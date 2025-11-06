@@ -433,6 +433,15 @@ function AnimatedDotOverlay({ fromNode, toNode, progress, currentStep }: any) {
   // Project to screen coordinates
   const screenPos = project({ x, y });
 
+  // Debug logging
+  console.log('Animated Dot Debug:', {
+    progress,
+    fromNode: { x: fromNode.position.x, y: fromNode.position.y, width: fromWidth, height: fromHeight },
+    toNode: { x: toNode.position.x, y: toNode.position.y, width: toWidth, height: toHeight },
+    flowPos: { x, y },
+    screenPos,
+  });
+
   return (
     <div
       className="pointer-events-none"
@@ -446,16 +455,25 @@ function AnimatedDotOverlay({ fromNode, toNode, progress, currentStep }: any) {
       }}
     >
       <div
-        className="absolute w-6 h-6 bg-blue-600 rounded-full shadow-lg pointer-events-auto cursor-pointer"
+        className="absolute w-8 h-8 rounded-full shadow-2xl pointer-events-auto cursor-pointer"
         style={{
           left: `${screenPos.x}px`,
           top: `${screenPos.y}px`,
           transform: 'translate(-50%, -50%)',
           transition: 'left 0.03s linear, top 0.03s linear',
+          background: '#3b82f6',
+          border: '3px solid white',
+          boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)',
         }}
         title={`${currentStep.stepName}: ${currentStep.httpMethod} ${currentStep.endpoint}`}
       >
-        <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-75" />
+        <div
+          className="absolute inset-0 rounded-full animate-ping"
+          style={{
+            background: '#60a5fa',
+            opacity: 0.75,
+          }}
+        />
       </div>
     </div>
   );
