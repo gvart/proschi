@@ -52,6 +52,9 @@ data class FlowStep(
     @Column(nullable = false)
     var stepOrder: Int,
 
+    @Column(name = "step_name", nullable = false)
+    var stepName: String = "Step",
+
     @Column(name = "from_service_id", nullable = false)
     var fromServiceId: String, // Reference to Node ID
 
@@ -64,11 +67,17 @@ data class FlowStep(
     @Column(nullable = false)
     var endpoint: String = "/",
 
-    @Column(columnDefinition = "TEXT")
-    var requestBody: String? = null, // JSON string
+    @Column(name = "request_format", nullable = false)
+    var requestFormat: String = "JSON", // JSON, XML, FREE_TEXT
 
-    @Column(columnDefinition = "TEXT")
-    var responseBody: String? = null, // JSON string
+    @Column(name = "request_body", columnDefinition = "TEXT")
+    var requestBody: String? = null,
+
+    @Column(name = "response_format", nullable = false)
+    var responseFormat: String = "JSON", // JSON, XML, FREE_TEXT
+
+    @Column(name = "response_body", columnDefinition = "TEXT")
+    var responseBody: String? = null,
 
     @Column
     var statusCode: Int? = 200,

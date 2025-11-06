@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { ArrowLeft, FolderOpen, Plus, Save } from 'lucide-react';
+import { ArrowLeft, FolderOpen, Plus, Save, Network, PlayCircle } from 'lucide-react';
 import { mockApi } from '../services/mockApi';
 import { useCanvasStore } from '../store/canvasStore';
 import type { Project } from '../types/canvas';
@@ -14,6 +14,8 @@ export default function TopNavBar({ onBackToProjects }: TopNavBarProps) {
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectDescription, setNewProjectDescription] = useState('');
   const currentProject = useCanvasStore((state) => state.currentProject);
+  const viewMode = useCanvasStore((state) => state.viewMode);
+  const setViewMode = useCanvasStore((state) => state.setViewMode);
   const loadProject = useCanvasStore((state) => state.loadProject);
   const saveCanvas = useCanvasStore((state) => state.saveCanvas);
 
@@ -80,6 +82,34 @@ export default function TopNavBar({ onBackToProjects }: TopNavBarProps) {
                 </option>
               ))}
             </select>
+          </div>
+
+          <div className="h-8 w-px bg-gray-300" />
+
+          {/* Mode Selector */}
+          <div className="flex items-center gap-1 bg-gray-100 rounded-lg p-1">
+            <button
+              onClick={() => setViewMode('architecture')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all ${
+                viewMode === 'architecture'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <Network className="w-4 h-4" />
+              <span className="text-sm font-medium">Architecture</span>
+            </button>
+            <button
+              onClick={() => setViewMode('usecases')}
+              className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-all ${
+                viewMode === 'usecases'
+                  ? 'bg-white text-blue-600 shadow-sm'
+                  : 'text-gray-600 hover:text-gray-900'
+              }`}
+            >
+              <PlayCircle className="w-4 h-4" />
+              <span className="text-sm font-medium">Use Cases</span>
+            </button>
           </div>
         </div>
 

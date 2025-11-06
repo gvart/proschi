@@ -73,11 +73,14 @@ class UseCaseService(
         val step = FlowStep(
             useCase = useCase,
             stepOrder = request.stepOrder,
+            stepName = request.stepName,
             fromServiceId = request.fromServiceId,
             toServiceId = request.toServiceId,
             httpMethod = request.httpMethod,
             endpoint = request.endpoint,
+            requestFormat = request.requestFormat,
             requestBody = request.requestBody,
+            responseFormat = request.responseFormat,
             responseBody = request.responseBody,
             statusCode = request.statusCode,
             description = request.description,
@@ -100,11 +103,14 @@ class UseCaseService(
         }
 
         step.stepOrder = request.stepOrder
+        step.stepName = request.stepName
         step.fromServiceId = request.fromServiceId
         step.toServiceId = request.toServiceId
         step.httpMethod = request.httpMethod
         step.endpoint = request.endpoint
+        step.requestFormat = request.requestFormat
         step.requestBody = request.requestBody
+        step.responseFormat = request.responseFormat
         step.responseBody = request.responseBody
         step.statusCode = request.statusCode
         step.description = request.description
