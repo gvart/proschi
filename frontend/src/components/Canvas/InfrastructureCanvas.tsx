@@ -236,19 +236,6 @@ function InfrastructureCanvasContent() {
   );
 }
 
-interface InfrastructureCanvasProps {
-  projectId?: string;
-}
-
-export default function InfrastructureCanvas({ projectId }: InfrastructureCanvasProps = {}) {
-  const { loadProject, currentProject } = useCanvasStore();
-
-  useEffect(() => {
-    // Load the project if projectId is provided and different from current
-    if (projectId && projectId !== currentProject?.id) {
-      loadProject(projectId);
-    }
-  }, [projectId, loadProject, currentProject?.id]);
-
+export default function InfrastructureCanvas() {
   return <InfrastructureCanvasContent />;
 }
