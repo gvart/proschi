@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath, EdgeProps } from 'reactflow';
+import { BaseEdge, EdgeLabelRenderer, getBezierPath } from 'reactflow';
+import type { EdgeProps } from 'reactflow';
 
 export function AnimatedPlaybackEdge({
   id,
