@@ -22,7 +22,9 @@ interface CanvasStore {
   edges: Edge[];
   currentProject: Project | null;
   selectedNode: Node | null;
+  selectedNodes: string[]; // Array of selected node IDs for multi-select
   selectedEdge: Edge | null;
+  clipboard: Node[]; // Clipboard for copy/paste
 
   // Actions
   setNodes: (nodes: Node[]) => void;
@@ -32,11 +34,18 @@ interface CanvasStore {
   onConnect: OnConnect;
   addNode: (type: ComponentMetadata['type'], techStack: ComponentMetadata['techStack']) => void;
   deleteNode: (nodeId: string) => void;
+  deleteSelectedNodes: () => void;
   updateNodeData: (nodeId: string, data: Partial<ComponentMetadata>) => void;
   selectNode: (node: Node | null) => void;
+  setSelectedNodes: (nodeIds: string[]) => void;
   selectEdge: (edge: Edge | null) => void;
   updateEdgeData: (edgeId: string, data: Partial<Edge>) => void;
   deleteEdge: (edgeId: string) => void;
+  copySelectedNodes: () => void;
+  pasteNodes: (position?: { x: number; y: number }) => void;
+  duplicateSelectedNodes: () => void;
+  bringToFront: (nodeIds: string[]) => void;
+  sendToBack: (nodeIds: string[]) => void;
   loadProject: (projectId: string) => Promise<void>;
   saveCanvas: () => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
@@ -47,7 +56,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   edges: [],
   currentProject: null,
   selectedNode: null,
+  selectedNodes: [],
   selectedEdge: null,
+  clipboard: [],
 
   setNodes: (nodes) => set({ nodes }),
 
@@ -102,6 +113,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         y: Math.random() * 300 + 100,
       },
       data: nodeData,
+      zIndex: 1000, // Default zIndex for new nodes
     };
 
     set({ nodes: [...get().nodes, newNode] });
@@ -129,9 +141,23 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
-  selectNode: (node) => set({ selectedNode: node, selectedEdge: null }),
+  selectNode: (node) => set({
+    selectedNode: node,
+    selectedNodes: node ? [node.id] : [],
+    selectedEdge: null
+  }),
 
-  selectEdge: (edge) => set({ selectedEdge: edge, selectedNode: null }),
+  setSelectedNodes: (nodeIds) => set({
+    selectedNodes: nodeIds,
+    selectedNode: nodeIds.length === 1 ? get().nodes.find(n => n.id === nodeIds[0]) || null : null,
+    selectedEdge: null,
+  }),
+
+  selectEdge: (edge) => set({
+    selectedEdge: edge,
+    selectedNode: null,
+    selectedNodes: []
+  }),
 
   updateEdgeData: (edgeId, data) => {
     const updatedEdges = get().edges.map(edge => {
@@ -158,6 +184,150 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       edges: get().edges.filter(edge => edge.id !== edgeId),
       selectedEdge: get().selectedEdge?.id === edgeId ? null : get().selectedEdge,
     });
+  },
+
+  deleteSelectedNodes: () => {
+    const { selectedNodes } = get();
+    if (selectedNodes.length === 0) return;
+
+    set({
+      nodes: get().nodes.filter(node => !selectedNodes.includes(node.id)),
+      edges: get().edges.filter(edge =>
+        !selectedNodes.includes(edge.source) && !selectedNodes.includes(edge.target)
+      ),
+      selectedNode: null,
+      selectedNodes: [],
+    });
+  },
+
+  copySelectedNodes: () => {
+    const { nodes, selectedNodes } = get();
+    const nodesToCopy = nodes.filter(node => selectedNodes.includes(node.id));
+    set({ clipboard: nodesToCopy });
+  },
+
+  pasteNodes: (position) => {
+    const { clipboard, nodes } = get();
+    if (clipboard.length === 0) return;
+
+    // Calculate offset for pasted nodes
+    const offset = position
+      ? { x: position.x - clipboard[0].position.x, y: position.y - clipboard[0].position.y }
+      : { x: 50, y: 50 };
+
+    // Find the maximum zIndex to place new nodes on top
+    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
+
+    const newNodes = clipboard.map((node, index) => {
+      const newId = `node-${Date.now()}-${index}`;
+      return {
+        ...node,
+        id: newId,
+        position: {
+          x: node.position.x + offset.x,
+          y: node.position.y + offset.y,
+        },
+        data: {
+          ...node.data,
+          id: newId,
+        },
+        selected: true,
+        zIndex: maxZIndex + 1 + index, // Place on top with incremental zIndex
+      };
+    });
+
+    const newNodeIds = newNodes.map(n => n.id);
+    set({
+      nodes: [...nodes, ...newNodes],
+      selectedNodes: newNodeIds,
+      selectedNode: newNodes.length === 1 ? newNodes[0] : null,
+    });
+  },
+
+  duplicateSelectedNodes: () => {
+    const { nodes, selectedNodes } = get();
+    const nodesToDuplicate = nodes.filter(node => selectedNodes.includes(node.id));
+
+    // Find the maximum zIndex to place new nodes on top
+    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
+
+    const newNodes = nodesToDuplicate.map((node, index) => {
+      const newId = `node-${Date.now()}-${index}`;
+      return {
+        ...node,
+        id: newId,
+        position: {
+          x: node.position.x + 50,
+          y: node.position.y + 50,
+        },
+        data: {
+          ...node.data,
+          id: newId,
+          name: `${node.data.name} (Copy)`,
+        },
+        selected: true,
+        zIndex: maxZIndex + 1 + index, // Place on top with incremental zIndex
+      };
+    });
+
+    const newNodeIds = newNodes.map(n => n.id);
+    set({
+      nodes: [...nodes, ...newNodes],
+      selectedNodes: newNodeIds,
+      selectedNode: newNodes.length === 1 ? newNodes[0] : null,
+    });
+  },
+
+  bringToFront: (nodeIds) => {
+    const { nodes } = get();
+
+    // First, normalize all nodes to have a zIndex (assign based on current array position)
+    let normalizedNodes = nodes.map((node, index) => ({
+      ...node,
+      zIndex: node.zIndex !== undefined ? node.zIndex : index,
+    }));
+
+    // Find the maximum zIndex
+    const maxZIndex = Math.max(...normalizedNodes.map(n => n.zIndex as number));
+
+    // Update selected nodes to be on top
+    const updatedNodes = normalizedNodes.map(node => {
+      if (nodeIds.includes(node.id)) {
+        return {
+          ...node,
+          zIndex: maxZIndex + 1,
+        };
+      }
+      return node;
+    });
+
+    set({ nodes: updatedNodes });
+  },
+
+  sendToBack: (nodeIds) => {
+    const { nodes } = get();
+
+    // First, normalize all nodes to have a zIndex (assign based on current array position)
+    let normalizedNodes = nodes.map((node, index) => ({
+      ...node,
+      zIndex: node.zIndex !== undefined ? node.zIndex : index,
+    }));
+
+    // Find the minimum zIndex
+    const minZIndex = Math.min(...normalizedNodes.map(n => n.zIndex as number));
+
+    // Update selected nodes to be at the back
+    const updatedNodes = normalizedNodes.map(node => {
+      if (nodeIds.includes(node.id)) {
+        return {
+          ...node,
+          zIndex: minZIndex - 1,
+        };
+      }
+      return node;
+    });
+
+    set({ nodes: updatedNodes });
   },
 
   loadProject: async (projectId) => {

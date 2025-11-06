@@ -9,7 +9,8 @@ export default function EdgeEditor() {
   // Sync local state with selected edge when a different edge is selected
   useEffect(() => {
     if (selectedEdge) {
-      setLabel(selectedEdge.label || '');
+      const edgeLabel = typeof selectedEdge.label === 'string' ? selectedEdge.label : '';
+      setLabel(edgeLabel);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedEdge?.id]); // Only update when edge ID changes, not on every label change
