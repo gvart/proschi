@@ -12,11 +12,22 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
+  BackgroundVariant,
 } from 'reactflow';
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
+import '@reactflow/node-resizer/dist/style.css';
 import { api, type UseCase } from '../../services/api';
 import { useCanvasStore } from '../../store/canvasStore';
+import ComponentNode from '../Canvas/ComponentNode';
+import TextNode from '../Canvas/TextNode';
+import GroupNode from '../Canvas/GroupNode';
+
+const nodeTypes = {
+  componentNode: ComponentNode,
+  textNode: TextNode,
+  groupNode: GroupNode,
+};
 
 interface UseCasePlaybackProps {
   useCaseId: string;
@@ -157,11 +168,36 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
   // Apply highlighting to nodes
   const displayNodes: Node[] = nodes.map((node) => ({
     ...node,
+    data: {
+      ...node.data,
+      // Keep all original data
+    },
     style: {
       ...node.style,
       opacity: highlightedNodes.has(node.id) ? 1 : 0.3,
-      border: highlightedNodes.has(node.id) ? '3px solid #3b82f6' : undefined,
-      boxShadow: highlightedNodes.has(node.id) ? '0 0 20px rgba(59, 130, 246, 0.5)' : undefined,
+      transition: 'opacity 0.3s ease',
+    },
+    className: highlightedNodes.has(node.id)
+      ? 'ring-4 ring-blue-500 ring-opacity-50'
+      : '',
+  }));
+
+  // Highlight active edge
+  const activeEdge = edges.find(
+    (e) =>
+      (e.source === currentStep.fromServiceId && e.target === currentStep.toServiceId) ||
+      (e.target === currentStep.fromServiceId && e.source === currentStep.toServiceId)
+  );
+
+  const displayEdges: Edge[] = edges.map((edge) => ({
+    ...edge,
+    animated: edge.id === activeEdge?.id,
+    style: {
+      ...edge.style,
+      stroke: edge.id === activeEdge?.id ? '#3b82f6' : '#b1b1b7',
+      strokeWidth: edge.id === activeEdge?.id ? 3 : 2,
+      opacity: edge.id === activeEdge?.id ? 1 : 0.3,
+      transition: 'all 0.3s ease',
     },
   }));
 
@@ -183,7 +219,7 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
             </button>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">{useCase.name}</h2>
-              <p className="text-sm text-gray-500">Playback Mode</p>
+              <p className="text-sm text-gray-500">Playback Mode - Read Only</p>
             </div>
           </div>
         </div>
@@ -193,16 +229,43 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
       <div className="flex-1 relative">
         <ReactFlow
           nodes={displayNodes}
-          edges={edges}
+          edges={displayEdges}
+          nodeTypes={nodeTypes}
           fitView
           attributionPosition="bottom-left"
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
+          className="bg-gray-50"
+          panOnDrag={true}
+          zoomOnScroll={true}
+          preventScrolling={false}
         >
-          <Background />
+          <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           <Controls showInteractive={false} />
-          <MiniMap />
+          <MiniMap
+            nodeColor={(node) => {
+              if (highlightedNodes.has(node.id)) {
+                return '#3b82f6'; // Highlighted blue
+              }
+              switch (node.data.type) {
+                case 'service':
+                  return '#3b82f6';
+                case 'database':
+                  return '#10b981';
+                case 'queue':
+                  return '#a855f7';
+                case 'external':
+                  return '#f97316';
+                case 'text':
+                  return '#eab308';
+                case 'group':
+                  return node.data.borderColor || '#3b82f6';
+                default:
+                  return '#6b7280';
+              }
+            }}
+          />
         </ReactFlow>
 
         {/* Animated Dot */}
@@ -261,7 +324,14 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
                     {nodes.find((n) => n.id === currentStep.toServiceId)?.data.name}
                   </p>
                 </div>
+                <div className="ml-auto text-sm text-gray-500">
+                  {currentStep.httpMethod} {currentStep.endpoint}
+                </div>
               </div>
+
+              {currentStep.description && (
+                <p className="text-sm text-gray-600 mb-3">{currentStep.description}</p>
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 {currentStep.requestBody && (
@@ -349,7 +419,7 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-gray-700">
-                  {currentStepIndex + 1} / {useCase.steps.length}
+                  Step {currentStepIndex + 1} of {useCase.steps.length}
                 </span>
                 <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
                   <div
