@@ -1,15 +1,27 @@
+import { useState, useEffect } from 'react';
 import { useCanvasStore } from '../../store/canvasStore';
 import { X, Trash2, ArrowRight } from 'lucide-react';
 
 export default function EdgeEditor() {
   const { selectedEdge, updateEdgeData, deleteEdge, selectEdge } = useCanvasStore();
+  const [label, setLabel] = useState('');
+
+  // Sync local state with selected edge when a different edge is selected
+  useEffect(() => {
+    if (selectedEdge) {
+      setLabel(selectedEdge.label || '');
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedEdge?.id]); // Only update when edge ID changes, not on every label change
 
   if (!selectedEdge) {
     return null;
   }
 
   const handleLabelChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    updateEdgeData(selectedEdge.id, { label: e.target.value });
+    const newLabel = e.target.value;
+    setLabel(newLabel);
+    updateEdgeData(selectedEdge.id, { label: newLabel });
   };
 
   const handleDelete = () => {
@@ -44,10 +56,11 @@ export default function EdgeEditor() {
           </label>
           <input
             type="text"
-            value={selectedEdge.label || ''}
+            value={label}
             onChange={handleLabelChange}
             placeholder="e.g., HTTP POST, Event, Query..."
             className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            autoFocus
           />
         </div>
 

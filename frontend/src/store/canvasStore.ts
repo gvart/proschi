@@ -134,13 +134,22 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   selectEdge: (edge) => set({ selectedEdge: edge, selectedNode: null }),
 
   updateEdgeData: (edgeId, data) => {
+    const updatedEdges = get().edges.map(edge => {
+      if (edge.id === edgeId) {
+        return { ...edge, ...data };
+      }
+      return edge;
+    });
+
+    // Also update selectedEdge if it's the one being modified
+    const currentSelectedEdge = get().selectedEdge;
+    const updatedSelectedEdge = currentSelectedEdge?.id === edgeId
+      ? { ...currentSelectedEdge, ...data }
+      : currentSelectedEdge;
+
     set({
-      edges: get().edges.map(edge => {
-        if (edge.id === edgeId) {
-          return { ...edge, ...data };
-        }
-        return edge;
-      }),
+      edges: updatedEdges,
+      selectedEdge: updatedSelectedEdge,
     });
   },
 
