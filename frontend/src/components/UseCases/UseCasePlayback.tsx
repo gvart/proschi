@@ -24,11 +24,16 @@ import { useCanvasStore } from '../../store/canvasStore';
 import ComponentNode from '../Canvas/ComponentNode';
 import TextNode from '../Canvas/TextNode';
 import GroupNode from '../Canvas/GroupNode';
+import { AnimatedPlaybackEdge } from './AnimatedPlaybackEdge';
 
 const nodeTypes = {
   componentNode: ComponentNode,
   textNode: TextNode,
   groupNode: GroupNode,
+};
+
+const edgeTypes = {
+  animated: AnimatedPlaybackEdge,
 };
 
 interface UseCasePlaybackProps {
@@ -194,7 +199,13 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
 
   const displayEdges: Edge[] = edges.map((edge) => ({
     ...edge,
-    animated: edge.id === activeEdge?.id,
+    type: edge.id === activeEdge?.id ? 'animated' : 'default',
+    animated: edge.id === activeEdge?.id && animationProgress >= 100,
+    data: {
+      ...(edge.data || {}),
+      isActive: edge.id === activeEdge?.id,
+      progress: animationProgress,
+    },
     style: {
       ...edge.style,
       stroke: edge.id === activeEdge?.id ? '#3b82f6' : '#b1b1b7',
@@ -234,6 +245,7 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
           nodes={displayNodes}
           edges={displayEdges}
           nodeTypes={nodeTypes}
+          edgeTypes={edgeTypes}
           fitView
           attributionPosition="bottom-left"
           nodesDraggable={false}
@@ -269,16 +281,6 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
               }
             }}
           />
-
-          {/* Animated Dot - Rendered inside ReactFlow */}
-          {fromNode && toNode && animationProgress < 100 && (
-            <AnimatedDotOverlay
-              fromNode={fromNode}
-              toNode={toNode}
-              progress={animationProgress}
-              currentStep={currentStep}
-            />
-          )}
         </ReactFlow>
       </div>
 
@@ -405,75 +407,6 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
             </div>
           </div>
         </div>
-      </div>
-    </div>
-  );
-}
-
-// Animated Dot Component - Rendered inside ReactFlow
-function AnimatedDotOverlay({ fromNode, toNode, progress, currentStep }: any) {
-  const { project } = useReactFlow();
-
-  // Get node dimensions (use measured values or defaults)
-  const fromWidth = fromNode.width || 150;
-  const fromHeight = fromNode.height || 80;
-  const toWidth = toNode.width || 150;
-  const toHeight = toNode.height || 80;
-
-  // Calculate center positions for both nodes
-  const fromCenterX = fromNode.position.x + fromWidth / 2;
-  const fromCenterY = fromNode.position.y + fromHeight / 2;
-  const toCenterX = toNode.position.x + toWidth / 2;
-  const toCenterY = toNode.position.y + toHeight / 2;
-
-  // Calculate interpolated position between centers
-  const x = fromCenterX + (toCenterX - fromCenterX) * (progress / 100);
-  const y = fromCenterY + (toCenterY - fromCenterY) * (progress / 100);
-
-  // Project to screen coordinates
-  const screenPos = project({ x, y });
-
-  // Debug logging
-  console.log('Animated Dot Debug:', {
-    progress,
-    fromNode: { x: fromNode.position.x, y: fromNode.position.y, width: fromWidth, height: fromHeight },
-    toNode: { x: toNode.position.x, y: toNode.position.y, width: toWidth, height: toHeight },
-    flowPos: { x, y },
-    screenPos,
-  });
-
-  return (
-    <div
-      className="pointer-events-none"
-      style={{
-        position: 'absolute',
-        left: 0,
-        top: 0,
-        width: '100%',
-        height: '100%',
-        zIndex: 1000,
-      }}
-    >
-      <div
-        className="absolute w-8 h-8 rounded-full shadow-2xl pointer-events-auto cursor-pointer"
-        style={{
-          left: `${screenPos.x}px`,
-          top: `${screenPos.y}px`,
-          transform: 'translate(-50%, -50%)',
-          transition: 'left 0.03s linear, top 0.03s linear',
-          background: '#3b82f6',
-          border: '3px solid white',
-          boxShadow: '0 0 20px rgba(59, 130, 246, 0.8)',
-        }}
-        title={`${currentStep.stepName}: ${currentStep.httpMethod} ${currentStep.endpoint}`}
-      >
-        <div
-          className="absolute inset-0 rounded-full animate-ping"
-          style={{
-            background: '#60a5fa',
-            opacity: 0.75,
-          }}
-        />
       </div>
     </div>
   );
