@@ -281,11 +281,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   bringToFront: (nodeIds) => {
     const { nodes } = get();
 
-    // Find the maximum zIndex currently in use
-    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
+    // First, normalize all nodes to have a zIndex (assign based on current array position)
+    let normalizedNodes = nodes.map((node, index) => ({
+      ...node,
+      zIndex: node.zIndex !== undefined ? node.zIndex : index,
+    }));
 
-    // Update nodes: bring selected nodes to front with higher zIndex
-    const updatedNodes = nodes.map(node => {
+    // Find the maximum zIndex
+    const maxZIndex = Math.max(...normalizedNodes.map(n => n.zIndex as number));
+
+    // Update selected nodes to be on top
+    const updatedNodes = normalizedNodes.map(node => {
       if (nodeIds.includes(node.id)) {
         return {
           ...node,
@@ -301,11 +307,17 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   sendToBack: (nodeIds) => {
     const { nodes } = get();
 
-    // Find the minimum zIndex currently in use
-    const minZIndex = Math.min(...nodes.map(n => n.zIndex || 0), 0);
+    // First, normalize all nodes to have a zIndex (assign based on current array position)
+    let normalizedNodes = nodes.map((node, index) => ({
+      ...node,
+      zIndex: node.zIndex !== undefined ? node.zIndex : index,
+    }));
 
-    // Update nodes: send selected nodes to back with lower zIndex
-    const updatedNodes = nodes.map(node => {
+    // Find the minimum zIndex
+    const minZIndex = Math.min(...normalizedNodes.map(n => n.zIndex as number));
+
+    // Update selected nodes to be at the back
+    const updatedNodes = normalizedNodes.map(node => {
       if (nodeIds.includes(node.id)) {
         return {
           ...node,

@@ -194,6 +194,7 @@ function InfrastructureCanvasContent() {
         deleteKeyCode={null} // Disable default delete, we handle it ourselves
         panOnDrag={[1, 2]} // Pan with left and middle mouse button
         selectionOnDrag // Enable box selection
+        elevateNodesOnSelect={false} // Disable auto-elevation so our zIndex control works
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls />
