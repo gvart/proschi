@@ -22,6 +22,7 @@ interface CanvasStore {
   edges: Edge[];
   currentProject: Project | null;
   selectedNode: Node | null;
+  selectedEdge: Edge | null;
 
   // Actions
   setNodes: (nodes: Node[]) => void;
@@ -33,6 +34,9 @@ interface CanvasStore {
   deleteNode: (nodeId: string) => void;
   updateNodeData: (nodeId: string, data: Partial<ComponentMetadata>) => void;
   selectNode: (node: Node | null) => void;
+  selectEdge: (edge: Edge | null) => void;
+  updateEdgeData: (edgeId: string, data: Partial<Edge>) => void;
+  deleteEdge: (edgeId: string) => void;
   loadProject: (projectId: string) => Promise<void>;
   saveCanvas: () => Promise<void>;
   setCurrentProject: (project: Project | null) => void;
@@ -43,6 +47,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   edges: [],
   currentProject: null,
   selectedNode: null,
+  selectedEdge: null,
 
   setNodes: (nodes) => set({ nodes }),
 
@@ -67,21 +72,36 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   },
 
   addNode: (type, techStack) => {
+    let nodeType = 'componentNode';
+    const nodeData: ComponentMetadata = {
+      id: `node-${Date.now()}`,
+      name: `New ${type}`,
+      type,
+      techStack,
+      ownerTeam: '',
+      description: '',
+    };
+
+    // Set node type based on component type
+    if (type === 'text') {
+      nodeType = 'textNode';
+      nodeData.textContent = 'Enter your text here...';
+      nodeData.fontSize = 14;
+    } else if (type === 'group') {
+      nodeType = 'groupNode';
+      nodeData.backgroundColor = '#f0f9ff';
+      nodeData.borderColor = '#3b82f6';
+      nodeData.borderStyle = 'dashed';
+    }
+
     const newNode: Node = {
       id: `node-${Date.now()}`,
-      type: 'componentNode',
+      type: nodeType,
       position: {
         x: Math.random() * 400 + 200,
         y: Math.random() * 300 + 100,
       },
-      data: {
-        id: `node-${Date.now()}`,
-        name: `New ${type}`,
-        type,
-        techStack,
-        ownerTeam: '',
-        description: '',
-      },
+      data: nodeData,
     };
 
     set({ nodes: [...get().nodes, newNode] });
@@ -109,7 +129,27 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     });
   },
 
-  selectNode: (node) => set({ selectedNode: node }),
+  selectNode: (node) => set({ selectedNode: node, selectedEdge: null }),
+
+  selectEdge: (edge) => set({ selectedEdge: edge, selectedNode: null }),
+
+  updateEdgeData: (edgeId, data) => {
+    set({
+      edges: get().edges.map(edge => {
+        if (edge.id === edgeId) {
+          return { ...edge, ...data };
+        }
+        return edge;
+      }),
+    });
+  },
+
+  deleteEdge: (edgeId) => {
+    set({
+      edges: get().edges.filter(edge => edge.id !== edgeId),
+      selectedEdge: get().selectedEdge?.id === edgeId ? null : get().selectedEdge,
+    });
+  },
 
   loadProject: async (projectId) => {
     const project = await mockApi.getProject(projectId);

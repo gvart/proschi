@@ -5,7 +5,7 @@ import ReactFlow, {
   MiniMap,
   BackgroundVariant,
 } from 'reactflow';
-import type { NodeTypes, Node } from 'reactflow';
+import type { NodeTypes, Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
 
@@ -13,9 +13,14 @@ import { useCanvasStore } from '../../store/canvasStore';
 import ComponentNode from './ComponentNode';
 import ComponentPalette from './ComponentPalette';
 import MetadataEditor from './MetadataEditor';
+import EdgeEditor from './EdgeEditor';
+import TextNode from './TextNode';
+import GroupNode from './GroupNode';
 
 const nodeTypes: NodeTypes = {
   componentNode: ComponentNode,
+  textNode: TextNode,
+  groupNode: GroupNode,
 };
 
 export default function InfrastructureCanvas() {
@@ -26,6 +31,7 @@ export default function InfrastructureCanvas() {
     onEdgesChange,
     onConnect,
     selectNode,
+    selectEdge,
     loadProject,
   } = useCanvasStore();
 
@@ -43,7 +49,16 @@ export default function InfrastructureCanvas() {
 
   const handlePaneClick = useCallback(() => {
     selectNode(null);
-  }, [selectNode]);
+    selectEdge(null);
+  }, [selectNode, selectEdge]);
+
+  const handleEdgeClick = useCallback(
+    (_event: React.MouseEvent, edge: Edge) => {
+      selectNode(null);
+      selectEdge(edge);
+    },
+    [selectNode, selectEdge]
+  );
 
   return (
     <div className="w-full h-screen bg-gray-50">
@@ -54,6 +69,7 @@ export default function InfrastructureCanvas() {
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
         onNodeClick={handleNodeClick}
+        onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         nodeTypes={nodeTypes}
         fitView
@@ -72,6 +88,10 @@ export default function InfrastructureCanvas() {
                 return '#a855f7';
               case 'external':
                 return '#f97316';
+              case 'text':
+                return '#eab308';
+              case 'group':
+                return node.data.borderColor || '#3b82f6';
               default:
                 return '#6b7280';
             }
@@ -81,6 +101,7 @@ export default function InfrastructureCanvas() {
 
       <ComponentPalette />
       <MetadataEditor />
+      <EdgeEditor />
     </div>
   );
 }

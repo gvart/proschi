@@ -161,6 +161,17 @@ const componentCatalog: ComponentOption[] = [
   { type: 'external', techStack: 'Email Service', category: 'External Systems', searchTerms: 'email service sendgrid mailgun' },
   { type: 'external', techStack: 'SMS Service', category: 'External Systems', searchTerms: 'sms service twilio' },
   { type: 'external', techStack: 'Analytics Service', category: 'External Systems', searchTerms: 'analytics service google analytics' },
+
+  // Text & Annotations
+  { type: 'text', techStack: 'Text Note', category: 'Annotations', searchTerms: 'text note annotation comment label' },
+  { type: 'text', techStack: 'Sticky Note', category: 'Annotations', searchTerms: 'sticky note annotation comment' },
+  { type: 'text', techStack: 'Comment', category: 'Annotations', searchTerms: 'comment annotation note text' },
+
+  // Grouping
+  { type: 'group', techStack: 'Logical Group', category: 'Grouping', searchTerms: 'group container boundary logical' },
+  { type: 'group', techStack: 'Network Boundary', category: 'Grouping', searchTerms: 'group network boundary vpc subnet' },
+  { type: 'group', techStack: 'Security Zone', category: 'Grouping', searchTerms: 'group security zone boundary' },
+  { type: 'group', techStack: 'Service Group', category: 'Grouping', searchTerms: 'group service container boundary' },
 ];
 
 export default function ComponentPalette() {

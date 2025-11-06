@@ -20,6 +20,8 @@ import {
   Network,
   Globe,
   Layers,
+  StickyNote,
+  FolderOpen,
 } from 'lucide-react';
 import {
   // AWS Icons
@@ -209,6 +211,17 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   'Email Service': <ExternalLink className="w-5 h-5" />,
   'SMS Service': <ExternalLink className="w-5 h-5" />,
   'Analytics Service': <ExternalLink className="w-5 h-5" />,
+
+  // Text & Annotations
+  'Text Note': <StickyNote className="w-5 h-5" />,
+  'Sticky Note': <StickyNote className="w-5 h-5" />,
+  Comment: <FileText className="w-5 h-5" />,
+
+  // Grouping
+  'Logical Group': <FolderOpen className="w-5 h-5" />,
+  'Network Boundary': <Box className="w-5 h-5" />,
+  'Security Zone': <Box className="w-5 h-5" />,
+  'Service Group': <Layers className="w-5 h-5" />,
 };
 
 // Color mapping for component types
@@ -224,6 +237,8 @@ export const componentTypeColors: Record<ComponentType, string> = {
   storage: 'bg-pink-500',
   cache: 'bg-teal-500',
   cdn: 'bg-red-500',
+  text: 'bg-yellow-400',
+  group: 'bg-blue-400',
 };
 
 // Category icon mapping
@@ -237,6 +252,8 @@ export const categoryIcons: Record<string, ReactElement> = {
   'Cache & In-Memory': <Layers className="w-5 h-5" />,
   'Message Queues': <MessageSquare className="w-5 h-5" />,
   'External Systems': <ExternalLink className="w-5 h-5" />,
+  Annotations: <StickyNote className="w-5 h-5" />,
+  Grouping: <FolderOpen className="w-5 h-5" />,
 };
 
 // Helper function to get icon for a tech stack

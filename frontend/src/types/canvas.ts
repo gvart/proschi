@@ -9,7 +9,9 @@ export type ComponentType =
   | 'container'
   | 'storage'
   | 'cache'
-  | 'cdn';
+  | 'cdn'
+  | 'text'
+  | 'group';
 
 export type TechStack =
   // Generic Shapes
@@ -136,7 +138,16 @@ export type TechStack =
   | 'Auth Service'
   | 'Email Service'
   | 'SMS Service'
-  | 'Analytics Service';
+  | 'Analytics Service'
+  // Text & Annotations
+  | 'Text Note'
+  | 'Sticky Note'
+  | 'Comment'
+  // Grouping
+  | 'Logical Group'
+  | 'Network Boundary'
+  | 'Security Zone'
+  | 'Service Group';
 
 export interface ComponentMetadata {
   id: string;
@@ -145,6 +156,13 @@ export interface ComponentMetadata {
   techStack: TechStack;
   ownerTeam?: string;
   description?: string;
+  // For text nodes
+  textContent?: string;
+  fontSize?: number;
+  // For group nodes
+  backgroundColor?: string;
+  borderColor?: string;
+  borderStyle?: 'solid' | 'dashed' | 'dotted';
 }
 
 export interface CanvasNode {
@@ -159,6 +177,8 @@ export interface CanvasEdge {
   source: string;
   target: string;
   label?: string;
+  labelStyle?: React.CSSProperties;
+  labelBgStyle?: React.CSSProperties;
 }
 
 export interface CanvasState {
