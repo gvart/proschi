@@ -1,5 +1,6 @@
 import { memo } from 'react';
-import { Handle, Position, NodeResizer } from '@reactflow/node-resizer';
+import { Handle, Position } from 'reactflow';
+import { NodeResizer } from '@reactflow/node-resizer';
 import type { NodeProps } from 'reactflow';
 import { StickyNote } from 'lucide-react';
 import type { ComponentMetadata } from '../../types/canvas';
