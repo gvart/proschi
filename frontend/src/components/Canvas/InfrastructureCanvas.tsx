@@ -7,6 +7,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { NodeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
+import '@reactflow/node-resizer/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';
 import ComponentNode from './ComponentNode';
