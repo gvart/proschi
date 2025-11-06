@@ -236,13 +236,19 @@ function InfrastructureCanvasContent() {
   );
 }
 
-export default function InfrastructureCanvas() {
-  const { loadProject } = useCanvasStore();
+interface InfrastructureCanvasProps {
+  projectId?: string;
+}
+
+export default function InfrastructureCanvas({ projectId }: InfrastructureCanvasProps = {}) {
+  const { loadProject, currentProject } = useCanvasStore();
 
   useEffect(() => {
-    // Load the default project on mount
-    loadProject('1');
-  }, [loadProject]);
+    // Load the project if projectId is provided and different from current
+    if (projectId && projectId !== currentProject?.id) {
+      loadProject(projectId);
+    }
+  }, [projectId, loadProject, currentProject?.id]);
 
   return <InfrastructureCanvasContent />;
 }
