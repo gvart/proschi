@@ -407,3 +407,6 @@ class RealApiService {
 
 // Export the appropriate service based on the flag
 export const api = USE_MOCK_DATA ? new MockApiService() : new RealApiService();
+
+// Log which service is being used
+console.log(`🔧 API Service: ${USE_MOCK_DATA ? 'MOCK DATA (no backend needed)' : 'REAL API (backend required)'}`);
