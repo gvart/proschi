@@ -414,9 +414,21 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
 function AnimatedDotOverlay({ fromNode, toNode, progress, currentStep }: any) {
   const { project } = useReactFlow();
 
-  // Calculate interpolated position in flow coordinates
-  const x = fromNode.position.x + (toNode.position.x - fromNode.position.x) * (progress / 100);
-  const y = fromNode.position.y + (toNode.position.y - fromNode.position.y) * (progress / 100);
+  // Get node dimensions (use measured values or defaults)
+  const fromWidth = fromNode.width || 150;
+  const fromHeight = fromNode.height || 80;
+  const toWidth = toNode.width || 150;
+  const toHeight = toNode.height || 80;
+
+  // Calculate center positions for both nodes
+  const fromCenterX = fromNode.position.x + fromWidth / 2;
+  const fromCenterY = fromNode.position.y + fromHeight / 2;
+  const toCenterX = toNode.position.x + toWidth / 2;
+  const toCenterY = toNode.position.y + toHeight / 2;
+
+  // Calculate interpolated position between centers
+  const x = fromCenterX + (toCenterX - fromCenterX) * (progress / 100);
+  const y = fromCenterY + (toCenterY - fromCenterY) * (progress / 100);
 
   // Project to screen coordinates
   const screenPos = project({ x, y });
