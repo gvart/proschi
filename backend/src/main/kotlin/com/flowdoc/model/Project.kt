@@ -18,6 +18,10 @@ data class Project(
     @Column(columnDefinition = "TEXT")
     var description: String? = null,
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_user_id")
+    var owner: User? = null,
+
     @CreationTimestamp
     @Column(nullable = false, updatable = false)
     val createdAt: Instant? = null,
@@ -31,6 +35,12 @@ data class Project(
 
     @OneToMany(mappedBy = "project", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
     val edges: MutableList<Edge> = mutableListOf(),
+
+    @OneToMany(mappedBy = "project", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    val members: MutableList<ProjectMember> = mutableListOf(),
+
+    @OneToMany(mappedBy = "project", cascade = [CascadeType.ALL], orphanRemoval = true, fetch = FetchType.LAZY)
+    val useCases: MutableList<UseCase> = mutableListOf(),
 
     @Embedded
     var viewport: Viewport = Viewport()

@@ -294,6 +294,222 @@ Content-Type: application/json
 DELETE /api/projects/{projectId}/edges/{edgeId}
 ```
 
+### Authentication
+
+#### Register User
+```
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "name": "John Doe",
+  "password": "password123"
+}
+```
+
+#### Login
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+Response:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "user-id",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "createdAt": "2025-11-06T17:00:00Z"
+  }
+}
+```
+
+#### Logout
+```
+POST /api/auth/logout
+Authorization: Bearer {token}
+```
+
+### Project Members
+
+#### Get All Members of a Project
+```
+GET /api/projects/{projectId}/members
+```
+
+#### Add Member to Project
+```
+POST /api/projects/{projectId}/members
+Content-Type: application/json
+
+{
+  "email": "member@example.com",
+  "role": "EDITOR"
+}
+```
+
+Roles: `OWNER`, `EDITOR`, `VIEWER`
+
+#### Update Member Role
+```
+PUT /api/projects/{projectId}/members/{memberId}
+Content-Type: application/json
+
+{
+  "role": "VIEWER"
+}
+```
+
+#### Remove Member from Project
+```
+DELETE /api/projects/{projectId}/members/{memberId}
+```
+
+### Use Cases
+
+#### Get All Use Cases for Project
+```
+GET /api/projects/{projectId}/use-cases
+```
+
+#### Create Use Case
+```
+POST /api/projects/{projectId}/use-cases
+Content-Type: application/json
+
+{
+  "name": "User Login Flow",
+  "description": "Authentication flow for user login",
+  "entryServiceId": "node-1"
+}
+```
+
+#### Get Use Case by ID
+```
+GET /api/use-cases/{useCaseId}
+```
+
+#### Update Use Case
+```
+PUT /api/use-cases/{useCaseId}
+Content-Type: application/json
+
+{
+  "name": "Updated Login Flow",
+  "description": "Updated description",
+  "entryServiceId": "node-1"
+}
+```
+
+#### Delete Use Case
+```
+DELETE /api/use-cases/{useCaseId}
+```
+
+#### Add Flow Step to Use Case
+```
+POST /api/use-cases/{useCaseId}/steps
+Content-Type: application/json
+
+{
+  "stepOrder": 1,
+  "fromServiceId": "api-gateway",
+  "toServiceId": "auth-service",
+  "httpMethod": "POST",
+  "endpoint": "/auth/login",
+  "requestBody": "{\"email\":\"user@example.com\",\"password\":\"pass\"}",
+  "responseBody": "{\"token\":\"abc123\"}",
+  "statusCode": 200,
+  "description": "Authenticate user"
+}
+```
+
+#### Update Flow Step
+```
+PUT /api/use-cases/{useCaseId}/steps/{stepId}
+Content-Type: application/json
+
+{
+  "stepOrder": 1,
+  "fromServiceId": "api-gateway",
+  "toServiceId": "auth-service",
+  "httpMethod": "POST",
+  "endpoint": "/auth/login",
+  "statusCode": 200
+}
+```
+
+#### Delete Flow Step
+```
+DELETE /api/use-cases/{useCaseId}/steps/{stepId}
+```
+
+### OpenAPI Schemas
+
+#### Get All Schemas for Project
+```
+GET /api/projects/{projectId}/schemas
+```
+
+#### Get Schemas for Service
+```
+GET /api/services/{serviceId}/schemas
+```
+
+#### Upload OpenAPI Schema
+```
+POST /api/projects/{projectId}/schemas
+Content-Type: application/json
+User-Id: {userId}
+
+{
+  "serviceId": "node-1",
+  "version": "1.0.0",
+  "title": "Auth Service API",
+  "description": "Authentication API",
+  "schemaContent": "openapi: 3.0.0\ninfo:\n  title: Auth API\n..."
+}
+```
+
+#### Get Schema by ID
+```
+GET /api/schemas/{schemaId}
+```
+
+#### Delete Schema
+```
+DELETE /api/schemas/{schemaId}
+```
+
+#### Validate Flow Against Schema
+```
+POST /api/schemas/{schemaId}/validate
+Content-Type: application/json
+
+{
+  "endpoint": "/auth/login",
+  "method": "POST",
+  "requestBody": {...}
+}
+```
+
+Response:
+```json
+{
+  "isValid": true,
+  "errors": [],
+  "warnings": []
+}
+```
+
 ## Environment Profiles
 
 - **default** - Base configuration
