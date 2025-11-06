@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   ArrowLeft,
   Play,
@@ -13,8 +13,10 @@ import ReactFlow, {
   Controls,
   MiniMap,
   BackgroundVariant,
+  useReactFlow,
+  ReactFlowProvider,
 } from 'reactflow';
-import type { Node, Edge } from 'reactflow';
+import type { Node, Edge, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
 import { api, type UseCase } from '../../services/api';
@@ -34,7 +36,7 @@ interface UseCasePlaybackProps {
   onBack: () => void;
 }
 
-export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackProps) {
+function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
   const [useCase, setUseCase] = useState<UseCase | null>(null);
   const [loading, setLoading] = useState(true);
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
@@ -50,6 +52,8 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
   const edges = useCanvasStore((state) => state.edges);
   const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const reactFlowInstance = useReactFlow();
+  const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadUseCase();
@@ -170,7 +174,6 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
     ...node,
     data: {
       ...node.data,
-      // Keep all original data
     },
     style: {
       ...node.style,
@@ -201,7 +204,7 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
     },
   }));
 
-  // Calculate animation dot position
+  // Get nodes for animation
   const fromNode = nodes.find((n) => n.id === currentStep.fromServiceId);
   const toNode = nodes.find((n) => n.id === currentStep.toServiceId);
 
@@ -226,7 +229,7 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
       </div>
 
       {/* Canvas with Animation */}
-      <div className="flex-1 relative">
+      <div ref={reactFlowWrapperRef} className="flex-1 relative">
         <ReactFlow
           nodes={displayNodes}
           edges={displayEdges}
@@ -246,7 +249,7 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
           <MiniMap
             nodeColor={(node) => {
               if (highlightedNodes.has(node.id)) {
-                return '#3b82f6'; // Highlighted blue
+                return '#3b82f6';
               }
               switch (node.data.type) {
                 case 'service':
@@ -266,52 +269,23 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
               }
             }}
           />
+
+          {/* Animated Dot - Rendered inside ReactFlow */}
+          {fromNode && toNode && animationProgress < 100 && (
+            <AnimatedDotOverlay
+              fromNode={fromNode}
+              toNode={toNode}
+              progress={animationProgress}
+              currentStep={currentStep}
+            />
+          )}
         </ReactFlow>
-
-        {/* Animated Dot */}
-        {fromNode && toNode && animationProgress < 100 && (
-          <AnimatedDot
-            fromNode={fromNode}
-            toNode={toNode}
-            progress={animationProgress}
-            onHover={(x, y) => {
-              setTooltipData({
-                x,
-                y,
-                content: (
-                  <div className="text-xs">
-                    <div className="font-semibold mb-1">{currentStep.stepName}</div>
-                    <div className="text-gray-300">
-                      {currentStep.httpMethod} {currentStep.endpoint}
-                    </div>
-                  </div>
-                ),
-              });
-            }}
-            onLeave={() => setTooltipData(null)}
-          />
-        )}
-
-        {/* Tooltip */}
-        {tooltipData && (
-          <div
-            className="absolute bg-gray-900 text-white px-3 py-2 rounded-lg shadow-lg pointer-events-none z-50"
-            style={{
-              left: tooltipData.x,
-              top: tooltipData.y,
-              transform: 'translate(-50%, -120%)',
-            }}
-          >
-            {tooltipData.content}
-          </div>
-        )}
       </div>
 
       {/* Step Info Panel */}
       <div className="bg-white border-t border-gray-200 p-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-start gap-6">
-            {/* Step Info */}
             <div className="flex-1">
               <div className="flex items-center gap-3 mb-3">
                 <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
@@ -364,7 +338,6 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
       <div className="bg-white border-t border-gray-200 px-6 py-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex items-center gap-4">
-            {/* Control Buttons */}
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
@@ -415,7 +388,6 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
               </button>
             </div>
 
-            {/* Progress Bar */}
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-gray-700">
@@ -438,47 +410,49 @@ export default function UseCasePlayback({ useCaseId, onBack }: UseCasePlaybackPr
   );
 }
 
-interface AnimatedDotProps {
-  fromNode: Node;
-  toNode: Node;
-  progress: number;
-  onHover: (x: number, y: number) => void;
-  onLeave: () => void;
-}
+// Animated Dot Component - Rendered inside ReactFlow
+function AnimatedDotOverlay({ fromNode, toNode, progress, currentStep }: any) {
+  const { project } = useReactFlow();
 
-function AnimatedDot({ fromNode, toNode, progress, onHover, onLeave }: AnimatedDotProps) {
-  const dotRef = useRef<HTMLDivElement>(null);
-
-  // Calculate position based on progress
+  // Calculate interpolated position in flow coordinates
   const x = fromNode.position.x + (toNode.position.x - fromNode.position.x) * (progress / 100);
   const y = fromNode.position.y + (toNode.position.y - fromNode.position.y) * (progress / 100);
 
-  useEffect(() => {
-    if (dotRef.current) {
-      const rect = dotRef.current.getBoundingClientRect();
-      onHover(rect.left + rect.width / 2, rect.top);
-    }
-  }, [x, y]);
+  // Project to screen coordinates
+  const screenPos = project({ x, y });
 
   return (
     <div
-      ref={dotRef}
-      className="absolute w-6 h-6 bg-blue-600 rounded-full shadow-lg z-40 pointer-events-auto cursor-pointer"
+      className="pointer-events-none"
       style={{
-        left: x + 50,
-        top: y + 25,
-        transform: 'translate(-50%, -50%)',
-        transition: 'left 0.03s linear, top 0.03s linear',
+        position: 'absolute',
+        left: 0,
+        top: 0,
+        width: '100%',
+        height: '100%',
+        zIndex: 1000,
       }}
-      onMouseEnter={() => {
-        if (dotRef.current) {
-          const rect = dotRef.current.getBoundingClientRect();
-          onHover(rect.left + rect.width / 2, rect.top);
-        }
-      }}
-      onMouseLeave={onLeave}
     >
-      <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping" />
+      <div
+        className="absolute w-6 h-6 bg-blue-600 rounded-full shadow-lg pointer-events-auto cursor-pointer"
+        style={{
+          left: `${screenPos.x}px`,
+          top: `${screenPos.y}px`,
+          transform: 'translate(-50%, -50%)',
+          transition: 'left 0.03s linear, top 0.03s linear',
+        }}
+        title={`${currentStep.stepName}: ${currentStep.httpMethod} ${currentStep.endpoint}`}
+      >
+        <div className="absolute inset-0 bg-blue-400 rounded-full animate-ping opacity-75" />
+      </div>
     </div>
+  );
+}
+
+export default function UseCasePlayback(props: UseCasePlaybackProps) {
+  return (
+    <ReactFlowProvider>
+      <UseCasePlaybackContent {...props} />
+    </ReactFlowProvider>
   );
 }
