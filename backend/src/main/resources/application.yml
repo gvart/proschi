@@ -3,7 +3,7 @@ spring:
     name: flowdoc-backend
 
   datasource:
-    url: jdbc:postgresql://localhost:5432/flowdoc
+    url: jdbc:postgresql://localhost:5432/flowdoc_dev
     username: flowdoc
     password: flowdoc
     driver-class-name: org.postgresql.Driver
@@ -16,11 +16,17 @@ spring:
       hibernate:
         dialect: org.hibernate.dialect.PostgreSQLDialect
         format_sql: true
+    open-in-view: false
 
   jackson:
     serialization:
       write-dates-as-timestamps: false
     time-zone: UTC
+
+  docker:
+    compose:
+      enabled: true
+      file: compose.yaml
 
 server:
   port: 8080

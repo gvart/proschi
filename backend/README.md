@@ -82,10 +82,13 @@ spring:
 
 ## Running the Application
 
-### Development Mode
+### Development Mode with Docker Compose
+
+The application now uses Spring Boot Docker Compose support to automatically manage PostgreSQL, Redis, and pgAdmin containers.
 
 ```bash
 # Using Gradle wrapper (recommended)
+# This will automatically start the required Docker containers
 ./gradlew bootRun
 
 # Or with a specific profile
@@ -93,6 +96,29 @@ spring:
 ```
 
 The application will start on `http://localhost:8080/api`
+
+Docker containers will be available at:
+- **PostgreSQL**: `localhost:5432` (user: flowdoc, password: flowdoc, database: flowdoc_dev)
+- **Redis**: `localhost:6379`
+- **pgAdmin**: `http://localhost:5050` (user: admin@flowdoc.com, password: admin)
+
+### Manual Docker Compose
+
+You can also manually manage the containers:
+
+```bash
+# Start containers
+docker compose up -d
+
+# Stop containers
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Rebuild containers
+docker compose up -d --build
+```
 
 ### Build
 
@@ -125,6 +151,362 @@ Response:
   "timestamp": "2025-11-06T17:00:00",
   "application": "FlowDoc Backend",
   "version": "0.0.1-SNAPSHOT"
+}
+```
+
+### Projects
+
+#### Get All Projects
+```
+GET /api/projects
+```
+
+#### Get Project by ID
+```
+GET /api/projects/{id}
+```
+
+#### Create Project
+```
+POST /api/projects
+Content-Type: application/json
+
+{
+  "name": "My Project",
+  "description": "Project description"
+}
+```
+
+#### Update Project
+```
+PUT /api/projects/{id}
+Content-Type: application/json
+
+{
+  "name": "Updated Project",
+  "description": "Updated description"
+}
+```
+
+#### Delete Project
+```
+DELETE /api/projects/{id}
+```
+
+#### Update Canvas State
+```
+PATCH /api/projects/{id}/canvas-state
+Content-Type: application/json
+
+{
+  "nodes": [...],
+  "edges": [...],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}
+```
+
+#### Search Projects
+```
+GET /api/projects/search?q=keyword
+```
+
+### Nodes
+
+#### Get All Nodes for Project
+```
+GET /api/projects/{projectId}/nodes
+```
+
+#### Get Node by ID
+```
+GET /api/projects/{projectId}/nodes/{nodeId}
+```
+
+#### Create Node
+```
+POST /api/projects/{projectId}/nodes
+Content-Type: application/json
+
+{
+  "type": "componentNode",
+  "position": { "x": 100, "y": 100 },
+  "data": {
+    "id": "node-1",
+    "name": "PostgreSQL",
+    "type": "database",
+    "techStack": "PostgreSQL",
+    "description": "Main database"
+  }
+}
+```
+
+#### Update Node
+```
+PUT /api/projects/{projectId}/nodes/{nodeId}
+Content-Type: application/json
+
+{
+  "position": { "x": 150, "y": 150 }
+}
+```
+
+#### Delete Node
+```
+DELETE /api/projects/{projectId}/nodes/{nodeId}
+```
+
+### Edges
+
+#### Get All Edges for Project
+```
+GET /api/projects/{projectId}/edges
+```
+
+#### Get Edge by ID
+```
+GET /api/projects/{projectId}/edges/{edgeId}
+```
+
+#### Create Edge
+```
+POST /api/projects/{projectId}/edges
+Content-Type: application/json
+
+{
+  "source": "node-1",
+  "target": "node-2",
+  "label": "HTTP"
+}
+```
+
+#### Update Edge
+```
+PUT /api/projects/{projectId}/edges/{edgeId}
+Content-Type: application/json
+
+{
+  "label": "gRPC"
+}
+```
+
+#### Delete Edge
+```
+DELETE /api/projects/{projectId}/edges/{edgeId}
+```
+
+### Authentication
+
+#### Register User
+```
+POST /api/auth/register
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "name": "John Doe",
+  "password": "password123"
+}
+```
+
+#### Login
+```
+POST /api/auth/login
+Content-Type: application/json
+
+{
+  "email": "user@example.com",
+  "password": "password123"
+}
+```
+
+Response:
+```json
+{
+  "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+  "user": {
+    "id": "user-id",
+    "email": "user@example.com",
+    "name": "John Doe",
+    "createdAt": "2025-11-06T17:00:00Z"
+  }
+}
+```
+
+#### Logout
+```
+POST /api/auth/logout
+Authorization: Bearer {token}
+```
+
+### Project Members
+
+#### Get All Members of a Project
+```
+GET /api/projects/{projectId}/members
+```
+
+#### Add Member to Project
+```
+POST /api/projects/{projectId}/members
+Content-Type: application/json
+
+{
+  "email": "member@example.com",
+  "role": "EDITOR"
+}
+```
+
+Roles: `OWNER`, `EDITOR`, `VIEWER`
+
+#### Update Member Role
+```
+PUT /api/projects/{projectId}/members/{memberId}
+Content-Type: application/json
+
+{
+  "role": "VIEWER"
+}
+```
+
+#### Remove Member from Project
+```
+DELETE /api/projects/{projectId}/members/{memberId}
+```
+
+### Use Cases
+
+#### Get All Use Cases for Project
+```
+GET /api/projects/{projectId}/use-cases
+```
+
+#### Create Use Case
+```
+POST /api/projects/{projectId}/use-cases
+Content-Type: application/json
+
+{
+  "name": "User Login Flow",
+  "description": "Authentication flow for user login",
+  "entryServiceId": "node-1"
+}
+```
+
+#### Get Use Case by ID
+```
+GET /api/use-cases/{useCaseId}
+```
+
+#### Update Use Case
+```
+PUT /api/use-cases/{useCaseId}
+Content-Type: application/json
+
+{
+  "name": "Updated Login Flow",
+  "description": "Updated description",
+  "entryServiceId": "node-1"
+}
+```
+
+#### Delete Use Case
+```
+DELETE /api/use-cases/{useCaseId}
+```
+
+#### Add Flow Step to Use Case
+```
+POST /api/use-cases/{useCaseId}/steps
+Content-Type: application/json
+
+{
+  "stepOrder": 1,
+  "fromServiceId": "api-gateway",
+  "toServiceId": "auth-service",
+  "httpMethod": "POST",
+  "endpoint": "/auth/login",
+  "requestBody": "{\"email\":\"user@example.com\",\"password\":\"pass\"}",
+  "responseBody": "{\"token\":\"abc123\"}",
+  "statusCode": 200,
+  "description": "Authenticate user"
+}
+```
+
+#### Update Flow Step
+```
+PUT /api/use-cases/{useCaseId}/steps/{stepId}
+Content-Type: application/json
+
+{
+  "stepOrder": 1,
+  "fromServiceId": "api-gateway",
+  "toServiceId": "auth-service",
+  "httpMethod": "POST",
+  "endpoint": "/auth/login",
+  "statusCode": 200
+}
+```
+
+#### Delete Flow Step
+```
+DELETE /api/use-cases/{useCaseId}/steps/{stepId}
+```
+
+### OpenAPI Schemas
+
+#### Get All Schemas for Project
+```
+GET /api/projects/{projectId}/schemas
+```
+
+#### Get Schemas for Service
+```
+GET /api/services/{serviceId}/schemas
+```
+
+#### Upload OpenAPI Schema
+```
+POST /api/projects/{projectId}/schemas
+Content-Type: application/json
+User-Id: {userId}
+
+{
+  "serviceId": "node-1",
+  "version": "1.0.0",
+  "title": "Auth Service API",
+  "description": "Authentication API",
+  "schemaContent": "openapi: 3.0.0\ninfo:\n  title: Auth API\n..."
+}
+```
+
+#### Get Schema by ID
+```
+GET /api/schemas/{schemaId}
+```
+
+#### Delete Schema
+```
+DELETE /api/schemas/{schemaId}
+```
+
+#### Validate Flow Against Schema
+```
+POST /api/schemas/{schemaId}/validate
+Content-Type: application/json
+
+{
+  "endpoint": "/auth/login",
+  "method": "POST",
+  "requestBody": {...}
+}
+```
+
+Response:
+```json
+{
+  "isValid": true,
+  "errors": [],
+  "warnings": []
 }
 ```
 
