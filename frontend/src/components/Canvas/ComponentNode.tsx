@@ -1,7 +1,8 @@
 import { memo } from 'react';
-import { Handle, Position, NodeProps } from 'reactflow';
+import { Handle, Position } from 'reactflow';
+import type { NodeProps } from 'reactflow';
 import { Server, Database, MessageSquare, ExternalLink } from 'lucide-react';
-import { ComponentMetadata } from '../../types/canvas';
+import type { ComponentMetadata } from '../../types/canvas';
 
 const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
   const getIcon = () => {

@@ -1,18 +1,20 @@
 import { create } from 'zustand';
 import {
+  addEdge,
+  applyNodeChanges,
+  applyEdgeChanges,
+} from 'reactflow';
+import type {
   Connection,
   Edge,
   EdgeChange,
   Node,
   NodeChange,
-  addEdge,
   OnNodesChange,
   OnEdgesChange,
   OnConnect,
-  applyNodeChanges,
-  applyEdgeChanges,
 } from 'reactflow';
-import { ComponentMetadata, Project } from '../types/canvas';
+import type { ComponentMetadata, Project } from '../types/canvas';
 import { mockApi } from '../services/mockApi';
 
 interface CanvasStore {

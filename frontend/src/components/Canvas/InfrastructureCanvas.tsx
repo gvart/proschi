@@ -4,8 +4,8 @@ import ReactFlow, {
   Controls,
   MiniMap,
   BackgroundVariant,
-  NodeTypes,
 } from 'reactflow';
+import type { NodeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';
@@ -34,7 +34,7 @@ export default function InfrastructureCanvas() {
   }, [loadProject]);
 
   const handleNodeClick = useCallback(
-    (_event: React.MouseEvent, node: any) => {
+    (_event: React.MouseEvent, node: Node) => {
       selectNode(node);
     },
     [selectNode]

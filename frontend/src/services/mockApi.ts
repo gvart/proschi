@@ -1,4 +1,4 @@
-import { Project, CanvasState } from '../types/canvas';
+import type { Project, CanvasState } from '../types/canvas';
 
 // Simulated delay for API calls
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));

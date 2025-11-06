@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { FolderOpen, Plus, Save } from 'lucide-react';
 import { mockApi } from '../../services/mockApi';
 import { useCanvasStore } from '../../store/canvasStore';
-import { Project } from '../../types/canvas';
+import type { Project } from '../../types/canvas';
 
 export default function WorkspaceSelector() {
   const [projects, setProjects] = useState<Project[]>([]);

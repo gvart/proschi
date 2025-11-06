@@ -1,5 +1,5 @@
 import { Server, Database, MessageSquare, ExternalLink } from 'lucide-react';
-import { ComponentType, TechStack } from '../../types/canvas';
+import type { ComponentType, TechStack } from '../../types/canvas';
 import { useCanvasStore } from '../../store/canvasStore';
 
 interface ComponentOption {
