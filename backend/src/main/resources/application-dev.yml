@@ -1,0 +1,19 @@
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/flowdoc_dev
+    username: flowdoc
+    password: flowdoc
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+
+  devtools:
+    restart:
+      enabled: true
+
+logging:
+  level:
+    com.flowdoc: DEBUG
+    org.springframework.web: DEBUG
