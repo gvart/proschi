@@ -113,6 +113,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
         y: Math.random() * 300 + 100,
       },
       data: nodeData,
+      zIndex: 1000, // Default zIndex for new nodes
     };
 
     set({ nodes: [...get().nodes, newNode] });
@@ -214,6 +215,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
       ? { x: position.x - clipboard[0].position.x, y: position.y - clipboard[0].position.y }
       : { x: 50, y: 50 };
 
+    // Find the maximum zIndex to place new nodes on top
+    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
+
     const newNodes = clipboard.map((node, index) => {
       const newId = `node-${Date.now()}-${index}`;
       return {
@@ -228,6 +232,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           id: newId,
         },
         selected: true,
+        zIndex: maxZIndex + 1 + index, // Place on top with incremental zIndex
       };
     });
 
@@ -242,6 +247,9 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   duplicateSelectedNodes: () => {
     const { nodes, selectedNodes } = get();
     const nodesToDuplicate = nodes.filter(node => selectedNodes.includes(node.id));
+
+    // Find the maximum zIndex to place new nodes on top
+    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
 
     const newNodes = nodesToDuplicate.map((node, index) => {
       const newId = `node-${Date.now()}-${index}`;
@@ -258,6 +266,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
           name: `${node.data.name} (Copy)`,
         },
         selected: true,
+        zIndex: maxZIndex + 1 + index, // Place on top with incremental zIndex
       };
     });
 
@@ -271,18 +280,42 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
 
   bringToFront: (nodeIds) => {
     const { nodes } = get();
-    const nodesToMove = nodes.filter(node => nodeIds.includes(node.id));
-    const otherNodes = nodes.filter(node => !nodeIds.includes(node.id));
-    // Put selected nodes at the end (rendered last = on top)
-    set({ nodes: [...otherNodes, ...nodesToMove] });
+
+    // Find the maximum zIndex currently in use
+    const maxZIndex = Math.max(...nodes.map(n => n.zIndex || 0), 0);
+
+    // Update nodes: bring selected nodes to front with higher zIndex
+    const updatedNodes = nodes.map(node => {
+      if (nodeIds.includes(node.id)) {
+        return {
+          ...node,
+          zIndex: maxZIndex + 1,
+        };
+      }
+      return node;
+    });
+
+    set({ nodes: updatedNodes });
   },
 
   sendToBack: (nodeIds) => {
     const { nodes } = get();
-    const nodesToMove = nodes.filter(node => nodeIds.includes(node.id));
-    const otherNodes = nodes.filter(node => !nodeIds.includes(node.id));
-    // Put selected nodes at the beginning (rendered first = at back)
-    set({ nodes: [...nodesToMove, ...otherNodes] });
+
+    // Find the minimum zIndex currently in use
+    const minZIndex = Math.min(...nodes.map(n => n.zIndex || 0), 0);
+
+    // Update nodes: send selected nodes to back with lower zIndex
+    const updatedNodes = nodes.map(node => {
+      if (nodeIds.includes(node.id)) {
+        return {
+          ...node,
+          zIndex: minZIndex - 1,
+        };
+      }
+      return node;
+    });
+
+    set({ nodes: updatedNodes });
   },
 
   loadProject: async (projectId) => {
