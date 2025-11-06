@@ -1,39 +1,12 @@
 import { memo } from 'react';
 import { Handle, Position } from 'reactflow';
 import type { NodeProps } from 'reactflow';
-import { Server, Database, MessageSquare, ExternalLink } from 'lucide-react';
 import type { ComponentMetadata } from '../../types/canvas';
+import { getTechStackIcon, getComponentTypeColor } from '../../utils/iconMapping';
 
 const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
-  const getIcon = () => {
-    switch (data.type) {
-      case 'service':
-        return <Server className="w-5 h-5" />;
-      case 'database':
-        return <Database className="w-5 h-5" />;
-      case 'queue':
-        return <MessageSquare className="w-5 h-5" />;
-      case 'external':
-        return <ExternalLink className="w-5 h-5" />;
-      default:
-        return <Server className="w-5 h-5" />;
-    }
-  };
-
-  const getColor = () => {
-    switch (data.type) {
-      case 'service':
-        return 'bg-blue-500';
-      case 'database':
-        return 'bg-green-500';
-      case 'queue':
-        return 'bg-purple-500';
-      case 'external':
-        return 'bg-orange-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
+  const color = getComponentTypeColor(data.type);
+  const icon = getTechStackIcon(data.techStack);
 
   return (
     <div
@@ -45,8 +18,8 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       <Handle type="target" position={Position.Top} className="w-3 h-3" />
 
       <div className="flex items-center gap-2 mb-2">
-        <div className={`p-2 rounded ${getColor()} text-white`}>
-          {getIcon()}
+        <div className={`p-2 rounded ${color} text-white`}>
+          {icon}
         </div>
         <div className="flex-1">
           <div className="font-semibold text-sm text-gray-800">{data.name}</div>

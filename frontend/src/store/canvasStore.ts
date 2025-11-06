@@ -125,9 +125,24 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   saveCanvas: async () => {
     const { currentProject, nodes, edges } = get();
     if (currentProject) {
+      // Convert ReactFlow types to Canvas types
+      const canvasNodes = nodes.map(node => ({
+        id: node.id,
+        type: node.type || 'default',
+        position: node.position,
+        data: node.data as ComponentMetadata,
+      }));
+
+      const canvasEdges = edges.map(edge => ({
+        id: edge.id,
+        source: edge.source,
+        target: edge.target,
+        label: typeof edge.label === 'string' ? edge.label : undefined,
+      }));
+
       await mockApi.saveCanvasState(currentProject.id, {
-        nodes,
-        edges,
+        nodes: canvasNodes,
+        edges: canvasEdges,
         viewport: { x: 0, y: 0, zoom: 1 },
       });
     }
