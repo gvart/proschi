@@ -12,9 +12,8 @@ import ReactFlow, {
   Background,
   Controls,
   MiniMap,
-  Node,
-  Edge,
 } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { api, type UseCase } from '../../services/api';
 import { useCanvasStore } from '../../store/canvasStore';
