@@ -1,12 +1,11 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, useRef } from 'react';
 import ReactFlow, {
   Background,
   Controls,
   MiniMap,
   BackgroundVariant,
-  useReactFlow,
 } from 'reactflow';
-import type { NodeTypes, Node, Edge } from 'reactflow';
+import type { NodeTypes, Node, Edge, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
 
@@ -46,7 +45,7 @@ function InfrastructureCanvasContent() {
   } = useCanvasStore();
 
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-  const reactFlowInstance = useReactFlow();
+  const reactFlowInstanceRef = useRef<ReactFlowInstance | null>(null);
 
   // Handle node selection changes from ReactFlow
   const handleNodesChange = useCallback(
@@ -156,8 +155,8 @@ function InfrastructureCanvasContent() {
     clipboard.length > 0,
     () => copySelectedNodes(),
     () => {
-      if (contextMenu && reactFlowInstance) {
-        const position = reactFlowInstance.project({
+      if (contextMenu && reactFlowInstanceRef.current) {
+        const position = reactFlowInstanceRef.current.screenToFlowPosition({
           x: contextMenu.x,
           y: contextMenu.y,
         });
@@ -184,6 +183,9 @@ function InfrastructureCanvasContent() {
         onEdgeClick={handleEdgeClick}
         onPaneClick={handlePaneClick}
         onContextMenu={handleContextMenu}
+        onInit={(instance) => {
+          reactFlowInstanceRef.current = instance;
+        }}
         nodeTypes={nodeTypes}
         fitView
         className="bg-gray-50"
