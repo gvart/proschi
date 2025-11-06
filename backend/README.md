@@ -82,10 +82,13 @@ spring:
 
 ## Running the Application
 
-### Development Mode
+### Development Mode with Docker Compose
+
+The application now uses Spring Boot Docker Compose support to automatically manage PostgreSQL, Redis, and pgAdmin containers.
 
 ```bash
 # Using Gradle wrapper (recommended)
+# This will automatically start the required Docker containers
 ./gradlew bootRun
 
 # Or with a specific profile
@@ -93,6 +96,29 @@ spring:
 ```
 
 The application will start on `http://localhost:8080/api`
+
+Docker containers will be available at:
+- **PostgreSQL**: `localhost:5432` (user: flowdoc, password: flowdoc, database: flowdoc_dev)
+- **Redis**: `localhost:6379`
+- **pgAdmin**: `http://localhost:5050` (user: admin@flowdoc.com, password: admin)
+
+### Manual Docker Compose
+
+You can also manually manage the containers:
+
+```bash
+# Start containers
+docker compose up -d
+
+# Stop containers
+docker compose down
+
+# View logs
+docker compose logs -f
+
+# Rebuild containers
+docker compose up -d --build
+```
 
 ### Build
 
@@ -126,6 +152,146 @@ Response:
   "application": "FlowDoc Backend",
   "version": "0.0.1-SNAPSHOT"
 }
+```
+
+### Projects
+
+#### Get All Projects
+```
+GET /api/projects
+```
+
+#### Get Project by ID
+```
+GET /api/projects/{id}
+```
+
+#### Create Project
+```
+POST /api/projects
+Content-Type: application/json
+
+{
+  "name": "My Project",
+  "description": "Project description"
+}
+```
+
+#### Update Project
+```
+PUT /api/projects/{id}
+Content-Type: application/json
+
+{
+  "name": "Updated Project",
+  "description": "Updated description"
+}
+```
+
+#### Delete Project
+```
+DELETE /api/projects/{id}
+```
+
+#### Update Canvas State
+```
+PATCH /api/projects/{id}/canvas-state
+Content-Type: application/json
+
+{
+  "nodes": [...],
+  "edges": [...],
+  "viewport": { "x": 0, "y": 0, "zoom": 1 }
+}
+```
+
+#### Search Projects
+```
+GET /api/projects/search?q=keyword
+```
+
+### Nodes
+
+#### Get All Nodes for Project
+```
+GET /api/projects/{projectId}/nodes
+```
+
+#### Get Node by ID
+```
+GET /api/projects/{projectId}/nodes/{nodeId}
+```
+
+#### Create Node
+```
+POST /api/projects/{projectId}/nodes
+Content-Type: application/json
+
+{
+  "type": "componentNode",
+  "position": { "x": 100, "y": 100 },
+  "data": {
+    "id": "node-1",
+    "name": "PostgreSQL",
+    "type": "database",
+    "techStack": "PostgreSQL",
+    "description": "Main database"
+  }
+}
+```
+
+#### Update Node
+```
+PUT /api/projects/{projectId}/nodes/{nodeId}
+Content-Type: application/json
+
+{
+  "position": { "x": 150, "y": 150 }
+}
+```
+
+#### Delete Node
+```
+DELETE /api/projects/{projectId}/nodes/{nodeId}
+```
+
+### Edges
+
+#### Get All Edges for Project
+```
+GET /api/projects/{projectId}/edges
+```
+
+#### Get Edge by ID
+```
+GET /api/projects/{projectId}/edges/{edgeId}
+```
+
+#### Create Edge
+```
+POST /api/projects/{projectId}/edges
+Content-Type: application/json
+
+{
+  "source": "node-1",
+  "target": "node-2",
+  "label": "HTTP"
+}
+```
+
+#### Update Edge
+```
+PUT /api/projects/{projectId}/edges/{edgeId}
+Content-Type: application/json
+
+{
+  "label": "gRPC"
+}
+```
+
+#### Delete Edge
+```
+DELETE /api/projects/{projectId}/edges/{edgeId}
 ```
 
 ## Environment Profiles
