@@ -21,7 +21,7 @@ export default function MetadataEditor() {
     return null;
   }
 
-  const handleChange = (field: keyof ComponentMetadata, value: string) => {
+  const handleChange = (field: keyof ComponentMetadata, value: string | number) => {
     const newData = { ...formData, [field]: value };
     setFormData(newData);
     updateNodeData(selectedNode.id, newData);
@@ -112,6 +112,79 @@ export default function MetadataEditor() {
             placeholder="Brief description of this component"
           />
         </div>
+
+        {/* Text Node Fields */}
+        {formData.type === 'text' && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Text Content
+              </label>
+              <textarea
+                value={formData.textContent || ''}
+                onChange={(e) => handleChange('textContent', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                rows={4}
+                placeholder="Enter your text..."
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Font Size
+              </label>
+              <input
+                type="number"
+                value={formData.fontSize || 14}
+                onChange={(e) => handleChange('fontSize', parseInt(e.target.value))}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min={8}
+                max={72}
+              />
+            </div>
+          </>
+        )}
+
+        {/* Group Node Fields */}
+        {formData.type === 'group' && (
+          <>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Background Color
+              </label>
+              <input
+                type="color"
+                value={formData.backgroundColor || '#f0f9ff'}
+                onChange={(e) => handleChange('backgroundColor', e.target.value)}
+                className="w-full h-10 border border-gray-300 rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Border Color
+              </label>
+              <input
+                type="color"
+                value={formData.borderColor || '#3b82f6'}
+                onChange={(e) => handleChange('borderColor', e.target.value)}
+                className="w-full h-10 border border-gray-300 rounded-md"
+              />
+            </div>
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Border Style
+              </label>
+              <select
+                value={formData.borderStyle || 'dashed'}
+                onChange={(e) => handleChange('borderStyle', e.target.value)}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="solid">Solid</option>
+                <option value="dashed">Dashed</option>
+                <option value="dotted">Dotted</option>
+              </select>
+            </div>
+          </>
+        )}
       </div>
 
       <div className="p-4 border-t border-gray-200">

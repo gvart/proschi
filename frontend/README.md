@@ -13,19 +13,31 @@ This is the frontend implementation of FlowDoc's **Infrastructure Canvas** featu
   - **Databases**: PostgreSQL, MySQL, MongoDB, Redis, DynamoDB
   - **Message Queues**: Kafka, RabbitMQ, SQS, Redis Queue
   - **External Systems**: Third Party API, Payment Gateway, Auth Service
+  - **Text & Annotations**: Text Note, Sticky Note, Comment (NEW ✨)
+  - **Grouping**: Logical Group, Network Boundary, Security Zone, Service Group (NEW ✨)
 - **Interactive Canvas**:
   - Zoom and pan controls
   - Mini-map for navigation
   - Dotted grid background
   - Connection lines between components
+  - Editable edge labels (NEW ✨)
+  - Resizable text and group nodes (NEW ✨)
 
 ### ✅ Component Metadata Editor
 - Click on any component to edit its properties:
   - Name
   - Owner Team
   - Description
+  - **For Text Nodes**: Text content, font size (NEW ✨)
+  - **For Group Nodes**: Background color, border color, border style (NEW ✨)
 - Delete components
 - Real-time updates
+
+### ✅ Edge Editor (NEW ✨)
+- Click on any connection to edit its properties:
+  - Label (e.g., "HTTP POST", "Event", "Query")
+  - Delete connections
+- Real-time label updates on the canvas
 
 ### ✅ Workspace Management
 - Switch between projects
@@ -57,8 +69,11 @@ src/
 │   └── Canvas/
 │       ├── InfrastructureCanvas.tsx   # Main canvas component
 │       ├── ComponentNode.tsx          # Custom node rendering
+│       ├── TextNode.tsx               # Text/annotation node (NEW)
+│       ├── GroupNode.tsx              # Group/boundary node (NEW)
 │       ├── ComponentPalette.tsx       # Component selection panel
 │       ├── MetadataEditor.tsx         # Node property editor
+│       ├── EdgeEditor.tsx             # Connection label editor (NEW)
 │       └── WorkspaceSelector.tsx      # Project switcher
 ├── services/
 │   └── mockApi.ts                     # Mock backend API
@@ -66,6 +81,8 @@ src/
 │   └── canvasStore.ts                 # Zustand state management
 ├── types/
 │   └── canvas.ts                      # TypeScript type definitions
+├── utils/
+│   └── iconMapping.tsx                # Icon and color mappings
 ├── App.tsx                            # Main app component
 └── index.css                          # Global styles
 ```
@@ -112,6 +129,30 @@ npm run preview
 2. Click and drag from the bottom handle of one component
 3. Drop on the top handle of another component
 4. A connection line will be created
+
+### Editing Connections (NEW ✨)
+1. Click on any connection line
+2. The **Edge Editor** panel appears on the right
+3. Add a label (e.g., "HTTP POST", "Publishes event", "Queries data")
+4. Click "Delete Connection" to remove it
+
+### Adding Text Notes (NEW ✨)
+1. In the Component Palette, find the **Annotations** category
+2. Click "Text Note" or "Sticky Note"
+3. A yellow sticky note appears on the canvas
+4. Click on it to edit the text content and font size
+5. Resize by dragging the corners when selected
+
+### Grouping Components (NEW ✨)
+1. In the Component Palette, find the **Grouping** category
+2. Click a group type (e.g., "Network Boundary", "Security Zone")
+3. A large resizable group box appears
+4. Click on the group to customize:
+   - Background color
+   - Border color
+   - Border style (solid, dashed, dotted)
+5. Resize the group to encompass related components
+6. Name it (e.g., "Private Subnet", "Production Environment")
 
 ### Managing Projects
 1. Use the **Workspace Selector** at the top to switch between projects

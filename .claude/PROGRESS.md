@@ -1,10 +1,33 @@
 # FlowDoc - Progress Tracker
 
-Last Updated: 2025-11-06
+Last Updated: 2025-11-06 (Updated with new features)
 
 ## ✅ Completed Features
 
-### Phase 1.1: Infrastructure Canvas (COMPLETE)
+### Phase 1.1: Infrastructure Canvas (COMPLETE + ENHANCED)
+
+#### NEW ENHANCEMENTS (2025-11-06)
+- [x] **Text & Annotation Support**
+  - TextNode component with resizable sticky notes
+  - Editable text content and font size
+  - Yellow sticky note design with icon
+  - Three annotation types: Text Note, Sticky Note, Comment
+
+- [x] **Editable Edge Labels**
+  - EdgeEditor component for editing connections
+  - Click on any edge to add/edit labels
+  - Delete connections from edge editor
+  - Real-time label updates on canvas
+
+- [x] **Component Grouping**
+  - GroupNode component with customizable styling
+  - Resizable group boundaries
+  - Customizable background color
+  - Customizable border color and style (solid, dashed, dotted)
+  - Four group types: Logical Group, Network Boundary, Security Zone, Service Group
+  - Perfect for showing VPCs, subnets, security zones, etc.
+
+### Phase 1.1: Infrastructure Canvas (ORIGINAL FEATURES)
 
 #### Frontend Setup
 - [x] React 19 + TypeScript project with Vite
@@ -281,15 +304,16 @@ Last Updated: 2025-11-06
 ## 📊 Statistics
 
 **Lines of Code:**
-- TypeScript: ~1,500 lines
+- TypeScript: ~2,000 lines (was 1,500, +500 for new features)
 - CSS: ~200 lines (mostly Tailwind classes)
 - Config: ~100 lines
 
 **Files Created:**
-- Components: 5
+- Components: 8 (was 5, +3 new: TextNode, GroupNode, EdgeEditor)
 - Services: 1
 - Store: 1
 - Types: 1
+- Utils: 1
 - Config: 4
 - Documentation: 4
 
