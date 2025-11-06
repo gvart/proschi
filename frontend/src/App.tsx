@@ -1,14 +1,24 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import InfrastructureCanvas from './components/Canvas/InfrastructureCanvas';
 import TopNavBar from './components/TopNavBar';
 import ProjectList from './components/ProjectList';
+import { useCanvasStore } from './store/canvasStore';
 import './App.css';
 
 function App() {
   const [currentProjectId, setCurrentProjectId] = useState<string | null>(null);
+  const currentProject = useCanvasStore((state) => state.currentProject);
+
+  // Sync local state with Zustand store when project changes
+  useEffect(() => {
+    if (currentProject) {
+      setCurrentProjectId(currentProject.id);
+    }
+  }, [currentProject]);
 
   const handleBackToProjects = () => {
     setCurrentProjectId(null);
+    useCanvasStore.getState().setCurrentProject(null);
   };
 
   if (!currentProjectId) {
