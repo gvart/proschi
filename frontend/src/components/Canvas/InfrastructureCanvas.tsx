@@ -4,9 +4,8 @@ import ReactFlow, {
   Controls,
   MiniMap,
   BackgroundVariant,
-  NodeTypes,
-  Node,
 } from 'reactflow';
+import type { NodeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 
 import { useCanvasStore } from '../../store/canvasStore';

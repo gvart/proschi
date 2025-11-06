@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { X, Trash2 } from 'lucide-react';
 import { useCanvasStore } from '../../store/canvasStore';
-import { ComponentMetadata } from '../../types/canvas';
+import type { ComponentMetadata } from '../../types/canvas';
 
 export default function MetadataEditor() {
   const selectedNode = useCanvasStore((state) => state.selectedNode);
