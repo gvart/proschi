@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -7,9 +7,11 @@ import {
   MoveUp,
   MoveDown,
   PlayCircle,
+  ArrowRight,
 } from 'lucide-react';
-import { api, type UseCase, type FlowStep, type CreateFlowStepRequest } from '../../services/api';
+import { api, type UseCase, type FlowStep, type CreateFlowStepRequest, type Protocol } from '../../services/api';
 import { useCanvasStore } from '../../store/canvasStore';
+import { getTechStackIcon, getComponentTypeColor } from '../../utils/iconMapping';
 
 interface UseCaseEditorProps {
   useCaseId: string;
@@ -27,6 +29,7 @@ export default function UseCaseEditor({
   const [editingStep, setEditingStep] = useState<number | null>(null);
   const [showStepModal, setShowStepModal] = useState(false);
   const nodes = useCanvasStore((state) => state.nodes);
+  const edges = useCanvasStore((state) => state.edges);
 
   useEffect(() => {
     loadUseCase();
@@ -221,6 +224,7 @@ export default function UseCaseEditor({
           step={editingStep !== null ? useCase.steps[editingStep] : undefined}
           stepOrder={editingStep !== null ? editingStep : useCase.steps.length}
           nodes={nodes}
+          edges={edges}
           onSave={handleSaveStep}
           onClose={() => {
             setShowStepModal(false);
@@ -370,16 +374,18 @@ interface StepModalProps {
   step?: FlowStep;
   stepOrder: number;
   nodes: any[];
+  edges: any[];
   onSave: (step: CreateFlowStepRequest) => void;
   onClose: () => void;
 }
 
-function StepModal({ step, stepOrder, nodes, onSave, onClose }: StepModalProps) {
+function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModalProps) {
   const [formData, setFormData] = useState<CreateFlowStepRequest>({
     stepOrder: step?.stepOrder ?? stepOrder,
     stepName: step?.stepName || 'Step',
     fromServiceId: step?.fromServiceId || '',
     toServiceId: step?.toServiceId || '',
+    protocol: step?.protocol || 'REST',
     httpMethod: step?.httpMethod || 'GET',
     endpoint: step?.endpoint || '/',
     requestFormat: step?.requestFormat || 'JSON',
@@ -401,6 +407,24 @@ function StepModal({ step, stepOrder, nodes, onSave, onClose }: StepModalProps) 
   };
 
   const serviceNodes = nodes.filter((n) => n.data.type === 'service');
+
+  // Get connected services based on selected fromService
+  const getConnectedServices = useMemo(() => {
+    if (!formData.fromServiceId) return serviceNodes;
+
+    const connectedServiceIds = new Set<string>();
+    edges.forEach(edge => {
+      if (edge.source === formData.fromServiceId) {
+        connectedServiceIds.add(edge.target);
+      }
+      if (edge.target === formData.fromServiceId) {
+        connectedServiceIds.add(edge.source);
+      }
+    });
+
+    const connected = serviceNodes.filter(node => connectedServiceIds.has(node.id));
+    return connected.length > 0 ? connected : serviceNodes; // Fallback to all if no connections
+  }, [formData.fromServiceId, edges, serviceNodes]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -439,84 +463,257 @@ function StepModal({ step, stepOrder, nodes, onSave, onClose }: StepModalProps) 
             />
           </div>
 
-          {/* Services */}
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                From Service *
-              </label>
-              <select
-                value={formData.fromServiceId}
-                onChange={(e) =>
-                  setFormData({ ...formData, fromServiceId: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select service</option>
-                {serviceNodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.data.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                To Service *
-              </label>
-              <select
-                value={formData.toServiceId}
-                onChange={(e) =>
-                  setFormData({ ...formData, toServiceId: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                required
-              >
-                <option value="">Select service</option>
-                {serviceNodes.map((node) => (
-                  <option key={node.id} value={node.id}>
-                    {node.data.name}
-                  </option>
-                ))}
-              </select>
+          {/* Services with Icons */}
+          <div className="space-y-4">
+            <div className="flex items-center gap-4">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  From Service *
+                </label>
+                <div className="grid grid-cols-1 gap-2">
+                  {serviceNodes.map((node) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, fromServiceId: node.id, toServiceId: '' })}
+                      className={`flex items-center gap-3 p-3 border-2 rounded-lg transition-all ${
+                        formData.fromServiceId === node.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className={`p-2 rounded ${getComponentTypeColor(node.data.type)} text-white flex-shrink-0`}>
+                        {getTechStackIcon(node.data.techStack)}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-gray-900">{node.data.name}</div>
+                        <div className="text-xs text-gray-500">{node.data.techStack}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              <div className="flex-shrink-0 pt-8">
+                <ArrowRight className="text-gray-400" size={24} />
+              </div>
+
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  To Service * {formData.fromServiceId && getConnectedServices.length < serviceNodes.length && (
+                    <span className="text-xs text-blue-600">(Connected only)</span>
+                  )}
+                </label>
+                <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto">
+                  {getConnectedServices.map((node) => (
+                    <button
+                      key={node.id}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, toServiceId: node.id })}
+                      disabled={!formData.fromServiceId || node.id === formData.fromServiceId}
+                      className={`flex items-center gap-3 p-3 border-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed ${
+                        formData.toServiceId === node.id
+                          ? 'border-blue-500 bg-blue-50'
+                          : 'border-gray-200 hover:border-gray-300 bg-white'
+                      }`}
+                    >
+                      <div className={`p-2 rounded ${getComponentTypeColor(node.data.type)} text-white flex-shrink-0`}>
+                        {getTechStackIcon(node.data.techStack)}
+                      </div>
+                      <div className="flex-1 text-left">
+                        <div className="font-medium text-gray-900">{node.data.name}</div>
+                        <div className="text-xs text-gray-500">{node.data.techStack}</div>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* HTTP Method & Endpoint */}
-          <div className="grid grid-cols-3 gap-4">
+          {/* Protocol Selector */}
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">
+              Communication Protocol *
+            </label>
+            <select
+              value={formData.protocol}
+              onChange={(e) =>
+                setFormData({ ...formData, protocol: e.target.value as Protocol })
+              }
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+            >
+              <option value="REST">REST API</option>
+              <option value="GRPC">gRPC</option>
+              <option value="SOAP">SOAP</option>
+              <option value="GRAPHQL">GraphQL</option>
+              <option value="MESSAGING">Messaging / Event</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+
+          {/* Protocol-specific fields */}
+          {formData.protocol === 'REST' && (
+            <div className="grid grid-cols-3 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  HTTP Method *
+                </label>
+                <select
+                  value={formData.httpMethod}
+                  onChange={(e) =>
+                    setFormData({ ...formData, httpMethod: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="PATCH">PATCH</option>
+                  <option value="DELETE">DELETE</option>
+                </select>
+              </div>
+              <div className="col-span-2">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Endpoint *
+                </label>
+                <input
+                  type="text"
+                  value={formData.endpoint}
+                  onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                  placeholder="/api/resource"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.protocol === 'GRPC' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                HTTP Method *
-              </label>
-              <select
-                value={formData.httpMethod}
-                onChange={(e) =>
-                  setFormData({ ...formData, httpMethod: e.target.value })
-                }
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-              >
-                <option value="GET">GET</option>
-                <option value="POST">POST</option>
-                <option value="PUT">PUT</option>
-                <option value="PATCH">PATCH</option>
-                <option value="DELETE">DELETE</option>
-              </select>
-            </div>
-            <div className="col-span-2">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Endpoint *
+                Service & Method *
               </label>
               <input
                 type="text"
                 value={formData.endpoint}
                 onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
-                placeholder="/api/resource"
+                placeholder="package.ServiceName/MethodName"
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
             </div>
-          </div>
+          )}
+
+          {formData.protocol === 'SOAP' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  SOAP Action
+                </label>
+                <input
+                  type="text"
+                  value={formData.httpMethod}
+                  onChange={(e) => setFormData({ ...formData, httpMethod: e.target.value })}
+                  placeholder="Action name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Endpoint *
+                </label>
+                <input
+                  type="text"
+                  value={formData.endpoint}
+                  onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                  placeholder="/soap/service"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.protocol === 'GRAPHQL' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Operation Type
+                </label>
+                <select
+                  value={formData.httpMethod}
+                  onChange={(e) =>
+                    setFormData({ ...formData, httpMethod: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="QUERY">Query</option>
+                  <option value="MUTATION">Mutation</option>
+                  <option value="SUBSCRIPTION">Subscription</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Endpoint *
+                </label>
+                <input
+                  type="text"
+                  value={formData.endpoint}
+                  onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                  placeholder="/graphql"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.protocol === 'MESSAGING' && (
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Message Type
+                </label>
+                <input
+                  type="text"
+                  value={formData.httpMethod}
+                  onChange={(e) => setFormData({ ...formData, httpMethod: e.target.value })}
+                  placeholder="Event type or topic"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Queue / Topic *
+                </label>
+                <input
+                  type="text"
+                  value={formData.endpoint}
+                  onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                  placeholder="queue-name or topic-name"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  required
+                />
+              </div>
+            </div>
+          )}
+
+          {formData.protocol === 'OTHER' && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Connection Details *
+              </label>
+              <input
+                type="text"
+                value={formData.endpoint}
+                onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
+                placeholder="Describe the connection method"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                required
+              />
+            </div>
+          )}
 
           {/* Execution Type & Parallel Group */}
           <div className="grid grid-cols-2 gap-4">
