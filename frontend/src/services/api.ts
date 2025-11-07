@@ -5,6 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // Types
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
+export type Protocol = 'REST' | 'GRPC' | 'SOAP' | 'GRAPHQL' | 'MESSAGING' | 'OTHER';
 
 export interface FlowStep {
   id?: string;
@@ -12,6 +13,7 @@ export interface FlowStep {
   stepName: string;
   fromServiceId: string;
   toServiceId: string;
+  protocol: Protocol;
   httpMethod: string;
   endpoint: string;
   requestFormat: 'JSON' | 'XML' | 'FREE_TEXT';
@@ -66,6 +68,7 @@ export interface CreateFlowStepRequest {
   stepName: string;
   fromServiceId: string;
   toServiceId: string;
+  protocol: Protocol;
   httpMethod: string;
   endpoint: string;
   requestFormat: 'JSON' | 'XML' | 'FREE_TEXT';
@@ -98,6 +101,7 @@ const sampleUseCase: UseCase = {
       stepName: 'Client Request',
       fromServiceId: 'node-1',
       toServiceId: 'node-2',
+      protocol: 'REST',
       httpMethod: 'POST',
       endpoint: '/api/orders',
       requestFormat: 'JSON',
@@ -133,6 +137,7 @@ const sampleUseCase: UseCase = {
       stepName: 'Validate User',
       fromServiceId: 'node-2',
       toServiceId: 'node-3',
+      protocol: 'REST',
       httpMethod: 'GET',
       endpoint: '/api/users/user123',
       requestFormat: 'JSON',
@@ -157,6 +162,7 @@ const sampleUseCase: UseCase = {
       stepName: 'Store Order',
       fromServiceId: 'node-2',
       toServiceId: 'node-4',
+      protocol: 'REST',
       httpMethod: 'POST',
       endpoint: '/orders',
       requestFormat: 'JSON',
@@ -185,6 +191,7 @@ const sampleUseCase: UseCase = {
       stepName: 'Publish Event',
       fromServiceId: 'node-2',
       toServiceId: 'node-6',
+      protocol: 'MESSAGING',
       httpMethod: 'POST',
       endpoint: '/events',
       requestFormat: 'JSON',
