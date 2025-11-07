@@ -171,8 +171,21 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
     );
   }
 
-  const currentStep = useCase.steps[currentStepIndex];
-  const highlightedNodes = new Set([currentStep.fromServiceId, currentStep.toServiceId]);
+  // Get current step(s) - could be multiple for parallel execution
+  const currentSteps = useCase.steps.filter((step, idx) => {
+    if (idx > currentStepIndex) return false;
+    if (idx === currentStepIndex) return true;
+    // Include previous steps if they're in the same parallel group as current step
+    const currentParallelGroup = useCase.steps[currentStepIndex]?.parallelGroup;
+    return currentParallelGroup !== undefined && step.parallelGroup === currentParallelGroup;
+  });
+
+  // Get all highlighted nodes from current step(s)
+  const highlightedNodes = new Set<string>();
+  currentSteps.forEach(step => {
+    highlightedNodes.add(step.fromServiceId);
+    highlightedNodes.add(step.toServiceId);
+  });
 
   // Apply highlighting to nodes
   const displayNodes: Node[] = nodes.map((node) => ({
@@ -190,34 +203,40 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
       : '',
   }));
 
-  // Highlight active edge
-  const activeEdge = edges.find(
-    (e) =>
-      (e.source === currentStep.fromServiceId && e.target === currentStep.toServiceId) ||
-      (e.target === currentStep.fromServiceId && e.source === currentStep.toServiceId)
-  );
+  // Find active edges for current step(s)
+  const activeEdges = currentSteps.map(step => {
+    const edge = edges.find(
+      (e) =>
+        (e.source === step.fromServiceId && e.target === step.toServiceId) ||
+        (e.target === step.fromServiceId && e.source === step.toServiceId)
+    );
+    return edge ? { edge, step } : null;
+  }).filter(Boolean);
 
-  const displayEdges: Edge[] = edges.map((edge) => ({
-    ...edge,
-    type: edge.id === activeEdge?.id ? 'animated' : 'default',
-    animated: edge.id === activeEdge?.id && animationProgress >= 100,
-    data: {
-      ...(edge.data || {}),
-      isActive: edge.id === activeEdge?.id,
-      progress: animationProgress,
-    },
-    style: {
-      ...edge.style,
-      stroke: edge.id === activeEdge?.id ? '#3b82f6' : '#b1b1b7',
-      strokeWidth: edge.id === activeEdge?.id ? 3 : 2,
-      opacity: edge.id === activeEdge?.id ? 1 : 0.3,
-      transition: 'all 0.3s ease',
-    },
-  }));
+  const displayEdges: Edge[] = edges.map((edge) => {
+    const activeInfo = activeEdges.find(ae => ae?.edge.id === edge.id);
+    const isActive = !!activeInfo;
+    const isRequestResponse = activeInfo?.step.executionType === 'SYNC_REQUEST_RESPONSE';
 
-  // Get nodes for animation
-  const fromNode = nodes.find((n) => n.id === currentStep.fromServiceId);
-  const toNode = nodes.find((n) => n.id === currentStep.toServiceId);
+    return {
+      ...edge,
+      type: isActive ? 'animated' : 'default',
+      animated: isActive && animationProgress >= 100,
+      data: {
+        ...(edge.data || {}),
+        isActive,
+        progress: animationProgress,
+        isRequestResponse,
+      },
+      style: {
+        ...edge.style,
+        stroke: isActive ? '#3b82f6' : '#b1b1b7',
+        strokeWidth: isActive ? 3 : 2,
+        opacity: isActive ? 1 : 0.3,
+        transition: 'all 0.3s ease',
+      },
+    };
+  });
 
   return (
     <div className="h-full flex flex-col bg-gray-50">
@@ -285,54 +304,75 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
       </div>
 
       {/* Step Info Panel */}
-      <div className="bg-white border-t border-gray-200 p-4">
+      <div className="bg-white border-t border-gray-200 p-4 max-h-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-start gap-6">
-            <div className="flex-1">
-              <div className="flex items-center gap-3 mb-3">
-                <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
-                  {currentStepIndex + 1}
-                </div>
-                <div>
-                  <h3 className="font-semibold text-gray-900">{currentStep.stepName}</h3>
-                  <p className="text-sm text-gray-500">
-                    {nodes.find((n) => n.id === currentStep.fromServiceId)?.data.name} →{' '}
-                    {nodes.find((n) => n.id === currentStep.toServiceId)?.data.name}
-                  </p>
-                </div>
-                <div className="ml-auto text-sm text-gray-500">
-                  {currentStep.httpMethod} {currentStep.endpoint}
-                </div>
-              </div>
-
-              {currentStep.description && (
-                <p className="text-sm text-gray-600 mb-3">{currentStep.description}</p>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                {currentStep.requestBody && (
-                  <div>
-                    <div className="text-xs font-medium text-gray-500 mb-1">
-                      Request ({currentStep.requestFormat})
-                    </div>
-                    <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
-                      {currentStep.requestBody}
-                    </pre>
-                  </div>
-                )}
-                {currentStep.responseBody && (
-                  <div>
-                    <div className="text-xs font-medium text-gray-500 mb-1">
-                      Response ({currentStep.responseFormat}) - {currentStep.statusCode}
-                    </div>
-                    <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
-                      {currentStep.responseBody}
-                    </pre>
-                  </div>
-                )}
-              </div>
+          {currentSteps.length > 1 && (
+            <div className="mb-2 text-sm font-medium text-blue-600">
+              ⚡ Parallel Execution ({currentSteps.length} steps running simultaneously)
             </div>
-          </div>
+          )}
+          {currentSteps.map((step, idx) => (
+            <div key={step.id || idx} className="mb-4 last:mb-0">
+              <div className="flex items-start gap-6">
+                <div className="flex-1">
+                  <div className="flex items-center gap-3 mb-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
+                      {useCase.steps.indexOf(step) + 1}
+                    </div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2">
+                        <h3 className="font-semibold text-gray-900">{step.stepName}</h3>
+                        {step.executionType === 'SYNC_REQUEST_RESPONSE' && (
+                          <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">Sync</span>
+                        )}
+                        {step.executionType === 'ASYNC_FIRE_AND_FORGET' && (
+                          <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">Fire & Forget</span>
+                        )}
+                        {step.executionType === 'ASYNC_REQUEST_RESPONSE' && (
+                          <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Async</span>
+                        )}
+                      </div>
+                      <p className="text-sm text-gray-500">
+                        {nodes.find((n) => n.id === step.fromServiceId)?.data.name} →{' '}
+                        {nodes.find((n) => n.id === step.toServiceId)?.data.name}
+                      </p>
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      {step.httpMethod} {step.endpoint}
+                    </div>
+                  </div>
+
+                  {step.description && (
+                    <p className="text-sm text-gray-600 mb-3">{step.description}</p>
+                  )}
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {step.requestBody && (
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 mb-1">
+                          Request ({step.requestFormat})
+                        </div>
+                        <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
+                          {step.requestBody}
+                        </pre>
+                      </div>
+                    )}
+                    {step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
+                      <div>
+                        <div className="text-xs font-medium text-gray-500 mb-1">
+                          Response ({step.responseFormat}) - {step.statusCode}
+                        </div>
+                        <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
+                          {step.responseBody}
+                        </pre>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+              {idx < currentSteps.length - 1 && <hr className="mt-4" />}
+            </div>
+          ))}
         </div>
       </div>
 

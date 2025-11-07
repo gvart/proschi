@@ -28,18 +28,35 @@ export function AnimatedPlaybackEdge({
 
   const isActive = data?.isActive || false;
   const progress = data?.progress || 0;
+  const isRequestResponse = data?.isRequestResponse || false;
 
   // Calculate dot position based on progress
+  // For request-response: 0-50% = request (forward), 50-100% = response (backward)
   useEffect(() => {
     if (!pathRef.current || !isActive) return;
 
     const pathElement = pathRef.current;
     const pathLength = pathElement.getTotalLength();
-    const targetLength = (progress / 100) * pathLength;
-    const point = pathElement.getPointAtLength(targetLength);
 
+    let targetLength: number;
+    if (isRequestResponse) {
+      // For request-response: animate back and forth
+      if (progress <= 50) {
+        // Request phase: 0 to 50% = move forward along path
+        targetLength = (progress / 50) * pathLength;
+      } else {
+        // Response phase: 50 to 100% = move backward along path
+        const responseProgress = (progress - 50) / 50;
+        targetLength = (1 - responseProgress) * pathLength;
+      }
+    } else {
+      // For fire-and-forget: just move forward
+      targetLength = (progress / 100) * pathLength;
+    }
+
+    const point = pathElement.getPointAtLength(targetLength);
     setDotPosition({ x: point.x, y: point.y });
-  }, [progress, isActive, edgePath]);
+  }, [progress, isActive, isRequestResponse, edgePath]);
 
   return (
     <>
