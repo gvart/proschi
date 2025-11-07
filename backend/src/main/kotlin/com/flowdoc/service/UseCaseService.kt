@@ -84,6 +84,8 @@ class UseCaseService(
             responseBody = request.responseBody,
             statusCode = request.statusCode,
             description = request.description,
+            executionType = request.executionType,
+            parallelGroup = request.parallelGroup,
             isParallel = request.isParallel,
             isConditional = request.isConditional,
             conditionExpression = request.conditionExpression
@@ -114,6 +116,8 @@ class UseCaseService(
         step.responseBody = request.responseBody
         step.statusCode = request.statusCode
         step.description = request.description
+        step.executionType = request.executionType
+        step.parallelGroup = request.parallelGroup
         step.isParallel = request.isParallel
         step.isConditional = request.isConditional
         step.conditionExpression = request.conditionExpression

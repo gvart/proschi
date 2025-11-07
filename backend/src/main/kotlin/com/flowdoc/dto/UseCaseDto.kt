@@ -43,6 +43,8 @@ data class FlowStepDto(
     val responseBody: String? = null,
     val statusCode: Int? = 200,
     val description: String? = null,
+    val executionType: String = "SYNC_REQUEST_RESPONSE",
+    val parallelGroup: Int? = null,
     val isParallel: Boolean = false,
     val isConditional: Boolean = false,
     val conditionExpression: String? = null
@@ -68,6 +70,8 @@ data class CreateFlowStepRequest(
     val responseBody: String? = null,
     val statusCode: Int? = 200,
     val description: String? = null,
+    val executionType: String = "SYNC_REQUEST_RESPONSE",
+    val parallelGroup: Int? = null,
     val isParallel: Boolean = false,
     val isConditional: Boolean = false,
     val conditionExpression: String? = null
@@ -133,6 +137,8 @@ fun FlowStep.toDto(): FlowStepDto = FlowStepDto(
     responseBody = this.responseBody,
     statusCode = this.statusCode,
     description = this.description,
+    executionType = this.executionType,
+    parallelGroup = this.parallelGroup,
     isParallel = this.isParallel,
     isConditional = this.isConditional,
     conditionExpression = this.conditionExpression

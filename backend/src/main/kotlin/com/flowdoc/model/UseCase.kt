@@ -85,6 +85,12 @@ data class FlowStep(
     @Column(columnDefinition = "TEXT")
     var description: String? = null,
 
+    @Column(name = "execution_type", nullable = false)
+    var executionType: String = "SYNC_REQUEST_RESPONSE", // SYNC_REQUEST_RESPONSE, ASYNC_FIRE_AND_FORGET, ASYNC_REQUEST_RESPONSE
+
+    @Column(name = "parallel_group")
+    var parallelGroup: Int? = null, // Steps with same parallelGroup execute simultaneously
+
     @Column(name = "is_parallel")
     var isParallel: Boolean = false,
 
