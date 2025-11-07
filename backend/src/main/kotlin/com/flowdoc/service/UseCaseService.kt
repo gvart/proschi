@@ -76,6 +76,7 @@ class UseCaseService(
             stepName = request.stepName,
             fromServiceId = request.fromServiceId,
             toServiceId = request.toServiceId,
+            protocol = request.protocol,
             httpMethod = request.httpMethod,
             endpoint = request.endpoint,
             requestFormat = request.requestFormat,
@@ -108,6 +109,7 @@ class UseCaseService(
         step.stepName = request.stepName
         step.fromServiceId = request.fromServiceId
         step.toServiceId = request.toServiceId
+        step.protocol = request.protocol
         step.httpMethod = request.httpMethod
         step.endpoint = request.endpoint
         step.requestFormat = request.requestFormat

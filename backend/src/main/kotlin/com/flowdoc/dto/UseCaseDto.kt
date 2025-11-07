@@ -35,6 +35,7 @@ data class FlowStepDto(
     val stepName: String = "Step",
     val fromServiceId: String,
     val toServiceId: String,
+    val protocol: String = "REST",
     val httpMethod: String = "GET",
     val endpoint: String = "/",
     val requestFormat: String = "JSON",
@@ -62,6 +63,7 @@ data class CreateFlowStepRequest(
     @field:NotBlank(message = "To service ID is required")
     val toServiceId: String,
 
+    val protocol: String = "REST",
     val httpMethod: String = "GET",
     val endpoint: String = "/",
     val requestFormat: String = "JSON",
@@ -129,6 +131,7 @@ fun FlowStep.toDto(): FlowStepDto = FlowStepDto(
     stepName = this.stepName,
     fromServiceId = this.fromServiceId,
     toServiceId = this.toServiceId,
+    protocol = this.protocol,
     httpMethod = this.httpMethod,
     endpoint = this.endpoint,
     requestFormat = this.requestFormat,

@@ -62,10 +62,13 @@ data class FlowStep(
     var toServiceId: String, // Reference to Node ID
 
     @Column(nullable = false)
-    var httpMethod: String = "GET", // GET, POST, PUT, DELETE, etc.
+    var protocol: String = "REST", // REST, GRPC, SOAP, GRAPHQL, MESSAGING, OTHER
 
     @Column(nullable = false)
-    var endpoint: String = "/",
+    var httpMethod: String = "GET", // For REST: GET, POST, PUT, DELETE, etc.
+
+    @Column(nullable = false)
+    var endpoint: String = "/", // For REST/SOAP: endpoint, For gRPC: service.method
 
     @Column(name = "request_format", nullable = false)
     var requestFormat: String = "JSON", // JSON, XML, FREE_TEXT
