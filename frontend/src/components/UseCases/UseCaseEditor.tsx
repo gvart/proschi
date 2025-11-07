@@ -401,6 +401,8 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
     conditionExpression: step?.conditionExpression || '',
   });
 
+  const [showAllServices, setShowAllServices] = useState(false);
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     onSave(formData);
@@ -410,7 +412,7 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
 
   // Get connected services based on selected fromService
   const getConnectedServices = useMemo(() => {
-    if (!formData.fromServiceId) return serviceNodes;
+    if (!formData.fromServiceId || showAllServices) return serviceNodes;
 
     const connectedServiceIds = new Set<string>();
     edges.forEach(edge => {
@@ -424,7 +426,7 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
 
     const connected = serviceNodes.filter(node => connectedServiceIds.has(node.id));
     return connected.length > 0 ? connected : serviceNodes; // Fallback to all if no connections
-  }, [formData.fromServiceId, edges, serviceNodes]);
+  }, [formData.fromServiceId, edges, serviceNodes, showAllServices]);
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -499,11 +501,25 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
               </div>
 
               <div className="flex-1">
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  To Service * {formData.fromServiceId && getConnectedServices.length < serviceNodes.length && (
-                    <span className="text-xs text-blue-600">(Connected only)</span>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="block text-sm font-medium text-gray-700">
+                    To Service *
+                  </label>
+                  {formData.fromServiceId && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllServices(!showAllServices)}
+                      className="text-xs px-2 py-1 rounded border transition-colors"
+                      style={{
+                        backgroundColor: showAllServices ? '#f3f4f6' : '#dbeafe',
+                        borderColor: showAllServices ? '#d1d5db' : '#3b82f6',
+                        color: showAllServices ? '#6b7280' : '#1d4ed8',
+                      }}
+                    >
+                      {showAllServices ? '🔓 Show All' : '🔗 Connected Only'}
+                    </button>
                   )}
-                </label>
+                </div>
                 <div className="grid grid-cols-1 gap-2 max-h-[300px] overflow-y-auto">
                   {getConnectedServices.map((node) => (
                     <button
