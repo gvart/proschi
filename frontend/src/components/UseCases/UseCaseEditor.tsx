@@ -388,6 +388,8 @@ function StepModal({ step, stepOrder, nodes, onSave, onClose }: StepModalProps) 
     responseBody: step?.responseBody || '',
     statusCode: step?.statusCode || 200,
     description: step?.description || '',
+    executionType: step?.executionType || 'SYNC_REQUEST_RESPONSE',
+    parallelGroup: step?.parallelGroup,
     isParallel: step?.isParallel || false,
     isConditional: step?.isConditional || false,
     conditionExpression: step?.conditionExpression || '',
@@ -513,6 +515,55 @@ function StepModal({ step, stepOrder, nodes, onSave, onClose }: StepModalProps) 
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                 required
               />
+            </div>
+          </div>
+
+          {/* Execution Type & Parallel Group */}
+          <div className="grid grid-cols-2 gap-4">
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Execution Type *
+              </label>
+              <select
+                value={formData.executionType}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    executionType: e.target.value as 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE',
+                  })
+                }
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="SYNC_REQUEST_RESPONSE">Sync Request/Response</option>
+                <option value="ASYNC_FIRE_AND_FORGET">Async Fire & Forget</option>
+                <option value="ASYNC_REQUEST_RESPONSE">Async Request/Response</option>
+              </select>
+              <p className="mt-1 text-xs text-gray-500">
+                {formData.executionType === 'SYNC_REQUEST_RESPONSE' && 'Wait for response, animate back and forth'}
+                {formData.executionType === 'ASYNC_FIRE_AND_FORGET' && 'No response wait, one-way animation'}
+                {formData.executionType === 'ASYNC_REQUEST_RESPONSE' && 'Non-blocking request with eventual response'}
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-1">
+                Parallel Group
+              </label>
+              <input
+                type="number"
+                value={formData.parallelGroup ?? ''}
+                onChange={(e) =>
+                  setFormData({
+                    ...formData,
+                    parallelGroup: e.target.value ? parseInt(e.target.value) : undefined,
+                  })
+                }
+                placeholder="Leave empty for sequential"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                min="1"
+              />
+              <p className="mt-1 text-xs text-gray-500">
+                Steps with same group number execute in parallel
+              </p>
             </div>
           </div>
 
