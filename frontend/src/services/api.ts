@@ -4,6 +4,8 @@ const USE_MOCK_DATA = true;
 const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
 
 // Types
+export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
+
 export interface FlowStep {
   id?: string;
   stepOrder: number;
@@ -18,6 +20,8 @@ export interface FlowStep {
   responseBody?: string;
   statusCode?: number;
   description?: string;
+  executionType: ExecutionType;
+  parallelGroup?: number;
   isParallel: boolean;
   isConditional: boolean;
   conditionExpression?: string;
@@ -70,6 +74,8 @@ export interface CreateFlowStepRequest {
   responseBody?: string;
   statusCode?: number;
   description?: string;
+  executionType: ExecutionType;
+  parallelGroup?: number;
   isParallel: boolean;
   isConditional: boolean;
   conditionExpression?: string;
@@ -115,7 +121,9 @@ const sampleUseCase: UseCase = {
         totalAmount: 109.97
       }, null, 2),
       statusCode: 201,
-      description: 'API Gateway receives create order request from client',
+      description: 'API Gateway receives create order request from client and sends response back',
+      executionType: 'SYNC_REQUEST_RESPONSE',
+      parallelGroup: undefined,
       isParallel: false,
       isConditional: false,
     },
@@ -137,7 +145,9 @@ const sampleUseCase: UseCase = {
         creditLimit: 5000
       }, null, 2),
       statusCode: 200,
-      description: 'Order Service validates user exists and is active',
+      description: 'Order Service validates user exists and is active (waits for response)',
+      executionType: 'SYNC_REQUEST_RESPONSE',
+      parallelGroup: undefined,
       isParallel: false,
       isConditional: false,
     },
@@ -163,8 +173,10 @@ const sampleUseCase: UseCase = {
         insertedId: 'order-789'
       }, null, 2),
       statusCode: 201,
-      description: 'Persist order details to database',
-      isParallel: false,
+      description: 'Persist order details to database (runs in parallel with event publishing)',
+      executionType: 'SYNC_REQUEST_RESPONSE',
+      parallelGroup: 1,
+      isParallel: true,
       isConditional: false,
     },
     {
@@ -187,8 +199,10 @@ const sampleUseCase: UseCase = {
         published: true
       }, null, 2),
       statusCode: 200,
-      description: 'Publish order created event to message queue',
-      isParallel: false,
+      description: 'Fire-and-forget event publish to message queue (no response wait)',
+      executionType: 'ASYNC_FIRE_AND_FORGET',
+      parallelGroup: 1,
+      isParallel: true,
       isConditional: false,
     },
   ],
