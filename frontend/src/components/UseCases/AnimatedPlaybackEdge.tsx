@@ -1,5 +1,5 @@
-import { useEffect, useRef } from 'react';
-import { BaseEdge, EdgeLabelRenderer, getBezierPath } from 'reactflow';
+import { useEffect, useRef, useState } from 'react';
+import { BaseEdge, getBezierPath } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 
 export function AnimatedPlaybackEdge({
@@ -15,7 +15,9 @@ export function AnimatedPlaybackEdge({
   data,
 }: EdgeProps) {
   const pathRef = useRef<SVGPathElement>(null);
-  const [edgePath, labelX, labelY] = getBezierPath({
+  const [dotPosition, setDotPosition] = useState({ x: sourceX, y: sourceY });
+
+  const [edgePath] = getBezierPath({
     sourceX,
     sourceY,
     sourcePosition,
@@ -27,59 +29,66 @@ export function AnimatedPlaybackEdge({
   const isActive = data?.isActive || false;
   const progress = data?.progress || 0;
 
+  // Calculate dot position based on progress
+  useEffect(() => {
+    if (!pathRef.current || !isActive) return;
+
+    const pathElement = pathRef.current;
+    const pathLength = pathElement.getTotalLength();
+    const targetLength = (progress / 100) * pathLength;
+    const point = pathElement.getPointAtLength(targetLength);
+
+    setDotPosition({ x: point.x, y: point.y });
+  }, [progress, isActive, edgePath]);
+
   return (
     <>
+      {/* Hidden path for calculation */}
+      <path
+        ref={pathRef}
+        d={edgePath}
+        fill="none"
+        stroke="none"
+        style={{ visibility: 'hidden', pointerEvents: 'none' }}
+      />
+
+      {/* Visible edge */}
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
       {/* Animated dot traveling along the edge */}
       {isActive && progress < 100 && (
         <g>
-          <path
-            ref={pathRef}
-            id={`edge-path-${id}`}
-            d={edgePath}
-            fill="none"
-            stroke="none"
-          />
-
-          <circle r="4" fill="#3b82f6">
-            <animateMotion
-              dur="1.5s"
-              repeatCount="1"
-              keyPoints={`${progress / 100};${progress / 100}`}
-              keyTimes="0;1"
-              calcMode="linear"
-            >
-              <mpath xlinkHref={`#edge-path-${id}`} />
-            </animateMotion>
-          </circle>
-
-          {/* Pulsing effect */}
-          <circle r="8" fill="#60a5fa" opacity="0.4">
-            <animateMotion
-              dur="1.5s"
-              repeatCount="1"
-              keyPoints={`${progress / 100};${progress / 100}`}
-              keyTimes="0;1"
-              calcMode="linear"
-            >
-              <mpath xlinkHref={`#edge-path-${id}`} />
-            </animateMotion>
+          {/* Pulsing outer circle */}
+          <circle
+            cx={dotPosition.x}
+            cy={dotPosition.y}
+            r="10"
+            fill="#60a5fa"
+            opacity="0.3"
+          >
             <animate
               attributeName="r"
-              from="8"
-              to="12"
+              values="10;14;10"
               dur="1s"
               repeatCount="indefinite"
             />
             <animate
               attributeName="opacity"
-              from="0.6"
-              to="0"
+              values="0.3;0.1;0.3"
               dur="1s"
               repeatCount="indefinite"
             />
           </circle>
+
+          {/* Main dot */}
+          <circle
+            cx={dotPosition.x}
+            cy={dotPosition.y}
+            r="6"
+            fill="#3b82f6"
+            stroke="#ffffff"
+            strokeWidth="2"
+          />
         </g>
       )}
     </>
