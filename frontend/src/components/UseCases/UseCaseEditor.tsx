@@ -408,7 +408,11 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
     onSave(formData);
   };
 
-  const serviceNodes = nodes.filter((n) => n.data.type === 'service');
+  const serviceNodes = nodes.filter((n) => {
+    // Include all component types except text annotations and groups
+    const flowComponentTypes = ['service', 'database', 'queue', 'cache', 'external', 'serverless', 'compute', 'container', 'storage', 'cdn'];
+    return flowComponentTypes.includes(n.data.type);
+  });
 
   // Get connected services based on selected fromService
   const getConnectedServices = useMemo(() => {
@@ -465,12 +469,12 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
             />
           </div>
 
-          {/* Services with Icons */}
+          {/* Components with Icons */}
           <div className="space-y-4">
             <div className="flex items-center gap-4">
               <div className="flex-1">
                 <label className="block text-sm font-medium text-gray-700 mb-2">
-                  From Service *
+                  From Component *
                 </label>
                 <div className="grid grid-cols-1 gap-2">
                   {serviceNodes.map((node) => (
@@ -503,7 +507,7 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
               <div className="flex-1">
                 <div className="flex items-center justify-between mb-2">
                   <label className="block text-sm font-medium text-gray-700">
-                    To Service *
+                    To Component *
                   </label>
                   {formData.fromServiceId && (
                     <button
@@ -516,7 +520,7 @@ function StepModal({ step, stepOrder, nodes, edges, onSave, onClose }: StepModal
                         color: showAllServices ? '#6b7280' : '#1d4ed8',
                       }}
                     >
-                      {showAllServices ? '🔓 Show All' : '🔗 Connected Only'}
+                      {showAllServices ? '🔓 All Components' : '🔗 Connected Only'}
                     </button>
                   )}
                 </div>
