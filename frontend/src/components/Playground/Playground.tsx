@@ -13,6 +13,7 @@ import ReactFlow, {
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
+  AlignLeft,
   AlertCircle,
   AlertTriangle,
   BookOpen,
@@ -302,6 +303,15 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   }}
                 >
                   Download .proschi file
+                </MenuItem>
+                <MenuItem
+                  icon={<AlignLeft size={14} />}
+                  onSelect={() => {
+                    close();
+                    editorRef.current?.format();
+                  }}
+                >
+                  Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
                 </MenuItem>
                 <div className="my-1 border-t border-gray-100" />
                 <MenuItem

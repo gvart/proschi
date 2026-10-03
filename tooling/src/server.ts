@@ -1,7 +1,7 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references and an outline.
+ * go-to-definition, references, an outline and formatting.
  */
 import {
   CodeActionKind,
@@ -22,6 +22,7 @@ import { statSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
 import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { format } from './proschi';
 
 declare const PROSCHI_VERSION: string;
 
@@ -50,6 +51,7 @@ connection.onInitialize(() => ({
     definitionProvider: true,
     referencesProvider: true,
     documentSymbolProvider: true,
+    documentFormattingProvider: true,
     codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
   },
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
@@ -157,6 +159,15 @@ function toSymbol(s: OutlineSymbol): DocumentSymbol {
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
   return doc ? outline(analysisOf(doc)).map(toSymbol) : [];
+});
+
+// One edit that replaces the whole document, or none when it is already formatted.
+connection.onDocumentFormatting((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const text = doc.getText();
+  const formatted = format(text);
+  return formatted === text ? [] : [{ range: { start: { line: 0, character: 0 }, end: doc.positionAt(text.length) }, newText: formatted }];
 });
 
 connection.onCodeAction((params) => {

@@ -6,10 +6,13 @@ import { indentWithTab } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
+import { format, formattedOffset } from '../../dsl/format';
 import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
 
 export interface CodeEditorHandle {
   goTo: (line: number, col: number) => void;
+  /** Formats the document (also Shift+Alt+F), keeping the cursor at the same code. */
+  format: () => void;
 }
 
 interface CodeEditorProps {
@@ -26,6 +29,16 @@ const theme = EditorView.theme({
   '.cm-gutters': { backgroundColor: '#f9fafb', borderRight: '1px solid #e5e7eb' },
   '&.cm-focused': { outline: 'none' },
 });
+
+function formatDocument(view: EditorView): boolean {
+  const before = view.state.doc.toString();
+  const after = format(before);
+  if (after !== before) {
+    const anchor = formattedOffset(before, after, view.state.selection.main.head);
+    view.dispatch({ changes: { from: 0, to: before.length, insert: after }, selection: { anchor }, scrollIntoView: true, userEvent: 'format' });
+  }
+  return true;
+}
 
 export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
@@ -46,7 +59,7 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
         doc: value,
         extensions: [
           basicSetup,
-          keymap.of([indentWithTab]),
+          keymap.of([indentWithTab, { key: 'Shift-Alt-f', run: formatDocument, preventDefault: true }]),
           proschiLanguage,
           autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current)] }),
           lintGutter(),
@@ -91,6 +104,12 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
       const target = view.state.doc.line(line);
       const anchor = Math.min(target.from + col - 1, target.to);
       view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor, { y: 'center' }) });
+      view.focus();
+    },
+    format() {
+      const view = viewRef.current;
+      if (!view) return;
+      formatDocument(view);
       view.focus();
     },
   }));

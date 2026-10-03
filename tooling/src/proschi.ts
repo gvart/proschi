@@ -6,6 +6,7 @@
  */
 export { parse } from '../../frontend/src/dsl/parser';
 export { addConnection } from '../../frontend/src/dsl/edit';
+export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
 export type { Diagnostic, Diagram, DiagramNode, DiagramStep, DiagramUseCase, ParseResult, SourceLoc } from '../../frontend/src/dsl/types';

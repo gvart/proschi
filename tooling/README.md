@@ -9,11 +9,13 @@ npm install -g proschi
 proschi check docs/                 # validate every *.proschi file below docs/
 proschi check --strict --openapi orders=specs/orders.yaml docs/   # also against an OpenAPI spec
 proschi parse checkout.proschi      # the parsed diagram as JSON
+proschi fmt docs/                   # format files in place (--check: only report, exit 1 for CI)
 proschi-language-server --stdio     # for any editor with an LSP client
 ```
 
-Both commands run the parser of the web editor, so they report exactly what
-the editor reports. Setup for VS Code, IntelliJ, Neovim, Helix, Sublime Text
+The commands run the parser of the web editor, so they report exactly what
+the editor reports. The language server also formats documents, with the same
+formatter as `proschi fmt`. Setup for VS Code, IntelliJ, Neovim, Helix, Sublime Text
 and CI: [docs/EDITORS.md](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md).
 
 `check` and the language server can also compare use case steps with the

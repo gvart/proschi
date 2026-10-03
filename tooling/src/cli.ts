@@ -1,11 +1,13 @@
 /**
  * `proschi check` validates .proschi files (for CI and pre-commit hooks);
- * `proschi parse` prints the parsed diagram as JSON (see schema/).
+ * `proschi parse` prints the parsed diagram as JSON (see schema/);
+ * `proschi fmt` formats them (see fmt.ts).
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { openApiDiagnostics, parseSpecFlag } from './openapi/config';
 import { parse, type Diagnostic } from './proschi';
+import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -13,6 +15,7 @@ const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
 const USAGE = `Usage:
   proschi check [--strict] [--format text|github|json] [--openapi <node>=<spec>]... <file|dir>...
   proschi parse <file>
+${FMT_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
@@ -21,7 +24,8 @@ check   Reports errors and warnings. Directories are searched for *.proschi file
         (YAML or JSON); it overrides the "openapi" map of the nearest
         proschi.json.
 parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
-        schema/proschi-diagram.schema.json.`;
+        schema/proschi-diagram.schema.json.
+${FMT_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -93,6 +97,8 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     out(JSON.stringify(parse(readFileSync(rest[0], 'utf8')), null, 2));
     return 0;
   }
+
+  if (command === 'fmt') return runFmt(rest, collectFiles, out, err);
 
   if (command === 'check') {
     let strict = false;
