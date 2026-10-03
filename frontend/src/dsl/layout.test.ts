@@ -20,7 +20,7 @@ describe('layoutDiagram', () => {
     }
 
     const topLevel = nodes.filter((n) => !n.parentNode);
-    const boxes = topLevel.map((n) => ({ x: n.position.x, y: n.position.y, w: Number(n.style?.width ?? 200), h: Number(n.style?.height ?? 84) }));
+    const boxes = topLevel.map((n) => ({ x: n.position.x, y: n.position.y, w: Number(n.style?.width ?? 240), h: Number(n.style?.height ?? 84) }));
     boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
   });
 

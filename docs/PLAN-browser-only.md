@@ -48,7 +48,7 @@ body → `requestFormat`/`requestBody`).
   autocomplete of tech stacks / node ids), debounced re-parse, `elkjs`
   auto-layout (groups as containers; optional `pos x,y` override), use-case
   picker wired to playback.
-- [ ] **Phase 3 – Sharing.** `lz-string` `#code=` links, named docs in
+- [x] **Phase 3 – Sharing.** `lz-string` `#code=` links, named docs in
   localStorage, PNG/SVG export (`html-to-image`), `.proschi` import/export,
   examples gallery.
 - [ ] **Phase 4 – Two-way editing (optional).** Canvas edits write back to the
