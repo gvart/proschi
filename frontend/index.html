@@ -104,13 +104,13 @@ usecase "Place order" {
   web -&gt; api : POST /orders json {"sku": "A1"}
 
   alt "Placed" {
-    api -&gt; db      : INSERT order
+    api  -&gt; db     : INSERT order
     api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
     api --&gt; web    : 201 {"orderId": "o-1"}
   } alt "Out of stock" {
     api --&gt; web : 409 {"error": "out_of_stock"}
   } alt "DB down" {
-    api -x db   : INSERT order
+    api  -x db  : INSERT order
     api --&gt; web : 503 {"error": "retry_later"}
   }
 }</code></pre>
@@ -274,8 +274,8 @@ orders  -&gt; events   : publish</code></pre>
     "items": [{ "productId": "prod-1", "quantity": 2 }]
   }
   par {
-    orders -&gt; ordersDb : INSERT order
-    orders -&gt;&gt; events  : OrderCreated {"orderId": "order-789"}
+    orders  -&gt; ordersDb : INSERT order
+    orders -&gt;&gt; events   : OrderCreated {"orderId": "order-789"}
   }
   orders --&gt; gateway : 201 {"status": "pending"}
 }</code></pre>
@@ -290,22 +290,23 @@ orders  -&gt; events   : publish</code></pre>
                   once and shared. Steps after the blocks are shared again by every branch.
                 </p>
                 <p>
-                  <code>-x</code> is a call that never gets an answer: a timeout or a refused connection. Scenarios whose
-                  entry request ends in a 4xx or 5xx, or fails, are marked as error paths.
+                  <code>when "…"</code> says why a branch happens, and paths may name their variable parts, as in
+                  <code>/orders/{id}</code>. <code>-x</code> is a call that never gets an answer: a timeout or a refused
+                  connection. Scenarios whose entry request ends in a 4xx or 5xx, or fails, are marked as error paths.
                 </p>
               </div>
               <pre class="code" data-proschi tabindex="0"><code>usecase "Get order" {
-  gateway -&gt; orders : GET /api/orders/42
+  gateway -&gt; orders : GET /api/orders/{id}
 
   alt "Found" {
-    orders -&gt; ordersDb  : SELECT order 42
-    orders --&gt; gateway : 200 {"id": 42, "status": "paid"}
-  } alt "Not found" {
-    orders -&gt; ordersDb  : SELECT order 42
-    orders --&gt; gateway : 404 {"error": "not_found"}
+    orders  -&gt; ordersDb : SELECT order
+    orders --&gt; gateway  : 200 {"id": 42, "status": "paid"}
+  } alt "Not found" when "no order has this id" {
+    orders  -&gt; ordersDb : SELECT order
+    orders --&gt; gateway  : 404 {"error": "not_found"}
   } alt "DB timeout" {
-    orders -x ordersDb  : SELECT order 42
-    orders --&gt; gateway : 504
+    orders  -x ordersDb : SELECT order
+    orders --&gt; gateway  : 504
   }
 }</code></pre>
             </li>
@@ -379,9 +380,11 @@ orders  -&gt; events   : publish</code></pre>
               <tr>
                 <th scope="row">Editors</th>
                 <td>
-                  Keep <code>.proschi</code> files next to your code and edit them in your IDE. A VS Code extension, a
-                  language server for IntelliJ, Neovim and others, and a <code>proschi check</code> command for CI all
-                  run the same parser as this editor. <a href="https://github.com/gvart/proschi/blob/main/docs/EDITORS.md">Editor setup</a>.
+                  Keep <code>.proschi</code> files next to your code, split across files with
+                  <code>import "infra.proschi"</code>. A VS Code extension with a live preview, a language server for
+                  IntelliJ, Neovim and others, and the <code>proschi</code> command (<code>check</code>, <code>fmt</code>,
+                  <code>render</code> to SVG or Markdown, and checks against your OpenAPI specs) all run the same parser as
+                  this editor. <a href="https://github.com/gvart/proschi/blob/main/docs/EDITORS.md">Editor setup</a>.
                 </td>
               </tr>
               <tr>
@@ -394,7 +397,7 @@ orders  -&gt; events   : publish</code></pre>
               </tr>
               <tr>
                 <th scope="row">Export</th>
-                <td>PNG or SVG of the current diagram.</td>
+                <td>PNG or SVG of the current diagram, or Mermaid text for the architecture or a scenario, ready to paste into a GitHub README.</td>
               </tr>
               <tr>
                 <th scope="row">Errors</th>

@@ -190,4 +190,9 @@ describe('format', () => {
   it('turns CRLF line endings into LF', () => {
     expect(format('title "T"\r\na [Redis]\r\n')).toBe('title "T"\na [Redis]\n');
   });
+
+  it('moves the rest of a node line into an empty team column', () => {
+    const src = 'api  "API"   [REST API]    @backend\nnote "Note" [Sticky Note] "Read me first"\n';
+    expect(format(src)).toBe('api  "API"  [REST API]    @backend\nnote "Note" [Sticky Note] "Read me first"\n');
+  });
 });

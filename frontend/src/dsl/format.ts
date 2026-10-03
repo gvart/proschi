@@ -187,7 +187,9 @@ function alignNodes(run: NodeEntry[]): string[] {
   const widths = [0, 1, 2, 3].map((c) => Math.max(...run.map((e) => len(e.cells[c]))));
   return run.map(({ cells }) => {
     let line = '';
-    for (let c = 0; c < 4; c++) if (widths[c]) line += pad(cells[c], widths[c] + 1);
+    // Without a team, the rest (a description, `pos`) moves into the team column instead of leaving a gap.
+    const columns = !cells[3] && cells[4] ? 3 : 4;
+    for (let c = 0; c < columns; c++) if (widths[c]) line += pad(cells[c], widths[c] + 1);
     return (line + cells[4]).trimEnd();
   });
 }
