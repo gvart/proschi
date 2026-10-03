@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   ArrowLeft,
   Play,
@@ -13,10 +13,9 @@ import ReactFlow, {
   Controls,
   MiniMap,
   BackgroundVariant,
-  useReactFlow,
   ReactFlowProvider,
 } from 'reactflow';
-import type { Node, Edge, ReactFlowInstance } from 'reactflow';
+import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
 import { api, type UseCase } from '../../services/api';
@@ -47,17 +46,11 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
-  const [tooltipData, setTooltipData] = useState<{
-    x: number;
-    y: number;
-    content: React.ReactNode;
-  } | null>(null);
 
   const nodes = useCanvasStore((state) => state.nodes);
   const edges = useCanvasStore((state) => state.edges);
-  const playIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const animationIntervalRef = useRef<NodeJS.Timeout | null>(null);
-  const reactFlowInstance = useReactFlow();
+  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {

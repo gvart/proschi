@@ -5,7 +5,7 @@ import ReactFlow, {
   MiniMap,
   BackgroundVariant,
 } from 'reactflow';
-import type { NodeTypes, Node, Edge, ReactFlowInstance } from 'reactflow';
+import type { NodeTypes, Node, Edge, NodeChange, ReactFlowInstance } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
 
@@ -16,7 +16,8 @@ import MetadataEditor from './MetadataEditor';
 import EdgeEditor from './EdgeEditor';
 import TextNode from './TextNode';
 import GroupNode from './GroupNode';
-import { ContextMenu, createNodeContextMenuItems } from './ContextMenu';
+import { ContextMenu } from './ContextMenu';
+import { createNodeContextMenuItems } from './contextMenuItems';
 
 const nodeTypes: NodeTypes = {
   componentNode: ComponentNode,
@@ -49,7 +50,7 @@ function InfrastructureCanvasContent() {
 
   // Handle node selection changes from ReactFlow
   const handleNodesChange = useCallback(
-    (changes: any[]) => {
+    (changes: NodeChange[]) => {
       onNodesChange(changes);
 
       // Update selected nodes when selection changes

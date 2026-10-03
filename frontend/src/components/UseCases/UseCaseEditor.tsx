@@ -3,13 +3,13 @@ import {
   ArrowLeft,
   Plus,
   Trash2,
-  Save,
   MoveUp,
   MoveDown,
   PlayCircle,
   ArrowRight,
 } from 'lucide-react';
 import { api, type UseCase, type FlowStep, type CreateFlowStepRequest, type Protocol } from '../../services/api';
+import type { Node, Edge } from 'reactflow';
 import { useCanvasStore } from '../../store/canvasStore';
 import { getTechStackIcon, getComponentTypeColor } from '../../utils/iconMapping';
 
@@ -240,7 +240,7 @@ interface StepCardProps {
   step: FlowStep;
   index: number;
   totalSteps: number;
-  nodes: any[];
+  nodes: Node[];
   onEdit: () => void;
   onDelete: () => void;
   onMoveUp: () => void;
@@ -373,8 +373,8 @@ function StepCard({
 interface StepModalProps {
   step?: FlowStep;
   stepOrder: number;
-  nodes: any[];
-  edges: any[];
+  nodes: Node[];
+  edges: Edge[];
   onSave: (step: CreateFlowStepRequest) => void;
   onClose: () => void;
 }

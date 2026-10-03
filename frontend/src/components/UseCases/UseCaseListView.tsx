@@ -1,7 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Plus, PlayCircle, Edit, Trash2, Search } from 'lucide-react';
 import { api, type UseCaseListItem } from '../../services/api';
-import { useCanvasStore } from '../../store/canvasStore';
 
 interface UseCaseListViewProps {
   projectId: string;

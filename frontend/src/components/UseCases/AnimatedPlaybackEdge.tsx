@@ -3,7 +3,6 @@ import { BaseEdge, getBezierPath } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 
 export function AnimatedPlaybackEdge({
-  id,
   sourceX,
   sourceY,
   targetX,

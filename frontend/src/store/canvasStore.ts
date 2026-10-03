@@ -289,7 +289,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const { nodes } = get();
 
     // First, normalize all nodes to have a zIndex (assign based on current array position)
-    let normalizedNodes = nodes.map((node, index) => ({
+    const normalizedNodes = nodes.map((node, index) => ({
       ...node,
       zIndex: node.zIndex !== undefined ? node.zIndex : index,
     }));
@@ -315,7 +315,7 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
     const { nodes } = get();
 
     // First, normalize all nodes to have a zIndex (assign based on current array position)
-    let normalizedNodes = nodes.map((node, index) => ({
+    const normalizedNodes = nodes.map((node, index) => ({
       ...node,
       zIndex: node.zIndex !== undefined ? node.zIndex : index,
     }));
