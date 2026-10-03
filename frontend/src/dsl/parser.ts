@@ -2,12 +2,14 @@ import type { ComponentType, TechStack } from '../types/canvas';
 import type { FlowStep, Protocol } from '../services/api';
 import { componentCatalog } from '../catalog/componentCatalog';
 import { bracketDepth, tokenizeLine, type Token } from './lexer';
+import { endpointGroupKey } from './paths';
 import type {
   Diagnostic,
   Diagram,
   DiagramEdge,
   DiagramNode,
   DiagramScenario,
+  DiagramStep,
   DiagramUseCase,
   ParseResult,
   SourceLoc,
@@ -29,6 +31,7 @@ type Item = { kind: 'step'; step: RawStep } | { kind: 'alt'; branches: Branch[] 
 
 interface Branch {
   name: string;
+  condition?: string;
   items: Item[];
   loc: SourceLoc;
 }
@@ -78,6 +81,8 @@ class Parser {
   private readonly useCases: { useCase: DiagramUseCase; body: Container }[] = [];
   private readonly references: Reference[] = [];
   private readonly stack: Frame[] = [];
+  /** `a|b` for every connection, both directions; filled before use cases are built. */
+  private readonly connected = new Set<string>();
   private title?: string;
 
   constructor(source: string) {
@@ -102,12 +107,17 @@ class Parser {
     }
 
     this.createImplicitNodes();
+    for (const e of this.edges) this.connected.add(`${e.source}|${e.target}`).add(`${e.target}|${e.source}`);
+
+    const useCases = this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body));
+    const endpoints = useCases.flatMap((u) => (u.endpoint ? [u.endpoint] : []));
+    for (const u of useCases) if (u.endpoint) u.endpointGroup = endpointGroupKey(u.endpoint, endpoints);
 
     const diagram: Diagram = {
       title: this.title,
       nodes: [...this.nodes.values()],
       edges: this.edges,
-      useCases: this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body)),
+      useCases,
     };
 
     this.diagnostics.sort((a, b) => a.line - b.line || a.col - b.col);
@@ -263,11 +273,23 @@ class Parser {
       this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line));
       return;
     }
-    if (tokens[2]?.kind !== 'lbrace') {
-      this.error('Expected { after alt name', this.locOf(tokens[2] ?? nameToken, line));
+    let i = 2;
+    let condition: string | undefined;
+    // `when` is only a keyword here, between the alt name and its condition.
+    if (tokens[i]?.kind === 'ident' && tokens[i].value === 'when') {
+      const conditionToken = tokens[i + 1];
+      if (conditionToken?.kind !== 'string') {
+        this.error('Expected a condition after when, e.g. alt "Not found" when "the order does not exist" {', this.locOf(conditionToken ?? tokens[i], line));
+        return;
+      }
+      condition = conditionToken.value.trim() || undefined;
+      i += 2;
+    }
+    if (tokens[i]?.kind !== 'lbrace') {
+      this.error(i === 2 ? 'Expected { after alt name' : 'Expected { after the alt condition', this.locOf(tokens[i] ?? tokens[i - 1], line));
       return;
     }
-    this.expectEnd(tokens, 3, line);
+    this.expectEnd(tokens, i + 1, line);
 
     // Alt blocks that follow each other directly are alternatives to one another.
     const owner = top.body;
@@ -279,7 +301,7 @@ class Parser {
     const loc = this.locOf(nameToken, line);
     if (set.branches.some((b) => b.name === nameToken.value)) this.warning(`Duplicate alt name '${nameToken.value}'`, loc);
     const body: Container = { items: [] };
-    set.branches.push({ name: nameToken.value, items: body.items, loc });
+    set.branches.push({ name: nameToken.value, condition, items: body.items, loc });
     owner.openAlt = undefined;
     this.stack.push({ kind: 'alt', name: nameToken.value, body, owner, set, loc });
   }
@@ -413,10 +435,12 @@ class Parser {
       const steps = this.buildSteps(useCase.id, id, path.steps);
       const entry = steps[0];
       const failedEntry = !!entry && (entry.failed || (entry.statusCode ?? 0) >= 400);
+      const condition = path.conditions.join(' · ');
       return {
         id,
         name: path.names.length ? path.names.join(' › ') : useCase.name,
         outcome: failedEntry ? 'error' : 'success',
+        ...(condition ? { condition } : {}),
         steps,
         loc: path.locs.at(-1) ?? useCase.loc,
       };
@@ -433,12 +457,13 @@ class Parser {
     };
   }
 
-  private buildSteps(useCaseId: string, scenarioId: string, raw: RawStep[]): FlowStep[] {
-    const steps: FlowStep[] = [];
+  private buildSteps(useCaseId: string, scenarioId: string, raw: RawStep[]): DiagramStep[] {
+    const steps: DiagramStep[] = [];
     const answered = new Set<FlowStep>();
     const prefix = scenarioId === 'main' ? useCaseId : `${useCaseId}-${scenarioId}`;
 
     for (const step of raw) {
+      this.checkConnection(step);
       if (step.arrow === '-->') {
         const request = [...steps]
           .reverse()
@@ -448,6 +473,7 @@ class Parser {
           continue;
         }
         answered.add(request);
+        request.responseLoc = step.loc;
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) request.statusCode = Number(status[1]);
         const payload = splitPayload(status ? status[2] : step.label);
@@ -481,10 +507,22 @@ class Parser {
         isParallel: step.parallelGroup !== undefined,
         isConditional: false,
         ...(step.arrow === '-x' ? { failed: true } : {}),
+        loc: step.loc,
       });
     }
 
     return steps;
+  }
+
+  /**
+   * Warns when a step talks between two nodes the architecture never connects.
+   * Documents without any connection are use-case-only sketches; they are left alone.
+   */
+  private checkConnection(step: RawStep) {
+    if (this.edges.length === 0 || step.from === step.to || this.connected.has(`${step.from}|${step.to}`)) return;
+    // A response travels back along the request's connection, so suggest the request direction.
+    const [from, to] = step.arrow === '-->' ? [step.to, step.from] : [step.from, step.to];
+    this.warning(`No connection between '${from}' and '${to}' in the architecture; add '${from} -> ${to}'`, step.loc);
   }
 
   private createImplicitNodes() {
@@ -571,8 +609,8 @@ class Parser {
  * multiplies the paths so far by its branches; steps after a set are shared by
  * every branch.
  */
-function expand(items: Item[]): { names: string[]; locs: SourceLoc[]; steps: RawStep[] }[] {
-  let paths: { names: string[]; locs: SourceLoc[]; steps: RawStep[] }[] = [{ names: [], locs: [], steps: [] }];
+function expand(items: Item[]): { names: string[]; conditions: string[]; locs: SourceLoc[]; steps: RawStep[] }[] {
+  let paths: ReturnType<typeof expand> = [{ names: [], conditions: [], locs: [], steps: [] }];
   for (const item of items) {
     if (item.kind === 'step') {
       for (const path of paths) path.steps.push(item.step);
@@ -584,6 +622,7 @@ function expand(items: Item[]): { names: string[]; locs: SourceLoc[]; steps: Raw
         for (const sub of expand(branch.items)) {
           next.push({
             names: [...path.names, branch.name, ...sub.names],
+            conditions: [...path.conditions, ...(branch.condition ? [branch.condition] : []), ...sub.conditions],
             locs: [...path.locs, branch.loc, ...sub.locs],
             steps: [...path.steps, ...sub.steps],
           });

@@ -1,0 +1,65 @@
+{
+  "openapi": "3.1.0",
+  "info": { "title": "Payments API", "version": "2.0.0" },
+  "servers": [{ "url": "/payments-api" }],
+  "paths": {
+    "/payments": {
+      "post": {
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/PaymentRequest" }
+            }
+          }
+        },
+        "responses": {
+          "2XX": {
+            "description": "Charged",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": ["paymentId"],
+                  "properties": { "paymentId": { "type": "string", "pattern": "^pay_" } }
+                }
+              }
+            }
+          },
+          "default": {
+            "description": "Declined or failed",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Error" }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/payments/{paymentId}/refunds": {
+      "post": {
+        "responses": { "202": { "description": "Refund accepted" } }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "PaymentRequest": {
+        "type": "object",
+        "required": ["orderId", "amount"],
+        "properties": {
+          "orderId": { "type": "integer" },
+          "amount": { "type": "number", "exclusiveMinimum": 0 },
+          "currency": { "enum": ["EUR", "USD"] },
+          "coupon": { "type": ["string", "null"] }
+        },
+        "unevaluatedProperties": false
+      },
+      "Error": {
+        "type": "object",
+        "required": ["code"],
+        "properties": { "code": { "type": "string" } }
+      }
+    }
+  }
+}

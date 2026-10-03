@@ -1,0 +1,6 @@
+{
+  "openapi": {
+    "orders": "specs/orders-api.yaml",
+    "payments": "specs/payments-api.json"
+  }
+}

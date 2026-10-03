@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, definition, hover, outline, references, toRange } from '../src/analysis';
+import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -97,4 +97,21 @@ describe('analysis', () => {
       ['DB down', 'error path', lineOf('alt "DB down"')],
     ]);
   });
+
+  it('quick-fixes a missing connection by adding it above the use cases', () => {
+    const warning = a.diagnostics.find((d) => d.message.startsWith('No connection'))!;
+    expect(warning).toMatchObject({ line: lineOf('web -> api') + 1, message: "No connection between 'web' and 'api' in the architecture; add 'web -> api'" });
+    const fix = quickFix(a, warning.message)!;
+    expect(fix.title).toBe("Add connection 'web -> api'");
+    const fixed = applyEdit(doc, fix.edit);
+    expect(fixed).toBe(doc.replace('api -> db : SQL\n', 'api -> db : SQL\nweb -> api\n'));
+    expect(analyze(fixed).diagnostics).toEqual([]);
+    expect(quickFix(a, "Unknown tech stack 'Nope'; drawing a Rectangle")).toBeNull();
+  });
 });
+
+function applyEdit(text: string, { range, newText }: TextEdit): string {
+  const lines = text.split('\n');
+  const offset = (p: { line: number; character: number }) => lines.slice(0, p.line).reduce((n, l) => n + l.length + 1, 0) + p.character;
+  return text.slice(0, offset(range.start)) + newText + text.slice(offset(range.end));
+}

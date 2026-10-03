@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   StreamMessageReader,
@@ -35,7 +35,7 @@ beforeAll(async () => {
   });
   connection.listen();
   const init = await connection.sendRequest('initialize', { processId: process.pid, rootUri: null, capabilities: {} });
-  expect(init).toMatchObject({ capabilities: { hoverProvider: true, definitionProvider: true }, serverInfo: { name: 'proschi-language-server' } });
+  expect(init).toMatchObject({ capabilities: { hoverProvider: true, definitionProvider: true, documentFormattingProvider: true }, serverInfo: { name: 'proschi-language-server' } });
   await connection.sendNotification('initialized', {});
 });
 
@@ -85,5 +85,74 @@ describe('language server', () => {
 
     const symbols = (await connection.sendRequest('textDocument/documentSymbol', { textDocument })) as { name: string }[];
     expect(symbols.map((s) => s.name)).toEqual(['api', 'db']);
+  });
+
+  it('formats the whole document in one edit, or none when it is formatted', async () => {
+    const formatUri = 'file:///tmp/format.proschi';
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri: formatUri, languageId: 'proschi', version: 1, text: 'api [REST API]\ndatabase   [Redis]\n\n\napi->database:SQL\n' },
+    });
+    const params = { textDocument: { uri: formatUri }, options: { tabSize: 2, insertSpaces: true } };
+    expect(await connection.sendRequest('textDocument/formatting', params)).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+        newText: 'api      [REST API]\ndatabase [Redis]\n\napi -> database : SQL\n',
+      },
+    ]);
+
+    await connection.sendNotification('textDocument/didChange', {
+      textDocument: { uri: formatUri, version: 2 },
+      contentChanges: [{ text: 'api [REST API]\n' }],
+    });
+    expect(await connection.sendRequest('textDocument/formatting', params)).toEqual([]);
+  });
+
+  it('reports OpenAPI findings for documents below a proschi.json', async () => {
+    // The file need not exist: proschi.json is found from its directory.
+    const specUri = pathToFileURL(fileURLToPath(new URL('./fixtures/openapi/unsaved.proschi', import.meta.url))).href;
+    const opened = nextDiagnostics(specUri);
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri: specUri, languageId: 'proschi', version: 1, text: 'usecase "U" {\n  gateway -> orders : GET /orders/42\n  orders --> gateway : 503\n}\n' },
+    });
+    const { diagnostics: found } = await opened;
+    expect(found).toEqual([
+      {
+        range: { start: { line: 2, character: 2 }, end: { line: 2, character: 26 } },
+        severity: 2,
+        source: 'proschi-openapi',
+        message: 'Status 503 is not documented for GET /orders/{orderId} (documented: 200, 4XX)',
+      },
+    ]);
+  });
+
+  it('offers a quick fix that adds a missing connection', async () => {
+    const flowUri = 'file:///tmp/flow.proschi';
+    const text = 'web -> api\n\nusecase "Read" {\n  web -> api : GET /orders/1\n  api -> db : SELECT\n  api --> web : 200\n}\n';
+    const opened = nextDiagnostics(flowUri);
+    await connection.sendNotification('textDocument/didOpen', { textDocument: { uri: flowUri, languageId: 'proschi', version: 1, text } });
+    const { diagnostics: found } = await opened;
+    expect(found.map((d) => [d.range.start.line, d.severity, d.message])).toEqual([
+      [4, 2, "No connection between 'api' and 'db' in the architecture; add 'api -> db'"],
+    ]);
+
+    const actions = (await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: flowUri },
+      range: found[0].range,
+      context: { diagnostics: found },
+    })) as { title: string; kind: string; isPreferred: boolean; edit: { changes: Record<string, { range: { start: { line: number; character: number } }; newText: string }[]> } }[];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ title: "Add connection 'api -> db'", kind: 'quickfix', isPreferred: true });
+    const [edit] = actions[0].edit.changes[flowUri];
+    const lines = text.split('\n');
+    const at = lines.slice(0, edit.range.start.line).reduce((n, l) => n + l.length + 1, 0) + edit.range.start.character;
+    expect(text.slice(0, at) + edit.newText + text.slice(at)).toBe(text.replace('web -> api\n', 'web -> api\napi -> db\n'));
+
+    // Other diagnostics have no quick fix.
+    const none = await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: flowUri },
+      range: found[0].range,
+      context: { diagnostics: [{ ...found[0], message: 'Unmatched }' }] },
+    });
+    expect(none).toEqual([]);
   });
 });
