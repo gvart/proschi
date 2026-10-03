@@ -41,3 +41,12 @@ describe('layoutDiagram', () => {
     expect(nodes.map((n) => n.id)).toEqual(['g', 'a']);
   });
 });
+
+describe('pinned group members', () => {
+  it('grows the group to contain a member dragged outside it', async () => {
+    const nodes = await layoutDiagram(parse('group g {\n  a\n  b pos 900,700\n}').diagram);
+    const group = nodes.find((n) => n.id === 'g')!;
+    expect(Number(group.style?.width)).toBeGreaterThanOrEqual(900 + 240);
+    expect(Number(group.style?.height)).toBeGreaterThanOrEqual(700 + 84);
+  });
+});

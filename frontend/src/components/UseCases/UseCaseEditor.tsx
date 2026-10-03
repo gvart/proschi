@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useCallback, useState, useEffect, useMemo } from 'react';
 import {
   ArrowLeft,
   Plus,
@@ -31,11 +31,7 @@ export default function UseCaseEditor({
   const nodes = useCanvasStore((state) => state.nodes);
   const edges = useCanvasStore((state) => state.edges);
 
-  useEffect(() => {
-    loadUseCase();
-  }, [useCaseId]);
-
-  const loadUseCase = async () => {
+  const loadUseCase = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getUseCase(useCaseId);
@@ -45,7 +41,11 @@ export default function UseCaseEditor({
     } finally {
       setLoading(false);
     }
-  };
+  }, [useCaseId]);
+
+  useEffect(() => {
+    loadUseCase();
+  }, [loadUseCase]);
 
   const handleAddStep = () => {
     setEditingStep(null);

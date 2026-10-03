@@ -41,13 +41,15 @@ interface UseCasePlaybackProps {
 }
 
 interface UseCasePlayerProps {
-  useCase: { name: string; steps: FlowStep[] };
+  useCase: { id?: string; name: string; steps: FlowStep[] };
   nodes: Node[];
   edges: Edge[];
   onBack: () => void;
   /** 0-based step to open on, for links to a specific step. */
   initialStep?: number;
   onStepChange?: (index: number) => void;
+  /** Hide the title bar when the host already shows the use case and a way back. */
+  showHeader?: boolean;
 }
 
 /** Loads a stored use case and plays it against the current canvas. */
@@ -90,7 +92,7 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
 }
 
 /** Animated step-by-step playback of a use case over an architecture diagram. */
-function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange }: UseCasePlayerProps) {
+function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange, showHeader = true }: UseCasePlayerProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -115,18 +117,25 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
     return [...architectureEdges, ...extra];
   }, [useCase, architectureEdges]);
 
-  // Restart whenever a different use case is played; only the first one honours initialStep.
-  const firstUseCaseRef = useRef(useCase);
+  // Restart when a different use case is played (not when the same one is edited);
+  // only the first one honours initialStep.
+  const useCaseKey = useCase.id ?? useCase.name;
+  const firstUseCaseKeyRef = useRef(useCaseKey);
   useEffect(() => {
-    const start = useCase === firstUseCaseRef.current ? (initialStep ?? 0) : 0;
+    const start = useCaseKey === firstUseCaseKeyRef.current ? (initialStep ?? 0) : 0;
     setCurrentStepIndex(Math.min(Math.max(start, 0), Math.max(useCase.steps.length - 1, 0)));
     setAnimationProgress(0);
     setIsPlaying(false);
     if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
-    // initialStep only matters for the first use case.
+    // initialStep only matters for the first use case; edits keep the current step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [useCase]);
+  }, [useCaseKey]);
+
+  // Editing can remove steps; stay within range.
+  useEffect(() => {
+    setCurrentStepIndex((index) => Math.min(index, Math.max(useCase.steps.length - 1, 0)));
+  }, [useCase.steps.length]);
 
   useEffect(() => {
     onStepChange?.(currentStepIndex);
@@ -280,6 +289,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
   return (
     <div className="h-full flex flex-col bg-gray-50">
       {/* Header */}
+      {showHeader && (
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -296,6 +306,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           </div>
         </div>
       </div>
+      )}
 
       {/* Canvas with Animation */}
       <div ref={reactFlowWrapperRef} className="flex-1 relative">
@@ -305,7 +316,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
-          attributionPosition="bottom-left"
+          proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
@@ -317,6 +328,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           <Controls showInteractive={false} />
           <MiniMap
+            className="!hidden md:!block"
             nodeColor={(node) => {
               if (highlightedNodes.has(node.id)) {
                 return '#3b82f6';
@@ -343,7 +355,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       </div>
 
       {/* Step Info Panel */}
-      <div className="bg-white border-t border-gray-200 p-4 max-h-64 overflow-y-auto">
+      <div className="bg-white border-t border-gray-200 p-3 sm:p-4 max-h-[35vh] sm:max-h-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {currentSteps.length > 1 && (
             <div className="mb-2 text-sm font-medium text-blue-600">
@@ -353,14 +365,14 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           {currentSteps.map((step, idx) => (
             <div key={step.id || idx} className="mb-4 last:mb-0">
               <div className="flex items-start gap-6">
-                <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                     <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
                       {useCase.steps.indexOf(step) + 1}
                     </div>
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2">
-                        <h3 className="font-semibold text-gray-900">{step.stepName}</h3>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <h3 className="font-semibold text-gray-900 break-words">{step.stepName}</h3>
                         {step.executionType === 'SYNC_REQUEST_RESPONSE' && (
                           <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">Sync</span>
                         )}
@@ -376,16 +388,18 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
                         {nodes.find((n) => n.id === step.toServiceId)?.data.name}
                       </p>
                     </div>
-                    <div className="text-sm text-gray-500">
-                      {step.httpMethod} {step.endpoint}
-                    </div>
+                    {`${step.httpMethod} ${step.endpoint}`.trim() !== step.stepName && (
+                      <div className="text-sm text-gray-500 break-all">
+                        {step.httpMethod} {step.endpoint}
+                      </div>
+                    )}
                   </div>
 
                   {step.description && (
                     <p className="text-sm text-gray-600 mb-3">{step.description}</p>
                   )}
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     {step.requestBody && (
                       <div>
                         <div className="text-xs font-medium text-gray-500 mb-1">
@@ -416,9 +430,9 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       </div>
 
       {/* Playback Controls */}
-      <div className="bg-white border-t border-gray-200 px-6 py-4">
+      <div className="bg-white border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-6xl mx-auto">
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}

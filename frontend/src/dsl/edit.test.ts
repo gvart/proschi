@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addConnection, clearPositions, renameNode, setNodePosition } from './edit';
+import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from './edit';
 import { parse } from './parser';
 
 describe('setNodePosition', () => {
@@ -78,5 +78,32 @@ describe('clearPositions', () => {
     const cleared = clearPositions(src);
     expect(cleared).toBe('group g "G" {\n  a [Redis] @t # c\n}\nb\nb -> a : pos 9,9');
     expect(parse(cleared).diagram.nodes.every((n) => !n.position)).toBe(true);
+  });
+});
+
+describe('removeConnections', () => {
+  it('removes the chosen connections, including duplicates by id', () => {
+    const src = 'a\nb\na -> b : one\na -> b : two\nb -> a';
+    expect(removeConnections(src, ['a->b#2', 'b->a'])).toBe('a\nb\na -> b : one');
+  });
+
+  it('removes a connection whose payload spans lines', () => {
+    expect(removeConnections('a -> b : {\n  "x": 1\n}\nc', ['a->b'])).toBe('c');
+  });
+});
+
+describe('removeNode', () => {
+  it('removes the declaration and its connections', () => {
+    const result = removeNode('a [Redis] # cache\nb\na -> b\nb -> c', 'a');
+    expect(result).toEqual({ source: 'b\nb -> c' });
+  });
+
+  it('removes an implicit node by removing its connections', () => {
+    expect(removeNode('a\na -> ghost', 'ghost')).toEqual({ source: 'a' });
+  });
+
+  it('refuses groups and nodes used in use cases', () => {
+    expect(removeNode('group g {\n  a\n}', 'g').error).toMatch(/group/);
+    expect(removeNode('a\nb\nusecase "Flow" {\n  a -> b\n}', 'b').error).toMatch(/"Flow"/);
   });
 });

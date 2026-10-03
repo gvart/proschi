@@ -1,3 +1,4 @@
+import { fileURLToPath } from 'node:url'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -7,4 +8,13 @@ export default defineConfig({
   // Relative asset paths so the build works under any sub-path,
   // e.g. https://<user>.github.io/proschi/ on GitHub Pages.
   base: './',
+  build: {
+    rollupOptions: {
+      // Two pages: the landing page at the root, the editor under app/.
+      input: {
+        landing: fileURLToPath(new URL('./index.html', import.meta.url)),
+        app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+      },
+    },
+  },
 })

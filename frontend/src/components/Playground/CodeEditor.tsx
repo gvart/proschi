@@ -95,5 +95,5 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
     },
   }));
 
-  return <div ref={hostRef} className="h-full overflow-hidden" />;
+  return <div ref={hostRef} className="proschi-editor h-full overflow-hidden" />;
 }
