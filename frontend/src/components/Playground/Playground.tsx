@@ -13,6 +13,7 @@ import ReactFlow, {
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
+  AlignLeft,
   AlertCircle,
   AlertTriangle,
   BookOpen,
@@ -150,7 +151,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const useCaseGroups = useMemo(() => groupByEndpoint(diagram.useCases), [diagram]);
   // The player restarts when this changes, so each scenario starts at its first step.
   const playedUseCase = useMemo(
-    () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps } : undefined),
+    () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
 
@@ -374,6 +375,15 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   }}
                 >
                   Download .proschi file
+                </MenuItem>
+                <MenuItem
+                  icon={<AlignLeft size={14} />}
+                  onSelect={() => {
+                    close();
+                    editorRef.current?.format();
+                  }}
+                >
+                  Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
                 </MenuItem>
                 <div className="my-1 border-t border-gray-100" />
                 <MenuItem
@@ -599,7 +609,7 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
             role="tab"
             aria-selected={active}
             onClick={() => onPick(s.id)}
-            title={`Play “${s.name}”`}
+            title={s.condition ? `Play “${s.name}” — when ${s.condition}` : `Play “${s.name}”`}
             className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 sm:py-1 text-sm whitespace-nowrap ${
               active
                 ? error

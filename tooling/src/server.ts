@@ -1,12 +1,13 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references, an outline and links on import paths.
- * Imports resolve from disk relative to the document, preferring the text of
- * open (possibly unsaved) documents.
+ * go-to-definition, references, an outline, formatting and links on import
+ * paths. Imports resolve from disk relative to the document, preferring the
+ * text of open (possibly unsaved) documents.
  */
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
+  CodeActionKind,
   CompletionItemKind,
   DiagnosticSeverity,
   InsertTextFormat,
@@ -16,11 +17,15 @@ import {
   TextDocumentSyncKind,
   TextDocuments,
   createConnection,
+  type CodeAction,
   type DocumentSymbol,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { analyze, complete, declaration, hover, outline, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { statSync } from 'node:fs';
+import { openApiDiagnostics, watchedFiles } from './openapi/config';
+import { analyze, complete, declaration, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
+import { format } from './proschi';
 
 declare const PROSCHI_VERSION: string;
 
@@ -53,19 +58,6 @@ function analysisOf(doc: TextDocument): Analysis {
   return analysis;
 }
 
-function publish(doc: TextDocument) {
-  connection.sendDiagnostics({
-    uri: doc.uri,
-    version: doc.version,
-    diagnostics: ownDiagnostics(analysisOf(doc).result).map((d) => ({
-      range: toRange(d),
-      severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
-      source: 'proschi',
-      message: d.message,
-    })),
-  });
-}
-
 /** Re-validates the open documents that import `uri`, directly or through other files. */
 function publishDependents(uri: string) {
   const path = pathOf(uri);
@@ -73,7 +65,7 @@ function publishDependents(uri: string) {
   for (const doc of documents.all()) {
     if (doc.uri === uri || !cache.get(doc.uri)?.files.has(path)) continue;
     cache.delete(doc.uri);
-    publish(doc);
+    validate(doc);
   }
 }
 
@@ -86,14 +78,68 @@ connection.onInitialize(() => ({
     referencesProvider: true,
     documentSymbolProvider: true,
     documentLinkProvider: { resolveProvider: false },
+    documentFormattingProvider: true,
+    codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
   },
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
 }));
 
+function validate(document: TextDocument) {
+  const analysis = analysisOf(document);
+  const toLsp = (source: string) => (d: Analysis['diagnostics'][number]) => ({
+    range: toRange(d),
+    severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+    source,
+    message: d.message,
+  });
+  connection.sendDiagnostics({
+    uri: document.uri,
+    version: document.version,
+    diagnostics: [
+      ...ownDiagnostics(analysis.result).map(toLsp('proschi')),
+      // Findings on steps in imported files belong to those files.
+      ...openApiFindings(document, analysis.diagram)
+        .filter((d) => d.file === undefined)
+        .map(toLsp('proschi-openapi')),
+    ],
+  });
+}
+
+/** Findings against the specs named in the nearest proschi.json, for documents saved on disk. */
+function openApiFindings(document: TextDocument, diagram: Analysis['diagram']) {
+  if (!document.uri.startsWith('file:')) return [];
+  try {
+    return openApiDiagnostics(fileURLToPath(document.uri), diagram);
+  } catch {
+    return [];
+  }
+}
+
 documents.onDidChangeContent(({ document }) => {
-  publish(document);
+  validate(document);
   publishDependents(document.uri);
 });
+
+// Specs and proschi.json change outside the editor; re-check open documents when they do.
+// Spec and config reads are cached by modification time, so this costs a stat per file.
+function watchedStamp(): string {
+  return watchedFiles()
+    .map((file) => {
+      try {
+        return `${file}:${statSync(file).mtimeMs}`;
+      } catch {
+        return `${file}:missing`;
+      }
+    })
+    .join('\n');
+}
+
+let stamp = '';
+setInterval(() => {
+  const next = watchedStamp();
+  if (stamp && next !== stamp) documents.all().forEach(validate);
+  stamp = next;
+}, 2000).unref();
 
 documents.onDidClose(({ document }) => {
   cache.delete(document.uri);
@@ -157,6 +203,35 @@ function toSymbol(s: OutlineSymbol): DocumentSymbol {
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
   return doc ? outline(analysisOf(doc)).map(toSymbol) : [];
+});
+
+// One edit that replaces the whole document, or none when it is already formatted.
+connection.onDocumentFormatting((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const text = doc.getText();
+  const formatted = format(text);
+  return formatted === text ? [] : [{ range: { start: { line: 0, character: 0 }, end: doc.positionAt(text.length) }, newText: formatted }];
+});
+
+connection.onCodeAction((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const analysis = analysisOf(doc);
+  const actions: CodeAction[] = [];
+  for (const diagnostic of params.context.diagnostics) {
+    if (diagnostic.source !== 'proschi') continue;
+    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message);
+    if (!fix) continue;
+    actions.push({
+      title: fix.title,
+      kind: CodeActionKind.QuickFix,
+      diagnostics: [diagnostic],
+      isPreferred: true,
+      edit: { changes: { [params.textDocument.uri]: [fix.edit] } },
+    });
+  }
+  return actions;
 });
 
 documents.listen(connection);

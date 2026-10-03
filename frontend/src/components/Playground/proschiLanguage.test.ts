@@ -1,9 +1,48 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Text } from '@codemirror/state';
+import { StringStream } from '@codemirror/language';
 import { CompletionContext } from '@codemirror/autocomplete';
 import { parse } from '../../dsl';
-import { ensureSyntaxTree } from '@codemirror/language';
-import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
+import { proschiCompletions, proschiStreamParser, toCmDiagnostics } from './proschiLanguage';
+
+/** [text, style] for each non-blank token of one line. */
+function highlight(line: string): [string, string | null][] {
+  const parser = proschiStreamParser;
+  const state = parser.startState!(2);
+  const stream = new StringStream(line, 2, 2);
+  const out: [string, string | null][] = [];
+  while (!stream.eol()) {
+    const style = parser.token(stream, state);
+    const text = stream.current();
+    if (text.trim()) out.push([text, style]);
+    stream.start = stream.pos;
+  }
+  return out;
+}
+
+describe('proschiLanguage', () => {
+  it('highlights when only after an alt name', () => {
+    expect(highlight('} alt "Missing" when "no such order" {')).toEqual([
+      ['}', 'brace'],
+      ['alt', 'keyword'],
+      ['"Missing"', 'string'],
+      ['when', 'keyword'],
+      ['"no such order"', 'string'],
+      ['{', 'brace'],
+    ]);
+    expect(highlight('alt Missing when "x" {')[2]).toEqual(['when', 'keyword']);
+    expect(highlight('when -> api')[0]).toEqual(['when', 'variableName']);
+    expect(highlight('a -> when')[2]).toEqual(['when', 'variableName']);
+  });
+
+  it('highlights import as a keyword', () => {
+    expect(highlight('import "infra.proschi"')).toEqual([
+      ['import', 'keyword'],
+      ['"infra.proschi"', 'string'],
+    ]);
+    expect(highlight('importer -> db')[0]).toEqual(['importer', 'variableName']);
+  });
+});
 
 const complete = (doc: string, explicit = false) => {
   const state = EditorState.create({ doc });
@@ -37,14 +76,6 @@ describe('proschiCompletions', () => {
   it('offers keywords and ids at the start of a line', () => {
     const labels = complete('or')?.options.map((o) => o.label);
     expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'import', 'orders']));
-  });
-
-  it('highlights import as a keyword', () => {
-    const state = EditorState.create({ doc: 'import "infra.proschi"', extensions: [proschiLanguage] });
-    const tree = ensureSyntaxTree(state, state.doc.length)!;
-    const names: string[] = [];
-    tree.iterate({ enter: (n) => void names.push(state.sliceDoc(n.from, n.to) + ':' + n.name) });
-    expect(names).toEqual(expect.arrayContaining(['import:keyword', '"infra.proschi":string']));
   });
 
   it('offers only ids after an arrow', () => {

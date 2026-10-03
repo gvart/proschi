@@ -1,9 +1,11 @@
 import { mkdtempSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { Ajv2020 } from 'ajv/dist/2020';
 import { describe, expect, it } from 'vitest';
 import { run } from '../src/cli';
+import { openApiDiagnostics } from '../src/openapi/config';
 import { analyze, declaration, hover, outline } from '../src/analysis';
 import { checkFiles, displayPath, fileResolver, importLinks, ownDiagnostics, parseFile } from '../src/imports';
 
@@ -28,7 +30,8 @@ describe('proschi check with imports', () => {
     expect(results.map((r) => [r.file, r.diagnostics.map((d) => `${d.line}:${d.severity}:${d.message}`)])).toEqual([
       [checkout, []],
       [infra, ["4:warning:Unknown tech stack 'Cobol'; drawing a Rectangle"]],
-      [payments, ["2:error:Cannot find 'missing.proschi'"]],
+      // gateway -> orders is connected in infra.proschi, so only orders -> psp warns.
+      [payments, ["2:error:Cannot find 'missing.proschi'", "4:warning:No connection between 'orders' and 'psp' in the architecture; add 'orders -> psp'"]],
     ]);
     // Grouped by file, so the diagnostics themselves carry no file.
     expect(results[1].diagnostics[0]).not.toHaveProperty('file');
@@ -59,6 +62,38 @@ describe('proschi check with imports', () => {
     expect(parseFile(a).diagnostics).toEqual([
       expect.objectContaining({ message: 'Import cycle: a.proschi → b.proschi → a.proschi', file: join(dir, 'b.proschi') }),
     ]);
+  });
+
+  it('checks steps against OpenAPI specs and reports findings under the file of the step', () => {
+    const api = join(dir, 'api');
+    mkdirSync(api);
+    const ordersSpec = fileURLToPath(new URL('./fixtures/openapi/specs/orders-api.yaml', import.meta.url));
+    writeFileSync(join(api, 'proschi.json'), JSON.stringify({ openapi: { orders: ordersSpec } }));
+    writeFileSync(join(api, 'infra.proschi'), 'gateway [AWS API Gateway]\norders [REST API]\ngateway -> orders\n');
+    const flows = join(api, 'flows.proschi');
+    writeFileSync(flows, 'import "infra.proschi"\nusecase "Typo" {\n  gateway -> orders : GET /ordres\n}\n');
+    const root = join(api, 'all.proschi');
+    writeFileSync(root, 'import "flows.proschi"\nusecase "Fine" {\n  gateway -> orders : GET /orders\n}\n');
+
+    const typo = /^3:warning:GET \/ordres: 'orders-api\.yaml' has no path \/ordres/;
+    const own = checkFiles([flows], (file, diagram) => openApiDiagnostics(file, diagram));
+    expect(own.map((r) => [r.file, r.diagnostics.map((d) => `${d.line}:${d.severity}:${d.message}`)])).toEqual([[flows, [expect.stringMatching(typo)]]]);
+    // Checked through a file that imports it, and directly: reported once, under flows.proschi.
+    const both = checkFiles([root, flows], (file, diagram) => openApiDiagnostics(file, diagram));
+    expect(both.map((r) => [r.file, r.diagnostics.length])).toEqual([
+      [root, 0],
+      [flows, 1],
+    ]);
+    expect(capture(['check', root]).out).toMatch(new RegExp(`${flows.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:3:3: warning: GET /ordres`));
+  });
+
+  it('formats files with imports without touching the import lines', () => {
+    const file = join(dir, 'fmt.proschi');
+    writeFileSync(file, '  import   "infra.proschi"\n\n\napi->db\n');
+    expect(capture(['fmt', file]).code).toBe(0);
+    const once = readFileSync(file, 'utf8');
+    expect(once.split('\n')[0]).toBe('import "infra.proschi"');
+    expect(capture(['fmt', '--check', file]).code).toBe(0);
   });
 
   it('spells paths inside the working directory relative to it', () => {

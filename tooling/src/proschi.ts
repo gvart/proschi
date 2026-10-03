@@ -5,6 +5,8 @@
  * can never disagree about what is valid.
  */
 export { parse } from '../../frontend/src/dsl/parser';
+export { addConnection } from '../../frontend/src/dsl/edit';
+export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
 export type {
@@ -12,6 +14,7 @@ export type {
   Diagram,
   DiagramImport,
   DiagramNode,
+  DiagramStep,
   DiagramUseCase,
   ImportResolver,
   ParseOptions,

@@ -12,9 +12,9 @@ export interface Segment {
 }
 
 const TOKEN =
-  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|import|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)/g;
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|import|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)|((?<=\balt\s+"(?:[^"\\]|\\.)*"\s+)when\b)/g;
 
-const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'comment', 'status'];
+const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'comment', 'status', 'keyword'];
 
 export function highlightLine(line: string): Segment[] {
   const out: Segment[] = [];

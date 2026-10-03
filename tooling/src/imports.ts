@@ -5,7 +5,7 @@
  */
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { basename, dirname, isAbsolute, relative, resolve } from 'node:path';
-import { parse, type Diagnostic, type ImportResolver, type ParseResult } from './proschi';
+import { parse, type Diagnostic, type Diagram, type ImportResolver, type ParseResult } from './proschi';
 import { toRange, type Range } from './analysis';
 
 /** Relative to the working directory when the file is inside it, else absolute. */
@@ -45,14 +45,17 @@ export interface FileDiagnostics {
  * Checks files and reports every problem under the file it occurs in. Each
  * checked file gets an entry; an imported file gets one when it has problems.
  * A file imported by several checked files has its problems reported once.
+ * `extra` adds findings of other checks (OpenAPI) for the merged diagram;
+ * those with `file` set are reported under that file too.
  */
-export function checkFiles(files: string[]): FileDiagnostics[] {
+export function checkFiles(files: string[], extra?: (file: string, diagram: Diagram) => Diagnostic[]): FileDiagnostics[] {
   const byFile = new Map<string, Diagnostic[]>();
   const seen = new Set<string>();
   for (const file of files) {
     const root = displayPath(file);
     if (!byFile.has(root)) byFile.set(root, []);
-    for (const { file: where, ...d } of parseFile(file).diagnostics) {
+    const { diagram, diagnostics } = parseFile(file);
+    for (const { file: where, ...d } of [...diagnostics, ...(extra?.(file, diagram) ?? [])]) {
       const target = where ?? root;
       const key = `${target}:${d.line}:${d.col}:${d.severity}:${d.message}`;
       if (seen.has(key)) continue;
@@ -61,7 +64,7 @@ export function checkFiles(files: string[]): FileDiagnostics[] {
       byFile.get(target)!.push(d);
     }
   }
-  return [...byFile].map(([file, diagnostics]) => ({ file, diagnostics }));
+  return [...byFile].map(([file, diagnostics]) => ({ file, diagnostics: diagnostics.sort((x, y) => x.line - y.line || x.col - y.col) }));
 }
 
 /** Imported files reached through an import of the root document, the file itself included. */

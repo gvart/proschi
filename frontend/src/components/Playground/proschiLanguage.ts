@@ -1,4 +1,4 @@
-import { StreamLanguage } from '@codemirror/language';
+import { StreamLanguage, type StreamParser } from '@codemirror/language';
 import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
 import type { EditorView } from '@codemirror/view';
 import type { Text } from '@codemirror/state';
@@ -14,9 +14,11 @@ interface LexState {
 
 const KEYWORDS = /^(title|import|group|usecase|par|alt|pos)\b/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
+/** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
+const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
-/** Syntax highlighting for Proschi documents. */
-export const proschiLanguage = StreamLanguage.define<LexState>({
+/** Tokenizer behind the highlighting; exported for tests. */
+export const proschiStreamParser: StreamParser<LexState> = {
   name: 'proschi',
   startState: () => ({ inLabel: false, depth: 0 }),
   token(stream, state) {
@@ -51,6 +53,7 @@ export const proschiLanguage = StreamLanguage.define<LexState>({
     if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
     if (stream.match(/^-?\d+/)) return 'number';
     if (stream.match(KEYWORDS)) return 'keyword';
+    if (AFTER_ALT_NAME.test(stream.string.slice(0, stream.pos)) && stream.match(/^when\b/)) return 'keyword';
     if (stream.match(/^[A-Za-z_]\w*/)) return 'variableName';
     if (stream.eat(':')) {
       state.inLabel = true;
@@ -61,7 +64,10 @@ export const proschiLanguage = StreamLanguage.define<LexState>({
     return null;
   },
   languageData: { commentTokens: { line: '#' } },
-});
+};
+
+/** Syntax highlighting for Proschi documents. */
+export const proschiLanguage = StreamLanguage.define(proschiStreamParser);
 
 const techOptions: Completion[] = componentCatalog.map((c) => ({
   label: c.techStack,

@@ -116,6 +116,8 @@ describe('landing page snippets', () => {
     expect(cls('  api -x db : INSERT order')).toEqual([['-x', 'arrow']]);
     expect(cls('  api -> xray')).toEqual([['->', 'arrow']]);
     expect(cls('import "infra.proschi"')).toEqual([['import', 'keyword'], ['"infra.proschi"', 'string']]);
+    expect(cls('  } alt "Missing" when "no such order" {')).toEqual([['} alt', 'keyword'], ['"Missing"', 'string'], ['when', 'keyword'], ['"no such order"', 'string']]);
+    expect(cls('  when -> b')).toEqual([['->', 'arrow']]);
   });
 
   it('highlighter keeps the text intact', () => {

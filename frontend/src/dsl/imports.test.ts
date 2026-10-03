@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { joinImportPath, mapResolver, parse } from './index';
+import { format } from './format';
 
 const infra = `title "Infra"
 gateway "API Gateway" [AWS API Gateway]
@@ -134,6 +135,25 @@ describe('import', () => {
     expect(errs('usecase "U" {\n  import "x.proschi"\n}')).toEqual(['import is only allowed at the top level']);
     expect(errs('import infra')).toEqual(['Expected a file path, e.g. import "infra.proschi"']);
     expect(errs('import "x.proschi" extra')).toEqual(["Cannot find 'x.proschi'", "Unexpected 'extra'"]);
+  });
+});
+
+describe('imports and other checks', () => {
+  it('counts connections from imported files for the missing-connection warning', () => {
+    const files = { 'infra.proschi': infra, 'checkout.proschi': `${checkout}usecase "Audit" {\n  gateway -> db : GET /audit\n}\n` };
+    const { diagnostics } = parseWith(files, 'checkout.proschi');
+    // gateway -> orders and orders -> db are declared in infra.proschi; gateway -> db is not.
+    expect(diagnostics.map((d) => [d.file, d.line, d.message])).toEqual([
+      [undefined, 10, "No connection between 'gateway' and 'db' in the architecture; add 'gateway -> db'"],
+    ]);
+  });
+
+  it('formats a document with imports idempotently, keeping the import lines', () => {
+    const src = 'title "X"\n   import   "infra.proschi"  # base\nimport "teams/a b.proschi"\n\n\n\napi->db\nusecase "U" {\n  api -> db : GET /x\n}\n';
+    const once = format(src);
+    expect(once.split('\n').slice(1, 3)).toEqual(['import "infra.proschi" # base', 'import "teams/a b.proschi"']);
+    expect(format(once)).toBe(once);
+    expect(parse(once).imports?.map((i) => i.path)).toEqual(['infra.proschi', 'teams/a b.proschi']);
   });
 });
 

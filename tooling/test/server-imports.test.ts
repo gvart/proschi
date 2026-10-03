@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -101,6 +101,21 @@ describe('language server with imports', () => {
     const fixed = nextDiagnostics(shopUri);
     await connection.sendNotification('textDocument/didChange', { textDocument: { uri: infraUri, version: 2 }, contentChanges: [{ text: infraText }] });
     expect(messages(await fixed)).toEqual([[1, "Cannot find 'nope.proschi'"]]);
+  });
+
+  it('reports OpenAPI findings only for steps in the document itself', async () => {
+    const api = join(dir, 'api');
+    mkdirSync(api);
+    const spec = fileURLToPath(new URL('./fixtures/openapi/specs/orders-api.yaml', import.meta.url));
+    writeFileSync(join(api, 'proschi.json'), JSON.stringify({ openapi: { orders: spec } }));
+    writeFileSync(join(api, 'flows.proschi'), 'gateway [AWS API Gateway]\norders [REST API]\ngateway -> orders\nusecase "Imported typo" {\n  gateway -> orders : GET /ordres\n}\n');
+    const uri = pathToFileURL(join(api, 'root.proschi')).href;
+    const opened = nextDiagnostics(uri);
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri, languageId: 'proschi', version: 1, text: 'import "flows.proschi"\nusecase "Own typo" {\n  gateway -> orders : GET /odrers\n}\n' },
+    });
+    const { diagnostics: found } = await opened;
+    expect(found.map((d) => [d.range.start.line, d.source, String(d.message).split(':')[0]])).toEqual([[2, 'proschi-openapi', 'GET /odrers']]);
   });
 
   it('reads the file from disk again when the imported document closes', async () => {

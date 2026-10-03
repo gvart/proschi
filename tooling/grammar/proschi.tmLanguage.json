@@ -13,6 +13,9 @@
       "include": "#label"
     },
     {
+      "include": "#alt-condition"
+    },
+    {
       "include": "#import"
     },
     {
@@ -44,6 +47,31 @@
     "comment": {
       "name": "comment.line.number-sign.proschi",
       "match": "(?:^|(?<=\\s))#.*$"
+    },
+    "alt-condition": {
+      "comment": "`when` is a keyword only between an alt name and its condition: `alt \"Name\" when \"condition\" {`.",
+      "match": "^\\s*(?:(\\})\\s*)?(alt)\\s+(?:(\"(?:[^\"\\\\]|\\\\.)*\")|([A-Za-z_][A-Za-z0-9_]*))\\s+(when)\\b",
+      "captures": {
+        "1": {
+          "name": "punctuation.section.block.end.proschi"
+        },
+        "2": {
+          "name": "keyword.control.proschi"
+        },
+        "3": {
+          "patterns": [
+            {
+              "include": "#string"
+            }
+          ]
+        },
+        "4": {
+          "name": "variable.other.node.proschi"
+        },
+        "5": {
+          "name": "keyword.control.proschi"
+        }
+      }
     },
     "import": {
       "comment": "import \"path\": the path is a link to another .proschi file.",

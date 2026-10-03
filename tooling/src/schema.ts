@@ -96,6 +96,7 @@ export function diagramSchema() {
           description: str,
           entryServiceId: str,
           endpoint: { ...str, description: '`METHOD /path` of the first step, if it is an HTTP call.' },
+          endpointGroup: { ...str, description: 'The endpoint with concrete ids folded into a `{param}` path template; use cases that share it hit the same endpoint.' },
           steps: { type: 'array', items: { $ref: '#/$defs/step' }, description: 'Steps of the first scenario.' },
           scenarios: { type: 'array', items: { $ref: '#/$defs/scenario' }, minItems: 1 },
           loc,
@@ -103,7 +104,14 @@ export function diagramSchema() {
         ['id', 'name', 'steps', 'scenarios', 'loc'],
       ),
       scenario: object(
-        { id: str, name: str, outcome: { enum: ['success', 'error'] }, steps: { type: 'array', items: { $ref: '#/$defs/step' } }, loc },
+        {
+          id: str,
+          name: str,
+          outcome: { enum: ['success', 'error'] },
+          condition: { ...str, description: "`when \"…\"` conditions of the branches on the scenario's path, joined with ' · '." },
+          steps: { type: 'array', items: { $ref: '#/$defs/step' } },
+          loc,
+        },
         ['id', 'name', 'outcome', 'steps', 'loc'],
       ),
       step: object(
@@ -128,8 +136,10 @@ export function diagramSchema() {
           isConditional: bool,
           conditionExpression: str,
           failed: { ...bool, description: 'Written `a -x b`: the call never got an answer.' },
+          loc: { ...loc, description: 'The request line.' },
+          responseLoc: { ...loc, description: 'The `-->` line that answered the request.' },
         },
-        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional'],
+        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'loc'],
       ),
     },
   };

@@ -1,25 +1,33 @@
 /**
  * `proschi check` validates .proschi files (for CI and pre-commit hooks);
- * `proschi parse` prints the parsed diagram as JSON (see schema/).
+ * `proschi parse` prints the parsed diagram as JSON (see schema/);
+ * `proschi fmt` formats them (see fmt.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
+import { openApiDiagnostics, parseSpecFlag } from './openapi/config';
 import type { Diagnostic } from './proschi';
+import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
 import { checkFiles, parseFile } from './imports';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
 
 const USAGE = `Usage:
-  proschi check [--strict] [--format text|github|json] <file|dir>...
+  proschi check [--strict] [--format text|github|json] [--openapi <node>=<spec>]... <file|dir>...
   proschi parse <file>
+${FMT_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
         Imports are followed; problems are reported under the file they occur in.
         Exits with 1 if any file has an error (or a warning, with --strict).
+        --openapi checks the steps calling <node> against an OpenAPI 3 spec
+        (YAML or JSON); it overrides the "openapi" map of the nearest
+        proschi.json.
 parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
-        schema/proschi-diagram.schema.json.`;
+        schema/proschi-diagram.schema.json.
+${FMT_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -86,10 +94,13 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     return 0;
   }
 
+  if (command === 'fmt') return runFmt(rest, collectFiles, out, err);
+
   if (command === 'check') {
     let strict = false;
     let style: 'text' | 'github' | 'json' = 'text';
     const paths: string[] = [];
+    const specs: Record<string, string> = {};
     for (let i = 0; i < rest.length; i++) {
       const arg = rest[i];
       if (arg === '--strict') strict = true;
@@ -100,6 +111,13 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
           return 2;
         }
         style = value;
+      } else if (arg === '--openapi') {
+        const spec = parseSpecFlag(rest[++i] ?? '');
+        if (!spec) {
+          err(`Expected --openapi <node>=<path/to/spec.yaml>, got '${rest[i] ?? ''}'`);
+          return 2;
+        }
+        specs[spec[0]] = spec[1];
       } else if (arg.startsWith('-')) {
         err(`Unknown option ${arg}\n\n${USAGE}`);
         return 2;
@@ -117,7 +135,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
       err(String((e as Error).message));
       return 2;
     }
-    const results = checkFiles(files);
+    const results = checkFiles(files, (file, diagram) => openApiDiagnostics(file, diagram, specs));
     const text = format(results, style);
     if (text) out(text);
     const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || strict));

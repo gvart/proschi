@@ -1,5 +1,6 @@
 import {
   KEYWORDS,
+  addConnection,
   componentCatalog,
   parse,
   type Diagnostic,
@@ -251,4 +252,37 @@ export function outline(analysis: Analysis): OutlineSymbol[] {
         : [],
   }));
   return [...top, ...useCases];
+}
+
+export interface TextEdit {
+  range: Range;
+  newText: string;
+}
+
+const MISSING_CONNECTION = /^No connection between '\w+' and '\w+' in the architecture; add '(\w+) -> (\w+)'$/;
+
+/** A quick fix for a parser diagnostic, if it has one: the missing-connection warning adds the connection. */
+export function quickFix(analysis: Analysis, message: string): { title: string; edit: TextEdit } | null {
+  const m = message.match(MISSING_CONNECTION);
+  if (!m) return null;
+  const [, from, to] = m;
+  const text = analysis.lines.join('\n');
+  // addConnection is what the canvas uses too, so the line lands where a drag-to-connect would put it.
+  const updated = addConnection(text, from, to);
+  if (updated === text) return null;
+  return { title: `Add connection '${from} -> ${to}'`, edit: diffEdit(text, updated) };
+}
+
+/** The smallest single edit that turns `before` into `after`. */
+function diffEdit(before: string, after: string): TextEdit {
+  let start = 0;
+  while (start < before.length && start < after.length && before[start] === after[start]) start++;
+  let end = 0;
+  while (end < before.length - start && end < after.length - start && before[before.length - 1 - end] === after[after.length - 1 - end]) end++;
+  return { range: { start: positionAt(before, start), end: positionAt(before, before.length - end) }, newText: after.slice(start, after.length - end) };
+}
+
+function positionAt(text: string, offset: number): Position {
+  const before = text.slice(0, offset).split('\n');
+  return { line: before.length - 1, character: before[before.length - 1].length };
 }
