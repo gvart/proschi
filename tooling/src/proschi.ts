@@ -7,7 +7,7 @@
 export { parse } from '../../frontend/src/dsl/parser';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
-export type { Diagnostic, Diagram, DiagramNode, DiagramUseCase, ParseResult, SourceLoc } from '../../frontend/src/dsl/types';
+export type { Diagnostic, Diagram, DiagramNode, DiagramStep, DiagramUseCase, ParseResult, SourceLoc } from '../../frontend/src/dsl/types';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [

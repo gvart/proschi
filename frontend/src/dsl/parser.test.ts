@@ -177,6 +177,13 @@ describe('use cases', () => {
     expect(diagram.useCases[0].steps.map((s) => s.parallelGroup)).toEqual([1, 2, undefined]);
   });
 
+  it('locates each step at its request line and the response that answered it', () => {
+    const [step, other] = parse('usecase "U" {\n  a -> b : POST /x {\n    "id": 1\n  }\n  a ->> c : Event\n  b --> a : 201\n}').diagram.useCases[0].steps;
+    expect(step).toMatchObject({ loc: { line: 2, col: 3 }, responseLoc: { line: 6, col: 3, length: 13 } });
+    expect(other.loc.line).toBe(5);
+    expect(other.responseLoc).toBeUndefined();
+  });
+
   it('rejects declarations that do not belong in a use case', () => {
     expect(errors('usecase U {\n  svc [REST API]\n}')[0]).toMatchObject({ line: 2, message: expect.stringMatching(/outside usecase/) });
     expect(errors('usecase U {\n  group g {\n  }\n}')[0].message).toMatch(/Groups cannot/);

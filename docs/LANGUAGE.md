@@ -81,6 +81,10 @@ How a step label is read:
 - Any other text becomes the step name, e.g. `INSERT order` or `OrderCreated {…}`.
 - On a response, a leading three-digit number is the status code, e.g. `201 {"id": 1}`.
 
+`proschi check` can compare these steps with the OpenAPI specs of the services
+they call: endpoints, status codes and JSON payloads. See
+[Checking against OpenAPI](EDITORS.md#checking-against-openapi).
+
 How the protocol is inferred:
 
 | Condition | Protocol |

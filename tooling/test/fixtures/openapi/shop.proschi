@@ -1,0 +1,39 @@
+title "Shop"
+
+gateway [AWS API Gateway]
+orders [REST API] @checkout
+payments [REST API] @payments
+ordersDb [PostgreSQL]
+
+gateway -> orders
+orders -> payments
+orders -> ordersDb
+
+usecase "Place order" {
+  gateway -> orders : POST /v1/orders {"items": [{"sku": "A-1", "quantity": 2}], "note": null}
+  orders -> ordersDb : INSERT order
+  orders -> payments : POST /payments {"orderId": 42, "amount": 19.99, "currency": "EUR", "coupon": null}
+
+  alt "Paid" {
+    payments --> orders : 201 {"paymentId": "pay_123"}
+    orders --> gateway : 201 {"id": 42, "status": "paid", "total": 19.99}
+  } alt "Declined" {
+    payments --> orders : 402 {"code": "card_declined"}
+    orders --> gateway : 400 {"error": "payment declined"}
+  }
+}
+
+usecase "Get order" {
+  gateway -> orders : GET /orders/42?expand=items
+  alt "Found" {
+    orders --> gateway : 200 {"id": 42, "status": "shipped", "total": null}
+  } alt "Not found" {
+    orders --> gateway : 404 {"error": "not_found"}
+  }
+}
+
+usecase "Payments down" {
+  gateway -> orders : POST /orders {"items": [{"sku": "A-1", "quantity": 1}]}
+  orders -x payments : POST /payments/{id}/refunds {"not": "checked"}
+  orders --> gateway : 400 {"error": "try again later"}
+}

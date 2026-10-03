@@ -1,5 +1,5 @@
 import { spawn } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import {
   StreamMessageReader,
@@ -85,5 +85,23 @@ describe('language server', () => {
 
     const symbols = (await connection.sendRequest('textDocument/documentSymbol', { textDocument })) as { name: string }[];
     expect(symbols.map((s) => s.name)).toEqual(['api', 'db']);
+  });
+
+  it('reports OpenAPI findings for documents below a proschi.json', async () => {
+    // The file need not exist: proschi.json is found from its directory.
+    const specUri = pathToFileURL(fileURLToPath(new URL('./fixtures/openapi/unsaved.proschi', import.meta.url))).href;
+    const opened = nextDiagnostics(specUri);
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri: specUri, languageId: 'proschi', version: 1, text: 'usecase "U" {\n  gateway -> orders : GET /orders/42\n  orders --> gateway : 503\n}\n' },
+    });
+    const { diagnostics: found } = await opened;
+    expect(found).toEqual([
+      {
+        range: { start: { line: 2, character: 2 }, end: { line: 2, character: 26 } },
+        severity: 2,
+        source: 'proschi-openapi',
+        message: 'Status 503 is not documented for GET /orders/{orderId} (documented: 200, 4XX)',
+      },
+    ]);
   });
 });
