@@ -2,12 +2,406 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <script>
+      // Old share links pointed at the site root (/proschi/#code=...). The editor
+      // now lives under app/, so forward them before anything else loads.
+      if (location.hash.indexOf('#code=') === 0) location.replace('./app/' + location.hash);
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Proschi</title>
+    <title>Proschi: architecture diagrams as text, with request flows you can play</title>
+    <meta
+      name="description"
+      content="Proschi is a small text language for microservice architectures. Describe services, databases and queues, write use cases as step-by-step request flows, and play them back on the diagram. Runs in the browser, free and open source."
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href="https://gvart.github.io/proschi/" />
+
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Proschi" />
+    <meta property="og:title" content="Proschi: architecture diagrams as text, with request flows you can play" />
+    <meta
+      property="og:description"
+      content="Describe services, databases and queues as text. Write use cases as request flows and play them back on the diagram. Browser-only, no account, open source."
+    />
+    <meta property="og:url" content="https://gvart.github.io/proschi/" />
+    <meta property="og:image" content="https://gvart.github.io/proschi/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta property="og:image:alt" content="Proschi source text next to the architecture diagram it produces." />
+    <meta name="twitter:card" content="summary_large_image" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+    />
   </head>
   <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap masthead__inner">
+        <a class="wordmark" href="./" aria-label="Proschi home">
+          <svg class="wordmark__mark" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="1.5" y="3.5" width="8" height="6" />
+            <rect x="14.5" y="14.5" width="8" height="6" />
+            <path d="M9.5 6.5h4v11h1" />
+          </svg>
+          <span>Proschi</span>
+        </a>
+        <nav class="masthead__nav" aria-label="Main">
+          <a class="navlink hide-sm" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language</a>
+          <a class="navlink" href="https://github.com/gvart/proschi">GitHub</a>
+          <a class="btn btn--small" href="./app/">Open the editor</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap">
+          <p class="kicker">A text language for microservice architectures</p>
+          <h1 id="hero-title">Architecture diagrams as text, with request flows you can&nbsp;play.</h1>
+          <div class="hero__lede">
+            <p>
+              Write down your services, databases and queues the way you would in a design doc. Proschi draws the
+              diagram as you type. Then describe a use case step by step, with real payloads and status codes, and
+              press Play to watch the request move through the system.
+            </p>
+            <div class="actions">
+              <a class="btn" href="./app/">Open the editor</a>
+              <a class="btn btn--ghost" id="hero-open" href="./app/">Open this example</a>
+            </div>
+            <p class="fineprint">Runs in your browser. No account, no backend, nothing uploaded.</p>
+          </div>
+
+          <figure class="specimen" aria-labelledby="specimen-caption">
+            <div class="specimen__grid">
+              <div class="panel panel--source">
+                <div class="panel__head">
+                  <span>checkout.proschi</span>
+                  <span class="panel__meta">source</span>
+                </div>
+                <pre class="code code--numbered" id="hero-source" data-proschi tabindex="0" aria-label="Proschi source for the checkout example"><code>title "Checkout"
+
+web "Web Shop" [Actor]
+
+group vpc "AWS VPC" {
+  api "Order API" [REST API]   @orders
+  db  "Orders DB" [PostgreSQL] @orders
+}
+events "OrderEvents" [Kafka] @platform
+
+web -&gt; api    : HTTPS
+api -&gt; db     : SQL
+api -&gt; events : publish
+
+usecase "Place order" {
+  web -&gt; api     : POST /orders json {"sku": "A1"}
+  api -&gt; db      : INSERT order
+  api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
+  api --&gt; web    : 201 {"orderId": "o-1"}
+}</code></pre>
+              </div>
+
+              <div class="panel panel--diagram">
+                <div class="panel__head">
+                  <span>Diagram</span>
+                  <span class="panel__meta">rendered</span>
+                </div>
+                <div class="diagram">
+                  <svg
+                    id="hero-diagram"
+                    viewBox="0 0 640 344"
+                    role="img"
+                    aria-labelledby="diagram-title diagram-desc"
+                  >
+                    <title id="diagram-title">Checkout architecture</title>
+                    <desc id="diagram-desc">
+                      A Web Shop actor calls the Order API over HTTPS. The Order API and the Orders DB (PostgreSQL)
+                      sit inside an AWS VPC group. The Order API writes to the Orders DB over SQL and publishes to the
+                      OrderEvents Kafka topic.
+                    </desc>
+                    <defs>
+                      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead" />
+                      </marker>
+                      <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead arrowhead--hot" />
+                      </marker>
+                    </defs>
+
+                    <!-- Desktop layout; src/landing/diagramLayout.ts also has a portrait one for phones. -->
+                    <rect id="d-group" class="d-group" x="206" y="14" width="204" height="316" />
+                    <text id="d-group-label" class="d-group-label" x="218" y="34">AWS VPC</text>
+
+                    <path id="edge-web-api" class="d-edge" d="M166 90 H231" marker-end="url(#arrow)" />
+                    <path id="edge-api-db" class="d-edge" d="M308 124 V228" marker-end="url(#arrow)" />
+                    <path id="edge-api-events" class="d-edge" d="M383 90 H472" marker-end="url(#arrow)" />
+                    <text id="label-web-api" class="d-edge-label" x="186" y="81" text-anchor="middle">HTTPS</text>
+                    <text id="label-api-db" class="d-edge-label" x="316" y="180">SQL</text>
+                    <text id="label-api-events" class="d-edge-label" x="442" y="81" text-anchor="middle">publish</text>
+
+                    <g class="d-node" id="node-web" transform="translate(16 56)">
+                      <rect width="150" height="68" />
+                      <circle class="d-glyph" cx="130" cy="17" r="4" />
+                      <path class="d-glyph" d="M122 33 q8 -10 16 0" />
+                      <text class="d-tech" x="12" y="22">Actor</text>
+                      <text class="d-name" x="12" y="46">Web Shop</text>
+                    </g>
+                    <g class="d-node" id="node-api" transform="translate(233 56)">
+                      <rect width="150" height="68" />
+                      <text class="d-tech" x="12" y="22">REST API</text>
+                      <text class="d-name" x="12" y="46">Order API</text>
+                      <text class="d-team" x="12" y="60">@orders</text>
+                    </g>
+                    <g class="d-node" id="node-db" transform="translate(233 230)">
+                      <path d="M0 9 a75 9 0 0 1 150 0 v58 a75 9 0 0 1 -150 0 z" />
+                      <path class="d-line" d="M0 9 a75 9 0 0 0 150 0" />
+                      <text class="d-tech" x="12" y="32">PostgreSQL</text>
+                      <text class="d-name" x="12" y="50">Orders DB</text>
+                      <text class="d-team" x="12" y="64">@orders</text>
+                    </g>
+                    <g class="d-node" id="node-events" transform="translate(474 56)">
+                      <rect width="150" height="68" />
+                      <path class="d-line" d="M120 6 v56 M128 6 v56 M136 6 v56" />
+                      <text class="d-tech" x="12" y="22">Kafka</text>
+                      <text class="d-name" x="12" y="46">OrderEvents</text>
+                      <text class="d-team" x="12" y="60">@platform</text>
+                    </g>
+
+                    <g id="d-legend" class="d-legend" transform="translate(474 248)" aria-hidden="true">
+                      <line x1="0" y1="0" x2="36" y2="0" class="d-key" marker-end="url(#arrow)" />
+                      <text x="46" y="4">request</text>
+                      <line x1="0" y1="24" x2="36" y2="24" class="d-key d-key--async" marker-end="url(#arrow)" />
+                      <text x="46" y="28">async</text>
+                      <line x1="0" y1="48" x2="36" y2="48" class="d-key d-key--response" marker-end="url(#arrow)" />
+                      <text x="46" y="52">response</text>
+                    </g>
+                    <g id="d-titleblock" class="d-titleblock" transform="translate(16 256)" aria-hidden="true">
+                      <text x="0" y="0" class="d-tb-head">Checkout</text>
+                      <text x="0" y="20">4 nodes · 3 edges</text>
+                      <text x="0" y="38">1 use case</text>
+                    </g>
+
+                    <circle id="packet" class="d-packet" r="6" cx="-20" cy="-20" />
+                  </svg>
+                </div>
+                <div class="player" id="player" hidden>
+                  <div class="player__controls">
+                    <button type="button" class="btn btn--small" id="player-toggle" aria-pressed="false">Play</button>
+                    <button type="button" class="btn btn--small btn--ghost" id="player-next">Next step</button>
+                  </div>
+                  <p class="player__status" id="player-status" aria-live="polite">Use case “Place order”, 4 steps.</p>
+                  <pre class="player__payload code" id="player-payload" aria-hidden="true"></pre>
+                </div>
+              </div>
+            </div>
+            <figcaption id="specimen-caption">
+              <span class="figno">Fig. 1</span> The source on the left is the whole document. The editor lays out the
+              diagram automatically; the use case “Place order” plays back over it step by step.
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="how-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">01</p>
+            <h2 id="how-title">How it works</h2>
+          </header>
+
+          <ol class="steps">
+            <li class="step">
+              <div class="step__text">
+                <h3><span class="step__no">1.1</span> Write the architecture</h3>
+                <p>
+                  One line per node: an id, a display name, a tech stack in brackets and an owning team. Groups draw a
+                  boundary around what they contain. Connections are arrows with an optional label.
+                </p>
+                <p>
+                  The editor autocompletes 108 tech stacks (AWS, GCP and Azure services, databases, queues, caches)
+                  and underlines mistakes as you type.
+                </p>
+              </div>
+              <pre class="code" data-proschi tabindex="0"><code>group vpc "AWS VPC" {
+  gateway "API Gateway"   [AWS API Gateway] @platform
+  orders  "Order Service" [REST API]        @orders
+}
+ordersDb "Orders DB" [PostgreSQL] @orders
+
+gateway -&gt; orders   : HTTP
+orders  -&gt; ordersDb : SQL</code></pre>
+            </li>
+
+            <li class="step">
+              <div class="step__text">
+                <h3><span class="step__no">1.2</span> Describe a use case</h3>
+                <p>
+                  A use case is a request flow, written as a sequence of steps. <code>-&gt;</code> is a synchronous
+                  request, <code>-&gt;&gt;</code> is fire-and-forget, <code>--&gt;</code> answers the last open request.
+                  Steps carry an HTTP method and path, a JSON, XML or text payload, and a status code. Steps inside
+                  <code>par { }</code> run in parallel.
+                </p>
+              </div>
+              <pre class="code" data-proschi tabindex="0"><code>usecase "Create order" {
+  gateway -&gt; orders : POST /api/orders json {
+    "userId": "user123",
+    "items": [{ "productId": "prod-1", "quantity": 2 }]
+  }
+  par {
+    orders -&gt; ordersDb : INSERT order
+    orders -&gt;&gt; events  : OrderCreated {"orderId": "order-789"}
+  }
+  orders --&gt; gateway : 201 {"status": "pending"}
+}</code></pre>
+            </li>
+
+            <li class="step">
+              <div class="step__text">
+                <h3><span class="step__no">1.3</span> Press Play</h3>
+                <p>
+                  Playback animates the use case over the architecture, one step at a time, and shows the request and
+                  response payload of each step. It is a quick way to check that a flow actually touches the services
+                  you think it does, or to walk a new team member through one.
+                </p>
+              </div>
+              <dl class="facts">
+                <div><dt>Step 1</dt><dd><code>gateway → orders</code> POST /api/orders</dd></div>
+                <div><dt>Step 2</dt><dd><code>orders → ordersDb</code> INSERT order <span class="tag">parallel</span></dd></div>
+                <div><dt>Step 3</dt><dd><code>orders ⇢ events</code> OrderCreated <span class="tag">async</span></dd></div>
+                <div><dt>Reply</dt><dd><code>orders → gateway</code> 201 {"status": "pending"}</dd></div>
+              </dl>
+            </li>
+
+            <li class="step">
+              <div class="step__text">
+                <h3><span class="step__no">1.4</span> Share a link</h3>
+                <p>
+                  The whole document is compressed into the URL, after <code>#code=</code>. A link can also point at a
+                  specific step of a use case, so it opens straight into playback there. The fragment never reaches a
+                  server; there is no server.
+                </p>
+              </div>
+              <pre class="code code--url" tabindex="0"><code>https://gvart.github.io/proschi/app/#code=<span class="tok-dim" id="share-sample">C4S2BsFMAICIGEAWkDGBrA9gV2LAUHgO…</span>&amp;uc=place-order&amp;step=2</code></pre>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="details-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">02</p>
+            <h2 id="details-title">The rest of it</h2>
+          </header>
+
+          <table class="spec">
+            <caption class="visually-hidden">Proschi features</caption>
+            <tbody>
+              <tr>
+                <th scope="row">Text first</th>
+                <td>
+                  The text is the source of truth. Dragging a node on the canvas writes <code>pos x,y</code> back into
+                  it, double-click renames, dragging between two nodes adds <code>a -&gt; b</code>. Auto-layout (ELK)
+                  places everything without a position.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Storage</th>
+                <td>Saved diagrams live in your browser's local storage. Nothing is sent anywhere, and there is no tracking.</td>
+              </tr>
+              <tr>
+                <th scope="row">Files</th>
+                <td>Download and open plain-text <code>.proschi</code> files, so diagrams can sit in a repository next to the code they describe.</td>
+              </tr>
+              <tr>
+                <th scope="row">Export</th>
+                <td>PNG or SVG of the current diagram.</td>
+              </tr>
+              <tr>
+                <th scope="row">Errors</th>
+                <td>The parser never stops at the first problem. Each error has a line and column, and everything else still renders.</td>
+              </tr>
+              <tr>
+                <th scope="row">Source</th>
+                <td>Free and open source. <a href="https://github.com/gvart/proschi">Source on GitHub</a>.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="examples-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">03</p>
+            <h2 id="examples-title">Examples</h2>
+          </header>
+          <p class="section__intro">Each link opens the editor with the example loaded. Edit it as much as you like; your copy stays in your browser.</p>
+
+          <ul class="examples">
+            <li>
+              <a class="example" data-example="hello" href="./app/">
+                <span class="example__name">Hello Proschi</span>
+                <span class="example__desc">The basics: nodes, connections and one use case.</span>
+                <span class="example__go" aria-hidden="true">Open →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" data-example="ecommerce" href="./app/">
+                <span class="example__name">E-commerce platform</span>
+                <span class="example__desc">Services in a VPC, multi-line payloads and parallel steps.</span>
+                <span class="example__go" aria-hidden="true">Open →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" data-example="serverless" href="./app/">
+                <span class="example__name">Serverless pipeline</span>
+                <span class="example__desc">API Gateway, Lambda, S3 and SQS with async processing.</span>
+                <span class="example__go" aria-hidden="true">Open →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" data-example="login" href="./app/">
+                <span class="example__name">Login with sessions</span>
+                <span class="example__desc">Two use cases for one architecture, plus a sticky note.</span>
+                <span class="example__go" aria-hidden="true">Open →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" data-example="events" href="./app/">
+                <span class="example__name">Event-driven checkout</span>
+                <span class="example__desc">Kafka fan-out to several consumers.</span>
+                <span class="example__go" aria-hidden="true">Open →</span>
+              </a>
+            </li>
+          </ul>
+
+          <div class="closing">
+            <a class="btn" href="./app/">Open the editor</a>
+            <a class="btn btn--ghost" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Read the language reference</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer__inner">
+        <p><strong>Proschi</strong> is free and open source software.</p>
+        <ul class="footer__links">
+          <li><a href="./app/">Editor</a></li>
+          <li><a href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language reference</a></li>
+          <li><a href="https://github.com/gvart/proschi">GitHub</a></li>
+          <li><a href="https://github.com/gvart/proschi/issues">Issues</a></li>
+        </ul>
+      </div>
+    </footer>
+
+    <script type="module" src="/src/landing/main.ts"></script>
   </body>
 </html>

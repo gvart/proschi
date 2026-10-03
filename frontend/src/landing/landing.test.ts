@@ -1,0 +1,127 @@
+import { describe, expect, it } from 'vitest';
+import landingHtml from '../../index.html?raw';
+import { examples, parse } from '../dsl';
+import { decodeShareLink } from '../playground/share';
+import { highlightLine } from './highlight';
+import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
+import { heroSteps, stepLines } from './player';
+import { tallLayout, wideLayout } from './diagramLayout';
+
+function decodeEntities(s: string): string {
+  return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
+}
+
+/** The Proschi text exactly as the landing page shows it in the hero. */
+function heroSource(): string {
+  const m = landingHtml.match(/<pre[^>]*id="hero-source"[^>]*><code>([\s\S]*?)<\/code><\/pre>/);
+  if (!m) throw new Error('hero source not found in index.html');
+  expect(m[1]).not.toMatch(/<[a-z]/i); // plain text only, so what you see is what parses
+  return decodeEntities(m[1]);
+}
+
+/** Every highlighted snippet on the page. */
+function snippets(): string[] {
+  return [...landingHtml.matchAll(/<pre[^>]*data-proschi[^>]*><code>([\s\S]*?)<\/code><\/pre>/g)].map((m) => decodeEntities(m[1]));
+}
+
+describe('landing page hero', () => {
+  it('shows valid Proschi with no diagnostics', () => {
+    const { diagram, diagnostics } = parse(heroSource());
+    expect(diagnostics).toEqual([]);
+    expect(diagram.nodes.every((n) => !n.implicit)).toBe(true);
+    expect(diagram.nodes.map((n) => n.id).sort()).toEqual(['api', 'db', 'events', 'vpc', 'web']);
+    expect(diagram.edges).toHaveLength(3);
+  });
+
+  it('names the use case the way the editor does in links', () => {
+    const { diagram } = parse(heroSource());
+    expect(diagram.useCases.map((u) => [u.id, u.name])).toEqual([[HERO_USE_CASE.id, HERO_USE_CASE.name]]);
+  });
+
+  it('animates the same steps as the source declares', () => {
+    const source = heroSource();
+    const { diagram } = parse(source);
+    const parsed = diagram.useCases[0].steps;
+    const requests = heroSteps.filter((s) => s.kind !== 'response');
+    expect(parsed.map((s) => [s.fromServiceId, s.toServiceId])).toEqual(requests.map((s) => [s.from, s.to]));
+    expect(parsed[0].statusCode).toBe(201);
+
+    const lines = stepLines(source.split('\n'));
+    expect(lines.every((l) => l > 0)).toBe(true);
+    expect(new Set(lines).size).toBe(heroSteps.length);
+  });
+
+  it('every SVG edge the player uses exists', () => {
+    for (const step of heroSteps) {
+      expect(landingHtml).toContain(`id="${step.edge}"`);
+      expect(landingHtml).toContain(`id="node-${step.from}"`);
+      expect(landingHtml).toContain(`id="node-${step.to}"`);
+    }
+  });
+
+  it('the wide diagram layout matches the SVG in index.html', () => {
+    expect(landingHtml).toContain(`viewBox="${wideLayout.viewBox}"`);
+    for (const [id, attrs] of Object.entries(wideLayout.elements)) {
+      const tag = landingHtml.match(new RegExp(`<[a-z]+[^>]*id="${id}"[^>]*>`))?.[0];
+      expect(tag, id).toBeTruthy();
+      for (const [name, value] of Object.entries(attrs)) {
+        if (name === 'text-anchor' && value === 'start') continue;
+        expect(tag, `${id} ${name}`).toContain(`${name}="${value}"`);
+      }
+    }
+    expect(Object.keys(tallLayout.elements).sort()).toEqual(Object.keys(wideLayout.elements).sort());
+  });
+
+  it('links into playback of the hero use case', () => {
+    const link = editorLink(heroSource(), { useCase: HERO_USE_CASE.id, step: 1 });
+    expect(link.startsWith(`${APP_PATH}#code=`)).toBe(true);
+    expect(decodeShareLink(link.slice(APP_PATH.length))).toEqual({
+      source: heroSource(),
+      playback: { useCase: HERO_USE_CASE.id, step: 1 },
+    });
+  });
+});
+
+describe('landing page snippets', () => {
+  it('only use syntax the parser accepts', () => {
+    const all = snippets();
+    expect(all.length).toBeGreaterThanOrEqual(3);
+    // The two "how it works" snippets are halves of one document.
+    const combined = all.slice(1).join('\n\nevents "OrderEvents" [Kafka]\n\n');
+    expect(parse(combined).diagnostics).toEqual([]);
+  });
+
+  it('highlighter keeps the text intact', () => {
+    for (const source of snippets()) {
+      for (const line of source.split('\n')) {
+        expect(highlightLine(line).map((s) => s.text).join('')).toBe(line);
+      }
+    }
+  });
+});
+
+describe('example links', () => {
+  it.each(examples.map((e) => [e.id, e.source]))('%s decodes back to the example source', (id, source) => {
+    const link = exampleLink(id);
+    expect(link).not.toBeNull();
+    expect(link!.startsWith(`${APP_PATH}#code=`)).toBe(true);
+    expect(decodeShareLink(link!.slice(APP_PATH.length))?.source).toBe(source);
+  });
+
+  it('the page lists every example, and nothing else', () => {
+    const ids = [...landingHtml.matchAll(/data-example="([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toEqual(examples.map((e) => e.id));
+    expect(exampleLink('nope')).toBeNull();
+  });
+});
+
+describe('old share links', () => {
+  it('are forwarded to the editor before anything else runs', () => {
+    const head = landingHtml.slice(0, landingHtml.indexOf('</head>'));
+    const firstScript = head.indexOf('<script');
+    expect(firstScript).toBeGreaterThan(-1);
+    expect(firstScript).toBeLessThan(head.indexOf('<link'));
+    expect(head).toContain("location.hash.indexOf('#code=') === 0");
+    expect(head).toContain("location.replace('./app/' + location.hash)");
+  });
+});
