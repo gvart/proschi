@@ -12,6 +12,19 @@ valid.
 | Command line | `proschi check` / `proschi parse` | Validation in CI and pre-commit hooks; the parsed diagram as JSON |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
+## Releasing
+
+Maintainers: bump `version` in both `tooling/package.json` and
+`tooling/vscode/package.json`, merge, then push a tag:
+
+```sh
+git tag tooling-v0.2.0 && git push origin tooling-v0.2.0
+```
+
+The *Release tooling* workflow tests, publishes `proschi` to npm through
+Trusted Publishing (no token in the repository), and attaches the `.vsix` to a
+GitHub release.
+
 ## Install
 
 Until the packages are published, build them from the repository:
