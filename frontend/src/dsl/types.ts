@@ -6,6 +6,8 @@ export interface SourceLoc {
   line: number;
   col: number;
   length: number;
+  /** Path of the imported file the construct is in; left out for the root document. */
+  file?: string;
 }
 
 export type Severity = 'error' | 'warning';
@@ -78,7 +80,35 @@ export interface Diagram {
   useCases: DiagramUseCase[];
 }
 
+/** One `import "path"` statement, in the root document or in an imported file. */
+export interface DiagramImport {
+  /** The path as written. */
+  path: string;
+  /** Path the resolver returned, or undefined when the file could not be loaded. */
+  resolved?: string;
+  loc: SourceLoc;
+}
+
 export interface ParseResult {
   diagram: Diagram;
   diagnostics: Diagnostic[];
+  /** Every import statement that was read; left out when the document has none. */
+  imports?: DiagramImport[];
+}
+
+/** A file an import resolved to. */
+export interface ResolvedImport {
+  /** Identifies the file: shown in messages, used for `file` and to resolve its own imports. */
+  path: string;
+  source: string;
+}
+
+/** Finds the file `importPath` refers to, relative to the importing file (undefined for an unnamed root). */
+export type ImportResolver = (importPath: string, fromPath: string | undefined) => ResolvedImport | undefined;
+
+export interface ParseOptions {
+  /** Path of the root document, so its imports resolve relative to it and import cycles back to it are found. */
+  path?: string;
+  /** Loads imported files; without it, `import` statements only produce a warning. */
+  resolve?: ImportResolver;
 }

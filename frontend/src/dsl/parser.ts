@@ -6,10 +6,13 @@ import type {
   Diagnostic,
   Diagram,
   DiagramEdge,
+  DiagramImport,
   DiagramNode,
   DiagramScenario,
   DiagramUseCase,
+  ParseOptions,
   ParseResult,
+  ResolvedImport,
   SourceLoc,
 } from './types';
 
@@ -65,26 +68,64 @@ const techByName = new Map<string, { type: ComponentType; techStack: TechStack }
  * Parses Proschi source text into a diagram. Parsing never throws: problems are
  * reported as diagnostics and the rest of the document is still returned, so an
  * editor can keep rendering while the user types.
+ *
+ * `import` statements are followed through `options.resolve`; everything the
+ * imported files declare becomes part of the diagram, and their problems are
+ * reported with the file's path in `file`.
  */
-export function parse(source: string): ParseResult {
-  return new Parser(source).run();
+export function parse(source: string, options: ParseOptions = {}): ParseResult {
+  return new Parser(source, options).run();
 }
 
 class Parser {
-  private readonly lines: string[];
+  // Per-file state, swapped while an imported file is read.
+  private lines: string[];
+  /** Path of the imported file being read; undefined for the root document. */
+  private file?: string;
+  private stack: Frame[] = [];
+
   private readonly diagnostics: Diagnostic[] = [];
   private readonly nodes = new Map<string, DiagramNode>();
   private readonly edges: DiagramEdge[] = [];
   private readonly useCases: { useCase: DiagramUseCase; body: Container }[] = [];
   private readonly references: Reference[] = [];
-  private readonly stack: Frame[] = [];
+  private readonly imports: DiagramImport[] = [];
+  /** Files read so far, so a file imported along several paths is included once. */
+  private readonly included = new Set<string>();
+  /** Files being read, outermost first, to find import cycles. */
+  private readonly chain: (string | undefined)[];
+  /** Diagnostics are sorted by file in the order the files were first read, the root first. */
+  private readonly fileOrder = new Map<string | undefined, number>([[undefined, 0]]);
   private title?: string;
+  private readonly options: ParseOptions;
 
-  constructor(source: string) {
+  constructor(source: string, options: ParseOptions) {
+    this.options = options;
     this.lines = source.split('\n');
+    this.chain = [options.path];
+    if (options.path !== undefined) this.included.add(options.path);
   }
 
   run(): ParseResult {
+    // Implicit nodes are created only once every file is read, so a use case
+    // file may refer to nodes its imports declare.
+    this.parseFile();
+    this.createImplicitNodes();
+
+    const diagram: Diagram = {
+      title: this.title,
+      nodes: [...this.nodes.values()],
+      edges: this.edges,
+      useCases: this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body)),
+    };
+
+    const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
+    this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
+    return { diagram, diagnostics: this.diagnostics, ...(this.imports.length ? { imports: this.imports } : {}) };
+  }
+
+  /** Reads the current file's lines and reports blocks it leaves open. */
+  private parseFile() {
     for (let i = 0; i < this.lines.length; i++) {
       i = this.parseLine(i);
     }
@@ -100,30 +141,18 @@ class Parser {
               : 'par block';
       this.error(`Missing } to close ${what}`, frame.loc);
     }
-
-    this.createImplicitNodes();
-
-    const diagram: Diagram = {
-      title: this.title,
-      nodes: [...this.nodes.values()],
-      edges: this.edges,
-      useCases: this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body)),
-    };
-
-    this.diagnostics.sort((a, b) => a.line - b.line || a.col - b.col);
-    return { diagram, diagnostics: this.diagnostics };
   }
 
   /** Parses the line at `index` and returns the index of the last line it consumed. */
   private parseLine(index: number): number {
     const line = index + 1;
     const { tokens, diagnostics } = tokenizeLine(this.lines[index], line);
-    this.diagnostics.push(...diagnostics);
+    this.diagnostics.push(...diagnostics.map((d) => ({ ...d, ...this.fileField() })));
     // A line the lexer could not read is skipped rather than half-interpreted.
     if (tokens.length === 0 || diagnostics.some((d) => d.severity === 'error')) return index;
 
     const [first, second] = tokens;
-    const loc = (t: Token): SourceLoc => ({ line, col: t.col, length: t.length });
+    const loc = (t: Token): SourceLoc => this.locOf(t, line);
 
     if (first.kind === 'rbrace') {
       if (this.stack.length === 0) this.error('Unmatched }', loc(first));
@@ -159,6 +188,9 @@ class Parser {
       case 'alt':
         this.parseAlt(tokens, line);
         break;
+      case 'import':
+        this.parseImport(tokens, line);
+        break;
       default:
         this.parseNode(tokens, line);
     }
@@ -171,8 +203,65 @@ class Parser {
       this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line));
       return;
     }
-    this.title = value.value;
+    // The root document names the diagram; titles of imported files are ignored.
+    if (this.file === undefined) this.title = value.value;
     this.expectEnd(tokens, 2, line);
+  }
+
+  private parseImport(tokens: Token[], line: number) {
+    const keyword = tokens[0];
+    if (this.stack.length > 0) {
+      this.error('import is only allowed at the top level', this.locOf(keyword, line));
+      return;
+    }
+    const pathToken = tokens[1];
+    if (pathToken?.kind !== 'string' || !pathToken.value.trim()) {
+      this.error('Expected a file path, e.g. import "infra.proschi"', this.locOf(pathToken ?? keyword, line));
+      return;
+    }
+    this.expectEnd(tokens, 2, line);
+
+    const path = pathToken.value;
+    const loc = this.locOf(pathToken, line);
+    const entry: DiagramImport = { path, loc };
+    this.imports.push(entry);
+
+    const { resolve } = this.options;
+    if (!resolve) {
+      this.warning(`Imports are not resolved in this context; '${path}' was not loaded`, loc);
+      return;
+    }
+    let target: ResolvedImport | undefined;
+    try {
+      target = resolve(path, this.file ?? this.options.path);
+    } catch {
+      target = undefined;
+    }
+    if (!target) {
+      this.error(`Cannot find '${path}'`, loc);
+      return;
+    }
+    entry.resolved = target.path;
+
+    const cycleStart = this.chain.indexOf(target.path);
+    if (cycleStart !== -1) {
+      const names = [...this.chain.slice(cycleStart), target.path].map((p) => fileName(p ?? ''));
+      this.error(`Import cycle: ${names.join(' → ')}`, loc);
+      return;
+    }
+    if (this.included.has(target.path)) return;
+    this.included.add(target.path);
+    this.fileOrder.set(target.path, this.fileOrder.size);
+
+    // The imported file gets its own lines and block stack; what it declares is shared.
+    const outer = { lines: this.lines, file: this.file, stack: this.stack };
+    this.lines = target.source.split('\n');
+    this.file = target.path;
+    this.stack = [];
+    this.chain.push(target.path);
+    this.parseFile();
+    this.chain.pop();
+    ({ lines: this.lines, file: this.file, stack: this.stack } = outer);
   }
 
   private parseGroup(tokens: Token[], line: number) {
@@ -376,7 +465,12 @@ class Parser {
       label = label.trimEnd();
     }
 
-    const loc: SourceLoc = { line, col: fromToken.col, length: (labelToken ?? toToken).col + (labelToken ?? toToken).length - fromToken.col };
+    const loc: SourceLoc = {
+      line,
+      col: fromToken.col,
+      length: (labelToken ?? toToken).col + (labelToken ?? toToken).length - fromToken.col,
+      ...this.fileField(),
+    };
     const from = fromToken.value;
     const to = toToken.value;
     const arrow = arrowToken.value as Arrow;
@@ -497,7 +591,12 @@ class Parser {
   private addNode(node: DiagramNode) {
     const existing = this.nodes.get(node.id);
     if (existing) {
-      this.error(`Duplicate id '${node.id}' (first declared on line ${existing.loc.line})`, node.loc);
+      const first = existing.loc.file;
+      const where =
+        first === node.loc.file
+          ? `on line ${existing.loc.line}`
+          : `in ${fileName(first ?? this.options.path ?? 'the root document')} on line ${existing.loc.line}`;
+      this.error(`Duplicate id '${node.id}' (first declared ${where})`, node.loc);
       return;
     }
     this.nodes.set(node.id, node);
@@ -552,7 +651,12 @@ class Parser {
   }
 
   private locOf(token: Token | undefined, line: number): SourceLoc {
-    return token ? { line, col: token.col, length: token.length } : { line, col: 1, length: 1 };
+    return token ? { line, col: token.col, length: token.length, ...this.fileField() } : { line, col: 1, length: 1, ...this.fileField() };
+  }
+
+  /** `{ file }` inside an imported file; nothing for the root document, whose locations stay as they were. */
+  private fileField(): { file?: string } {
+    return this.file === undefined ? {} : { file: this.file };
   }
 
   private error(message: string, loc: SourceLoc) {
@@ -561,7 +665,7 @@ class Parser {
 
   private warning(message: string, loc: SourceLoc) {
     // Steps shared by several scenarios are checked once per scenario; report each problem once.
-    if (this.diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col)) return;
+    if (this.diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col && d.file === loc.file)) return;
     this.diagnostics.push({ severity: 'warning', message, ...loc });
   }
 }
@@ -595,6 +699,11 @@ function expand(items: Item[]): { names: string[]; locs: SourceLoc[]; steps: Raw
     paths = next;
   }
   return paths;
+}
+
+/** Last segment of a path, for messages. */
+function fileName(path: string): string {
+  return path.split(/[\\/]/).pop() || path;
 }
 
 function slug(text: string): string {

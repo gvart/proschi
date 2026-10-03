@@ -2,9 +2,10 @@
  * `proschi check` validates .proschi files (for CI and pre-commit hooks);
  * `proschi parse` prints the parsed diagram as JSON (see schema/).
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
-import { parse, type Diagnostic } from './proschi';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
+import type { Diagnostic } from './proschi';
+import { checkFiles, parseFile } from './imports';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -15,6 +16,7 @@ const USAGE = `Usage:
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
+        Imports are followed; problems are reported under the file they occur in.
         Exits with 1 if any file has an error (or a warning, with --strict).
 parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
         schema/proschi-diagram.schema.json.`;
@@ -40,12 +42,6 @@ export function collectFiles(paths: string[]): string[] {
     else out.push(p);
   }
   return out;
-}
-
-/** Relative to the working directory when the file is inside it, else as given. */
-function displayPath(file: string): string {
-  const rel = relative(process.cwd(), file);
-  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : file;
 }
 
 export function format(results: CheckResult[], style: 'text' | 'github' | 'json'): string {
@@ -86,7 +82,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
       err(USAGE);
       return 2;
     }
-    out(JSON.stringify(parse(readFileSync(rest[0], 'utf8')), null, 2));
+    out(JSON.stringify(parseFile(rest[0]), null, 2));
     return 0;
   }
 
@@ -121,10 +117,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
       err(String((e as Error).message));
       return 2;
     }
-    const results = files.map((file) => ({
-      file: displayPath(file),
-      diagnostics: parse(readFileSync(file, 'utf8')).diagnostics,
-    }));
+    const results = checkFiles(files);
     const text = format(results, style);
     if (text) out(text);
     const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || strict));

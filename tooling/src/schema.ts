@@ -18,6 +18,7 @@ const loc = { $ref: '#/$defs/loc' };
 const str = { type: 'string' };
 const int = { type: 'integer' };
 const bool = { type: 'boolean' };
+const file = { type: 'string', description: 'The imported file this is in; left out for the parsed file itself.' };
 const object = (properties: Record<string, unknown>, required: string[], description?: string) => ({
   type: 'object',
   ...(description ? { description } : {}),
@@ -33,12 +34,34 @@ export function diagramSchema() {
     $id: 'https://gvart.github.io/proschi/schema/proschi-diagram.schema.json',
     title: 'Proschi parse result',
     description: 'Output of `proschi parse <file>`: the diagram a Proschi document describes, plus parser diagnostics.',
-    ...object({ diagram: { $ref: '#/$defs/diagram' }, diagnostics: { type: 'array', items: { $ref: '#/$defs/diagnostic' } } }, ['diagram', 'diagnostics']),
+    ...object(
+      {
+        diagram: { $ref: '#/$defs/diagram' },
+        diagnostics: { type: 'array', items: { $ref: '#/$defs/diagnostic' } },
+        imports: { type: 'array', items: { $ref: '#/$defs/import' }, description: 'Every `import` statement read, in any file; left out when there are none.' },
+      },
+      ['diagram', 'diagnostics'],
+    ),
     $defs: {
-      loc: object({ line: { type: 'integer', minimum: 1 }, col: { type: 'integer', minimum: 1 }, length: { type: 'integer', minimum: 0 } }, ['line', 'col', 'length'], '1-based source position.'),
+      loc: object(
+        { line: { type: 'integer', minimum: 1 }, col: { type: 'integer', minimum: 1 }, length: { type: 'integer', minimum: 0 }, file },
+        ['line', 'col', 'length'],
+        '1-based source position.',
+      ),
       diagnostic: object(
-        { severity: { enum: ['error', 'warning'] }, message: str, line: { type: 'integer', minimum: 1 }, col: { type: 'integer', minimum: 1 }, length: { type: 'integer', minimum: 0 } },
+        {
+          severity: { enum: ['error', 'warning'] },
+          message: str,
+          line: { type: 'integer', minimum: 1 },
+          col: { type: 'integer', minimum: 1 },
+          length: { type: 'integer', minimum: 0 },
+          file,
+        },
         ['severity', 'message', 'line', 'col', 'length'],
+      ),
+      import: object(
+        { path: { ...str, description: 'The path as written.' }, resolved: { ...str, description: 'The file it resolved to; left out when it could not be found.' }, loc },
+        ['path', 'loc'],
       ),
       diagram: object(
         {

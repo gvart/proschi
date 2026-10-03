@@ -52,6 +52,7 @@ and each use case can branch into scenarios (success and error paths) with
 | Statement | Syntax | Notes |
 |---|---|---|
 | Title | `title "Text"` | |
+| Import | `import "path.proschi"` | Top level only. Adds everything the file declares. See [Imports](#imports). |
 | Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y]` | Parts after the id may come in any order; the first string is the name, the second the description. |
 | Group | `group id ["Name"] [Style] [pos x,y] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
 | Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
@@ -136,6 +137,53 @@ The use case picker in the editor groups use cases by the HTTP method and path
 of their first step, e.g. all `POST /api/orders` flows together. Use cases
 that don't start with an HTTP call are listed under *Other flows*.
 
+## Imports
+
+Write the infrastructure once and keep use cases in other files, e.g. one per
+team or domain:
+
+```
+# infra.proschi
+title "Shop infrastructure"
+gateway "API Gateway" [AWS API Gateway]
+orders "Order Service" [REST API] @Orders
+ordersDb [PostgreSQL]
+gateway -> orders
+orders -> ordersDb
+```
+
+```
+# checkout.proschi
+title "Checkout"
+import "infra.proschi"
+
+usecase "Place order" {
+  gateway -> orders : POST /orders
+  orders -> ordersDb : INSERT order
+  orders --> gateway : 201
+}
+```
+
+- The path is relative to the importing file. Imports may be nested: an imported file can import others.
+- Everything an imported file declares (nodes, groups, connections, use cases) becomes part of the diagram. The importing document's `title` names it; titles of imported files are ignored.
+- A file imported along several paths (`a` and `b` both import `infra`) is included once. An import cycle is an error on the import that closes it: `Import cycle: a.proschi → b.proschi → a.proschi`. A file that does not exist is an error: `Cannot find 'x.proschi'`.
+- Ids are shared by all files: declaring the same id in two files is an error at the later declaration, naming the file and line of the first. Use case ids stay unique too (a repeated name gets a `-2` suffix).
+- Undeclared ids become plain nodes only after every file is read, so a use case file may use nodes its imports declare.
+- Problems in an imported file are reported with that file's path (`file` in `proschi parse` output).
+
+Where imports are resolved:
+
+| Where | Resolved against |
+|---|---|
+| Web editor | The diagrams saved in the browser, by file name. A diagram opened from a `.proschi` file keeps its name; others are named after their title, e.g. `title "Shop Infra"` → `shop-infra.proschi` (shown in the *Diagrams* menu). A path that matches no saved name exactly falls back to the one diagram with the same file name. |
+| `proschi check` / `parse`, language server | The file system. The language server prefers the text of open, unsaved documents. |
+
+In the web editor, nodes and connections from imported files are drawn like
+any other, but canvas edits only change the open document: moving, renaming or
+deleting something declared in an imported file is refused with a short
+message. Edit that file instead. The problems panel lists problems in imported
+files with the file name in front; clicking one opens that diagram.
+
 ## Editing on the canvas
 
 The text is the source of truth. Edits on the diagram are written back into it:
@@ -151,7 +199,11 @@ A node that was only referenced, never declared, gets a declaration line above t
 
 ## Links
 
-The address bar always holds the whole document: `#code=…`. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.
+The address bar always holds the whole document: `#code=…`. When the document
+imports other files, their text travels along as `&imports=…` (a compressed map
+of path to source), so the link renders the same for someone who has none of
+the files. Those files stay attached to the diagram opened from the link and
+win over saved diagrams of the same name. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.
 
 ## Grammar
 
@@ -163,10 +215,11 @@ brackets balance. Whitespace between tokens is ignored.
 document     = { line } ;
 line         = [ statement ] [ comment ] newline ;
 
-statement    = title | node | connection
+statement    = title | import | node | connection
              | group-open | usecase-open | par-open | alt-open | close ;
 
 title        = "title" , ( string | id ) ;
+import       = "import" , string ;                      (* a relative file path *)
 node         = id , { string | tech | team | position } ;  (* 1st string: name, 2nd: description *)
 connection   = id , arrow , id , [ ":" , label ] ;
 group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
@@ -191,6 +244,7 @@ Where each statement may appear:
 | Statement | Top level | In `group` | In `usecase` / `alt` | In `par` |
 |---|---|---|---|---|
 | `title` | ✓ | | | |
+| `import` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
 | connection (`a -> b`) | ✓ | ✓ | as a step | as a step |
@@ -203,5 +257,6 @@ Where each statement may appear:
 `json` / `xml` / `text` payload, and on a response a leading status code.
 
 The grammar describes syntax only. The parser also checks meaning: duplicate
-ids, unknown tech stacks, responses without a matching request, and so on.
+ids, unknown tech stacks, responses without a matching request, import cycles
+and missing imported files, and so on.
 Those checks are what the language server and `proschi check` report.

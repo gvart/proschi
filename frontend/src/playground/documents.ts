@@ -3,6 +3,13 @@ export interface SavedDiagram {
   id: string;
   source: string;
   updatedAt: string;
+  /** Name of the .proschi file it was opened from; other diagrams derive one from their title. */
+  fileName?: string;
+  /**
+   * Imported files (path → source) that came with a share link. They win over
+   * saved diagrams of the same name, so the link renders as it was shared.
+   */
+  imports?: Record<string, string>;
 }
 
 export interface DocumentState {
@@ -24,6 +31,8 @@ interface InitialInput {
   legacySource: string | null;
   /** Source from a `#code=` share link. */
   sharedSource: string | null;
+  /** Imported files carried by the share link. */
+  sharedImports?: Record<string, string>;
   fallbackSource: string;
 }
 
@@ -41,11 +50,13 @@ export function initialState(input: InitialInput, now: Clock = defaultClock, new
   }
 
   if (input.sharedSource !== null) {
+    const imports = input.sharedImports && Object.keys(input.sharedImports).length ? { imports: input.sharedImports } : {};
     const existing = docs.find((d) => d.source === input.sharedSource);
     if (existing) {
       currentId = existing.id;
+      if (imports.imports) docs = docs.map((d) => (d === existing ? { ...d, ...imports } : d));
     } else {
-      const doc = { id: newId(), source: input.sharedSource, updatedAt: now() };
+      const doc = { id: newId(), source: input.sharedSource, updatedAt: now(), ...imports };
       docs = [doc, ...docs];
       currentId = doc.id;
     }
@@ -73,6 +84,12 @@ export function addDoc(state: DocumentState, source: string, now: Clock = defaul
   return { docs: [doc, ...state.docs], currentId: doc.id };
 }
 
+/** Adds a diagram opened from a file, remembering the file's name so imports can find it. */
+export function addFile(state: DocumentState, source: string, fileName: string, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
+  const next = addDoc(state, source, now, newId);
+  return { ...next, docs: next.docs.map((d) => (d.id === next.currentId ? { ...d, fileName } : d)) };
+}
+
 export function selectDoc(state: DocumentState, id: string): DocumentState {
   return state.docs.some((d) => d.id === id) ? { ...state, currentId: id } : state;
 }
@@ -89,4 +106,14 @@ export function titleOf(source: string): string {
   const match = source.match(/^[ \t]*title[ \t]+(?:"((?:[^"\\]|\\.)*)"|([A-Za-z_]\w*))/m);
   const title = match ? (match[1] ?? match[2]).replace(/\\(.)/g, '$1').trim() : '';
   return title || 'Untitled';
+}
+
+/** The name imports use for a diagram: its file name, or one made from its title. */
+export function fileNameOf(doc: Pick<SavedDiagram, 'source' | 'fileName'>): string {
+  if (doc.fileName) return doc.fileName;
+  const slug = titleOf(doc.source)
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-|-$/g, '');
+  return `${slug || 'diagram'}.proschi`;
 }

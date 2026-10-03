@@ -57,6 +57,18 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes imports and their path', () => {
+    const [line] = tokenize('import "infra/shared.proschi" # the platform');
+    expect(line).toEqual([
+      ['import', 'keyword.control.import.proschi'],
+      ['"', 'punctuation.definition.string.begin.proschi'],
+      ['infra/shared.proschi', 'string.quoted.double.path.proschi'],
+      ['"', 'punctuation.definition.string.end.proschi'],
+      ['# the platform', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(scopeOf(tokenize('importer -> db'), 'importer')).toBe('variable.other.node.proschi');
+  });
+
   it('scopes arrows, without reading -x out of an id', () => {
     for (const arrow of ['->', '->>', '-->', '-x']) {
       expect(scopeOf(tokenize(`a ${arrow} b`), arrow), arrow).toBe('keyword.operator.arrow.proschi');

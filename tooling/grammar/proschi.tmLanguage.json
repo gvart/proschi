@@ -13,6 +13,9 @@
       "include": "#label"
     },
     {
+      "include": "#import"
+    },
+    {
       "include": "#keyword"
     },
     {
@@ -41,6 +44,24 @@
     "comment": {
       "name": "comment.line.number-sign.proschi",
       "match": "(?:^|(?<=\\s))#.*$"
+    },
+    "import": {
+      "comment": "import \"path\": the path is a link to another .proschi file.",
+      "match": "^\\s*(import)\\b(?:\\s+(\")([^\"]*)(\")?)?",
+      "captures": {
+        "1": {
+          "name": "keyword.control.import.proschi"
+        },
+        "2": {
+          "name": "punctuation.definition.string.begin.proschi"
+        },
+        "3": {
+          "name": "string.quoted.double.path.proschi"
+        },
+        "4": {
+          "name": "punctuation.definition.string.end.proschi"
+        }
+      }
     },
     "keyword": {
       "comment": "Statement keywords start a line, or follow } as in `} alt \"Next\" {`.",

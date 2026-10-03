@@ -2,7 +2,8 @@ import { describe, expect, it } from 'vitest';
 import { EditorState, Text } from '@codemirror/state';
 import { CompletionContext } from '@codemirror/autocomplete';
 import { parse } from '../../dsl';
-import { proschiCompletions, toCmDiagnostics } from './proschiLanguage';
+import { ensureSyntaxTree } from '@codemirror/language';
+import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
 
 const complete = (doc: string, explicit = false) => {
   const state = EditorState.create({ doc });
@@ -35,7 +36,15 @@ describe('proschiCompletions', () => {
 
   it('offers keywords and ids at the start of a line', () => {
     const labels = complete('or')?.options.map((o) => o.label);
-    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'orders']));
+    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'import', 'orders']));
+  });
+
+  it('highlights import as a keyword', () => {
+    const state = EditorState.create({ doc: 'import "infra.proschi"', extensions: [proschiLanguage] });
+    const tree = ensureSyntaxTree(state, state.doc.length)!;
+    const names: string[] = [];
+    tree.iterate({ enter: (n) => void names.push(state.sliceDoc(n.from, n.to) + ':' + n.name) });
+    expect(names).toEqual(expect.arrayContaining(['import:keyword', '"infra.proschi":string']));
   });
 
   it('offers only ids after an arrow', () => {
