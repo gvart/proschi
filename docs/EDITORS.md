@@ -9,7 +9,7 @@ valid.
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
 | Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline |
-| Command line | `proschi check` / `proschi parse` | Validation in CI and pre-commit hooks; the parsed diagram as JSON |
+| Command line | `proschi check` / `proschi parse` / `proschi render` | Validation in CI and pre-commit hooks; the parsed diagram as JSON; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)) |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -117,3 +117,45 @@ warning) and 2 on bad usage. `--format json` prints machine-readable results.
 `proschi parse diagram.proschi` prints `{"diagram": …, "diagnostics": […]}`. It
 matches the JSON Schema, so other tools can read nodes, edges, use cases and
 scenarios without reimplementing the language.
+
+## Rendering and export
+
+Diagrams can leave the editor as images, Mermaid source or a static page.
+
+**Web editor.** The *Export* menu on the diagram saves a PNG or SVG image of
+the canvas, and copies Mermaid source to the clipboard:
+
+- *Copy Mermaid: architecture*: a `flowchart LR` with a `subgraph` per group
+- *Copy Mermaid: this scenario*: a `sequenceDiagram` of the use case and
+  scenario picked in the editor (disabled when the document has no use case)
+
+Paste either into a Markdown file on GitHub or GitLab inside a ` ```mermaid `
+block and it renders there.
+
+**Command line.** `proschi render` writes static files, for docs sites,
+READMEs and wikis:
+
+```sh
+proschi render shop.proschi --out docs/diagrams              # SVG (default)
+proschi render shop.proschi --out docs --format md           # docs/shop.md
+proschi render shop.proschi --out site --format html         # site/shop.html
+```
+
+| Format | Output |
+|---|---|
+| `svg` | `architecture.svg` and one `<usecase>--<scenario>.svg` sequence diagram per scenario, e.g. `create-order--database-down.svg` |
+| `md` | `<file>.md`: the title, a Mermaid architecture block, and a heading and Mermaid sequence block per use case and scenario |
+| `html` | `<file>.html`: one self-contained page with every SVG and a scenario list |
+
+`--out` defaults to the current directory. The SVGs need no fonts or
+stylesheets (system font stack, a white background, so they read well in
+dark viewers too). Sequence diagrams number the requests and draw error
+responses and failed (`-x`) calls in red, with `par` blocks as regions. A
+document with errors is not rendered: `render` prints them and exits with 1.
+Warnings are fine.
+
+**VS Code.** *Proschi: Open Preview to the Side* (the preview button in the
+editor title bar, or the command palette) opens a panel with the architecture
+and a scenario picker showing that scenario's sequence diagram. It updates as
+you type and follows the active `.proschi` editor; while the document has
+errors it lists them above the last good rendering.

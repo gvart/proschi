@@ -1,0 +1,251 @@
+import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { XMLParser, XMLValidator } from 'fast-xml-parser';
+import { describe, expect, it } from 'vitest';
+import { run } from '../src/cli';
+import { examples, parse } from '../src/proschi';
+import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } from '../src/render';
+import { previewHtml, renderPreviewContent } from '../src/render/preview';
+import { COLORS, esc, fit, textWidth } from '../src/render/svg';
+
+async function capture(argv: string[]) {
+  const out: string[] = [];
+  const err: string[] = [];
+  const code = await run(argv, (s) => out.push(s), (s) => err.push(s));
+  return { code, out: out.join('\n'), err: err.join('\n') };
+}
+
+function expectWellFormed(svg: string) {
+  expect(XMLValidator.validate(svg)).toBe(true);
+  const doc = new XMLParser({ ignoreAttributes: false }).parse(svg);
+  expect(doc.svg['@_xmlns']).toBe('http://www.w3.org/2000/svg');
+  // A white background, so the SVG reads well in dark viewers too.
+  expect(svg).toContain(`<rect width="100%" height="100%" fill="${COLORS.background}"/>`);
+}
+
+/** The `<g>` element of a step's message in a sequence SVG. */
+function stepGroups(svg: string, kind: string): string[] {
+  return [...svg.matchAll(new RegExp(`<g data-step="\\d+" data-kind="${kind}"[^>]*>[\\s\\S]*?</g>`, 'g'))].map((m) => m[0]);
+}
+
+const dir = mkdtempSync(join(tmpdir(), 'proschi-render-'));
+const exampleFiles = examples.map((e) => {
+  const file = join(dir, `${e.id}.proschi`);
+  writeFileSync(file, e.source);
+  return { ...e, file };
+});
+
+describe('proschi render', () => {
+  it.each(exampleFiles.map((e) => [e.id, e]))('renders %s as SVG files', async (_id, example) => {
+    const out = join(dir, 'svg', example.id);
+    const r = await capture(['render', example.file, '--out', out]);
+    expect(r.code).toBe(0);
+    const { diagram } = parse(example.source);
+
+    const arch = readFileSync(join(out, 'architecture.svg'), 'utf8');
+    expectWellFormed(arch);
+    for (const node of diagram.nodes.filter((n) => n.kind === 'component')) expect(arch).toContain(`>${esc(node.name)}<`);
+
+    for (const uc of diagram.useCases) {
+      for (const s of uc.scenarios) {
+        const file = join(out, `${uc.id}--${s.id}.svg`);
+        expect(r.out).toContain(file);
+        const svg = readFileSync(file, 'utf8');
+        expectWellFormed(svg);
+        expect(svg).toContain(esc(uc.name));
+        expect(stepGroups(svg, '(?:request|failed)')).toHaveLength(s.steps.length);
+        for (const g of stepGroups(svg, 'failed')) expect(g).toContain(`stroke="${COLORS.error}"`);
+        for (const g of stepGroups(svg, 'response')) {
+          if (g.includes('data-error="true"')) expect(g).toContain(`stroke="${COLORS.error}"`);
+          else expect(g).not.toContain(COLORS.error);
+        }
+      }
+    }
+  });
+
+  it.each(exampleFiles.map((e) => [e.id, e]))('renders %s as Markdown and HTML', async (_id, example) => {
+    const out = join(dir, 'docs', example.id);
+    expect((await capture(['render', example.file, '--out', out, '--format', 'md'])).code).toBe(0);
+    expect((await capture(['render', example.file, '--out', out, '--format', 'html'])).code).toBe(0);
+    const { diagram } = parse(example.source);
+
+    const md = readFileSync(join(out, `${example.id}.md`), 'utf8');
+    expect(md.startsWith(`# ${diagram.title}\n`)).toBe(true);
+    const scenarios = diagram.useCases.reduce((n, uc) => n + uc.scenarios.length, 0);
+    expect(md.match(/^```mermaid$/gm)).toHaveLength(1 + scenarios);
+    expect(md.match(/^sequenceDiagram$/gm)).toHaveLength(scenarios);
+
+    const html = readFileSync(join(out, `${example.id}.html`), 'utf8');
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expect(html.match(/<svg /g)).toHaveLength(1 + scenarios);
+    for (const uc of diagram.useCases) for (const s of uc.scenarios) expect(html).toContain(`href="#${uc.id}--${s.id}"`);
+    expect(html).not.toMatch(/<script|<link|https?:\/\/(?!www\.w3\.org)/);
+    // Each inline SVG has its own marker ids.
+    const ids = [...html.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('refuses documents with errors, but renders warnings', async () => {
+    const bad = join(dir, 'bad.proschi');
+    writeFileSync(bad, 'a [REST API]\na [Redis]\n');
+    const r = await capture(['render', bad, '--out', join(dir, 'bad')]);
+    expect(r.code).toBe(1);
+    expect(r.err).toContain(`${bad}:2:1: error: Duplicate id 'a'`);
+    expect(existsSync(join(dir, 'bad'))).toBe(false);
+
+    const warn = join(dir, 'warn.proschi');
+    writeFileSync(warn, 'api [Nope]\nusecase "U" {\n  api -> db : GET /x\n  b --> a : 200\n}\n');
+    expect((await capture(['render', warn, '--out', join(dir, 'warn')])).code).toBe(0);
+    expect(existsSync(join(dir, 'warn', 'u--main.svg'))).toBe(true);
+  });
+
+  it('rejects bad usage with exit code 2', async () => {
+    const file = exampleFiles[0].file;
+    expect((await capture(['render'])).code).toBe(2);
+    expect((await capture(['render', file, file])).code).toBe(2);
+    expect((await capture(['render', '--format', 'pdf', file])).code).toBe(2);
+    expect((await capture(['render', file, '--out'])).code).toBe(2);
+    expect((await capture(['render', '--nope', file])).code).toBe(2);
+    expect((await capture(['render', join(dir, 'missing.proschi')])).code).toBe(2);
+    expect((await capture(['--help'])).out).toContain('proschi render');
+  });
+});
+
+describe('SVG rendering', () => {
+  const { diagram } = parse(`title "Shop & <Co>"
+group vpc "AWS VPC" [Network Boundary] {
+  gateway "API Gateway" [AWS API Gateway] @platform
+  group core "Core" {
+    orders "Order <Service>" [REST API]
+  }
+}
+db "Orders DB" [PostgreSQL]
+gateway -> orders : HTTP & "json"
+orders -> db : SQL
+
+usecase "Create order" {
+  gateway -> orders : POST /orders json {"sku": "A1"}
+  orders -> orders : validate
+  alt "Created" {
+    par {
+      orders -> db : INSERT order
+      orders ->> db : audit
+    }
+    orders --> gateway : 201 {"id": 1}
+  } alt "DB down" {
+    orders -x db : INSERT order
+    orders --> gateway : 503
+  }
+}
+`);
+
+  it('draws nested groups, nodes with tech and team, and escaped labels', async () => {
+    const svg = await renderArchitectureSvg(diagram);
+    expectWellFormed(svg);
+    expect(svg).toContain('<title>Shop &amp; &lt;Co&gt;</title>');
+    expect(svg.match(/data-kind="group"/g)).toHaveLength(2);
+    expect(svg).toContain('stroke-dasharray="6 4"');
+    expect(svg).toContain('>[Network Boundary]<');
+    expect(svg).toContain('>Order &lt;Service&gt;<');
+    expect(svg).toContain('>[AWS API Gateway]<');
+    expect(svg).toContain('>@platform<');
+    expect(svg).toContain('>HTTP &amp; &quot;json&quot;<');
+    expect(svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(2);
+  });
+
+  it('draws numbered requests, responses, self-calls, par regions, and errors in red', () => {
+    const [created, down] = diagram.useCases[0].scenarios;
+    const ok = renderSequenceSvg(diagram, diagram.useCases[0], created, 'x-');
+    expectWellFormed(ok);
+    expect(ok).toContain('Create order › Created');
+    expect(ok).toContain('data-kind="par"');
+    expect(ok).toContain('>par<');
+    expect(ok).toContain('<tspan font-weight="700">201</tspan>');
+    expect(ok).toContain('marker-end="url(#x-solid)"');
+    expect(ok).toContain('marker-end="url(#x-open)"');
+    expect(ok.replace(/<defs>[\s\S]*?<\/defs>/, '')).not.toContain(COLORS.error);
+    // The self-call is a loop on one lifeline.
+    expect(stepGroups(ok, 'request')[1]).toContain('<path d="M');
+
+    const bad = renderSequenceSvg(diagram, diagram.useCases[0], down);
+    expectWellFormed(bad);
+    expect(bad).toContain('error path');
+    const [failed] = stepGroups(bad, 'failed');
+    expect(failed).toContain(`stroke="${COLORS.error}"`);
+    expect(failed).not.toContain('marker-end');
+    const [response] = stepGroups(bad, 'response');
+    expect(response).toContain('data-error="true"');
+    expect(response).toContain('marker-end="url(#open-error)"');
+    expect(response).toContain('>503</tspan>');
+  });
+
+  it('renders an empty document and a use case without steps', async () => {
+    const empty = parse('').diagram;
+    expectWellFormed(await renderArchitectureSvg(empty));
+    const noSteps = parse('usecase "Nothing" {\n}\n').diagram;
+    const { scenarios } = await renderSvgs(noSteps);
+    expect(scenarios).toHaveLength(1);
+    expectWellFormed(scenarios[0].svg);
+    expect(scenarios[0].svg).toContain('No steps');
+  });
+
+  it('estimates and fits text', () => {
+    expect(textWidth('MMMM', 10)).toBeGreaterThan(textWidth('iiii', 10));
+    expect(fit('short', 200, 12)).toBe('short');
+    const cut = fit('a very long label that does not fit', 80, 12);
+    expect(cut.endsWith('…')).toBe(true);
+    expect(textWidth(cut, 12)).toBeLessThanOrEqual(80);
+  });
+
+  it('writes Markdown with scenario headings', () => {
+    const md = renderMarkdown(diagram);
+    expect(md).toContain('### Create order');
+    expect(md).toContain('`POST /orders`');
+    expect(md).toContain('#### Created');
+    expect(md).toContain('#### DB down (error)');
+  });
+});
+
+describe('VS Code preview', () => {
+  it('builds a page with a strict CSP and a nonce for the script and style', () => {
+    const html = previewHtml({ nonce: 'abc123', cspSource: 'vscode-resource:', title: 'Preview <x>', body: '<p>hi</p>' });
+    const csp = html.match(/http-equiv="Content-Security-Policy" content="([^"]+)"/)![1];
+    expect(csp).toBe("default-src 'none'; img-src vscode-resource: data:; style-src 'nonce-abc123'; script-src 'nonce-abc123'");
+    expect(html).toContain('<title>Preview &lt;x&gt;</title>');
+    expect(html).toContain('<style nonce="abc123">');
+    expect(html).toContain('<script nonce="abc123">');
+    expect(html.match(/<script/g)).toHaveLength(1);
+    expect(html).toContain('<div id="root"><p>hi</p></div>');
+    expect(html).not.toMatch(/https?:\/\//);
+  });
+
+  it('renders the architecture and a scenario picker, showing the first scenario', async () => {
+    const source = examples.find((e) => e.id === 'ecommerce')!.source;
+    const content = await renderPreviewContent(source);
+    expect(content.ok).toBe(true);
+    expect(content.html).toContain('<h1>E-Commerce Platform</h1>');
+    expect(content.html).toContain('<select id="scenario">');
+    expect(content.html).toContain('<optgroup label="Create order">');
+    expect(content.html).toContain('<option value="create-order--database-down">Database down (error)</option>');
+    const figures = [...content.html.matchAll(/<div class="figure scenario" data-slug="([^"]+)"( hidden)?>/g)];
+    expect(figures).toHaveLength(5);
+    expect(figures[0][2]).toBeUndefined();
+    expect(figures.slice(1).every((f) => f[2] === ' hidden')).toBe(true);
+    // No inline style attributes or scripts, which the CSP would block.
+    expect(content.html).not.toMatch(/ style="|<script|<style/);
+  });
+
+  it('lists errors instead of rendering', async () => {
+    const content = await renderPreviewContent('a [REST API]\na [Redis]\n');
+    expect(content.ok).toBe(false);
+    expect(content.html).toContain('1 error(s)');
+    expect(content.html).toContain("Line 2:1: Duplicate id &#39;a&#39;");
+  });
+
+  it('hints at use cases when there are none', async () => {
+    const content = await renderPreviewContent('api -> db\n');
+    expect(content.ok).toBe(true);
+    expect(content.html).toContain('Add a <code>usecase</code>');
+  });
+});

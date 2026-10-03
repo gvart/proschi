@@ -56,6 +56,7 @@ import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
 import { downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
@@ -455,6 +456,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   onResetLayout={() => editSource(clearPositions)}
                   onDelete={deleteFromCanvas}
                   fitKey={mobilePane}
+                  mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
                 />
               </ReactFlowProvider>
             )}
@@ -558,6 +560,7 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  mermaid: MermaidSource;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -574,6 +577,7 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  mermaid,
 }: DiagramViewProps) {
   const { fitView, getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
@@ -753,6 +757,7 @@ function DiagramView({
                   >
                     SVG image
                   </MenuItem>
+                  <MermaidMenuItems source={mermaid} close={close} />
                 </>
               )}
             </Menu>

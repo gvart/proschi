@@ -26,8 +26,9 @@ mkdirSync('schema', { recursive: true });
 writeFileSync('schema/proschi-diagram.schema.json', JSON.stringify(diagramSchema(), null, 2) + '\n');
 rmSync('dist/.schema.cjs');
 
-// VS Code extension: its own client bundle, plus copies of the server and grammar.
-await build({ ...common, entryPoints: ['vscode/src/extension.ts'], outfile: 'vscode/dist/extension.cjs', external: ['vscode'] });
+// VS Code extension: its own client bundle (minified, as the preview carries ELK),
+// plus copies of the server and grammar.
+await build({ ...common, entryPoints: ['vscode/src/extension.ts'], outfile: 'vscode/dist/extension.cjs', external: ['vscode'], minify: true });
 copyFileSync('dist/server.cjs', 'vscode/dist/server.cjs');
 // Both packages ship the repository's license.
 copyFileSync('../LICENSE', 'LICENSE');

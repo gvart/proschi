@@ -5,6 +5,7 @@
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { parse, type Diagnostic } from './proschi';
+import { RENDER_HELP, RENDER_USAGE, renderCommand } from './render/command';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -12,12 +13,14 @@ const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
 const USAGE = `Usage:
   proschi check [--strict] [--format text|github|json] <file|dir>...
   proschi parse <file>
+${RENDER_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
         Exits with 1 if any file has an error (or a warning, with --strict).
 parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
-        schema/proschi-diagram.schema.json.`;
+        schema/proschi-diagram.schema.json.
+${RENDER_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -70,7 +73,7 @@ export function format(results: CheckResult[], style: 'text' | 'github' | 'json'
   return lines.join('\n');
 }
 
-export function run(argv: string[], out: (s: string) => void = console.log, err: (s: string) => void = console.error): number {
+export function run(argv: string[], out: (s: string) => void = console.log, err: (s: string) => void = console.error): number | Promise<number> {
   const [command, ...rest] = argv;
   if (command === '--version' || command === '-v') {
     out(VERSION);
@@ -89,6 +92,8 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     out(JSON.stringify(parse(readFileSync(rest[0], 'utf8')), null, 2));
     return 0;
   }
+
+  if (command === 'render') return renderCommand(rest, out, err, USAGE);
 
   if (command === 'check') {
     let strict = false;
@@ -136,4 +141,4 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
 }
 
 // Only run when executed, not when imported by the tests.
-if (typeof PROSCHI_VERSION === 'string') process.exitCode = run(process.argv.slice(2));
+if (typeof PROSCHI_VERSION === 'string') Promise.resolve(run(process.argv.slice(2))).then((code) => (process.exitCode = code));
