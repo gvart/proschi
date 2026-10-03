@@ -1,0 +1,54 @@
+{
+  "name": "proschi",
+  "version": "0.1.0",
+  "description": "Command-line checker and language server for Proschi architecture diagrams",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gvart/proschi.git",
+    "directory": "tooling"
+  },
+  "homepage": "https://gvart.github.io/proschi/",
+  "keywords": [
+    "proschi",
+    "architecture",
+    "diagram",
+    "language-server",
+    "lsp"
+  ],
+  "type": "module",
+  "bin": {
+    "proschi": "dist/cli.cjs",
+    "proschi-language-server": "dist/server.cjs"
+  },
+  "files": [
+    "dist/cli.cjs",
+    "dist/server.cjs",
+    "grammar",
+    "schema",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit",
+    "pretest": "node build.mjs",
+    "test": "vitest run",
+    "package:vscode": "node build.mjs && cd vscode && vsce package --no-dependencies --skip-license -o ../dist/proschi.vsix"
+  },
+  "devDependencies": {
+    "@types/node": "^24.19.1",
+    "@types/vscode": "~1.91.0",
+    "@vscode/vsce": "^4.0.0",
+    "ajv": "^8.20.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~5.9.3",
+    "vitest": "^3.2.7",
+    "vscode-languageclient": "^10.1.2",
+    "vscode-languageserver": "^10.1.2",
+    "vscode-languageserver-textdocument": "^1.0.15",
+    "vscode-oniguruma": "^2.0.1",
+    "vscode-textmate": "^9.3.2"
+  }
+}

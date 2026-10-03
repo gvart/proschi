@@ -54,6 +54,8 @@ export interface DiagramScenario {
   /** `error` when the entry request is answered with a 4xx/5xx or fails. */
   outcome: 'success' | 'error';
   steps: FlowStep[];
+  /** The innermost `alt` name of the scenario, or the use case name when it has no branches. */
+  loc: SourceLoc;
 }
 
 export interface DiagramUseCase {

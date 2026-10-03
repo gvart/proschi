@@ -30,6 +30,7 @@ type Item = { kind: 'step'; step: RawStep } | { kind: 'alt'; branches: Branch[] 
 interface Branch {
   name: string;
   items: Item[];
+  loc: SourceLoc;
 }
 
 /** A use case body or an alt branch: anything that holds steps. */
@@ -278,7 +279,7 @@ class Parser {
     const loc = this.locOf(nameToken, line);
     if (set.branches.some((b) => b.name === nameToken.value)) this.warning(`Duplicate alt name '${nameToken.value}'`, loc);
     const body: Container = { items: [] };
-    set.branches.push({ name: nameToken.value, items: body.items });
+    set.branches.push({ name: nameToken.value, items: body.items, loc });
     owner.openAlt = undefined;
     this.stack.push({ kind: 'alt', name: nameToken.value, body, owner, set, loc });
   }
@@ -417,6 +418,7 @@ class Parser {
         name: path.names.length ? path.names.join(' › ') : useCase.name,
         outcome: failedEntry ? 'error' : 'success',
         steps,
+        loc: path.locs.at(-1) ?? useCase.loc,
       };
     });
 
@@ -569,8 +571,8 @@ class Parser {
  * multiplies the paths so far by its branches; steps after a set are shared by
  * every branch.
  */
-function expand(items: Item[]): { names: string[]; steps: RawStep[] }[] {
-  let paths: { names: string[]; steps: RawStep[] }[] = [{ names: [], steps: [] }];
+function expand(items: Item[]): { names: string[]; locs: SourceLoc[]; steps: RawStep[] }[] {
+  let paths: { names: string[]; locs: SourceLoc[]; steps: RawStep[] }[] = [{ names: [], locs: [], steps: [] }];
   for (const item of items) {
     if (item.kind === 'step') {
       for (const path of paths) path.steps.push(item.step);
@@ -580,7 +582,11 @@ function expand(items: Item[]): { names: string[]; steps: RawStep[] }[] {
     for (const path of paths) {
       for (const branch of item.branches) {
         for (const sub of expand(branch.items)) {
-          next.push({ names: [...path.names, branch.name, ...sub.names], steps: [...path.steps, ...sub.steps] });
+          next.push({
+            names: [...path.names, branch.name, ...sub.names],
+            locs: [...path.locs, branch.loc, ...sub.locs],
+            steps: [...path.steps, ...sub.steps],
+          });
         }
       }
       // Stop multiplying long before the result gets out of hand.
