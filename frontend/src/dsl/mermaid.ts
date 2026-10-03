@@ -76,7 +76,7 @@ export function toMermaidSequence(diagram: Diagram, useCaseId: string, scenarioI
   }
 
   const message = (m: SequenceMessage, indent: string) =>
-    `${indent}${id(m.from)}${arrow(m)}${id(m.to)}: ${escapeMermaid(m.label) || (m.kind === 'response' ? 'response' : '#32;')}`;
+    `${indent}${id(m.from)}${arrow(m)}${id(m.to)}: ${escapeMermaid(m.label) || '#32;'}`;
   for (const item of sequence.items) {
     if (item.kind === 'message') {
       lines.push(message(item.message, '  '));

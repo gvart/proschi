@@ -3,13 +3,6 @@ import { basename, extname, join } from 'node:path';
 import { parse } from '../proschi';
 import { FORMATS, renderFiles, type RenderFormat } from './index';
 
-export const RENDER_USAGE = `  proschi render [--out <dir>] [--format svg|md|html] <file>`;
-
-export const RENDER_HELP = `render  Writes the diagram as static files into --out (default: the current
-        directory). svg (default): architecture.svg and <usecase>--<scenario>.svg
-        per scenario; md: <file>.md with Mermaid blocks; html: <file>.html with
-        the SVGs. Refuses (exit 1) when the document has errors.`;
-
 /** `proschi render`: parses `<file>`, refuses on errors, and writes the files of the chosen format. */
 export async function renderCommand(args: string[], out: (s: string) => void, err: (s: string) => void, usage: string): Promise<number> {
   let dir = '.';

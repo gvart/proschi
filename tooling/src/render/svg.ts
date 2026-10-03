@@ -5,35 +5,21 @@
  * under a strict Content-Security-Policy.
  */
 
-export const FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif";
+import { CANVAS_FONT, TAILWIND_HEX } from '../../../frontend/src/utils/canvasColors';
 
+/** The editor's font stack (Tailwind's `font-sans`). */
+export const FONT = CANVAS_FONT;
+
+/** The editor's colours; `active` and `error` are what use case playback highlights with. */
 export const COLORS = {
   background: '#ffffff',
-  text: '#1f2937',
-  muted: '#6b7280',
-  line: '#64748b',
-  border: '#cbd5e1',
-  group: '#94a3b8',
-  groupFill: '#f8fafc',
-  noteFill: '#fef9c3',
-  noteBorder: '#eab308',
+  text: TAILWIND_HEX['text-gray-800'],
+  muted: TAILWIND_HEX['text-gray-500'],
+  line: '#6b7280',
+  border: TAILWIND_HEX['border-gray-300'],
+  active: '#3b82f6',
   error: '#dc2626',
-  badge: '#334155',
-  par: '#7c3aed',
-};
-
-/** Accent (border) colour of a node, by component type. */
-export const ACCENT: Record<string, string> = {
-  service: '#2563eb',
-  database: '#059669',
-  queue: '#d97706',
-  external: '#7c3aed',
-  serverless: '#ea580c',
-  compute: '#0891b2',
-  container: '#0284c7',
-  storage: '#65a30d',
-  cache: '#db2777',
-  cdn: '#0d9488',
+  par: '#6366f1',
 };
 
 export function esc(text: string): string {

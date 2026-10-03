@@ -7,6 +7,7 @@ import { run } from '../src/cli';
 import { examples, parse } from '../src/proschi';
 import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } from '../src/render';
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
+import { TAILWIND_HEX, techIcon, typeColor } from '../src/render/icons';
 import { COLORS, esc, fit, textWidth } from '../src/render/svg';
 
 async function capture(argv: string[]) {
@@ -78,7 +79,7 @@ describe('proschi render', () => {
 
     const html = readFileSync(join(out, `${example.id}.html`), 'utf8');
     expect(html.startsWith('<!doctype html>')).toBe(true);
-    expect(html.match(/<svg /g)).toHaveLength(1 + scenarios);
+    expect(html.match(/<svg [^>]*font-family=/g)).toHaveLength(1 + scenarios);
     for (const uc of diagram.useCases) for (const s of uc.scenarios) expect(html).toContain(`href="#${uc.id}--${s.id}"`);
     expect(html).not.toMatch(/<script|<link|https?:\/\/(?!www\.w3\.org)/);
     // Each inline SVG has its own marker ids.
@@ -145,11 +146,18 @@ usecase "Create order" {
     expectWellFormed(svg);
     expect(svg).toContain('<title>Shop &amp; &lt;Co&gt;</title>');
     expect(svg.match(/data-kind="group"/g)).toHaveLength(2);
-    expect(svg).toContain('stroke-dasharray="6 4"');
-    expect(svg).toContain('>[Network Boundary]<');
+    expect(svg).toContain('stroke-dasharray="7 5"');
     expect(svg).toContain('>Order &lt;Service&gt;<');
-    expect(svg).toContain('>[AWS API Gateway]<');
-    expect(svg).toContain('>@platform<');
+    expect(svg).toContain('>AWS API Gateway<');
+    expect(svg).toContain('>Team: platform<');
+    // Cards like ComponentNode: the coloured icon tile with the canvas's glyph in white.
+    expect(svg).toContain(`fill="${typeColor('service')}"`);
+    expect(svg).toContain(`fill="${TAILWIND_HEX['bg-blue-500']}"`);
+    expect(svg.match(/<svg x="[^"]+" y="[^"]+" width="20" height="20" color="#ffffff"/g)).toHaveLength(3);
+    // Both groups carry GroupNode's folder icon.
+    expect(svg.match(/width="20" height="20" color="#3b82f6"/g)).toHaveLength(2);
+    // No class or style attributes leak from the React icons.
+    expect(svg).not.toMatch(/ (class|style)="/);
     expect(svg).toContain('>HTTP &amp; &quot;json&quot;<');
     expect(svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(2);
   });
@@ -188,6 +196,34 @@ usecase "Create order" {
     expect(scenarios).toHaveLength(1);
     expectWellFormed(scenarios[0].svg);
     expect(scenarios[0].svg).toContain('No steps');
+  });
+
+  it('renders the canvas icons as plain nested SVG', () => {
+    const pg = techIcon('PostgreSQL', 10, 20, 20, '#ffffff');
+    expect(pg.startsWith('<svg x="10" y="20" width="20" height="20" color="#ffffff"')).toBe(true);
+    expect(pg).toContain('viewBox="0 0 24 24"');
+    expect(XMLValidator.validate(pg)).toBe(true);
+    // A lucide icon keeps its children's own sizes (Rectangle → Square has a <rect width>).
+    const square = techIcon('Rectangle', 0, 0, 16, '#000000');
+    expect(square).toMatch(/<rect [^>]*width="18"/);
+    expect(square).not.toMatch(/ (class|style)="/);
+  });
+
+  it('places nodes where the canvas does, honouring pinned positions', async () => {
+    const pinned = parse('a "A" [REST API] pos 500,40\nb "B" [Redis] pos 100,300\na -> b').diagram;
+    const svg = await renderArchitectureSvg(pinned);
+    const card = (id: string) => svg.match(new RegExp(`<g data-node="${id}"[^>]*>\\n<rect x="([\\d.]+)" y="([\\d.]+)"`))!.slice(1).map(Number);
+    const [ax, ay] = card('a');
+    const [bx, by] = card('b');
+    expect([ax - bx, ay - by]).toEqual([400, -260]);
+  });
+
+  it('draws a reply that has no status or body', () => {
+    const d = parse('usecase "U" {\n  a -> b : call\n  b --> a\n}').diagram;
+    const svg = renderSequenceSvg(d, d.useCases[0], d.useCases[0].scenarios[0]);
+    const [reply] = stepGroups(svg, 'response');
+    expect(reply).toContain('stroke-dasharray="6 4"');
+    expect(reply).not.toContain('<text');
   });
 
   it('estimates and fits text', () => {

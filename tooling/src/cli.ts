@@ -7,7 +7,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { isAbsolute, join, relative } from 'node:path';
 import { openApiDiagnostics, parseSpecFlag } from './openapi/config';
 import { parse, type Diagnostic } from './proschi';
-import { RENDER_HELP, RENDER_USAGE, renderCommand } from './render/command';
+import { RENDER_HELP, RENDER_USAGE } from './render/usage';
 import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
 
 declare const PROSCHI_VERSION: string;
@@ -101,7 +101,8 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     return 0;
   }
 
-  if (command === 'render') return renderCommand(rest, out, err, USAGE);
+  // The renderer (ELK, React for the icons) is a separate bundle, loaded only here.
+  if (command === 'render') return import('./render/command').then((m) => m.renderCommand(rest, out, err, USAGE));
   if (command === 'fmt') return runFmt(rest, collectFiles, out, err);
 
   if (command === 'check') {

@@ -1,5 +1,4 @@
-import type { FlowStep } from '../services/api';
-import type { Diagram, DiagramNode, DiagramScenario, DiagramUseCase } from './types';
+import type { Diagram, DiagramNode, DiagramScenario, DiagramStep, DiagramUseCase } from './types';
 
 /**
  * A scenario as a sequence diagram: the parser folds each `-->` into its
@@ -21,7 +20,7 @@ export interface SequenceMessage {
   /** A failed call, or a response with a 4xx/5xx status. */
   error: boolean;
   status?: number;
-  step: FlowStep;
+  step: DiagramStep;
 }
 
 export type SequenceItem = { kind: 'message'; message: SequenceMessage } | { kind: 'par'; branches: SequenceMessage[][] };
@@ -37,7 +36,7 @@ export interface Sequence {
   scenario: DiagramScenario;
   participants: Participant[];
   items: SequenceItem[];
-  /** The scenario's `when` condition, if the parser provides one. */
+  /** The `when` conditions of the scenario's branches, if any. */
   condition?: string;
 }
 
@@ -50,21 +49,22 @@ export function shorten(text: string, max = PAYLOAD_LIMIT): string {
 }
 
 /** `POST /orders {"sku": …}`, `INSERT order`; the parser's `a → b` placeholder becomes empty. */
-export function requestLabel(step: FlowStep): string {
+export function requestLabel(step: DiagramStep): string {
   const name = !step.httpMethod && step.stepName === `${step.fromServiceId} → ${step.toServiceId}` ? '' : step.stepName;
   return [name, step.description, step.requestBody && shorten(step.requestBody)].filter(Boolean).join(' ');
 }
 
 /** `201 {"id": 1}`, or empty when the response has neither a status nor a body. */
-export function responseLabel(step: FlowStep): string {
+export function responseLabel(step: DiagramStep): string {
   return [step.statusCode, step.responseBody && shorten(step.responseBody)].filter((p) => p !== undefined && p !== '').join(' ');
 }
 
-function hasResponse(step: FlowStep): boolean {
-  return !step.failed && (step.statusCode !== undefined || !!step.responseBody);
+/** Answered with `-->`, even one without a status or body. */
+function hasResponse(step: DiagramStep): boolean {
+  return !step.failed && (!!step.responseLoc || step.statusCode !== undefined || !!step.responseBody);
 }
 
-function request(step: FlowStep): SequenceMessage {
+function request(step: DiagramStep): SequenceMessage {
   return {
     kind: 'request',
     from: step.fromServiceId,
@@ -78,7 +78,7 @@ function request(step: FlowStep): SequenceMessage {
   };
 }
 
-function response(step: FlowStep): SequenceMessage {
+function response(step: DiagramStep): SequenceMessage {
   return {
     kind: 'response',
     from: step.toServiceId,
@@ -101,7 +101,7 @@ function response(step: FlowStep): SequenceMessage {
  */
 export function buildSequence(useCase: DiagramUseCase, scenario: DiagramScenario, nodes: DiagramNode[] = []): Sequence {
   const items: SequenceItem[] = [];
-  const stack: FlowStep[] = [];
+  const stack: DiagramStep[] = [];
   const emit = (message: SequenceMessage) => items.push({ kind: 'message', message });
   const unwindFor = (from: string) => {
     const depth = stack.map((s) => s.toServiceId).lastIndexOf(from);
@@ -117,7 +117,7 @@ export function buildSequence(useCase: DiagramUseCase, scenario: DiagramScenario
       if (hasResponse(step)) stack.push(step);
       continue;
     }
-    const group: FlowStep[] = [];
+    const group: DiagramStep[] = [];
     while (i < steps.length && steps[i].parallelGroup === step.parallelGroup) group.push(steps[i++]);
     i--;
     unwindFor(step.fromServiceId);
@@ -139,8 +139,7 @@ export function buildSequence(useCase: DiagramUseCase, scenario: DiagramScenario
     add(step.toServiceId);
   }
 
-  const condition = (scenario as { condition?: unknown }).condition;
-  return { useCase, scenario, participants, items, condition: typeof condition === 'string' && condition ? condition : undefined };
+  return { useCase, scenario, participants, items, condition: scenario.condition || undefined };
 }
 
 /** Finds a use case and scenario (the first one by default), or undefined. */

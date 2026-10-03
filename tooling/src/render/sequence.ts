@@ -1,4 +1,5 @@
 import { buildSequence, type Diagram, type DiagramScenario, type DiagramUseCase, type SequenceMessage } from '../proschi';
+import { techIcon, typeColor } from './icons';
 import { COLORS, esc, fit, marker, r, svgDocument, text, textWidth } from './svg';
 
 /**
@@ -37,7 +38,8 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   const index = new Map(participants.map((p, i) => [p.id, i]));
 
   // Header box widths, then the distance between neighbouring lifelines.
-  const widths = participants.map((p) => Math.min(220, Math.max(110, textWidth(p.name, 13, true) + 24, textWidth(p.tech ? `[${p.tech}]` : '', 11) + 24)));
+  const widths = participants.map((p) => Math.min(240, Math.max(120, textWidth(p.name, 13, true) + 58, textWidth(p.tech ?? '', 11) + 58)));
+  const nodes = new Map(diagram.nodes.map((n) => [n.id, n]));
   const gaps = participants.slice(1).map((_, i) => Math.max(MIN_GAP, (widths[i] + widths[i + 1]) / 2 + 24));
   const messages = seq.items.flatMap((item) => (item.kind === 'message' ? [item.message] : item.branches.flat()));
   // Widen the narrowest spans first so long labels fit between their lifelines.
@@ -126,12 +128,16 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   participants.forEach((p, i) => {
     const x = xs[i];
     const w = widths[i];
+    const node = p.tech ? nodes.get(p.id) : undefined;
     body.push(
       `<g data-participant="${esc(p.id)}">`,
       `<line x1="${r(x)}" y1="${r(headerTop + HEADER_HEIGHT)}" x2="${r(x)}" y2="${r(bottom)}" stroke="${COLORS.border}" stroke-width="1.5" stroke-dasharray="5 4"/>`,
-      `<rect x="${r(x - w / 2)}" y="${r(headerTop)}" width="${r(w)}" height="${HEADER_HEIGHT}" rx="6" fill="${COLORS.background}" stroke="${COLORS.line}" stroke-width="1.5"/>`,
-      text(x, headerTop + (p.tech ? 20 : 28), fit(p.name, w - 12, 13, true), { size: 13, weight: 600, anchor: 'middle' }),
-      p.tech ? text(x, headerTop + 36, fit(`[${p.tech}]`, w - 12, 11), { size: 11, fill: COLORS.muted, anchor: 'middle' }) : '',
+      // A small ComponentNode: card, coloured icon tile, name and tech stack.
+      `<rect x="${r(x - w / 2 + 1)}" y="${r(headerTop + 1)}" width="${r(w - 2)}" height="${HEADER_HEIGHT - 2}" rx="8" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
+      node ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${typeColor(node.type)}"/>` : '',
+      node ? techIcon(node.techStack, x - w / 2 + 15, headerTop + 16, 14, '#ffffff') : '',
+      text(x - w / 2 + (node ? 42 : 12), headerTop + (p.tech ? 20 : 28), fit(p.name, w - (node ? 50 : 20), 13, true), { size: 13, weight: 600 }),
+      p.tech ? text(x - w / 2 + 42, headerTop + 36, fit(p.tech, w - 50, 11), { size: 11, fill: COLORS.muted }) : '',
       '</g>',
     );
   });
@@ -143,8 +149,9 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   }
 
   const defs = [
-    marker(`${idPrefix}solid`, COLORS.line),
-    marker(`${idPrefix}open`, COLORS.line, true),
+    marker(`${idPrefix}solid`, COLORS.active),
+    marker(`${idPrefix}open`, COLORS.active, true),
+    marker(`${idPrefix}reply`, COLORS.line, true),
     marker(`${idPrefix}solid-error`, COLORS.error),
     marker(`${idPrefix}open-error`, COLORS.error, true),
   ].join('');
@@ -152,9 +159,10 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
 }
 
 function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string): string {
-  const color = m.error ? COLORS.error : COLORS.line;
+  // Requests in the editor's active blue, replies grey and dashed, errors red.
+  const color = m.error ? COLORS.error : m.kind === 'response' ? COLORS.line : COLORS.active;
   const dash = m.kind === 'response' ? ' stroke-dasharray="6 4"' : '';
-  const head = `${m.kind === 'response' || m.async ? 'open' : 'solid'}${m.error ? '-error' : ''}`;
+  const head = m.error ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-error` : m.kind === 'response' ? 'reply' : m.async ? 'open' : 'solid';
   const label = labelText(m);
   const out = [`<g data-step="${m.number}" data-kind="${m.failed ? 'failed' : m.kind}"${m.error ? ' data-error="true"' : ''}>`];
 
@@ -170,7 +178,7 @@ function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPr
     let tx = startX;
     if (m.kind === 'request') {
       out.push(
-        `<circle cx="${r(tx + 8)}" cy="${r(ly - 4)}" r="8" fill="${m.error ? COLORS.error : COLORS.badge}"/>`,
+        `<circle cx="${r(tx + 8)}" cy="${r(ly - 4)}" r="8" fill="${m.error ? COLORS.error : COLORS.active}"/>`,
         text(tx + 8, ly - 0.5, String(m.number), { size: 10, weight: 700, fill: COLORS.background, anchor: 'middle' }),
       );
       tx += 22;

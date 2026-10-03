@@ -1,191 +1,167 @@
-import ELK from 'elkjs/lib/elk.bundled.js';
-import type { ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
+import { layoutBoxes } from '../../../frontend/src/dsl/autoLayout';
 import type { Diagram, DiagramNode } from '../proschi';
-import { ACCENT, COLORS, esc, fit, marker, r, svgDocument, text, textWidth, wrap } from './svg';
+import { TAILWIND_HEX, techIcon, typeColor } from './icons';
+import { esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
 
 /**
- * The architecture as SVG: ELK's layered layout (as in the web editor, but
- * left to right), boxes with name, tech and team, dashed group rectangles and
- * labelled connections.
+ * The architecture as SVG, drawn like the editor's canvas: the canvas's own
+ * top-down ELK layout (autoLayout.ts, so pinned `pos x,y` positions hold),
+ * ComponentNode-style cards with the coloured icon tile, GroupNode's dashed
+ * boxes, TextNode's sticky notes, and React Flow's bezier edges.
  */
 
-const MARGIN = 24;
-const NODE_MIN = 150;
-const NODE_MAX = 260;
-const NOTE_WIDTH = 220;
-const LABEL_SIZE = 11;
+const MARGIN = 32;
+// ComponentNode: border 2 + py-3, a 36px row (icon tile / name + tech), mb-2, and the team line.
+const CARD_HEIGHT = 72;
+const CARD_WITH_TEAM_HEIGHT = 92;
+const PAD_X = 18;
+const PAD_Y = 14;
+const NOTE_FONT = 14;
+const NOTE_LINE = 21;
 
-const ROOT_OPTIONS = {
-  'elk.algorithm': 'layered',
-  'elk.direction': 'RIGHT',
-  'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
-  'elk.edgeRouting': 'ORTHOGONAL',
-  'elk.spacing.nodeNode': '40',
-  'elk.layered.spacing.nodeNodeBetweenLayers': '64',
-  'elk.spacing.edgeLabel': '4',
-  'elk.spacing.componentComponent': '56',
-  'elk.edgeLabels.placement': 'CENTER',
-  'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
-  // Every coordinate in the result is absolute, so nothing needs offsetting.
-  'elk.json.shapeCoords': 'ROOT',
-  'elk.json.edgeCoords': 'ROOT',
+const GRAY = {
+  border: TAILWIND_HEX['border-gray-300'],
+  name: TAILWIND_HEX['text-gray-800'],
+  tech: TAILWIND_HEX['text-gray-500'],
+  team: TAILWIND_HEX['text-gray-600'],
+  body: TAILWIND_HEX['text-gray-700'],
 };
+const EDGE = '#b1b1b7';
+const GROUP_FILL = '#f0f9ff';
+const GROUP_BORDER = '#3b82f6';
 
-const GROUP_OPTIONS = {
-  'elk.padding': '[top=44,left=20,bottom=20,right=20]',
-  'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-  'elk.nodeSize.minimum': '(200, 100)',
-};
-
-let elk: { layout: (graph: ElkNode) => Promise<ElkNode> } | undefined;
-
-interface Box {
+interface Placed {
+  node: DiagramNode;
+  x: number;
+  y: number;
   width: number;
   height: number;
-  lines: string[];
+  lines?: string[];
 }
 
-function nodeBox(node: DiagramNode): Box {
-  if (node.kind === 'text') {
-    const lines = wrap(node.description ?? node.name, NOTE_WIDTH - 24, 12, 6);
-    return { width: NOTE_WIDTH, height: 24 + lines.length * 16, lines };
-  }
-  const parts = [node.name, node.implicit ? '' : `[${node.techStack}]`, node.ownerTeam ? `@${node.ownerTeam}` : ''];
-  const width = Math.min(NODE_MAX, Math.max(NODE_MIN, textWidth(parts[0], 14, true) + 32, textWidth(parts[1], 12) + 32, textWidth(parts[2], 12) + 32));
-  return { width, height: node.implicit ? 44 : node.ownerTeam ? 74 : 58, lines: parts };
-}
-
-function isAncestor(byId: Map<string, DiagramNode>, ancestor: string, id: string): boolean {
-  for (let p = byId.get(id)?.parent; p; p = byId.get(p)?.parent) if (p === ancestor) return true;
-  return false;
+function noteLines(node: DiagramNode, width: number): string[] {
+  return wrap(node.description ?? node.name, width - 36, NOTE_FONT, 12);
 }
 
 export async function renderArchitectureSvg(diagram: Diagram, idPrefix = ''): Promise<string> {
-  const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
-  const boxes = new Map(diagram.nodes.filter((n) => n.kind !== 'group').map((n) => [n.id, nodeBox(n)]));
-  const elkNodes = new Map<string, ElkNode>();
-  for (const node of diagram.nodes) {
-    const box = boxes.get(node.id);
-    elkNodes.set(node.id, node.kind === 'group' ? { id: node.id, children: [], layoutOptions: GROUP_OPTIONS } : { id: node.id, width: box!.width, height: box!.height });
-  }
-  const roots: ElkNode[] = [];
-  for (const node of diagram.nodes) {
-    const parent = node.parent ? elkNodes.get(node.parent) : undefined;
-    (parent?.children ?? roots).push(elkNodes.get(node.id)!);
-  }
-  for (const n of elkNodes.values()) {
-    if (n.children?.length === 0) Object.assign(n, { width: 200, height: 100 });
-  }
+  const boxes = new Map((await layoutBoxes(diagram)).map((b) => [b.id, b]));
 
-  // Connections are drawn; use case steps only steer the layout, as in the editor.
-  const edges: ElkExtendedEdge[] = [];
-  const drawn = new Map<string, (typeof diagram.edges)[number]>();
-  const pairs = new Set<string>();
-  const add = (source: string, target: string, label?: string, edgeId?: string) => {
-    if (source === target || !byId.has(source) || !byId.has(target)) return;
-    if (isAncestor(byId, source, target) || isAncestor(byId, target, source)) return;
-    const key = `${source}\u0000${target}`;
-    if (!edgeId && pairs.has(key)) return;
-    pairs.add(key);
-    const id = edgeId ?? `layout${edges.length}`;
-    edges.push({
-      id,
-      sources: [source],
-      targets: [target],
-      labels: label ? [{ text: label, width: textWidth(fit(label, 180, LABEL_SIZE), LABEL_SIZE) + 8, height: 16 }] : undefined,
-    });
+  // Absolute positions: group members are laid out relative to their group.
+  const absolute = (id: string): { x: number; y: number } => {
+    const b = boxes.get(id)!;
+    const parent = b.parent ? absolute(b.parent) : { x: 0, y: 0 };
+    return { x: parent.x + b.position.x, y: parent.y + b.position.y };
   };
-  diagram.edges.forEach((e, i) => {
-    drawn.set(`edge${i}`, e);
-    add(e.source, e.target, e.label, `edge${i}`);
-  });
-  diagram.useCases.forEach((uc) => uc.scenarios.forEach((s) => s.steps.forEach((step) => add(step.fromServiceId, step.toServiceId))));
+  const placed = new Map<string, Placed>();
+  for (const node of diagram.nodes) {
+    const box = boxes.get(node.id)!;
+    const { x, y } = absolute(node.id);
+    if (node.kind === 'group') placed.set(node.id, { node, x, y, width: box.width, height: box.height });
+    else if (node.kind === 'text') {
+      const lines = noteLines(node, box.width);
+      placed.set(node.id, { node, x, y, width: box.width, height: 46 + lines.length * NOTE_LINE + 18, lines });
+    } else placed.set(node.id, { node, x, y, width: box.width, height: node.ownerTeam ? CARD_WITH_TEAM_HEIGHT : CARD_HEIGHT });
+  }
 
-  elk ??= new ELK();
-  const result = await elk.layout({ id: 'root', layoutOptions: ROOT_OPTIONS, children: roots, edges });
-
-  const placed = new Map<string, ElkNode>();
-  const collect = (nodes: ElkNode[] | undefined) =>
-    nodes?.forEach((n) => {
-      placed.set(n.id, n);
-      collect(n.children);
-    });
-  collect(result.children);
-
-  const width = (result.width ?? 0) + MARGIN * 2;
-  const height = (result.height ?? 0) + MARGIN * 2;
-  const at = (n: number) => n + MARGIN;
+  const all = [...placed.values()];
+  const minX = Math.min(0, ...all.map((p) => p.x));
+  const minY = Math.min(0, ...all.map((p) => p.y));
+  const maxX = Math.max(0, ...all.map((p) => p.x + p.width));
+  const maxY = Math.max(0, ...all.map((p) => p.y + p.height));
+  const dx = MARGIN - minX;
+  const dy = MARGIN - minY;
   const body: string[] = [];
 
-  // Groups first (outermost first), so nested groups and nodes draw on top.
-  const depth = (n: DiagramNode): number => (n.parent && byId.has(n.parent) ? depth(byId.get(n.parent)!) + 1 : 0);
-  for (const group of diagram.nodes.filter((n) => n.kind === 'group').sort((a, b) => depth(a) - depth(b))) {
-    const b = placed.get(group.id);
-    if (!b) continue;
-    const style = group.techStack && group.techStack !== 'Logical Group' ? `[${group.techStack}]` : '';
+  // Groups first (outermost first), then edges, then cards on top, as on the canvas.
+  const depth = (n: DiagramNode): number => {
+    const parent = n.parent ? placed.get(n.parent) : undefined;
+    return parent ? depth(parent.node) + 1 : 0;
+  };
+  for (const p of all.filter((p) => p.node.kind === 'group').sort((a, b) => depth(a.node) - depth(b.node))) {
+    const x = p.x + dx;
+    const y = p.y + dy;
     body.push(
-      `<g data-node="${esc(group.id)}" data-kind="group">`,
-      `<rect x="${r(at(b.x!))}" y="${r(at(b.y!))}" width="${r(b.width!)}" height="${r(b.height!)}" rx="10" fill="${COLORS.groupFill}" stroke="${COLORS.group}" stroke-width="1.5" stroke-dasharray="6 4"/>`,
-      text(at(b.x!) + 14, at(b.y!) + 22, fit(group.name, b.width! - 28, 13, true), { size: 13, weight: 600, fill: COLORS.badge }),
-      style ? text(at(b.x!) + 14, at(b.y!) + 36, fit(style, b.width! - 28, 11), { size: 11, fill: COLORS.muted }) : '',
+      `<g data-node="${esc(p.node.id)}" data-kind="group">`,
+      `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="8" fill="${GROUP_FILL}" stroke="${GROUP_BORDER}" stroke-width="2" stroke-dasharray="7 5"/>`,
+      techIcon('Logical Group', x + 18, y + 22, 20, GROUP_BORDER),
+      text(x + 46, y + 38, fit(p.node.name, p.width - 64, 18, true), { size: 18, weight: 600, fill: GROUP_BORDER }),
+      p.node.description ? text(x + 18, y + 72, fit(p.node.description, p.width - 36, 14), { size: 14, fill: GRAY.team }) : '',
       '</g>',
     );
   }
 
-  for (const edge of result.edges ?? []) {
-    const source = drawn.get(edge.id);
-    const section = edge.sections?.[0];
-    if (!source || !section) continue;
-    const points = [section.startPoint, ...(section.bendPoints ?? []), section.endPoint];
-    const d = points.map((p, i) => `${i ? 'L' : 'M'}${r(at(p.x))},${r(at(p.y))}`).join(' ');
-    body.push(`<g data-edge="${esc(source.id)}">`, `<path d="${d}" fill="none" stroke="${COLORS.line}" stroke-width="1.5" marker-end="url(#${idPrefix}arrow)"/>`);
-    const label = edge.labels?.[0];
-    if (label && source.label) {
-      const shown = fit(source.label, 180, LABEL_SIZE);
-      body.push(
-        `<rect x="${r(at(label.x!))}" y="${r(at(label.y!))}" width="${r(label.width!)}" height="${r(label.height!)}" rx="3" fill="${COLORS.background}" opacity="0.9"/>`,
-        text(at(label.x!) + label.width! / 2, at(label.y!) + 12, shown, { size: LABEL_SIZE, fill: COLORS.muted, anchor: 'middle' }),
-      );
-    }
-    body.push('</g>');
+  for (const edge of diagram.edges) {
+    const s = placed.get(edge.source);
+    const t = placed.get(edge.target);
+    if (!s || !t || s === t) continue;
+    body.push(drawEdge(edge.id, edge.label, s.x + dx + s.width / 2, s.y + dy + s.height, t.x + dx + t.width / 2, t.y + dy, idPrefix));
   }
 
-  for (const node of diagram.nodes) {
-    const b = placed.get(node.id);
-    const box = boxes.get(node.id);
-    if (!b || !box) continue;
-    const x = at(b.x!);
-    const y = at(b.y!);
-    if (node.kind === 'text') {
-      body.push(
-        `<g data-node="${esc(node.id)}" data-kind="text">`,
-        `<rect x="${r(x)}" y="${r(y)}" width="${r(box.width)}" height="${r(box.height)}" rx="4" fill="${COLORS.noteFill}" stroke="${COLORS.noteBorder}"/>`,
-        ...box.lines.map((line, i) => text(x + 12, y + 22 + i * 16, line, { size: 12 })),
-        '</g>',
-      );
-      continue;
-    }
-    const accent = ACCENT[node.type] ?? COLORS.line;
-    const cx = x + box.width / 2;
-    const [name, tech, team] = box.lines;
-    const max = box.width - 20;
-    body.push(
-      `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}">`,
-      `<rect x="${r(x)}" y="${r(y)}" width="${r(box.width)}" height="${r(box.height)}" rx="8" fill="${COLORS.background}" stroke="${node.implicit ? COLORS.border : accent}" stroke-width="1.5"/>`,
-      node.implicit ? '' : `<rect x="${r(x + 1)}" y="${r(y + 6)}" width="3" height="${r(box.height - 12)}" rx="1.5" fill="${accent}"/>`,
-      text(cx, y + (node.implicit ? 27 : 24), fit(name, max, 14, true), { size: 14, weight: 600, anchor: 'middle' }),
-      tech ? text(cx, y + 42, fit(tech, max, 12), { size: 12, fill: COLORS.muted, anchor: 'middle' }) : '',
-      team ? text(cx, y + 60, fit(team, max, 12), { size: 12, fill: accent, anchor: 'middle' }) : '',
-      '</g>',
+  for (const p of all) {
+    if (p.node.kind === 'group') continue;
+    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : drawCard(p, dx, dy, idPrefix));
+  }
+
+  if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: GRAY.tech }));
+  const defs = [
+    `<filter id="${idPrefix}shadow" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/></filter>`,
+    `<marker id="${idPrefix}arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${EDGE}"/></marker>`,
+  ].join('');
+  return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean), defs);
+}
+
+function drawCard(p: Placed, dx: number, dy: number, idPrefix: string): string {
+  const { node, width, height } = p;
+  const x = p.x + dx;
+  const y = p.y + dy;
+  const textX = x + PAD_X + 44;
+  const textMax = width - PAD_X * 2 - 44;
+  return [
+    `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}">`,
+    `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(width - 2)}" height="${r(height - 2)}" rx="8" fill="#ffffff" stroke="${GRAY.border}" stroke-width="2" filter="url(#${idPrefix}shadow)"/>`,
+    `<rect x="${r(x + PAD_X)}" y="${r(y + PAD_Y)}" width="36" height="36" rx="4" fill="${typeColor(node.type)}"/>`,
+    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 20, '#ffffff'),
+    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 600, fill: GRAY.name }),
+    text(textX, y + PAD_Y + 32, fit(node.techStack, textMax, 12), { size: 12, fill: GRAY.tech }),
+    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: GRAY.team }) : '',
+    '</g>',
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
+
+function drawNote(p: Placed, dx: number, dy: number): string {
+  const x = p.x + dx;
+  const y = p.y + dy;
+  return [
+    `<g data-node="${esc(p.node.id)}" data-kind="text">`,
+    `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="8" fill="${TAILWIND_HEX['bg-yellow-100']}" stroke="${TAILWIND_HEX['border-yellow-300']}" stroke-width="2"/>`,
+    techIcon('Sticky Note', x + 18, y + 20, 16, TAILWIND_HEX['text-yellow-600']),
+    text(x + 42, y + 33, fit(p.node.name, p.width - 60, 14), { size: 14, weight: 500, fill: TAILWIND_HEX['text-yellow-800'] }),
+    ...(p.lines ?? []).map((line, i) => text(x + 18, y + 61 + i * NOTE_LINE, line, { size: NOTE_FONT, fill: GRAY.body })),
+    '</g>',
+  ].join('\n');
+}
+
+/** React Flow's default (bezier) edge from the source's bottom to the target's top, label at its middle. */
+function drawEdge(id: string, label: string | undefined, sx: number, sy: number, tx: number, ty: number, idPrefix: string): string {
+  const offset = (d: number) => (d >= 0 ? 0.5 * d : 0.25 * 25 * Math.sqrt(-d));
+  const c1y = sy + offset(ty - sy);
+  const c2y = ty - offset(ty - sy);
+  const out = [
+    `<g data-edge="${esc(id)}">`,
+    `<path d="M${r(sx)},${r(sy)} C${r(sx)},${r(c1y)} ${r(tx)},${r(c2y)} ${r(tx)},${r(ty)}" fill="none" stroke="${EDGE}" stroke-width="1.5" marker-end="url(#${idPrefix}arrow)"/>`,
+  ];
+  if (label) {
+    const cx = sx * 0.125 + sx * 0.375 + tx * 0.375 + tx * 0.125;
+    const cy = sy * 0.125 + c1y * 0.375 + c2y * 0.375 + ty * 0.125;
+    const shown = fit(label, 200, 11);
+    const w = textWidth(shown, 11) + 8;
+    out.push(
+      `<rect x="${r(cx - w / 2)}" y="${r(cy - 9)}" width="${r(w)}" height="18" rx="2" fill="#ffffff"/>`,
+      text(cx, cy + 4, shown, { size: 11, fill: GRAY.name, anchor: 'middle' }),
     );
   }
-
-  if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: COLORS.muted }));
-  return svgDocument(
-    Math.max(width, 200),
-    Math.max(height, 64),
-    diagram.title ?? 'Architecture',
-    body.filter(Boolean),
-    marker(`${idPrefix}arrow`, COLORS.line),
-  );
+  out.push('</g>');
+  return out.join('\n');
 }

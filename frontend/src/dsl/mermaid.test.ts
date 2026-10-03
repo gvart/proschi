@@ -144,10 +144,29 @@ usecase "U" {
     expect(lines(toMermaidSequence(d, 'u')).slice(-2)).toEqual(['a-)q: Job', 'q-->>a: 202 queued']);
   });
 
-  it('shows a scenario condition when the parser provides one', () => {
-    const d = structuredClone(shop);
-    Object.assign(d.useCases[0].scenarios[1], { condition: 'the database is down' });
-    expect(lines(toMermaidSequence(d, 'create-order', 'db-down'))).toContain('Note over gateway,db: DB down (error) when the database is down');
+  it('shows the scenario condition', () => {
+    const d = diagramOf(`usecase "Get" {
+  a -> b : GET /x
+  alt "Ok" {
+    b --> a : 200
+  } alt "Down" when "b is down" {
+    b --> a : 503
+  }
+}`);
+    expect(lines(toMermaidSequence(d, 'get', 'down'))).toContain('Note over a,b: Down (error) when b is down');
+    expect(lines(toMermaidSequence(d, 'get', 'ok'))).toContain('Note over a,b: Ok');
+  });
+
+  it('draws a response without status or body', () => {
+    const d = diagramOf(`usecase "U" {
+  a -> b : call
+  b -> c : lookup
+  c --> b
+  b --> a
+  a ->> q : Job
+}`);
+    const out = lines(toMermaidSequence(d, 'u'));
+    expect(out.slice(-5)).toEqual(['a->>b: call', 'b->>c: lookup', 'c-->>b: #32;', 'b-->>a: #32;', 'a-)q: Job']);
   });
 });
 
