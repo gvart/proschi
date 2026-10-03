@@ -57,6 +57,25 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes when only between an alt name and its condition', () => {
+    const [line] = tokenize('  } alt "Missing" when "no such order" {');
+    expect(line).toEqual([
+      ['}', 'punctuation.section.block.end.proschi'],
+      ['alt', 'keyword.control.proschi'],
+      ['"', 'punctuation.definition.string.begin.proschi'],
+      ['Missing', 'string.quoted.double.proschi'],
+      ['"', 'punctuation.definition.string.end.proschi'],
+      ['when', 'keyword.control.proschi'],
+      ['"', 'punctuation.definition.string.begin.proschi'],
+      ['no such order', 'string.quoted.double.proschi'],
+      ['"', 'punctuation.definition.string.end.proschi'],
+      ['{', 'punctuation.section.block.proschi'],
+    ]);
+    expect(scopeOf(tokenize('alt Missing when "x" {'), 'when')).toBe('keyword.control.proschi');
+    expect(scopeOf(tokenize('when -> api'), 'when')).toBe('variable.other.node.proschi');
+    expect(scopeOf(tokenize('alt when {'), 'when')).toBe('variable.other.node.proschi');
+  });
+
   it('scopes arrows, without reading -x out of an id', () => {
     for (const arrow of ['->', '->>', '-->', '-x']) {
       expect(scopeOf(tokenize(`a ${arrow} b`), arrow), arrow).toBe('keyword.operator.arrow.proschi');

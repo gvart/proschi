@@ -1,8 +1,40 @@
 import { describe, expect, it } from 'vitest';
 import { EditorState, Text } from '@codemirror/state';
+import { StringStream } from '@codemirror/language';
 import { CompletionContext } from '@codemirror/autocomplete';
 import { parse } from '../../dsl';
-import { proschiCompletions, toCmDiagnostics } from './proschiLanguage';
+import { proschiCompletions, proschiStreamParser, toCmDiagnostics } from './proschiLanguage';
+
+/** [text, style] for each non-blank token of one line. */
+function highlight(line: string): [string, string | null][] {
+  const parser = proschiStreamParser;
+  const state = parser.startState!(2);
+  const stream = new StringStream(line, 2, 2);
+  const out: [string, string | null][] = [];
+  while (!stream.eol()) {
+    const style = parser.token(stream, state);
+    const text = stream.current();
+    if (text.trim()) out.push([text, style]);
+    stream.start = stream.pos;
+  }
+  return out;
+}
+
+describe('proschiLanguage', () => {
+  it('highlights when only after an alt name', () => {
+    expect(highlight('} alt "Missing" when "no such order" {')).toEqual([
+      ['}', 'brace'],
+      ['alt', 'keyword'],
+      ['"Missing"', 'string'],
+      ['when', 'keyword'],
+      ['"no such order"', 'string'],
+      ['{', 'brace'],
+    ]);
+    expect(highlight('alt Missing when "x" {')[2]).toEqual(['when', 'keyword']);
+    expect(highlight('when -> api')[0]).toEqual(['when', 'variableName']);
+    expect(highlight('a -> when')[2]).toEqual(['when', 'variableName']);
+  });
+});
 
 const complete = (doc: string, explicit = false) => {
   const state = EditorState.create({ doc });
