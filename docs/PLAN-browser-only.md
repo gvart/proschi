@@ -44,7 +44,7 @@ body → `requestFormat`/`requestBody`).
 - [x] **Phase 1 – Language core** (`src/dsl/`, pure TS): lexer, recursive-descent
   parser with line/column errors, syntax tree → `{ nodes, edges, useCases }`.
   Partial results on error. Vitest suite. Syntax reference: `docs/LANGUAGE.md`.
-- [ ] **Phase 2 – Live editor.** CodeMirror 6 (highlighting, error marks,
+- [x] **Phase 2 – Live editor.** CodeMirror 6 (highlighting, error marks,
   autocomplete of tech stacks / node ids), debounced re-parse, `elkjs`
   auto-layout (groups as containers; optional `pos x,y` override), use-case
   picker wired to playback.
