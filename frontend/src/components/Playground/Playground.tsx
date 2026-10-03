@@ -214,7 +214,9 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     <div className="h-[100dvh] flex flex-col bg-gray-50">
       <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2 bg-white border-b border-gray-200">
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
-          <span className="text-lg font-bold text-gray-900 mr-1">Proschi</span>
+          <a href="../" title="About Proschi" className="text-lg font-bold text-gray-900 mr-1 hover:text-blue-700">
+            Proschi
+          </a>
 
           <Menu
             label="Diagrams"
