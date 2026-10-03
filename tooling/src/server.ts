@@ -18,6 +18,9 @@ import {
   type DocumentSymbol,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { statSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { openApiDiagnostics, watchedFiles } from './openapi/config';
 import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
 
 declare const PROSCHI_VERSION: string;
@@ -52,19 +55,53 @@ connection.onInitialize(() => ({
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
 }));
 
-documents.onDidChangeContent(({ document }) => {
-  const { diagnostics } = analysisOf(document);
+function validate(document: TextDocument) {
+  const { diagram, diagnostics } = analysisOf(document);
+  const toLsp = (source: string) => (d: (typeof diagnostics)[number]) => ({
+    range: toRange(d),
+    severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
+    source,
+    message: d.message,
+  });
   connection.sendDiagnostics({
     uri: document.uri,
     version: document.version,
-    diagnostics: diagnostics.map((d) => ({
-      range: toRange(d),
-      severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
-      source: 'proschi',
-      message: d.message,
-    })),
+    diagnostics: [...diagnostics.map(toLsp('proschi')), ...openApiFindings(document, diagram).map(toLsp('proschi-openapi'))],
   });
-});
+}
+
+/** Findings against the specs named in the nearest proschi.json, for documents saved on disk. */
+function openApiFindings(document: TextDocument, diagram: Analysis['diagram']) {
+  if (!document.uri.startsWith('file:')) return [];
+  try {
+    return openApiDiagnostics(fileURLToPath(document.uri), diagram);
+  } catch {
+    return [];
+  }
+}
+
+documents.onDidChangeContent(({ document }) => validate(document));
+
+// Specs and proschi.json change outside the editor; re-check open documents when they do.
+// Spec and config reads are cached by modification time, so this costs a stat per file.
+function watchedStamp(): string {
+  return watchedFiles()
+    .map((file) => {
+      try {
+        return `${file}:${statSync(file).mtimeMs}`;
+      } catch {
+        return `${file}:missing`;
+      }
+    })
+    .join('\n');
+}
+
+let stamp = '';
+setInterval(() => {
+  const next = watchedStamp();
+  if (stamp && next !== stamp) documents.all().forEach(validate);
+  stamp = next;
+}, 2000).unref();
 
 documents.onDidClose(({ document }) => {
   cache.delete(document.uri);

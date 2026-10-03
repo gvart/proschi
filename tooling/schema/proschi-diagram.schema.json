@@ -498,6 +498,14 @@
         "failed": {
           "type": "boolean",
           "description": "Written `a -x b`: the call never got an answer."
+        },
+        "loc": {
+          "$ref": "#/$defs/loc",
+          "description": "The request line."
+        },
+        "responseLoc": {
+          "$ref": "#/$defs/loc",
+          "description": "The `-->` line that answered the request."
         }
       },
       "required": [
@@ -512,7 +520,8 @@
         "responseFormat",
         "executionType",
         "isParallel",
-        "isConditional"
+        "isConditional",
+        "loc"
       ],
       "additionalProperties": false
     }

@@ -9,6 +9,7 @@ import type {
   DiagramEdge,
   DiagramNode,
   DiagramScenario,
+  DiagramStep,
   DiagramUseCase,
   ParseResult,
   SourceLoc,
@@ -456,8 +457,8 @@ class Parser {
     };
   }
 
-  private buildSteps(useCaseId: string, scenarioId: string, raw: RawStep[]): FlowStep[] {
-    const steps: FlowStep[] = [];
+  private buildSteps(useCaseId: string, scenarioId: string, raw: RawStep[]): DiagramStep[] {
+    const steps: DiagramStep[] = [];
     const answered = new Set<FlowStep>();
     const prefix = scenarioId === 'main' ? useCaseId : `${useCaseId}-${scenarioId}`;
 
@@ -472,6 +473,7 @@ class Parser {
           continue;
         }
         answered.add(request);
+        request.responseLoc = step.loc;
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) request.statusCode = Number(status[1]);
         const payload = splitPayload(status ? status[2] : step.label);
@@ -505,6 +507,7 @@ class Parser {
         isParallel: step.parallelGroup !== undefined,
         isConditional: false,
         ...(step.arrow === '-x' ? { failed: true } : {}),
+        loc: step.loc,
       });
     }
 

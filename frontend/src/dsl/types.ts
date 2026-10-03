@@ -15,6 +15,9 @@ export interface Diagnostic extends SourceLoc {
   message: string;
 }
 
+/** A use case step with where it is written: the request line, and the `-->` line that answered it. */
+export type DiagramStep = FlowStep & { loc: SourceLoc; responseLoc?: SourceLoc };
+
 export type DiagramNodeKind = 'component' | 'group' | 'text';
 
 export interface DiagramNode {
@@ -55,7 +58,7 @@ export interface DiagramScenario {
   outcome: 'success' | 'error';
   /** `when "…"` conditions of the branches on the path, joined with ' · '; absent when none has one. */
   condition?: string;
-  steps: FlowStep[];
+  steps: DiagramStep[];
   /** The innermost `alt` name of the scenario, or the use case name when it has no branches. */
   loc: SourceLoc;
 }
@@ -73,7 +76,7 @@ export interface DiagramUseCase {
    */
   endpointGroup?: string;
   /** The steps of the first scenario. */
-  steps: FlowStep[];
+  steps: DiagramStep[];
   scenarios: DiagramScenario[];
   loc: SourceLoc;
 }

@@ -113,8 +113,10 @@ export function diagramSchema() {
           isConditional: bool,
           conditionExpression: str,
           failed: { ...bool, description: 'Written `a -x b`: the call never got an answer.' },
+          loc: { ...loc, description: 'The request line.' },
+          responseLoc: { ...loc, description: 'The `-->` line that answered the request.' },
         },
-        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional'],
+        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'loc'],
       ),
     },
   };

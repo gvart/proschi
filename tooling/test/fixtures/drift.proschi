@@ -1,0 +1,12 @@
+usecase "Drift" {
+  gateway -> orders : POST /orders/42 {"items": []}
+  orders --> gateway : 200
+  gateway -> orders : POST /orders {"items": [{"sku": "A", "quantity": 0}], "extra": 1}
+  orders --> gateway : 422 {"x": 1}
+  gateway -> orders : GET /ordres/42
+  gateway -> orders : GET /orders/42
+  orders --> gateway : 200 {"id": "x", "status": "lost"}
+  gateway -> payments : POST /payments-api/payments {"orderId": 1, "amount": 0, "extra": true}
+  payments --> gateway : 201 {"paymentId": "nope"}
+  gateway -> orders : DELETE /orders
+}
