@@ -1,8 +1,9 @@
 name: Release tooling
 
-# Publishing a GitHub release whose tag starts with `tooling-v` (e.g.
-# `tooling-v0.2.0`) publishes the `proschi` npm package and attaches the VS Code
-# extension to that release. This works from the GitHub website on a phone too.
+# Pushing a tag that starts with `tooling-v` (e.g. `tooling-v0.2.0`) publishes
+# the `proschi` npm package and attaches the VS Code extension to a GitHub
+# release for that tag. Creating the release on github.com with a new tag works
+# too (it pushes the tag); the workflow then adds the extension to it.
 #
 # Authentication: npm Trusted Publishing (GitHub OIDC). On npmjs.com the
 # package's trusted publisher names this repository, this workflow file
@@ -11,8 +12,12 @@ name: Release tooling
 # repository secret instead; delete the secret once Trusted Publishing is set up.
 
 on:
-  release:
-    types: [published]
+  push:
+    tags: ['tooling-v*']
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: write # upload the extension to the release
@@ -20,18 +25,15 @@ permissions:
 
 jobs:
   release:
-    if: startsWith(github.event.release.tag_name, 'tooling-v')
     runs-on: ubuntu-latest
     environment: npm
     defaults:
       run:
         working-directory: tooling
     env:
-      VERSION: ${{ github.event.release.tag_name }}
+      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          ref: ${{ github.event.release.tag_name }}
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -61,4 +63,6 @@ jobs:
         run: |
           file="dist/proschi-${VERSION#tooling-v}.vsix"
           cp dist/proschi.vsix "$file"
+          gh release view "$VERSION" >/dev/null 2>&1 ||
+            gh release create "$VERSION" --verify-tag --title "Proschi tooling ${VERSION#tooling-v}" --generate-notes
           gh release upload "$VERSION" "$file" --clobber
