@@ -43,6 +43,12 @@ describe('playback deep links', () => {
     expect(decodeShareLink(`${code}&uc=u&step=abc`)?.playback).toEqual({ useCase: 'u', step: 1 });
   });
 
+  it('round-trips a scenario', () => {
+    const hash = encodeShareHash('a -> b', { useCase: 'create-order', scenario: 'db-down', step: 2 });
+    expect(hash).toMatch(/&uc=create-order&alt=db-down&step=2$/);
+    expect(decodeShareLink(hash)?.playback).toEqual({ useCase: 'create-order', scenario: 'db-down', step: 2 });
+  });
+
   it('has no playback without a use case', () => {
     expect(decodeShareLink(encodeShareHash('x'))).toEqual({ source: 'x' });
   });

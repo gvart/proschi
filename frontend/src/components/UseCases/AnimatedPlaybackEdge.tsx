@@ -2,6 +2,10 @@ import { useEffect, useRef, useState } from 'react';
 import { BaseEdge, getBezierPath } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 
+const ERROR_COLOR = '#dc2626';
+/** How far along the edge (in %) a failed call gets before it is cut off. */
+const FAIL_AT = 55;
+
 export function AnimatedPlaybackEdge({
   sourceX,
   sourceY,
@@ -28,6 +32,10 @@ export function AnimatedPlaybackEdge({
   const isActive = data?.isActive || false;
   const progress = data?.progress || 0;
   const isRequestResponse = data?.isRequestResponse || false;
+  /** 4xx/5xx: the reply travels back in red. */
+  const isError = data?.isError || false;
+  /** The call never arrives: the dot stops short and a cross marks the spot. */
+  const failed = data?.failed || false;
 
   // Calculate dot position based on progress
   // For request-response: 0-50% = request (forward), 50-100% = response (backward)
@@ -38,7 +46,9 @@ export function AnimatedPlaybackEdge({
     const pathLength = pathElement.getTotalLength();
 
     let targetLength: number;
-    if (isRequestResponse) {
+    if (failed) {
+      targetLength = (Math.min(progress, FAIL_AT) / 100) * pathLength;
+    } else if (isRequestResponse) {
       // For request-response: animate back and forth
       if (progress <= 50) {
         // Request phase: 0 to 50% = move forward along path
@@ -55,7 +65,10 @@ export function AnimatedPlaybackEdge({
 
     const point = pathElement.getPointAtLength(targetLength);
     setDotPosition({ x: point.x, y: point.y });
-  }, [progress, isActive, isRequestResponse, edgePath]);
+  }, [progress, isActive, isRequestResponse, failed, edgePath]);
+
+  const replying = isRequestResponse && progress > 50;
+  const dotColor = isError && (replying || !isRequestResponse) ? ERROR_COLOR : '#3b82f6';
 
   return (
     <>
@@ -72,14 +85,21 @@ export function AnimatedPlaybackEdge({
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
       {/* Animated dot traveling along the edge */}
-      {isActive && progress < 100 && (
+      {isActive && failed && progress >= FAIL_AT && (
+        <g stroke={ERROR_COLOR} strokeWidth="3" strokeLinecap="round">
+          <line x1={dotPosition.x - 7} y1={dotPosition.y - 7} x2={dotPosition.x + 7} y2={dotPosition.y + 7} />
+          <line x1={dotPosition.x - 7} y1={dotPosition.y + 7} x2={dotPosition.x + 7} y2={dotPosition.y - 7} />
+        </g>
+      )}
+
+      {isActive && progress < 100 && !(failed && progress >= FAIL_AT) && (
         <g>
           {/* Pulsing outer circle */}
           <circle
             cx={dotPosition.x}
             cy={dotPosition.y}
             r="10"
-            fill="#60a5fa"
+            fill={dotColor}
             opacity="0.3"
           >
             <animate
@@ -101,7 +121,7 @@ export function AnimatedPlaybackEdge({
             cx={dotPosition.x}
             cy={dotPosition.y}
             r="6"
-            fill="#3b82f6"
+            fill={dotColor}
             stroke="#ffffff"
             strokeWidth="2"
           />

@@ -12,6 +12,9 @@
   --rule-soft: #d3ccbc;
   --accent: #c2410c;
   --accent-ink: #9a3412;
+  /* Error paths only: 4xx/5xx replies and failed calls. */
+  --error: #b91c1c;
+  --error-wash: #fbeaea;
   --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --cond: 'IBM Plex Sans Condensed', 'IBM Plex Sans', 'Arial Narrow', system-ui, sans-serif;
   --mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
@@ -365,6 +368,37 @@ h1 {
 .arrowhead--hot {
   fill: var(--accent);
 }
+.arrowhead--error {
+  fill: var(--error);
+}
+.d-edge.is-hot.is-error,
+.d-edge.is-hot.is-failed {
+  stroke: var(--error);
+}
+.d-edge.is-failed {
+  stroke-dasharray: 5 4;
+}
+.d-node.is-error rect,
+.d-node.is-error > path:first-of-type {
+  stroke: var(--error);
+  fill: var(--error-wash);
+}
+.d-key--error {
+  stroke: var(--error);
+}
+.d-packet.is-error {
+  fill: var(--error);
+}
+.d-fail {
+  fill: none;
+  stroke: var(--error);
+  stroke-width: 3;
+  stroke-linecap: round;
+  opacity: 0;
+}
+.d-fail.is-visible {
+  opacity: 1;
+}
 .d-edge-label {
   font: 400 11px var(--mono);
   fill: var(--ink-2);
@@ -428,6 +462,50 @@ h1 {
   display: flex;
   gap: 8px;
 }
+.player__scenarios {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.scenario {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--rule-soft);
+  background: transparent;
+  color: var(--ink-2);
+  font: 500 0.82rem/1 var(--mono);
+  cursor: pointer;
+}
+.scenario::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--ink-3);
+}
+.scenario--error::before {
+  background: var(--error);
+}
+.scenario:hover {
+  border-color: var(--ink);
+  color: var(--ink);
+}
+.scenario[aria-pressed='true'] {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+}
+.scenario--error[aria-pressed='true'] {
+  border-color: var(--error);
+  background: var(--error);
+  color: #fff;
+}
+.scenario--error[aria-pressed='true']::before {
+  background: #fff;
+}
 .player__controls .btn {
   min-width: 88px;
 }
@@ -486,6 +564,9 @@ h1 {
   text-align: right;
   color: var(--ink-3);
   opacity: 0.7;
+}
+.code .line.is-other {
+  opacity: 0.45;
 }
 .code .line.is-active {
   background: #fbe6d8;
@@ -627,6 +708,10 @@ h3 {
   border: 1px solid var(--accent);
   color: var(--accent-ink);
   vertical-align: 0.1em;
+}
+.tag--error {
+  border-color: var(--error);
+  color: var(--error);
 }
 .code--url {
   white-space: pre;

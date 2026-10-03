@@ -42,12 +42,30 @@ export interface DiagramEdge {
   loc: SourceLoc;
 }
 
+/**
+ * One path through a use case. A use case without `alt` blocks has a single
+ * scenario; each combination of `alt` branches is a scenario of its own.
+ */
+export interface DiagramScenario {
+  /** Slug of the branch names, or `main` when the use case has no branches. */
+  id: string;
+  /** Branch names joined with ' › ', or the use case name when there are none. */
+  name: string;
+  /** `error` when the entry request is answered with a 4xx/5xx or fails. */
+  outcome: 'success' | 'error';
+  steps: FlowStep[];
+}
+
 export interface DiagramUseCase {
   id: string;
   name: string;
   description?: string;
   entryServiceId?: string;
+  /** `METHOD /path` of the first step, if it is an HTTP call; used to group use cases. */
+  endpoint?: string;
+  /** The steps of the first scenario. */
   steps: FlowStep[];
+  scenarios: DiagramScenario[];
   loc: SourceLoc;
 }
 

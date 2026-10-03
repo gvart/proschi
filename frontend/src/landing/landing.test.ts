@@ -4,7 +4,7 @@ import { examples, parse } from '../dsl';
 import { decodeShareLink } from '../playground/share';
 import { highlightLine } from './highlight';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
-import { heroSteps, stepLines } from './player';
+import { heroScenarios, stepLines } from './player';
 import { tallLayout, wideLayout } from './diagramLayout';
 
 function decodeEntities(s: string): string {
@@ -38,21 +38,33 @@ describe('landing page hero', () => {
     expect(diagram.useCases.map((u) => [u.id, u.name])).toEqual([[HERO_USE_CASE.id, HERO_USE_CASE.name]]);
   });
 
-  it('animates the same steps as the source declares', () => {
+  it('animates the same scenarios and steps as the source declares', () => {
     const source = heroSource();
     const { diagram } = parse(source);
-    const parsed = diagram.useCases[0].steps;
-    const requests = heroSteps.filter((s) => s.kind !== 'response');
-    expect(parsed.map((s) => [s.fromServiceId, s.toServiceId])).toEqual(requests.map((s) => [s.from, s.to]));
-    expect(parsed[0].statusCode).toBe(201);
+    const [useCase] = diagram.useCases;
+    expect(useCase.scenarios.map((s) => [s.id, s.name, s.outcome])).toEqual(heroScenarios.map((s) => [s.id, s.name, s.outcome]));
 
-    const lines = stepLines(source.split('\n'));
-    expect(lines.every((l) => l > 0)).toBe(true);
-    expect(new Set(lines).size).toBe(heroSteps.length);
+    for (const [i, hero] of heroScenarios.entries()) {
+      const parsed = useCase.scenarios[i].steps;
+      const requests = hero.steps.filter((s) => s.kind !== 'response');
+      expect(parsed.map((s) => [s.fromServiceId, s.toServiceId, !!s.failed])).toEqual(
+        requests.map((s) => [s.from, s.to, s.kind === 'failed']),
+      );
+      const reply = hero.steps.find((s) => s.kind === 'response')!;
+      expect(String(parsed[0].statusCode)).toBe(reply.label.slice(0, 3));
+      expect(!!reply.error).toBe(parsed[0].statusCode! >= 400);
+
+      const lines = stepLines(source.split('\n'), hero);
+      expect(lines.every((l) => l > 0), hero.name).toBe(true);
+      expect(new Set(lines).size).toBe(hero.steps.length);
+    }
   });
 
   it('every SVG edge the player uses exists', () => {
-    for (const step of heroSteps) {
+    expect(landingHtml).toContain('id="fail-mark"');
+    expect(landingHtml).toContain('id="player-scenarios"');
+    expect(landingHtml).toContain('id="arrow-error"');
+    for (const step of heroScenarios.flatMap((s) => s.steps)) {
       expect(landingHtml).toContain(`id="${step.edge}"`);
       expect(landingHtml).toContain(`id="node-${step.from}"`);
       expect(landingHtml).toContain(`id="node-${step.to}"`);
@@ -72,6 +84,12 @@ describe('landing page hero', () => {
     expect(Object.keys(tallLayout.elements).sort()).toEqual(Object.keys(wideLayout.elements).sort());
   });
 
+  it('the share sample names a real scenario of the hero use case', () => {
+    const sample = landingHtml.match(/&amp;uc=([\w-]+)&amp;alt=([\w-]+)&amp;step=\d+/);
+    expect(sample?.[1]).toBe(HERO_USE_CASE.id);
+    expect(parse(heroSource()).diagram.useCases[0].scenarios.map((s) => s.id)).toContain(sample?.[2]);
+  });
+
   it('links into playback of the hero use case', () => {
     const link = editorLink(heroSource(), { useCase: HERO_USE_CASE.id, step: 1 });
     expect(link.startsWith(`${APP_PATH}#code=`)).toBe(true);
@@ -86,9 +104,17 @@ describe('landing page snippets', () => {
   it('only use syntax the parser accepts', () => {
     const all = snippets();
     expect(all.length).toBeGreaterThanOrEqual(3);
-    // The two "how it works" snippets are halves of one document.
-    const combined = all.slice(1).join('\n\nevents "OrderEvents" [Kafka]\n\n');
+    // The "how it works" snippets are parts of one document.
+    const [architecture, ...useCases] = all.slice(1);
+    const combined = [architecture, 'events "OrderEvents" [Kafka]', ...useCases].join('\n\n');
     expect(parse(combined).diagnostics).toEqual([]);
+  });
+
+  it('highlights alt and failed calls', () => {
+    const cls = (line: string) => highlightLine(line).filter((seg) => seg.cls).map((seg) => [seg.text.trim(), seg.cls]);
+    expect(cls('  } alt "Out of stock" {')).toEqual([['} alt', 'keyword'], ['"Out of stock"', 'string']]);
+    expect(cls('  api -x db : INSERT order')).toEqual([['-x', 'arrow']]);
+    expect(cls('  api -> xray')).toEqual([['->', 'arrow']]);
   });
 
   it('highlighter keeps the text intact', () => {

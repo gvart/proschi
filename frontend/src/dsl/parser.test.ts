@@ -237,3 +237,139 @@ describe('error recovery', () => {
     expect(parse('')).toEqual({ diagram: { title: undefined, nodes: [], edges: [], useCases: [] }, diagnostics: [] });
   });
 });
+
+describe('alt scenarios', () => {
+  const source = `gateway [AWS API Gateway]
+orders  [REST API]
+db      [PostgreSQL]
+
+usecase "Create order" {
+  gateway -> orders : POST /orders json {"sku": "A1"}
+  alt "Created" {
+    orders -> db : INSERT order
+    db --> orders : ok
+    orders --> gateway : 201 {"id": 1}
+  } alt "Invalid payload" {
+    orders --> gateway : 400 {"error": "sku required"}
+  }
+  alt "DB down" {
+    orders -x db : INSERT order
+    orders --> gateway : 503
+  }
+}`;
+
+  it('turns each alt branch into a scenario that shares the steps before it', () => {
+    const { diagram, diagnostics } = parse(source);
+    expect(diagnostics).toEqual([]);
+    const [useCase] = diagram.useCases;
+    expect(useCase.endpoint).toBe('POST /orders');
+    expect(useCase.scenarios.map((s) => [s.id, s.name, s.outcome])).toEqual([
+      ['created', 'Created', 'success'],
+      ['invalid-payload', 'Invalid payload', 'error'],
+      ['db-down', 'DB down', 'error'],
+    ]);
+
+    const [created, invalid, down] = useCase.scenarios;
+    expect(created.steps.map((s) => s.stepName)).toEqual(['POST /orders', 'INSERT order']);
+    expect(created.steps[0]).toMatchObject({ statusCode: 201, responseBody: '{"id": 1}' });
+    expect(invalid.steps).toHaveLength(1);
+    expect(invalid.steps[0]).toMatchObject({ statusCode: 400, responseBody: '{"error": "sku required"}' });
+    expect(down.steps[1]).toMatchObject({ failed: true, fromServiceId: 'orders', toServiceId: 'db' });
+    expect(down.steps[0].statusCode).toBe(503);
+    expect(useCase.steps).toBe(created.steps);
+  });
+
+  it('keeps step ids unique across scenarios', () => {
+    const ids = parse(source).diagram.useCases[0].scenarios.flatMap((s) => s.steps.map((step) => step.id));
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it('a use case without alt has one main scenario', () => {
+    const [useCase] = parse('usecase "U" {\n  a -> b : GET /x\n  b --> a : 404\n}').diagram.useCases;
+    expect(useCase.scenarios).toHaveLength(1);
+    expect(useCase.scenarios[0]).toMatchObject({ id: 'main', name: 'U', outcome: 'error' });
+  });
+
+  it('shares steps after an alt set with every branch', () => {
+    const [useCase] = parse('usecase "U" {\n  alt "A" {\n    a -> b\n  } alt "B" {\n    a -> c\n  }\n  a -> log : audit\n}').diagram.useCases;
+    expect(useCase.scenarios.map((s) => s.steps.map((step) => step.toServiceId))).toEqual([
+      ['b', 'log'],
+      ['c', 'log'],
+    ]);
+  });
+
+  it('multiplies nested and consecutive-but-separate alt sets', () => {
+    const src = `usecase "U" {
+  alt "A" {
+    alt "A1" {
+      a -> b
+    } alt "A2" {
+      a -> c
+    }
+  } alt "B" {
+    a -> d
+  }
+  a -> e
+  alt "X" {
+    a -> f
+  } alt "Y" {
+    a -> g
+  }
+}`;
+    const { diagram, diagnostics } = parse(src);
+    expect(diagnostics).toEqual([]);
+    expect(diagram.useCases[0].scenarios.map((s) => s.name)).toEqual([
+      'A › A1 › X',
+      'A › A1 › Y',
+      'A › A2 › X',
+      'A › A2 › Y',
+      'B › X',
+      'B › Y',
+    ]);
+  });
+
+  it('matches a response inside a branch to a request before it', () => {
+    const { diagram, diagnostics } = parse('usecase "U" {\n  a -> b : GET /x\n  alt "Ok" {\n    b --> a : 200\n  } alt "Missing" {\n    b --> a : 404\n  }\n}');
+    expect(diagnostics).toEqual([]);
+    expect(diagram.useCases[0].scenarios.map((s) => s.steps[0].statusCode)).toEqual([200, 404]);
+  });
+
+  it('allows par inside alt and keeps parallel groups', () => {
+    const { diagram, diagnostics } = parse('usecase "U" {\n  alt "A" {\n    par {\n      a -> b\n      a -> c\n    }\n  }\n}');
+    expect(diagnostics).toEqual([]);
+    expect(diagram.useCases[0].steps.map((s) => s.parallelGroup)).toEqual([1, 1]);
+  });
+
+  it('reports each warning in shared steps once', () => {
+    const w = warnings('usecase "U" {\n  b --> a : 200\n  alt "A" {\n    a -> b\n  } alt "B" {\n    a -> c\n  }\n}');
+    expect(w).toHaveLength(1);
+    expect(w[0].line).toBe(2);
+  });
+
+  it('a failed call cannot be answered', () => {
+    const w = warnings('usecase "U" {\n  a -x b : GET /x\n  b --> a : 200\n}');
+    expect(w[0].message).toMatch(/no matching request/);
+  });
+
+  it('rejects misplaced alt and -x', () => {
+    expect(errors('alt "A" {\n}')[0].message).toBe('alt is only allowed inside a usecase');
+    expect(errors('usecase "U" {\n  par {\n    alt "A" {\n    }\n  }\n}')[0].message).toBe('alt blocks cannot be inside a par block');
+    expect(errors('usecase "U" {\n  alt {\n  }\n}')[0].message).toMatch(/Expected a scenario name/);
+    expect(errors('a -x b')[0].message).toMatch(/only allowed in use case steps/);
+    expect(errors('usecase "U" {\n  alt "A" {\n    a -> b\n}')[0].message).toBe("Missing } to close usecase 'U'");
+    expect(errors('usecase "U" {\n  } junk')[0].message).toBe("Unexpected input after }");
+  });
+
+  it('does not read -x out of an id', () => {
+    expect(parse('a -> xray').diagram.edges[0].target).toBe('xray');
+    expect(errors('a -xray')).not.toEqual([]);
+  });
+
+  it('caps the number of scenarios', () => {
+    const set = (n: number) => `  alt "${n}a" {\n    a -> b\n  } alt "${n}b" {\n    a -> c\n  }\n`;
+    const src = `usecase "U" {\n${[1, 2, 3, 4, 5, 6].map((n) => `${set(n)}  a -> d\n`).join('')}}`;
+    const { diagram, diagnostics } = parse(src);
+    expect(diagram.useCases[0].scenarios).toHaveLength(32);
+    expect(diagnostics[0].message).toMatch(/Too many scenarios/);
+  });
+});

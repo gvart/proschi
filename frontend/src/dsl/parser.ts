@@ -7,12 +7,13 @@ import type {
   Diagram,
   DiagramEdge,
   DiagramNode,
+  DiagramScenario,
   DiagramUseCase,
   ParseResult,
   SourceLoc,
 } from './types';
 
-type Arrow = '->' | '->>' | '-->';
+type Arrow = '->' | '->>' | '-->' | '-x';
 
 interface RawStep {
   from: string;
@@ -23,6 +24,21 @@ interface RawStep {
   loc: SourceLoc;
 }
 
+/** A use case body: steps, and sets of `alt` branches that split it into scenarios. */
+type Item = { kind: 'step'; step: RawStep } | { kind: 'alt'; branches: Branch[] };
+
+interface Branch {
+  name: string;
+  items: Item[];
+}
+
+/** A use case body or an alt branch: anything that holds steps. */
+interface Container {
+  items: Item[];
+  /** The alt set closed last, while no step has followed it; a new `alt` joins it. */
+  openAlt?: Item & { kind: 'alt' };
+}
+
 interface Reference {
   id: string;
   loc: SourceLoc;
@@ -30,12 +46,15 @@ interface Reference {
 
 type Frame =
   | { kind: 'group'; id: string; loc: SourceLoc }
-  | { kind: 'usecase'; useCase: DiagramUseCase; steps: RawStep[]; parCount: number; loc: SourceLoc }
+  | { kind: 'usecase'; useCase: DiagramUseCase; body: Container; parCount: number; loc: SourceLoc }
+  | { kind: 'alt'; name: string; body: Container; owner: Container; set: Item & { kind: 'alt' }; loc: SourceLoc }
   | { kind: 'par'; group: number; loc: SourceLoc };
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const DEFAULT_TECH: TechStack = 'Rectangle';
 const DEFAULT_GROUP_TECH: TechStack = 'Logical Group';
+/** Nested or repeated alt sets multiply; past this many scenarios the rest are dropped. */
+export const MAX_SCENARIOS = 32;
 
 const techByName = new Map<string, { type: ComponentType; techStack: TechStack }>(
   componentCatalog.map((c) => [c.techStack.toLowerCase(), { type: c.type, techStack: c.techStack }])
@@ -55,7 +74,7 @@ class Parser {
   private readonly diagnostics: Diagnostic[] = [];
   private readonly nodes = new Map<string, DiagramNode>();
   private readonly edges: DiagramEdge[] = [];
-  private readonly useCases: { useCase: DiagramUseCase; steps: RawStep[] }[] = [];
+  private readonly useCases: { useCase: DiagramUseCase; body: Container }[] = [];
   private readonly references: Reference[] = [];
   private readonly stack: Frame[] = [];
   private title?: string;
@@ -70,7 +89,14 @@ class Parser {
     }
 
     for (const frame of this.stack) {
-      const what = frame.kind === 'group' ? `group '${frame.id}'` : frame.kind === 'usecase' ? `usecase '${frame.useCase.name}'` : 'par block';
+      const what =
+        frame.kind === 'group'
+          ? `group '${frame.id}'`
+          : frame.kind === 'usecase'
+            ? `usecase '${frame.useCase.name}'`
+            : frame.kind === 'alt'
+              ? `alt '${frame.name}'`
+              : 'par block';
       this.error(`Missing } to close ${what}`, frame.loc);
     }
 
@@ -80,7 +106,7 @@ class Parser {
       title: this.title,
       nodes: [...this.nodes.values()],
       edges: this.edges,
-      useCases: this.useCases.map(({ useCase, steps }) => this.buildUseCase(useCase, steps)),
+      useCases: this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body)),
     };
 
     this.diagnostics.sort((a, b) => a.line - b.line || a.col - b.col);
@@ -99,9 +125,11 @@ class Parser {
     const loc = (t: Token): SourceLoc => ({ line, col: t.col, length: t.length });
 
     if (first.kind === 'rbrace') {
-      if (tokens.length > 1) this.error('Unexpected input after }', loc(tokens[1]));
       if (this.stack.length === 0) this.error('Unmatched }', loc(first));
-      else this.stack.pop();
+      else this.closeFrame();
+      // `} alt "Next" {` closes one branch and opens the next on the same line.
+      if (second?.kind === 'ident' && second.value === 'alt') this.parseAlt(tokens.slice(1), line);
+      else if (second) this.error('Unexpected input after }', loc(second));
       return index;
     }
 
@@ -126,6 +154,9 @@ class Parser {
         break;
       case 'par':
         this.parsePar(tokens, line);
+        break;
+      case 'alt':
+        this.parseAlt(tokens, line);
         break;
       default:
         this.parseNode(tokens, line);
@@ -212,16 +243,55 @@ class Parser {
     this.expectEnd(tokens, i + 1, line);
 
     const loc = this.locOf(nameToken, line);
-    const useCase: DiagramUseCase = { id: this.useCaseId(nameToken.value), name: nameToken.value, description, steps: [], loc };
-    const frame: Frame = { kind: 'usecase', useCase, steps: [], parCount: 0, loc };
-    this.useCases.push({ useCase, steps: frame.steps });
+    const useCase: DiagramUseCase = { id: this.useCaseId(nameToken.value), name: nameToken.value, description, steps: [], scenarios: [], loc };
+    const frame: Frame = { kind: 'usecase', useCase, body: { items: [] }, parCount: 0, loc };
+    this.useCases.push({ useCase, body: frame.body });
     this.stack.push(frame);
+  }
+
+  private parseAlt(tokens: Token[], line: number) {
+    const keyword = tokens[0];
+    const top = this.top();
+    if (top?.kind !== 'usecase' && top?.kind !== 'alt') {
+      this.error(top?.kind === 'par' ? 'alt blocks cannot be inside a par block' : 'alt is only allowed inside a usecase', this.locOf(keyword, line));
+      return;
+    }
+
+    const nameToken = tokens[1];
+    if (nameToken?.kind !== 'string' && nameToken?.kind !== 'ident') {
+      this.error('Expected a scenario name, e.g. alt "Not found" {', this.locOf(keyword, line));
+      return;
+    }
+    if (tokens[2]?.kind !== 'lbrace') {
+      this.error('Expected { after alt name', this.locOf(tokens[2] ?? nameToken, line));
+      return;
+    }
+    this.expectEnd(tokens, 3, line);
+
+    // Alt blocks that follow each other directly are alternatives to one another.
+    const owner = top.body;
+    let set = owner.openAlt;
+    if (!set) {
+      set = { kind: 'alt', branches: [] };
+      owner.items.push(set);
+    }
+    const loc = this.locOf(nameToken, line);
+    if (set.branches.some((b) => b.name === nameToken.value)) this.warning(`Duplicate alt name '${nameToken.value}'`, loc);
+    const body: Container = { items: [] };
+    set.branches.push({ name: nameToken.value, items: body.items });
+    owner.openAlt = undefined;
+    this.stack.push({ kind: 'alt', name: nameToken.value, body, owner, set, loc });
+  }
+
+  private closeFrame() {
+    const frame = this.stack.pop();
+    if (frame?.kind === 'alt') frame.owner.openAlt = frame.set;
   }
 
   private parsePar(tokens: Token[], line: number) {
     const keyword = tokens[0];
     const top = this.top();
-    if (top?.kind !== 'usecase') {
+    if (top?.kind !== 'usecase' && top?.kind !== 'alt') {
       this.error(top?.kind === 'par' ? 'par blocks cannot be nested' : 'par is only allowed inside a usecase', this.locOf(keyword, line));
       return;
     }
@@ -230,8 +300,10 @@ class Parser {
       return;
     }
     this.expectEnd(tokens, 2, line);
-    top.parCount++;
-    this.stack.push({ kind: 'par', group: top.parCount, loc: this.locOf(keyword, line) });
+    top.body.openAlt = undefined;
+    const useCase = this.currentUseCase()!;
+    useCase.parCount++;
+    this.stack.push({ kind: 'par', group: useCase.parCount, loc: this.locOf(keyword, line) });
   }
 
   private parseNode(tokens: Token[], line: number) {
@@ -310,9 +382,12 @@ class Parser {
     this.references.push({ id: from, loc: this.locOf(fromToken, line) }, { id: to, loc: this.locOf(toToken, line) });
 
     const top = this.top();
-    if (top?.kind === 'usecase' || top?.kind === 'par') {
-      const frame = this.currentUseCase()!;
-      frame.steps.push({ from, to, arrow, label, parallelGroup: top.kind === 'par' ? top.group : undefined, loc });
+    if (top?.kind === 'usecase' || top?.kind === 'alt' || top?.kind === 'par') {
+      const body = this.currentBody()!;
+      body.openAlt = undefined;
+      body.items.push({ kind: 'step', step: { from, to, arrow, label, parallelGroup: top.kind === 'par' ? top.group : undefined, loc } });
+    } else if (arrow === '-x') {
+      this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line));
     } else {
       const base = `${from}->${to}`;
       const count = this.edges.filter((e) => e.id === base || e.id.startsWith(`${base}#`)).length;
@@ -321,13 +396,51 @@ class Parser {
     return lastLine;
   }
 
-  private buildUseCase(useCase: DiagramUseCase, raw: RawStep[]): DiagramUseCase {
+  private buildUseCase(useCase: DiagramUseCase, body: Container): DiagramUseCase {
+    let paths = expand(body.items);
+    if (paths.length > MAX_SCENARIOS) {
+      this.warning(`Too many scenarios (${paths.length}); only the first ${MAX_SCENARIOS} are kept`, useCase.loc);
+      paths = paths.slice(0, MAX_SCENARIOS);
+    }
+
+    const taken = new Set<string>();
+    const scenarios: DiagramScenario[] = paths.map((path) => {
+      const base = path.names.length ? slug(path.names.join(' ')) || 'scenario' : 'main';
+      let id = base;
+      for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
+      taken.add(id);
+      const steps = this.buildSteps(useCase.id, id, path.steps);
+      const entry = steps[0];
+      const failedEntry = !!entry && (entry.failed || (entry.statusCode ?? 0) >= 400);
+      return {
+        id,
+        name: path.names.length ? path.names.join(' › ') : useCase.name,
+        outcome: failedEntry ? 'error' : 'success',
+        steps,
+      };
+    });
+
+    const steps = scenarios[0]?.steps ?? [];
+    const entry = steps[0];
+    return {
+      ...useCase,
+      entryServiceId: entry?.fromServiceId,
+      endpoint: entry?.httpMethod ? `${entry.httpMethod} ${entry.endpoint}` : undefined,
+      steps,
+      scenarios,
+    };
+  }
+
+  private buildSteps(useCaseId: string, scenarioId: string, raw: RawStep[]): FlowStep[] {
     const steps: FlowStep[] = [];
     const answered = new Set<FlowStep>();
+    const prefix = scenarioId === 'main' ? useCaseId : `${useCaseId}-${scenarioId}`;
 
     for (const step of raw) {
       if (step.arrow === '-->') {
-        const request = [...steps].reverse().find((s) => s.fromServiceId === step.to && s.toServiceId === step.from && !answered.has(s));
+        const request = [...steps]
+          .reverse()
+          .find((s) => s.fromServiceId === step.to && s.toServiceId === step.from && !answered.has(s) && !s.failed);
         if (!request) {
           this.warning(`Response has no matching request from '${step.to}' to '${step.from}'`, step.loc);
           continue;
@@ -349,7 +462,7 @@ class Parser {
       const target = this.nodes.get(step.to);
       const isAsync = step.arrow === '->>';
       steps.push({
-        id: `${useCase.id}-${steps.length + 1}`,
+        id: `${prefix}-${steps.length + 1}`,
         stepOrder: steps.length,
         stepName: label.name || `${step.from} → ${step.to}`,
         fromServiceId: step.from,
@@ -365,10 +478,11 @@ class Parser {
         parallelGroup: step.parallelGroup,
         isParallel: step.parallelGroup !== undefined,
         isConditional: false,
+        ...(step.arrow === '-x' ? { failed: true } : {}),
       });
     }
 
-    return { ...useCase, entryServiceId: steps[0]?.fromServiceId, steps };
+    return steps;
   }
 
   private createImplicitNodes() {
@@ -395,7 +509,7 @@ class Parser {
   }
 
   private useCaseId(name: string): string {
-    const base = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'usecase';
+    const base = slug(name) || 'usecase';
     const taken = new Set(this.useCases.map((u) => u.useCase.id));
     let id = base;
     for (let n = 2; taken.has(id); n++) id = `${base}-${n}`;
@@ -419,6 +533,14 @@ class Parser {
     return undefined;
   }
 
+  private currentBody(): Container | undefined {
+    for (let i = this.stack.length - 1; i >= 0; i--) {
+      const frame = this.stack[i];
+      if (frame.kind === 'usecase' || frame.kind === 'alt') return frame.body;
+    }
+    return undefined;
+  }
+
   private inUseCase(): boolean {
     return this.currentUseCase() !== undefined;
   }
@@ -436,8 +558,41 @@ class Parser {
   }
 
   private warning(message: string, loc: SourceLoc) {
+    // Steps shared by several scenarios are checked once per scenario; report each problem once.
+    if (this.diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col)) return;
     this.diagnostics.push({ severity: 'warning', message, ...loc });
   }
+}
+
+/**
+ * Flattens a use case body into one step list per scenario. Each alt set
+ * multiplies the paths so far by its branches; steps after a set are shared by
+ * every branch.
+ */
+function expand(items: Item[]): { names: string[]; steps: RawStep[] }[] {
+  let paths: { names: string[]; steps: RawStep[] }[] = [{ names: [], steps: [] }];
+  for (const item of items) {
+    if (item.kind === 'step') {
+      for (const path of paths) path.steps.push(item.step);
+      continue;
+    }
+    const next: typeof paths = [];
+    for (const path of paths) {
+      for (const branch of item.branches) {
+        for (const sub of expand(branch.items)) {
+          next.push({ names: [...path.names, branch.name, ...sub.names], steps: [...path.steps, ...sub.steps] });
+        }
+      }
+      // Stop multiplying long before the result gets out of hand.
+      if (next.length > MAX_SCENARIOS * 4) break;
+    }
+    paths = next;
+  }
+  return paths;
+}
+
+function slug(text: string): string {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
 }
 
 type PayloadFormat = FlowStep['requestFormat'];

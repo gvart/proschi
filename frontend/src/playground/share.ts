@@ -2,9 +2,11 @@ import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from
 
 const PREFIX = '#code=';
 
-/** Which use case, and which 1-based step of it, a link should open in playback. */
+/** Which use case, scenario and 1-based step a link should open in playback. */
 export interface PlaybackTarget {
   useCase: string;
+  /** Scenario id; left out for use cases without alt branches. */
+  scenario?: string;
   step: number;
 }
 
@@ -21,7 +23,8 @@ export interface ShareLink {
 export function encodeShareHash(source: string, playback?: PlaybackTarget): string {
   const code = PREFIX + compressToEncodedURIComponent(source);
   if (!playback) return code;
-  return `${code}&uc=${encodeURIComponent(playback.useCase)}&step=${playback.step}`;
+  const scenario = playback.scenario ? `&alt=${encodeURIComponent(playback.scenario)}` : '';
+  return `${code}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
 }
 
 /** Reads a `#code=` hash; returns null if there is none or it is corrupt. */
@@ -40,7 +43,11 @@ export function decodeShareLink(hash: string): ShareLink | null {
   const useCase = params.get('uc');
   const step = Number(params.get('step') ?? '1');
   if (!useCase) return { source };
-  return { source, playback: { useCase, step: Number.isInteger(step) && step > 0 ? step : 1 } };
+  const scenario = params.get('alt');
+  return {
+    source,
+    playback: { useCase, ...(scenario ? { scenario } : {}), step: Number.isInteger(step) && step > 0 ? step : 1 },
+  };
 }
 
 export function decodeShareHash(hash: string): string | null {

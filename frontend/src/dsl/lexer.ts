@@ -5,7 +5,7 @@ export type TokenKind =
   | 'string'  // "API Gateway"
   | 'tech'    // [AWS Lambda]
   | 'team'    // @Platform
-  | 'arrow'   // -> ->> -->
+  | 'arrow'   // -> ->> --> -x
   | 'label'   // everything after ':' on an edge/step line
   | 'number'  // 120, -40
   | 'comma'
@@ -80,9 +80,12 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
 
     if (ch === '-') {
       const arrow = ['->>', '-->', '->'].find((a) => text.startsWith(a, i));
-      if (arrow) {
-        tokens.push({ kind: 'arrow', value: arrow, col: start + 1, length: arrow.length });
-        i += arrow.length;
+      // `-x` (a failed call) must not swallow the start of an id such as `-xray`.
+      const failed = text.startsWith('-x', i) && !IDENT_PART.test(text[i + 2] ?? '');
+      if (arrow || failed) {
+        const value = arrow ?? '-x';
+        tokens.push({ kind: 'arrow', value, col: start + 1, length: value.length });
+        i += value.length;
         continue;
       }
       if (DIGIT.test(text[i + 1] ?? '')) {

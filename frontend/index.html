@@ -11,7 +11,7 @@
     <title>Proschi: architecture diagrams as text, with request flows you can play</title>
     <meta
       name="description"
-      content="Proschi is a small text language for microservice architectures. Describe services, databases and queues, write use cases as step-by-step request flows, and play them back on the diagram. Runs in the browser, free and open source."
+      content="Proschi is a small text language for microservice architectures. Describe services, databases and queues once, write use cases as step-by-step request flows with success and error scenarios, and play them back on the diagram. Runs in the browser, free and open source."
     />
     <meta name="color-scheme" content="light" />
     <meta name="theme-color" content="#f4f1ea" />
@@ -67,9 +67,10 @@
           <h1 id="hero-title">Architecture diagrams as text, with request flows you can&nbsp;play.</h1>
           <div class="hero__lede">
             <p>
-              Write down your services, databases and queues the way you would in a design doc. Proschi draws the
-              diagram as you type. Then describe a use case step by step, with real payloads and status codes, and
-              press Play to watch the request move through the system.
+              Write down your services, databases and queues once, the way you would in a design doc. Proschi draws
+              the diagram as you type. Then describe each use case step by step, with real payloads and status codes:
+              the happy path and every way it can fail. Press Play to watch the request move through the system,
+              one scenario at a time.
             </p>
             <div class="actions">
               <a class="btn" href="./app/">Open the editor</a>
@@ -100,10 +101,18 @@ api -&gt; db     : SQL
 api -&gt; events : publish
 
 usecase "Place order" {
-  web -&gt; api     : POST /orders json {"sku": "A1"}
-  api -&gt; db      : INSERT order
-  api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
-  api --&gt; web    : 201 {"orderId": "o-1"}
+  web -&gt; api : POST /orders json {"sku": "A1"}
+
+  alt "Placed" {
+    api -&gt; db      : INSERT order
+    api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
+    api --&gt; web    : 201 {"orderId": "o-1"}
+  } alt "Out of stock" {
+    api --&gt; web : 409 {"error": "out_of_stock"}
+  } alt "DB down" {
+    api -x db   : INSERT order
+    api --&gt; web : 503 {"error": "retry_later"}
+  }
 }</code></pre>
               </div>
 
@@ -123,7 +132,8 @@ usecase "Place order" {
                     <desc id="diagram-desc">
                       A Web Shop actor calls the Order API over HTTPS. The Order API and the Orders DB (PostgreSQL)
                       sit inside an AWS VPC group. The Order API writes to the Orders DB over SQL and publishes to the
-                      OrderEvents Kafka topic.
+                      OrderEvents Kafka topic. The use case “Place order” has three scenarios: the order is placed, the
+                      item is out of stock (409), or the database does not answer (503).
                     </desc>
                     <defs>
                       <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
@@ -131,6 +141,9 @@ usecase "Place order" {
                       </marker>
                       <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
                         <path d="M0 1 L9 5 L0 9 z" class="arrowhead arrowhead--hot" />
+                      </marker>
+                      <marker id="arrow-error" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead arrowhead--error" />
                       </marker>
                     </defs>
 
@@ -180,29 +193,35 @@ usecase "Place order" {
                       <text x="46" y="28">async</text>
                       <line x1="0" y1="48" x2="36" y2="48" class="d-key d-key--response" marker-end="url(#arrow)" />
                       <text x="46" y="52">response</text>
+                      <line x1="0" y1="72" x2="36" y2="72" class="d-key d-key--error" marker-end="url(#arrow-error)" />
+                      <text x="46" y="76">error</text>
                     </g>
                     <g id="d-titleblock" class="d-titleblock" transform="translate(16 256)" aria-hidden="true">
                       <text x="0" y="0" class="d-tb-head">Checkout</text>
                       <text x="0" y="20">4 nodes · 3 edges</text>
                       <text x="0" y="38">1 use case</text>
+                      <text x="0" y="56">3 scenarios</text>
                     </g>
 
                     <circle id="packet" class="d-packet" r="6" cx="-20" cy="-20" />
+                    <path id="fail-mark" class="d-fail" d="M-7 -7 L7 7 M-7 7 L7 -7" transform="translate(-20 -20)" />
                   </svg>
                 </div>
                 <div class="player" id="player" hidden>
+                  <div class="player__scenarios" id="player-scenarios" role="group" aria-label="Scenarios of Place order"></div>
                   <div class="player__controls">
                     <button type="button" class="btn btn--small" id="player-toggle" aria-pressed="false">Play</button>
                     <button type="button" class="btn btn--small btn--ghost" id="player-next">Next step</button>
                   </div>
-                  <p class="player__status" id="player-status" aria-live="polite">Use case “Place order”, 4 steps.</p>
+                  <p class="player__status" id="player-status" aria-live="polite">Use case “Place order”, 3 scenarios.</p>
                   <pre class="player__payload code" id="player-payload" aria-hidden="true"></pre>
                 </div>
               </div>
             </div>
             <figcaption id="specimen-caption">
               <span class="figno">Fig. 1</span> The source on the left is the whole document. The editor lays out the
-              diagram automatically; the use case “Place order” plays back over it step by step.
+              diagram automatically. The use case “Place order” splits into three scenarios with <code>alt</code>, and
+              each one plays back over the same diagram step by step. Error paths are drawn in red.
             </figcaption>
           </figure>
         </div>
@@ -263,11 +282,45 @@ orders  -&gt; ordersDb : SQL</code></pre>
 
             <li class="step">
               <div class="step__text">
-                <h3><span class="step__no">1.3</span> Press Play</h3>
+                <h3><span class="step__no">1.3</span> Branch into scenarios</h3>
+                <p>
+                  One endpoint rarely has one outcome. Inside a use case, <code>alt "Name" { }</code> blocks that follow
+                  each other are alternatives: each one becomes its own scenario, and the steps before them are written
+                  once and shared. Steps after the blocks are shared again by every branch.
+                </p>
+                <p>
+                  <code>-x</code> is a call that never gets an answer: a timeout or a refused connection. Scenarios whose
+                  entry request ends in a 4xx or 5xx, or fails, are marked as error paths.
+                </p>
+              </div>
+              <pre class="code" data-proschi tabindex="0"><code>usecase "Get order" {
+  gateway -&gt; orders : GET /api/orders/42
+
+  alt "Found" {
+    orders -&gt; ordersDb  : SELECT order 42
+    orders --&gt; gateway : 200 {"id": 42, "status": "paid"}
+  } alt "Not found" {
+    orders -&gt; ordersDb  : SELECT order 42
+    orders --&gt; gateway : 404 {"error": "not_found"}
+  } alt "DB timeout" {
+    orders -x ordersDb  : SELECT order 42
+    orders --&gt; gateway : 504
+  }
+}</code></pre>
+            </li>
+
+            <li class="step">
+              <div class="step__text">
+                <h3><span class="step__no">1.4</span> Press Play</h3>
                 <p>
                   Playback animates the use case over the architecture, one step at a time, and shows the request and
-                  response payload of each step. It is a quick way to check that a flow actually touches the services
-                  you think it does, or to walk a new team member through one.
+                  response payload of each step. Tabs above the diagram switch between scenarios; services a scenario
+                  never touches fade out, and error responses and failed calls turn red.
+                </p>
+                <p>
+                  The use case picker groups use cases by the endpoint they start with, so everything about
+                  <code>POST /api/orders</code> sits together. It is a quick way to check that a flow actually touches
+                  the services you think it does, or to walk a new team member through the edge cases.
                 </p>
               </div>
               <dl class="facts">
@@ -275,19 +328,22 @@ orders  -&gt; ordersDb : SQL</code></pre>
                 <div><dt>Step 2</dt><dd><code>orders → ordersDb</code> INSERT order <span class="tag">parallel</span></dd></div>
                 <div><dt>Step 3</dt><dd><code>orders ⇢ events</code> OrderCreated <span class="tag">async</span></dd></div>
                 <div><dt>Reply</dt><dd><code>orders → gateway</code> 201 {"status": "pending"}</dd></div>
+                <div><dt>Alt</dt><dd>“Not found” <code>orders → gateway</code> 404 <span class="tag tag--error">error</span></dd></div>
+                <div><dt>Alt</dt><dd>“DB timeout” <code>orders ✕ ordersDb</code> no answer <span class="tag tag--error">failed</span></dd></div>
               </dl>
             </li>
 
             <li class="step">
               <div class="step__text">
-                <h3><span class="step__no">1.4</span> Share a link</h3>
+                <h3><span class="step__no">1.5</span> Share a link</h3>
                 <p>
                   The whole document is compressed into the URL, after <code>#code=</code>. A link can also point at a
-                  specific step of a use case, so it opens straight into playback there. The fragment never reaches a
+                  specific step of a use case and scenario, so it opens straight into playback there: handy for a bug
+                  report that says “this is the error path I mean”. The fragment never reaches a
                   server; there is no server.
                 </p>
               </div>
-              <pre class="code code--url" tabindex="0"><code>https://gvart.github.io/proschi/app/#code=<span class="tok-dim" id="share-sample">C4S2BsFMAICIGEAWkDGBrA9gV2LAUHgO…</span>&amp;uc=place-order&amp;step=2</code></pre>
+              <pre class="code code--url" tabindex="0"><code>https://gvart.github.io/proschi/app/#code=<span class="tok-dim" id="share-sample">C4S2BsFMAICIGEAWkDGBrA9gV2LAUHgO…</span>&amp;uc=place-order&amp;alt=out-of-stock&amp;step=2</code></pre>
             </li>
           </ol>
         </div>
@@ -309,6 +365,14 @@ orders  -&gt; ordersDb : SQL</code></pre>
                   The text is the source of truth. Dragging a node on the canvas writes <code>pos x,y</code> back into
                   it, double-click renames, dragging between two nodes adds <code>a -&gt; b</code>. Auto-layout (ELK)
                   places everything without a position.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Scenarios</th>
+                <td>
+                  The architecture is written once; any number of use cases play over it. <code>alt</code> branches give
+                  one use case its success and error paths without copying the shared steps, and the use case picker
+                  groups use cases by endpoint.
                 </td>
               </tr>
               <tr>
@@ -355,7 +419,7 @@ orders  -&gt; ordersDb : SQL</code></pre>
             <li>
               <a class="example" data-example="ecommerce" href="./app/">
                 <span class="example__name">E-commerce platform</span>
-                <span class="example__desc">Services in a VPC, multi-line payloads and parallel steps.</span>
+                <span class="example__desc">Success and error scenarios per endpoint, multi-line payloads and parallel steps.</span>
                 <span class="example__go" aria-hidden="true">Open →</span>
               </a>
             </li>
@@ -369,7 +433,7 @@ orders  -&gt; ordersDb : SQL</code></pre>
             <li>
               <a class="example" data-example="login" href="./app/">
                 <span class="example__name">Login with sessions</span>
-                <span class="example__desc">Two use cases for one architecture, plus a sticky note.</span>
+                <span class="example__desc">Log in with success, wrong-password and outage scenarios, plus log out.</span>
                 <span class="example__go" aria-hidden="true">Open →</span>
               </a>
             </li>

@@ -48,7 +48,7 @@ export const tallLayout: DiagramLayout = {
     'node-api': at(24, 148),
     'node-db': at(214, 144),
     'node-events': at(24, 340),
-    'd-legend': at(214, 352),
+    'd-legend': at(214, 340),
     'd-titleblock': at(214, 32),
   },
 };

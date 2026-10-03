@@ -31,7 +31,7 @@ import {
   Pencil,
   Network,
 } from 'lucide-react';
-import { ecommerceExample, parse, type Diagnostic } from '../../dsl';
+import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase } from '../../dsl';
 import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
 import { loadJson, saveJson } from '../../services/storage';
 import {
@@ -45,6 +45,7 @@ import {
   updateCurrent,
   type DocumentState,
 } from '../../playground/documents';
+import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
@@ -93,6 +94,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
   const [parsedSource, setParsedSource] = useState(source);
   const [selectedUseCaseId, setSelectedUseCaseId] = useState<string | undefined>(linkPlayback?.useCase);
+  const [selectedScenarioId, setSelectedScenarioId] = useState<string | undefined>(linkPlayback?.scenario);
   const [playing, setPlaying] = useState(!!linkPlayback);
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
@@ -115,8 +117,17 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const { diagram, diagnostics } = useMemo(() => parse(parsedSource), [parsedSource]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
   const useCase = diagram.useCases.find((u) => u.id === selectedUseCaseId) ?? diagram.useCases[0];
-  const playback: PlaybackTarget | undefined = playing && useCase ? { useCase: useCase.id, step: playStep + 1 } : undefined;
-  const playbackKey = playback ? `${playback.useCase}#${playback.step}` : '';
+  const scenario = useCase?.scenarios.find((s) => s.id === selectedScenarioId) ?? useCase?.scenarios[0];
+  const hasScenarios = (useCase?.scenarios.length ?? 0) > 1;
+  const playback: PlaybackTarget | undefined =
+    playing && useCase ? { useCase: useCase.id, ...(hasScenarios && scenario ? { scenario: scenario.id } : {}), step: playStep + 1 } : undefined;
+  const playbackKey = playback ? `${playback.useCase}/${playback.scenario ?? ''}#${playback.step}` : '';
+  const useCaseGroups = useMemo(() => groupByEndpoint(diagram.useCases), [diagram]);
+  // The player restarts when this changes, so each scenario starts at its first step.
+  const playedUseCase = useMemo(
+    () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps } : undefined),
+    [useCase, scenario],
+  );
 
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
   useEffect(() => {
@@ -165,6 +176,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     setDocState(update);
     stopPlaying();
     setSelectedUseCaseId(undefined);
+    setSelectedScenarioId(undefined);
   };
 
   const deleteDoc = (id: string, title: string) => {
@@ -206,7 +218,13 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     setMobilePane('diagram');
   };
 
-  const canPlay = !!useCase && useCase.steps.length > 0;
+  const pickScenario = (id: string) => {
+    setSelectedScenarioId(id);
+    setInitialStep(undefined);
+    if (!playing) startPlaying();
+  };
+
+  const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
@@ -325,17 +343,24 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             value={useCase?.id ?? ''}
             onChange={(e) => {
               setSelectedUseCaseId(e.target.value);
+              setSelectedScenarioId(undefined);
               setInitialStep(undefined);
             }}
             disabled={diagram.useCases.length === 0}
-            className="flex-1 min-w-0 sm:flex-none sm:max-w-[12rem] text-sm border border-gray-300 rounded-md px-2 py-2 sm:py-1.5 bg-white disabled:text-gray-400"
+            className="flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] text-sm border border-gray-300 rounded-md px-2 py-2 sm:py-1.5 bg-white disabled:text-gray-400"
           >
             {diagram.useCases.length === 0 && <option value="">No use cases</option>}
-            {diagram.useCases.map((u) => (
-              <option key={u.id} value={u.id}>
-                {u.name}
-              </option>
-            ))}
+            {useCaseGroups.map((group) =>
+              group.label ? (
+                <optgroup key={group.label} label={group.label}>
+                  {group.useCases.map((u) => (
+                    <UseCaseOption key={u.id} useCase={u} />
+                  ))}
+                </optgroup>
+              ) : (
+                group.useCases.map((u) => <UseCaseOption key={u.id} useCase={u} />)
+              ),
+            )}
           </select>
 
           {playing ? (
@@ -400,42 +425,47 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={(d) => editorRef.current?.goTo(d.line, d.col)} />
         </section>
 
-        <section className={`${mobilePane === 'diagram' ? 'block' : 'hidden'} md:block flex-1 min-h-0 min-w-0 relative`}>
-          {playing && useCase ? (
-            <UseCasePlayer
-              useCase={useCase}
-              nodes={nodes}
-              edges={edges}
-              onBack={stopPlaying}
-              initialStep={initialStep}
-              onStepChange={setPlayStep}
-              showHeader={false}
-            />
-          ) : (
-            <ReactFlowProvider>
-              <DiagramView
+        <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
+          {hasScenarios && useCase && scenario && (
+            <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
+          )}
+          <div className="flex-1 min-h-0 relative">
+            {playing && playedUseCase ? (
+              <UseCasePlayer
+                useCase={playedUseCase}
                 nodes={nodes}
                 edges={edges}
-                onNodesChange={setNodes}
-                onEdgesChange={setEdges}
-                title={diagram.title}
-                hasPinnedNodes={diagram.nodes.some((n) => n.position)}
-                onMoveNodes={(moved) => editSource((src) => moved.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src))}
-                onConnectNodes={(from, to) => editSource((src) => addConnection(src, from, to))}
-                onRenameNode={(id, name) => editSource((src) => renameNode(src, id, name))}
-                onResetLayout={() => editSource(clearPositions)}
-                onDelete={deleteFromCanvas}
-                fitKey={mobilePane}
+                onBack={stopPlaying}
+                initialStep={initialStep}
+                onStepChange={setPlayStep}
+                showHeader={false}
               />
-            </ReactFlowProvider>
-          )}
-          {nodes.length === 0 && !playing && (
-            <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-              <p className="text-sm text-gray-400">
-                Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>
-              </p>
-            </div>
-          )}
+            ) : (
+              <ReactFlowProvider>
+                <DiagramView
+                  nodes={nodes}
+                  edges={edges}
+                  onNodesChange={setNodes}
+                  onEdgesChange={setEdges}
+                  title={diagram.title}
+                  hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                  onMoveNodes={(moved) => editSource((src) => moved.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src))}
+                  onConnectNodes={(from, to) => editSource((src) => addConnection(src, from, to))}
+                  onRenameNode={(id, name) => editSource((src) => renameNode(src, id, name))}
+                  onResetLayout={() => editSource(clearPositions)}
+                  onDelete={deleteFromCanvas}
+                  fitKey={mobilePane}
+                />
+              </ReactFlowProvider>
+            )}
+            {nodes.length === 0 && !playing && (
+              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                <p className="text-sm text-gray-400">
+                  Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>
+                </p>
+              </div>
+            )}
+          </div>
         </section>
       </div>
 
@@ -448,6 +478,68 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           }}
         />
       )}
+    </div>
+  );
+}
+
+function UseCaseOption({ useCase }: { useCase: DiagramUseCase }) {
+  const count = useCase.scenarios.length;
+  return (
+    <option value={useCase.id}>
+      {count > 1 ? `${useCase.name} · ${count} scenarios` : useCase.name}
+    </option>
+  );
+}
+
+interface ScenarioBarProps {
+  useCase: DiagramUseCase;
+  /** The scenario being played, if any. */
+  current?: string;
+  onPick: (id: string) => void;
+}
+
+/** One tab per scenario of the selected use case; picking one plays it. */
+function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
+  const activeRef = useRef<HTMLButtonElement>(null);
+  // On narrow screens the bar scrolls sideways; keep the playing scenario in view.
+  useEffect(() => {
+    activeRef.current?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [current]);
+
+  return (
+    <div
+      role="tablist"
+      aria-label={`Scenarios of ${useCase.name}`}
+      className="flex items-center gap-1 px-2 py-1.5 bg-white border-b border-gray-200 overflow-x-auto"
+    >
+      <span className="hidden sm:inline px-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 flex-shrink-0">Scenarios</span>
+      {useCase.scenarios.map((s: DiagramScenario) => {
+        const active = s.id === current;
+        const error = s.outcome === 'error';
+        const status = s.steps[0]?.failed ? 'failed' : s.steps[0]?.statusCode;
+        return (
+          <button
+            key={s.id}
+            ref={active ? activeRef : undefined}
+            role="tab"
+            aria-selected={active}
+            onClick={() => onPick(s.id)}
+            title={`Play “${s.name}”`}
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 sm:py-1 text-sm whitespace-nowrap ${
+              active
+                ? error
+                  ? 'border-red-600 bg-red-50 text-red-800'
+                  : 'border-blue-600 bg-blue-50 text-blue-800'
+                : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+            }`}
+          >
+            <span aria-hidden="true" className={`h-2 w-2 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`} />
+            {s.name}
+            {status !== undefined && <span className={`text-xs tabular-nums ${error ? 'text-red-600' : 'text-gray-400'}`}>{status}</span>}
+            <span className="sr-only">{error ? '(error path)' : '(success path)'}</span>
+          </button>
+        );
+      })}
     </div>
   );
 }
