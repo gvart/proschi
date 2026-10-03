@@ -51,7 +51,7 @@ body → `requestFormat`/`requestBody`).
 - [x] **Phase 3 – Sharing.** `lz-string` `#code=` links, named docs in
   localStorage, PNG/SVG export (`html-to-image`), `.proschi` import/export,
   examples gallery.
-- [ ] **Phase 4 – Two-way editing (optional).** Canvas edits write back to the
+- [x] **Phase 4 – Two-way editing (optional).** Canvas edits write back to the
   text via a formatter; deep links to a use case / step.
 
 ## Decisions

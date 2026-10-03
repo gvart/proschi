@@ -36,7 +36,7 @@ usecase "Create order" {
 |---|---|---|
 | Title | `title "Text"` | |
 | Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y]` | Parts after the id may come in any order; the first string is the name, the second the description. |
-| Group | `group id ["Name"] [Style] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
+| Group | `group id ["Name"] [Style] [pos x,y] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
 | Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
 | Use case | `usecase "Name" ["Description"] { steps }` | Top level only. |
 | Parallel steps | `par { steps }` | Inside a use case; steps in one block run in parallel. |
@@ -70,3 +70,20 @@ How the protocol is inferred:
 | An HTTP method and a `GraphQL`, `gRPC` or `SOAP API` target | `GRAPHQL`, `GRPC` or `SOAP` |
 | Any other HTTP method | `REST` |
 | Anything else | `OTHER` |
+
+## Editing on the canvas
+
+The text is the source of truth. Edits on the diagram are written back into it:
+
+| Canvas action | Text change |
+|---|---|
+| Drag a node or group | Adds or updates `pos x,y` on its declaration. Positions of group members are relative to the group. |
+| Double-click a node | Sets its display name: `id "New name"`. |
+| Drag from one node's dot to another's | Adds a connection, `a -> b`. |
+| **Auto-layout** button | Removes every `pos x,y`. |
+
+A node that was only referenced, never declared, gets a declaration line above the first use case.
+
+## Links
+
+The address bar always holds the whole document: `#code=…`. While a use case is playing, the link also names the use case and the step, e.g. `#code=…&uc=create-order&step=3`, so a shared link opens playback at that step.

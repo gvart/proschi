@@ -41,7 +41,8 @@ import {
   updateCurrent,
   type DocumentState,
 } from '../../playground/documents';
-import { decodeShareHash, encodeShareHash, shareUrl } from '../../playground/share';
+import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { addConnection, clearPositions, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
@@ -65,7 +66,7 @@ function loadInitialState(): DocumentState {
   return initialState({
     stored: loadJson<DocumentState | null>(DOCS_KEY, null),
     legacySource: loadJson<string | null>(LEGACY_SOURCE_KEY, null),
-    sharedSource: decodeShareHash(window.location.hash),
+    sharedSource: decodeShareLink(window.location.hash)?.source ?? null,
     fallbackSource: ecommerceExample,
   });
 }
@@ -78,21 +79,29 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [docState, setDocState] = useState(loadInitialState);
   const source = currentDoc(docState).source;
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  /** Applies a canvas edit to the current document's text. */
+  const editSource = useCallback(
+    (edit: (source: string) => string) => setDocState((s) => updateCurrent(s, edit(currentDoc(s).source))),
+    [],
+  );
 
+  // A link may point at a use case step; open straight into playback there.
+  const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
   const [parsedSource, setParsedSource] = useState(source);
-  const [selectedUseCaseId, setSelectedUseCaseId] = useState<string>();
-  const [playing, setPlaying] = useState(false);
+  const [selectedUseCaseId, setSelectedUseCaseId] = useState<string | undefined>(linkPlayback?.useCase);
+  const [playing, setPlaying] = useState(!!linkPlayback);
+  const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
+  const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Re-parse, save, and refresh the shareable URL shortly after typing stops.
+  // Re-parse and save shortly after typing stops.
   useEffect(() => {
     const timer = setTimeout(() => {
       setParsedSource(source);
       saveJson(DOCS_KEY, docState);
-      window.history.replaceState(null, '', encodeShareHash(source));
     }, PARSE_DELAY_MS);
     return () => clearTimeout(timer);
   }, [source, docState]);
@@ -100,6 +109,18 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const { diagram, diagnostics } = useMemo(() => parse(parsedSource), [parsedSource]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
   const useCase = diagram.useCases.find((u) => u.id === selectedUseCaseId) ?? diagram.useCases[0];
+  const playback: PlaybackTarget | undefined = playing && useCase ? { useCase: useCase.id, step: playStep + 1 } : undefined;
+  const playbackKey = playback ? `${playback.useCase}#${playback.step}` : '';
+
+  // Keep the address bar a shareable link to the diagram, and to the current step while playing.
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      window.history.replaceState(null, '', encodeShareHash(source, playback));
+    }, PARSE_DELAY_MS);
+    return () => clearTimeout(timer);
+    // playbackKey captures playback by value.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [source, playbackKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const edges = useMemo(() => toFlowEdges(diagram), [diagram]);
@@ -114,9 +135,14 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     };
   }, [diagram]);
 
+  const stopPlaying = () => {
+    setPlaying(false);
+    setInitialStep(undefined);
+  };
+
   const openDoc = (update: (s: DocumentState) => DocumentState) => {
     setDocState(update);
-    setPlaying(false);
+    stopPlaying();
     setSelectedUseCaseId(undefined);
   };
 
@@ -131,7 +157,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   };
 
   const copyShareLink = async () => {
-    const url = shareUrl(source, window.location);
+    const url = shareUrl(source, window.location, playback);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -242,7 +268,10 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           <select
             aria-label="Use case"
             value={useCase?.id ?? ''}
-            onChange={(e) => setSelectedUseCaseId(e.target.value)}
+            onChange={(e) => {
+              setSelectedUseCaseId(e.target.value);
+              setInitialStep(undefined);
+            }}
             disabled={diagram.useCases.length === 0}
             className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white disabled:text-gray-400 max-w-[12rem]"
           >
@@ -256,7 +285,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
           {playing ? (
             <button
-              onClick={() => setPlaying(false)}
+              onClick={stopPlaying}
               className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
               <LayoutGrid size={16} />
@@ -276,7 +305,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
           <button
             onClick={copyShareLink}
-            title="Copy a link that contains this diagram"
+            title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
           >
             {copied ? <Check size={16} className="text-green-600" /> : <Link size={16} />}
@@ -299,10 +328,27 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
         <section className="flex-1 min-h-0 min-w-0 relative">
           {playing && useCase ? (
-            <UseCasePlayer useCase={useCase} nodes={nodes} edges={edges} onBack={() => setPlaying(false)} />
+            <UseCasePlayer
+              useCase={useCase}
+              nodes={nodes}
+              edges={edges}
+              onBack={stopPlaying}
+              initialStep={initialStep}
+              onStepChange={setPlayStep}
+            />
           ) : (
             <ReactFlowProvider>
-              <DiagramView nodes={nodes} edges={edges} onNodesChange={setNodes} title={diagram.title} />
+              <DiagramView
+                nodes={nodes}
+                edges={edges}
+                onNodesChange={setNodes}
+                title={diagram.title}
+                hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                onMoveNodes={(moved) => editSource((src) => moved.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src))}
+                onConnectNodes={(from, to) => editSource((src) => addConnection(src, from, to))}
+                onRenameNode={(id, name) => editSource((src) => renameNode(src, id, name))}
+                onResetLayout={() => editSource(clearPositions)}
+              />
             </ReactFlowProvider>
           )}
           {nodes.length === 0 && !playing && (
@@ -333,10 +379,25 @@ interface DiagramViewProps {
   edges: Edge[];
   onNodesChange: (update: (nodes: Node[]) => Node[]) => void;
   title?: string;
+  hasPinnedNodes: boolean;
+  onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
+  onConnectNodes: (from: string, to: string) => void;
+  onRenameNode: (id: string, name: string) => void;
+  onResetLayout: () => void;
 }
 
-/** Read-only rendering of the parsed diagram; nodes can be dragged but edits stay in the text. */
-function DiagramView({ nodes, edges, onNodesChange, title }: DiagramViewProps) {
+/** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
+function DiagramView({
+  nodes,
+  edges,
+  onNodesChange,
+  title,
+  hasPinnedNodes,
+  onMoveNodes,
+  onConnectNodes,
+  onRenameNode,
+  onResetLayout,
+}: DiagramViewProps) {
   const { fitView, getNodes } = useReactFlow();
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
@@ -376,7 +437,13 @@ function DiagramView({ nodes, edges, onNodesChange, title }: DiagramViewProps) {
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
-        nodesConnectable={false}
+        onNodeDragStop={(_event, _node, dragged) => onMoveNodes(dragged.map((n) => ({ id: n.id, position: n.position })))}
+        onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
+        onNodeDoubleClick={(_event, node) => {
+          const name = window.prompt('Display name', node.data?.name ?? node.id);
+          if (name !== null) onRenameNode(node.id, name);
+        }}
+        zoomOnDoubleClick={false}
         fitView
         minZoom={0.1}
         proOptions={{ hideAttribution: true }}
@@ -384,7 +451,22 @@ function DiagramView({ nodes, edges, onNodesChange, title }: DiagramViewProps) {
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls showInteractive={false} />
         {nodes.length > 0 && (
-          <Panel position="top-right">
+          <Panel position="bottom-right" className="hidden md:block text-xs text-gray-400 bg-white/80 rounded px-2 py-1">
+            Drag to pin · double-click to rename · drag between dots to connect
+          </Panel>
+        )}
+        {nodes.length > 0 && (
+          <Panel position="top-right" className="flex items-center gap-1">
+            {hasPinnedNodes && (
+              <button
+                onClick={onResetLayout}
+                title="Remove every pos x,y and lay the diagram out automatically"
+                className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+              >
+                <LayoutGrid size={16} />
+                Auto-layout
+              </button>
+            )}
             <Menu
               label="Export image"
               align="right"

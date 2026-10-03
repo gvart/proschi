@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample } from '../dsl';
-import { decodeShareHash, encodeShareHash, shareUrl } from './share';
+import { decodeShareHash, decodeShareLink, encodeShareHash, shareUrl } from './share';
 
 describe('share links', () => {
   it('round-trips a document through the hash', () => {
@@ -25,5 +25,29 @@ describe('share links', () => {
   it('builds a full URL that keeps the page path', () => {
     const url = shareUrl('a -> b', { origin: 'https://gvart.github.io', pathname: '/proschi/', search: '' });
     expect(url.startsWith('https://gvart.github.io/proschi/#code=')).toBe(true);
+  });
+});
+
+describe('playback deep links', () => {
+  it('round-trips a use case and step', () => {
+    const hash = encodeShareHash('a -> b', { useCase: 'log-in', step: 3 });
+    expect(hash).toMatch(/&uc=log-in&step=3$/);
+    expect(decodeShareLink(hash)).toEqual({ source: 'a -> b', playback: { useCase: 'log-in', step: 3 } });
+    expect(decodeShareHash(hash)).toBe('a -> b');
+  });
+
+  it('defaults a missing or bad step to 1', () => {
+    const code = encodeShareHash('x');
+    expect(decodeShareLink(`${code}&uc=u`)?.playback).toEqual({ useCase: 'u', step: 1 });
+    expect(decodeShareLink(`${code}&uc=u&step=-2`)?.playback).toEqual({ useCase: 'u', step: 1 });
+    expect(decodeShareLink(`${code}&uc=u&step=abc`)?.playback).toEqual({ useCase: 'u', step: 1 });
+  });
+
+  it('has no playback without a use case', () => {
+    expect(decodeShareLink(encodeShareHash('x'))).toEqual({ source: 'x' });
+  });
+
+  it('includes playback in full URLs', () => {
+    expect(shareUrl('x', { origin: 'https://h', pathname: '/p/', search: '' }, { useCase: 'u', step: 2 })).toMatch(/^https:\/\/h\/p\/#code=.*&uc=u&step=2$/);
   });
 });

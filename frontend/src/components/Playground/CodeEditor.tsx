@@ -65,9 +65,18 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
   // Replace the document when the value changes from outside (e.g. loading an example).
   useEffect(() => {
     const view = viewRef.current;
-    if (view && view.state.doc.toString() !== value) {
-      view.dispatch({ changes: { from: 0, to: view.state.doc.length, insert: value } });
+    const current = view?.state.doc.toString();
+    if (!view || current === undefined || current === value) return;
+    // Replace only the changed middle so the cursor and undo history survive canvas edits.
+    let start = 0;
+    while (start < current.length && start < value.length && current[start] === value[start]) start++;
+    let endCurrent = current.length;
+    let endValue = value.length;
+    while (endCurrent > start && endValue > start && current[endCurrent - 1] === value[endValue - 1]) {
+      endCurrent--;
+      endValue--;
     }
+    view.dispatch({ changes: { from: start, to: endCurrent, insert: value.slice(start, endValue) } });
   }, [value]);
 
   useEffect(() => {
