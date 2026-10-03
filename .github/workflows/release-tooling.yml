@@ -4,6 +4,8 @@ name: Release tooling
 # the `proschi` npm package and attaches the VS Code extension to a GitHub
 # release for that tag. Creating the release on github.com with a new tag works
 # too (it pushes the tag); the workflow then adds the extension to it.
+# Running the workflow by hand on `main` releases the version in
+# tooling/package.json and creates the tag and release itself.
 #
 # Authentication: npm Trusted Publishing (GitHub OIDC). On npmjs.com the
 # package's trusted publisher names this repository, this workflow file
@@ -14,9 +16,10 @@ name: Release tooling
 on:
   push:
     tags: ['tooling-v*']
+  workflow_dispatch:
 
 concurrency:
-  group: release-${{ github.ref }}
+  group: release-tooling
   cancel-in-progress: false
 
 permissions:
@@ -25,15 +28,27 @@ permissions:
 
 jobs:
   release:
+    # A manual run releases what is on main, nothing else.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment: npm
     defaults:
       run:
         working-directory: tooling
-    env:
-      VERSION: ${{ github.ref_name }}
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve the release tag
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+            tag="tooling-v$(node -p "require('./package.json').version")"
+            if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+              echo "::error::$tag already exists; bump the version in tooling/package.json first"
+              exit 1
+            fi
+          else
+            tag="$GITHUB_REF_NAME"
+          fi
+          echo "VERSION=$tag" >> "$GITHUB_ENV"
       - uses: actions/setup-node@v4
         with:
           node-version: 22
@@ -63,6 +78,7 @@ jobs:
         run: |
           file="dist/proschi-${VERSION#tooling-v}.vsix"
           cp dist/proschi.vsix "$file"
+          # Creates the tag too on a manual run.
           gh release view "$VERSION" >/dev/null 2>&1 ||
-            gh release create "$VERSION" --verify-tag --title "Proschi tooling ${VERSION#tooling-v}" --generate-notes
+            gh release create "$VERSION" --target "$GITHUB_SHA" --title "Proschi tooling ${VERSION#tooling-v}" --generate-notes
           gh release upload "$VERSION" "$file" --clobber
