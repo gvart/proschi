@@ -1,7 +1,7 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references and an outline.
+ * go-to-definition, references, an outline and formatting.
  */
 import {
   CompletionItemKind,
@@ -16,6 +16,7 @@ import {
   type DocumentSymbol,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
+import { format } from './proschi';
 import { analyze, complete, definition, hover, outline, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
 
 declare const PROSCHI_VERSION: string;
@@ -45,6 +46,7 @@ connection.onInitialize(() => ({
     definitionProvider: true,
     referencesProvider: true,
     documentSymbolProvider: true,
+    documentFormattingProvider: true,
   },
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
 }));
@@ -117,6 +119,15 @@ function toSymbol(s: OutlineSymbol): DocumentSymbol {
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
   return doc ? outline(analysisOf(doc)).map(toSymbol) : [];
+});
+
+// One edit that replaces the whole document, or none when it is already formatted.
+connection.onDocumentFormatting((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const text = doc.getText();
+  const formatted = format(text);
+  return formatted === text ? [] : [{ range: { start: { line: 0, character: 0 }, end: doc.positionAt(text.length) }, newText: formatted }];
 });
 
 documents.listen(connection);

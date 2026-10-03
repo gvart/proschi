@@ -8,8 +8,8 @@ valid.
 | Piece | File | Gives you |
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline |
-| Command line | `proschi check` / `proschi parse` | Validation in CI and pre-commit hooks; the parsed diagram as JSON |
+| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting |
+| Command line | `proschi check` / `proschi parse` / `proschi fmt` | Validation in CI and pre-commit hooks; the parsed diagram as JSON; formatting |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -114,6 +114,31 @@ proschi check --strict --format github .   # warnings fail too; GitHub annotatio
 `check` exits with 1 when a file has an error (with `--strict`, also a
 warning) and 2 on bad usage. `--format json` prints machine-readable results.
 
+To keep files in the canonical layout, add `proschi fmt --check docs/` (see
+[Formatting](#formatting)).
+
 `proschi parse diagram.proschi` prints `{"diagram": …, "diagnostics": […]}`. It
 matches the JSON Schema, so other tools can read nodes, edges, use cases and
 scenarios without reimplementing the language.
+
+## Formatting
+
+`proschi fmt` rewrites files in the canonical layout: two spaces per open block,
+aligned columns in runs of node declarations and of connections, single blank
+lines and one trailing newline. Strings, labels, comments and multi-line
+payloads are kept as written (payloads move with their step's indentation), and
+so are lines with syntax errors, so formatting never changes what a file means.
+
+```sh
+proschi fmt docs/                  # rewrite every *.proschi below docs/; lists the files it changed
+proschi fmt --check docs/          # write nothing; list files that need formatting, exit 1 if any
+```
+
+In CI, `proschi fmt --check .` next to `proschi check .` fails the build when a
+file is not formatted. Directories are searched the same way as for `check`.
+
+In editors, formatting comes from the language server
+(`textDocument/formatting`): *Format Document* (Shift+Alt+F) in VS Code,
+`vim.lsp.buf.format()` in Neovim, `:format` in Helix, *Reformat Code* with LSP4IJ
+in IntelliJ, *LSP: Format File* in Sublime Text. In the web editor, use
+**Diagrams → Format code** or Shift+Alt+F.

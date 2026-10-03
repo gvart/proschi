@@ -47,6 +47,10 @@ The architecture is written once. Any number of use cases can play over it,
 and each use case can branch into scenarios (success and error paths) with
 `alt`.
 
+The canonical style is what `proschi fmt` (or *Format code* in the editor)
+produces: two spaces per block and aligned columns in runs of similar lines; see
+[Formatting](EDITORS.md#formatting).
+
 ## Statements
 
 | Statement | Syntax | Notes |

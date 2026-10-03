@@ -35,7 +35,7 @@ beforeAll(async () => {
   });
   connection.listen();
   const init = await connection.sendRequest('initialize', { processId: process.pid, rootUri: null, capabilities: {} });
-  expect(init).toMatchObject({ capabilities: { hoverProvider: true, definitionProvider: true }, serverInfo: { name: 'proschi-language-server' } });
+  expect(init).toMatchObject({ capabilities: { hoverProvider: true, definitionProvider: true, documentFormattingProvider: true }, serverInfo: { name: 'proschi-language-server' } });
   await connection.sendNotification('initialized', {});
 });
 
@@ -85,5 +85,25 @@ describe('language server', () => {
 
     const symbols = (await connection.sendRequest('textDocument/documentSymbol', { textDocument })) as { name: string }[];
     expect(symbols.map((s) => s.name)).toEqual(['api', 'db']);
+  });
+
+  it('formats the whole document in one edit, or none when it is formatted', async () => {
+    const formatUri = 'file:///tmp/format.proschi';
+    await connection.sendNotification('textDocument/didOpen', {
+      textDocument: { uri: formatUri, languageId: 'proschi', version: 1, text: 'api [REST API]\ndatabase   [Redis]\n\n\napi->database:SQL\n' },
+    });
+    const params = { textDocument: { uri: formatUri }, options: { tabSize: 2, insertSpaces: true } };
+    expect(await connection.sendRequest('textDocument/formatting', params)).toEqual([
+      {
+        range: { start: { line: 0, character: 0 }, end: { line: 5, character: 0 } },
+        newText: 'api      [REST API]\ndatabase [Redis]\n\napi -> database : SQL\n',
+      },
+    ]);
+
+    await connection.sendNotification('textDocument/didChange', {
+      textDocument: { uri: formatUri, version: 2 },
+      contentChanges: [{ text: 'api [REST API]\n' }],
+    });
+    expect(await connection.sendRequest('textDocument/formatting', params)).toEqual([]);
   });
 });
