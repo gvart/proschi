@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../dsl';
-import { addFile, fileNameOf, initialState, type SavedDiagram } from './documents';
+import { BLANK_SOURCE, addDoc, addFile, fileNameOf, initialState, renameFile, selectDoc, updateCurrent, type SavedDiagram } from './documents';
 import { filesResolver, importableFiles, usedImports } from './imports';
 
 const doc = (id: string, source: string, extra: Partial<SavedDiagram> = {}): SavedDiagram => ({ id, source, updatedAt: '2026-01-01', ...extra });
@@ -11,6 +11,41 @@ describe('file names of saved diagrams', () => {
     expect(fileNameOf({ source: 'title "Shared Infra!"' })).toBe('shared-infra.proschi');
     expect(fileNameOf({ source: 'a -> b' })).toBe('untitled.proschi');
     expect(fileNameOf({ source: 'title "☕"' })).toBe('diagram.proschi');
+  });
+
+  it('names a diagram once, so editing its title does not break imports of it', () => {
+    const empty = { docs: [], currentId: '' };
+    let state = addDoc(empty, 'title "Shop Infra"', () => 't', () => 'infra');
+    state = addDoc(state, 'title "Shop"\nimport "shop-infra.proschi"\nusecase "U" {\n  api -> db\n}', () => 't', () => 'shop');
+    state = updateCurrent(selectDoc(state, 'infra'), 'title "Platform"\napi [REST API]\ndb [Redis]\napi -> db');
+    expect(state.docs.map((d) => d.fileName)).toEqual(['shop.proschi', 'shop-infra.proschi']);
+
+    const shop = state.docs[0];
+    const files = importableFiles(state.docs, shop);
+    const result = parse(shop.source, { path: fileNameOf(shop), resolve: filesResolver(files, fileNameOf(shop)) });
+    expect(result.diagnostics).toEqual([]);
+    expect(result.diagram.nodes.map((n) => n.loc.file)).toEqual(['shop-infra.proschi', 'shop-infra.proschi']);
+  });
+
+  it('keeps derived names unique and assigns them to diagrams saved before names existed', () => {
+    const stored = {
+      docs: [
+        { id: 'a', source: 'title "Untitled"', updatedAt: 't' },
+        { id: 'b', source: 'x -> y', updatedAt: 't' },
+        { id: 'c', source: 'title "Named"', updatedAt: 't', fileName: 'mine.proschi' },
+      ],
+      currentId: 'a',
+    };
+    const state = initialState({ stored, legacySource: null, sharedSource: null, fallbackSource: 'x' });
+    expect(state.docs.map((d) => d.fileName)).toEqual(['untitled.proschi', 'untitled-2.proschi', 'mine.proschi']);
+    expect(addDoc(state, BLANK_SOURCE).docs[0].fileName).toBe('untitled-3.proschi');
+  });
+
+  it('renames a file on request', () => {
+    const state = addDoc({ docs: [], currentId: '' }, 'title "A"', () => 't', () => 'a');
+    expect(renameFile(state, 'a', ' teams/payments ').docs[0].fileName).toBe('teams/payments.proschi');
+    expect(renameFile(state, 'a', 'x.proschi').docs[0].fileName).toBe('x.proschi');
+    expect(renameFile(state, 'a', '   ')).toBe(state);
   });
 
   it('remembers the name of an opened file', () => {
@@ -65,6 +100,6 @@ describe('opening a share link with imports', () => {
   it('attaches them to an identical saved diagram', () => {
     const stored = { docs: [{ id: 'a', source: 'same', updatedAt: 't' }], currentId: 'a' };
     const state = initialState({ ...base, stored, sharedSource: 'same', sharedImports: imports });
-    expect(state.docs).toEqual([{ id: 'a', source: 'same', updatedAt: 't', imports }]);
+    expect(state.docs).toEqual([{ id: 'a', source: 'same', updatedAt: 't', imports, fileName: 'untitled.proschi' }]);
   });
 });

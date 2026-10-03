@@ -43,6 +43,7 @@ import {
   fileNameOf,
   initialState,
   removeDoc,
+  renameFile,
   selectDoc,
   titleOf,
   updateCurrent,
@@ -205,6 +206,11 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     setSelectedScenarioId(undefined);
   };
 
+  const renameDocFile = (id: string, current: string) => {
+    const name = window.prompt('File name (used by import "…")', current);
+    if (name !== null) setDocState((s) => renameFile(s, id, name));
+  };
+
   const deleteDoc = (id: string, title: string) => {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
   };
@@ -336,6 +342,14 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                           <span className="block truncate text-xs font-normal text-gray-400">
                             {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
                           </span>
+                        </button>
+                        <button
+                          aria-label={`Rename file ${fileNameOf(doc)}`}
+                          title="Rename the file imports refer to"
+                          onClick={() => renameDocFile(doc.id, fileNameOf(doc))}
+                          className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                        >
+                          <Pencil size={14} />
                         </button>
                         <button
                           aria-label={`Delete ${title}`}

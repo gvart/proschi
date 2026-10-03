@@ -3,7 +3,11 @@ export interface SavedDiagram {
   id: string;
   source: string;
   updatedAt: string;
-  /** Name of the .proschi file it was opened from; other diagrams derive one from their title. */
+  /**
+   * Name imports use for it: the file it was opened from, or one made from its
+   * title when it was created. It does not follow later title edits, so imports
+   * of it keep working; only renaming the file changes it.
+   */
   fileName?: string;
   /**
    * Imported files (path → source) that came with a share link. They win over
@@ -64,7 +68,7 @@ export function initialState(input: InitialInput, now: Clock = defaultClock, new
 
   if (docs.length === 0) docs.push({ id: newId(), source: input.fallbackSource, updatedAt: now() });
   if (!docs.some((d) => d.id === currentId)) currentId = docs[0].id;
-  return { docs, currentId };
+  return { docs: nameDocs(docs), currentId };
 }
 
 export function currentDoc(state: DocumentState): SavedDiagram {
@@ -81,13 +85,21 @@ export function updateCurrent(state: DocumentState, source: string, now: Clock =
 
 export function addDoc(state: DocumentState, source: string, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
   const doc = { id: newId(), source, updatedAt: now() };
-  return { docs: [doc, ...state.docs], currentId: doc.id };
+  return { docs: nameDocs([doc, ...state.docs]), currentId: doc.id };
 }
 
 /** Adds a diagram opened from a file, remembering the file's name so imports can find it. */
 export function addFile(state: DocumentState, source: string, fileName: string, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
   const next = addDoc(state, source, now, newId);
   return { ...next, docs: next.docs.map((d) => (d.id === next.currentId ? { ...d, fileName } : d)) };
+}
+
+/** Renames a diagram's file; `.proschi` is added when missing. Imports of the old name stop resolving. */
+export function renameFile(state: DocumentState, id: string, fileName: string): DocumentState {
+  const clean = fileName.trim().replace(/^\/+/, '');
+  if (!clean) return state;
+  const name = clean.endsWith('.proschi') ? clean : `${clean}.proschi`;
+  return { ...state, docs: state.docs.map((d) => (d.id === id ? { ...d, fileName: name } : d)) };
 }
 
 export function selectDoc(state: DocumentState, id: string): DocumentState {
@@ -110,8 +122,29 @@ export function titleOf(source: string): string {
 
 /** The name imports use for a diagram: its file name, or one made from its title. */
 export function fileNameOf(doc: Pick<SavedDiagram, 'source' | 'fileName'>): string {
-  if (doc.fileName) return doc.fileName;
-  const slug = titleOf(doc.source)
+  return doc.fileName || derivedFileName(doc.source);
+}
+
+/**
+ * Gives each diagram without a file name one made from its title, unique
+ * among the others (`untitled-2.proschi`). Saved diagrams from before file
+ * names existed get theirs here, once.
+ */
+function nameDocs(docs: SavedDiagram[]): SavedDiagram[] {
+  if (docs.every((d) => d.fileName)) return docs;
+  const taken = new Set(docs.flatMap((d) => (d.fileName ? [d.fileName] : [])));
+  return docs.map((d) => {
+    if (d.fileName) return d;
+    const base = derivedFileName(d.source).slice(0, -'.proschi'.length);
+    let name = `${base}.proschi`;
+    for (let n = 2; taken.has(name); n++) name = `${base}-${n}.proschi`;
+    taken.add(name);
+    return { ...d, fileName: name };
+  });
+}
+
+function derivedFileName(source: string): string {
+  const slug = titleOf(source)
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
     .replace(/^-|-$/g, '');

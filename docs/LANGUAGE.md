@@ -214,7 +214,7 @@ Where imports are resolved:
 
 | Where | Resolved against |
 |---|---|
-| Web editor | The diagrams saved in the browser, by file name. A diagram opened from a `.proschi` file keeps its name; others are named after their title, e.g. `title "Shop Infra"` → `shop-infra.proschi` (shown in the *Diagrams* menu). A path that matches no saved name exactly falls back to the one diagram with the same file name. |
+| Web editor | The diagrams saved in the browser, by file name. A diagram opened from a `.proschi` file keeps its name; others are named after their title when they are created, e.g. `title "Shop Infra"` → `shop-infra.proschi`. The name stays when the title changes, so imports keep working; rename it with the pencil in the *Diagrams* menu, where it is shown. A path that matches no saved name exactly falls back to the one diagram with the same file name. |
 | `proschi check` / `parse`, language server | The file system. The language server prefers the text of open, unsaved documents. |
 
 In the web editor, nodes and connections from imported files are drawn like
