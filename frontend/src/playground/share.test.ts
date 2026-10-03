@@ -57,3 +57,31 @@ describe('playback deep links', () => {
     expect(shareUrl('x', { origin: 'https://h', pathname: '/p/', search: '' }, { useCase: 'u', step: 2 })).toMatch(/^https:\/\/h\/p\/#code=.*&uc=u&step=2$/);
   });
 });
+
+describe('imported files in links', () => {
+  const imports = { 'infra.proschi': 'title "Infra"\napi [REST API] "Uses + & # = signs"', 'teams/db.proschi': 'db [Redis]' };
+
+  it('round-trips imported sources alongside playback', () => {
+    const hash = encodeShareHash('import "infra.proschi"', { useCase: 'u', scenario: 's', step: 2 }, imports);
+    expect(hash).toMatch(/^#code=[^&]+&imports=[A-Za-z0-9+\-$]+&uc=u&alt=s&step=2$/);
+    expect(decodeShareLink(hash)).toEqual({ source: 'import "infra.proschi"', imports, playback: { useCase: 'u', scenario: 's', step: 2 } });
+    expect(decodeShareLink(encodeShareHash('x', undefined, imports))).toEqual({ source: 'x', imports });
+    expect(shareUrl('x', { origin: 'https://h', pathname: '/', search: '' }, undefined, imports)).toContain('&imports=');
+  });
+
+  it('leaves the parameter out when there is nothing to import', () => {
+    expect(encodeShareHash('x', undefined, {})).toBe(encodeShareHash('x'));
+  });
+
+  it('ignores a corrupt or malformed imports parameter', () => {
+    const code = encodeShareHash('x');
+    expect(decodeShareLink(`${code}&imports=%%%`)).toEqual({ source: 'x' });
+    expect(decodeShareLink(`${code}&imports=${encodeShareHash('[1,2]').slice(6)}`)).toEqual({ source: 'x' });
+  });
+
+  it('keeps links made before imports existed working', () => {
+    // A link in the format the editor wrote before imports existed.
+    const old = '#code=IYAgtAfCBGQ&uc=log-in&alt=db-down&step=3';
+    expect(decodeShareLink(old)).toEqual({ source: 'a -> b', playback: { useCase: 'log-in', scenario: 'db-down', step: 3 } });
+  });
+});

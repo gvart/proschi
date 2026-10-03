@@ -8,7 +8,7 @@ valid.
 | Piece | File | Gives you |
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting |
+| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths |
 | Command line | `proschi check` / `proschi parse` / `proschi fmt` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
@@ -199,3 +199,24 @@ it, naming the file.
 The language server reports the same findings as you type (source
 `proschi-openapi`) when the document is saved below a `proschi.json`. It
 re-reads specs and the config when they change on disk.
+
+## Imports
+
+`import "path.proschi"` statements (see [Imports](LANGUAGE.md#imports)) are
+resolved from the file system, relative to the importing file.
+
+- **`proschi check`** reports every problem under the file it occurs in, so an
+  error in `infra.proschi` is printed as `infra.proschi:3:1: …` even when only
+  the files importing it were named on the command line. When several checked
+  files import the same file, its problems are reported once.
+- **`proschi parse`** prints the merged diagram. Locations and diagnostics in
+  imported files carry `file` (relative to the working directory when inside
+  it); `imports` lists every import statement and the file it resolved to.
+- **The language server** prefers the text of open documents over the disk, so
+  unsaved changes count. Each document shows its own problems; an import whose
+  file (or a file that one imports) has errors gets one error on the import
+  line, e.g. `'infra.proschi' has 2 errors`. Editing an open imported file
+  re-validates the open documents that import it. Completion offers node ids
+  from imported files, hover and go to definition work for nodes declared in
+  another file, and the import path is a link to the file. Files that change on
+  disk while closed are picked up the next time the importing document changes.

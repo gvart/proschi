@@ -9,11 +9,23 @@ export { addConnection } from '../../frontend/src/dsl/edit';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';
 export { componentCatalog } from '../../frontend/src/catalog/componentCatalog';
-export type { Diagnostic, Diagram, DiagramNode, DiagramStep, DiagramUseCase, ParseResult, SourceLoc } from '../../frontend/src/dsl/types';
+export type {
+  Diagnostic,
+  Diagram,
+  DiagramImport,
+  DiagramNode,
+  DiagramStep,
+  DiagramUseCase,
+  ImportResolver,
+  ParseOptions,
+  ParseResult,
+  SourceLoc,
+} from '../../frontend/src/dsl/types';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'title', detail: 'Document title', snippet: 'title "$1"' },
+  { label: 'import', detail: 'import "file.proschi" (top level)', snippet: 'import "${1:file.proschi}"' },
   { label: 'group', detail: 'group id "Name" [Style] { … }', snippet: 'group ${1:id} "${2:Name}" {\n\t$0\n}' },
   { label: 'usecase', detail: 'usecase "Name" { steps }', snippet: 'usecase "${1:Name}" {\n\t$0\n}' },
   { label: 'par', detail: 'Steps that run in parallel', snippet: 'par {\n\t$0\n}' },

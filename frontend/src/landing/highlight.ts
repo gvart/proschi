@@ -12,7 +12,7 @@ export interface Segment {
 }
 
 const TOKEN =
-  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)|((?<=\balt\s+"(?:[^"\\]|\\.)*"\s+)when\b)/g;
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|import|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)|((?<=\balt\s+"(?:[^"\\]|\\.)*"\s+)when\b)/g;
 
 const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'comment', 'status', 'keyword'];
 

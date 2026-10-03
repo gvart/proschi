@@ -74,7 +74,7 @@ describe('document operations', () => {
 
   it('leaves a blank document after deleting the last one', () => {
     const state = removeDoc(start(), 'd1', clock, () => 'fresh');
-    expect(state).toEqual({ docs: [{ id: 'fresh', source: BLANK_SOURCE, updatedAt: clock() }], currentId: 'fresh' });
+    expect(state).toEqual({ docs: [{ id: 'fresh', source: BLANK_SOURCE, updatedAt: clock(), fileName: 'untitled.proschi' }], currentId: 'fresh' });
   });
 });
 
