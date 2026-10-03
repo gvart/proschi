@@ -11,6 +11,7 @@ events   "OrderEvents" [Kafka]      @Platform
 
 gateway -> orders   : HTTP
 gateway -> users    : GraphQL
+orders  -> users    : GraphQL
 orders  -> ordersDb : SQL
 users   -> usersDb  : SQL
 orders  -> events   : Publish

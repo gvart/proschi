@@ -52,7 +52,8 @@ interface UseCasePlaybackProps {
 }
 
 interface UseCasePlayerProps {
-  useCase: { id?: string; name: string; steps: FlowStep[] };
+  /** `condition` is the `when "…"` text of the scenario being played. */
+  useCase: { id?: string; name: string; steps: FlowStep[]; condition?: string };
   nodes: Node[];
   edges: Edge[];
   onBack: () => void;
@@ -378,6 +379,11 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       {/* Step Info Panel */}
       <div className="bg-white border-t border-gray-200 p-3 sm:p-4 max-h-[35vh] sm:max-h-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
+          {useCase.condition && (
+            <p className="mb-2 text-sm text-gray-600">
+              <span className="font-medium text-gray-700">When:</span> {useCase.condition}
+            </p>
+          )}
           {currentSteps.length > 1 && (
             <div className="mb-2 text-sm font-medium text-blue-600">
               ⚡ Parallel Execution ({currentSteps.length} steps running simultaneously)

@@ -254,7 +254,8 @@ usecase "Place order" {
 ordersDb "Orders DB" [PostgreSQL] @orders
 
 gateway -&gt; orders   : HTTP
-orders  -&gt; ordersDb : SQL</code></pre>
+orders  -&gt; ordersDb : SQL
+orders  -&gt; events   : publish</code></pre>
             </li>
 
             <li class="step">

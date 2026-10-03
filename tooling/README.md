@@ -7,6 +7,7 @@ microservice architectures and the request flows that run through them.
 ```sh
 npm install -g proschi
 proschi check docs/                 # validate every *.proschi file below docs/
+proschi check --strict --openapi orders=specs/orders.yaml docs/   # also against an OpenAPI spec
 proschi parse checkout.proschi      # the parsed diagram as JSON
 proschi fmt docs/                   # format files in place (--check: only report, exit 1 for CI)
 proschi-language-server --stdio     # for any editor with an LSP client
@@ -17,6 +18,11 @@ the editor reports. The language server also formats documents, with the same
 formatter as `proschi fmt`. Setup for VS Code, IntelliJ, Neovim, Helix, Sublime Text
 and CI: [docs/EDITORS.md](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md).
 
+`check` and the language server can also compare use case steps with the
+OpenAPI 3.0/3.1 specs of the services they call (endpoints, status codes,
+JSON payloads), mapped in a `proschi.json` or with `--openapi`: see
+[Checking against OpenAPI](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#checking-against-openapi).
+
 Also in this package:
 
 - `grammar/proschi.tmLanguage.json`: TextMate grammar for syntax highlighting
@@ -26,7 +32,7 @@ Also in this package:
 
 ```sh
 npm ci
-npm test                 # builds, then runs the tests (CLI, server over stdio, grammar, schema)
+npm test                 # builds, then runs the tests (CLI, server over stdio, OpenAPI checks, grammar, schema)
 npm run typecheck
 npm run package:vscode   # dist/proschi.vsix
 ```

@@ -115,6 +115,8 @@ describe('landing page snippets', () => {
     expect(cls('  } alt "Out of stock" {')).toEqual([['} alt', 'keyword'], ['"Out of stock"', 'string']]);
     expect(cls('  api -x db : INSERT order')).toEqual([['-x', 'arrow']]);
     expect(cls('  api -> xray')).toEqual([['->', 'arrow']]);
+    expect(cls('  } alt "Missing" when "no such order" {')).toEqual([['} alt', 'keyword'], ['"Missing"', 'string'], ['when', 'keyword'], ['"no such order"', 'string']]);
+    expect(cls('  when -> b')).toEqual([['->', 'arrow']]);
   });
 
   it('highlighter keeps the text intact', () => {

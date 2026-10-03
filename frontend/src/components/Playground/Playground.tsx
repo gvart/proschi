@@ -126,7 +126,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const useCaseGroups = useMemo(() => groupByEndpoint(diagram.useCases), [diagram]);
   // The player restarts when this changes, so each scenario starts at its first step.
   const playedUseCase = useMemo(
-    () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps } : undefined),
+    () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
 
@@ -534,7 +534,7 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
             role="tab"
             aria-selected={active}
             onClick={() => onPick(s.id)}
-            title={`Play “${s.name}”`}
+            title={s.condition ? `Play “${s.name}” — when ${s.condition}` : `Play “${s.name}”`}
             className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 sm:py-1 text-sm whitespace-nowrap ${
               active
                 ? error

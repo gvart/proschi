@@ -8,8 +8,8 @@ valid.
 | Piece | File | Gives you |
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting |
-| Command line | `proschi check` / `proschi parse` / `proschi fmt` | Validation in CI and pre-commit hooks; the parsed diagram as JSON; formatting |
+| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting |
+| Command line | `proschi check` / `proschi parse` / `proschi fmt` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -23,7 +23,9 @@ git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
 ```
 
 On a phone, creating a GitHub release with that new tag (*Releases → Draft a
-new release*) does the same. The *Release tooling* workflow tests, publishes
+new release*) does the same, and so does running the workflow by hand on
+`main` (*Actions → Release tooling → Run workflow*), which tags the version in
+`tooling/package.json`. The *Release tooling* workflow tests, publishes
 `proschi` to npm through Trusted Publishing (no token in the repository), and
 attaches the `.vsix` to the GitHub release, creating the release if needed.
 
@@ -142,3 +144,58 @@ In editors, formatting comes from the language server
 `vim.lsp.buf.format()` in Neovim, `:format` in Helix, *Reformat Code* with LSP4IJ
 in IntelliJ, *LSP: Format File* in Sublime Text. In the web editor, use
 **Diagrams → Format code** or Shift+Alt+F.
+
+## Checking against OpenAPI
+
+Use cases document what services say to each other; OpenAPI specs document
+what the services actually accept. `proschi check` can compare the two so the
+diagrams don't drift from the APIs. Map node ids to spec files (OpenAPI 3.0 or
+3.1, YAML or JSON) in a `proschi.json`:
+
+```json
+{
+  "openapi": {
+    "orders": "specs/orders-api.yaml",
+    "payments": "../payments/openapi.json"
+  }
+}
+```
+
+Paths are relative to `proschi.json`. Each checked file uses the nearest
+`proschi.json` in its directory or above it. On the command line,
+`--openapi <node>=<spec>` (repeatable, relative to the working directory) adds
+a mapping or overrides the one in the config:
+
+```sh
+proschi check --strict --format github docs/
+proschi check --openapi orders=build/openapi.yaml docs/checkout.proschi
+```
+
+Every step that calls a node with a spec and has an HTTP method is checked:
+
+| Check | Example warning |
+|---|---|
+| The method and path exist | `GET /ordres/42: 'orders-api.yaml' has no path /ordres/42; did you mean GET /orders/{orderId}?` |
+| The status code on the `-->` reply is documented: exactly, as a range (`4XX`) or by `default` | `Status 422 is not documented for POST /orders (documented: 201, 400)` |
+| A JSON request body matches the `application/json` schema | `Request body does not match the schema of POST /orders: /items/0/quantity must be integer` |
+| A JSON response body matches the schema of that status | `200 response body does not match the schema of GET /orders/{orderId}: /status must be equal to one of the allowed values: "pending", "paid", "shipped"` |
+
+- Concrete paths match templates: `/orders/42` and `/orders/{id}` both match
+  `/orders/{orderId}`. A parameter stands for exactly one segment; a literal
+  path such as `/orders/latest` wins over a template. Query strings are ignored.
+- If `servers[0].url` has a path (`https://api.example.com/v1`), steps may be
+  written with or without it: `/v1/orders` and `/orders` both work.
+- Schemas are resolved through local `$ref`s (`#/components/…`). OpenAPI 3.0
+  `nullable` is understood; 3.1 schemas are JSON Schema 2020-12. `format` is
+  not checked, and external `$ref`s are skipped.
+- Payloads that aren't JSON (`xml`, `text`) or aren't valid JSON (`{"items": [ … ]}`)
+  are skipped silently, so sketched payloads stay allowed.
+- A failed call (`a -x b`) only has its endpoint checked.
+
+The findings are warnings, so `check` still passes unless you add `--strict`.
+A spec that can't be read or isn't OpenAPI 3 is an error on the node that uses
+it, naming the file.
+
+The language server reports the same findings as you type (source
+`proschi-openapi`) when the document is saved below a `proschi.json`. It
+re-reads specs and the config when they change on disk.
