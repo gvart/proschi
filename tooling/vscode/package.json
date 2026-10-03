@@ -47,6 +47,29 @@
         "scopeName": "source.proschi",
         "path": "./syntaxes/proschi.tmLanguage.json"
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "proschi.openPreview",
+        "title": "Open Preview to the Side",
+        "category": "Proschi",
+        "icon": "$(open-preview)"
+      }
+    ],
+    "menus": {
+      "editor/title": [
+        {
+          "command": "proschi.openPreview",
+          "when": "editorLangId == proschi",
+          "group": "navigation"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "proschi.openPreview",
+          "when": "editorLangId == proschi"
+        }
+      ]
+    }
   }
 }

@@ -9,7 +9,7 @@ valid.
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
 | Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths |
-| Command line | `proschi check` / `proschi parse` / `proschi fmt` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting |
+| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)) |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -220,3 +220,50 @@ resolved from the file system, relative to the importing file.
   from imported files, hover and go to definition work for nodes declared in
   another file, and the import path is a link to the file. Files that change on
   disk while closed are picked up the next time the importing document changes.
+
+## Rendering and export
+
+Diagrams can leave the editor as images, Mermaid source or a static page.
+
+**Web editor.** The *Export* menu on the diagram saves a PNG or SVG image of
+the canvas, and copies Mermaid source to the clipboard:
+
+- *Copy Mermaid: architecture*: a `flowchart LR` with a `subgraph` per group
+- *Copy Mermaid: this scenario*: a `sequenceDiagram` of the use case and
+  scenario picked in the editor (disabled when the document has no use case)
+
+Paste either into a Markdown file on GitHub or GitLab inside a ` ```mermaid `
+block and it renders there.
+
+**Command line.** `proschi render` writes static files, for docs sites,
+READMEs and wikis:
+
+```sh
+proschi render shop.proschi --out docs/diagrams              # SVG (default)
+proschi render shop.proschi --out docs --format md           # docs/shop.md
+proschi render shop.proschi --out site --format html         # site/shop.html
+```
+
+| Format | Output |
+|---|---|
+| `svg` | `architecture.svg` and one `<usecase>--<scenario>.svg` sequence diagram per scenario, e.g. `create-order--database-down.svg` |
+| `md` | `<file>.md`: the title, a Mermaid architecture block, and a heading and Mermaid sequence block per use case and scenario |
+| `html` | `<file>.html`: one self-contained page with every SVG and a scenario list |
+
+`--out` defaults to the current directory. The architecture SVG looks like
+the editor's canvas: the same top-down layout (pinned `pos x,y` positions
+included), the same cards with their coloured icon tiles and icons, dashed
+groups and sticky notes. Sequence diagrams use the same icons and colours,
+number the requests, draw error responses and failed (`-x`) calls in red, and
+show `par` blocks as regions. The SVGs need no fonts, images or stylesheets
+and have a white background, so they read well in dark viewers too.
+
+Imports are followed as for `check`, and the merged diagram is rendered. A
+document with errors (in any of its files) is not rendered: `render` prints
+them and exits with 1. Warnings are fine.
+
+**VS Code.** *Proschi: Open Preview to the Side* (the preview button in the
+editor title bar, or the command palette) opens a panel with the architecture
+and a scenario picker showing that scenario's sequence diagram. It updates as
+you type and follows the active `.proschi` editor; while the document has
+errors it lists them above the last good rendering.

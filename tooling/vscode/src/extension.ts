@@ -1,10 +1,12 @@
 import * as path from 'node:path';
 import type { ExtensionContext } from 'vscode';
 import { LanguageClient, TransportKind, type LanguageClientOptions, type ServerOptions } from 'vscode-languageclient/node';
+import { registerPreview } from './preview';
 
 let client: LanguageClient | undefined;
 
 export async function activate(context: ExtensionContext) {
+  registerPreview(context);
   const module = context.asAbsolutePath(path.join('dist', 'server.cjs'));
   const serverOptions: ServerOptions = {
     run: { module, transport: TransportKind.ipc },

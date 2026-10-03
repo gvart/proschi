@@ -7,6 +7,7 @@ import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { openApiDiagnostics, parseSpecFlag } from './openapi/config';
 import type { Diagnostic } from './proschi';
+import { RENDER_HELP, RENDER_USAGE } from './render/usage';
 import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
 import { checkFiles, parseFile } from './imports';
 
@@ -16,6 +17,7 @@ const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
 const USAGE = `Usage:
   proschi check [--strict] [--format text|github|json] [--openapi <node>=<spec>]... <file|dir>...
   proschi parse <file>
+${RENDER_USAGE}
 ${FMT_USAGE}
   proschi --version
 
@@ -27,6 +29,7 @@ check   Reports errors and warnings. Directories are searched for *.proschi file
         proschi.json.
 parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
         schema/proschi-diagram.schema.json.
+${RENDER_HELP}
 ${FMT_HELP}`;
 
 export interface CheckResult {
@@ -74,7 +77,7 @@ export function format(results: CheckResult[], style: 'text' | 'github' | 'json'
   return lines.join('\n');
 }
 
-export function run(argv: string[], out: (s: string) => void = console.log, err: (s: string) => void = console.error): number {
+export function run(argv: string[], out: (s: string) => void = console.log, err: (s: string) => void = console.error): number | Promise<number> {
   const [command, ...rest] = argv;
   if (command === '--version' || command === '-v') {
     out(VERSION);
@@ -94,6 +97,8 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
     return 0;
   }
 
+  // The renderer (ELK, React for the icons) is a separate bundle, loaded only here.
+  if (command === 'render') return import('./render/command').then((m) => m.renderCommand(rest, out, err, USAGE));
   if (command === 'fmt') return runFmt(rest, collectFiles, out, err);
 
   if (command === 'check') {
@@ -147,4 +152,4 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
 }
 
 // Only run when executed, not when imported by the tests.
-if (typeof PROSCHI_VERSION === 'string') process.exitCode = run(process.argv.slice(2));
+if (typeof PROSCHI_VERSION === 'string') Promise.resolve(run(process.argv.slice(2))).then((code) => (process.exitCode = code));

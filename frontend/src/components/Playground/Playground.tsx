@@ -61,6 +61,7 @@ import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
 import { downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
@@ -552,6 +553,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   onResetLayout={() => editSource(clearPositions)}
                   onDelete={deleteFromCanvas}
                   fitKey={mobilePane}
+                  mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
                   notice={notice}
                   onNotice={setNotice}
                 />
@@ -657,6 +659,7 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  mermaid: MermaidSource;
   /** Nodes declared in imported files (id → file); they cannot be moved here. */
   importedNodes: Map<string, string>;
   /** A short message shown over the canvas, e.g. why an edit was refused. */
@@ -678,6 +681,7 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  mermaid,
   importedNodes,
   notice,
   onNotice,
@@ -877,6 +881,7 @@ function DiagramView({
                   >
                     SVG image
                   </MenuItem>
+                  <MermaidMenuItems source={mermaid} close={close} />
                 </>
               )}
             </Menu>

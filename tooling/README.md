@@ -10,6 +10,7 @@ proschi check docs/                 # validate every *.proschi file below docs/
 proschi check --strict --openapi orders=specs/orders.yaml docs/   # also against an OpenAPI spec
 proschi parse checkout.proschi      # the parsed diagram as JSON
 proschi fmt docs/                   # format files in place (--check: only report, exit 1 for CI)
+proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html)
 proschi-language-server --stdio     # for any editor with an LSP client
 ```
 
@@ -22,6 +23,26 @@ and CI: [docs/EDITORS.md](https://github.com/gvart/proschi/blob/main/docs/EDITOR
 OpenAPI 3.0/3.1 specs of the services they call (endpoints, status codes,
 JSON payloads), mapped in a `proschi.json` or with `--openapi`: see
 [Checking against OpenAPI](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#checking-against-openapi).
+
+## Rendering
+
+```
+proschi render [--out <dir>] [--format svg|md|html] <file>
+```
+
+- `svg` (default): `architecture.svg`, plus `<usecase>--<scenario>.svg` with a
+  sequence diagram for every scenario
+- `md`: `<file>.md` with Mermaid blocks (architecture and every scenario),
+  which GitHub and GitLab render natively
+- `html`: `<file>.html`, a single self-contained page with all the SVGs and a
+  scenario list
+
+`--out` defaults to the current directory; the written paths are printed.
+Imports are followed as for `check`. A document with errors in any of its
+files is not rendered (the errors are printed, exit code 1); warnings don't
+stop it. The SVGs are self-contained, with a white background, and look like
+the web editor's canvas (same layout, cards and icons). The renderer is a
+separate bundle (`dist/render.cjs`), loaded only by `proschi render`.
 
 Also in this package:
 
