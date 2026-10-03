@@ -167,6 +167,16 @@ class Parser {
       if (resolved.type === 'group') techStack = resolved.techStack;
       else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line));
     }
+    let position: { x: number; y: number } | undefined;
+    if (tokens[i]?.kind === 'ident' && tokens[i].value === 'pos') {
+      const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
+      if (x?.kind !== 'number' || comma?.kind !== 'comma' || y?.kind !== 'number') {
+        this.error('Expected pos x,y', this.locOf(tokens[i], line));
+        return;
+      }
+      position = { x: Number(x.value), y: Number(y.value) };
+      i += 4;
+    }
 
     if (tokens[i]?.kind !== 'lbrace') {
       this.error('Expected { after group header', this.locOf(tokens[i] ?? tokens[i - 1], line));
@@ -175,7 +185,7 @@ class Parser {
     this.expectEnd(tokens, i + 1, line);
 
     const loc = this.locOf(idToken, line);
-    this.addNode({ id: idToken.value, kind: 'group', name, type: 'group', techStack, parent: this.currentGroup(), loc });
+    this.addNode({ id: idToken.value, kind: 'group', name, type: 'group', techStack, parent: this.currentGroup(), position, loc });
     this.stack.push({ kind: 'group', id: idToken.value, loc });
   }
 

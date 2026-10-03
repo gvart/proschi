@@ -45,6 +45,9 @@ interface UseCasePlayerProps {
   nodes: Node[];
   edges: Edge[];
   onBack: () => void;
+  /** 0-based step to open on, for links to a specific step. */
+  initialStep?: number;
+  onStepChange?: (index: number) => void;
 }
 
 /** Loads a stored use case and plays it against the current canvas. */
@@ -87,7 +90,7 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
 }
 
 /** Animated step-by-step playback of a use case over an architecture diagram. */
-function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack }: UseCasePlayerProps) {
+function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange }: UseCasePlayerProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -112,14 +115,22 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
     return [...architectureEdges, ...extra];
   }, [useCase, architectureEdges]);
 
-  // Restart from the first step whenever a different use case is played.
+  // Restart whenever a different use case is played; only the first one honours initialStep.
+  const firstUseCaseRef = useRef(useCase);
   useEffect(() => {
-    setCurrentStepIndex(0);
+    const start = useCase === firstUseCaseRef.current ? (initialStep ?? 0) : 0;
+    setCurrentStepIndex(Math.min(Math.max(start, 0), Math.max(useCase.steps.length - 1, 0)));
     setAnimationProgress(0);
     setIsPlaying(false);
     if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+    // initialStep only matters for the first use case.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCase]);
+
+  useEffect(() => {
+    onStepChange?.(currentStepIndex);
+  }, [currentStepIndex, onStepChange]);
 
   useEffect(() => {
     return () => {
