@@ -15,15 +15,13 @@ valid.
 ## Releasing
 
 Maintainers: bump `version` in both `tooling/package.json` and
-`tooling/vscode/package.json`, merge, then push a tag:
-
-```sh
-git tag tooling-v0.2.0 && git push origin tooling-v0.2.0
-```
+`tooling/vscode/package.json` and merge. Then publish a GitHub release whose
+tag is `tooling-v<version>`, e.g. `tooling-v0.2.0` (on github.com: *Releases →
+Draft a new release*, or `gh release create tooling-v0.2.0 --generate-notes`).
 
 The *Release tooling* workflow tests, publishes `proschi` to npm through
-Trusted Publishing (no token in the repository), and attaches the `.vsix` to a
-GitHub release.
+Trusted Publishing (no token in the repository), and attaches the `.vsix` to
+the release.
 
 ## Install
 
