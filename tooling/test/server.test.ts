@@ -104,4 +104,35 @@ describe('language server', () => {
       },
     ]);
   });
+
+  it('offers a quick fix that adds a missing connection', async () => {
+    const flowUri = 'file:///tmp/flow.proschi';
+    const text = 'web -> api\n\nusecase "Read" {\n  web -> api : GET /orders/1\n  api -> db : SELECT\n  api --> web : 200\n}\n';
+    const opened = nextDiagnostics(flowUri);
+    await connection.sendNotification('textDocument/didOpen', { textDocument: { uri: flowUri, languageId: 'proschi', version: 1, text } });
+    const { diagnostics: found } = await opened;
+    expect(found.map((d) => [d.range.start.line, d.severity, d.message])).toEqual([
+      [4, 2, "No connection between 'api' and 'db' in the architecture; add 'api -> db'"],
+    ]);
+
+    const actions = (await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: flowUri },
+      range: found[0].range,
+      context: { diagnostics: found },
+    })) as { title: string; kind: string; isPreferred: boolean; edit: { changes: Record<string, { range: { start: { line: number; character: number } }; newText: string }[]> } }[];
+    expect(actions).toHaveLength(1);
+    expect(actions[0]).toMatchObject({ title: "Add connection 'api -> db'", kind: 'quickfix', isPreferred: true });
+    const [edit] = actions[0].edit.changes[flowUri];
+    const lines = text.split('\n');
+    const at = lines.slice(0, edit.range.start.line).reduce((n, l) => n + l.length + 1, 0) + edit.range.start.character;
+    expect(text.slice(0, at) + edit.newText + text.slice(at)).toBe(text.replace('web -> api\n', 'web -> api\napi -> db\n'));
+
+    // Other diagnostics have no quick fix.
+    const none = await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri: flowUri },
+      range: found[0].range,
+      context: { diagnostics: [{ ...found[0], message: 'Unmatched }' }] },
+    });
+    expect(none).toEqual([]);
+  });
 });

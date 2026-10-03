@@ -14,7 +14,7 @@ describe('example document', () => {
   it('reads title, nodes, groups and edges', () => {
     expect(diagram.title).toBe('E-Commerce Platform');
     expect(diagram.nodes.map((n) => n.id)).toEqual(['vpc', 'gateway', 'orders', 'users', 'ordersDb', 'usersDb', 'events']);
-    expect(diagram.edges).toHaveLength(5);
+    expect(diagram.edges).toHaveLength(6);
 
     const orders = diagram.nodes.find((n) => n.id === 'orders')!;
     expect(orders).toMatchObject({
@@ -207,8 +207,17 @@ describe('step labels', () => {
     ['Send text message', { name: 'Send text message', body: undefined }],
     ['OrderPlaced {"id": 1}', { name: 'OrderPlaced', format: 'JSON', body: '{"id": 1}' }],
     ['"Quoted name"', { name: 'Quoted name' }],
+    ['GET /orders/{id}', { name: 'GET /orders/{id}', endpoint: '/orders/{id}', body: undefined }],
+    ['PUT /orders/{id}/items/{itemId} json {"qty": 2}', { endpoint: '/orders/{id}/items/{itemId}', format: 'JSON', body: '{"qty": 2}' }],
   ])('%s', (label, expected) => {
     expect(parseStepLabel(label)).toMatchObject(expected);
+  });
+
+  it('keeps a path template in the step, not in the payload', () => {
+    const { diagram, diagnostics } = parse('usecase "U" {\n  web -> api : GET /orders/{id}\n  api --> web : 200 {"id": 1}\n}');
+    expect(diagnostics).toEqual([]);
+    expect(diagram.useCases[0]).toMatchObject({ endpoint: 'GET /orders/{id}', endpointGroup: 'GET /orders/{id}' });
+    expect(diagram.useCases[0].steps[0]).toMatchObject({ endpoint: '/orders/{id}', requestBody: undefined, responseBody: '{"id": 1}' });
   });
 
   it('only treats known HTTP verbs as methods', () => {
@@ -379,5 +388,82 @@ usecase "Create order" {
     const { diagram, diagnostics } = parse(src);
     expect(diagram.useCases[0].scenarios).toHaveLength(32);
     expect(diagnostics[0].message).toMatch(/Too many scenarios/);
+  });
+});
+
+describe('scenario conditions', () => {
+  const scenarios = (src: string) => parse(src).diagram.useCases[0].scenarios.map((s) => [s.name, s.condition]);
+
+  it('reads alt "Name" when "condition", also after }', () => {
+    const src = 'usecase "U" {\n  a -> b : GET /x\n  alt "Found" when "the order exists" {\n    b --> a : 200\n  } alt "Missing" when "no such order" {\n    b --> a : 404\n  } alt "Other" {\n    b --> a : 500\n  }\n}';
+    expect(parse(src).diagnostics).toEqual([]);
+    expect(scenarios(src)).toEqual([
+      ['Found', 'the order exists'],
+      ['Missing', 'no such order'],
+      ['Other', undefined],
+    ]);
+  });
+
+  it('joins the non-empty conditions of nested branches', () => {
+    const src = 'usecase "U" {\n  alt "A" when "cache miss" {\n    alt "A1" {\n      a -> b\n    } alt "A2" when "db down" {\n      a -x b\n    }\n  } alt "B" when "" {\n    a -> c\n  }\n}';
+    expect(scenarios(src)).toEqual([
+      ['A › A1', 'cache miss'],
+      ['A › A2', 'cache miss · db down'],
+      ['B', undefined],
+    ]);
+  });
+
+  it('leaves the condition out of the output when there is none', () => {
+    const [scenario] = parse('usecase "U" {\n  a -> b\n}').diagram.useCases[0].scenarios;
+    expect('condition' in scenario).toBe(false);
+  });
+
+  it('treats when as a keyword only after the alt name', () => {
+    const { diagram, diagnostics } = parse('when [REST API]\nusecase "U" {\n  alt when {\n    when -> b\n  }\n}');
+    expect(diagnostics).toEqual([]);
+    expect(diagram.nodes[0].id).toBe('when');
+    expect(diagram.useCases[0].scenarios[0]).toMatchObject({ name: 'when' });
+  });
+
+  it('needs a quoted condition and a brace', () => {
+    const err = (line: string) => errors(`usecase "U" {\n  ${line}\n    a -> b\n  }\n}`)[0];
+    expect(err('alt "A" when {')).toMatchObject({ message: expect.stringMatching(/^Expected a condition after when/), line: 2, col: 16 });
+    expect(err('alt "A" when')).toMatchObject({ message: expect.stringMatching(/^Expected a condition after when/), col: 11 });
+    expect(err('alt "A" when cond {').message).toMatch(/^Expected a condition after when/);
+    expect(err('alt "A" when "c"').message).toBe('Expected { after the alt condition');
+    expect(err('alt "A" when "c" "d" {').message).toBe('Expected { after the alt condition');
+    expect(err('alt "A" "c" {').message).toBe('Expected { after alt name');
+    expect(errors('usecase "U" {\n  alt "A" {\n  } alt "B" when {\n  }\n}')[0].message).toMatch(/^Expected a condition after when/);
+  });
+});
+
+describe('missing connection warning', () => {
+  const missing = (src: string) => warnings(src).filter((w) => w.message.startsWith('No connection')).map((w) => [w.line, w.message]);
+
+  it('warns on steps between nodes the architecture does not connect', () => {
+    const src = 'web -> api\nusecase "U" {\n  web -> api : GET /x\n  api -> db : SELECT\n  api ->> events : Done\n  db --> api : rows\n  api -x cache : GET\n  api --> web : 200\n}';
+    expect(missing(src)).toEqual([
+      [4, "No connection between 'api' and 'db' in the architecture; add 'api -> db'"],
+      [5, "No connection between 'api' and 'events' in the architecture; add 'api -> events'"],
+      [6, "No connection between 'api' and 'db' in the architecture; add 'api -> db'"],
+      [7, "No connection between 'api' and 'cache' in the architecture; add 'api -> cache'"],
+    ]);
+    expect(warnings(src)[0]).toMatchObject({ line: 4, col: 3, length: 'api -> db : SELECT'.length });
+  });
+
+  it('accepts a connection in either direction and self-calls', () => {
+    expect(missing('db -> api\nusecase "U" {\n  api -> db : SELECT\n  api -> api : validate\n}')).toEqual([]);
+  });
+
+  it('stays quiet when the document has no connections', () => {
+    expect(missing('api [REST API]\nusecase "U" {\n  web -> api : GET /x\n}')).toEqual([]);
+  });
+
+  it('reports a step shared by several scenarios once', () => {
+    const src = 'a -> b\nusecase "U" {\n  a -> c : x\n  alt "A" {\n    a -> b\n  } alt "B" {\n    c -> d\n  }\n}';
+    expect(missing(src)).toEqual([
+      [3, "No connection between 'a' and 'c' in the architecture; add 'a -> c'"],
+      [7, "No connection between 'c' and 'd' in the architecture; add 'c -> d'"],
+    ]);
   });
 });

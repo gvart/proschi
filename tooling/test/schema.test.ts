@@ -24,10 +24,11 @@ describe('JSON Schema', () => {
     expect(validate(JSON.parse(JSON.stringify(result))), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
-  it('describes documents with problems, failed calls and positions too', () => {
-    const source = 'g [Network Boundary]\ngroup vpc pos 10,20 {\n  a [Nope] pos -5,3\n}\nusecase "U" {\n  a -x b : GET /x\n  b --> a : 200\n}\n%%%';
+  it('describes documents with problems, failed calls, conditions and positions too', () => {
+    const source = 'g [Network Boundary]\ngroup vpc pos 10,20 {\n  a [Nope] pos -5,3\n}\nusecase "U" {\n  a -x b : GET /x/42\n  alt "A" when "b is down" {\n    b --> a : 200\n  }\n}\n%%%';
     const result = JSON.parse(JSON.stringify(parse(source)));
     expect(result.diagnostics.length).toBeGreaterThan(0);
+    expect(result.diagram.useCases[0]).toMatchObject({ endpointGroup: 'GET /x/{id}', scenarios: [{ condition: 'b is down' }] });
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
