@@ -23,7 +23,9 @@ git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
 ```
 
 On a phone, creating a GitHub release with that new tag (*Releases → Draft a
-new release*) does the same. The *Release tooling* workflow tests, publishes
+new release*) does the same, and so does running the workflow by hand on
+`main` (*Actions → Release tooling → Run workflow*), which tags the version in
+`tooling/package.json`. The *Release tooling* workflow tests, publishes
 `proschi` to npm through Trusted Publishing (no token in the repository), and
 attaches the `.vsix` to the GitHub release, creating the release if needed.
 
