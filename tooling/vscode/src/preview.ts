@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { fileResolver } from '../../src/imports';
 import { makeNonce, previewHtml, renderPreviewContent } from '../../src/render/preview';
 
 const DEBOUNCE_MS = 300;
@@ -48,7 +49,8 @@ export class PreviewPanel {
     this.panel.onDidChangeViewState(() => this.panel.visible && this.load(), null, this.disposables);
     vscode.workspace.onDidChangeTextDocument(
       (e) => {
-        if (e.document === this.document) this.update(DEBOUNCE_MS);
+        // An imported file may have changed too.
+        if (e.document === this.document || e.document.languageId === 'proschi') this.update(DEBOUNCE_MS);
       },
       null,
       this.disposables,
@@ -89,7 +91,7 @@ export class PreviewPanel {
     const document = this.document;
     let html: string;
     try {
-      const content = await renderPreviewContent(document.getText());
+      const content = await renderPreviewContent(document.getText(), parseOptions(document));
       if (content.ok) this.lastGood = content.html;
       html = content.ok ? content.html : content.html + this.lastGood;
     } catch (error) {
@@ -108,6 +110,13 @@ export class PreviewPanel {
     clearTimeout(this.timer);
     this.disposables.forEach((d) => d.dispose());
   }
+}
+
+/** Imports resolve relative to the document, preferring the text of open (possibly unsaved) documents. */
+function parseOptions(document: vscode.TextDocument) {
+  if (document.uri.scheme !== 'file') return undefined;
+  const open = (path: string) => vscode.workspace.textDocuments.find((d) => d.uri.scheme === 'file' && d.uri.fsPath === path)?.getText();
+  return { path: document.uri.fsPath, resolve: fileResolver(open) };
 }
 
 export function registerPreview(context: vscode.ExtensionContext) {

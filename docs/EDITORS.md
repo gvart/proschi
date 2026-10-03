@@ -250,12 +250,17 @@ proschi render shop.proschi --out site --format html         # site/shop.html
 | `md` | `<file>.md`: the title, a Mermaid architecture block, and a heading and Mermaid sequence block per use case and scenario |
 | `html` | `<file>.html`: one self-contained page with every SVG and a scenario list |
 
-`--out` defaults to the current directory. The SVGs need no fonts or
-stylesheets (system font stack, a white background, so they read well in
-dark viewers too). Sequence diagrams number the requests and draw error
-responses and failed (`-x`) calls in red, with `par` blocks as regions. A
-document with errors is not rendered: `render` prints them and exits with 1.
-Warnings are fine.
+`--out` defaults to the current directory. The architecture SVG looks like
+the editor's canvas: the same top-down layout (pinned `pos x,y` positions
+included), the same cards with their coloured icon tiles and icons, dashed
+groups and sticky notes. Sequence diagrams use the same icons and colours,
+number the requests, draw error responses and failed (`-x`) calls in red, and
+show `par` blocks as regions. The SVGs need no fonts, images or stylesheets
+and have a white background, so they read well in dark viewers too.
+
+Imports are followed as for `check`, and the merged diagram is rendered. A
+document with errors (in any of its files) is not rendered: `render` prints
+them and exits with 1. Warnings are fine.
 
 **VS Code.** *Proschi: Open Preview to the Side* (the preview button in the
 editor title bar, or the command palette) opens a panel with the architecture

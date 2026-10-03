@@ -1,6 +1,7 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync } from 'node:fs';
 import { basename, extname, join } from 'node:path';
-import { parse } from '../proschi';
+import { displayPath, parseFile } from '../imports';
+import type { ParseResult } from '../proschi';
 import { FORMATS, renderFiles, type RenderFormat } from './index';
 
 /** `proschi render`: parses `<file>`, refuses on errors, and writes the files of the chosen format. */
@@ -35,17 +36,18 @@ export async function renderCommand(args: string[], out: (s: string) => void, er
   }
 
   const file = files[0];
-  let source: string;
+  let result: ParseResult;
   try {
-    source = readFileSync(file, 'utf8');
+    // Imports resolve from disk exactly as for `proschi check`; the merged diagram is rendered.
+    result = parseFile(file);
   } catch (e) {
     err(String((e as Error).message));
     return 2;
   }
-  const { diagram, diagnostics } = parse(source);
+  const { diagram, diagnostics } = result;
   const errors = diagnostics.filter((d) => d.severity === 'error');
   if (errors.length) {
-    for (const d of errors) err(`${file}:${d.line}:${d.col}: error: ${d.message}`);
+    for (const d of errors) err(`${d.file ?? displayPath(file)}:${d.line}:${d.col}: error: ${d.message}`);
     err(`Not rendered: ${errors.length} error(s). Fix them, then run proschi render again.`);
     return 1;
   }

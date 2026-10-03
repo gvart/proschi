@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
@@ -99,6 +99,25 @@ describe('proschi render', () => {
     writeFileSync(warn, 'api [Nope]\nusecase "U" {\n  api -> db : GET /x\n  b --> a : 200\n}\n');
     expect((await capture(['render', warn, '--out', join(dir, 'warn')])).code).toBe(0);
     expect(existsSync(join(dir, 'warn', 'u--main.svg'))).toBe(true);
+  });
+
+  it('renders a document that imports another file, and refuses when the import has errors', async () => {
+    const multi = join(dir, 'multi');
+    mkdirSync(join(multi, 'shared'), { recursive: true });
+    writeFileSync(join(multi, 'shared', 'infra.proschi'), 'db "Orders DB" [PostgreSQL]\n');
+    writeFileSync(join(multi, 'main.proschi'), 'import "shared/infra.proschi"\napi "Order API" [REST API]\napi -> db : SQL\nusecase "Read" {\n  api -> db : SELECT\n}\n');
+    const out = join(multi, 'out');
+    const r = await capture(['render', join(multi, 'main.proschi'), '--out', out]);
+    expect(r.code).toBe(0);
+    const arch = readFileSync(join(out, 'architecture.svg'), 'utf8');
+    expect(arch).toContain('>Orders DB<');
+    expect(arch).toContain('>Order API<');
+    expect(readFileSync(join(out, 'read--main.svg'), 'utf8')).toContain('>Orders DB<');
+
+    writeFileSync(join(multi, 'shared', 'infra.proschi'), 'db [PostgreSQL]\ndb [Redis]\n');
+    const bad = await capture(['render', join(multi, 'main.proschi'), '--out', join(multi, 'bad')]);
+    expect(bad.code).toBe(1);
+    expect(bad.err).toMatch(/infra\.proschi:2:1: error: Duplicate id 'db'/);
   });
 
   it('rejects bad usage with exit code 2', async () => {
@@ -277,6 +296,19 @@ describe('VS Code preview', () => {
     expect(content.ok).toBe(false);
     expect(content.html).toContain('1 error(s)');
     expect(content.html).toContain("Line 2:1: Duplicate id &#39;a&#39;");
+  });
+
+  it('resolves imports through the given resolver', async () => {
+    const files: Record<string, string> = { '/w/infra.proschi': 'db "Orders DB" [PostgreSQL]\n' };
+    const content = await renderPreviewContent('import "infra.proschi"\napi -> db\n', {
+      path: '/w/main.proschi',
+      resolve: (p, from) => {
+        const abs = `${from!.slice(0, from!.lastIndexOf('/'))}/${p}`;
+        return files[abs] === undefined ? undefined : { path: abs, source: files[abs] };
+      },
+    });
+    expect(content.ok).toBe(true);
+    expect(content.html).toContain('>Orders DB<');
   });
 
   it('hints at use cases when there are none', async () => {

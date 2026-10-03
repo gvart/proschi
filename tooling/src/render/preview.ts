@@ -5,7 +5,7 @@
  * content in place (a `postMessage`) as the document changes.
  */
 import { randomBytes } from 'node:crypto';
-import { parse } from '../proschi';
+import { parse, type ParseOptions } from '../proschi';
 import { renderSvgs } from './index';
 import { esc } from './svg';
 
@@ -15,12 +15,15 @@ export interface PreviewContent {
   html: string;
 }
 
-/** Renders a document's preview content: the diagrams, or the list of errors that stop it rendering. */
-export async function renderPreviewContent(source: string): Promise<PreviewContent> {
-  const { diagram, diagnostics } = parse(source);
+/**
+ * Renders a document's preview content: the diagrams, or the list of errors
+ * that stop it rendering. `options` resolves imports, as for `parse`.
+ */
+export async function renderPreviewContent(source: string, options?: ParseOptions): Promise<PreviewContent> {
+  const { diagram, diagnostics } = parse(source, options);
   const errors = diagnostics.filter((d) => d.severity === 'error');
   if (errors.length) {
-    const items = errors.map((d) => `<li>Line ${d.line}:${d.col}: ${esc(d.message)}</li>`).join('');
+    const items = errors.map((d) => `<li>${d.file ? `${esc(d.file)}: ` : ''}Line ${d.line}:${d.col}: ${esc(d.message)}</li>`).join('');
     return { ok: false, html: `<div class="errors"><strong>${errors.length} error(s)</strong>; the preview updates when they are fixed.<ul>${items}</ul></div>` };
   }
 

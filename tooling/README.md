@@ -37,10 +37,12 @@ proschi render [--out <dir>] [--format svg|md|html] <file>
 - `html`: `<file>.html`, a single self-contained page with all the SVGs and a
   scenario list
 
-`--out` defaults to the current directory; the written paths are printed. A
-file with errors is not rendered (the errors are printed, exit code 1);
-warnings don't stop it. The SVGs are self-contained, laid out with ELK, and
-have a white background.
+`--out` defaults to the current directory; the written paths are printed.
+Imports are followed as for `check`. A document with errors in any of its
+files is not rendered (the errors are printed, exit code 1); warnings don't
+stop it. The SVGs are self-contained, with a white background, and look like
+the web editor's canvas (same layout, cards and icons). The renderer is a
+separate bundle (`dist/render.cjs`), loaded only by `proschi render`.
 
 Also in this package:
 
