@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useCallback, useState, useEffect } from 'react';
 import { Plus, PlayCircle, Edit, Trash2, Search } from 'lucide-react';
 import { api, type UseCaseListItem } from '../../services/api';
 
@@ -21,11 +21,7 @@ export default function UseCaseListView({
   const [newUseCaseDescription, setNewUseCaseDescription] = useState('');
   const [creating, setCreating] = useState(false);
 
-  useEffect(() => {
-    loadUseCases();
-  }, [projectId]);
-
-  const loadUseCases = async () => {
+  const loadUseCases = useCallback(async () => {
     try {
       setLoading(true);
       const data = await api.getUseCases(projectId);
@@ -35,7 +31,11 @@ export default function UseCaseListView({
     } finally {
       setLoading(false);
     }
-  };
+  }, [projectId]);
+
+  useEffect(() => {
+    loadUseCases();
+  }, [loadUseCases]);
 
   const handleCreateUseCase = async () => {
     if (!newUseCaseName.trim()) return;

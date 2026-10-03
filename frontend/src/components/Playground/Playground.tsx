@@ -5,11 +5,12 @@ import ReactFlow, {
   Controls,
   Panel,
   ReactFlowProvider,
+  applyEdgeChanges,
   applyNodeChanges,
   useNodesInitialized,
   useReactFlow,
 } from 'reactflow';
-import type { Edge, Node, NodeChange } from 'reactflow';
+import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import {
   AlertCircle,
@@ -26,6 +27,9 @@ import {
   Play,
   Trash2,
   Upload,
+  Code2,
+  Pencil,
+  Network,
 } from 'lucide-react';
 import { ecommerceExample, parse, type Diagnostic } from '../../dsl';
 import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
@@ -42,7 +46,7 @@ import {
   type DocumentState,
 } from '../../playground/documents';
 import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
-import { addConnection, clearPositions, renameNode, setNodePosition } from '../../dsl/edit';
+import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
@@ -93,6 +97,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
+  // Phones show one pane at a time.
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -123,12 +129,27 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   }, [source, playbackKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
-  const edges = useMemo(() => toFlowEdges(diagram), [diagram]);
+  const [edges, setEdges] = useState<Edge[]>([]);
+
+  // Edges are local state so selection works; keep it across re-parses.
+  useEffect(() => {
+    setEdges((previous) => {
+      const selected = new Set(previous.filter((e) => e.selected).map((e) => e.id));
+      return toFlowEdges(diagram).map((e) => (selected.has(e.id) ? { ...e, selected: true } : e));
+    });
+  }, [diagram]);
 
   useEffect(() => {
     let cancelled = false;
     layoutDiagram(diagram)
-      .then((laidOut) => !cancelled && setNodes(laidOut))
+      .then((laidOut) => {
+        if (cancelled) return;
+        // Keep what the user had selected across re-layouts.
+        setNodes((previous) => {
+          const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
+          return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
+        });
+      })
       .catch((error) => console.error('Layout failed:', error));
     return () => {
       cancelled = true;
@@ -167,84 +188,115 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     }
   };
 
+  const deleteFromCanvas = (nodeIds: string[], edgeIds: string[]) => {
+    let next = removeConnections(source, edgeIds);
+    for (const id of nodeIds) {
+      const result = removeNode(next, id);
+      if (result.error !== undefined) {
+        window.alert(result.error);
+        return;
+      }
+      next = result.source;
+    }
+    setSource(next);
+  };
+
+  const startPlaying = () => {
+    setPlaying(true);
+    setMobilePane('diagram');
+  };
+
   const canPlay = !!useCase && useCase.steps.length > 0;
+  const problemCount = diagnostics.length;
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <div className="h-screen flex flex-col bg-gray-50">
-      <header className="flex flex-wrap items-center gap-2 px-4 py-2 bg-white border-b border-gray-200">
-        <span className="text-lg font-bold text-gray-900 mr-1">Proschi</span>
+    <div className="h-[100dvh] flex flex-col bg-gray-50">
+      <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2 bg-white border-b border-gray-200">
+        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+          <span className="text-lg font-bold text-gray-900 mr-1">Proschi</span>
 
-        <Menu
-          label="Diagrams"
-          trigger={
-            <>
-              <span className="max-w-[14rem] truncate">{titleOf(source)}</span>
-              <ChevronDown size={14} />
-            </>
-          }
-        >
-          {(close) => (
-            <>
-              <div className="px-3 pt-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Saved in this browser</div>
-              <ul className="max-h-72 overflow-y-auto">
-                {sortedDocs.map((doc) => {
-                  const title = titleOf(doc.source);
-                  return (
-                    <li key={doc.id} className="group flex items-center">
-                      <button
-                        role="menuitem"
-                        onClick={() => {
-                          openDoc((s) => selectDoc(s, doc.id));
-                          close();
-                        }}
-                        className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-gray-100 ${doc.id === docState.currentId ? 'font-semibold text-blue-700' : 'text-gray-700'}`}
-                      >
-                        <span className="block truncate">{title}</span>
-                        <span className="block text-xs font-normal text-gray-400">{new Date(doc.updatedAt).toLocaleString()}</span>
-                      </button>
-                      <button
-                        aria-label={`Delete ${title}`}
-                        onClick={() => deleteDoc(doc.id, title)}
-                        className="mr-1 p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
-                      >
-                        <Trash2 size={14} />
-                      </button>
-                    </li>
-                  );
-                })}
-              </ul>
-              <div className="my-1 border-t border-gray-100" />
-              <MenuItem
-                icon={<FilePlus size={14} />}
-                onSelect={() => {
-                  openDoc((s) => addDoc(s, BLANK_SOURCE));
-                  close();
-                }}
-              >
-                New diagram
-              </MenuItem>
-              <MenuItem
-                icon={<Upload size={14} />}
-                onSelect={() => {
-                  fileInputRef.current?.click();
-                  close();
-                }}
-              >
-                Open .proschi file…
-              </MenuItem>
-              <MenuItem
-                icon={<Download size={14} />}
-                onSelect={() => {
-                  downloadText(source, fileNameFor(diagram.title, 'proschi'));
-                  close();
-                }}
-              >
-                Download .proschi file
-              </MenuItem>
-            </>
-          )}
-        </Menu>
+          <Menu
+            label="Diagrams"
+            trigger={
+              <>
+                <span className="max-w-[10rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
+                <ChevronDown size={14} />
+              </>
+            }
+          >
+            {(close) => (
+              <>
+                <div className="px-3 pt-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Saved in this browser</div>
+                <ul className="max-h-72 overflow-y-auto">
+                  {sortedDocs.map((doc) => {
+                    const title = titleOf(doc.source);
+                    return (
+                      <li key={doc.id} className="group flex items-center">
+                        <button
+                          role="menuitem"
+                          onClick={() => {
+                            openDoc((s) => selectDoc(s, doc.id));
+                            close();
+                          }}
+                          className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-gray-100 ${doc.id === docState.currentId ? 'font-semibold text-blue-700' : 'text-gray-700'}`}
+                        >
+                          <span className="block truncate">{title}</span>
+                          <span className="block text-xs font-normal text-gray-400">{new Date(doc.updatedAt).toLocaleString()}</span>
+                        </button>
+                        <button
+                          aria-label={`Delete ${title}`}
+                          onClick={() => deleteDoc(doc.id, title)}
+                          className="mr-1 p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+                <div className="my-1 border-t border-gray-100" />
+                <MenuItem
+                  icon={<FilePlus size={14} />}
+                  onSelect={() => {
+                    openDoc((s) => addDoc(s, BLANK_SOURCE));
+                    close();
+                  }}
+                >
+                  New diagram
+                </MenuItem>
+                <MenuItem
+                  icon={<Upload size={14} />}
+                  onSelect={() => {
+                    fileInputRef.current?.click();
+                    close();
+                  }}
+                >
+                  Open .proschi file…
+                </MenuItem>
+                <MenuItem
+                  icon={<Download size={14} />}
+                  onSelect={() => {
+                    downloadText(source, fileNameFor(diagram.title, 'proschi'));
+                    close();
+                  }}
+                >
+                  Download .proschi file
+                </MenuItem>
+                <div className="my-1 border-t border-gray-100" />
+                <MenuItem
+                  icon={<Network size={14} />}
+                  onSelect={() => {
+                    close();
+                    onOpenBuilder();
+                  }}
+                >
+                  Visual builder (classic)
+                </MenuItem>
+              </>
+            )}
+          </Menu>
+        </div>
         <input
           ref={fileInputRef}
           type="file"
@@ -256,13 +308,14 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           }}
         />
 
-        <div className="flex flex-wrap items-center gap-2 ml-auto">
+        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
           <button
             onClick={() => setShowExamples(true)}
-            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+            aria-label="Examples"
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
           >
             <BookOpen size={16} />
-            Examples
+            <span className="hidden sm:inline">Examples</span>
           </button>
 
           <select
@@ -273,7 +326,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
               setInitialStep(undefined);
             }}
             disabled={diagram.useCases.length === 0}
-            className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white disabled:text-gray-400 max-w-[12rem]"
+            className="flex-1 min-w-0 sm:flex-none sm:max-w-[12rem] text-sm border border-gray-300 rounded-md px-2 py-2 sm:py-1.5 bg-white disabled:text-gray-400"
           >
             {diagram.useCases.length === 0 && <option value="">No use cases</option>}
             {diagram.useCases.map((u) => (
@@ -286,47 +339,66 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           {playing ? (
             <button
               onClick={stopPlaying}
-              className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              aria-label="Back to diagram"
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
             >
               <LayoutGrid size={16} />
-              Diagram
+              <span className="hidden sm:inline">Diagram</span>
             </button>
           ) : (
             <button
-              onClick={() => setPlaying(true)}
+              onClick={startPlaying}
               disabled={!canPlay}
+              aria-label="Play"
               title={canPlay ? 'Play this use case' : 'Add a usecase with steps to play it'}
-              className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Play size={16} />
-              Play
+              <span className="hidden sm:inline">Play</span>
             </button>
           )}
 
           <button
             onClick={copyShareLink}
+            aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
           >
             {copied ? <Check size={16} className="text-green-600" /> : <Link size={16} />}
-            {copied ? 'Copied' : 'Share'}
-          </button>
-
-          <button onClick={onOpenBuilder} className="text-sm px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100">
-            Visual builder
+            <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
           </button>
         </div>
       </header>
 
+      <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
+        {(['code', 'diagram'] as const).map((pane) => (
+          <button
+            key={pane}
+            role="tab"
+            aria-selected={mobilePane === pane}
+            onClick={() => setMobilePane(pane)}
+            className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 ${mobilePane === pane ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
+          >
+            {pane === 'code' ? <Code2 size={16} /> : <Network size={16} />}
+            {pane === 'code' ? 'Code' : playing ? 'Playback' : 'Diagram'}
+            {pane === 'code' && problemCount > 0 && (
+              <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{problemCount}</span>
+            )}
+          </button>
+        ))}
+      </div>
+
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <section className="h-[45vh] md:h-auto md:w-[42%] md:max-w-[720px] flex flex-col border-b md:border-b-0 md:border-r border-gray-200 bg-white">
+        <section
+          className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r border-gray-200 bg-white`}
+        >
           <div className="flex-1 min-h-0">
             <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={diagnostics} nodeIds={nodeIds} />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={(d) => editorRef.current?.goTo(d.line, d.col)} />
         </section>
 
-        <section className="flex-1 min-h-0 min-w-0 relative">
+        <section className={`${mobilePane === 'diagram' ? 'block' : 'hidden'} md:block flex-1 min-h-0 min-w-0 relative`}>
           {playing && useCase ? (
             <UseCasePlayer
               useCase={useCase}
@@ -335,6 +407,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
               onBack={stopPlaying}
               initialStep={initialStep}
               onStepChange={setPlayStep}
+              showHeader={false}
             />
           ) : (
             <ReactFlowProvider>
@@ -342,12 +415,15 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 nodes={nodes}
                 edges={edges}
                 onNodesChange={setNodes}
+                onEdgesChange={setEdges}
                 title={diagram.title}
                 hasPinnedNodes={diagram.nodes.some((n) => n.position)}
                 onMoveNodes={(moved) => editSource((src) => moved.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src))}
                 onConnectNodes={(from, to) => editSource((src) => addConnection(src, from, to))}
                 onRenameNode={(id, name) => editSource((src) => renameNode(src, id, name))}
                 onResetLayout={() => editSource(clearPositions)}
+                onDelete={deleteFromCanvas}
+                fitKey={mobilePane}
               />
             </ReactFlowProvider>
           )}
@@ -378,12 +454,16 @@ interface DiagramViewProps {
   nodes: Node[];
   edges: Edge[];
   onNodesChange: (update: (nodes: Node[]) => Node[]) => void;
+  onEdgesChange: (update: (edges: Edge[]) => Edge[]) => void;
   title?: string;
   hasPinnedNodes: boolean;
   onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
   onConnectNodes: (from: string, to: string) => void;
   onRenameNode: (id: string, name: string) => void;
   onResetLayout: () => void;
+  onDelete: (nodeIds: string[], edgeIds: string[]) => void;
+  /** Changes when the view becomes visible again, so it can re-fit. */
+  fitKey: string;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -391,14 +471,43 @@ function DiagramView({
   nodes,
   edges,
   onNodesChange,
+  onEdgesChange,
   title,
   hasPinnedNodes,
   onMoveNodes,
   onConnectNodes,
   onRenameNode,
   onResetLayout,
+  onDelete,
+  fitKey,
 }: DiagramViewProps) {
   const { fitView, getNodes } = useReactFlow();
+  const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
+
+  // React Flow re-sends the selection when this handler changes, so it must be stable
+  // and must not store an equal selection again.
+  const handleSelectionChange = useCallback(({ nodes: selectedNodes, edges: selectedEdges }: { nodes: Node[]; edges: Edge[] }) => {
+    setSelection((current) => {
+      const same =
+        current.nodes.map((n) => n.id).join('|') === selectedNodes.map((n) => n.id).join('|') &&
+        current.edges.map((e) => e.id).join('|') === selectedEdges.map((e) => e.id).join('|');
+      return same ? current : { nodes: selectedNodes, edges: selectedEdges };
+    });
+  }, []);
+
+  const promptRename = (node: Node) => {
+    const name = window.prompt('Display name', node.data?.name ?? node.id);
+    if (name !== null) onRenameNode(node.id, name);
+  };
+
+  const deleteSelection = () => {
+    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    onDelete(
+      selection.nodes.map((n) => n.id),
+      selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
+    );
+  };
   const wrapperRef = useRef<HTMLDivElement>(null);
   const [exporting, setExporting] = useState(false);
 
@@ -421,9 +530,18 @@ function DiagramView({
   // Re-fit once nodes are measured after being added or removed, not on every drag.
   useEffect(() => {
     if (!measured) return;
-    const frame = requestAnimationFrame(() => fitView({ padding: 0.15, duration: 200 }));
+    const frame = requestAnimationFrame(() => {
+      // A hidden pane (the other mobile tab) has no size; fitting it would produce NaN.
+      if (!wrapperRef.current?.offsetWidth) return;
+      fitView({ padding: 0.15, duration: 200 });
+    });
     return () => cancelAnimationFrame(frame);
-  }, [structure, measured, fitView]);
+  }, [structure, measured, fitView, fitKey]);
+
+  const handleEdgesChange = useCallback(
+    (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
+    [onEdgesChange],
+  );
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => onNodesChange((current) => applyNodeChanges(changes, current)),
@@ -431,18 +549,39 @@ function DiagramView({
   );
 
   return (
-    <div ref={wrapperRef} className="h-full">
+    <div
+      ref={wrapperRef}
+      className="h-full"
+      onKeyDown={(e) => {
+        const target = e.target as HTMLElement;
+        if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
+          e.preventDefault();
+          deleteSelection();
+        }
+      }}
+    >
       <ReactFlow
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={handleNodesChange}
-        onNodeDragStop={(_event, _node, dragged) => onMoveNodes(dragged.map((n) => ({ id: n.id, position: n.position })))}
-        onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
-        onNodeDoubleClick={(_event, node) => {
-          const name = window.prompt('Display name', node.data?.name ?? node.id);
-          if (name !== null) onRenameNode(node.id, name);
+        onEdgesChange={handleEdgesChange}
+        onNodeDragStart={(_event, _node, dragged) => {
+          dragStartRef.current = new Map(dragged.map((n) => [n.id, { ...n.position }]));
         }}
+        onNodeDragStop={(_event, _node, dragged) => {
+          // A click is a drag that never moved; only real moves are written to the text.
+          const moved = dragged.filter((n) => {
+            const start = dragStartRef.current.get(n.id);
+            return !start || Math.abs(start.x - n.position.x) > 1 || Math.abs(start.y - n.position.y) > 1;
+          });
+          if (moved.length > 0) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
+        }}
+        onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
+        onNodeDoubleClick={(_event, node) => promptRename(node)}
+        onSelectionChange={handleSelectionChange}
+        // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
+        deleteKeyCode={null}
         zoomOnDoubleClick={false}
         fitView
         minZoom={0.1}
@@ -450,9 +589,34 @@ function DiagramView({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls showInteractive={false} />
+        {(selection.nodes.length > 0 || selection.edges.length > 0) && (
+          <Panel position="top-left" className="flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-sm">
+            <span className="px-2 text-xs text-gray-500">
+              {selection.nodes.length === 1 && selection.edges.length === 0
+                ? (selection.nodes[0].data?.name ?? selection.nodes[0].id)
+                : `${selection.nodes.length + selection.edges.length} selected`}
+            </span>
+            {selection.nodes.length === 1 && selection.edges.length === 0 && (
+              <button
+                onClick={() => promptRename(selection.nodes[0])}
+                className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm text-gray-700 hover:bg-gray-100"
+              >
+                <Pencil size={14} />
+                Rename
+              </button>
+            )}
+            <button
+              onClick={deleteSelection}
+              className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm text-red-600 hover:bg-red-50"
+            >
+              <Trash2 size={14} />
+              Delete
+            </button>
+          </Panel>
+        )}
         {nodes.length > 0 && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-gray-400 bg-white/80 rounded px-2 py-1">
-            Drag to pin · double-click to rename · drag between dots to connect
+            Drag to pin · double-click to rename · drag between dots to connect · Delete removes
           </Panel>
         )}
         {nodes.length > 0 && (

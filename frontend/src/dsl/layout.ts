@@ -14,6 +14,9 @@ const GROUP_OPTIONS = {
   'elk.nodeSize.minimum': '(300, 200)',
 };
 
+/** Space kept between a group's edge and a member that was dragged near it. */
+const GROUP_MARGIN = 24;
+
 const ROOT_OPTIONS = {
   'elk.algorithm': 'layered',
   'elk.direction': 'DOWN',
@@ -93,7 +96,7 @@ export async function layoutDiagram(diagram: Diagram): Promise<Node<ComponentMet
     });
   collect(result.children);
 
-  return diagram.nodes.map((node): Node<ComponentMetadata> => {
+  const rfNodes = diagram.nodes.map((node): Node<ComponentMetadata> => {
     const box = placed.get(node.id);
     const position = node.position ?? { x: box?.x ?? 0, y: box?.y ?? 0 };
     const rfNode: Node<ComponentMetadata> = {
@@ -111,6 +114,36 @@ export async function layoutDiagram(diagram: Diagram): Promise<Node<ComponentMet
     }
     return rfNode;
   });
+
+  growGroupsAroundMembers(rfNodes, placed);
+  return rfNodes;
+}
+
+/**
+ * ELK sizes groups for its own placement; members pinned with `pos` can sit
+ * outside that box, so grow each group (innermost first) until it contains them.
+ */
+function growGroupsAroundMembers(nodes: Node<ComponentMetadata>[], placed: Map<string, ElkNode>) {
+  const size = (n: Node) => ({
+    width: Number(n.style?.width ?? placed.get(n.id)?.width ?? 0),
+    height: Number(n.style?.height ?? placed.get(n.id)?.height ?? 0),
+  });
+  const depth = (n: Node): number => {
+    const parent = nodes.find((p) => p.id === n.parentNode);
+    return parent ? depth(parent) + 1 : 0;
+  };
+  const groups = nodes.filter((n) => n.type === NODE_TYPE.group).sort((a, b) => depth(b) - depth(a));
+  for (const group of groups) {
+    const { width, height } = size(group);
+    let right = width;
+    let bottom = height;
+    for (const member of nodes.filter((n) => n.parentNode === group.id)) {
+      const m = size(member);
+      right = Math.max(right, member.position.x + m.width + GROUP_MARGIN);
+      bottom = Math.max(bottom, member.position.y + m.height + GROUP_MARGIN);
+    }
+    group.style = { ...group.style, width: right, height: bottom };
+  }
 }
 
 export function toFlowEdges(diagram: Diagram): Edge[] {

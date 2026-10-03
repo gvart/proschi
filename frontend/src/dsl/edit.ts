@@ -1,4 +1,4 @@
-import { tokenizeLine, type Token } from './lexer';
+import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { parse } from './parser';
 import type { DiagramNode } from './types';
 
@@ -45,6 +45,50 @@ export function addConnection(source: string, from: string, to: string): string 
   const { diagram } = parse(source);
   if (diagram.edges.some((e) => e.source === from && e.target === to)) return source;
   return insertDeclaration(source, `${from} -> ${to}`);
+}
+
+export type EditResult = { source: string; error?: undefined } | { source?: undefined; error: string };
+
+/** Deletes architecture connections by their parsed ids (e.g. `a->b`, `a->b#2`). */
+export function removeConnections(source: string, edgeIds: string[]): string {
+  const { diagram } = parse(source);
+  const lines = diagram.edges.filter((e) => edgeIds.includes(e.id)).map((e) => e.loc.line);
+  return removeStatementLines(source, lines);
+}
+
+/**
+ * Deletes a node's declaration and its connections. Refuses when the node is a
+ * group or appears in a use case, since that would need edits the user should see.
+ */
+export function removeNode(source: string, id: string): EditResult {
+  const { diagram } = parse(source);
+  const node = diagram.nodes.find((n) => n.id === id);
+  if (!node) return { source };
+  if (node.kind === 'group') return { error: `"${node.name}" is a group; delete it in the text so its members are handled too.` };
+  const useCase = diagram.useCases.find((u) => u.steps.some((s) => s.fromServiceId === id || s.toServiceId === id));
+  if (useCase) return { error: `"${node.name}" is used in the use case "${useCase.name}"; remove those steps first.` };
+
+  const lines = diagram.edges.filter((e) => e.source === id || e.target === id).map((e) => e.loc.line);
+  if (!node.implicit) lines.push(node.loc.line);
+  return { source: removeStatementLines(source, lines) };
+}
+
+/** Removes whole statements starting at the given lines, including multi-line payloads. */
+function removeStatementLines(source: string, starts: number[]): string {
+  const lines = source.split('\n');
+  const drop = new Set<number>();
+  for (const start of starts) {
+    let index = start - 1;
+    drop.add(index);
+    const label = tokenizeLine(lines[index] ?? '', start).tokens.find((t) => t.kind === 'label')?.value ?? '';
+    let depth = bracketDepth(label);
+    while (depth > 0 && index + 1 < lines.length) {
+      index++;
+      drop.add(index);
+      depth += bracketDepth(lines[index]);
+    }
+  }
+  return lines.filter((_, i) => !drop.has(i)).join('\n');
 }
 
 /** Removes every `pos x,y` so the whole diagram is auto-laid-out again. */
