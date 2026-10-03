@@ -1,10 +1,8 @@
 import type { Project, CanvasState } from '../types/canvas';
+import { loadJson, saveJson } from './storage';
 
-// Simulated delay for API calls
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
-
-// Mock data
-const mockProjects: Project[] = [
+// Example projects seeded on first visit
+const seedProjects: Project[] = [
   {
     id: '1',
     name: 'E-Commerce Platform',
@@ -116,23 +114,27 @@ const mockProjects: Project[] = [
   }
 ];
 
-let currentProject: Project | null = mockProjects[0];
+// Projects are stored in the browser; there is no backend.
+const PROJECTS_KEY = 'proschi.projects';
 
-// Mock API methods
+const mockProjects: Project[] = loadJson<Project[]>(PROJECTS_KEY, seedProjects);
+
+const persist = () => saveJson(PROJECTS_KEY, mockProjects);
+
+let currentProject: Project | null = mockProjects[0] ?? null;
+
+// Project API backed by localStorage
 export const mockApi = {
   // Projects
   async getProjects(): Promise<Project[]> {
-    await delay(300);
     return [...mockProjects];
   },
 
   async getProject(id: string): Promise<Project | null> {
-    await delay(200);
     return mockProjects.find(p => p.id === id) || null;
   },
 
   async createProject(name: string, description?: string): Promise<Project> {
-    await delay(400);
     const newProject: Project = {
       id: `project-${Date.now()}`,
       name,
@@ -146,11 +148,11 @@ export const mockApi = {
       }
     };
     mockProjects.push(newProject);
+    persist();
     return newProject;
   },
 
   async updateProject(id: string, updates: Partial<Project>): Promise<Project> {
-    await delay(300);
     const project = mockProjects.find(p => p.id === id);
     if (!project) throw new Error('Project not found');
 
@@ -158,32 +160,32 @@ export const mockApi = {
       ...updates,
       updatedAt: new Date().toISOString()
     });
+    persist();
     return project;
   },
 
   async deleteProject(id: string): Promise<void> {
-    await delay(300);
     const index = mockProjects.findIndex(p => p.id === id);
     if (index !== -1) {
       mockProjects.splice(index, 1);
+      persist();
     }
   },
 
   // Canvas state
   async getCanvasState(projectId: string): Promise<CanvasState> {
-    await delay(200);
     const project = mockProjects.find(p => p.id === projectId);
     if (!project) throw new Error('Project not found');
     return project.canvasState;
   },
 
   async saveCanvasState(projectId: string, canvasState: CanvasState): Promise<void> {
-    await delay(300);
     const project = mockProjects.find(p => p.id === projectId);
     if (!project) throw new Error('Project not found');
 
     project.canvasState = canvasState;
     project.updatedAt = new Date().toISOString();
+    persist();
   },
 
   // Current project helpers
