@@ -32,14 +32,20 @@ data class UpdateUseCaseRequest(
 data class FlowStepDto(
     val id: String? = null,
     val stepOrder: Int,
+    val stepName: String = "Step",
     val fromServiceId: String,
     val toServiceId: String,
+    val protocol: String = "REST",
     val httpMethod: String = "GET",
     val endpoint: String = "/",
+    val requestFormat: String = "JSON",
     val requestBody: String? = null,
+    val responseFormat: String = "JSON",
     val responseBody: String? = null,
     val statusCode: Int? = 200,
     val description: String? = null,
+    val executionType: String = "SYNC_REQUEST_RESPONSE",
+    val parallelGroup: Int? = null,
     val isParallel: Boolean = false,
     val isConditional: Boolean = false,
     val conditionExpression: String? = null
@@ -47,18 +53,27 @@ data class FlowStepDto(
 
 data class CreateFlowStepRequest(
     val stepOrder: Int,
+
+    @field:NotBlank(message = "Step name is required")
+    val stepName: String = "Step",
+
     @field:NotBlank(message = "From service ID is required")
     val fromServiceId: String,
 
     @field:NotBlank(message = "To service ID is required")
     val toServiceId: String,
 
+    val protocol: String = "REST",
     val httpMethod: String = "GET",
     val endpoint: String = "/",
+    val requestFormat: String = "JSON",
     val requestBody: String? = null,
+    val responseFormat: String = "JSON",
     val responseBody: String? = null,
     val statusCode: Int? = 200,
     val description: String? = null,
+    val executionType: String = "SYNC_REQUEST_RESPONSE",
+    val parallelGroup: Int? = null,
     val isParallel: Boolean = false,
     val isConditional: Boolean = false,
     val conditionExpression: String? = null
@@ -113,14 +128,20 @@ fun UseCase.toListResponse(): UseCaseListResponse = UseCaseListResponse(
 fun FlowStep.toDto(): FlowStepDto = FlowStepDto(
     id = this.id,
     stepOrder = this.stepOrder,
+    stepName = this.stepName,
     fromServiceId = this.fromServiceId,
     toServiceId = this.toServiceId,
+    protocol = this.protocol,
     httpMethod = this.httpMethod,
     endpoint = this.endpoint,
+    requestFormat = this.requestFormat,
     requestBody = this.requestBody,
+    responseFormat = this.responseFormat,
     responseBody = this.responseBody,
     statusCode = this.statusCode,
     description = this.description,
+    executionType = this.executionType,
+    parallelGroup = this.parallelGroup,
     isParallel = this.isParallel,
     isConditional = this.isConditional,
     conditionExpression = this.conditionExpression

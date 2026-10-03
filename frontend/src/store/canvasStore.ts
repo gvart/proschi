@@ -17,16 +17,20 @@ import type {
 import type { ComponentMetadata, Project } from '../types/canvas';
 import { mockApi } from '../services/mockApi';
 
+type ViewMode = 'architecture' | 'usecases' | 'playback';
+
 interface CanvasStore {
   nodes: Node[];
   edges: Edge[];
   currentProject: Project | null;
+  viewMode: ViewMode;
   selectedNode: Node | null;
   selectedNodes: string[]; // Array of selected node IDs for multi-select
   selectedEdge: Edge | null;
   clipboard: Node[]; // Clipboard for copy/paste
 
   // Actions
+  setViewMode: (mode: ViewMode) => void;
   setNodes: (nodes: Node[]) => void;
   setEdges: (edges: Edge[]) => void;
   onNodesChange: OnNodesChange;
@@ -55,10 +59,13 @@ export const useCanvasStore = create<CanvasStore>((set, get) => ({
   nodes: [],
   edges: [],
   currentProject: null,
+  viewMode: 'architecture',
   selectedNode: null,
   selectedNodes: [],
   selectedEdge: null,
   clipboard: [],
+
+  setViewMode: (mode) => set({ viewMode: mode }),
 
   setNodes: (nodes) => set({ nodes }),
 

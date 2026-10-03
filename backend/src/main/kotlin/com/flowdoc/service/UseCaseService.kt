@@ -73,14 +73,20 @@ class UseCaseService(
         val step = FlowStep(
             useCase = useCase,
             stepOrder = request.stepOrder,
+            stepName = request.stepName,
             fromServiceId = request.fromServiceId,
             toServiceId = request.toServiceId,
+            protocol = request.protocol,
             httpMethod = request.httpMethod,
             endpoint = request.endpoint,
+            requestFormat = request.requestFormat,
             requestBody = request.requestBody,
+            responseFormat = request.responseFormat,
             responseBody = request.responseBody,
             statusCode = request.statusCode,
             description = request.description,
+            executionType = request.executionType,
+            parallelGroup = request.parallelGroup,
             isParallel = request.isParallel,
             isConditional = request.isConditional,
             conditionExpression = request.conditionExpression
@@ -100,14 +106,20 @@ class UseCaseService(
         }
 
         step.stepOrder = request.stepOrder
+        step.stepName = request.stepName
         step.fromServiceId = request.fromServiceId
         step.toServiceId = request.toServiceId
+        step.protocol = request.protocol
         step.httpMethod = request.httpMethod
         step.endpoint = request.endpoint
+        step.requestFormat = request.requestFormat
         step.requestBody = request.requestBody
+        step.responseFormat = request.responseFormat
         step.responseBody = request.responseBody
         step.statusCode = request.statusCode
         step.description = request.description
+        step.executionType = request.executionType
+        step.parallelGroup = request.parallelGroup
         step.isParallel = request.isParallel
         step.isConditional = request.isConditional
         step.conditionExpression = request.conditionExpression
