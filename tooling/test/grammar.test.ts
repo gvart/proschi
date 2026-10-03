@@ -57,6 +57,18 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes imports and their path', () => {
+    const [line] = tokenize('import "infra/shared.proschi" # the platform');
+    expect(line).toEqual([
+      ['import', 'keyword.control.import.proschi'],
+      ['"', 'punctuation.definition.string.begin.proschi'],
+      ['infra/shared.proschi', 'string.quoted.double.path.proschi'],
+      ['"', 'punctuation.definition.string.end.proschi'],
+      ['# the platform', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(scopeOf(tokenize('importer -> db'), 'importer')).toBe('variable.other.node.proschi');
+  });
+
   it('scopes when only between an alt name and its condition', () => {
     const [line] = tokenize('  } alt "Missing" when "no such order" {');
     expect(line).toEqual([

@@ -34,6 +34,14 @@ describe('proschiLanguage', () => {
     expect(highlight('when -> api')[0]).toEqual(['when', 'variableName']);
     expect(highlight('a -> when')[2]).toEqual(['when', 'variableName']);
   });
+
+  it('highlights import as a keyword', () => {
+    expect(highlight('import "infra.proschi"')).toEqual([
+      ['import', 'keyword'],
+      ['"infra.proschi"', 'string'],
+    ]);
+    expect(highlight('importer -> db')[0]).toEqual(['importer', 'variableName']);
+  });
 });
 
 const complete = (doc: string, explicit = false) => {
@@ -67,7 +75,7 @@ describe('proschiCompletions', () => {
 
   it('offers keywords and ids at the start of a line', () => {
     const labels = complete('or')?.options.map((o) => o.label);
-    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'orders']));
+    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'import', 'orders']));
   });
 
   it('offers only ids after an arrow', () => {

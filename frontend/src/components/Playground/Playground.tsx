@@ -38,15 +38,19 @@ import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
   addDoc,
+  addFile,
   currentDoc,
+  fileNameOf,
   initialState,
   removeDoc,
+  renameFile,
   selectDoc,
   titleOf,
   updateCurrent,
   type DocumentState,
 } from '../../playground/documents';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
+import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
 import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
@@ -70,10 +74,12 @@ const nodeTypes = {
 };
 
 function loadInitialState(): DocumentState {
+  const link = decodeShareLink(window.location.hash);
   return initialState({
     stored: loadJson<DocumentState | null>(DOCS_KEY, null),
     legacySource: loadJson<string | null>(LEGACY_SOURCE_KEY, null),
-    sharedSource: decodeShareLink(window.location.hash)?.source ?? null,
+    sharedSource: link?.source ?? null,
+    sharedImports: link?.imports,
     fallbackSource: ecommerceExample,
   });
 }
@@ -84,7 +90,9 @@ interface PlaygroundProps {
 
 export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [docState, setDocState] = useState(loadInitialState);
-  const source = currentDoc(docState).source;
+  const current = currentDoc(docState);
+  const source = current.source;
+  const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
   /** Applies a canvas edit to the current document's text. */
   const editSource = useCallback(
@@ -116,7 +124,25 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     return () => clearTimeout(timer);
   }, [source, docState]);
 
-  const { diagram, diagnostics } = useMemo(() => parse(parsedSource), [parsedSource]);
+  // Imports resolve against the other diagrams saved in this browser. Comparing them
+  // by value keeps typing in the current diagram from re-parsing before the debounce.
+  const importableKey = JSON.stringify(importableFiles(docState.docs, current));
+  const parsed = useMemo(
+    () => parse(parsedSource, { path: rootPath, resolve: filesResolver(JSON.parse(importableKey), rootPath) }),
+    [parsedSource, rootPath, importableKey],
+  );
+  const { diagram, diagnostics } = parsed;
+  const imports = useMemo(() => usedImports(parsed, JSON.parse(importableKey), rootPath), [parsed, importableKey, rootPath]);
+  const importsKey = JSON.stringify(imports);
+  const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
+  /** Nodes declared in imported files (id → file); canvas edits leave them alone. */
+  const importedNodes = useMemo(() => new Map(diagram.nodes.flatMap((n) => (n.loc.file ? [[n.id, n.loc.file] as const] : []))), [diagram]);
+  const [notice, setNotice] = useState<string | null>(null);
+  useEffect(() => {
+    if (!notice) return;
+    const timer = setTimeout(() => setNotice(null), 4000);
+    return () => clearTimeout(timer);
+  }, [notice]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
   const useCase = diagram.useCases.find((u) => u.id === selectedUseCaseId) ?? diagram.useCases[0];
   const scenario = useCase?.scenarios.find((s) => s.id === selectedScenarioId) ?? useCase?.scenarios[0];
@@ -134,12 +160,12 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
   useEffect(() => {
     const timer = setTimeout(() => {
-      window.history.replaceState(null, '', encodeShareHash(source, playback));
+      window.history.replaceState(null, '', encodeShareHash(source, playback, imports));
     }, PARSE_DELAY_MS);
     return () => clearTimeout(timer);
-    // playbackKey captures playback by value.
+    // playbackKey and importsKey capture playback and imports by value.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [source, playbackKey]);
+  }, [source, playbackKey, importsKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
@@ -181,6 +207,11 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     setSelectedScenarioId(undefined);
   };
 
+  const renameDocFile = (id: string, current: string) => {
+    const name = window.prompt('File name (used by import "…")', current);
+    if (name !== null) setDocState((s) => renameFile(s, id, name));
+  };
+
   const deleteDoc = (id: string, title: string) => {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
   };
@@ -188,11 +219,11 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const importFile = async (file: File | undefined) => {
     if (!file) return;
     const text = await file.text();
-    openDoc((s) => addDoc(s, text));
+    openDoc((s) => addFile(s, text, file.name));
   };
 
   const copyShareLink = async () => {
-    const url = shareUrl(source, window.location, playback);
+    const url = shareUrl(source, window.location, playback, imports);
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -203,7 +234,25 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   };
 
   const deleteFromCanvas = (nodeIds: string[], edgeIds: string[]) => {
-    let next = removeConnections(source, edgeIds);
+    const selectedEdges = diagram.edges.filter((e) => edgeIds.includes(e.id));
+    const importedNode = nodeIds.find((id) => importedNodes.has(id));
+    const importedEdge = selectedEdges.find((e) => e.loc.file);
+    if (importedNode || importedEdge) {
+      setNotice(`Declared in ${importedNode ? importedNodes.get(importedNode) : importedEdge!.loc.file}; delete it there.`);
+      return;
+    }
+    // removeNode only sees this document's use cases.
+    const usedElsewhere = diagram.useCases.find(
+      (u) => u.loc.file && u.scenarios.some((sc) => sc.steps.some((s) => nodeIds.includes(s.fromServiceId) || nodeIds.includes(s.toServiceId))),
+    );
+    if (usedElsewhere) {
+      setNotice(`Used in the use case "${usedElsewhere.name}" in ${usedElsewhere.loc.file}; remove those steps first.`);
+      return;
+    }
+    // Edge ids count duplicates across every file; the text edit needs this document's own ids.
+    const rootEdges = parse(source).diagram.edges;
+    const rootIds = selectedEdges.flatMap((e) => rootEdges.filter((r) => r.loc.line === e.loc.line).map((r) => r.id));
+    let next = removeConnections(source, rootIds);
     for (const id of nodeIds) {
       const result = removeNode(next, id);
       if (result.error !== undefined) {
@@ -224,6 +273,33 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     setSelectedScenarioId(id);
     setInitialStep(undefined);
     if (!playing) startPlaying();
+  };
+
+  const moveNodes = (moved: { id: string; position: { x: number; y: number } }[]) => {
+    const own = moved.filter((n) => !importedNodes.has(n.id));
+    if (own.length > 0) editSource((src) => own.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src));
+  };
+
+  const renameFromCanvas = (id: string, name: string) => {
+    const file = importedNodes.get(id);
+    if (file) setNotice(`'${id}' is declared in ${file}; rename it there.`);
+    else editSource((src) => renameNode(src, id, name));
+  };
+
+  const connectNodes = (from: string, to: string) => {
+    // The connection may already exist in an imported file.
+    if (diagram.edges.some((e) => e.source === from && e.target === to)) return;
+    editSource((src) => addConnection(src, from, to));
+  };
+
+  /** A problem in an imported file opens that file, if it is saved in this browser. */
+  const selectDiagnostic = (d: Diagnostic) => {
+    if (d.file === undefined) {
+      editorRef.current?.goTo(d.line, d.col);
+      return;
+    }
+    const target = docState.docs.find((doc) => doc.id !== current.id && fileNameOf(doc) === d.file);
+    if (target && !current.imports?.[d.file]) openDoc((s) => selectDoc(s, target.id));
   };
 
   const canPlay = !!scenario && scenario.steps.length > 0;
@@ -264,7 +340,17 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                           className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-gray-100 ${doc.id === docState.currentId ? 'font-semibold text-blue-700' : 'text-gray-700'}`}
                         >
                           <span className="block truncate">{title}</span>
-                          <span className="block text-xs font-normal text-gray-400">{new Date(doc.updatedAt).toLocaleString()}</span>
+                          <span className="block truncate text-xs font-normal text-gray-400">
+                            {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
+                          </span>
+                        </button>
+                        <button
+                          aria-label={`Rename file ${fileNameOf(doc)}`}
+                          title="Rename the file imports refer to"
+                          onClick={() => renameDocFile(doc.id, fileNameOf(doc))}
+                          className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                        >
+                          <Pencil size={14} />
                         </button>
                         <button
                           aria-label={`Delete ${title}`}
@@ -299,7 +385,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 <MenuItem
                   icon={<Download size={14} />}
                   onSelect={() => {
-                    downloadText(source, fileNameFor(diagram.title, 'proschi'));
+                    downloadText(source, rootPath);
                     close();
                   }}
                 >
@@ -431,9 +517,9 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r border-gray-200 bg-white`}
         >
           <div className="flex-1 min-h-0">
-            <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={diagnostics} nodeIds={nodeIds} />
+            <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
           </div>
-          <DiagnosticsPanel diagnostics={diagnostics} onSelect={(d) => editorRef.current?.goTo(d.line, d.col)} />
+          <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
         </section>
 
         <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
@@ -460,13 +546,16 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   onEdgesChange={setEdges}
                   title={diagram.title}
                   hasPinnedNodes={diagram.nodes.some((n) => n.position)}
-                  onMoveNodes={(moved) => editSource((src) => moved.reduce((acc, n) => setNodePosition(acc, n.id, n.position), src))}
-                  onConnectNodes={(from, to) => editSource((src) => addConnection(src, from, to))}
-                  onRenameNode={(id, name) => editSource((src) => renameNode(src, id, name))}
+                  importedNodes={importedNodes}
+                  onMoveNodes={moveNodes}
+                  onConnectNodes={connectNodes}
+                  onRenameNode={renameFromCanvas}
                   onResetLayout={() => editSource(clearPositions)}
                   onDelete={deleteFromCanvas}
                   fitKey={mobilePane}
                   mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
+                  notice={notice}
+                  onNotice={setNotice}
                 />
               </ReactFlowProvider>
             )}
@@ -571,6 +660,11 @@ interface DiagramViewProps {
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
   mermaid: MermaidSource;
+  /** Nodes declared in imported files (id → file); they cannot be moved here. */
+  importedNodes: Map<string, string>;
+  /** A short message shown over the canvas, e.g. why an edit was refused. */
+  notice: string | null;
+  onNotice: (message: string) => void;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -588,6 +682,9 @@ function DiagramView({
   onDelete,
   fitKey,
   mermaid,
+  importedNodes,
+  notice,
+  onNotice,
 }: DiagramViewProps) {
   const { fitView, getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
@@ -605,6 +702,8 @@ function DiagramView({
   }, []);
 
   const promptRename = (node: Node) => {
+    // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
+    if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
     const name = window.prompt('Display name', node.data?.name ?? node.id);
     if (name !== null) onRenameNode(node.id, name);
   };
@@ -683,7 +782,17 @@ function DiagramView({
             const start = dragStartRef.current.get(n.id);
             return !start || Math.abs(start.x - n.position.x) > 1 || Math.abs(start.y - n.position.y) > 1;
           });
-          if (moved.length > 0) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
+          // Nodes from imported files snap back: their text is in another file.
+          const locked = moved.filter((n) => importedNodes.has(n.id));
+          if (locked.length > 0) {
+            const back = new Map(locked.map((n) => [n.id, dragStartRef.current.get(n.id)]));
+            onNodesChange((current) => current.map((n) => {
+              const start = back.get(n.id);
+              return start ? { ...n, position: start } : n;
+            }));
+            onNotice(`'${locked[0].id}' is declared in ${importedNodes.get(locked[0].id)}; move it there.`);
+          }
+          if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
         }}
         onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
         onNodeDoubleClick={(_event, node) => promptRename(node)}
@@ -720,6 +829,11 @@ function DiagramView({
               <Trash2 size={14} />
               Delete
             </button>
+          </Panel>
+        )}
+        {notice && (
+          <Panel position="bottom-center" role="status" className="rounded-md bg-gray-900/90 px-3 py-1.5 text-xs text-white shadow">
+            {notice}
           </Panel>
         )}
         {nodes.length > 0 && (
@@ -804,6 +918,7 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
               <AlertTriangle size={14} className="text-amber-600 flex-shrink-0 mt-px" />
             )}
             <span className="text-gray-500 tabular-nums flex-shrink-0">
+              {d.file ? `${d.file}:` : ''}
               {d.line}:{d.col}
             </span>
             <span className="text-gray-800">{d.message}</span>

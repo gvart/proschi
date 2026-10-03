@@ -13,6 +13,13 @@
       "items": {
         "$ref": "#/$defs/diagnostic"
       }
+    },
+    "imports": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/import"
+      },
+      "description": "Every `import` statement read, in any file; left out when there are none."
     }
   },
   "required": [
@@ -36,6 +43,10 @@
         "length": {
           "type": "integer",
           "minimum": 0
+        },
+        "file": {
+          "type": "string",
+          "description": "The imported file this is in; left out for the parsed file itself."
         }
       },
       "required": [
@@ -68,6 +79,10 @@
         "length": {
           "type": "integer",
           "minimum": 0
+        },
+        "file": {
+          "type": "string",
+          "description": "The imported file this is in; left out for the parsed file itself."
         }
       },
       "required": [
@@ -76,6 +91,27 @@
         "line",
         "col",
         "length"
+      ],
+      "additionalProperties": false
+    },
+    "import": {
+      "type": "object",
+      "properties": {
+        "path": {
+          "type": "string",
+          "description": "The path as written."
+        },
+        "resolved": {
+          "type": "string",
+          "description": "The file it resolved to; left out when it could not be found."
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "path",
+        "loc"
       ],
       "additionalProperties": false
     },

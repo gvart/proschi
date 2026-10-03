@@ -1,4 +1,15 @@
-import { KEYWORDS, addConnection, componentCatalog, parse, type Diagnostic, type Diagram, type DiagramNode, type SourceLoc } from './proschi';
+import {
+  KEYWORDS,
+  addConnection,
+  componentCatalog,
+  parse,
+  type Diagnostic,
+  type Diagram,
+  type DiagramNode,
+  type ParseOptions,
+  type ParseResult,
+  type SourceLoc,
+} from './proschi';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -18,14 +29,17 @@ export function toRange(loc: SourceLoc): Range {
 }
 
 export interface Analysis {
+  /** Everything the document and its imports declare. */
   diagram: Diagram;
+  /** Problems in the document and in the files it imports (those carry `file`). */
   diagnostics: Diagnostic[];
   lines: string[];
+  result: ParseResult;
 }
 
-export function analyze(text: string): Analysis {
-  const { diagram, diagnostics } = parse(text);
-  return { diagram, diagnostics, lines: text.split('\n') };
+export function analyze(text: string, options?: ParseOptions): Analysis {
+  const result = parse(text, options);
+  return { diagram: result.diagram, diagnostics: result.diagnostics, lines: text.split('\n'), result };
 }
 
 const IDENT = /[A-Za-z0-9_]/;
@@ -149,11 +163,17 @@ export function nodeAt(analysis: Analysis, pos: Position): { node: DiagramNode; 
   return { node, range: { start: { line: pos.line, character: word.start }, end: { line: pos.line, character: word.end } } };
 }
 
-/** Where a node is declared; implicit nodes have no declaration. */
-export function definition(analysis: Analysis, pos: Position): Range | null {
+/** Where a node is declared, in this document or (with `file`) an imported one; implicit nodes have no declaration. */
+export function declaration(analysis: Analysis, pos: Position): { file?: string; range: Range } | null {
   const hit = nodeAt(analysis, pos);
   if (!hit || hit.node.implicit) return null;
-  return toRange(hit.node.loc);
+  return { file: hit.node.loc.file, range: toRange(hit.node.loc) };
+}
+
+/** Where a node is declared, if that is in this document. */
+export function definition(analysis: Analysis, pos: Position): Range | null {
+  const found = declaration(analysis, pos);
+  return found && found.file === undefined ? found.range : null;
 }
 
 /** Every place a node id is used as a node: its declaration, connections and steps. */
@@ -191,6 +211,7 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   if (n.description) lines.push('', n.description);
   if (n.parent) lines.push('', `In group \`${n.parent}\``);
   if (n.implicit) lines.push('', '_Not declared; created because it is referenced._');
+  else if (n.loc.file) lines.push('', `_Declared in ${n.loc.file.split(/[\\/]/).pop()}_`);
   if (useCases.length) lines.push('', `Used in: ${useCases.map((u) => `“${u.name}”`).join(', ')}`);
   return { markdown: lines.join('\n'), range: hit.range };
 }
@@ -203,9 +224,9 @@ export interface OutlineSymbol {
   children: OutlineSymbol[];
 }
 
-/** Groups with their members, then use cases with their scenarios. */
+/** Groups with their members, then use cases with their scenarios; only what this document declares. */
 export function outline(analysis: Analysis): OutlineSymbol[] {
-  const declared = analysis.diagram.nodes.filter((n) => !n.implicit);
+  const declared = analysis.diagram.nodes.filter((n) => !n.implicit && !n.loc.file);
   const symbolOf = (n: DiagramNode): OutlineSymbol => ({
     name: n.id,
     detail: describeNode(n),
@@ -214,7 +235,7 @@ export function outline(analysis: Analysis): OutlineSymbol[] {
     children: declared.filter((c) => c.parent === n.id).map(symbolOf),
   });
   const top = declared.filter((n) => !n.parent).map(symbolOf);
-  const useCases = analysis.diagram.useCases.map((u) => ({
+  const useCases = analysis.diagram.useCases.filter((u) => !u.loc.file).map((u) => ({
     name: u.name,
     detail: [u.endpoint, u.scenarios.length > 1 ? `${u.scenarios.length} scenarios` : ''].filter(Boolean).join(' · '),
     kind: 'usecase' as const,

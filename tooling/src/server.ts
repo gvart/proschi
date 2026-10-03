@@ -1,8 +1,11 @@
 /**
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
- * go-to-definition, references, an outline and formatting.
+ * go-to-definition, references, an outline, formatting and links on import
+ * paths. Imports resolve from disk relative to the document, preferring the
+ * text of open (possibly unsaved) documents.
  */
+import { fileURLToPath, pathToFileURL } from 'node:url';
 import {
   CodeActionKind,
   CompletionItemKind,
@@ -19,9 +22,9 @@ import {
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { statSync } from 'node:fs';
-import { fileURLToPath } from 'node:url';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
-import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { analyze, complete, declaration, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
 
 declare const PROSCHI_VERSION: string;
@@ -33,14 +36,37 @@ if (process.argv.includes('--version')) {
 
 const connection = createConnection(ProposedFeatures.all);
 const documents = new TextDocuments(TextDocument);
-const cache = new Map<string, { version: number; analysis: Analysis }>();
+/** Analyses by URI, with the files their imports read, so a change to one of those re-validates them. */
+const cache = new Map<string, { version: number; analysis: Analysis; files: Set<string> }>();
+
+const pathOf = (uri: string): string | undefined => (uri.startsWith('file:') ? fileURLToPath(uri) : undefined);
+const uriOf = (path: string): string => pathToFileURL(path).href;
+
+/** Open documents by file path; their text wins over what is on disk. */
+function openText(path: string): string | undefined {
+  return documents.all().find((d) => pathOf(d.uri) === path)?.getText();
+}
+
+const resolve = fileResolver(openText);
 
 function analysisOf(doc: TextDocument): Analysis {
   const cached = cache.get(doc.uri);
   if (cached?.version === doc.version) return cached.analysis;
-  const analysis = analyze(doc.getText());
-  cache.set(doc.uri, { version: doc.version, analysis });
+  const analysis = analyze(doc.getText(), { path: pathOf(doc.uri), resolve });
+  const files = new Set((analysis.result.imports ?? []).flatMap((i) => (i.resolved ? [i.resolved] : [])));
+  cache.set(doc.uri, { version: doc.version, analysis, files });
   return analysis;
+}
+
+/** Re-validates the open documents that import `uri`, directly or through other files. */
+function publishDependents(uri: string) {
+  const path = pathOf(uri);
+  if (!path) return;
+  for (const doc of documents.all()) {
+    if (doc.uri === uri || !cache.get(doc.uri)?.files.has(path)) continue;
+    cache.delete(doc.uri);
+    validate(doc);
+  }
 }
 
 connection.onInitialize(() => ({
@@ -51,6 +77,7 @@ connection.onInitialize(() => ({
     definitionProvider: true,
     referencesProvider: true,
     documentSymbolProvider: true,
+    documentLinkProvider: { resolveProvider: false },
     documentFormattingProvider: true,
     codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
   },
@@ -58,8 +85,8 @@ connection.onInitialize(() => ({
 }));
 
 function validate(document: TextDocument) {
-  const { diagram, diagnostics } = analysisOf(document);
-  const toLsp = (source: string) => (d: (typeof diagnostics)[number]) => ({
+  const analysis = analysisOf(document);
+  const toLsp = (source: string) => (d: Analysis['diagnostics'][number]) => ({
     range: toRange(d),
     severity: d.severity === 'error' ? DiagnosticSeverity.Error : DiagnosticSeverity.Warning,
     source,
@@ -68,7 +95,13 @@ function validate(document: TextDocument) {
   connection.sendDiagnostics({
     uri: document.uri,
     version: document.version,
-    diagnostics: [...diagnostics.map(toLsp('proschi')), ...openApiFindings(document, diagram).map(toLsp('proschi-openapi'))],
+    diagnostics: [
+      ...ownDiagnostics(analysis.result).map(toLsp('proschi')),
+      // Findings on steps in imported files belong to those files.
+      ...openApiFindings(document, analysis.diagram)
+        .filter((d) => d.file === undefined)
+        .map(toLsp('proschi-openapi')),
+    ],
   });
 }
 
@@ -82,7 +115,10 @@ function openApiFindings(document: TextDocument, diagram: Analysis['diagram']) {
   }
 }
 
-documents.onDidChangeContent(({ document }) => validate(document));
+documents.onDidChangeContent(({ document }) => {
+  validate(document);
+  publishDependents(document.uri);
+});
 
 // Specs and proschi.json change outside the editor; re-check open documents when they do.
 // Spec and config reads are cached by modification time, so this costs a stat per file.
@@ -108,6 +144,8 @@ setInterval(() => {
 documents.onDidClose(({ document }) => {
   cache.delete(document.uri);
   connection.sendDiagnostics({ uri: document.uri, diagnostics: [] });
+  // Dependents now read the file from disk again.
+  publishDependents(document.uri);
 });
 
 const withDoc =
@@ -140,8 +178,14 @@ connection.onHover(
 
 connection.onDefinition((params) => {
   const doc = documents.get(params.textDocument.uri);
-  const range = doc && definition(analysisOf(doc), params.position);
-  return range ? { uri: params.textDocument.uri, range } : null;
+  const found = doc && declaration(analysisOf(doc), params.position);
+  if (!found) return null;
+  return { uri: found.file ? uriOf(found.file) : params.textDocument.uri, range: found.range };
+});
+
+connection.onDocumentLinks((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  return doc ? importLinks(analysisOf(doc).result).map(({ range, target }) => ({ range, target: uriOf(target) })) : [];
 });
 
 connection.onReferences((params) => {

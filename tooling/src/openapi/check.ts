@@ -18,7 +18,7 @@ export function checkOpenApi(diagram: Diagram, specFiles: SpecMap): Diagnostic[]
   const diagnostics: Diagnostic[] = [];
   const add = (severity: Diagnostic['severity'], message: string, loc: SourceLoc) => {
     // Steps shared by several scenarios appear once per scenario; report each problem once.
-    if (!diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col)) diagnostics.push({ severity, message, ...loc });
+    if (!diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col && d.file === loc.file)) diagnostics.push({ severity, message, ...loc });
   };
 
   const specs = new Map<string, OpenApiSpec | null>();

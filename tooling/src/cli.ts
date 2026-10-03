@@ -3,12 +3,13 @@
  * `proschi parse` prints the parsed diagram as JSON (see schema/);
  * `proschi fmt` formats them (see fmt.ts).
  */
-import { readFileSync, readdirSync, statSync } from 'node:fs';
-import { isAbsolute, join, relative } from 'node:path';
+import { readdirSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import { openApiDiagnostics, parseSpecFlag } from './openapi/config';
-import { parse, type Diagnostic } from './proschi';
+import type { Diagnostic } from './proschi';
 import { RENDER_HELP, RENDER_USAGE } from './render/usage';
 import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
+import { checkFiles, parseFile } from './imports';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -21,6 +22,7 @@ ${FMT_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
+        Imports are followed; problems are reported under the file they occur in.
         Exits with 1 if any file has an error (or a warning, with --strict).
         --openapi checks the steps calling <node> against an OpenAPI 3 spec
         (YAML or JSON); it overrides the "openapi" map of the nearest
@@ -51,12 +53,6 @@ export function collectFiles(paths: string[]): string[] {
     else out.push(p);
   }
   return out;
-}
-
-/** Relative to the working directory when the file is inside it, else as given. */
-function displayPath(file: string): string {
-  const rel = relative(process.cwd(), file);
-  return rel && !rel.startsWith('..') && !isAbsolute(rel) ? rel : file;
 }
 
 export function format(results: CheckResult[], style: 'text' | 'github' | 'json'): string {
@@ -97,7 +93,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
       err(USAGE);
       return 2;
     }
-    out(JSON.stringify(parse(readFileSync(rest[0], 'utf8')), null, 2));
+    out(JSON.stringify(parseFile(rest[0]), null, 2));
     return 0;
   }
 
@@ -144,11 +140,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
       err(String((e as Error).message));
       return 2;
     }
-    const results = files.map((file) => {
-      const { diagram, diagnostics } = parse(readFileSync(file, 'utf8'));
-      const all = [...diagnostics, ...openApiDiagnostics(file, diagram, specs)].sort((a, b) => a.line - b.line || a.col - b.col);
-      return { file: displayPath(file), diagnostics: all };
-    });
+    const results = checkFiles(files, (file, diagram) => openApiDiagnostics(file, diagram, specs));
     const text = format(results, style);
     if (text) out(text);
     const failed = results.some((r) => r.diagnostics.some((d) => d.severity === 'error' || strict));

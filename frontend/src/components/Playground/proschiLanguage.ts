@@ -12,7 +12,7 @@ interface LexState {
   depth: number;
 }
 
-const KEYWORDS = /^(title|group|usecase|par|alt|pos)\b/;
+const KEYWORDS = /^(title|import|group|usecase|par|alt|pos)\b/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
@@ -82,6 +82,7 @@ const techOptions: Completion[] = componentCatalog.map((c) => ({
 
 const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },
+  { label: 'import', type: 'keyword', apply: 'import "', detail: 'import "file.proschi"' },
   { label: 'group', type: 'keyword', detail: 'group id "Name" { … }' },
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
