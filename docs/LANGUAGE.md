@@ -5,6 +5,12 @@ use cases (step-by-step request flows) as plain text. The parser lives in
 `frontend/src/dsl/` and never throws: problems come back as diagnostics with a
 line and column, and everything else still renders.
 
+The parser is the definition of the language. The same code powers the web
+editor, the `proschi` command line and the language server, so every editor
+reports the same problems. See [Editor support](EDITORS.md) for VS Code,
+IntelliJ, Neovim, Helix, Sublime Text and CI, and the [grammar](#grammar) below
+for a summary of the syntax.
+
 ```
 title "E-Commerce Platform"
 
@@ -146,3 +152,56 @@ A node that was only referenced, never declared, gets a declaration line above t
 ## Links
 
 The address bar always holds the whole document: `#code=…`. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.
+
+## Grammar
+
+A summary in EBNF. The language is line-oriented: each statement takes one
+line, except a step or connection label whose JSON payload continues until its
+brackets balance. Whitespace between tokens is ignored.
+
+```ebnf
+document     = { line } ;
+line         = [ statement ] [ comment ] newline ;
+
+statement    = title | node | connection
+             | group-open | usecase-open | par-open | alt-open | close ;
+
+title        = "title" , ( string | id ) ;
+node         = id , { string | tech | team | position } ;  (* 1st string: name, 2nd: description *)
+connection   = id , arrow , id , [ ":" , label ] ;
+group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
+usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
+par-open     = "par" , "{" ;
+alt-open     = "alt" , ( string | id ) , "{" ;
+close        = "}" , [ "alt" , ( string | id ) , "{" ] ;
+
+arrow        = "->" | "->>" | "-->" | "-x" ;
+position     = "pos" , integer , "," , integer ;
+id           = ( letter | "_" ) , { letter | digit | "_" } ;
+string       = '"' , { character - '"' | "\" , character } , '"' ;
+tech         = "[" , { character - "]" } , "]" ;
+team         = "@" , { letter | digit | "_" | "-" } ;
+integer      = [ "-" ] , digit , { digit } ;
+comment      = "#" , { character } ;            (* only where a token can start *)
+label        = { character } ;                  (* to end of line; see below *)
+```
+
+Where each statement may appear:
+
+| Statement | Top level | In `group` | In `usecase` / `alt` | In `par` |
+|---|---|---|---|---|
+| `title` | ✓ | | | |
+| node | ✓ | ✓ | | |
+| `group` | ✓ | ✓ | | |
+| connection (`a -> b`) | ✓ | ✓ | as a step | as a step |
+| `usecase` | ✓ | | | |
+| `par` | | | ✓ | |
+| `alt` | | | ✓ | |
+
+`-x` is only valid as a step. A label is read as described in
+[Use case steps](#use-case-steps): an optional HTTP method and path, an optional
+`json` / `xml` / `text` payload, and on a response a leading status code.
+
+The grammar describes syntax only. The parser also checks meaning: duplicate
+ids, unknown tech stacks, responses without a matching request, and so on.
+Those checks are what the language server and `proschi check` report.

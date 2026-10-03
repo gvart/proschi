@@ -1,0 +1,52 @@
+{
+  "name": "proschi",
+  "displayName": "Proschi",
+  "description": "Syntax highlighting, validation, completion and outline for Proschi architecture diagrams (.proschi)",
+  "license": "MIT",
+  "version": "0.1.0",
+  "publisher": "gvart",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/gvart/proschi.git",
+    "directory": "tooling/vscode"
+  },
+  "homepage": "https://gvart.github.io/proschi/",
+  "engines": {
+    "vscode": "^1.91.0"
+  },
+  "categories": [
+    "Programming Languages",
+    "Linters"
+  ],
+  "keywords": [
+    "architecture",
+    "diagram",
+    "microservices",
+    "sequence",
+    "proschi"
+  ],
+  "main": "./dist/extension.cjs",
+  "activationEvents": [],
+  "contributes": {
+    "languages": [
+      {
+        "id": "proschi",
+        "aliases": [
+          "Proschi",
+          "proschi"
+        ],
+        "extensions": [
+          ".proschi"
+        ],
+        "configuration": "./language-configuration.json"
+      }
+    ],
+    "grammars": [
+      {
+        "language": "proschi",
+        "scopeName": "source.proschi",
+        "path": "./syntaxes/proschi.tmLanguage.json"
+      }
+    ]
+  }
+}

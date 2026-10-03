@@ -1,0 +1,236 @@
+{
+  "$schema": "https://raw.githubusercontent.com/martinring/tmlanguage/master/tmlanguage.json",
+  "name": "Proschi",
+  "scopeName": "source.proschi",
+  "fileTypes": [
+    "proschi"
+  ],
+  "patterns": [
+    {
+      "include": "#comment"
+    },
+    {
+      "include": "#label"
+    },
+    {
+      "include": "#keyword"
+    },
+    {
+      "include": "#string"
+    },
+    {
+      "include": "#tech"
+    },
+    {
+      "include": "#team"
+    },
+    {
+      "include": "#arrow"
+    },
+    {
+      "include": "#position"
+    },
+    {
+      "include": "#brace"
+    },
+    {
+      "include": "#identifier"
+    }
+  ],
+  "repository": {
+    "comment": {
+      "name": "comment.line.number-sign.proschi",
+      "match": "(?:^|(?<=\\s))#.*$"
+    },
+    "keyword": {
+      "comment": "Statement keywords start a line, or follow } as in `} alt \"Next\" {`.",
+      "match": "^\\s*(?:(\\})\\s*)?(title|group|usecase|par|alt)\\b",
+      "captures": {
+        "1": {
+          "name": "punctuation.section.block.end.proschi"
+        },
+        "2": {
+          "name": "keyword.control.proschi"
+        }
+      }
+    },
+    "position": {
+      "match": "\\b(pos)\\s+(-?\\d+)\\s*(,)\\s*(-?\\d+)",
+      "captures": {
+        "1": {
+          "name": "keyword.other.pos.proschi"
+        },
+        "2": {
+          "name": "constant.numeric.proschi"
+        },
+        "3": {
+          "name": "punctuation.separator.comma.proschi"
+        },
+        "4": {
+          "name": "constant.numeric.proschi"
+        }
+      }
+    },
+    "string": {
+      "name": "string.quoted.double.proschi",
+      "begin": "\"",
+      "end": "\"|$",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.begin.proschi"
+        }
+      },
+      "endCaptures": {
+        "0": {
+          "name": "punctuation.definition.string.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "name": "constant.character.escape.proschi",
+          "match": "\\\\."
+        }
+      ]
+    },
+    "tech": {
+      "name": "entity.name.type.tech.proschi",
+      "match": "\\[[^\\]\\n]*\\]?"
+    },
+    "team": {
+      "name": "entity.other.attribute-name.team.proschi",
+      "match": "@[A-Za-z0-9_-]*"
+    },
+    "arrow": {
+      "name": "keyword.operator.arrow.proschi",
+      "match": "->>|-->|->|-x(?![A-Za-z0-9_])"
+    },
+    "brace": {
+      "name": "punctuation.section.block.proschi",
+      "match": "[{}]"
+    },
+    "identifier": {
+      "name": "variable.other.node.proschi",
+      "match": "[A-Za-z_][A-Za-z0-9_]*"
+    },
+    "label": {
+      "comment": "Everything after ':' on a connection or step line. A JSON payload may continue over several lines until its brackets balance.",
+      "name": "meta.label.proschi",
+      "begin": ":",
+      "end": "$",
+      "beginCaptures": {
+        "0": {
+          "name": "punctuation.separator.label.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#payload"
+        },
+        {
+          "match": "\\b(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\\b(?:\\s+(\\S+))?",
+          "captures": {
+            "1": {
+              "name": "keyword.other.http-method.proschi"
+            },
+            "2": {
+              "name": "string.unquoted.endpoint.proschi"
+            }
+          }
+        },
+        {
+          "comment": "A leading three-digit number on a response is its status code.",
+          "match": "\\G\\s*([1-5]\\d\\d)\\b",
+          "captures": {
+            "1": {
+              "name": "constant.numeric.status.proschi"
+            }
+          }
+        },
+        {
+          "name": "storage.type.format.proschi",
+          "match": "\\b(json|xml|text)\\b"
+        },
+        {
+          "include": "#string"
+        }
+      ]
+    },
+    "payload": {
+      "patterns": [
+        {
+          "name": "meta.structure.dictionary.proschi",
+          "begin": "\\{",
+          "end": "\\}",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.dictionary.begin.proschi"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.dictionary.end.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#json"
+            }
+          ]
+        },
+        {
+          "name": "meta.structure.array.proschi",
+          "begin": "\\[",
+          "end": "\\]",
+          "beginCaptures": {
+            "0": {
+              "name": "punctuation.definition.array.begin.proschi"
+            }
+          },
+          "endCaptures": {
+            "0": {
+              "name": "punctuation.definition.array.end.proschi"
+            }
+          },
+          "patterns": [
+            {
+              "include": "#json"
+            }
+          ]
+        }
+      ]
+    },
+    "json": {
+      "patterns": [
+        {
+          "include": "#payload"
+        },
+        {
+          "name": "string.quoted.double.json.proschi",
+          "begin": "\"",
+          "end": "\"",
+          "patterns": [
+            {
+              "name": "constant.character.escape.proschi",
+              "match": "\\\\."
+            }
+          ]
+        },
+        {
+          "name": "constant.numeric.json.proschi",
+          "match": "-?\\b\\d+(?:\\.\\d+)?(?:[eE][+-]?\\d+)?\\b"
+        },
+        {
+          "name": "constant.language.json.proschi",
+          "match": "\\b(?:true|false|null)\\b"
+        },
+        {
+          "name": "punctuation.separator.json.proschi",
+          "match": "[,:]"
+        }
+      ]
+    }
+  }
+}

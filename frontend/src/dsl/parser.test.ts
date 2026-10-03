@@ -277,6 +277,7 @@ usecase "Create order" {
     expect(down.steps[1]).toMatchObject({ failed: true, fromServiceId: 'orders', toServiceId: 'db' });
     expect(down.steps[0].statusCode).toBe(503);
     expect(useCase.steps).toBe(created.steps);
+    expect(useCase.scenarios.map((s) => s.loc.line)).toEqual([7, 11, 14]);
   });
 
   it('keeps step ids unique across scenarios', () => {
