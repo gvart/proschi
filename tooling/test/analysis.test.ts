@@ -53,6 +53,14 @@ describe('analysis', () => {
     expect(items[0].snippet).toContain('alt "${1:Scenario}"');
   });
 
+  it('offers when right after an alt name, and only there', () => {
+    const items = complete(analyze('usecase "U" {\n  alt "Missing" w'), { line: 1, character: 17 });
+    expect(items.map((i) => i.label)).toEqual(['when']);
+    expect(items[0].snippet).toContain('when "${1:condition}"');
+    expect(complete(analyze('usecase "U" {\n  } alt "B" '), { line: 1, character: 12 }).map((i) => i.label)).toEqual(['when']);
+    expect(complete(analyze('a -> b\nusecase "U" {\n  a '), { line: 2, character: 4 }).map((i) => i.label)).not.toContain('when');
+  });
+
   it('stays quiet in labels and payloads', () => {
     expect(complete(a, { line: lineOf('POST /orders'), character: 20 })).toEqual([]);
     expect(complete(a, { line: lineOf('"sku"'), character: 5 })).toEqual([]);

@@ -3,6 +3,7 @@ import landingHtml from '../../index.html?raw';
 import { examples, parse } from '../dsl';
 import { decodeShareLink } from '../playground/share';
 import { highlightLine } from './highlight';
+import { format } from '../dsl/format';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { heroScenarios, stepLines } from './player';
 import { tallLayout, wideLayout } from './diagramLayout';
@@ -118,6 +119,10 @@ describe('landing page snippets', () => {
     expect(cls('import "infra.proschi"')).toEqual([['import', 'keyword'], ['"infra.proschi"', 'string']]);
     expect(cls('  } alt "Missing" when "no such order" {')).toEqual([['} alt', 'keyword'], ['"Missing"', 'string'], ['when', 'keyword'], ['"no such order"', 'string']]);
     expect(cls('  when -> b')).toEqual([['->', 'arrow']]);
+  });
+
+  it('are in canonical format', () => {
+    for (const source of snippets()) expect(format(`${source}\n`)).toBe(`${source}\n`);
   });
 
   it('highlighter keeps the text intact', () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { examples, parse } from './index';
+import { format } from './format';
 
 describe('examples', () => {
   it.each(examples.map((e) => [e.name, e.source]))('%s parses cleanly and has a playable use case', (_name, source) => {
@@ -8,6 +9,10 @@ describe('examples', () => {
     expect(diagram.title).toBeTruthy();
     expect(diagram.useCases[0]?.steps.length).toBeGreaterThan(0);
     expect(diagram.nodes.every((n) => !n.implicit)).toBe(true);
+  });
+
+  it.each(examples.map((e) => [e.name, e.source]))('%s is in canonical format', (_name, source) => {
+    expect(format(source)).toBe(source);
   });
 
   it('have unique ids', () => {

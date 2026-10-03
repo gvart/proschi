@@ -128,6 +128,10 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   const word = before.match(/[A-Za-z_]\w*$/)?.[0] ?? '';
   const range = { start: { line: pos.line, character: pos.character - word.length }, end: pos };
   const atLineStart = /^\s*(\}\s*)?$/.test(before.slice(0, before.length - word.length));
+  // `when` is only valid right after an alt name: alt "Not found" when "…" {
+  if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, before.length - word.length))) {
+    return [{ label: 'when', kind: 'keyword', detail: 'Condition of this scenario', snippet: 'when "${1:condition}" {\n\t$0\n}', range }];
+  }
   const nodes: CompletionItem[] = analysis.diagram.nodes.map((n) => ({
     label: n.id,
     kind: 'node',

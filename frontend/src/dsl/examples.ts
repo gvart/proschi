@@ -1,9 +1,9 @@
 export const ecommerceExample = `title "E-Commerce Platform"
 
 group vpc "AWS VPC" {
-  gateway  "API Gateway"   [AWS API Gateway] @Platform
-  orders   "Order Service" [REST API]        @Orders  "Handles order processing"
-  users    "User Service"  [GraphQL]         @Platform
+  gateway "API Gateway"   [AWS API Gateway] @Platform
+  orders  "Order Service" [REST API]        @Orders   "Handles order processing"
+  users   "User Service"  [GraphQL]         @Platform
 }
 ordersDb "Orders DB"   [PostgreSQL] @Orders
 usersDb  "Users DB"    [PostgreSQL] @Platform
@@ -22,28 +22,28 @@ usecase "Create order" "Complete flow for creating a new order" {
     "userId": "user123",
     "items": [{ "productId": "prod-1", "quantity": 2 }]
   }
-  orders -> users  : GET /api/users/user123
+  orders -> users : GET /api/users/user123
 
   alt "Created" {
     users --> orders : 200 {"verified": true}
     par {
-      orders -> ordersDb : INSERT order
-      orders ->> events  : OrderCreated {"orderId": "order-789"}
+      orders  -> ordersDb : INSERT order
+      orders ->> events   : OrderCreated {"orderId": "order-789"}
     }
     orders --> gateway : 201 {"orderId": "order-789", "status": "pending"}
   } alt "Unknown user" {
-    users --> orders   : 404
+    users  --> orders  : 404
     orders --> gateway : 422 {"error": "unknown_user"}
   } alt "Database down" {
-    users --> orders   : 200 {"verified": true}
-    orders -x ordersDb : INSERT order       # -x: the call never gets an answer
-    orders --> gateway : 503 {"error": "try_again_later"}
+    users  --> orders   : 200 {"verified": true}
+    orders  -x ordersDb : INSERT order # -x: the call never gets an answer
+    orders --> gateway  : 503 {"error": "try_again_later"}
   }
 }
 
 usecase "Get order" {
-  gateway -> orders : GET /api/orders/order-789
-  orders -> ordersDb : SELECT order
+  gateway -> orders   : GET /api/orders/order-789
+  orders  -> ordersDb : SELECT order
 
   alt "Found" {
     orders --> gateway : 200 {"orderId": "order-789", "status": "pending"}
@@ -57,18 +57,18 @@ export const helloExample = `# A Proschi document: nodes, connections and a use 
 title "Hello Proschi"
 
 # id "Display name" [Tech stack] @owner-team
-user "User"        [Actor]
-api  "Notes API"   [REST API]   @backend
-db   "Notes DB"    [PostgreSQL] @backend
+user "User"      [Actor]
+api  "Notes API" [REST API]   @backend
+db   "Notes DB"  [PostgreSQL] @backend
 
 user -> api : HTTPS
 api  -> db  : SQL
 
 # Steps: -> request, --> response, ->> fire-and-forget
 usecase "Create a note" {
-  user -> api : POST /notes json {"text": "Buy milk"}
-  api  -> db  : INSERT note
-  db  --> api : 1 row
+  user -> api  : POST /notes json {"text": "Buy milk"}
+  api  -> db   : INSERT note
+  db  --> api  : 1 row
   api --> user : 201 {"id": 42}
 }
 `;
@@ -94,13 +94,13 @@ resize  -> bucket   : put thumbnails
 resize  -> metadata : save sizes
 
 usecase "Upload a photo" {
-  client  -> gateway : POST /images json {"fileName": "cat.jpg"}
-  gateway -> upload  : invoke
-  upload  -> bucket  : PUT /originals/cat.jpg
-  upload  ->> jobs   : ResizeRequested {"key": "originals/cat.jpg"}
-  upload --> gateway : 202 {"imageId": "img-1"}
-  gateway --> client : 202 {"imageId": "img-1"}
-  jobs    -> resize  : ResizeRequested
+  client   -> gateway : POST /images json {"fileName": "cat.jpg"}
+  gateway  -> upload  : invoke
+  upload   -> bucket  : PUT /originals/cat.jpg
+  upload  ->> jobs    : ResizeRequested {"key": "originals/cat.jpg"}
+  upload  --> gateway : 202 {"imageId": "img-1"}
+  gateway --> client  : 202 {"imageId": "img-1"}
+  jobs     -> resize  : ResizeRequested
   par {
     resize -> bucket   : PUT /thumbs/cat-200.jpg
     resize -> metadata : PutItem {"imageId": "img-1", "sizes": [200, 800]}
@@ -123,31 +123,31 @@ auth    -> users
 auth    -> sessions
 
 usecase "Log in" "Password login that creates a session" {
-  browser -> web  : POST /login json {"email": "ada@example.com", "password": "***"}
-  web     -> auth : POST /v1/authenticate
+  browser -> web   : POST /login json {"email": "ada@example.com", "password": "***"}
+  web     -> auth  : POST /v1/authenticate
   auth    -> users : SELECT user by email
-  users  --> auth : 1 row
+  users  --> auth  : 1 row
 
   alt "Success" {
-    auth    -> sessions : SET session:abc123 EX 1800
-    auth   --> web : 200 {"sessionId": "abc123"}
-    web    --> browser : 302 text Set-Cookie: sid=abc123
+    auth  -> sessions : SET session:abc123 EX 1800
+    auth --> web      : 200 {"sessionId": "abc123"}
+    web  --> browser  : 302 text Set-Cookie: sid=abc123
   } alt "Wrong password" {
-    auth   --> web : 401 {"error": "invalid_credentials"}
-    web    --> browser : 401
+    auth --> web     : 401 {"error": "invalid_credentials"}
+    web  --> browser : 401
   } alt "Session store down" {
-    auth    -x sessions : SET session:abc123 EX 1800
-    auth   --> web : 503
-    web    --> browser : 503 text Please try again
+    auth  -x sessions : SET session:abc123 EX 1800
+    auth --> web      : 503
+    web  --> browser  : 503 text Please try again
   }
 }
 
 usecase "Log out" {
-  browser -> web  : POST /logout
-  web     -> auth : DELETE /v1/sessions/abc123
+  browser -> web      : POST /logout
+  web     -> auth     : DELETE /v1/sessions/abc123
   auth    -> sessions : DEL session:abc123
-  auth   --> web : 204
-  web    --> browser : 302 text Set-Cookie: sid=; Max-Age=0
+  auth   --> web      : 204
+  web    --> browser  : 302 text Set-Cookie: sid=; Max-Age=0
 }
 `;
 
@@ -160,17 +160,17 @@ inventory "Inventory Service" [REST API]        @warehouse
 email     "Notifier"          [Email Service]   @growth
 ledger    "Ledger DB"         [PostgreSQL]      @payments
 
-checkout -> payments : charge
-checkout -> bus      : publish
+checkout -> payments  : charge
+checkout -> bus       : publish
 bus      -> inventory : consume
 bus      -> email     : consume
 checkout -> ledger
 
 usecase "Pay for an order" {
-  checkout -> payments : POST /charges json {"amount": 4999, "currency": "EUR"}
+  checkout  -> payments : POST /charges json {"amount": 4999, "currency": "EUR"}
   payments --> checkout : 201 {"chargeId": "ch_1"}
-  checkout -> ledger : INSERT payment
-  checkout ->> bus : OrderPaid {"orderId": "o-7"}
+  checkout  -> ledger   : INSERT payment
+  checkout ->> bus      : OrderPaid {"orderId": "o-7"}
   par {
     bus -> inventory : OrderPaid
     bus -> email     : OrderPaid

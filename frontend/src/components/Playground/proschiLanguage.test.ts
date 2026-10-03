@@ -83,6 +83,11 @@ describe('proschiCompletions', () => {
     expect(labels).toEqual(['gateway', 'orders']);
   });
 
+  it('offers when right after an alt name', () => {
+    expect(complete('  alt "Missing" w')?.options.map((o) => o.label)).toEqual(['when']);
+    expect(complete('  } alt "B" ', true)?.options.map((o) => o.label)).toEqual(['when']);
+  });
+
   it('stays quiet inside labels', () => {
     expect(complete('a -> b : POST /ord')).toBeNull();
   });

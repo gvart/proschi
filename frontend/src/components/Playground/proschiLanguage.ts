@@ -105,6 +105,10 @@ export function proschiCompletions(getNodeIds: () => string[]) {
     if (!word && !ctx.explicit) return null;
     const from = word?.from ?? ctx.pos;
     const atLineStart = before.slice(0, from - line.from).trim() === '';
+    // `when` is only valid right after an alt name: alt "Not found" when "…" {
+    if (/^\s*(\}\s*)?alt\s+"[^"]*"\s+$/.test(before.slice(0, from - line.from))) {
+      return { from, options: [{ label: 'when', type: 'keyword', apply: 'when "', detail: 'condition of this scenario' }], validFor: /^\w*$/ };
+    }
 
     const ids: Completion[] = getNodeIds().map((id) => ({ label: id, type: 'variable' }));
     return { from, options: atLineStart ? [...keywordOptions, ...ids] : ids, validFor: /^\w*$/ };
