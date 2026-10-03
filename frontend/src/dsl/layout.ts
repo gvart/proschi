@@ -4,9 +4,9 @@ import type { ComponentMetadata } from '../types/canvas';
 import type { Diagram, DiagramNode } from './types';
 import { NODE_TYPE, toMetadata } from './toCanvas';
 
-const COMPONENT_SIZE = { width: 200, height: 84 };
-const COMPONENT_WITH_TEAM_SIZE = { width: 200, height: 104 };
-const TEXT_SIZE = { width: 200, height: 110 };
+const COMPONENT_SIZE = { width: 240, height: 84 };
+const COMPONENT_WITH_TEAM_SIZE = { width: 240, height: 104 };
+const TEXT_SIZE = { width: 240, height: 110 };
 // Matches GroupNode's minimum size so the drawn box and the layout agree.
 const GROUP_OPTIONS = {
   'elk.padding': '[top=56,left=24,bottom=24,right=24]',

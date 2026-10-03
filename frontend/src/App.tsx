@@ -8,16 +8,22 @@ import UseCasePlayback from './components/UseCases/UseCasePlayback';
 import Playground from './components/Playground/Playground';
 import { useCanvasStore } from './store/canvasStore';
 import { loadJson, saveJson } from './services/storage';
+import { decodeShareHash } from './playground/share';
 import './App.css';
 
 type AppMode = 'playground' | 'builder';
 const MODE_KEY = 'proschi.mode';
 
 function App() {
-  const [mode, setModeState] = useState<AppMode>(() => loadJson<AppMode>(MODE_KEY, 'playground'));
+  // A share link always opens in the text editor.
+  const [mode, setModeState] = useState<AppMode>(() =>
+    decodeShareHash(window.location.hash) !== null ? 'playground' : loadJson<AppMode>(MODE_KEY, 'playground')
+  );
   const setMode = (next: AppMode) => {
     setModeState(next);
     saveJson(MODE_KEY, next);
+    // The diagram link only belongs to the text editor; drop it so a reload stays in the builder.
+    if (next === 'builder') window.history.replaceState(null, '', window.location.pathname + window.location.search);
   };
   const currentProject = useCanvasStore((state) => state.currentProject);
   const viewMode = useCanvasStore((state) => state.viewMode);

@@ -3,6 +3,7 @@ import ReactFlow, {
   Background,
   BackgroundVariant,
   Controls,
+  Panel,
   ReactFlowProvider,
   applyNodeChanges,
   useNodesInitialized,
@@ -10,17 +11,48 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Edge, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { AlertCircle, AlertTriangle, CheckCircle2, LayoutGrid, Play } from 'lucide-react';
+import {
+  AlertCircle,
+  AlertTriangle,
+  BookOpen,
+  Check,
+  CheckCircle2,
+  ChevronDown,
+  Download,
+  FilePlus,
+  Image,
+  LayoutGrid,
+  Link,
+  Play,
+  Trash2,
+  Upload,
+} from 'lucide-react';
 import { ecommerceExample, parse, type Diagnostic } from '../../dsl';
 import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
 import { loadJson, saveJson } from '../../services/storage';
+import {
+  BLANK_SOURCE,
+  addDoc,
+  currentDoc,
+  initialState,
+  removeDoc,
+  selectDoc,
+  titleOf,
+  updateCurrent,
+  type DocumentState,
+} from '../../playground/documents';
+import { decodeShareHash, encodeShareHash, shareUrl } from '../../playground/share';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import { UseCasePlayer } from '../UseCases/UseCasePlayback';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
+import ExamplesGallery from './ExamplesGallery';
+import Menu, { MenuItem } from './Menu';
+import { downloadText, exportImage, fileNameFor } from './exportDiagram';
 
-const SOURCE_KEY = 'proschi.playground.source';
+const DOCS_KEY = 'proschi.docs';
+const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
 
 const nodeTypes = {
@@ -29,30 +61,41 @@ const nodeTypes = {
   textNode: TextNode,
 };
 
-const examples: Record<string, string> = {
-  'E-commerce': ecommerceExample,
-  Blank: 'title "Untitled"\n\n',
-};
+function loadInitialState(): DocumentState {
+  return initialState({
+    stored: loadJson<DocumentState | null>(DOCS_KEY, null),
+    legacySource: loadJson<string | null>(LEGACY_SOURCE_KEY, null),
+    sharedSource: decodeShareHash(window.location.hash),
+    fallbackSource: ecommerceExample,
+  });
+}
 
 interface PlaygroundProps {
   onOpenBuilder: () => void;
 }
 
 export default function Playground({ onOpenBuilder }: PlaygroundProps) {
-  const [source, setSource] = useState(() => loadJson(SOURCE_KEY, ecommerceExample));
+  const [docState, setDocState] = useState(loadInitialState);
+  const source = currentDoc(docState).source;
+  const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+
   const [parsedSource, setParsedSource] = useState(source);
   const [selectedUseCaseId, setSelectedUseCaseId] = useState<string>();
   const [playing, setPlaying] = useState(false);
+  const [showExamples, setShowExamples] = useState(false);
+  const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
-  // Re-parse and save shortly after typing stops.
+  // Re-parse, save, and refresh the shareable URL shortly after typing stops.
   useEffect(() => {
     const timer = setTimeout(() => {
       setParsedSource(source);
-      saveJson(SOURCE_KEY, source);
+      saveJson(DOCS_KEY, docState);
+      window.history.replaceState(null, '', encodeShareHash(source));
     }, PARSE_DELAY_MS);
     return () => clearTimeout(timer);
-  }, [source]);
+  }, [source, docState]);
 
   const { diagram, diagnostics } = useMemo(() => parse(parsedSource), [parsedSource]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
@@ -71,37 +114,130 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     };
   }, [diagram]);
 
-  const loadExample = (name: string) => {
-    const isExample = Object.values(examples).includes(source);
-    if (!isExample && !window.confirm('Replace your current diagram with this example?')) return;
-    setSource(examples[name]);
+  const openDoc = (update: (s: DocumentState) => DocumentState) => {
+    setDocState(update);
     setPlaying(false);
+    setSelectedUseCaseId(undefined);
+  };
+
+  const deleteDoc = (id: string, title: string) => {
+    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
+  };
+
+  const importFile = async (file: File | undefined) => {
+    if (!file) return;
+    const text = await file.text();
+    openDoc((s) => addDoc(s, text));
+  };
+
+  const copyShareLink = async () => {
+    const url = shareUrl(source, window.location);
+    try {
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      window.prompt('Copy this link:', url);
+    }
   };
 
   const canPlay = !!useCase && useCase.steps.length > 0;
+  const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
     <div className="h-screen flex flex-col bg-gray-50">
-      <header className="flex flex-wrap items-center gap-3 px-4 py-2 bg-white border-b border-gray-200">
-        <div className="flex items-baseline gap-3 min-w-0">
-          <span className="text-lg font-bold text-gray-900">Proschi</span>
-          <span className="text-sm text-gray-500 truncate">{diagram.title}</span>
-        </div>
+      <header className="flex flex-wrap items-center gap-2 px-4 py-2 bg-white border-b border-gray-200">
+        <span className="text-lg font-bold text-gray-900 mr-1">Proschi</span>
+
+        <Menu
+          label="Diagrams"
+          trigger={
+            <>
+              <span className="max-w-[14rem] truncate">{titleOf(source)}</span>
+              <ChevronDown size={14} />
+            </>
+          }
+        >
+          {(close) => (
+            <>
+              <div className="px-3 pt-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Saved in this browser</div>
+              <ul className="max-h-72 overflow-y-auto">
+                {sortedDocs.map((doc) => {
+                  const title = titleOf(doc.source);
+                  return (
+                    <li key={doc.id} className="group flex items-center">
+                      <button
+                        role="menuitem"
+                        onClick={() => {
+                          openDoc((s) => selectDoc(s, doc.id));
+                          close();
+                        }}
+                        className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-gray-100 ${doc.id === docState.currentId ? 'font-semibold text-blue-700' : 'text-gray-700'}`}
+                      >
+                        <span className="block truncate">{title}</span>
+                        <span className="block text-xs font-normal text-gray-400">{new Date(doc.updatedAt).toLocaleString()}</span>
+                      </button>
+                      <button
+                        aria-label={`Delete ${title}`}
+                        onClick={() => deleteDoc(doc.id, title)}
+                        className="mr-1 p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                      >
+                        <Trash2 size={14} />
+                      </button>
+                    </li>
+                  );
+                })}
+              </ul>
+              <div className="my-1 border-t border-gray-100" />
+              <MenuItem
+                icon={<FilePlus size={14} />}
+                onSelect={() => {
+                  openDoc((s) => addDoc(s, BLANK_SOURCE));
+                  close();
+                }}
+              >
+                New diagram
+              </MenuItem>
+              <MenuItem
+                icon={<Upload size={14} />}
+                onSelect={() => {
+                  fileInputRef.current?.click();
+                  close();
+                }}
+              >
+                Open .proschi file…
+              </MenuItem>
+              <MenuItem
+                icon={<Download size={14} />}
+                onSelect={() => {
+                  downloadText(source, fileNameFor(diagram.title, 'proschi'));
+                  close();
+                }}
+              >
+                Download .proschi file
+              </MenuItem>
+            </>
+          )}
+        </Menu>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".proschi,.txt,text/plain"
+          className="hidden"
+          onChange={(e) => {
+            importFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
 
         <div className="flex flex-wrap items-center gap-2 ml-auto">
-          <select
-            aria-label="Load example"
-            value=""
-            onChange={(e) => e.target.value && loadExample(e.target.value)}
-            className="text-sm border border-gray-300 rounded-md px-2 py-1.5 bg-white"
+          <button
+            onClick={() => setShowExamples(true)}
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
           >
-            <option value="">Examples…</option>
-            {Object.keys(examples).map((name) => (
-              <option key={name} value={name}>
-                {name}
-              </option>
-            ))}
-          </select>
+            <BookOpen size={16} />
+            Examples
+          </button>
 
           <select
             aria-label="Use case"
@@ -138,6 +274,15 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             </button>
           )}
 
+          <button
+            onClick={copyShareLink}
+            title="Copy a link that contains this diagram"
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+          >
+            {copied ? <Check size={16} className="text-green-600" /> : <Link size={16} />}
+            {copied ? 'Copied' : 'Share'}
+          </button>
+
           <button onClick={onOpenBuilder} className="text-sm px-3 py-1.5 rounded-md text-gray-600 hover:bg-gray-100">
             Visual builder
           </button>
@@ -157,7 +302,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             <UseCasePlayer useCase={useCase} nodes={nodes} edges={edges} onBack={() => setPlaying(false)} />
           ) : (
             <ReactFlowProvider>
-              <DiagramView nodes={nodes} edges={edges} onNodesChange={setNodes} />
+              <DiagramView nodes={nodes} edges={edges} onNodesChange={setNodes} title={diagram.title} />
             </ReactFlowProvider>
           )}
           {nodes.length === 0 && !playing && (
@@ -169,6 +314,16 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           )}
         </section>
       </div>
+
+      {showExamples && (
+        <ExamplesGallery
+          onClose={() => setShowExamples(false)}
+          onPick={(example) => {
+            openDoc((s) => addDoc(s, example.source));
+            setShowExamples(false);
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -177,11 +332,28 @@ interface DiagramViewProps {
   nodes: Node[];
   edges: Edge[];
   onNodesChange: (update: (nodes: Node[]) => Node[]) => void;
+  title?: string;
 }
 
 /** Read-only rendering of the parsed diagram; nodes can be dragged but edits stay in the text. */
-function DiagramView({ nodes, edges, onNodesChange }: DiagramViewProps) {
-  const { fitView } = useReactFlow();
+function DiagramView({ nodes, edges, onNodesChange, title }: DiagramViewProps) {
+  const { fitView, getNodes } = useReactFlow();
+  const wrapperRef = useRef<HTMLDivElement>(null);
+  const [exporting, setExporting] = useState(false);
+
+  const handleExport = async (format: 'png' | 'svg') => {
+    const viewport = wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
+    if (!viewport || nodes.length === 0) return;
+    setExporting(true);
+    try {
+      await exportImage(format, getNodes(), viewport, fileNameFor(title, format));
+    } catch (error) {
+      console.error('Export failed:', error);
+      window.alert('Sorry, the image could not be exported.');
+    } finally {
+      setExporting(false);
+    }
+  };
   const measured = useNodesInitialized();
   const structure = nodes.map((n) => n.id).join('|');
 
@@ -194,23 +366,60 @@ function DiagramView({ nodes, edges, onNodesChange }: DiagramViewProps) {
 
   const handleNodesChange = useCallback(
     (changes: NodeChange[]) => onNodesChange((current) => applyNodeChanges(changes, current)),
-    [onNodesChange]
+    [onNodesChange],
   );
 
   return (
-    <ReactFlow
-      nodes={nodes}
-      edges={edges}
-      nodeTypes={nodeTypes}
-      onNodesChange={handleNodesChange}
-      nodesConnectable={false}
-      fitView
-      minZoom={0.1}
-      proOptions={{ hideAttribution: true }}
-    >
-      <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-      <Controls showInteractive={false} />
-    </ReactFlow>
+    <div ref={wrapperRef} className="h-full">
+      <ReactFlow
+        nodes={nodes}
+        edges={edges}
+        nodeTypes={nodeTypes}
+        onNodesChange={handleNodesChange}
+        nodesConnectable={false}
+        fitView
+        minZoom={0.1}
+        proOptions={{ hideAttribution: true }}
+      >
+        <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        <Controls showInteractive={false} />
+        {nodes.length > 0 && (
+          <Panel position="top-right">
+            <Menu
+              label="Export image"
+              align="right"
+              trigger={
+                <>
+                  <Image size={16} />
+                  {exporting ? 'Exporting…' : 'Export'}
+                </>
+              }
+            >
+              {(close) => (
+                <>
+                  <MenuItem
+                    onSelect={() => {
+                      close();
+                      handleExport('png');
+                    }}
+                  >
+                    PNG image
+                  </MenuItem>
+                  <MenuItem
+                    onSelect={() => {
+                      close();
+                      handleExport('svg');
+                    }}
+                  >
+                    SVG image
+                  </MenuItem>
+                </>
+              )}
+            </Menu>
+          </Panel>
+        )}
+      </ReactFlow>
+    </div>
   );
 }
 
@@ -233,10 +442,7 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
     <ul className="max-h-36 overflow-y-auto border-t border-gray-200 bg-gray-50 text-xs">
       {diagnostics.map((d, i) => (
         <li key={i}>
-          <button
-            onClick={() => onSelect(d)}
-            className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100"
-          >
+          <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100">
             {d.severity === 'error' ? (
               <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-px" />
             ) : (
