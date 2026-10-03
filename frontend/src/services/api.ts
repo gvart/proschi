@@ -1,7 +1,4 @@
-// Set to true to use mock data, false to use real API
-const USE_MOCK_DATA = true;
-
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8080';
+import { loadJson, saveJson } from './storage';
 
 // Types
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -83,9 +80,6 @@ export interface CreateFlowStepRequest {
   isConditional: boolean;
   conditionExpression?: string;
 }
-
-// Mock Data Store
-const mockUseCases: Map<string, UseCase> = new Map();
 
 // Initialize with sample data
 const sampleUseCase: UseCase = {
@@ -217,16 +211,18 @@ const sampleUseCase: UseCase = {
   updatedAt: new Date('2024-03-20').toISOString(),
 };
 
-mockUseCases.set(sampleUseCase.id, sampleUseCase);
+// Use cases are stored in the browser; the sample is seeded on first visit.
+const USE_CASES_KEY = 'proschi.useCases';
 
-// Helper function to simulate API delay
-const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+const useCases = new Map<string, UseCase>(
+  loadJson<UseCase[]>(USE_CASES_KEY, [sampleUseCase]).map(uc => [uc.id, uc])
+);
 
-// Mock API Service
-class MockApiService {
+const persist = () => saveJson(USE_CASES_KEY, Array.from(useCases.values()));
+
+class LocalUseCaseService {
   async getUseCases(projectId: string): Promise<UseCaseListItem[]> {
-    await delay(300);
-    const useCases = Array.from(mockUseCases.values())
+    return Array.from(useCases.values())
       .filter(uc => uc.projectId === projectId)
       .map(uc => ({
         id: uc.id,
@@ -238,12 +234,10 @@ class MockApiService {
         createdAt: uc.createdAt,
         updatedAt: uc.updatedAt,
       }));
-    return useCases;
   }
 
   async getUseCase(useCaseId: string): Promise<UseCase> {
-    await delay(200);
-    const useCase = mockUseCases.get(useCaseId);
+    const useCase = useCases.get(useCaseId);
     if (!useCase) {
       throw new Error('Use case not found');
     }
@@ -254,7 +248,6 @@ class MockApiService {
     projectId: string,
     data: CreateUseCaseRequest
   ): Promise<UseCase> {
-    await delay(400);
     const newUseCase: UseCase = {
       id: `usecase-${Date.now()}`,
       name: data.name,
@@ -265,7 +258,8 @@ class MockApiService {
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
-    mockUseCases.set(newUseCase.id, newUseCase);
+    useCases.set(newUseCase.id, newUseCase);
+    persist();
     return { ...newUseCase };
   }
 
@@ -273,8 +267,7 @@ class MockApiService {
     useCaseId: string,
     data: UpdateUseCaseRequest
   ): Promise<UseCase> {
-    await delay(300);
-    const useCase = mockUseCases.get(useCaseId);
+    const useCase = useCases.get(useCaseId);
     if (!useCase) {
       throw new Error('Use case not found');
     }
@@ -282,20 +275,20 @@ class MockApiService {
     useCase.description = data.description;
     useCase.entryServiceId = data.entryServiceId;
     useCase.updatedAt = new Date().toISOString();
+    persist();
     return { ...useCase };
   }
 
   async deleteUseCase(useCaseId: string): Promise<void> {
-    await delay(300);
-    mockUseCases.delete(useCaseId);
+    useCases.delete(useCaseId);
+    persist();
   }
 
   async addFlowStep(
     useCaseId: string,
     data: CreateFlowStepRequest
   ): Promise<UseCase> {
-    await delay(400);
-    const useCase = mockUseCases.get(useCaseId);
+    const useCase = useCases.get(useCaseId);
     if (!useCase) {
       throw new Error('Use case not found');
     }
@@ -306,6 +299,7 @@ class MockApiService {
     useCase.steps.push(newStep);
     useCase.steps.sort((a, b) => a.stepOrder - b.stepOrder);
     useCase.updatedAt = new Date().toISOString();
+    persist();
     return { ...useCase };
   }
 
@@ -314,8 +308,7 @@ class MockApiService {
     stepId: string,
     data: CreateFlowStepRequest
   ): Promise<UseCase> {
-    await delay(300);
-    const useCase = mockUseCases.get(useCaseId);
+    const useCase = useCases.get(useCaseId);
     if (!useCase) {
       throw new Error('Use case not found');
     }
@@ -329,105 +322,19 @@ class MockApiService {
     };
     useCase.steps.sort((a, b) => a.stepOrder - b.stepOrder);
     useCase.updatedAt = new Date().toISOString();
+    persist();
     return { ...useCase };
   }
 
   async deleteFlowStep(useCaseId: string, stepId: string): Promise<void> {
-    await delay(300);
-    const useCase = mockUseCases.get(useCaseId);
+    const useCase = useCases.get(useCaseId);
     if (!useCase) {
       throw new Error('Use case not found');
     }
     useCase.steps = useCase.steps.filter(s => s.id !== stepId);
     useCase.updatedAt = new Date().toISOString();
+    persist();
   }
 }
 
-// Real API Service
-class RealApiService {
-  private async request<T>(
-    endpoint: string,
-    options: RequestInit = {}
-  ): Promise<T> {
-    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
-      ...options,
-      headers: {
-        'Content-Type': 'application/json',
-        ...options.headers,
-      },
-    });
-
-    if (!response.ok) {
-      throw new Error(`API Error: ${response.statusText}`);
-    }
-
-    return response.json();
-  }
-
-  async getUseCases(projectId: string): Promise<UseCaseListItem[]> {
-    return this.request(`/projects/${projectId}/use-cases`);
-  }
-
-  async getUseCase(useCaseId: string): Promise<UseCase> {
-    return this.request(`/use-cases/${useCaseId}`);
-  }
-
-  async createUseCase(
-    projectId: string,
-    data: CreateUseCaseRequest
-  ): Promise<UseCase> {
-    return this.request(`/projects/${projectId}/use-cases`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateUseCase(
-    useCaseId: string,
-    data: UpdateUseCaseRequest
-  ): Promise<UseCase> {
-    return this.request(`/use-cases/${useCaseId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteUseCase(useCaseId: string): Promise<void> {
-    await this.request(`/use-cases/${useCaseId}`, {
-      method: 'DELETE',
-    });
-  }
-
-  async addFlowStep(
-    useCaseId: string,
-    data: CreateFlowStepRequest
-  ): Promise<UseCase> {
-    return this.request(`/use-cases/${useCaseId}/steps`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateFlowStep(
-    useCaseId: string,
-    stepId: string,
-    data: CreateFlowStepRequest
-  ): Promise<UseCase> {
-    return this.request(`/use-cases/${useCaseId}/steps/${stepId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteFlowStep(useCaseId: string, stepId: string): Promise<void> {
-    await this.request(`/use-cases/${useCaseId}/steps/${stepId}`, {
-      method: 'DELETE',
-    });
-  }
-}
-
-// Export the appropriate service based on the flag
-export const api = USE_MOCK_DATA ? new MockApiService() : new RealApiService();
-
-// Log which service is being used
-console.log(`🔧 API Service: ${USE_MOCK_DATA ? 'MOCK DATA (no backend needed)' : 'REAL API (backend required)'}`);
+export const api = new LocalUseCaseService();

@@ -76,7 +76,9 @@ src/
 │       ├── EdgeEditor.tsx             # Connection label editor (NEW)
 │       └── WorkspaceSelector.tsx      # Project switcher
 ├── services/
-│   └── mockApi.ts                     # Mock backend API
+│   ├── mockApi.ts                     # Projects, stored in localStorage
+│   ├── api.ts                         # Use cases, stored in localStorage
+│   └── storage.ts                     # Guarded localStorage helpers
 ├── store/
 │   └── canvasStore.ts                 # Zustand state management
 ├── types/
@@ -193,7 +195,7 @@ To turn this into a production app:
 
 ## Development Notes
 
-- The app uses **mock API calls** with simulated delays to mimic real backend behavior
+- The app runs entirely in the browser: projects and use cases are saved to `localStorage` (no backend needed)
 - All state is managed through **Zustand** for simplicity and performance
 - **ReactFlow** handles the canvas rendering, nodes, edges, and interactions
 - Component colors are type-specific (blue=service, green=database, purple=queue, orange=external)

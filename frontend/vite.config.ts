@@ -4,4 +4,7 @@ import react from '@vitejs/plugin-react'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // Relative asset paths so the build works under any sub-path,
+  // e.g. https://<user>.github.io/proschi/ on GitHub Pages.
+  base: './',
 })
