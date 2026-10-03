@@ -4,6 +4,7 @@
  * go-to-definition, references and an outline.
  */
 import {
+  CodeActionKind,
   CompletionItemKind,
   DiagnosticSeverity,
   InsertTextFormat,
@@ -13,10 +14,11 @@ import {
   TextDocumentSyncKind,
   TextDocuments,
   createConnection,
+  type CodeAction,
   type DocumentSymbol,
 } from 'vscode-languageserver/node';
 import { TextDocument } from 'vscode-languageserver-textdocument';
-import { analyze, complete, definition, hover, outline, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
 
 declare const PROSCHI_VERSION: string;
 
@@ -45,6 +47,7 @@ connection.onInitialize(() => ({
     definitionProvider: true,
     referencesProvider: true,
     documentSymbolProvider: true,
+    codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
   },
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
 }));
@@ -117,6 +120,26 @@ function toSymbol(s: OutlineSymbol): DocumentSymbol {
 connection.onDocumentSymbol((params) => {
   const doc = documents.get(params.textDocument.uri);
   return doc ? outline(analysisOf(doc)).map(toSymbol) : [];
+});
+
+connection.onCodeAction((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  if (!doc) return [];
+  const analysis = analysisOf(doc);
+  const actions: CodeAction[] = [];
+  for (const diagnostic of params.context.diagnostics) {
+    if (diagnostic.source !== 'proschi') continue;
+    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message);
+    if (!fix) continue;
+    actions.push({
+      title: fix.title,
+      kind: CodeActionKind.QuickFix,
+      diagnostics: [diagnostic],
+      isPreferred: true,
+      edit: { changes: { [params.textDocument.uri]: [fix.edit] } },
+    });
+  }
+  return actions;
 });
 
 documents.listen(connection);

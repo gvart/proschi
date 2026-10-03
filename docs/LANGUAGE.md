@@ -23,6 +23,7 @@ events   "OrderEvents" [Kafka]
 
 gateway -> orders   : HTTP
 orders  -> ordersDb : SQL
+orders  -> events   : Publish
 
 usecase "Create order" {
   gateway -> orders : POST /api/orders json {
@@ -57,7 +58,7 @@ and each use case can branch into scenarios (success and error paths) with
 | Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
 | Use case | `usecase "Name" ["Description"] { steps }` | Top level only. |
 | Parallel steps | `par { steps }` | Inside a use case or an `alt` block; steps in one block run in parallel. Cannot be nested. |
-| Scenario | `alt "Name" { steps }` | Inside a use case or another `alt`. See [Scenarios](#scenarios). |
+| Scenario | `alt "Name" [when "condition"] { steps }` | Inside a use case or another `alt`. See [Scenarios](#scenarios). |
 | Comment | `# …` | Anywhere a token can start. A `#` inside quotes or a JSON payload is kept. |
 
 - **Ids** are letters, digits and `_`, starting with a letter or `_`.
@@ -76,6 +77,7 @@ and each use case can branch into scenarios (success and error paths) with
 How a step label is read:
 
 - `POST /orders` sets the HTTP method and endpoint. Only the standard verbs count: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.
+- The path may be a template with `{param}` segments, e.g. `GET /orders/{id}`. Braces inside the path are part of it, not a payload.
 - After the method and path, `json …`, `xml …` or `text …` sets the payload format and body. A body that starts with `{`, `[` or `<` is recognised without a keyword.
 - A JSON payload can span several lines. It continues until its brackets balance.
 - Any other text becomes the step name, e.g. `INSERT order` or `OrderCreated {…}`.
@@ -89,6 +91,14 @@ How the protocol is inferred:
 | An HTTP method and a `GraphQL`, `gRPC` or `SOAP API` target | `GRAPHQL`, `GRPC` or `SOAP` |
 | Any other HTTP method | `REST` |
 | Anything else | `OTHER` |
+
+Steps should follow the architecture: when a step goes between two nodes that
+no connection joins (in either direction), the parser warns
+`No connection between 'a' and 'b' in the architecture; add 'a -> b'`. For a
+response the suggested connection points the way the request went. Calls of a
+node to itself are fine, and a document without any connection (only use
+cases) is not checked. The language server offers a quick fix that adds the
+connection.
 
 ## Scenarios
 
@@ -128,6 +138,13 @@ usecase "Get order" {
   failed calls in red.
 - A use case without `alt` has a single scenario.
 
+A branch can say when it happens: `alt "Not found" when "no order has that id" {`
+(also `} alt "…" when "…" {`). The condition is free text in quotes; `when` is
+a keyword only in this position, so it still works as an id elsewhere. The
+editor shows the condition on the scenario tab's tooltip and as a *When:* line
+during playback. For nested branches the conditions on the path are joined
+with ` · `, e.g. `cache miss · db down`.
+
 Scenario ids are the slugged branch names (`not-found`, `a-x`), used in links.
 
 ### Grouping by endpoint
@@ -135,6 +152,20 @@ Scenario ids are the slugged branch names (`not-found`, `a-x`), used in links.
 The use case picker in the editor groups use cases by the HTTP method and path
 of their first step, e.g. all `POST /api/orders` flows together. Use cases
 that don't start with an HTTP call are listed under *Other flows*.
+
+**Path templates.** Calls to the same endpoint with different ids share a
+group:
+
+1. A path with a `{param}` segment groups by itself: `GET /orders/{id}`.
+2. Otherwise, a concrete path joins a template endpoint of another use case in
+   the document with the same method that matches it, where `{param}` stands
+   for exactly one non-empty segment: `GET /orders/order-789` joins
+   `GET /orders/{id}`.
+3. Otherwise, segments that are all digits or a UUID are read as `{id}`:
+   `GET /orders/42` and `GET /orders/43` group as `GET /orders/{id}`.
+
+The use case's `endpoint` stays the literal path; the group key is
+`endpointGroup` in the parse output.
 
 ## Editing on the canvas
 
@@ -172,8 +203,8 @@ connection   = id , arrow , id , [ ":" , label ] ;
 group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
 usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
 par-open     = "par" , "{" ;
-alt-open     = "alt" , ( string | id ) , "{" ;
-close        = "}" , [ "alt" , ( string | id ) , "{" ] ;
+alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
+close        = "}" , [ alt-open ] ;
 
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
@@ -203,5 +234,6 @@ Where each statement may appear:
 `json` / `xml` / `text` payload, and on a response a leading status code.
 
 The grammar describes syntax only. The parser also checks meaning: duplicate
-ids, unknown tech stacks, responses without a matching request, and so on.
+ids, unknown tech stacks, responses without a matching request, steps between
+nodes the architecture does not connect, and so on.
 Those checks are what the language server and `proschi check` report.

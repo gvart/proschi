@@ -347,6 +347,10 @@
           "type": "string",
           "description": "`METHOD /path` of the first step, if it is an HTTP call."
         },
+        "endpointGroup": {
+          "type": "string",
+          "description": "The endpoint with concrete ids folded into a `{param}` path template; use cases that share it hit the same endpoint."
+        },
         "steps": {
           "type": "array",
           "items": {
@@ -388,6 +392,10 @@
             "success",
             "error"
           ]
+        },
+        "condition": {
+          "type": "string",
+          "description": "`when \"…\"` conditions of the branches on the scenario's path, joined with ' · '."
         },
         "steps": {
           "type": "array",
