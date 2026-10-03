@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
   Play,
@@ -18,7 +18,7 @@ import ReactFlow, {
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
-import { api, type UseCase } from '../../services/api';
+import { api, type FlowStep, type UseCase } from '../../services/api';
 import { useCanvasStore } from '../../store/canvasStore';
 import ComponentNode from '../Canvas/ComponentNode';
 import TextNode from '../Canvas/TextNode';
@@ -40,22 +40,86 @@ interface UseCasePlaybackProps {
   onBack: () => void;
 }
 
+interface UseCasePlayerProps {
+  useCase: { name: string; steps: FlowStep[] };
+  nodes: Node[];
+  edges: Edge[];
+  onBack: () => void;
+}
+
+/** Loads a stored use case and plays it against the current canvas. */
 function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
   const [useCase, setUseCase] = useState<UseCase | null>(null);
   const [loading, setLoading] = useState(true);
+  const nodes = useCanvasStore((state) => state.nodes);
+  const edges = useCanvasStore((state) => state.edges);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    api
+      .getUseCase(useCaseId)
+      .then((data) => !cancelled && setUseCase(data))
+      .catch((error) => console.error('Failed to load use case:', error))
+      .finally(() => !cancelled && setLoading(false));
+    return () => {
+      cancelled = true;
+    };
+  }, [useCaseId]);
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-gray-500">Loading use case...</div>
+      </div>
+    );
+  }
+
+  if (!useCase) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <div className="text-red-500">Use case not found</div>
+      </div>
+    );
+  }
+
+  return <UseCasePlayerContent useCase={useCase} nodes={nodes} edges={edges} onBack={onBack} />;
+}
+
+/** Animated step-by-step playback of a use case over an architecture diagram. */
+function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack }: UseCasePlayerProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
 
-  const nodes = useCanvasStore((state) => state.nodes);
-  const edges = useCanvasStore((state) => state.edges);
   const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
 
+  // Steps between nodes with no architecture edge get a hidden edge so they can still animate.
+  const edges = useMemo(() => {
+    const extra: Edge[] = [];
+    for (const step of useCase.steps) {
+      const connected = [...architectureEdges, ...extra].some(
+        (e) =>
+          (e.source === step.fromServiceId && e.target === step.toServiceId) ||
+          (e.target === step.fromServiceId && e.source === step.toServiceId)
+      );
+      if (!connected && step.fromServiceId !== step.toServiceId) {
+        extra.push({ id: `step:${step.fromServiceId}->${step.toServiceId}`, source: step.fromServiceId, target: step.toServiceId, data: { hiddenUntilActive: true } });
+      }
+    }
+    return [...architectureEdges, ...extra];
+  }, [useCase, architectureEdges]);
+
+  // Restart from the first step whenever a different use case is played.
   useEffect(() => {
-    loadUseCase();
-  }, [useCaseId]);
+    setCurrentStepIndex(0);
+    setAnimationProgress(0);
+    setIsPlaying(false);
+    if (playIntervalRef.current) clearInterval(playIntervalRef.current);
+    if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+  }, [useCase]);
 
   useEffect(() => {
     return () => {
@@ -63,18 +127,6 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
       if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
     };
   }, []);
-
-  const loadUseCase = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getUseCase(useCaseId);
-      setUseCase(data);
-    } catch (error) {
-      console.error('Failed to load use case:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const startAnimation = () => {
     setAnimationProgress(0);
@@ -97,7 +149,7 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
 
     playIntervalRef.current = setInterval(() => {
       setCurrentStepIndex((prev) => {
-        if (!useCase || prev >= useCase.steps.length - 1) {
+        if (prev >= useCase.steps.length - 1) {
           setIsPlaying(false);
           if (playIntervalRef.current) clearInterval(playIntervalRef.current);
           return prev;
@@ -115,7 +167,6 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
   };
 
   const handleStepForward = () => {
-    if (!useCase) return;
     handlePause();
     setCurrentStepIndex((prev) => Math.min(prev + 1, useCase.steps.length - 1));
     setAnimationProgress(0);
@@ -132,22 +183,6 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
     setCurrentStepIndex(0);
     setAnimationProgress(0);
   };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-500">Loading use case...</div>
-      </div>
-    );
-  }
-
-  if (!useCase) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-red-500">Use case not found</div>
-      </div>
-    );
-  }
 
   if (useCase.steps.length === 0) {
     return (
@@ -225,7 +260,7 @@ function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
         ...edge.style,
         stroke: isActive ? '#3b82f6' : '#b1b1b7',
         strokeWidth: isActive ? 3 : 2,
-        opacity: isActive ? 1 : 0.3,
+        opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : 0.3,
         transition: 'all 0.3s ease',
       },
     };
@@ -449,6 +484,14 @@ export default function UseCasePlayback(props: UseCasePlaybackProps) {
   return (
     <ReactFlowProvider>
       <UseCasePlaybackContent {...props} />
+    </ReactFlowProvider>
+  );
+}
+
+export function UseCasePlayer(props: UseCasePlayerProps) {
+  return (
+    <ReactFlowProvider>
+      <UseCasePlayerContent {...props} />
     </ReactFlowProvider>
   );
 }

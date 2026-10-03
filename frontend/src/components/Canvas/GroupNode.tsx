@@ -10,7 +10,7 @@ function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
   const borderStyle = data.borderStyle || 'dashed';
 
   return (
-    <div className="relative">
+    <div className="relative w-full h-full">
       <NodeResizer
         isVisible={selected}
         minWidth={300}
@@ -22,6 +22,8 @@ function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
           ${selected ? 'shadow-lg' : 'shadow-md'}
         `}
         style={{
+          width: '100%',
+          height: '100%',
           minWidth: 300,
           minHeight: 200,
           backgroundColor,

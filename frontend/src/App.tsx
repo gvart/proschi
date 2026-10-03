@@ -5,10 +5,20 @@ import ProjectList from './components/ProjectList';
 import UseCaseListView from './components/UseCases/UseCaseListView';
 import UseCaseEditor from './components/UseCases/UseCaseEditor';
 import UseCasePlayback from './components/UseCases/UseCasePlayback';
+import Playground from './components/Playground/Playground';
 import { useCanvasStore } from './store/canvasStore';
+import { loadJson, saveJson } from './services/storage';
 import './App.css';
 
+type AppMode = 'playground' | 'builder';
+const MODE_KEY = 'proschi.mode';
+
 function App() {
+  const [mode, setModeState] = useState<AppMode>(() => loadJson<AppMode>(MODE_KEY, 'playground'));
+  const setMode = (next: AppMode) => {
+    setModeState(next);
+    saveJson(MODE_KEY, next);
+  };
   const currentProject = useCanvasStore((state) => state.currentProject);
   const viewMode = useCanvasStore((state) => state.viewMode);
   const setViewMode = useCanvasStore((state) => state.setViewMode);
@@ -45,8 +55,12 @@ function App() {
     setViewMode('usecases');
   };
 
+  if (mode === 'playground') {
+    return <Playground onOpenBuilder={() => setMode('builder')} />;
+  }
+
   if (!currentProject) {
-    return <ProjectList onProjectOpen={handleProjectOpen} />;
+    return <ProjectList onProjectOpen={handleProjectOpen} onOpenPlayground={() => setMode('playground')} />;
   }
 
   return (

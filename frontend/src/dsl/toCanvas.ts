@@ -1,7 +1,7 @@
 import type { CanvasEdge, CanvasNode, ComponentMetadata } from '../types/canvas';
 import type { Diagram, DiagramNode } from './types';
 
-const NODE_TYPE: Record<DiagramNode['kind'], string> = {
+export const NODE_TYPE: Record<DiagramNode['kind'], string> = {
   component: 'componentNode',
   group: 'groupNode',
   text: 'textNode',
@@ -19,26 +19,13 @@ export function toCanvas(diagram: Diagram): { nodes: CanvasNode[]; edges: Canvas
   let unplaced = 0;
 
   const nodes = diagram.nodes.map((node): CanvasNode => {
-    const data: ComponentMetadata = {
-      id: node.id,
-      name: node.name,
-      type: node.type,
-      techStack: node.techStack,
-      ownerTeam: node.ownerTeam,
-      description: node.description,
-    };
-    if (node.kind === 'text') {
-      data.textContent = node.description ?? node.name;
-      data.fontSize = 14;
-    }
-
     const position = node.position ?? {
       x: (unplaced % GRID_COLUMNS) * GRID_X,
       y: Math.floor(unplaced / GRID_COLUMNS) * GRID_Y,
     };
     if (!node.position) unplaced++;
 
-    return { id: node.id, type: NODE_TYPE[node.kind], position, data };
+    return { id: node.id, type: NODE_TYPE[node.kind], position, data: toMetadata(node) };
   });
 
   const edges = diagram.edges.map((edge): CanvasEdge => ({
@@ -49,4 +36,20 @@ export function toCanvas(diagram: Diagram): { nodes: CanvasNode[]; edges: Canvas
   }));
 
   return { nodes, edges };
+}
+
+export function toMetadata(node: DiagramNode): ComponentMetadata {
+  const data: ComponentMetadata = {
+    id: node.id,
+    name: node.name,
+    type: node.type,
+    techStack: node.techStack,
+    ownerTeam: node.ownerTeam,
+    description: node.description,
+  };
+  if (node.kind === 'text') {
+    data.textContent = node.description ?? node.name;
+    data.fontSize = 14;
+  }
+  return data;
 }

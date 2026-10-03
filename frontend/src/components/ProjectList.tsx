@@ -1,13 +1,14 @@
 import { useState, useEffect } from 'react';
-import { Trash2, FolderOpen, Plus, Search, Calendar } from 'lucide-react';
+import { Trash2, FolderOpen, Plus, Search, Calendar, Code2 } from 'lucide-react';
 import { mockApi } from '../services/mockApi';
 import type { Project } from '../types/canvas';
 
 interface ProjectListProps {
   onProjectOpen: (projectId: string) => void;
+  onOpenPlayground?: () => void;
 }
 
-export default function ProjectList({ onProjectOpen }: ProjectListProps) {
+export default function ProjectList({ onProjectOpen, onOpenPlayground }: ProjectListProps) {
   const [projects, setProjects] = useState<Project[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -94,13 +95,24 @@ export default function ProjectList({ onProjectOpen }: ProjectListProps) {
                 Manage your infrastructure diagrams and architecture projects
               </p>
             </div>
-            <button
-              onClick={() => setShowCreateModal(true)}
-              className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              <Plus size={20} />
-              New Project
-            </button>
+            <div className="flex items-center gap-2">
+              {onOpenPlayground && (
+                <button
+                  onClick={onOpenPlayground}
+                  className="inline-flex items-center gap-2 px-4 py-2 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  <Code2 size={20} />
+                  Text editor
+                </button>
+              )}
+              <button
+                onClick={() => setShowCreateModal(true)}
+                className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+              >
+                <Plus size={20} />
+                New Project
+              </button>
+            </div>
           </div>
 
           {/* Search */}
