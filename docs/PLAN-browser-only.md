@@ -41,9 +41,9 @@ body → `requestFormat`/`requestBody`).
 - [x] **Phase 0 – Backend-free + deploy.** localStorage persistence for
   projects and use cases, relative Vite `base`, GitHub Actions workflow that
   lints, builds and deploys `frontend/dist` to Pages.
-- [ ] **Phase 1 – Language core** (`src/dsl/`, pure TS): lexer, recursive-descent
+- [x] **Phase 1 – Language core** (`src/dsl/`, pure TS): lexer, recursive-descent
   parser with line/column errors, syntax tree → `{ nodes, edges, useCases }`.
-  Partial results on error. Vitest suite.
+  Partial results on error. Vitest suite. Syntax reference: `docs/LANGUAGE.md`.
 - [ ] **Phase 2 – Live editor.** CodeMirror 6 (highlighting, error marks,
   autocomplete of tech stacks / node ids), debounced re-parse, `elkjs`
   auto-layout (groups as containers; optional `pos x,y` override), use-case
