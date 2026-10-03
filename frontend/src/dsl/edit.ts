@@ -65,7 +65,9 @@ export function removeNode(source: string, id: string): EditResult {
   const node = diagram.nodes.find((n) => n.id === id);
   if (!node) return { source };
   if (node.kind === 'group') return { error: `"${node.name}" is a group; delete it in the text so its members are handled too.` };
-  const useCase = diagram.useCases.find((u) => u.steps.some((s) => s.fromServiceId === id || s.toServiceId === id));
+  const useCase = diagram.useCases.find((u) =>
+    u.scenarios.some((sc) => sc.steps.some((s) => s.fromServiceId === id || s.toServiceId === id)),
+  );
   if (useCase) return { error: `"${node.name}" is used in the use case "${useCase.name}"; remove those steps first.` };
 
   const lines = diagram.edges.filter((e) => e.source === id || e.target === id).map((e) => e.loc.line);

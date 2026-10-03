@@ -31,15 +31,20 @@ if (shareSample && heroSource) {
 const player = document.querySelector<HTMLElement>('#player');
 const svg = document.querySelector<SVGSVGElement>('#hero-diagram');
 const packet = document.querySelector<SVGCircleElement>('#packet');
+const failMark = document.querySelector<SVGPathElement>('#fail-mark');
+const scenarios = document.querySelector<HTMLElement>('#player-scenarios');
 const toggle = document.querySelector<HTMLButtonElement>('#player-toggle');
 const next = document.querySelector<HTMLButtonElement>('#player-next');
 const status = document.querySelector<HTMLElement>('#player-status');
 const payload = document.querySelector<HTMLElement>('#player-payload');
 
-if (svg) responsiveLayout(svg, () => packet?.classList.remove('is-visible'));
+if (svg) responsiveLayout(svg, () => {
+  packet?.classList.remove('is-visible');
+  failMark?.classList.remove('is-visible');
+});
 
-if (player && svg && packet && heroCode && toggle && next && status && payload) {
+if (player && svg && packet && failMark && scenarios && heroCode && toggle && next && status && payload) {
   player.hidden = false;
   const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  initPlayer({ svg, packet, code: heroCode, toggle, next, status, payload }, heroLines, reduced);
+  initPlayer({ svg, packet, failMark, code: heroCode, scenarios, toggle, next, status, payload }, heroLines, reduced);
 }

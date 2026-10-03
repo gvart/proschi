@@ -35,6 +35,17 @@ const edgeTypes = {
   animated: AnimatedPlaybackEdge,
 };
 
+const ERROR_COLOR = '#dc2626';
+
+/** A step that failed outright or was answered with a 4xx/5xx status. */
+function isErrorStep(step: FlowStep): boolean {
+  return !!step.failed || (step.statusCode ?? 0) >= 400;
+}
+
+const connects = (edge: Edge, step: FlowStep) =>
+  (edge.source === step.fromServiceId && edge.target === step.toServiceId) ||
+  (edge.target === step.fromServiceId && edge.source === step.toServiceId);
+
 interface UseCasePlaybackProps {
   useCaseId: string;
   onBack: () => void;
@@ -186,16 +197,17 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
     if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
   };
 
+  // Manual steps animate too, so a failed call still shows where it was cut off.
   const handleStepForward = () => {
     handlePause();
     setCurrentStepIndex((prev) => Math.min(prev + 1, useCase.steps.length - 1));
-    setAnimationProgress(0);
+    startAnimation();
   };
 
   const handleStepBack = () => {
     handlePause();
     setCurrentStepIndex((prev) => Math.max(prev - 1, 0));
-    setAnimationProgress(0);
+    startAnimation();
   };
 
   const handleReset = () => {
@@ -230,10 +242,15 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
 
   // Get all highlighted nodes from current step(s)
   const highlightedNodes = new Set<string>();
+  const errorNodes = new Set<string>();
   currentSteps.forEach(step => {
     highlightedNodes.add(step.fromServiceId);
     highlightedNodes.add(step.toServiceId);
+    if (isErrorStep(step)) errorNodes.add(step.toServiceId);
   });
+
+  // Nodes this scenario never touches fade further than the ones it passes through later.
+  const scenarioNodes = new Set(useCase.steps.flatMap((step) => [step.fromServiceId, step.toServiceId]));
 
   // Apply highlighting to nodes
   const displayNodes: Node[] = nodes.map((node) => ({
@@ -243,44 +260,48 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
     },
     style: {
       ...node.style,
-      opacity: highlightedNodes.has(node.id) ? 1 : 0.3,
+      opacity: highlightedNodes.has(node.id) ? 1 : scenarioNodes.has(node.id) || node.type === 'groupNode' ? 0.45 : 0.15,
       transition: 'opacity 0.3s ease',
     },
-    className: highlightedNodes.has(node.id)
-      ? 'ring-4 ring-blue-500 ring-opacity-50'
-      : '',
+    className: errorNodes.has(node.id)
+      ? 'ring-4 ring-red-500 ring-opacity-60'
+      : highlightedNodes.has(node.id)
+        ? 'ring-4 ring-blue-500 ring-opacity-50'
+        : '',
   }));
 
   // Find active edges for current step(s)
   const activeEdges = currentSteps.map(step => {
-    const edge = edges.find(
-      (e) =>
-        (e.source === step.fromServiceId && e.target === step.toServiceId) ||
-        (e.target === step.fromServiceId && e.source === step.toServiceId)
-    );
+    const edge = edges.find((e) => connects(e, step));
     return edge ? { edge, step } : null;
   }).filter(Boolean);
 
   const displayEdges: Edge[] = edges.map((edge) => {
     const activeInfo = activeEdges.find(ae => ae?.edge.id === edge.id);
     const isActive = !!activeInfo;
-    const isRequestResponse = activeInfo?.step.executionType === 'SYNC_REQUEST_RESPONSE';
+    const step = activeInfo?.step;
+    const isRequestResponse = step?.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed;
+    const isError = !!step && isErrorStep(step);
+    const onPath = useCase.steps.some((s) => connects(edge, s));
 
     return {
       ...edge,
       type: isActive ? 'animated' : 'default',
-      animated: isActive && animationProgress >= 100,
+      animated: isActive && animationProgress >= 100 && !step?.failed,
       data: {
         ...(edge.data || {}),
         isActive,
         progress: animationProgress,
         isRequestResponse,
+        isError,
+        failed: !!step?.failed,
       },
       style: {
         ...edge.style,
-        stroke: isActive ? '#3b82f6' : '#b1b1b7',
+        stroke: isActive ? (isError ? ERROR_COLOR : '#3b82f6') : '#b1b1b7',
         strokeWidth: isActive ? 3 : 2,
-        opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : 0.3,
+        strokeDasharray: isActive && step?.failed ? '6 4' : edge.style?.strokeDasharray,
+        opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : onPath ? 0.45 : 0.12,
         transition: 'all 0.3s ease',
       },
     };
@@ -367,13 +388,23 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
               <div className="flex items-start gap-6">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
-                    <div className="w-8 h-8 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-semibold text-sm">
+                    <div
+                      className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
+                        isErrorStep(step) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                      }`}
+                    >
                       {useCase.steps.indexOf(step) + 1}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-gray-900 break-words">{step.stepName}</h3>
-                        {step.executionType === 'SYNC_REQUEST_RESPONSE' && (
+                        {step.failed && (
+                          <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Failed</span>
+                        )}
+                        {!step.failed && (step.statusCode ?? 0) >= 400 && (
+                          <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">{step.statusCode}</span>
+                        )}
+                        {step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed && (
                           <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">Sync</span>
                         )}
                         {step.executionType === 'ASYNC_FIRE_AND_FORGET' && (
@@ -412,13 +443,23 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
                     )}
                     {step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
                       <div>
-                        <div className="text-xs font-medium text-gray-500 mb-1">
-                          Response ({step.responseFormat}) - {step.statusCode}
+                        <div className={`text-xs font-medium mb-1 ${isErrorStep(step) ? 'text-red-600' : 'text-gray-500'}`}>
+                          Response ({step.responseFormat}){step.statusCode !== undefined && ` - ${step.statusCode}`}
                         </div>
-                        <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
+                        <pre
+                          className={`text-xs p-2 rounded border overflow-auto max-h-32 ${
+                            isErrorStep(step) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+                          }`}
+                        >
                           {step.responseBody}
                         </pre>
                       </div>
+                    )}
+                    {!step.responseBody && !step.failed && (step.statusCode ?? 0) >= 400 && (
+                      <div className="text-sm text-red-700">Answered with {step.statusCode}</div>
+                    )}
+                    {step.failed && (
+                      <div className="text-sm text-red-700">No response: the call failed (timeout, connection refused or similar).</div>
                     )}
                   </div>
                 </div>

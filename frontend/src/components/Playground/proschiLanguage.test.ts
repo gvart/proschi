@@ -35,7 +35,7 @@ describe('proschiCompletions', () => {
 
   it('offers keywords and ids at the start of a line', () => {
     const labels = complete('or')?.options.map((o) => o.label);
-    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'orders']));
+    expect(labels).toEqual(expect.arrayContaining(['usecase', 'group', 'alt', 'orders']));
   });
 
   it('offers only ids after an arrow', () => {

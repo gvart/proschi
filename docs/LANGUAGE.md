@@ -22,13 +22,24 @@ usecase "Create order" {
   gateway -> orders : POST /api/orders json {
     "sku": "A1"
   }
-  par {
-    orders -> ordersDb : INSERT order
-    orders ->> events  : OrderCreated {"orderId": "o-1"}
+  alt "Created" {
+    par {
+      orders -> ordersDb : INSERT order
+      orders ->> events  : OrderCreated {"orderId": "o-1"}
+    }
+    orders --> gateway : 201 {"status": "pending"}
+  } alt "Invalid payload" {
+    orders --> gateway : 400 {"error": "sku required"}
+  } alt "DB down" {
+    orders -x ordersDb : INSERT order
+    orders --> gateway : 503
   }
-  orders --> gateway : 201 {"status": "pending"}
 }
 ```
+
+The architecture is written once. Any number of use cases can play over it,
+and each use case can branch into scenarios (success and error paths) with
+`alt`.
 
 ## Statements
 
@@ -39,7 +50,8 @@ usecase "Create order" {
 | Group | `group id ["Name"] [Style] [pos x,y] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
 | Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
 | Use case | `usecase "Name" ["Description"] { steps }` | Top level only. |
-| Parallel steps | `par { steps }` | Inside a use case; steps in one block run in parallel. |
+| Parallel steps | `par { steps }` | Inside a use case or an `alt` block; steps in one block run in parallel. Cannot be nested. |
+| Scenario | `alt "Name" { steps }` | Inside a use case or another `alt`. See [Scenarios](#scenarios). |
 | Comment | `# …` | Anywhere a token can start. A `#` inside quotes or a JSON payload is kept. |
 
 - **Ids** are letters, digits and `_`, starting with a letter or `_`.
@@ -53,6 +65,7 @@ usecase "Create order" {
 | `a -> b : …` | Synchronous request |
 | `a ->> b : …` | Asynchronous, fire and forget. It becomes async request/response if a reply follows. |
 | `b --> a : …` | Response to the latest unanswered request from `a` to `b` |
+| `a -x b : …` | Failed call: the request never gets an answer (timeout, connection refused). It cannot be answered with `-->`. |
 
 How a step label is read:
 
@@ -71,6 +84,52 @@ How the protocol is inferred:
 | Any other HTTP method | `REST` |
 | Anything else | `OTHER` |
 
+## Scenarios
+
+One endpoint rarely has one outcome. `alt` blocks split a use case into
+scenarios without copying the steps they share:
+
+```
+usecase "Get order" {
+  gateway -> orders : GET /api/orders/42      # shared by every scenario
+
+  alt "Found" {
+    orders -> ordersDb  : SELECT order 42
+    orders --> gateway : 200 {"id": 42}
+  } alt "Not found" {
+    orders -> ordersDb  : SELECT order 42
+    orders --> gateway : 404 {"error": "not_found"}
+  } alt "DB timeout" {
+    orders -x ordersDb  : SELECT order 42
+    orders --> gateway : 504
+  }
+
+  gateway ->> audit : OrderViewed               # shared again, after every branch
+}
+```
+
+- `alt` blocks that follow each other directly are one set of alternatives.
+  Close one and open the next on the same line (`} alt "B" {`) or on the next
+  line; a step between two blocks starts a new set.
+- Each branch becomes a scenario. Steps before a set are shared by all its
+  branches, and steps after it are added to every branch.
+- `alt` blocks can be nested. Nested sets, and several sets one after another,
+  multiply: two sets of two branches give four scenarios, named like
+  `A › X`. A use case keeps at most 32 scenarios; the parser warns past that.
+- A response inside a branch can answer a request made before the branch.
+- A scenario is an **error path** when the use case's first request is answered
+  with a 4xx or 5xx status, or fails with `-x`. Playback draws error replies and
+  failed calls in red.
+- A use case without `alt` has a single scenario.
+
+Scenario ids are the slugged branch names (`not-found`, `a-x`), used in links.
+
+### Grouping by endpoint
+
+The use case picker in the editor groups use cases by the HTTP method and path
+of their first step, e.g. all `POST /api/orders` flows together. Use cases
+that don't start with an HTTP call are listed under *Other flows*.
+
 ## Editing on the canvas
 
 The text is the source of truth. Edits on the diagram are written back into it:
@@ -86,4 +145,4 @@ A node that was only referenced, never declared, gets a declaration line above t
 
 ## Links
 
-The address bar always holds the whole document: `#code=…`. While a use case is playing, the link also names the use case and the step, e.g. `#code=…&uc=create-order&step=3`, so a shared link opens playback at that step.
+The address bar always holds the whole document: `#code=…`. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.

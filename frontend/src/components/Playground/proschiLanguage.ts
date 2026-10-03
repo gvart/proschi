@@ -12,7 +12,7 @@ interface LexState {
   depth: number;
 }
 
-const KEYWORDS = /^(title|group|usecase|par|pos)\b/;
+const KEYWORDS = /^(title|group|usecase|par|alt|pos)\b/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 
 /** Syntax highlighting for Proschi documents. */
@@ -48,7 +48,7 @@ export const proschiLanguage = StreamLanguage.define<LexState>({
     if (stream.match(/^"(?:[^"\\]|\\.)*"?/)) return 'string';
     if (stream.match(/^\[[^\]]*\]?/)) return 'typeName';
     if (stream.match(/^@[\w-]*/)) return 'attributeName';
-    if (stream.match(/^(->>|-->|->)/)) return 'operator';
+    if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
     if (stream.match(/^-?\d+/)) return 'number';
     if (stream.match(KEYWORDS)) return 'keyword';
     if (stream.match(/^[A-Za-z_]\w*/)) return 'variableName';
@@ -79,6 +79,7 @@ const keywordOptions: Completion[] = [
   { label: 'group', type: 'keyword', detail: 'group id "Name" { … }' },
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
+  { label: 'alt', type: 'keyword', apply: 'alt "', detail: 'alt "Scenario" { … }' },
 ];
 
 /** Completes tech stacks inside [ ] and node ids / keywords elsewhere. */

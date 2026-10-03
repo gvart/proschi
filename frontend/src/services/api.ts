@@ -24,6 +24,8 @@ export interface FlowStep {
   isParallel: boolean;
   isConditional: boolean;
   conditionExpression?: string;
+  /** The call never got an answer (connection refused, timeout); written `a -x b`. */
+  failed?: boolean;
 }
 
 export interface UseCase {
