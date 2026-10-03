@@ -2,6 +2,7 @@
   "name": "proschi",
   "displayName": "Proschi",
   "description": "Syntax highlighting, validation, completion and outline for Proschi architecture diagrams (.proschi)",
+  "license": "MIT",
   "version": "0.1.0",
   "publisher": "gvart",
   "repository": {

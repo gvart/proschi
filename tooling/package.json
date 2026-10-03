@@ -2,6 +2,7 @@
   "name": "proschi",
   "version": "0.1.0",
   "description": "Command-line checker and language server for Proschi architecture diagrams",
+  "license": "MIT",
   "repository": {
     "type": "git",
     "url": "https://github.com/gvart/proschi.git",
@@ -25,7 +26,8 @@
     "dist/server.cjs",
     "grammar",
     "schema",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=18"
@@ -35,7 +37,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "node build.mjs",
     "test": "vitest run",
-    "package:vscode": "node build.mjs && cd vscode && vsce package --no-dependencies --skip-license -o ../dist/proschi.vsix"
+    "package:vscode": "node build.mjs && cd vscode && vsce package --no-dependencies -o ../dist/proschi.vsix"
   },
   "devDependencies": {
     "@types/node": "^24.19.1",

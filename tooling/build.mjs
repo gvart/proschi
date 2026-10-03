@@ -29,5 +29,8 @@ rmSync('dist/.schema.cjs');
 // VS Code extension: its own client bundle, plus copies of the server and grammar.
 await build({ ...common, entryPoints: ['vscode/src/extension.ts'], outfile: 'vscode/dist/extension.cjs', external: ['vscode'] });
 copyFileSync('dist/server.cjs', 'vscode/dist/server.cjs');
+// Both packages ship the repository's license.
+copyFileSync('../LICENSE', 'LICENSE');
+copyFileSync('../LICENSE', 'vscode/LICENSE');
 mkdirSync('vscode/syntaxes', { recursive: true });
 copyFileSync('grammar/proschi.tmLanguage.json', 'vscode/syntaxes/proschi.tmLanguage.json');
