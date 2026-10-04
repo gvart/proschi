@@ -10,7 +10,7 @@
     "url": "https://github.com/gvart/proschi.git",
     "directory": "tooling/vscode"
   },
-  "homepage": "https://gvart.github.io/proschi/",
+  "homepage": "https://proschi.app/",
   "engines": {
     "vscode": "^1.91.0"
   },

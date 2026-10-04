@@ -15,6 +15,10 @@ import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspa
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
 import { startMode, type StartMode } from '../onboarding/seen';
+import type { Account } from './useAccount';
+import AccountMenu from './AccountMenu';
+import CommunityStats from './CommunityStats';
+import { useProblemStats } from './useCommunity';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 
@@ -34,10 +38,11 @@ interface ProblemPageProps {
   progress: Progress;
   onProgress: (update: (p: Progress) => Progress) => void;
   engine: Engine;
+  account: Account;
 }
 
 /** LeetCode-like: the statement on the left, the editor and diagram in the middle, tests at the bottom. Tabs on phones. */
-export default function ProblemPage({ problem, progress, onProgress, engine }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
@@ -48,6 +53,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
   const [tour, setTour] = useState<StartMode>(() => startMode('practice', { returning: Object.keys(progress).length > 0 }));
   const [tourRun, setTourRun] = useState(0);
   const [runs, setRuns] = useState(0);
+  // Bumped once a run is recorded (or, signed out, made), to show and refresh how others did.
+  const [statsRefresh, setStatsRefresh] = useState(0);
+  const [serverNote, setServerNote] = useState<string>();
+  const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, account.state.status === 'signed-in', statsRefresh);
 
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {
@@ -69,7 +78,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
     setRuns((n) => n + 1);
-    if (!result.blocked) onProgress((p) => withRun(p, problem, result.solved));
+    if (!result.blocked) {
+      onProgress((p) => withRun(p, problem, result.solved));
+      void account.recordRun(problem.id, source, result.solved).then((record) => {
+        setServerNote(
+          result.solved && record?.verdict && !record.verdict.solved
+            ? 'The server did not confirm this solve, so it is not in your stats. Reload the page to get the latest version and run the tests again.'
+            : undefined,
+        );
+        setStatsRefresh((n) => n + 1);
+      });
+    }
     setPane('tests');
   };
 
@@ -101,6 +120,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
         </button>
+        <AccountMenu account={account} />
         <HelpMenu
           tourLabel="Take the practice tour"
           onTour={() => {
@@ -146,7 +166,21 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
             </section>
           </div>
           <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>
-            <TestPanel run={run?.result} stale={!!run && run.source !== source} diagnostics={diagnostics} onRun={runNow} onSelect={goTo} />
+            <TestPanel
+              run={run?.result}
+              stale={!!run && run.source !== source}
+              diagnostics={diagnostics}
+              onRun={runNow}
+              onSelect={goTo}
+              community={
+                run && !run.result.blocked && (community || serverNote) ? (
+                  <>
+                    {serverNote && <p className="m-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">{serverNote}</p>}
+                    {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
+                  </>
+                ) : undefined
+              }
+            />
           </section>
         </div>
       </div>

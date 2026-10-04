@@ -15,7 +15,8 @@ Status: accepted · Owner: gvart · Applies to: language, tooling, web editor
 
 Both rest on the same three additions: language for scale and requirements, a
 deterministic simulation, and executable tests. Everything runs in the browser
-and in the CLI; there is no backend in this phase.
+and in the CLI; there is no backend in this phase. (Optional accounts and
+global practice stats came later, in `backend/`; see backend/README.md.)
 
 Non-goals for this phase: accounts, leaderboards, server-side hidden tests,
 benchmark-accurate performance numbers (the simulation teaches orders of
@@ -266,7 +267,7 @@ DOM): `analyze(diagram, options?) → Analysis`. It runs in milliseconds, so the
 editor re-runs it on every change.
 
 This section describes the model as the code implements it today, §7's
-refinements included. [How the simulation works](https://gvart.github.io/proschi/model/)
+refinements included. [How the simulation works](https://proschi.app/model/)
 (`frontend/model/index.html`) states every rule with its default numbers,
 worked examples and limits; a test recomputes each number on that page from
 the code.

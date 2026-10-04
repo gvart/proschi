@@ -1,9 +1,15 @@
-import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import problems from 'virtual:practice-listings';
 import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import { loadProgress, saveProgress, type Progress } from './progress';
+import { api, type Me } from '../services/api';
+import { mergeServerProgress, progressToImport } from './account';
+import { useAccount } from './useAccount';
+import AccountMenu from './AccountMenu';
+import LeaderboardPanel from './LeaderboardPanel';
+import { useLeaderboard, useStatsSummary } from './useCommunity';
 import HelpMenu from '../onboarding/HelpMenu';
 import { requestTour } from '../onboarding/seen';
 
@@ -34,6 +40,25 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     });
   }, []);
 
+  // Signed in: the server's progress joins the browser's, and the browser's designs the server lacks are uploaded (it checks the solves).
+  const progressRef = useRef(progress);
+  progressRef.current = progress;
+  const onSignedIn = useCallback(
+    (me: Me) => {
+      const toImport = progressToImport(progressRef.current, me.progress).filter((item) => problems.some((p) => p.id === item.id));
+      updateProgress((p) => mergeServerProgress(p, me.progress));
+      void (async () => {
+        for (const { id, source, solved } of toImport) {
+          await api(`/api/problems/${encodeURIComponent(id)}/runs`, { method: 'POST', body: { source, solved, imported: true } }).catch(() => undefined);
+        }
+      })();
+    },
+    [updateProgress],
+  );
+  const account = useAccount(onSignedIn);
+  const stats = useStatsSummary();
+  const leaderboard = useLeaderboard();
+
   const problem = route ? problems.find((p) => p.id === route) : undefined;
   useEffect(() => {
     document.title = problem ? `${problem.title} · Proschi practice` : 'Practice · Proschi';
@@ -42,7 +67,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   if (problem) {
     return (
       <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
-        <ProblemRoute key={problem.id} id={problem.id} progress={progress} onProgress={updateProgress} engine={engine} />
+        <ProblemRoute key={problem.id} id={problem.id} progress={progress} onProgress={updateProgress} engine={engine} account={account} />
       </Suspense>
     );
   }
@@ -57,6 +82,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         <a href="../app/" className="ml-auto text-sm text-gray-700 hover:text-blue-700">
           Open the editor
         </a>
+        <AccountMenu account={account} />
         <HelpMenu
           tourLabel="Take the practice tour"
           onTour={() => {
@@ -67,7 +93,9 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         />
       </header>
       {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">No problem called “{route}”. Pick one below.</p>}
-      <ProblemList problems={problems} progress={progress} />
+      <ProblemList problems={problems} progress={progress} stats={stats}>
+        {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
+      </ProblemList>
     </div>
   );
 }

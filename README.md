@@ -58,11 +58,14 @@ test "Notes are stored before they are returned" {
 - **HLD and simulation**: traffic, requirements, replicas, shards, capacity,
   entities and decisions turn a diagram into a high-level design document; the
   simulation computes load, latency, availability and cost per node and runs
-  your requirements and tests. [How the simulation works](https://gvart.github.io/proschi/model/)
+  your requirements and tests. [How the simulation works](https://proschi.app/model/)
   lists its formulas, its default numbers and what it leaves out.
 - **Practice**: system design problems (URL shortener, payments, chat, video
   streaming and more) whose tests tell you in the browser whether your design
-  holds up.
+  holds up. Optionally sign in with GitHub or Google to keep progress across
+  devices, see each problem's solve rate, compare your design's cost and p99
+  with other solvers', and join the leaderboard; the server re-runs the tests
+  before it records a solve. See [the backend](backend/README.md).
 - **CLI, LSP and VS Code**: `proschi check`, `fmt`, `render`, `test`,
   `analyze` and `problem` for CI; a language server for any LSP editor; a VS
   Code extension with a diagram preview. Use case steps can also be checked
@@ -72,10 +75,10 @@ test "Notes are stored before they are returned" {
 
 | | |
 |---|---|
-| Website | <https://gvart.github.io/proschi/> |
-| Editor | <https://gvart.github.io/proschi/app/> |
-| Practice | <https://gvart.github.io/proschi/practice/> |
-| How the simulation works | <https://gvart.github.io/proschi/model/> |
+| Website | <https://proschi.app/> |
+| Editor | <https://proschi.app/app/> |
+| Practice | <https://proschi.app/practice/> |
+| How the simulation works | <https://proschi.app/model/> |
 | npm package (CLI and language server) | [`proschi`](https://www.npmjs.com/package/proschi) |
 | VS Code extension (`.vsix`) | [GitHub releases](https://github.com/gvart/proschi/releases) |
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |
@@ -86,7 +89,7 @@ test "Notes are stored before they are returned" {
 
 ## Quick start
 
-Open the [editor](https://gvart.github.io/proschi/app/), pick one of the
+Open the [editor](https://proschi.app/app/), pick one of the
 Examples and edit the text; the diagram, scenarios, Analysis, Tests and HLD
 tabs follow as you type.
 
@@ -105,12 +108,16 @@ For VS Code, download `proschi-<version>.vsix` from the
 
 ## Contributing
 
-The repository has two packages:
+The repository has three packages:
 
 - `frontend/`: the website, editor and practice platform (React, Vite). The
   language (`src/dsl`), simulation (`src/sim`) and HLD (`src/hld`) live here.
 - `tooling/`: the CLI, language server, TextMate grammar, JSON Schema and VS
   Code extension, bundled from the frontend sources with esbuild.
+- `backend/`: the Cloudflare Worker that serves proschi.app: the built site,
+  and the API for practice accounts and stats (D1), which verifies solutions
+  with the frontend's parser and simulation. See
+  [backend/README.md](backend/README.md).
 
 ```sh
 # Web app
@@ -126,10 +133,17 @@ npm run typecheck
 npm test           # builds dist/ first
 node dist/cli.cjs check ../frontend/src/practice/problems
 npm run package:vscode   # dist/proschi.vsix
+
+# Backend
+cd backend
+npm ci
+npm run typecheck
+npm test           # in the Workers runtime, with a local D1
 ```
 
 A change to the language goes in `frontend/src/dsl/` with tests next to it;
-both test suites must pass, since the tooling bundles the same code.
+all three test suites must pass, since the tooling and the backend bundle the
+same code.
 
 ### Adding a practice problem
 

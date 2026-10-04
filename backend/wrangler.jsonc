@@ -1,0 +1,33 @@
+// proschi.app: the site (frontend/dist) and its API, sign-in and practice stats (backend/README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "proschi",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "observability": { "enabled": true },
+  "routes": [{ "pattern": "proschi.app", "custom_domain": true }],
+  // `wrangler dev` would otherwise rewrite requests to the route's host, so
+  // OAuth callbacks and the same-origin check would see proschi.app.
+  "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
+  // The built site: `npm run build` in frontend/ first. Paths outside /api and /auth
+  // are served straight from these files, without running the Worker.
+  "assets": {
+    "directory": "../frontend/dist",
+    "binding": "ASSETS",
+    "run_worker_first": ["/api/*", "/auth/*"],
+    "not_found_handling": "404-page"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "proschi",
+      // `npx wrangler d1 create proschi` prints this id; it is not a secret.
+      "database_id": "aa25969d-1e0d-489d-8a1d-427b4176c224",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Verifying a solution runs the simulation, so test runs are rate limited per user.
+  "ratelimits": [{ "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }]
+  // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
+  // SESSION_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+}
