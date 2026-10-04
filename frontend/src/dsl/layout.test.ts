@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from './index';
-import { layoutDiagram } from './layout';
+import { layoutDiagram, provisionalLayout } from './layout';
 
 const overlaps = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -45,6 +45,33 @@ describe('layoutDiagram', () => {
 describe('pinned group members', () => {
   it('grows the group to contain a member dragged outside it', async () => {
     const nodes = await layoutDiagram(parse('group g {\n  a\n  b pos 900,700\n}').diagram);
+    const group = nodes.find((n) => n.id === 'g')!;
+    expect(Number(group.style?.width)).toBeGreaterThanOrEqual(900 + 240);
+    expect(Number(group.style?.height)).toBeGreaterThanOrEqual(700 + 84);
+  });
+});
+
+describe('provisionalLayout', () => {
+  it('places every node at once, members inside their group, without overlaps', () => {
+    const diagram = parse(ecommerceExample).diagram;
+    const nodes = provisionalLayout(diagram);
+    expect(nodes.map((n) => n.id)).toEqual(diagram.nodes.map((n) => n.id));
+    const group = nodes.find((n) => n.id === 'vpc')!;
+    for (const m of nodes.filter((n) => n.parentNode === 'vpc')) {
+      expect(m.position.y).toBeGreaterThanOrEqual(56);
+      expect(m.position.x + Number(m.style?.width)).toBeLessThanOrEqual(Number(group.style?.width));
+    }
+    for (const parent of [undefined, 'vpc']) {
+      const boxes = nodes
+        .filter((n) => n.parentNode === parent)
+        .map((n) => ({ x: n.position.x, y: n.position.y, w: Number(n.style?.width), h: Number(n.style?.height ?? 110) }));
+      boxes.forEach((a, i) => boxes.slice(i + 1).forEach((b) => expect(overlaps(a, b)).toBe(false)));
+    }
+  });
+
+  it('keeps explicit positions and grows groups around them', () => {
+    const nodes = provisionalLayout(parse('group g {\n  a\n  b pos 900,700\n}\nc pos 5,6').diagram);
+    expect(nodes.find((n) => n.id === 'c')!.position).toEqual({ x: 5, y: 6 });
     const group = nodes.find((n) => n.id === 'g')!;
     expect(Number(group.style?.width)).toBeGreaterThanOrEqual(900 + 240);
     expect(Number(group.style?.height)).toBeGreaterThanOrEqual(700 + 84);

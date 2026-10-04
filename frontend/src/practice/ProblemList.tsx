@@ -2,10 +2,11 @@ import { useMemo, useState } from 'react';
 import { Search } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import { DIFFICULTIES, type Problem } from './types';
+import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
 
 interface ProblemListProps {
-  problems: Problem[];
+  problems: ProblemListing[];
   progress: Progress;
 }
 

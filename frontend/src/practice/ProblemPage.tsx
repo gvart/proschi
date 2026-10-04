@@ -54,7 +54,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
   const { diagram, diagnostics } = parsed;
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
-  const { nodes, edges } = useDiagramLayout(diagram);
+  const { nodes, edges, settled } = useDiagramLayout(diagram);
 
   const runNow = () => {
     // Run on what is in the editor right now, not the debounced parse.
@@ -125,7 +125,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
               </div>
             </section>
             <section className={`${show('diagram')} flex-1 min-h-0 min-w-0 flex-col border-t lg:border-t-0 border-gray-200`}>
-              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={pane} engine={engine} onSelect={goTo} />
+              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} />
             </section>
           </div>
           <section className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>

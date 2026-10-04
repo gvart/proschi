@@ -3,6 +3,7 @@ import { parse } from '../dsl';
 import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/engine';
 import { parseInline, parseMarkdown, safeHref } from './markdown';
 import { catalogErrors, findProblem, problems } from './catalog';
+import { loadProblem } from './loadProblem';
 import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, withSource } from './progress';
 import { CAPACITY_MESSAGE, PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
 import { validateProblem } from './validate';
@@ -19,6 +20,11 @@ describe('problem catalog', () => {
     expect(new Set(ids).size).toBe(ids.length);
     expect(findProblem('url-shortener')?.title).toBe('URL Shortener');
     expect(findProblem('nope')).toBeUndefined();
+  });
+
+  it('loads one problem on its own, the same as the catalog has it', async () => {
+    for (const p of problems) expect(await loadProblem(p.id)).toEqual(p);
+    expect(await loadProblem('nope')).toBeUndefined();
   });
 
   it('lists problems by difficulty, then order, then title', () => {
