@@ -61,7 +61,7 @@ body → `requestFormat`/`requestBody`).
 | Source of truth | Text | Simple share links and diffs |
 | Layout | elkjs + optional `pos` | Handles nested groups |
 | Routing | Hash state only | GitHub Pages has no SPA fallback |
-| `backend/` | Kept, not deployed | Leaves room for a hosted mode |
+| `backend/` | Removed (last present at `tooling-v0.5.0`, commit 2eecc56) | Unused since the app went browser-only; recover it from git history if a hosted mode comes back |
 
 ## Risks
 - Auto-layout quality → `pos` overrides.

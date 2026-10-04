@@ -1,5 +1,4 @@
 import type { ComponentType, TechStack } from '../types/canvas';
-import type { FlowStep, Protocol } from '../services/api';
 import { componentCatalog } from '../catalog/componentCatalog';
 import { BracketCounter, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
@@ -7,6 +6,8 @@ import { DATA_STORE_KINDS, KINDS, isDataStore, isKind, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
 import { accessOf } from './access';
 import type {
+  FlowStep,
+  Protocol,
   Assertion,
   CapacityOverride,
   Decision,
