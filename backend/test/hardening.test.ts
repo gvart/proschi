@@ -6,7 +6,7 @@ import { SESSION_COOKIE, SESSION_TTL } from '../src/auth';
 import { sha256 } from '../src/crypto';
 import type { Env } from '../src/env';
 import worker from '../src/index';
-import { normalizeForCheck, rejectName } from '../src/moderation';
+import { normalizeForCheck, rejectName, wordsForCheck } from '../src/moderation';
 import { findProblem, problemIds } from '../src/verify';
 import { call, ORIGIN, resetDatabase, signedInUser } from './helpers';
 
@@ -153,6 +153,16 @@ describe('display names', () => {
     expect(normalizeForCheck('ＡＤＭ１Ｎ')).toBe('admin');
     expect(rejectName('Mod')).toBeTruthy();
     expect(rejectName('Ada Lovelace')).toBeUndefined();
+  });
+
+  it('match staff words as whole words only, the site name anywhere', () => {
+    expect(wordsForCheck('4dm1n_42 Bob')).toEqual(['admin', 'dmn', 'a', 'bob', 'bob']);
+    for (const name of ['Pr0schi Admin', 'admin 42', 'Admin42', 'The 4dm1n', 'chief-moderator', 'ProschiFan']) {
+      expect(rejectName(name), name).toMatch(/staff/);
+    }
+    for (const name of ['Badminton', 'Modest Mouse', 'Administrative Ada', 'System Design Fan', 'Root Beer']) {
+      expect(rejectName(name), name).toBeUndefined();
+    }
   });
 
   it('PATCH /api/me validates them', async () => {
