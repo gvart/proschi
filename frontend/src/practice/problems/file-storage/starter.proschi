@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the API, the metadata store, the CDN and the use cases
+# "List files", "Start upload", "Upload" and "Download".
+api "Files API" [REST API]
+
+user -> api
+api  -> blobs
+
+usecase "Upload" {
+  user  -> api   : ~1MB PUT /files/report.pdf
+  api   -> blobs : ~1MB PUT /report.pdf
+  blobs --> api  : 200
+  api  --> user  : 200
+}

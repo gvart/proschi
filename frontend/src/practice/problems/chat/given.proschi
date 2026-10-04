@@ -1,0 +1,48 @@
+title "Chat" "One-to-one messages delivered in real time, or by push notification"
+
+sender    "Sender"        [Actor]
+recipient "Recipient"     [Actor]
+push      "Push Provider" [Third Party API] "APNs and FCM"
+
+capacity {
+  push 10k rps
+}
+
+traffic {
+  "Send message" 10k rps mix "Online" 70%, "Offline" 30%
+  "Load history" 2k rps
+}
+
+requirements {
+  p99 "Send message" < 150ms
+  p99 "Load history" < 200ms
+  availability "Send message" >= 99.95%
+  durable "Send message"
+  survive any node failure
+  cost <= 4000 usd/month
+}
+
+test "Messages are stored before the ack, and history reads them back" {
+  "Send message" writes any database before responding
+  "Load history" calls any database
+}
+
+test "Presence decides how a message is delivered" {
+  "Send message" calls any cache before recipient
+  "Send message" calls any cache before push
+}
+
+test "Delivery happens after the ack" {
+  "Send message" never waits for push or recipient
+  "Send message" calls recipient after any database
+}
+
+test "Online recipients get the message over their connection" {
+  "Send message" scenario "Online" calls any queue before recipient
+  "Send message" scenario "Online" never calls push
+}
+
+test "Offline recipients get a push notification" {
+  "Send message" scenario "Offline" calls push
+  "Send message" scenario "Offline" never calls recipient
+}

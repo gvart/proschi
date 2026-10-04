@@ -1,0 +1,105 @@
+# expect-fail: cost ≤ $2,500,000/month
+# Viewers read segments straight from storage: egress blows the budget.
+import "problem.proschi"
+
+lb     "Load Balancer"  [AWS Load Balancer] x2 @platform
+api    "Video API"      [REST API]          x6 @media "Registers uploads, serves video pages"
+cache  "Metadata Cache" [Redis]             x2 @media "Video metadata of popular videos"
+db     "Videos DB"      [PostgreSQL]        x2 @media "Title, owner, status and manifest of every video"
+jobs   "Transcode Jobs" [AWS SQS]           x2 @media "One message per uploaded original"
+bucket "Video Storage"  [AWS S3]            x4 @media "Originals and HLS renditions"
+cdn    "CDN"            [AWS CloudFront]    x2 @media "Caches segments near viewers; the bucket is its origin"
+
+creator    -> lb
+creator    -> bucket     : presigned PUT
+viewer     -> lb
+viewer     -> cdn
+lb         -> api        : HTTPS
+api        -> db         : SQL
+api        -> cache      : GET / SET
+bucket     -> jobs       : ObjectCreated
+jobs       -> transcoder : deliver
+transcoder -> bucket     : GET original, PUT renditions
+transcoder -> db         : mark ready
+cdn        -> bucket     : origin fetch
+
+entity Video in db "One uploaded video" {
+  videoId     uuid   key
+  ownerId     string index
+  title       string
+  status      string
+  manifestUrl string optional
+  createdAt   time   index
+}
+
+entity Original in bucket "The file as uploaded" {
+  key  string key
+  size int
+}
+
+entity Segment in bucket "A few seconds of one rendition, immutable" {
+  key        string key
+  resolution string
+  duration   int
+}
+
+decision "Upload straight to S3 with a presigned URL" {
+  because "A 2 GB file takes minutes over the creator's connection; the API only records the video and signs a URL, so its request stays fast and no server copies the bytes"
+  rejected "Upload through the API" "Every byte crosses the load balancer and the API, the upload request lasts minutes, and API replicas sit busy copying files"
+}
+decision "Transcode asynchronously through a queue fed by storage events" {
+  because "The original exists only once the creator's PUT completes; S3 announces it on the queue, the fleet works at its own pace and the queue absorbs upload spikes"
+  rejected "Transcode in the upload request" "A minute-long request ties up the API and times out; a burst of uploads would need a fleet sized for the peak"
+  rejected "The API calls the transcoder directly" "Nothing keeps the job when every transcoder is busy or one crashes"
+}
+decision "Serve segments from a CDN with S3 as origin" {
+  because "About 100 PB a month leave for viewers; from the CDN that is about $2.1M at $0.02/GB, from S3 about $9.3M at $0.09/GB. Segments are immutable, so 99% are served at the edge and S3 sees only the misses"
+  rejected "Viewers read S3 directly" "Same latency, but four and a half times the egress bill, and four storage replicas just for the request rate"
+  rejected "Serve segments through the API or a load balancer" "The bytes still leave S3 at storage prices, and servers copy every segment"
+}
+decision "Metadata in PostgreSQL, cached in Redis" because "Video pages are thousands of times more frequent than uploads and mostly for popular videos; the cache keeps page loads fast and the database small"
+
+usecase "Upload video" "A creator registers a video and uploads the file straight to storage" {
+  creator -> lb      : POST /videos json {"title": "My trip", "size": 2000000000}
+  lb      -> api     : POST /videos
+  api     -> db      : INSERT video v-9 status uploading
+  db     --> api     : ok
+  api    --> lb      : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
+  lb     --> creator : 201 {"videoId": "v-9", "uploadUrl": "https://bucket.s3.amazonaws.com/originals/v-9.mp4?X-Amz-Signature=…"}
+  creator -> bucket  : ~2GB PUT /originals/v-9.mp4
+  bucket ->> jobs    : ObjectCreated {"key": "originals/v-9.mp4"}
+  bucket --> creator : 200
+}
+
+usecase "Transcode video" "The queue hands a transcoder one original; the video is ready once its renditions are stored" {
+  jobs        -> transcoder : ObjectCreated {"key": "originals/v-9.mp4"}
+  transcoder  -> bucket     : GET /originals/v-9.mp4
+  bucket     --> transcoder : original
+  transcoder  -> bucket     : PUT /hls/v-9/1080p/*.ts
+  bucket     --> transcoder : 200
+  transcoder  -> db         : UPDATE video v-9 status ready
+  db         --> transcoder : ok
+  transcoder --> jobs       : ack
+}
+
+usecase "Open video" "A viewer opens a video page" {
+  viewer -> lb    : GET /videos/v-9
+  lb     -> api   : GET /videos/v-9
+  api    -> cache : GET video:v-9
+
+  alt "Cache hit" when "the video is popular" {
+    cache --> api : metadata
+  } alt "Cache miss" when "the video was not opened recently" {
+    cache --> api   : nil
+    api    -> db    : SELECT video v-9
+    db    --> api   : 1 row
+    api   ->> cache : SET video:v-9 EX 300
+  }
+  api --> lb     : 200 {"title": "My trip", "manifest": "https://cdn.example.com/hls/v-9/master.m3u8"}
+  lb  --> viewer : 200 {"title": "My trip", "manifest": "https://cdn.example.com/hls/v-9/master.m3u8"}
+}
+
+usecase "Stream video" "The player fetches the next segment" {
+  viewer  -> bucket : ~4MB GET /hls/v-9/1080p/00042.ts
+  bucket --> viewer : 200 video/MP2T
+}

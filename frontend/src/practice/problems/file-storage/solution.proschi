@@ -1,0 +1,81 @@
+import "problem.proschi"
+
+lb       "Load Balancer"   [AWS Load Balancer] x2
+api      "Files API"       [REST API]          x3 @files "Lists folders, records uploads and signs URLs"
+meta     "Metadata DB"     [PostgreSQL]        x2 @files "Folders, files and their upload state"
+cdn      "CDN"             [AWS CloudFront]    x2 @files "Caches file bytes at the edge; fetches misses from the bucket"
+events   "Upload Events"   [AWS SQS]           x2 @files "ObjectCreated notifications from the bucket"
+finisher "Upload Finisher" [AWS Lambda]        x2 @files "Marks a file ready once its object is stored"
+
+user     -> lb
+user     -> blobs    : PUT pre-signed
+user     -> cdn      : GET signed
+lb       -> api      : HTTPS
+api      -> meta     : SQL
+cdn      -> blobs    : origin fetch
+blobs    -> events   : ObjectCreated
+events   -> finisher : trigger
+finisher -> meta     : SQL
+
+entity File in meta "One file in a user's folder" {
+  id        uuid   key
+  ownerId   uuid   index
+  folder    string index
+  name      string
+  size      int
+  objectKey string unique
+  status    string
+  createdAt time
+}
+
+decision "Pre-signed URLs instead of proxying bytes" {
+  because "A 2 GB upload through the API would hold a server for minutes; the bucket takes the bytes directly and the API only signs a URL, which needs no call"
+  rejected "Upload through the API" "Every byte crosses the load balancer and the API on its way to the bucket: more hops, more transfer time, and API replicas that scale with bandwidth"
+}
+decision "Bucket events mark uploads ready" {
+  because "The client may go offline right after its PUT; the bucket's ObjectCreated event reaches the finisher through a durable queue either way"
+  rejected "Client calls a Complete endpoint" "A client that disappears leaves the file pending forever"
+}
+decision "Downloads through a CDN" {
+  because "About 1.3 PB a month is downloaded: at $0.02/GB from the CDN instead of $0.09/GB from the bucket, the edge saves over $75k a month, and 90% of downloads never reach the bucket"
+  rejected "Signed bucket URLs for downloads" "Every byte leaves the bucket at $0.09/GB: about $117k a month in egress alone"
+}
+
+usecase "List files" "Show the files in a folder with signed download links" {
+  user  -> lb   : GET /folders/{id}/files
+  lb    -> api  : GET /folders/{id}/files
+  api   -> meta : SELECT files WHERE folder = ?
+  meta --> api  : rows
+  api  --> lb   : 200 {"files": [{"name": "report.pdf", "url": "https://cdn.example.com/f/9a1?sig=…"}]}
+  lb   --> user : 200 {"files": [{"name": "report.pdf", "url": "https://cdn.example.com/f/9a1?sig=…"}]}
+}
+
+usecase "Start upload" "Record a pending file and hand out a pre-signed PUT URL" {
+  user  -> lb   : POST /files json {"folder": "docs", "name": "report.pdf", "size": 1048576}
+  lb    -> api  : POST /files
+  api   -> meta : INSERT File status=pending
+  meta --> api  : ok
+  api  --> lb   : 201 {"id": "9a1", "uploadUrl": "https://blobs.example.com/9a1?sig=…"}
+  lb   --> user : 201 {"id": "9a1", "uploadUrl": "https://blobs.example.com/9a1?sig=…"}
+}
+
+usecase "Upload" "Put the bytes straight into the bucket" {
+  user     -> blobs    : ~1MB PUT /9a1?sig=…
+  blobs   --> user     : 200
+  blobs   ->> events   : ObjectCreated 9a1
+  events  ->> finisher : ObjectCreated 9a1
+  finisher -> meta     : UPDATE File status=ready
+  meta    --> finisher : ok
+}
+
+usecase "Download" "Fetch a file through its signed link" {
+  user -> cdn : ~1MB GET /f/9a1?sig=…
+
+  alt "CDN hit" when "the file was fetched recently" {
+    cdn --> user : 200 bytes
+  } alt "CDN miss" when "the edge does not have the file" {
+    cdn    -> blobs : ~1MB GetObject 9a1
+    blobs --> cdn   : 200 bytes
+    cdn   --> user  : 200 bytes
+  }
+}

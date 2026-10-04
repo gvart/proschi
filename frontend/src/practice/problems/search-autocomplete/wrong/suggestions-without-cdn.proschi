@@ -1,0 +1,82 @@
+# expect-fail: Suggestions are served by the CDN, then the cache
+# expect-fail: cost ≤ $5,500/month
+# Fails suggestions without a CDN: every keystroke reaches the servers.
+import "problem.proschi"
+
+cdn      "CDN"              [AWS CloudFront]    x3 @search "Caches the suggestions of popular prefixes for 5 minutes"
+lb       "Load Balancer"    [AWS Load Balancer] x2
+suggest  "Suggest Service"  [REST API]          x100 @search "Looks up the top ten completions of a prefix"
+topk     "Suggestion Index" [Redis]             x2 @search "Top ten completions per prefix, replaced by every rebuild"
+api      "Search API"       [REST API]          x3 @search "Runs searches and logs every query"
+querylog "Query Log"        [Kafka]             x2 @search "Every search query, kept for 7 days"
+builder  "Index Builder"    [AWS Fargate]       x2 @search "Counts queries per prefix and writes the new top ten"
+
+user      -> cdn      : HTTPS
+user      -> lb       : HTTPS
+cdn       -> lb       : origin
+lb        -> suggest  : HTTP
+lb        -> api      : HTTP
+suggest   -> topk     : GET
+api       -> search   : query
+api       -> querylog : produce
+scheduler -> builder  : RebuildIndex
+builder   -> querylog : consume
+builder   -> topk     : SET
+
+entity Suggestions in topk "The ten most searched completions of one prefix" {
+  prefix      string key
+  completions json
+  builtAt     time
+}
+
+entity Query in querylog "One submitted search" {
+  text     string
+  userId   uuid optional
+  searched time
+}
+
+decision "Precompute the top ten per prefix" {
+  because "A Redis GET takes ~1 ms; a prefix query on Elasticsearch takes ~15 ms and the cluster handles 9k rps, a tenth of the keystrokes"
+  rejected "Prefix queries on the search cluster" "Would need 40+ Elasticsearch nodes and still miss the p99"
+}
+decision "Cache popular prefixes at the CDN" {
+  because "80% of keystrokes hit a few thousand popular prefixes; serving them at the edge cuts the Suggest Service from ~80 to 20 replicas"
+  rejected "No edge cache" "Every keystroke reaches your servers; the budget does not allow it"
+}
+decision "Rebuild every 15 minutes from the query log" because "Rankings change slowly; a batch over the log keeps all the counting off the request path"
+
+usecase "Suggest" "Top ten completions from the index" {
+  user -> lb : GET /suggest?q=ipho
+
+  alt "Edge hit" when "the prefix is popular" {
+    lb       -> suggest : GET /suggest?q=ipho
+    suggest  -> topk    : GET top10:ipho
+    topk    --> suggest : ["iphone 15"]
+    suggest --> lb      : 200
+    lb      --> user    : 200 ["iphone 15"]
+  } alt "Edge miss" when "the prefix is rare" {
+    lb       -> suggest : GET /suggest?q=ipho
+    suggest  -> topk    : GET top10:ipho
+    topk    --> suggest : ["iphone 15"]
+    suggest --> lb      : 200
+    lb      --> user    : 200 ["iphone 15"]
+  }
+}
+
+usecase "Search" "Run a submitted query and log it" {
+  user    -> lb       : GET /search?q=iphone+case
+  lb      -> api      : GET /search?q=iphone+case
+  api     -> search   : match "iphone case"
+  search --> api      : hits
+  api    ->> querylog : Query "iphone case"
+  api    --> lb       : 200 {"results": []}
+  lb     --> user     : 200 {"results": []}
+}
+
+usecase "Rebuild index" "Recompute the top ten of every prefix from recent queries" {
+  scheduler ->> builder  : RebuildIndex
+  builder    -> querylog : read the last 7 days
+  querylog  --> builder  : queries
+  builder    -> topk     : SET top10:{prefix} for changed prefixes
+  topk      --> builder  : OK
+}

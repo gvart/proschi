@@ -1,0 +1,81 @@
+# expect-fail: The driver's offer never holds up the rider
+# Fails a ride request that waits for the offer queue.
+import "problem.proschi"
+
+lb      "Load Balancer"    [AWS Load Balancer] x3
+gateway "Driver Gateway"   [WebSocket]         x75 @dispatch "Keeps a connection to every online driver; takes location updates, pushes offers"
+geo     "Live Map"         [Redis]             x3 @dispatch "Latest position of every online driver in a geo index"
+match   "Matching Service" [REST API]          x3 @dispatch "Finds the nearest free driver and creates the trip"
+trips   "Trips DB"         [PostgreSQL]        x2 @dispatch "Every trip: rider, driver, pickup, status"
+offers  "Ride Offers"      [Kafka]             x2 @dispatch "Ride offers on their way to drivers"
+
+driver  -> lb      : WebSocket
+rider   -> lb      : HTTPS
+lb      -> gateway : WebSocket
+lb      -> match   : HTTP
+gateway -> geo     : GEOADD
+match   -> geo     : GEOSEARCH
+match   -> trips   : SQL
+match   -> offers  : produce
+offers  -> gateway : consume
+gateway -> driver  : push
+
+entity DriverPosition in geo "Where an online driver is now; expires 30 s after the last update" {
+  driverId string key
+  lat      float
+  lng      float
+  heading  int
+}
+
+entity Trip in trips "One ride from request to drop-off" {
+  id        uuid key
+  riderId   uuid index
+  driverId  uuid index
+  pickup    json
+  status    string
+  createdAt time
+}
+
+decision "Driver locations live in Redis, not the database" {
+  because "100k updates per second of which only the latest matters: GEOADD overwrites in ~1 ms, and GEOSEARCH answers 'nearest within 3 km' from the same index"
+  rejected "UPDATE a drivers table" "Every write goes to one PostgreSQL primary (5k writes per second); read replicas do not help, and 20+ shards with a replica each cost over $16k a month for positions nobody needs to keep"
+}
+decision "Three Live Map nodes" {
+  because "One node takes 100k operations per second; with three, the two left after a failure still carry the ~102k rps"
+  rejected "Two nodes" "Losing one leaves a single node saturated, and matching stops"
+}
+decision "The trip row is the driver's lock" {
+  because "A unique index on the driver's active trip makes two riders racing for one driver fail cleanly in a strongly consistent database"
+  rejected "Trips in DynamoDB" "Eventually consistent reads could show a driver as free after another rider got them"
+}
+
+usecase "Update location" "A driver's app reports where it is" {
+  driver   -> lb      : location {"lat": 52.52, "lng": 13.40, "heading": 90}
+  lb       -> gateway : location
+  gateway  -> geo     : GEOADD drivers 13.40 52.52 d7
+  geo     --> gateway : 1
+  gateway --> lb      : ack
+  lb      --> driver  : ack
+}
+
+usecase "Request ride" "Match a rider with the nearest free driver" {
+  rider -> lb    : POST /rides json {"pickup": {"lat": 52.52, "lng": 13.41}}
+  lb    -> match : POST /rides
+  match -> geo   : GEOSEARCH drivers 3 km ASC
+
+  alt "Matched" when "a free driver is within 3 km" {
+    geo     --> match   : [d7, d12]
+    match    -> trips   : INSERT Trip driver=d7
+    trips   --> match   : ok
+    match    -> offers  : RideOffered d7
+    offers  --> match   : ack
+    offers  ->> gateway : RideOffered d7
+    gateway ->> driver  : ride offer
+    match   --> lb      : 201 {"tripId": "t91", "driverId": "d7", "etaMinutes": 4}
+    lb      --> rider   : 201 {"tripId": "t91", "driverId": "d7", "etaMinutes": 4}
+  } alt "No driver nearby" when "nobody is free within 3 km" {
+    geo   --> match : []
+    match --> lb    : 404 {"error": "no_driver_nearby"}
+    lb    --> rider : 404 {"error": "no_driver_nearby"}
+  }
+}

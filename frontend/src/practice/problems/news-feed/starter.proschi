@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Publish post" and "Read feed".
+api "Feed API" [REST API]
+
+user -> api
+
+usecase "Read feed" {
+  user -> api : GET /feed
+  api --> user : 200 {"posts": []}
+}

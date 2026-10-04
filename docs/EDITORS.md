@@ -9,7 +9,7 @@ valid.
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
 | Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths, failing requirements and tests |
-| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` / `proschi test` / `proschi analyze` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)); requirements, tests and the capacity table (see [Simulation and tests](#simulation-and-tests)) |
+| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` / `proschi test` / `proschi analyze` / `proschi problem` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)); requirements, tests and the capacity table (see [Simulation and tests](#simulation-and-tests)); checking and scaffolding practice problems (see [Practice](#practice)) |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -487,4 +487,19 @@ and flow test, with what was measured and how to fix what fails.
 - Progress (to do, attempted, solved) and your last code per problem are kept
   in this browser only.
 
-Adding a problem: see [PRACTICE.md](PRACTICE.md).
+- In practice, `capacity` comes from the problem only: a `capacity` line in
+  your file is an error (*capacity is set by the problem; change the design
+  (replicas, shards, caching) instead*) and is ignored, except `shards <n>`.
+
+Each problem is a folder of plain files (`problem.md`, `given.proschi`,
+`starter.proschi`, `solution.proschi`, `wrong/*.proschi`) in
+`frontend/src/practice/problems/`. Two commands help write them:
+
+```sh
+proschi problem new seat-map                  # scaffold a folder that already passes the check
+proschi problem check                         # validate every problem (exit 1 on a violation)
+proschi problem check --format github frontend/src/practice/problems   # in CI
+```
+
+The format, the rules `problem check` enforces and how to calibrate a
+problem: [PRACTICE.md](PRACTICE.md).

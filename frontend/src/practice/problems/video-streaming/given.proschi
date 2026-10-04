@@ -1,0 +1,53 @@
+title "Video Platform" "Creators upload videos; viewers stream them from the edge"
+
+creator    "Creator"    [Actor]
+viewer     "Viewer"     [Actor]
+transcoder "Transcoder" [AWS ECS] x10 @media "Turns an original into HLS renditions; a minute per video"
+
+capacity {
+  transcoder 0.5 rps latency 60s cost 200 usd/month
+}
+
+traffic {
+  "Upload video"    2 rps
+  "Transcode video" 2 rps
+  "Open video"      5k rps  mix "Cache hit" 95%, "Cache miss" 5%
+  "Stream video"    10k rps mix "Edge hit" 99%, "Edge miss" 1%
+}
+
+requirements {
+  p99 "Upload video" < 1s
+  p99 "Open video" < 150ms
+  p99 "Stream video" < 2s
+  availability "Stream video" >= 99.99%
+  durable "Upload video"
+  survive any node failure
+  cost <= 2500000 usd/month
+}
+
+test "The file goes straight to object storage, never through a server" {
+  in "Upload video" creator calls any storage
+  in "Upload video" any service or any function never calls any storage
+  "Upload video" writes any database before responding
+  "Upload video" responds 201
+}
+
+test "Transcoding is queued, never in the request path" {
+  "Upload video" never waits for transcoder
+  "Upload video" calls any queue
+  "Transcode video" starts at any queue
+  "Transcode video" calls transcoder
+  "Transcode video" calls any database after any storage
+}
+
+test "Segments are served by a CDN, with storage as its origin" {
+  "Stream video" calls any cdn before any storage
+  "Stream video" scenario "Edge hit" never calls any storage
+  "Stream video" never calls any service
+  no path from viewer to any storage
+}
+
+test "Video pages read metadata from a cache" {
+  "Open video" calls any cache before any database
+  "Open video" scenario "Cache hit" never calls any database
+}

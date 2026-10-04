@@ -1,0 +1,40 @@
+title "Pastebin" "Stores text pastes and serves them to anyone with the link"
+
+user "User" [Actor]
+
+traffic {
+  "Read paste"   5k rps mix "Cached" 90%, "Not cached" 9%, "Expired" 1%
+  "Create paste" 50 rps
+}
+
+requirements {
+  p99 "Read paste" < 200ms
+  p99 "Create paste" < 300ms
+  p99 "Read paste" scenario "Cached" < 30ms
+  availability "Read paste" >= 99.9%
+  durable "Create paste"
+  survive any node failure
+  cost <= 6000 usd/month
+}
+
+test "Paste text lives in object storage" {
+  "Create paste" writes any storage before responding
+  "Read paste" scenario "Not cached" calls any storage
+}
+
+test "Metadata lives in a database" {
+  "Create paste" writes any database before responding
+  "Create paste" responds 201
+}
+
+test "Popular pastes are served by the CDN" {
+  "Read paste" scenario "Cached" calls any cdn
+  "Read paste" scenario "Cached" never calls any service or any database or any storage
+}
+
+test "Expiry is checked before the text is fetched" {
+  "Read paste" calls any database before any storage
+  "Read paste" scenario "Not cached" calls any storage after any database
+  "Read paste" scenario "Expired" never calls any storage
+  "Read paste" scenario "Expired" responds 404
+}

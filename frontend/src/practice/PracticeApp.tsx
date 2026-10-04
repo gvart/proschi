@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { defaultEngine, type Engine } from '../hld/engine';
 import ProblemList from './ProblemList';
 import ProblemPage from './ProblemPage';
-import { findProblem, problems } from './problems';
+import { findProblem, problems } from './catalog';
 import { loadProgress, saveProgress, type Progress } from './progress';
 
 /** `#/` is the list, `#/<problem id>` a problem; hash routes work under any sub-path. */

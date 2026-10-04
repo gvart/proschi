@@ -1,0 +1,42 @@
+title "Ride Matching" "Matches riders with the nearest free driver from a live map of driver locations"
+
+rider  "Rider"  [Actor]
+driver "Driver" [Actor]
+
+traffic {
+  "Update location" 100k rps
+  "Request ride"    2k rps mix "Matched" 95%, "No driver nearby" 5%
+}
+
+requirements {
+  p99 "Update location" < 150ms
+  p99 "Request ride" < 300ms
+  availability "Request ride" >= 99.9%
+  durable "Request ride"
+  survive any node failure
+  cost <= 10000 usd/month
+}
+
+test "Location updates are writes to the live map, never the database" {
+  "Update location" starts at driver
+  "Update location" writes any cache before responding
+  "Update location" never calls any database
+}
+
+test "Matching searches the live map first" {
+  "Request ride" every scenario calls any cache
+  "Request ride" calls any cache before any database
+  "Request ride" scenario "No driver nearby" never calls any database
+  "Request ride" scenario "No driver nearby" responds 404
+}
+
+test "Trips are stored strongly before the rider hears back" {
+  "Request ride" scenario "Matched" writes any database before responding
+  "Request ride" scenario "Matched" writes any strong store before responding
+  "Request ride" scenario "Matched" responds 201
+}
+
+test "The driver's offer never holds up the rider" {
+  "Request ride" scenario "Matched" calls any queue
+  "Request ride" never waits for any queue
+}

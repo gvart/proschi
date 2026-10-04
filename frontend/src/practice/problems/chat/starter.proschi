@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Send message" and "Load history".
+ws "Chat Gateway" [WebSocket]
+
+sender -> ws
+
+usecase "Send message" {
+  sender -> ws : SEND {"to": "bob", "text": "On my way"}
+  ws --> sender : ACK {"id": "m_77"}
+}

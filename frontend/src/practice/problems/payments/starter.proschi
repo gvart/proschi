@@ -1,0 +1,17 @@
+import "problem.proschi"
+
+# Add where payments and their idempotency keys live, how failed charges are
+# retried, and the scenarios "Charged", "Replay" and "Gateway down".
+api "Payments API" [REST API]
+
+shopper -> api
+api     -> gateway
+api     -> ledger
+
+usecase "Checkout" {
+  shopper  -> api     : POST /payments json {"orderId": "o-1042", "amount": 4999, "idempotencyKey": "chk_7f3a"}
+  api      -> gateway : POST /charges
+  gateway --> api     : 201 approved
+  api      -> ledger  : APPEND entries
+  api     --> shopper : 201 {"status": "succeeded"}
+}

@@ -1,0 +1,81 @@
+import "problem.proschi"
+
+lb        "Load Balancer"  [AWS Load Balancer] x2 @feed
+api       "Feed API"       [REST API]          x9 @feed "Publishes posts and serves feeds"
+posts     "Posts DB"       [Cassandra]         x2 @feed "Every post, partitioned by author"
+events    "Post Events"    [Kafka]             x2 @feed "PostCreated events for the fan-out"
+fanout    "Fan-out Worker" [REST API]          x2 @feed "Pushes each new post into its followers' feeds"
+feeds     "Feed Cache"     [Redis]             x3 @feed "The newest 500 post ids of every active user"
+postCache "Post Cache"     [Redis]             x2 @feed "Recent posts by id, so feeds can be shown without the database"
+
+user   -> lb
+lb     -> api       : HTTPS
+api    -> posts     : write
+api    -> events    : produce
+events -> fanout    : consume
+fanout -> graph     : followers
+fanout -> postCache : SET
+fanout -> feeds     : ZADD
+api    -> feeds     : ZREVRANGE
+api    -> postCache : MGET
+
+entity Post in posts "One post" {
+  id        string key
+  authorId  string index
+  text      string
+  createdAt time
+}
+
+entity Feed in feeds "A sorted set of post ids per user, newest first, capped at 500" {
+  userId string key
+  postId string
+  score  time
+}
+
+entity CachedPost in postCache "A post as the feed shows it" {
+  id     string key
+  author string
+  text   string
+}
+
+decision "Fan-out on write" {
+  because "Reads outnumber posts 20:1; building each feed when a post is published makes every read two cache lookups"
+  rejected "Fan-out on read" "Every read would ask the graph for up to 5,000 followees and merge their posts from the database"
+}
+decision "Fan-out behind a queue" {
+  because "Listing followers alone takes 50 ms and each post goes to ~200 feeds; the author gets 201 once the post is stored and the event is queued"
+  rejected "Fan-out inside the request" "Publishing would wait for the graph and hundreds of cache writes"
+}
+decision "Three feed cache nodes" {
+  because "500 posts a second times 200 followers is 100k ZADDs a second on top of 10k reads; three nodes keep that under 40%, and the two left after a failure under 60%"
+  rejected "Two nodes" "One node alone cannot take 110k operations a second when the other fails"
+}
+decision "Store first, then fan out" because "A feed may only point at posts the database already holds; a failed fan-out is retried from the queue"
+decision "Celebrities are out of scope" because "With at most 5,000 followers pure fan-out on write works; huge accounts would need their posts merged at read time"
+
+usecase "Publish post" "Store a post and push it into the followers' feeds" {
+  user    -> lb        : POST /posts json {"text": "Shipped the new release!"}
+  lb      -> api       : POST /posts
+  api     -> posts     : INSERT Post p_981
+  posts  --> api       : ok
+  api     -> events    : PostCreated p_981
+  events --> api       : ack
+  api    --> lb        : 201 {"id": "p_981"}
+  lb     --> user      : 201 {"id": "p_981"}
+  events ->> fanout    : PostCreated p_981
+  fanout  -> graph     : GET /users/7/followers
+  graph  --> fanout    : 200 [~200 follower ids]
+  fanout  -> postCache : SET post:p_981
+  fanout  -> feeds     : x200 ZADD feed:{follower} p_981
+}
+
+usecase "Read feed" "Show the newest posts of the people a user follows" {
+  user       -> lb        : GET /feed
+  lb         -> api       : GET /feed
+  api        -> feeds     : ZREVRANGE feed:42 0 49
+  feeds     --> api       : 50 post ids
+  api        -> postCache : MGET post:p_981 …
+  postCache --> api       : 50 posts
+  api       --> lb        : 200 {"posts": [...]}
+  lb        --> user      : 200 {"posts": [...]}
+}

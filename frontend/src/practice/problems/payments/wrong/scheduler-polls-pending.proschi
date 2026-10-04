@@ -1,0 +1,91 @@
+# expect-fail: Pending charges are retried from a queue with the same key
+# A scheduler polls for pending payments instead of a queue.
+import "problem.proschi"
+
+lb      "Load Balancer"   [AWS Load Balancer] x2 @platform
+api     "Payments API"    [REST API]          x3 @payments "Records payments, calls the gateway, answers retries"
+intents "Payment Intents" [PostgreSQL]        x2 @payments "One row per idempotency key: status and the stored response"
+retries "Retry Queue"     [AWS SQS]           x2 @payments "Pending charges to retry with the same key"
+worker  "Retry Worker"    [AWS ECS]           x2 @payments "Retries pending charges and books them"
+
+shopper -> lb
+lb      -> api     : HTTPS
+api     -> intents : SQL
+api     -> gateway : charge
+api     -> ledger  : book
+api     -> retries : enqueue
+retries -> worker  : deliver
+worker  -> gateway : charge
+worker  -> ledger  : book
+worker  -> intents : SQL
+
+entity PaymentIntent in intents "One checkout attempt, keyed by the client's idempotency key" {
+  idempotencyKey string key
+  orderId        string index
+  amount         int
+  currency       string
+  status         string
+  response       json   optional
+  createdAt      time
+}
+
+decision "Insert the intent before calling the gateway" {
+  because "A crash between the charge and the write would otherwise leave money taken with no trace; with the row first, every charge has a record to reconcile or retry"
+  rejected "Charge first, then write" "A timeout after the gateway approved loses the payment, and the client's retry charges again"
+}
+decision "Idempotency keys under a unique constraint in PostgreSQL" {
+  because "INSERT … ON CONFLICT is atomic, strongly consistent and durable: two concurrent retries cannot both win, the key survives a failover, and every attempt (a replay too) is a real write"
+  rejected "Redis SETNX" "Eventually consistent and not durable: a failover forgets keys, and the next retry charges again"
+  rejected "SELECT the key, then INSERT" "Two retries arriving together both see no row and both charge; and a replay that only reads stores nothing"
+}
+decision "Mark the payment succeeded after booking the ledger" {
+  because "A crash between the charge and the booking leaves the payment pending, so a retry books it; the ledger dedupes on the payment id. Marking it first would hide a charge that was never booked"
+  rejected "Write status and ledger entries before charging" "Books money the gateway may decline"
+}
+decision "Pass the same idempotency key to the gateway" because "If our call timed out after the gateway charged, the background retry returns the first charge instead of a second one"
+decision "Answer 202 and retry from a queue when the gateway fails" {
+  because "The charge may or may not have happened; the payment stays pending and a worker retries it, so checkout stays up when the gateway does not"
+  rejected "Retry the gateway inline before answering" "The shopper waits for a second timeout, and checkout is only as available as the gateway"
+  rejected "Return 502 and let the client retry" "The shopper sees an error for a payment that may have gone through"
+}
+decision "One PostgreSQL primary is enough" because "Checkout writes about 2k rows a second (insert, then update) against 5k a primary takes; the replica is for failover"
+
+usecase "Checkout" "Charge the shopper's card for an order, exactly once" {
+  shopper -> lb      : POST /payments json {"orderId": "o-1042", "amount": 4999, "currency": "EUR", "idempotencyKey": "chk_7f3a"}
+  lb      -> api     : POST /payments
+  api     -> intents : INSERT intent ON CONFLICT (idempotencyKey) DO NOTHING RETURNING *
+
+  alt "Charged" when "the key is new and the gateway approves" {
+    intents --> api     : inserted, status pending
+    api      -> gateway : POST /charges Idempotency-Key chk_7f3a
+    gateway --> api     : 201 approved
+    api      -> ledger  : APPEND debit and credit entries for pay_81
+    ledger  --> api     : ok
+    api      -> intents : UPDATE status succeeded, store response
+    intents --> api     : ok
+    api     --> lb      : 201 {"paymentId": "pay_81", "status": "succeeded"}
+    lb      --> shopper : 201 {"paymentId": "pay_81", "status": "succeeded"}
+  } alt "Replay" when "the key was seen before" {
+    intents --> api     : conflict, stored response
+    api     --> lb      : 201 {"paymentId": "pay_81", "status": "succeeded"}
+    lb      --> shopper : 201 {"paymentId": "pay_81", "status": "succeeded"}
+  } alt "Gateway down" when "the gateway times out or fails" {
+    intents --> api     : inserted, status pending
+    api      -x gateway : POST /charges Idempotency-Key chk_7f3a
+    api      -> retries : ENQUEUE RetryCharge {"idempotencyKey": "chk_7f3a"}
+    retries --> api     : ok
+    api     --> lb      : 202 {"paymentId": "pay_81", "status": "pending"}
+    lb      --> shopper : 202 {"paymentId": "pay_81", "status": "pending"}
+  }
+}
+
+usecase "Retry charge" "The queue hands a worker one pending charge; it is acknowledged once booked" {
+  worker   -> intents : SELECT pending intent FOR UPDATE SKIP LOCKED
+  intents --> worker  : status pending
+  worker   -> gateway : POST /charges Idempotency-Key chk_7f3a
+  gateway --> worker  : 201 approved
+  worker   -> ledger  : APPEND debit and credit entries for pay_81
+  ledger  --> worker  : ok
+  worker   -> intents : UPDATE status succeeded, store response
+  intents --> worker  : ok
+}

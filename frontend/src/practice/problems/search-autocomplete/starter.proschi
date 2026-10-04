@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the suggestion path, the query log, the index builder and the use cases
+# "Suggest", "Search" and "Rebuild index".
+api "Search API" [REST API]
+
+user -> api
+api  -> search
+
+usecase "Suggest" {
+  user    -> api    : GET /suggest?q=ipho
+  api     -> search : prefix query "ipho*"
+  search --> api    : hits
+  api    --> user   : 200 ["iphone 15", "iphone case"]
+}

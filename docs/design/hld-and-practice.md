@@ -431,21 +431,14 @@ A third page next to the landing page and the editor (Vite multi-page, like
   on request with a confirmation.
 - **Progress** in localStorage: status and the last source per problem.
 
-Problem format (`frontend/src/practice/problems/<id>.ts`):
-
-```ts
-export interface Problem {
-  id: string;                         // url-shortener
-  title: string;
-  difficulty: 'easy' | 'medium' | 'hard';
-  tags: string[];                     // caching, queues, consistency, …
-  statement: string;                  // Markdown
-  given: string;                      // Proschi: traffic, requirements, tests, fixed nodes (e.g. client)
-  starter: string;                    // starts with: import "problem.proschi"
-  solution: string;                   // reference solution; CI checks it passes every test
-  hints: string[];
-}
-```
+Problem format: a folder per problem, `frontend/src/practice/problems/<id>/`,
+with `problem.md` (front matter: title, summary, difficulty, tags, order,
+hints; body: the Markdown statement), `given.proschi` (traffic, requirements,
+tests, fixed nodes such as the client), `starter.proschi` and
+`solution.proschi` (both start with `import "problem.proschi"`), and optional
+`wrong/<name>.proschi` designs that must fail the tests named in their
+`# expect-fail:` lines. CI checks the solution passes every test
+(`proschi problem check`; details in [PRACTICE.md](../PRACTICE.md)).
 
 The editor resolves `import "problem.proschi"` to `given`, so the problem's
 traffic, requirements and tests apply to the solution without being editable.

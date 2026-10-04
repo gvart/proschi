@@ -1,0 +1,16 @@
+import "problem.proschi"
+
+# Add where seats, holds and bookings live, the seat map cache, and the use
+# cases "View seats", "Hold seat" and "Confirm booking".
+api   "Booking API" [REST API]
+cache "Seat Maps"   [Redis]
+
+fan -> api
+api -> cache
+
+usecase "Hold seat" {
+  fan    -> api   : POST /events/e1/holds json {"seat": "A-12"}
+  api    -> cache : GET seatmap:e1
+  cache --> api   : A-12 free
+  api   --> fan   : 201 {"holdId": "h-77"}
+}

@@ -1,0 +1,60 @@
+title "Payments" "Charges a card exactly once per checkout, even when clients retry and the gateway fails"
+
+shopper "Shopper"         [Actor]
+gateway "Payment Gateway" [Payment Gateway] "External card processor; slow, and sometimes times out"
+ledger  "Ledger API"      [gRPC]            x3 @finance "Double-entry ledger; only approved money is booked here"
+
+capacity {
+  gateway 5k rps latency 250ms
+}
+
+traffic {
+  "Checkout"     1k rps mix "Charged" 94.5%, "Replay" 5%, "Gateway down" 0.5%
+  "Retry charge" 5 rps
+}
+
+requirements {
+  p99 "Checkout" < 1500ms
+  p99 "Checkout" scenario "Replay" < 100ms
+  availability "Checkout" >= 99.95%
+  durable "Checkout"
+  survive any node failure
+  cost <= 2500 usd/month
+}
+
+test "The payment is recorded in a strong store before the card is charged" {
+  "Checkout" calls any strong store before gateway
+  "Checkout" never calls any eventual store
+}
+
+test "A retry returns the stored result and charges nothing" {
+  "Checkout" has scenario "Replay"
+  "Checkout" scenario "Replay" calls any strong store
+  "Checkout" scenario "Replay" never calls gateway or ledger
+  "Checkout" scenario "Replay" responds 2xx
+}
+
+test "Money is booked only after the gateway approves" {
+  "Checkout" calls gateway before ledger
+  "Checkout" scenario "Charged" writes ledger before responding
+  "Checkout" scenario "Charged" responds 201
+}
+
+test "The payment is marked succeeded only once the money is booked" {
+  "Checkout" scenario "Charged" calls any strong store after ledger
+  "Retry charge" calls any strong store after ledger
+}
+
+test "A failing gateway leaves the payment pending, not lost" {
+  "Checkout" handles failure of gateway
+  "Checkout" scenario "Gateway down" responds 202
+  "Checkout" scenario "Gateway down" calls any queue
+  "Checkout" scenario "Gateway down" never waits for ledger
+}
+
+test "Pending charges are retried from a queue with the same key" {
+  "Retry charge" starts at any queue
+  "Retry charge" calls any strong store before gateway
+  "Retry charge" calls gateway before ledger
+  "Retry charge" writes ledger before responding
+}

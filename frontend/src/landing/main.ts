@@ -3,6 +3,7 @@ import { highlightElement } from './highlight';
 import { HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { responsiveLayout } from './diagramLayout';
 import { initPlayer } from './player';
+import { listingsFrom, practiceListHtml } from './practiceList';
 
 const heroCode = document.querySelector<HTMLElement>('#hero-source code');
 const heroSource = heroCode?.textContent ?? '';
@@ -26,6 +27,14 @@ const shareSample = document.querySelector<HTMLElement>('#share-sample');
 if (shareSample && heroSource) {
   const code = heroLink.slice(heroLink.indexOf('#code=') + '#code='.length, heroLink.indexOf('&'));
   shareSample.textContent = `${code.slice(0, 32)}…`;
+}
+
+// The practice list comes from the problem folders, so it never falls behind them.
+const practiceList = document.querySelector<HTMLElement>('#practice-list');
+if (practiceList) {
+  const files = import.meta.glob<string>('../practice/problems/*/problem.md', { query: '?raw', import: 'default', eager: true });
+  const problems = listingsFrom(Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace('../practice/problems/', ''), text])));
+  practiceList.innerHTML = practiceListHtml(problems);
 }
 
 const player = document.querySelector<HTMLElement>('#player');

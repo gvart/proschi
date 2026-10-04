@@ -1,0 +1,50 @@
+title "Ticket Booking" "Sells each seat exactly once while thousands of fans race for it"
+
+fan      "Fan"              [Actor]
+payments "Payment Provider" [Payment Gateway] "External card payments"
+
+capacity {
+  payments 5k rps latency 250ms
+}
+
+traffic {
+  "View seats"      20k rps mix "Cache hit" 97%, "Cache miss" 3%
+  "Hold seat"       6k rps  mix "Held" 40%, "Taken" 60%
+  "Confirm booking" 500 rps mix "Paid" 90%, "Payment declined" 7%, "Hold expired" 3%
+}
+
+requirements {
+  p99 "View seats" < 150ms
+  p99 "Hold seat" < 200ms
+  p99 "Confirm booking" < 1500ms
+  durable "Hold seat"
+  durable "Confirm booking"
+  survive any node failure
+  cost <= 4500 usd/month
+}
+
+test "Seat maps are served from the cache" {
+  "View seats" calls any cache before any database
+  "View seats" scenario "Cache hit" never calls any database
+}
+
+test "A strong store, not the cache, decides who holds a seat" {
+  "Hold seat" every scenario calls any database
+  "Hold seat" writes any strong store before responding
+  "Hold seat" never calls any eventual store
+  "Hold seat" scenario "Taken" responds 409
+}
+
+test "Nobody pays without a valid hold" {
+  "Confirm booking" calls any strong store before payments
+  "Confirm booking" never waits for any eventual store
+  "Confirm booking" scenario "Hold expired" never calls payments
+  "Confirm booking" scenario "Hold expired" responds 409
+}
+
+test "A seat is booked only once it is paid" {
+  "Confirm booking" scenario "Paid" calls any strong store after payments
+  "Confirm booking" scenario "Paid" writes any strong store before responding
+  "Confirm booking" scenario "Paid" responds 201
+  "Confirm booking" scenario "Payment declined" responds 402
+}
