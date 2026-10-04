@@ -36,7 +36,7 @@ import {
 import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
-import { useFitOnChange } from '../Diagram/useFitOnChange';
+import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
@@ -971,6 +971,7 @@ function DiagramView({
         deleteKeyCode={null}
         zoomOnDoubleClick={false}
         fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.1}
         proOptions={{ hideAttribution: true }}
       >

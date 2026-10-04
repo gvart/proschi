@@ -4,7 +4,7 @@ import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
-import { useFitOnChange } from './useFitOnChange';
+import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 
 /**
  * A read-only canvas of a parsed diagram, for pages that show a design without
@@ -37,6 +37,7 @@ function Canvas({ nodes, edges, compact, fitKey }: DiagramCanvasProps) {
       zoomOnScroll={!compact}
       preventScrolling={!compact}
       fitView
+      fitViewOptions={FIT_VIEW_OPTIONS}
       minZoom={0.1}
       proOptions={{ hideAttribution: true }}
     >

@@ -17,6 +17,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { FIT_VIEW_OPTIONS } from '../Diagram/useFitOnChange';
 import { CANVAS_ACCENT, CANVAS_EDGE, CANVAS_FAIL } from '../../utils/canvasColors';
 import '@reactflow/node-resizer/dist/style.css';
 import type { FlowStep } from '../../dsl/types';
@@ -291,6 +292,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           nodeTypes={nodeTypes}
           edgeTypes={edgeTypes}
           fitView
+          fitViewOptions={FIT_VIEW_OPTIONS}
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}
