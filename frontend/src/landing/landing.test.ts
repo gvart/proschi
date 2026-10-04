@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
+import legacyRedirect from '../../public/legacy-redirect.js?raw';
 import { examples, parse } from '../dsl';
 import { problems } from '../practice/catalog';
 import { decodeShareLink } from '../playground/share';
@@ -184,8 +185,10 @@ describe('old share links', () => {
     const firstScript = head.indexOf('<script');
     expect(firstScript).toBeGreaterThan(-1);
     expect(firstScript).toBeLessThan(head.indexOf('<link'));
-    expect(head).toContain("location.hash.indexOf('#code=') === 0");
-    expect(head).toContain("location.replace('./app/' + location.hash)");
+    // An external file, so the CSP can forbid inline scripts.
+    expect(head.slice(firstScript)).toMatch(/^<script src="\.\/legacy-redirect\.js"><\/script>/);
+    expect(legacyRedirect).toContain("location.hash.indexOf('#code=') === 0");
+    expect(legacyRedirect).toContain("location.replace('./app/' + location.hash)");
   });
 });
 

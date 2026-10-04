@@ -31,6 +31,8 @@ import {
   Code2,
   Pencil,
   Network,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
@@ -53,7 +55,9 @@ import {
 } from '../../playground/documents';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
-import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { LONG_LINK_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
+import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
 import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
@@ -63,7 +67,8 @@ import ViewTabs, { type View } from '../Analysis/ViewTabs';
 import { useSimulation } from '../Analysis/useSimulation';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
-import { downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
+import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 
 // Panes that are not visible at start load on first use.
@@ -87,8 +92,8 @@ const nodeTypes = {
 function loadInitialState(): DocumentState {
   const link = decodeShareLink(window.location.hash);
   return initialState({
-    stored: loadJson<DocumentState | null>(DOCS_KEY, null),
-    legacySource: loadJson<string | null>(LEGACY_SOURCE_KEY, null),
+    stored: loadJson<unknown>(DOCS_KEY, null),
+    legacySource: loadJson<unknown>(LEGACY_SOURCE_KEY, null),
     sharedSource: link?.source ?? null,
     sharedImports: link?.imports,
     fallbackSource: ecommerceExample,
@@ -122,6 +127,7 @@ export default function Playground() {
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -147,6 +153,11 @@ export default function Playground() {
   /** Nodes declared in imported files (id → file); canvas edits leave them alone. */
   const importedNodes = useMemo(() => new Map(diagram.nodes.flatMap((n) => (n.loc.file ? [[n.id, n.loc.file] as const] : []))), [diagram]);
   const [notice, setNotice] = useState<string | null>(null);
+  // A link that could not be opened says so; the banner also carries long-link and backup messages.
+  const [banner, setBanner] = useState<BannerMessage | null>(() => {
+    const link = readShareLink(window.location.hash);
+    return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
+  });
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4000);
@@ -231,6 +242,32 @@ export default function Playground() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       window.prompt('Copy this link:', url);
+    }
+    if (isLongLink(url)) {
+      setBanner({ message: LONG_LINK_MESSAGE, tone: 'warning', action: { label: 'Download .proschi', run: () => downloadText(source, rootPath) } });
+    }
+  };
+
+  const exportAll = () => {
+    downloadBlob(new Blob([buildBackup(docState, loadProgress())], { type: 'application/zip' }), backupFileName());
+  };
+
+  const importBackup = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const backup = readBackup(new Uint8Array(await file.arrayBuffer()));
+      const plan = planMerge(docState, backup.docs);
+      let replaced = 0;
+      const next = applyMerge(docState, plan, ({ existing }) => {
+        const yes = window.confirm(`"${titleOf(existing.source)}" (${fileNameOf(existing)}) differs from the copy in the backup. Replace it with the backup's version?`);
+        if (yes) replaced++;
+        return yes;
+      });
+      openDoc(() => next);
+      saveProgress(mergeProgress(loadProgress(), backup.progress));
+      setBanner({ message: mergeSummary(plan, replaced, Object.keys(backup.progress).length) });
+    } catch (error) {
+      setBanner({ message: `Could not import ${file.name}: ${error instanceof Error ? error.message : String(error)}`, tone: 'warning' });
     }
   };
 
@@ -402,6 +439,26 @@ export default function Playground() {
                 >
                   Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
                 </MenuItem>
+                <div className="my-1 border-t border-gray-100" />
+                <MenuItem
+                  icon={<Archive size={14} />}
+                  onSelect={() => {
+                    exportAll();
+                    close();
+                  }}
+                >
+                  Export all (.zip)
+                </MenuItem>
+                <MenuItem
+                  icon={<ArchiveRestore size={14} />}
+                  onSelect={() => {
+                    backupInputRef.current?.click();
+                    close();
+                  }}
+                >
+                  Import backup…
+                </MenuItem>
+                <p className="px-3 pt-0.5 pb-1 text-xs text-gray-400">Saved in this browser only — export a backup.</p>
               </>
             )}
           </Menu>
@@ -413,6 +470,17 @@ export default function Playground() {
           className="hidden"
           onChange={(e) => {
             importFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={backupInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          aria-label="Import backup"
+          onChange={(e) => {
+            importBackup(e.target.files?.[0]);
             e.target.value = '';
           }}
         />
@@ -495,6 +563,7 @@ export default function Playground() {
           </button>
         </div>
       </header>
+      {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
 
       <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
         {(['code', 'diagram'] as const).map((pane) => (

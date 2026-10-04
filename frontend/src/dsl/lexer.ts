@@ -215,18 +215,36 @@ export function stripTrailingComment(text: string): string {
 
 /** Net count of unclosed `{` / `[` outside string literals. */
 export function bracketDepth(text: string): number {
-  let depth = 0;
-  let inString = false;
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    if (inString) {
-      if (ch === '\\') i++;
-      else if (ch === '"') inString = false;
-      continue;
+  return new BracketCounter().feed(text);
+}
+
+/**
+ * `bracketDepth` fed piece by piece: a multi-line payload is scanned once
+ * instead of once per added line, so an unclosed `{` in a large document
+ * costs linear time, not quadratic (it froze the tab on big share links).
+ */
+export class BracketCounter {
+  private depth = 0;
+  private inString = false;
+  private escaped = false;
+
+  /** Adds `text` and returns the depth so far. */
+  feed(text: string): number {
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (this.escaped) {
+        this.escaped = false;
+        continue;
+      }
+      if (this.inString) {
+        if (ch === '\\') this.escaped = true;
+        else if (ch === '"') this.inString = false;
+        continue;
+      }
+      if (ch === '"') this.inString = true;
+      else if (ch === '{' || ch === '[') this.depth++;
+      else if (ch === '}' || ch === ']') this.depth--;
     }
-    if (ch === '"') inString = true;
-    else if (ch === '{' || ch === '[') depth++;
-    else if (ch === '}' || ch === ']') depth--;
+    return this.depth;
   }
-  return depth;
 }

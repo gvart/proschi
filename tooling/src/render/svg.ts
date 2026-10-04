@@ -84,7 +84,8 @@ export function text(x: number, y: number, content: string, o: TextOptions = {})
     o.anchor && o.anchor !== 'start' ? `text-anchor="${o.anchor}"` : '',
     o.family ? `font-family="${o.family}"` : '',
   ].filter(Boolean);
-  return `<text ${attrs.join(' ')}>${content.startsWith('<tspan') ? content : esc(content)}</text>`;
+  // Always escaped: labels come from the document, and one starting with `<tspan` once went out as raw markup.
+  return `<text ${attrs.join(' ')}>${esc(content)}</text>`;
 }
 
 /** Rounds coordinates to one decimal so the output stays small and stable. */
