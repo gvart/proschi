@@ -2,10 +2,10 @@ import { parse } from '../dsl/parser';
 import type { Assertion, CapacityOverride, Diagram, FlowTest, Requirement, SourceLoc, TrafficEntry } from '../dsl/types';
 
 /**
- * Test helper: parses the parts of a document the parser already reads
- * (nodes, connections, use cases, scenarios) and attaches traffic,
- * requirements, capacity and tests by hand, so the simulation can be tested
- * independently of the language work. `x<n>` replicas are given as a map.
+ * Test helper: parses a document (nodes, connections, use cases, scenarios)
+ * and attaches traffic, requirements, capacity and tests by hand, so tests
+ * can pin exact inputs (and locations) without writing the syntax. `x<n>`
+ * replicas are given as a map.
  */
 
 type Loose<T> = T extends unknown ? Omit<T, 'loc'> & { loc?: SourceLoc } : never;

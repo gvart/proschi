@@ -22,6 +22,8 @@ const BY_TECH: Partial<Record<string, Kind>> = {
   'GCP BigQuery': 'analytics',
   InfluxDB: 'analytics',
   TimescaleDB: 'analytics',
+  // A note shape annotates the diagram; it is not a client.
+  Note: 'other',
 };
 
 const BY_TYPE: Partial<Record<ComponentType, Kind>> = {
@@ -40,8 +42,8 @@ const BY_TYPE: Partial<Record<ComponentType, Kind>> = {
 
 /**
  * The kind of a node: from its tech stack, falling back to its component type.
- * Shapes (an `Actor`, or a node without a tech) are clients; groups and text
- * nodes are `other`.
+ * Shapes (an `Actor`, or a node without a tech) are clients, except the `Note`
+ * shape; groups and text nodes are `other`.
  */
 export function kindOf(node: Pick<DiagramNode, 'kind' | 'type' | 'techStack'>): Kind {
   if (node.kind !== 'component') return 'other';

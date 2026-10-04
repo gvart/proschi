@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { componentCatalog } from '../catalog/componentCatalog';
 import type { DiagramNode, Kind } from '../dsl/types';
-import { KINDS, kindOf } from './kinds';
+import { KINDS, kindOf } from '../dsl/kinds';
 import { KIND_PROFILES, profileOf } from './profiles';
 
 const node = (type: DiagramNode['type'], techStack: DiagramNode['techStack'], kind: DiagramNode['kind'] = 'component'): DiagramNode => ({

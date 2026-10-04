@@ -8,10 +8,8 @@ import { analyze, hover } from '../src/analysis';
 import { parse } from '../src/proschi';
 import { formatTestReports, nodeSimulation, runAnalyze, runTest, testDiagnostics, testFiles, type Loader } from '../src/simulation';
 
-// The parser does not read traffic, requirements and tests yet (that lands
-// with the language work), so most tests attach them by hand through a loader.
-// The tests at the end use the real syntax and switch on once the parser reads it.
-const supportsSyntax = (parse('usecase "U" {\n  a -> b : x\n}\ntraffic {\n  "U" 1k rps\n}\n').diagram.traffic?.length ?? 0) > 0;
+// Most tests attach traffic, requirements and tests by hand through a loader,
+// to pin exact numbers; the tests at the end use the real syntax.
 
 const dir = mkdtempSync(join(tmpdir(), 'proschi-sim-'));
 
@@ -51,7 +49,7 @@ const EXTRAS: Extras = {
   ],
 };
 
-/** Parses from disk and attaches `extras` to the diagram, as the parser will once it reads the syntax. */
+/** Parses from disk and attaches `extras` to the diagram by hand. */
 const withExtras =
   (extras: Extras): Loader =>
   (path) => {
@@ -210,7 +208,7 @@ describe('language server helpers', () => {
   });
 });
 
-describe.skipIf(!supportsSyntax)('with the language syntax', () => {
+describe('with the language syntax', () => {
   it('runs the requirements and tests written in the file', () => {
     writeFileSync(
       join(dir, 'real.proschi'),

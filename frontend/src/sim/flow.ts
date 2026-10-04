@@ -1,6 +1,6 @@
 import { buildSequence, sequenceMessages, type SequenceMessage } from '../dsl/sequence';
 import type { Diagram, DiagramNode, DiagramScenario, DiagramStep, DiagramUseCase, Selector } from '../dsl/types';
-import { kindOf } from './kinds';
+import { kindOf } from '../dsl/kinds';
 
 /**
  * How scenarios run, as the simulation and the tests read them: which steps

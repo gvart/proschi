@@ -1,6 +1,6 @@
 import type { TechStack } from '../types/canvas';
 import type { CapacityOverride, DiagramNode, Kind } from '../dsl/types';
-import { kindOf } from './kinds';
+import { kindOf } from '../dsl/kinds';
 
 /**
  * Per-replica numbers the simulation starts from (docs/design/hld-and-practice.md

@@ -8,13 +8,8 @@ import {
   type ProtocolConnection,
   type PublishDiagnosticsParams,
 } from 'vscode-languageserver-protocol/node';
-import { parse } from '../src/proschi';
 
-// Requirement and test findings over the real LSP connection. Until the parser
-// reads traffic, requirements and tests, documents cannot carry them, so the
-// tests with that syntax switch on once it does (see simulation.test.ts for
-// the same checks on hand-built diagrams).
-const supportsSyntax = (parse('usecase "U" {\n  a -> b : x\n}\ntraffic {\n  "U" 1k rps\n}\n').diagram.traffic?.length ?? 0) > 0;
+// Requirement and test findings over the real LSP connection.
 
 const server = spawn(process.execPath, [fileURLToPath(new URL('../dist/server.cjs', import.meta.url)), '--stdio']);
 let connection: ProtocolConnection;
@@ -79,7 +74,7 @@ describe('language server: simulation', () => {
     expect(await hoverText(uri, 1, 1)).not.toContain('Load');
   });
 
-  it.skipIf(!supportsSyntax)('reports failing requirements and tests as warnings, and load in hovers', async () => {
+  it('reports failing requirements and tests as warnings, and load in hovers', async () => {
     const uri = 'file:///tmp/sim-items.proschi';
     const text = `${ITEMS}traffic {
   "Read" 1k rps
