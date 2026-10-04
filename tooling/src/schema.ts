@@ -154,11 +154,14 @@ export function diagramSchema() {
           failed: { ...bool, description: 'Written `a -x b`: the call never got an answer.' },
           loc: { ...loc, description: 'The request line.' },
           responseLoc: { ...loc, description: 'The `-->` line that answered the request.' },
+          multiplier: { type: 'integer', minimum: 1, description: '`x200` at the start of the label: the step happens this many times per request (fan-out). Absent means 1.' },
+          sizeBytes: { type: 'integer', minimum: 1, description: '`~2MB` at the start of the label: payload size in bytes (decimal units).' },
+          access: { enum: ['read', 'write'], description: 'From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one.' },
         },
-        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'loc'],
+        ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'access', 'loc'],
       ),
       selector: {
-        description: 'A node id, an exact tech stack, or every node of a kind (`any cache`).',
+        description: 'A node id, an exact tech stack, every node of a kind (`any cache`), every data store of a consistency (`any strong store`), or a union (`X or Y`).',
         oneOf: [
           object({ node: str }, ['node']),
           object({ tech: str }, ['tech']),
@@ -184,7 +187,14 @@ export function diagramSchema() {
         // Keyed by kind, so a new kind of requirement without a schema is a type error.
         oneOf: Object.values({
           latency: object(
-            { kind: { const: 'latency' }, percentile: { enum: Object.keys(PERCENTILES).map(Number) }, useCase: { ...str, description: 'Left out: every use case with traffic.' }, maxMs: num, loc },
+            {
+              kind: { const: 'latency' },
+              percentile: { enum: Object.keys(PERCENTILES).map(Number) },
+              useCase: { ...str, description: 'Left out: every use case with traffic.' },
+              scenario: { ...str, description: '`scenario "S"`: the latency of one scenario of the use case.' },
+              maxMs: num,
+              loc,
+            },
             ['kind', 'percentile', 'maxMs', 'loc'],
           ),
           availability: object({ kind: { const: 'availability' }, useCase: str, minPercent: percent, loc }, ['kind', 'minPercent', 'loc']),
@@ -201,6 +211,12 @@ export function diagramSchema() {
           availability: percent,
           costUsd: { ...num, description: 'Monthly cost per replica in USD.' },
           durable: { ...bool, description: '`durable` (true) or `volatile` (false).' },
+          readRps: { ...num, description: '`reads`: read requests per second per replica.' },
+          writeRps: { ...num, description: '`writes`: write requests per second per replica.' },
+          shards: { type: 'integer', minimum: 1, description: 'Write capacity of single-primary stores scales with shards.' },
+          consistency: { enum: ['strong', 'eventual'] },
+          bandwidthMBps: { ...num, exclusiveMinimum: 0, description: '`bandwidth`: megabytes per second per replica.' },
+          egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data leaving the node, in USD per GB.' },
           loc,
         },
         ['node', 'loc'],

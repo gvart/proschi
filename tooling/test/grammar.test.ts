@@ -197,6 +197,34 @@ describe('TextMate grammar', () => {
     expect(tokenize('  x3 [Redis]')[0][0]).toEqual(['x3', 'variable.other.node.proschi']);
   });
 
+  it('scopes the v2 words, units and label prefixes', () => {
+    const lines = tokenize(
+      [
+        'test "T" {',
+        '  "U" never waits for any queue or any eventual store',
+        '  in "U" api calls db after cache',
+        '  "U" starts at any strong store',
+        '}',
+        'capacity {',
+        '  db reads 30k rps writes 8k rps shards 4 consistency strong bandwidth 500 MB/s egress 0.05 usd/GB',
+        '}',
+      ].join('\n'),
+    );
+    const keywords = (i: number) => lines[i].filter(([, s]) => s === 'keyword.other.proschi').map(([t]) => t);
+    expect(keywords(1)).toEqual(['never', 'waits', 'for', 'any', 'or', 'any', 'eventual', 'store']);
+    expect(keywords(2)).toEqual(['in', 'calls', 'after']);
+    expect(keywords(3)).toEqual(['starts', 'at', 'any', 'strong', 'store']);
+    expect(keywords(6)).toEqual(['reads', 'writes', 'shards', 'consistency', 'strong', 'bandwidth', 'egress']);
+    expect(scopeOf([lines[6]], '500 MB/s')).toBe('constant.numeric.proschi');
+    expect(scopeOf([lines[6]], '0.05 usd/GB')).toBe('constant.numeric.proschi');
+
+    const [step] = tokenize('  worker -> feeds : x200 ~2MB LPUSH feed');
+    expect(scopeOf([step], 'x200')).toBe('constant.numeric.label-prefix.proschi');
+    expect(scopeOf([step], '~2MB')).toBe('constant.numeric.label-prefix.proschi');
+    const [plain] = tokenize('  a -> b : xml x200 payload');
+    expect(scopeOf([plain], 'x200')).not.toBe('constant.numeric.label-prefix.proschi');
+  });
+
   it.each(examples.map((e) => [e.id, e.source]))('tokenizes the %s example without leaving a block open', (_id, source) => {
     let state = vsctm.INITIAL;
     for (const line of source.split('\n')) state = grammar.tokenizeLine(line, state).ruleStack;

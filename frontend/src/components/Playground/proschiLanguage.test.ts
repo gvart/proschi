@@ -145,6 +145,36 @@ describe('section highlighting', () => {
     expect(styleOf(lines, 1, 'x3')).toBe('number');
     expect(lines[2][0]).toEqual(['x3', 'variableName']);
   });
+
+  it('highlights the v2 words, units and label prefixes', () => {
+    const lines = highlightDoc(
+      [
+        'test "T" {',
+        '  "U" never waits for any queue or any eventual store',
+        '  in "U" api calls db after cache',
+        '  "U" starts at any strong store',
+        '}',
+        'capacity {',
+        '  db reads 30k rps writes 8k rps shards 4 consistency strong bandwidth 500 MB/s egress 0.05 usd/GB',
+        '}',
+        'usecase "U" {',
+        '  worker -> feeds : x200 ~2MB LPUSH feed',
+        '  a -> b : xml x200',
+        '}',
+      ].join('\n'),
+    );
+    const keywords = (i: number) => lines[i].filter(([, s]) => s === 'keyword').map(([t]) => t);
+    expect(keywords(1)).toEqual(['never', 'waits', 'for', 'any', 'or', 'any', 'eventual', 'store']);
+    expect(keywords(2)).toEqual(['in', 'calls', 'after']);
+    expect(keywords(3)).toEqual(['starts', 'at', 'any', 'strong', 'store']);
+    expect(keywords(6)).toEqual(['reads', 'writes', 'shards', 'consistency', 'strong', 'bandwidth', 'egress']);
+    expect(styleOf(lines, 6, '500 MB/s')).toBe('number');
+    expect(styleOf(lines, 6, '0.05 usd/GB')).toBe('number');
+    expect(styleOf(lines, 9, 'x200')).toBe('number');
+    expect(styleOf(lines, 9, '~2MB')).toBe('number');
+    expect(styleOf(lines, 9, 'LPUSH')).not.toBe('number');
+    expect(styleOf(lines, 10, 'x200')).toBeUndefined();
+  });
 });
 
 const complete = (doc: string, explicit = false) => {
@@ -196,6 +226,13 @@ describe('proschiCompletions', () => {
     for (const label of ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test']) {
       expect(options.find((o) => o.label === label), label).toMatchObject({ type: 'keyword', apply: expect.any(Function) });
     }
+  });
+
+  it('offers assertions at the start of a line inside a test block', () => {
+    const labels = complete('test "T" {\n  "U" calls db\n  ne', true)?.options.map((o) => o.label);
+    expect(labels).toEqual(expect.arrayContaining(['"Use case" never waits for', '"Use case" calls … after …', 'node never calls node', 'gateway']));
+    expect(labels).not.toContain('usecase');
+    expect(complete('test "T" {\n}\nus')?.options.map((o) => o.label)).toContain('usecase');
   });
 
   it('stays quiet inside labels', () => {

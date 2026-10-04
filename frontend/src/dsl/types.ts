@@ -129,10 +129,14 @@ export type Kind =
   | 'external'
   | 'other';
 
-/** A quantity after unit normalisation: rates in requests per second, durations in milliseconds. */
+/**
+ * A quantity after unit normalisation: rates in requests per second, durations
+ * in milliseconds, bandwidth in megabytes per second (§7.3), egress prices in
+ * USD per gigabyte (§7.3).
+ */
 export interface Quantity {
   value: number;
-  unit: 'rps' | 'ms' | '%' | 'usd/month';
+  unit: 'rps' | 'ms' | '%' | 'usd/month' | 'MBps' | 'usd/GB';
 }
 
 /** A node id, an exact tech stack, or every node of a kind (`any cache`). */

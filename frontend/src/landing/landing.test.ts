@@ -140,6 +140,14 @@ describe('landing page snippets', () => {
     expect(cls(6).map(([t]) => t)).toEqual(['no', 'path', 'from', 'to', 'any']);
   });
 
+  it('highlights the v2 words and label prefixes', () => {
+    const cls = (line: string, inSection = false) => highlightLine(line, inSection).filter((seg) => seg.cls).map((seg) => [seg.text.trim(), seg.cls]);
+    expect(cls('  worker -> feeds : x200 ~2MB LPUSH feed:{f}')).toEqual([['->', 'arrow'], ['x200', 'number'], ['~2MB', 'number']]);
+    expect(cls('  a -> b : xml x200')).toEqual([['->', 'arrow']]);
+    expect(cls('  "U" never waits for any queue or any strong store', true).map(([t]) => t)).toEqual(['"U"', 'never', 'waits', 'for', 'any', 'or', 'any', 'strong', 'store']);
+    expect(cls('  blobs bandwidth 500 MB/s egress 0.05 usd/GB', true)).toEqual([['bandwidth', 'keyword'], ['500 MB/s', 'number'], ['egress', 'keyword'], ['0.05 usd/GB', 'number']]);
+  });
+
   it('are in canonical format', () => {
     for (const source of snippets()) expect(format(`${source}\n`)).toBe(`${source}\n`);
   });

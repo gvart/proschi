@@ -28,9 +28,13 @@ export const SECTION_HEADER = new RegExp(
 export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
 /** Words with a meaning inside section blocks (docs/LANGUAGE.md, "High-level design"). */
 const SECTION_WORDS =
-  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|never|every|responds|writes|responding|handles|failure|path|replicas|any|in|scenario|latency|availability|cost|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
 /** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
-const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month)\b| %)?/;
+const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?/;
+/** `x200` (fan-out) and `~2MB` (payload size) at the start of a step label (§7.3). */
+const LABEL_PREFIX = /^(?:x\d+|~\d+(?:\.\d+)?[KMGT]?B)(?=\s|$)/;
+/** Everything after ':' so far is label prefixes, so another one may follow. */
+const BEFORE_LABEL_PREFIX = /^[^:]*:\s*(?:(?:x\d+|~\d+(?:\.\d+)?[KMGT]?B)\s+)*$/;
 
 /** Tokenizer behind the highlighting; exported for tests. */
 export const proschiStreamParser: StreamParser<LexState> = {
@@ -55,6 +59,7 @@ export const proschiStreamParser: StreamParser<LexState> = {
 
     if (state.inLabel) {
       if (state.depth <= 0) {
+        if (BEFORE_LABEL_PREFIX.test(stream.string.slice(0, stream.pos)) && stream.match(LABEL_PREFIX)) return 'number';
         if (stream.match(HTTP_METHOD)) return 'keyword';
         if (stream.match(/^\/\S*/)) return 'link';
         if (stream.match(/^\d{3}\b/)) return 'number';
@@ -120,6 +125,36 @@ const keywordOptions: Completion[] = [
   snippetCompletion('test "${Name}" {\n\t${}\n}', { label: 'test', type: 'keyword', detail: 'flow assertions' }),
 ];
 
+/** Assertion forms, offered at the start of a line inside a test block. */
+const assertionOptions: Completion[] = [
+  ['"${Use case}" calls ${node}', '"Use case" calls', 'some scenario calls it'],
+  ['"${Use case}" never calls ${node}', '"Use case" never calls', 'no scenario calls it'],
+  ['"${Use case}" every scenario calls ${node}', '"Use case" every scenario calls', 'every scenario calls it'],
+  ['"${Use case}" calls ${node} before ${other}', '"Use case" calls … before …', 'first call before first call'],
+  ['"${Use case}" calls ${node} after ${other}', '"Use case" calls … after …', 'last call after first call'],
+  ['"${Use case}" never waits for ${node}', '"Use case" never waits for', 'no synchronous call before responding'],
+  ['"${Use case}" writes ${node} before responding', '"Use case" writes … before responding', 'durable before the answer'],
+  ['"${Use case}" responds ${status}', '"Use case" responds', 'status of the entry response'],
+  ['"${Use case}" starts at ${node}', '"Use case" starts at', 'who sends the entry request'],
+  ['"${Use case}" has scenario "${Scenario}"', '"Use case" has scenario', 'the scenario exists'],
+  ['"${Use case}" handles failure of ${node}', '"Use case" handles failure of', 'a scenario survives it failing'],
+  ['${node} calls ${other}', 'node calls node', 'some step is sent from one to the other'],
+  ['${node} never calls ${other}', 'node never calls node', 'no step is sent from one to the other'],
+  ['in "${Use case}" ${node} calls ${other}', 'in "Use case" node calls node', 'sent within one use case'],
+  ['no path from ${node} to ${other}', 'no path from … to …', 'no chain of connections'],
+  ['${node} has replicas >= ${min}', 'node has replicas >=', 'minimum replica count'],
+].map(([template, label, detail]) => snippetCompletion(template, { label, type: 'keyword', detail }));
+
+/** True when line `number` (1-based) is inside a `test "…" {` block. */
+function inTestBlock(doc: Text, number: number): boolean {
+  for (let n = number - 1; n >= 1; n--) {
+    const text = doc.line(n).text;
+    if (/^\s*\}/.test(text)) return false;
+    if (/\{\s*(?:#.*)?$/.test(text)) return /^\s*test\s+"/.test(text);
+  }
+  return false;
+}
+
 /** Completes tech stacks inside [ ] and node ids / keywords elsewhere. */
 export function proschiCompletions(getNodeIds: () => string[]) {
   return (ctx: CompletionContext): CompletionResult | null => {
@@ -142,6 +177,7 @@ export function proschiCompletions(getNodeIds: () => string[]) {
     }
 
     const ids: Completion[] = getNodeIds().map((id) => ({ label: id, type: 'variable' }));
+    if (atLineStart && inTestBlock(ctx.state.doc, line.number)) return { from, options: [...assertionOptions, ...ids], validFor: /^\w*$/ };
     return { from, options: atLineStart ? [...keywordOptions, ...ids] : ids, validFor: /^\w*$/ };
   };
 }

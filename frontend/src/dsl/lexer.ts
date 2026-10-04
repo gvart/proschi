@@ -29,8 +29,8 @@ const IDENT_PART = /[A-Za-z0-9_]/;
 const TEAM_PART = /[A-Za-z0-9_-]/;
 const DIGIT = /[0-9]/;
 const LETTER = /[A-Za-z]/;
-/** Units that may follow a number after a space: `50 ms`, `100k rps`, `99.9 %`. */
-const SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month)(?![A-Za-z0-9_/])/;
+/** Units that may follow a number after a space: `50 ms`, `100k rps`, `99.9 %`, `500 MB/s`, `0.05 usd/GB`. */
+const SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month|usd\/GB|MB\/s|GB\/s)(?![A-Za-z0-9_/])/;
 
 /**
  * Tokenizes a single source line. The language is line-oriented, so each line
@@ -147,7 +147,7 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
 
 /**
  * Reads a number starting at `start` with an optional fraction and unit:
- * `120`, `2.5`, `50ms`, `99.9%`, `100krps`, `3000usd/month`, or with the unit
+ * `120`, `2.5`, `50ms`, `99.9%`, `100krps`, `3000usd/month`, `500MB/s`, or with the unit
  * one space away (`100k rps`). Returns the index after it. What the unit means
  * is checked by the parser (quantity.ts), so `5xyz` is one token it can name.
  */
