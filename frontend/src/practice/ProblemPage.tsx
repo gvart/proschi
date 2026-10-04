@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Code2, Eye, FlaskConical, Lightbulb, Network, RotateCcw } from 'lucide-react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
@@ -13,6 +13,10 @@ import { DifficultyBadge, StatusIcon } from './Badges';
 import { sourceOf, statusOf, withRun, withSource, type Progress } from './progress';
 import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
 import type { Problem } from './types';
+import HelpMenu from '../onboarding/HelpMenu';
+import { startMode, type StartMode } from '../onboarding/seen';
+
+const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 
 const PARSE_DELAY_MS = 150;
 
@@ -40,6 +44,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
   const [pane, setPane] = useState<Pane>('statement');
   const editorRef = useRef<CodeEditorHandle>(null);
   const status = statusOf(progress, problem.id);
+  // Someone who has worked on problems before is not a first-time visitor.
+  const [tour, setTour] = useState<StartMode>(() => startMode('practice', { returning: Object.keys(progress).length > 0 }));
+  const [tourRun, setTourRun] = useState(0);
+  const [runs, setRuns] = useState(0);
 
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {
@@ -60,6 +68,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
     // Run on what is in the editor right now, not the debounced parse.
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
+    setRuns((n) => n + 1);
     if (!result.blocked) onProgress((p) => withRun(p, problem, result.solved));
     setPane('tests');
   };
@@ -92,6 +101,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
         </button>
+        <HelpMenu
+          tourLabel="Take the practice tour"
+          onTour={() => {
+            setTourRun((n) => n + 1);
+            setTour('tour');
+          }}
+        />
       </header>
 
       <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
@@ -99,6 +115,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
           <button
             key={id}
             role="tab"
+            data-tour={`tab-${id}`}
             aria-selected={pane === id}
             onClick={() => setPane(id)}
             className={`flex-1 inline-flex items-center justify-center gap-1 py-2.5 text-sm font-medium border-b-2 ${pane === id ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
@@ -110,13 +127,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
       </div>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <aside className={`${show('statement')} flex-1 md:flex-none min-h-0 md:w-[32%] md:max-w-[560px] flex-col overflow-y-auto border-gray-200 md:border-r bg-white`}>
+        <aside data-tour="statement" className={`${show('statement')} flex-1 md:flex-none min-h-0 md:w-[32%] md:max-w-[560px] flex-col overflow-y-auto border-gray-200 md:border-r bg-white`}>
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
         </aside>
 
         <div className={`${pane === 'statement' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 min-w-0 flex-col`}>
           <div className={`${pane === 'tests' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 flex-col lg:flex-row`}>
-            <section className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col bg-white lg:border-r border-gray-200`}>
+            <section data-tour="practice-code" className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col bg-white lg:border-r border-gray-200`}>
               <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-gray-100">
                 solution.proschi · imports <code>{PROBLEM_FILE}</code>
               </div>
@@ -128,11 +145,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
               <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} />
             </section>
           </div>
-          <section className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>
+          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>
             <TestPanel run={run?.result} stale={!!run && run.source !== source} diagnostics={diagnostics} onRun={runNow} onSelect={goTo} />
           </section>
         </div>
       </div>
+
+      {tour === 'tour' && (
+        <Suspense fallback={null}>
+          <PracticeTour key={tourRun} setPane={setPane} runs={runs} runTests={runNow} onClose={() => setTour(null)} />
+        </Suspense>
+      )}
     </div>
   );
 }

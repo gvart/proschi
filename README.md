@@ -49,7 +49,8 @@ test "Notes are stored before they are returned" {
   See the [language reference](docs/LANGUAGE.md).
 - **Editor**: a browser-only editor with highlighting, completion, live
   diagnostics and automatic layout; share links, saved documents, PNG/SVG and
-  Mermaid export. Nothing is uploaded.
+  Mermaid export. Nothing is uploaded. A short tour on the first visit and a
+  Help (?) menu with a syntax cheat-sheet get you started.
 - **Playback**: every use case plays as an animation over the diagram, step by
   step, with links to individual steps.
 - **Scenarios**: `alt` branches and `when "…"` conditions describe the happy

@@ -11,6 +11,8 @@ import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiL
 
 export interface CodeEditorHandle {
   goTo: (line: number, col: number) => void;
+  /** Selects `length` characters from line:col and scrolls them into view; focuses the editor when asked. */
+  select: (line: number, col: number, length: number, focus?: boolean) => void;
   /** Formats the document (also Shift+Alt+F), keeping the cursor at the same code. */
   format: () => void;
 }
@@ -105,6 +107,15 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
       const anchor = Math.min(target.from + col - 1, target.to);
       view.dispatch({ selection: { anchor }, effects: EditorView.scrollIntoView(anchor, { y: 'center' }) });
       view.focus();
+    },
+    select(line, col, length, focus = true) {
+      const view = viewRef.current;
+      if (!view || line > view.state.doc.lines) return;
+      const target = view.state.doc.line(line);
+      const anchor = Math.min(target.from + col - 1, target.to);
+      const head = Math.min(anchor + length, target.to);
+      view.dispatch({ selection: { anchor, head }, effects: EditorView.scrollIntoView(anchor, { y: 'center' }) });
+      if (focus) view.focus();
     },
     format() {
       const view = viewRef.current;
