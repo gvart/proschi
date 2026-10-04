@@ -19,7 +19,7 @@ entity Url in db "One short code and where it points" {
 }
 
 decision "Cache redirects in Redis" {
-  because "Reads outnumber writes 100:1 and p99 must stay under 100 ms"
+  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
   rejected "Database reads only" "Every redirect pays a database round trip"
 }
 decision "Base62 codes from a counter" because "Short, unique, no collisions to retry"

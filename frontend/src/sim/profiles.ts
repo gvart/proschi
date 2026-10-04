@@ -1,4 +1,4 @@
-import type { TechStack } from '../types/canvas';
+import { componentCatalog, type TechProfileKey } from '../catalog/componentCatalog';
 import type { CapacityOverride, DiagramNode, Kind } from '../dsl/types';
 import { isDataStore, kindOf } from '../dsl/kinds';
 
@@ -35,8 +35,10 @@ export interface Profile {
   consistency?: 'strong' | 'eventual';
   /** Network bandwidth per replica, in megabytes per second (§7.3). */
   bandwidthMBps: number;
-  /** Price of data leaving this node, USD per GB (§7.3). */
+  /** Price of data this node sends to clients and third parties (internet egress), USD per GB (§7.3). */
   egressUsdPerGb: number;
+  /** What a failed call (`-x`) to this node costs, from `capacity { n timeout … }`; absent means the analysis default. */
+  timeoutMs?: number;
 }
 
 /** The numbers of a profile table row; `kind` comes from the node, read/write capacity from `rps` unless given. */
@@ -44,6 +46,11 @@ type Row = Pick<Profile, 'rps' | 'latencyMs' | 'availability' | 'costUsd' | 'dur
   Partial<Pick<Profile, 'readRps' | 'writeRps' | 'writeScaling' | 'consistency' | 'bandwidthMBps' | 'egressUsdPerGb'>>;
 
 const NEUTRAL: Row = { rps: Infinity, latencyMs: 0, availability: 1, costUsd: 0, durable: false };
+
+/** Internet egress, USD per GB: what a cloud charges for data a node you run sends to the internet (§7.3). */
+export const INTERNET_EGRESS_USD_PER_GB = 0.09;
+/** A CDN's price per GB delivered. */
+export const CDN_EGRESS_USD_PER_GB = 0.02;
 
 /** Single-primary (relational) store: 20k reads per replica, 5k writes per shard (§7.2). */
 const RELATIONAL: Row = {
@@ -61,8 +68,9 @@ const RELATIONAL: Row = {
 /** Defaults by kind. */
 export const KIND_PROFILES: Record<Kind, Row> = {
   client: { ...NEUTRAL, bandwidthMBps: 10 },
+  // A firewall or accelerator in front of everything else (WAF, Global Accelerator); `any edge` also selects the four below.
   edge: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
-  cdn: { rps: 200_000, latencyMs: 5, availability: 0.9999, costUsd: 100, durable: false, egressUsdPerGb: 0.02 },
+  cdn: { rps: 200_000, latencyMs: 5, availability: 0.9999, costUsd: 100, durable: false, egressUsdPerGb: CDN_EGRESS_USD_PER_GB },
   loadbalancer: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
   gateway: { rps: 10_000, latencyMs: 10, availability: 0.9995, costUsd: 100, durable: false },
   // Name resolution happens before the request and is cached: off the request path.
@@ -74,7 +82,7 @@ export const KIND_PROFILES: Record<Kind, Row> = {
   search: { rps: 3_000, latencyMs: 15, availability: 0.999, costUsd: 400, durable: true, consistency: 'eventual' },
   analytics: { rps: 200, latencyMs: 500, availability: 0.999, costUsd: 300, durable: true, consistency: 'eventual' },
   queue: { rps: 50_000, latencyMs: 5, availability: 0.9999, costUsd: 200, durable: true, consistency: 'strong' },
-  storage: { rps: 5_000, latencyMs: 30, availability: 0.9999, costUsd: 50, durable: true, consistency: 'eventual', egressUsdPerGb: 0.09 },
+  storage: { rps: 5_000, latencyMs: 30, availability: 0.9999, costUsd: 50, durable: true, consistency: 'eventual' },
   external: { rps: 1_000, latencyMs: 200, availability: 0.999, costUsd: 0, durable: false },
   other: NEUTRAL,
 };
@@ -82,19 +90,12 @@ export const KIND_PROFILES: Record<Kind, Row> = {
 /** Partitioned NoSQL stores: 20k reads and 20k writes per replica (§7.2). */
 const NOSQL: Row = { rps: 20_000, latencyMs: 5, availability: 0.9999, costUsd: 500, durable: true, consistency: 'eventual' };
 const NOSQL_STRONG: Row = { ...NOSQL, consistency: 'strong' };
+const PROFILE_ROWS: Record<TechProfileKey, Row> = { nosql: NOSQL, nosqlStrong: NOSQL_STRONG };
 
-/** Techs whose numbers differ from their kind's. Relational techs use the `database` row. */
-export const TECH_PROFILES: Partial<Record<TechStack, Row>> = {
-  DynamoDB: NOSQL,
-  'AWS DynamoDB': NOSQL,
-  Cassandra: NOSQL,
-  CouchDB: NOSQL,
-  'Azure Cosmos DB': NOSQL,
-  MongoDB: NOSQL_STRONG,
-  'GCP Bigtable': NOSQL_STRONG,
-  'GCP Firestore': NOSQL_STRONG,
-  'GCP Spanner': NOSQL_STRONG,
-};
+/** Techs whose numbers differ from their kind's (the catalog's `profile`). Relational techs use the `database` row. */
+export const TECH_PROFILES: Readonly<Record<string, Row>> = Object.fromEntries(
+  componentCatalog.flatMap((c) => ('profile' in c ? [[c.techStack, PROFILE_ROWS[c.profile]]] : [])),
+);
 
 /** Bandwidth per replica by kind, MB/s (§7.3); kinds not listed get 100. */
 const BANDWIDTH: Partial<Record<Kind, number>> = {
@@ -108,10 +109,13 @@ const BANDWIDTH: Partial<Record<Kind, number>> = {
 };
 const DEFAULT_BANDWIDTH_MBPS = 100;
 
+/** Kinds you run and pay egress for; clients and third parties send at their own cost, DNS and annotations send nothing. */
+const CHARGES_EGRESS = (kind: Kind): boolean => kind !== 'client' && kind !== 'external' && kind !== 'dns' && kind !== 'other';
+
 /** The node's per-replica profile: tech table, else kind table, then the `capacity` override. */
 export function profileOf(node: DiagramNode, override?: CapacityOverride): Profile {
   const kind = kindOf(node);
-  const base = TECH_PROFILES[node.techStack] ?? KIND_PROFILES[kind];
+  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : undefined) ?? KIND_PROFILES[kind];
   const baseRead = base.readRps ?? base.rps;
   const baseWrite = base.writeRps ?? base.rps;
   const readRps = override?.readRps ?? override?.rps ?? baseRead;
@@ -130,7 +134,8 @@ export function profileOf(node: DiagramNode, override?: CapacityOverride): Profi
     durable: override?.durable ?? base.durable,
     ...(consistency && isDataStore(kind) ? { consistency } : {}),
     bandwidthMBps: override?.bandwidthMBps ?? base.bandwidthMBps ?? BANDWIDTH[kind] ?? DEFAULT_BANDWIDTH_MBPS,
-    egressUsdPerGb: override?.egressUsdPerGb ?? base.egressUsdPerGb ?? 0,
+    egressUsdPerGb: override?.egressUsdPerGb ?? base.egressUsdPerGb ?? (CHARGES_EGRESS(kind) ? INTERNET_EGRESS_USD_PER_GB : 0),
+    ...(override?.timeoutMs !== undefined ? { timeoutMs: override.timeoutMs } : {}),
   };
 }
 

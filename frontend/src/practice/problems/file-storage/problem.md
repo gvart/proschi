@@ -6,7 +6,7 @@ tags: [storage, cdn, egress, async]
 hints:
   - Your API should never touch the bytes. What can it hand the client instead, so that the client writes to the bucket itself?
   - "The upload is acknowledged by the bucket, not by your API. The bucket can publish an event when an object arrives: let a worker behind a queue mark the file ready."
-  - Downloads move about 1.3 PB a month. Leaving the bucket that costs $0.09/GB; leaving a CDN $0.02/GB. Point the download links at a CDN so only the misses reach the bucket.
+  - Downloads move about 1.3 PB a month. Sent to users from the bucket (or from anything else you run) that costs $0.09/GB; from a CDN $0.02/GB. Point the download links at a CDN so only the misses reach the bucket.
   - Mark the bytes with ~1MB on the upload PUT, the download GET and the CDN's fetch from the bucket; Start upload must write the pending file to a durable store before answering 201, and every component needs two replicas.
 ---
 
@@ -42,13 +42,15 @@ tests in `problem.proschi` refer to them.
 - The average file is **1 MB**: write it on the steps that carry file bytes
   (`user -> blobs : ~1MB PUT …`, `user -> cdn : ~1MB GET …`, the CDN's
   fetch from the bucket), so transfer time and egress are counted.
-- Data leaving the bucket costs **$0.09 per GB**, data leaving the CDN
-  **$0.02 per GB**; a user's connection moves about 10 MB/s.
+- Data sent to users costs **$0.09 per GB** from the bucket or any other
+  component you run, **$0.02 per GB** from the CDN; copies inside the
+  system (the CDN filling from the bucket) are free. A user's connection
+  moves about 10 MB/s.
 
 ## Constraints
 
 - p99 of a folder listing and of a start upload under **200 ms**; of an
-  upload under **450 ms** and of a download under **500 ms**, transfer time
+  upload under **220 ms** and of a download under **200 ms**, transfer time
   included.
 - Every use case available **99.9%** of the time.
 - An upload is acknowledged only once its bytes are stored durably; a

@@ -13,8 +13,8 @@ traffic {
 }
 
 requirements {
-  p99 "Read feed" < 100ms
-  p99 "Publish post" < 150ms
+  p99 "Read feed" < 50ms
+  p99 "Publish post" < 90ms
   availability "Read feed" >= 99.9%
   durable "Publish post"
   survive any node failure

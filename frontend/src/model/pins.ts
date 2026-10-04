@@ -1,7 +1,22 @@
 import { componentCatalog } from '../catalog/componentCatalog';
 import { parse } from '../dsl/parser';
 import type { DiagramNode, Percentile } from '../dsl/types';
-import { DEFAULT_TIMEOUT_MS, HOT, PERCENTILE_FACTORS, analyze, hopLatency, replicatedAvailability, type Analysis, type NodeAnalysis } from '../sim/analyze';
+import {
+  DEFAULT_TIMEOUT_MS,
+  FAILOVER_SHARE,
+  HOT,
+  SERVICE_SPREAD,
+  analyze,
+  erlangC,
+  hopLatency,
+  hopMean,
+  hopModel,
+  hopQuantile,
+  primaryAvailability,
+  replicatedAvailability,
+  type Analysis,
+  type NodeAnalysis,
+} from '../sim/analyze';
 import { formatAvailability, formatMs, formatPercent, formatRps } from '../sim/format';
 import { profileOf, type Profile } from '../sim/profiles';
 import { runTests, type TestResult } from '../sim/tests';
@@ -17,7 +32,11 @@ import { runTests, type TestResult } from '../sim/tests';
  * - `profile|<Tech stack>.<field>`: a default profile (reads, writes, latency,
  *   availability, cost, bandwidth, egress, durable, consistency).
  * - `const|<name>`: a constant of the model (hot, queueCap, maxSlowdown,
- *   timeout, f50 … f999, slowdown@<utilisation>).
+ *   timeout, failover, spread, f50 … f999 (idle hop quantile ÷ mean),
+ *   slowdown@<utilisation> (one server), slowdown@<servers>@<utilisation>,
+ *   wait@<servers>@<utilisation> (Erlang C), tail99@<utilisation> (p99 ÷ mean
+ *   of one server), primary@<replicas> (a PostgreSQL primary's write
+ *   availability), catalog (number of tech stacks)).
  * - `<example id>|<path>`: a number from analysing a worked example whose
  *   source is in a `<pre data-example="<id>">` on the page; paths are
  *   `node.<id>.<field>`, `uc.<use case>.<field>`, `sc.<use case>.<scenario>.<field>`,
@@ -72,17 +91,30 @@ function constant(name: string): string {
   // hopLatency caps utilisation, so the slowdown at or past saturation is the largest there is.
   if (name === 'maxSlowdown') return `${Number(hopLatency(1, 10).toFixed(1))}×`;
   if (name === 'queueCap') return formatPercent(1 - 1 / hopLatency(1, 10));
+  const times = (x: number, digits = 1) => `${Number(x.toFixed(digits))}×`;
   const slowdown = /^slowdown@(\d+)$/.exec(name);
-  if (slowdown) return `${Number(hopLatency(1, Number(slowdown[1]) / 100).toFixed(1))}×`;
+  if (slowdown) return times(hopLatency(1, Number(slowdown[1]) / 100));
+  const pool = /^slowdown@(\d+)@(\d+)$/.exec(name);
+  if (pool) return times(hopLatency(1, Number(pool[2]) / 100, Number(pool[1])), 2);
+  const wait = /^wait@(\d+)@(\d+)$/.exec(name);
+  if (wait) return formatPercent(erlangC(Number(wait[1]), Number(wait[2]) / 100));
+  const tail = /^tail99@(\d+)$/.exec(name);
+  if (tail) {
+    const hop = hopModel(1, Number(tail[1]) / 100);
+    return times(hopQuantile(hop, 0.99) / hopMean(hop));
+  }
   const factor = /^f(\d+)$/.exec(name);
   if (factor) {
     const q = (factor[1] === '999' ? 99.9 : Number(factor[1])) as Percentile;
-    const f = PERCENTILE_FACTORS[q];
-    if (f === undefined) throw new Error(`Unknown percentile in a pin: ${name}`);
-    return `${f.toFixed(1)}×`;
+    if (![50, 90, 95, 99, 99.9].includes(q)) throw new Error(`Unknown percentile in a pin: ${name}`);
+    return times(hopQuantile(hopModel(1, 0), q / 100), 2);
   }
+  if (name === 'failover') return formatPercent(FAILOVER_SHARE);
+  if (name === 'spread') return formatPercent(SERVICE_SPREAD);
+  if (name === 'catalog') return String(componentCatalog.filter((c) => c.type !== 'group' && c.type !== 'text').length);
+  const primary = /^primary@(\d+)$/.exec(name);
+  if (primary) return formatAvailability(primaryAvailability(profileOf(profileNode('PostgreSQL')).availability, Number(primary[1])));
   if (name === 'sixServices') return formatAvailability(replicatedAvailability(profileOf(profileNode('REST API')).availability, 6));
-  if (name === 'timeoutP99') return formatMs(DEFAULT_TIMEOUT_MS * PERCENTILE_FACTORS[99]);
   throw new Error(`Unknown constant in a pin: ${name}`);
 }
 
@@ -90,7 +122,9 @@ function nodeField(n: NodeAnalysis, field: string): string {
   if (/utilization$/i.test(field)) return formatPercent(n[field as 'utilization']);
   if (/Rps$/.test(field)) return formatRps(n[field as 'loadRps']);
   if (field === 'latencyMs') return formatMs(n.latencyMs);
-  if (field === 'availability') return formatAvailability(n.availability);
+  if (field === 'availability' || field === 'writeAvailability') return formatAvailability(n[field]);
+  if (field === 'waitProbability') return formatPercent(n.waitProbability);
+  if (field === 'servers') return String(n.servers);
   if (field === 'costUsd' || field === 'egressUsd') return usd(n[field]);
   if (field === 'egressGbPerMonth') return gb(n.egressGbPerMonth);
   throw new Error(`Unknown node field in a pin: ${field}`);

@@ -111,6 +111,13 @@ describe('practice capacity rule', () => {
     expect(mixed.diagram.capacity?.find((c) => c.node === 'db')).toEqual({ node: 'db', shards: 2, loc: expect.anything() });
   });
 
+  it('does not let the solver shorten timeouts: a failure scenario would cost nothing', () => {
+    const q = findProblem('ticket-booking')!;
+    const timed = parseSolution(q, q.solution.replace('  db shards 2\n', '  db shards 2 timeout 1ms\n'));
+    expect(timed.diagnostics.map((d) => d.message)).toEqual([expect.stringContaining(CAPACITY_MESSAGE)]);
+    expect(timed.diagram.capacity?.find((c) => c.node === 'db')).toEqual({ node: 'db', shards: 2, loc: expect.anything() });
+  });
+
   it('does not touch the given capacity or regular documents', () => {
     const q = findProblem('payments')!;
     expect(parseSolution(q, q.solution).diagram.capacity).toEqual([expect.objectContaining({ node: 'gateway', rps: 5000, latencyMs: 250 })]);

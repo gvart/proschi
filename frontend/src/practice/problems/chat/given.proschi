@@ -14,7 +14,7 @@ traffic {
 }
 
 requirements {
-  p99 "Send message" < 150ms
+  p99 "Send message" < 100ms
   p99 "Load history" < 200ms
   availability "Send message" >= 99.95%
   durable "Send message"

@@ -14,8 +14,8 @@ traffic {
 }
 
 requirements {
-  p99 "View seats" < 150ms
-  p99 "Hold seat" < 200ms
+  p99 "View seats" < 50ms
+  p99 "Hold seat" < 130ms
   p99 "Confirm booking" < 1500ms
   durable "Hold seat"
   durable "Confirm booking"

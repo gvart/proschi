@@ -61,10 +61,46 @@ describe('nodes', () => {
     expect(node.type).toBe('database');
   });
 
-  it('warns on unknown tech and falls back to a rectangle', () => {
-    const { diagram, diagnostics } = parse('x [Cobol Mainframe]');
-    expect(diagram.nodes[0].techStack).toBe('Rectangle');
-    expect(diagnostics).toEqual([expect.objectContaining({ severity: 'warning', line: 1, col: 3, message: expect.stringContaining('Cobol') })]);
+  it.each([
+    ['S3', 'AWS S3', 'storage'],
+    ['amazon s3', 'AWS S3', 'storage'],
+    ['Postgres', 'PostgreSQL', 'database'],
+    ['PostgreSQL 16', 'PostgreSQL', 'database'],
+    ['redis 7.2', 'Redis', 'database'],
+    ['Route 53', 'AWS Route53', 'cdn'],
+    ['pubsub', 'GCP Pub/Sub', 'queue'],
+    ['NodeJS', 'Node.js', 'service'],
+    ['ALB', 'AWS Load Balancer', 'cdn'],
+    ['k8s', 'Kubernetes', 'container'],
+    ['Golang', 'Go', 'service'],
+  ])('resolves the alias [%s] to %s', (written, tech, type) => {
+    const { diagram, diagnostics } = parse(`n [${written}]`);
+    expect(diagnostics).toEqual([]);
+    expect(diagram.nodes[0]).toMatchObject({ techStack: tech, type });
+    expect(diagram.nodes[0].inferredKind).toBeUndefined();
+  });
+
+  it('keeps an unknown tech as written, simulated as the kind its name suggests, with a warning', () => {
+    const { diagram, diagnostics } = parse('x [Cobol Mainframe]\nl [TigerBeetle DB]\nq [Acme Queue]');
+    expect(diagram.nodes.map((n) => [n.techStack, n.type, n.inferredKind])).toEqual([
+      ['Cobol Mainframe', 'service', 'service'],
+      ['TigerBeetle DB', 'database', 'database'],
+      ['Acme Queue', 'queue', 'queue'],
+    ]);
+    expect(diagnostics).toEqual([
+      expect.objectContaining({ severity: 'warning', line: 1, col: 3, message: "Unknown tech stack 'Cobol Mainframe'; simulated as a generic service, like [Service]" }),
+      expect.objectContaining({ severity: 'warning', line: 2, message: "Unknown tech stack 'TigerBeetle DB'; simulated as a generic database, like [Database]" }),
+      expect.objectContaining({ severity: 'warning', line: 3, message: "Unknown tech stack 'Acme Queue'. Did you mean 'Message Queue'? Until then it is simulated as a generic queue" }),
+    ]);
+  });
+
+  it('suggests the closest catalog tech for a typo', () => {
+    const { diagram, diagnostics } = parse('db [Postgress]\nq [Kafak]');
+    expect(diagram.nodes[0]).toMatchObject({ techStack: 'Postgress', inferredKind: 'database' });
+    expect(diagnostics.map((d) => d.message)).toEqual([
+      "Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]",
+      "Unknown tech stack 'Kafak'. Did you mean 'Kafka'? Until then it is simulated as a generic queue, like [Message Queue]",
+    ]);
   });
 
   it('reads explicit positions, including negative ones', () => {

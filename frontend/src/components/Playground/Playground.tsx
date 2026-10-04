@@ -917,7 +917,9 @@ function DiagramView({
     // coverKey captures cover by value; fitKey changes when the pane is shown again.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [coverKey, fitKey]);
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef, inset });
+  // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
+  // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),

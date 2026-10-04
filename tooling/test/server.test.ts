@@ -50,14 +50,23 @@ describe('language server', () => {
   it('publishes the parser diagnostics when a file opens, and clears them when fixed', async () => {
     const opened = nextDiagnostics(uri);
     await connection.sendNotification('textDocument/didOpen', {
-      textDocument: { uri, languageId: 'proschi', version: 1, text: 'api [REST API]\napi [Redis]\ndb [Nope]\napi -> db\n' },
+      textDocument: { uri, languageId: 'proschi', version: 1, text: 'api [REST API]\napi [Redis]\ndb [Postgress]\napi -> db\n' },
     });
     const { diagnostics: found } = await opened;
     expect(found.map((d) => [d.range.start.line, d.severity, d.message])).toEqual([
       [1, 1, "Duplicate id 'api' (first declared on line 1)"],
-      [2, 2, "Unknown tech stack 'Nope'; drawing a Rectangle"],
+      [2, 2, "Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]"],
     ]);
     expect(found[0]).toMatchObject({ source: 'proschi', range: { start: { character: 0 }, end: { character: 3 } } });
+
+    // The unknown tech's quick fix puts the suggestion inside the brackets.
+    const actions = (await connection.sendRequest('textDocument/codeAction', {
+      textDocument: { uri },
+      range: found[1].range,
+      context: { diagnostics: [found[1]] },
+    })) as { title: string; edit: { changes: Record<string, { range: { start: { line: number; character: number }; end: { line: number; character: number } }; newText: string }[]> } }[];
+    expect(actions.map((a) => a.title)).toEqual(["Change to 'PostgreSQL'"]);
+    expect(actions[0].edit.changes[uri]).toEqual([{ range: { start: { line: 2, character: 4 }, end: { line: 2, character: 13 } }, newText: 'PostgreSQL' }]);
 
     const fixed = nextDiagnostics(uri);
     await connection.sendNotification('textDocument/didChange', {

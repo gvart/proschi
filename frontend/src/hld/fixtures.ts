@@ -108,7 +108,23 @@ const percentiles = (mean: number) => ({ p50: mean, p90: mean * 1.6, p95: mean *
 
 type NodeFixture = Omit<
   NodeAnalysis,
-  'shards' | 'readLoadRps' | 'writeLoadRps' | 'readCapacityRps' | 'writeCapacityRps' | 'readUtilization' | 'writeUtilization' | 'writeScaling' | 'egressGbPerMonth' | 'egressUsd'
+  | 'shards'
+  | 'readLoadRps'
+  | 'writeLoadRps'
+  | 'readCapacityRps'
+  | 'writeCapacityRps'
+  | 'readUtilization'
+  | 'writeUtilization'
+  | 'writeScaling'
+  | 'egressGbPerMonth'
+  | 'egressUsd'
+  | 'servers'
+  | 'waitProbability'
+  | 'writeAvailability'
+  | 'bandwidthUtilization'
+  | 'bandwidthLoadMBps'
+  | 'bandwidthCapacityMBps'
+  | 'requestUtilization'
 >;
 
 /** A node with all of its load counted as reads and no egress. */
@@ -123,6 +139,13 @@ const node = (n: NodeFixture): NodeAnalysis => ({
   writeScaling: 'replicas',
   egressGbPerMonth: 0,
   egressUsd: 0,
+  servers: n.replicas,
+  waitProbability: 0,
+  writeAvailability: n.availability,
+  bandwidthUtilization: 0,
+  bandwidthLoadMBps: 0,
+  bandwidthCapacityMBps: 0,
+  requestUtilization: n.utilization,
   ...n,
 });
 
@@ -144,6 +167,7 @@ export const shortenerAnalysis: Analysis = {
         { id: 'cache-miss', name: 'Cache miss', share: 0.1, meanMs: 25, percentiles: percentiles(25) },
       ],
       percentiles: percentiles(25),
+      tailScenario: { p50: 0, p90: 1, p95: 1, p99: 1, p999: 1 },
       availability: 0.9989,
     },
   ],

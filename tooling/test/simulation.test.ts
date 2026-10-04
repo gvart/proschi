@@ -72,7 +72,7 @@ describe('proschi test', () => {
     expect(shown).toBe(
       [
         '<dir>/items.proschi',
-        '  ✓ p99 of Read < 100 ms: p99 of Read is 75.8 ms (limit 100 ms)',
+        '  ✓ p99 of Read < 100 ms: p99 of Read is 89.3 ms (limit 100 ms)',
         '  ✗ survive any node failure (line 15): Losing api (REST API) breaks "Read" (and 1 more)',
         '      → Add a replica (x2 on api) or a fallback scenario in "Read" that calls api with -x and still completes',
         '  ✗ Reads go to the db (line 17): "Read" never responds 404; it answers 200',
@@ -142,13 +142,13 @@ describe('proschi analyze', () => {
         'Items (<dir>/items.proschi)',
         '',
         'Node  Kind      Replicas          Reads  Writes  Util  Latency  Availability  Egress/month  Cost/month',
-        'api   service          2  1k/4k rps 25%       -   25%  13.3 ms      99.9975%             -        $200',
+        'api   service          2  1k/4k rps 25%       -   25%  10.7 ms      99.9975%             -        $200',
         'db    database         1  1k/20k rps 5%       -    5%   5.3 ms        99.95%             -        $400',
         '',
         'Total cost: $600/month',
         '',
-        'Use case  Traffic      p50      p95      p99  p99.9  Availability',
-        'Read       1k rps  18.6 ms  37.2 ms  55.8 ms  93 ms       99.947%',
+        'Use case  Traffic      p50      p95      p99    p99.9  Availability',
+        'Read       1k rps  13.3 ms  32.8 ms  46.3 ms  65.7 ms       99.947%',
         '',
         'Single points of failure: db',
       ].join('\n'),
@@ -234,7 +234,7 @@ usecase "Upload" {
   api --> user : 201
 }
 usecase "Download" {
-  user -> api : GET /files/1
+  user -> api : ~1MB GET /files/1
   api -> db : SELECT file
   api -> blobs : ~1MB GET file
   api --> user : 200
@@ -245,11 +245,13 @@ usecase "Download" {
     expect(r.code).toBe(0);
     const row = (id: string) => r.out.split('\n').find((l) => l.startsWith(`${id} `))!.split(/\s{2,}/);
     expect(row('db')).toEqual(['db', 'database', '2x3 shards', '1k/120k rps 1%', '3k/15k rps 20%', '20%', '6.3 ms', '99.999975%', '-', '$2,400']);
-    expect(row('blobs')).toEqual(['blobs', 'storage', '2', '1k/10k rps 10%', '3k/10k rps 30%', '40%', '50 ms', '99.999999%', '$233,280 (2,592 TB)', '$233,380']);
+    // The bucket only talks to the API, inside the system; the API's answers to users are the egress.
+    expect(row('blobs')).toEqual(['blobs', 'storage', '2', '1k/10k rps 10%', '3k/10k rps 30%', '40%', '35.7 ms', '99.999999%', '-', '$100']);
+    expect(row('api')).toContain('$233,280 (2,592 TB)');
     expect(r.out).toMatch(/Total cost: \$[\d,]+\/month \(\$233,280\/month of it egress\)/);
   });
 
-  it('hovers show reads and writes and egress when a node has both', () => {
+  it('hovers show reads and writes, and egress', () => {
     const source = `user [Actor]
 api [REST API] x2
 blobs [AWS S3] x2
@@ -260,7 +262,7 @@ traffic {
   "Put" 100 rps
 }
 usecase "Get" {
-  user -> api : GET /f
+  user -> api : ~1MB GET /f
   api -> blobs : ~1MB GET f
   api --> user : 200
 }
@@ -272,7 +274,7 @@ usecase "Put" {
 `;
     const text = nodeSimulation(parse(source).diagram, 'blobs')!;
     expect(text).toContain('Reads 100 rps of 10k rps (1%) · writes 100 rps of 10k rps (1%)');
-    expect(text).toContain('of it egress, 259.2 TB)');
+    expect(nodeSimulation(parse(source).diagram, 'api')!).toContain('of it egress, 259.2 TB)');
   });
 
   it('runs the requirements and tests written in the file', () => {

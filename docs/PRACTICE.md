@@ -171,7 +171,8 @@ One part stays with the solver: `shards <n>`. How many shards a store is split
 into is a design decision (each shard is a full set of replicas, and costs
 like one), so `capacity { db shards 2 }` in the solver's file is accepted and
 used. Everything else (rates, latency, availability, cost, durability,
-consistency, bandwidth, egress) belongs to the problem. Regular documents in
+consistency, bandwidth, egress, timeout) belongs to the problem: a solver who
+set `timeout 1ms` would pass every failure scenario. Regular documents in
 the editor and `proschi check`/`proschi test` are not affected.
 
 ## Calibrating a problem

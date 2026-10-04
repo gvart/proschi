@@ -82,15 +82,15 @@ describe('latency requirements', () => {
   const traffic = (rps: number) => ({ traffic: [{ useCase: 'Read', rps }] });
 
   it('passes under the limit and states the value and limit', () => {
-    // p99 = 3 × (20 + 5 / 0.95) = 75.79 ms
+    // Fixed halves 5 + 2.5; tails 15 (api at 50%) + 2.76 (db): p99 = 7.5 + 17.76 × ln 100 = 89.3 ms
     const r = req(READ, { kind: 'latency', percentile: 99, useCase: 'Read', maxMs: 100 }, traffic(1000));
-    expect(r).toMatchObject({ passed: true, message: 'p99 of Read is 75.8 ms (limit 100 ms)' });
+    expect(r).toMatchObject({ passed: true, message: 'p99 of Read is 89.3 ms (limit 100 ms)' });
   });
 
   it('fails over the limit with a hint naming the slowest hop', () => {
     const r = req(READ, { kind: 'latency', percentile: 99, useCase: 'Read', maxMs: 50 }, traffic(1000));
     expect(r.passed).toBe(false);
-    expect(r.message).toBe('p99 of Read is 75.8 ms (limit 50 ms)');
+    expect(r.message).toBe('p99 of Read is 89.3 ms (limit 50 ms)');
     expect(r.hint).toContain('api (REST API) at 20 ms');
   });
 
@@ -136,11 +136,12 @@ usecase "Get" {
     api --> client : 200
   }
 }`;
-    const r = req(src, { kind: 'latency', percentile: 99, useCase: 'Get', maxMs: 20 }, {
+    const r = req(src, { kind: 'latency', percentile: 99, useCase: 'Get', maxMs: 100 }, {
       traffic: [{ useCase: 'Get', rps: 1, mix: [{ scenario: 'Fast', share: 0.9 }, { scenario: 'Slow', share: 0.1 }] }],
+      capacity: [{ node: 'db', latencyMs: 100 }],
     });
     expect(r.passed).toBe(false);
-    expect(r.hint).toMatch(/^The "Slow" path \(10% of traffic\) sets p99\. Its slowest hop is api/);
+    expect(r.hint).toMatch(/^The "Slow" path \(10% of traffic\) sets p99\. Its slowest hop is db/);
   });
 
   it('checks every use case with traffic when no use case is named', () => {
@@ -160,7 +161,7 @@ usecase "Idle" {
     expect(ok.message).toMatch(/^All 2 use cases hold; p50 of Read is .* ms, p50 of Write is .* ms \(limit 100 ms\)$/);
     const bad = req(src, { kind: 'latency', percentile: 50, maxMs: 10 }, both);
     expect(bad.passed).toBe(false);
-    expect(bad.message).toMatch(/^p50 of Read is 16.\d ms; p50 of Write is 16.\d ms \(limit 10 ms\)$/);
+    expect(bad.message).toMatch(/^p50 of Read is 13.\d ms; p50 of Write is 13.\d ms \(limit 10 ms\)$/);
   });
 
   it('fails when nothing has traffic or the use case does not exist', () => {
@@ -170,7 +171,7 @@ usecase "Idle" {
   });
 
   it('measures a named use case without traffic and says so', () => {
-    expect(req(READ, { kind: 'latency', percentile: 50, useCase: 'Read', maxMs: 100 }).message).toBe('p50 of Read is 15 ms with no traffic (limit 100 ms)');
+    expect(req(READ, { kind: 'latency', percentile: 50, useCase: 'Read', maxMs: 100 }).message).toBe('p50 of Read is 12.7 ms with no traffic (limit 100 ms)');
   });
 });
 
@@ -278,6 +279,47 @@ describe('survive requirement (failure injection)', () => {
     const r = req(READ, { kind: 'survive', target: { node: 'api' } }, { replicas: { api: 2, db: 2 }, traffic: [{ useCase: 'Read', rps: 3000 }] });
     expect(r).toMatchObject({ passed: false, message: 'Losing one of 2 api replicas leaves 2k rps for 3k rps (150%)' });
     expect(r.hint).toContain('x3');
+  });
+
+  it('re-checks the latency requirements that held, with one replica fewer', () => {
+    // 1.8k rps on 2 × 2k api replicas (45%): p99 is about 54 ms. One replica at 90% takes 100 ms on average.
+    const extras = { replicas: { api: 2, db: 2 }, traffic: [{ useCase: 'Read', rps: 1800 }] };
+    const latency = { kind: 'latency', percentile: 99, useCase: 'Read', maxMs: 100, loc: at(8) } as const;
+    const results = runTests(diagramOf(READ, { ...extras, requirements: [latency, { kind: 'survive', target: 'any', loc: at(9) }] }));
+    expect(results[0].passed).toBe(true);
+    expect(results[1].passed).toBe(false);
+    expect(results[1].message).toMatch(/^Losing one of 2 api replicas breaks a latency limit: p99 of Read is \d+ ms \(limit 100 ms\)$/);
+    expect(results[1].hint).toContain('Add a replica to api (REST API) (x3)');
+    // A limit the healthy design already misses is that requirement's failure, not survive's.
+    const missed = runTests(diagramOf(READ, { ...extras, requirements: [{ ...latency, maxMs: 10 }, { kind: 'survive', target: 'any', loc: at(9) }] }));
+    expect(missed.map((r) => r.passed)).toEqual([false, true]);
+  });
+
+  it('loses one replica of one shard of a sharded store: that shard is the bottleneck', () => {
+    const src = `
+client [Actor]
+db [DynamoDB] x2
+usecase "Read" {
+  client -> db : GetItem
+}`;
+    // 120k reads over 4 shards of 2 × 20k: 75%. A shard down to one replica gets its 30k on 20k.
+    const r = req(src, { kind: 'survive', target: { node: 'db' } }, { capacity: [{ node: 'db', shards: 4 }], traffic: [{ useCase: 'Read', rps: 120_000 }] });
+    expect(r).toMatchObject({ passed: false, message: 'Losing one of the 2 replicas of a db shard leaves that shard 20k rps for 30k rps (150%)' });
+  });
+
+  it('fails a single-primary store over to a replica: writes keep their primary, reads lose a replica', () => {
+    const src = `
+client [Actor]
+db [PostgreSQL] x2
+usecase "Write" {
+  client -> db : INSERT row
+}`;
+    // 4k writes on the 5k primary; whichever instance goes, a primary is left.
+    expect(req(src, { kind: 'survive', target: { node: 'db' } }, { traffic: [{ useCase: 'Write', rps: 4000 }] }).passed).toBe(true);
+    // A single instance has nothing to fail over to.
+    expect(req(src.replace(' x2', ''), { kind: 'survive', target: { node: 'db' } }, { traffic: [{ useCase: 'Write', rps: 4000 }] }).message).toBe(
+      'Losing db (PostgreSQL) breaks "Write"',
+    );
   });
 
   it('passes for a single-replica node with a fallback scenario', () => {

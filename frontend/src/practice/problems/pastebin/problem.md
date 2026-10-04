@@ -7,7 +7,7 @@ hints:
   - Pastes can be 10 MB and add up to 80 TB. Which kind of store is built for large blobs, and what is left for the database?
   - Reads come in bursts for the same link, and a popular paste must load in 30 ms. What can answer them before they reach your servers at all?
   - "Look up the paste row first: it tells you whether the paste expired, so an expired read never fetches the text."
-  - "Write ~10KB on the steps that carry the text. Each read that reaches object storage pays $0.09/GB of egress; one the CDN answers pays $0.02/GB. The \"Not cached\" path sets p99 (9% of reads): it pays the CDN, the API, the database and object storage (~30 ms) one after the other."
+  - "Write ~10KB on the steps that carry the text. Text the CDN sends to readers costs $0.02/GB; sent by your API it would cost $0.09/GB. The \"Not cached\" path (9% of reads) decides p99: it waits for the CDN, the API, the database and object storage (~30 ms) one after the other."
 ---
 
 Design a service where people paste a block of text (a log, a stack
@@ -39,12 +39,13 @@ tests in `problem.proschi` refer to them.
   up to about 80 TB.
 - 5k reads a second of 10 KB each send about **130 TB a month** to readers.
   Put the size on every step that carries the text (`~10KB`), so the
-  simulation counts its transfer time and egress: data leaving object
-  storage costs **$0.09/GB**, data leaving a CDN **$0.02/GB**.
+  simulation counts its transfer time and egress: data sent to readers
+  costs **$0.02/GB** from a CDN and **$0.09/GB** from anything else you
+  run; copies inside the system (object storage to your API) are free.
 
 ## Constraints
 
-- p99 of a read under **200 ms**, of creating a paste under **300 ms**.
+- p99 of a read under **100 ms**, of creating a paste under **300 ms**.
 - A popular paste (`"Cached"`) loads in under **30 ms** at p99: only an
   edge close to the reader is that fast.
 - Reads available **99.9%** of the time.

@@ -1,5 +1,6 @@
 import {
   ASSERTIONS,
+  DID_YOU_MEAN,
   KEYWORDS,
   addConnection,
   componentCatalog,
@@ -103,6 +104,8 @@ export interface CompletionItem {
   snippet?: string;
   /** Text to insert when it differs from the label (tech stacks close their bracket). */
   insertText?: string;
+  /** Text the client filters on when it differs from the label: a tech stack and its aliases. */
+  filterText?: string;
   /** Range the item replaces. */
   range: Range;
 }
@@ -117,13 +120,17 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
   if (tech) {
     const closed = line[pos.character] === ']';
     const range = { start: { line: pos.line, character: pos.character - tech[1].length }, end: pos };
-    return componentCatalog.map((c) => ({
-      label: c.techStack,
-      kind: 'tech' as const,
-      detail: c.category,
-      insertText: closed ? c.techStack : `${c.techStack}]`,
-      range,
-    }));
+    return componentCatalog.map((c) => {
+      const aliases: readonly string[] = 'aliases' in c ? c.aliases : [];
+      return {
+        label: c.techStack,
+        kind: 'tech' as const,
+        detail: aliases.length ? `${c.category} · also ${aliases.slice(0, 3).join(', ')}` : c.category,
+        insertText: closed ? c.techStack : `${c.techStack}]`,
+        ...(aliases.length ? { filterText: [c.techStack, ...aliases].join(' ') } : {}),
+        range,
+      };
+    });
   }
   if (inLabel(before)) return [];
 
@@ -316,8 +323,24 @@ export interface TextEdit {
 
 const MISSING_CONNECTION = /^No connection between '\w+' and '\w+' in the architecture; add '(\w+) -> (\w+)'$/;
 
-/** A quick fix for a parser diagnostic, if it has one: the missing-connection warning adds the connection. */
-export function quickFix(analysis: Analysis, message: string): { title: string; edit: TextEdit } | null {
+/**
+ * A quick fix for a parser diagnostic, if it has one: the missing-connection
+ * warning adds the connection; an unknown tech stack with a "did you mean"
+ * replaces the text in its brackets (`range` is the diagnostic's, which
+ * covers `[…]`).
+ */
+export function quickFix(analysis: Analysis, message: string, range?: Range): { title: string; edit: TextEdit } | null {
+  const tech = message.match(DID_YOU_MEAN);
+  if (tech && range) {
+    const line = analysis.lines[range.start.line] ?? '';
+    const open = line.indexOf('[', range.start.character);
+    const close = open < 0 ? -1 : line.indexOf(']', open);
+    if (open < 0 || close < 0) return null;
+    return {
+      title: `Change to '${tech[2]}'`,
+      edit: { range: { start: { line: range.start.line, character: open + 1 }, end: { line: range.start.line, character: close } }, newText: tech[2] },
+    };
+  }
   const m = message.match(MISSING_CONNECTION);
   if (!m) return null;
   const [, from, to] = m;

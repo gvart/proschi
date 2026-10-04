@@ -78,6 +78,10 @@ export interface LoadRow {
   writeUtilization: number;
   /** `shards`: writes go to one primary per shard (relational databases). */
   writeScaling: 'replicas' | 'shards';
+  /** Payload bandwidth used and available, MB/s, and their ratio (§7.3); `utilization` is the larger of this and the request utilisation. */
+  bandwidthLoadMBps: number;
+  bandwidthCapacityMBps: number;
+  bandwidthUtilization: number;
   /** Data leaving the node per month and what it costs (§7.3); included in `costUsd`. */
   egressGbPerMonth: number;
   egressUsd: number;
@@ -354,6 +358,9 @@ export function hld(diagram: Diagram, analysis?: Analysis, tests: TestResult[] =
       writeCapacityRps: n.writeCapacityRps,
       writeUtilization: n.writeUtilization,
       writeScaling: n.writeScaling,
+      bandwidthLoadMBps: n.bandwidthLoadMBps,
+      bandwidthCapacityMBps: n.bandwidthCapacityMBps,
+      bandwidthUtilization: n.bandwidthUtilization,
       egressGbPerMonth: n.egressGbPerMonth,
       egressUsd: n.egressUsd,
       costUsd: n.costUsd,
@@ -429,7 +436,16 @@ export function hld(diagram: Diagram, analysis?: Analysis, tests: TestResult[] =
   for (const n of load) {
     const pct = `${Math.round(n.utilization * 100)}%`;
     if (n.saturated) {
-      risks.push({ severity: 'high', kind: 'saturated', title: `${n.name} is saturated`, detail: `${formatRps(n.loadRps)} against a capacity of ${formatRps(n.capacityRps)} (${pct})`, hint: 'Add replicas, cache in front of it, or move work async.' });
+      const bandwidth = n.bandwidthUtilization >= n.utilization && n.bandwidthUtilization > 0;
+      risks.push({
+        severity: 'high',
+        kind: 'saturated',
+        title: `${n.name} is saturated`,
+        detail: bandwidth
+          ? `${Math.round(n.bandwidthLoadMBps).toLocaleString('en-US')} MB/s of payloads against ${Math.round(n.bandwidthCapacityMBps).toLocaleString('en-US')} MB/s of bandwidth (${pct})`
+          : `${formatRps(n.loadRps)} against a capacity of ${formatRps(n.capacityRps)} (${pct})`,
+        hint: bandwidth ? 'Send the bytes around it (presigned URLs to storage, a CDN), or add replicas.' : 'Add replicas, cache in front of it, or move work async.',
+      });
     } else if (n.utilization > HOT_UTILIZATION) {
       risks.push({ severity: 'medium', kind: 'hot', title: `${n.name} runs hot`, detail: `${pct} utilisation; latency climbs steeply near saturation`, hint: 'Add headroom with another replica.' });
     }

@@ -1,4 +1,4 @@
-import type { ComponentType, TechStack } from '../types/canvas';
+import type { ComponentType, TechName } from '../types/canvas';
 
 // Use case steps, as the parser produces them and the player animates them.
 export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
@@ -63,7 +63,14 @@ export interface DiagramNode {
   kind: DiagramNodeKind;
   name: string;
   type: ComponentType;
-  techStack: TechStack;
+  /** A catalog tech stack, or the text of an unknown one (then `inferredKind` is set). */
+  techStack: TechName;
+  /**
+   * Set only when the tech is not in the catalog: the kind the simulation
+   * gives the node, guessed from words in the tech's name (`service` when
+   * nothing matches). The parser warns about such a node.
+   */
+  inferredKind?: Kind;
   ownerTeam?: string;
   description?: string;
   /** Id of the enclosing `group`, if any. */
@@ -211,8 +218,10 @@ export interface CapacityOverride {
   consistency?: 'strong' | 'eventual';
   /** Network bandwidth per replica in megabytes per second (§7.3). */
   bandwidthMBps?: number;
-  /** Egress price in USD per GB (§7.3). */
+  /** Internet egress price in USD per GB (§7.3). */
   egressUsdPerGb?: number;
+  /** `timeout <duration>`: what a failed call (`-x`) to this node costs; 1 000 ms by default. */
+  timeoutMs?: number;
   loc: SourceLoc;
 }
 

@@ -135,7 +135,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
       // A small ComponentNode: card, coloured icon tile, name and tech stack.
       `<rect x="${r(x - w / 2 + 1)}" y="${r(headerTop + 1)}" width="${r(w - 2)}" height="${HEADER_HEIGHT - 2}" rx="8" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
       node ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${typeColor(node.type)}"/>` : '',
-      node ? techIcon(node.techStack, x - w / 2 + 15, headerTop + 16, 14, '#ffffff') : '',
+      node ? techIcon(node.techStack, x - w / 2 + 15, headerTop + 16, 14, '#ffffff', node.type) : '',
       text(x - w / 2 + (node ? 42 : 12), headerTop + (p.tech ? 20 : 28), fit(p.name, w - (node ? 50 : 20), 13, true), { size: 13, weight: 600 }),
       p.tech ? text(x - w / 2 + 42, headerTop + 36, fit(p.tech, w - 50, 11), { size: 11, fill: COLORS.muted }) : '',
       '</g>',

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze } from './analyze';
+import { analyze, hopMean, hopModel, mixtureQuantile, pathQuantile, type PathModel } from './analyze';
 import { runTests } from './tests';
 import { diagramOf, type Extras } from './testDiagram';
 
@@ -159,23 +159,36 @@ describe('URL shortener', () => {
     expect(node('api').utilization).toBeCloseTo(10_100 / 32_000);
     expect(node('cache').loadRps).toBeCloseTo(9000 + 1000 + 1000);
     expect(node('db').loadRps).toBeCloseTo(1000 + 100);
-    const lb = 2 / (1 - 10_100 / 200_000);
-    const api = 10 / (1 - 10_100 / 32_000);
-    const cache = 1 / (1 - 11_000 / 200_000);
+    // M/M/c per node: lb x2, api x16, cache x2 (one shard each).
+    const lbHop = hopModel(2, 10_100 / 200_000, 2);
+    const apiHop = hopModel(10, 10_100 / 32_000, 16);
+    const cacheHop = hopModel(1, 11_000 / 200_000, 2);
+    const [lb, api, cache] = [lbHop, apiHop, cacheHop].map(hopMean);
     // 1k reads on 2 × 20k, 100 writes on one 5k primary: the busier side counts.
     expect(node('db')).toMatchObject({ readLoadRps: 1000, writeLoadRps: 100, readCapacityRps: 40_000, writeCapacityRps: 5000 });
     expect(node('db').utilization).toBeCloseTo(Math.max(1000 / 40_000, 100 / 5000));
-    const db = 5 / (1 - 1000 / 40_000);
+    // Reads are the busier side, queued on both replicas.
+    const dbHop = hopModel(5, Math.max(1000 / 40_000, 100 / 5000), 2);
+    const db = hopMean(dbHop);
     const redirect = analysis.useCases.find((u) => u.name === 'Redirect')!;
     expect(redirect.scenarios[0].meanMs).toBeCloseTo(lb + api + cache);
     expect(redirect.scenarios[1].meanMs).toBeCloseTo(lb + api + cache + db + cache);
     expect(redirect.scenarios[2]).toMatchObject({ name: 'Cache down', share: 0 });
-    // 10% misses carry more than the 1% tail, so the miss path sets p99.
-    expect(redirect.percentiles.p99).toBeCloseTo(3 * (lb + api + cache + db + cache));
-    expect(redirect.percentiles.p50).toBeCloseTo(lb + api + cache);
+    // p99 is the 90/10 mixture of hit and miss paths: between the miss path's p90 and its p99.
+    const item = (h: { fixedMs: number; tailMs: number }) => [{ fixedMs: h.fixedMs, tailMs: h.tailMs }];
+    const hit: PathModel = { parts: [item(lbHop), item(apiHop), item(cacheHop)] };
+    const miss: PathModel = { parts: [...hit.parts, item(dbHop), item(cacheHop)] };
+    const mix = [
+      { share: 0.9, path: hit },
+      { share: 0.1, path: miss },
+    ];
+    expect(redirect.percentiles.p99).toBeCloseTo(mixtureQuantile(mix, 0.99), 6);
+    expect(redirect.percentiles.p99).toBeGreaterThan(pathQuantile(miss, 0.9));
+    expect(redirect.percentiles.p99).toBeLessThan(pathQuantile(miss, 0.99));
+    expect(redirect.percentiles.p50).toBeCloseTo(mixtureQuantile(mix, 0.5), 6);
     expect(analysis.totalCostUsd).toBe(2 * 50 + 16 * 100 + 2 * 150 + 2 * 400);
 
-    expect(byName(results)['p99 of Redirect < 100 ms'].message).toBe('p99 of Redirect is 71.9 ms (limit 100 ms)');
+    expect(byName(results)['p99 of Redirect < 100 ms'].message).toBe(`p99 of Redirect is ${Number(mixtureQuantile(mix, 0.99).toPrecision(3))} ms (limit 100 ms)`);
   });
 
   it('flags the cache as a single point of failure without its fallback scenario', () => {

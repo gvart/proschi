@@ -150,7 +150,7 @@ describe('hld without simulation', () => {
 });
 
 describe('capacity: reads, writes and egress', () => {
-  // A single-primary store with shards, and a bucket whose downloads leave as egress (§7.2, §7.3).
+  // A single-primary store with shards, and an API whose downloads leave as egress and fill its bandwidth (§7.2, §7.3).
   const source = `title "Uploads"
 user  "User"    [Actor]
 api   "API"     [REST API]   x4
@@ -173,7 +173,7 @@ usecase "Upload" {
   api --> user : 201
 }
 usecase "Download" {
-  user -> api : GET /files/1
+  user -> api : ~1MB GET /files/1
   api -> db : SELECT file
   api -> blobs : ~1MB GET file
   api --> user : 200
@@ -195,16 +195,22 @@ usecase "Download" {
       egressGbPerMonth: 0,
     });
     expect(row('db').writeUtilization).toBeCloseTo(0.2);
-    // 1k rps × 1 MB × 2 592 000 s = 2 592 000 GB at $0.09/GB.
-    expect(row('blobs').egressGbPerMonth).toBeCloseTo(2_592_000);
-    expect(row('blobs').egressUsd).toBeCloseTo(233_280);
+    // The API sends 1k rps × 1 MB × 2 592 000 s = 2 592 000 GB to users at $0.09/GB;
+    // what the bucket sends the API stays inside and is free.
+    expect(row('api').egressGbPerMonth).toBeCloseTo(2_592_000);
+    expect(row('api').egressUsd).toBeCloseTo(233_280);
+    expect(row('blobs').egressUsd).toBe(0);
+    // 3k uploads and 1k downloads of 1 MB pass through it twice (in and out): 5,000 MB/s on 4 × 200 MB/s.
+    expect(row('api')).toMatchObject({ bandwidthLoadMBps: 5000, bandwidthCapacityMBps: 800, saturated: true });
+    expect(section(doc, 'risks')!.risks.find((r) => r.title === 'API is saturated')?.detail).toBe('5,000 MB/s of payloads against 800 MB/s of bandwidth (625%)');
     expect(section(doc, 'capacity')!.totalEgressUsd).toBeCloseTo(233_280);
   });
 
   it('renders the split in Markdown and HTML', () => {
     const md = toMarkdown(doc);
     expect(md).toContain('| Meta DB | 1k rps of 120k rps (0.8%) | 3k rps of 15k rps (20%) | 20% | 2 × 3 shards | — | $2,400 |');
-    expect(md).toContain('| Blobs | 1k rps of 10k rps (10%) | 3k rps of 10k rps (30%) | 40% | 2 | 2,592 TB, $233,280 | $233,380 |');
+    expect(md).toContain('| Blobs | 1k rps of 10k rps (10%) | 3k rps of 10k rps (30%) | 40% | 2 | — | $100 |');
+    expect(md).toMatch(/\| API \| .* \| 2,592 TB, \$233,280 \| \$233,680 \|/);
     expect(md).toMatch(/\*\*Total cost:\*\* \$[\d,]+ \/ month \(\$233,280 of it egress\)/);
     const html = toHtml(doc);
     expect(html).toContain('<td>3k rps of 15k rps (20%)</td>');

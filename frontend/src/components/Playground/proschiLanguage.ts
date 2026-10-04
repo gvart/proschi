@@ -28,7 +28,7 @@ export const SECTION_HEADER = new RegExp(
 export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
 /** Words with a meaning inside section blocks (docs/LANGUAGE.md, "High-level design"). */
 const SECTION_WORDS =
-  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
 /** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
 const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?/;
 /** `x200` (fan-out) and `~2MB` (payload size) at the start of a step label (§7.3). */
@@ -98,16 +98,18 @@ export const proschiStreamParser: StreamParser<LexState> = {
 /** Syntax highlighting for Proschi documents. */
 export const proschiLanguage = StreamLanguage.define(proschiStreamParser);
 
-const techOptions: Completion[] = componentCatalog.map((c) => ({
-  label: c.techStack,
-  type: 'type',
-  detail: c.category,
-  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
-    const closed = view.state.sliceDoc(to, to + 1) === ']';
-    const insert = closed ? c.techStack : `${c.techStack}]`;
-    view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length + (closed ? 1 : 0) } });
-  },
-}));
+/** Inserts `tech` and closes the bracket unless it already is. */
+const applyTech = (tech: string) => (view: EditorView, _completion: Completion, from: number, to: number) => {
+  const closed = view.state.sliceDoc(to, to + 1) === ']';
+  const insert = closed ? tech : `${tech}]`;
+  view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length + (closed ? 1 : 0) } });
+};
+
+/** Every catalog tech, and each alias (`S3`, `Postgres`) inserting the tech it stands for. */
+const techOptions: Completion[] = componentCatalog.flatMap((c) => [
+  { label: c.techStack, type: 'type', detail: c.category, apply: applyTech(c.techStack) },
+  ...('aliases' in c ? c.aliases : []).map((alias: string) => ({ label: alias, type: 'type', detail: `→ ${c.techStack}`, boost: -1, apply: applyTech(c.techStack) })),
+]);
 
 const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },

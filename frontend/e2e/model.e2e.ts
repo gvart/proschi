@@ -22,8 +22,8 @@ test.describe('simulation page', () => {
     for (const name of ['What is modelled', 'Worked examples', 'What is not modelled', 'How to read the results', 'Practice verdicts']) {
       await expect(page.getByRole('heading', { level: 2, name })).toBeVisible();
     }
-    await expect(page.getByRole('region', { name: 'Default profiles' }).getByRole('row')).toHaveCount(17);
-    await expect(page.getByText('p99 of Read feed is 97 ms (limit 150 ms)')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Default profiles' }).getByRole('row')).toHaveCount(18);
+    await expect(page.getByText('p99 of Read feed is 38.6 ms (limit 60 ms)')).toBeVisible();
     // Snippets are highlighted.
     await expect(page.locator('pre[data-example="feed"] code span').first()).toBeAttached();
 

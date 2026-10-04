@@ -32,6 +32,54 @@ deployed from `main` and ships with the same changes.
   number on the page from the simulation code. Linked from the landing page,
   the editor's Analysis and Tests tabs and the practice test panel
   ("How is this calculated?").
+- The tech catalog knows about 205 tech stacks instead of 110, with the names
+  people write as aliases: `[S3]`, `[GCS]`, `[Azure Blob]`, `[MinIO]`,
+  `[Postgres]`, `[CockroachDB]`, `[ScyllaDB]`, `[Valkey]`, `[Kinesis]`,
+  `[Pub/Sub]`, `[OpenSearch]`, `[Fastly]`, `[ALB]`, `[nginx]`, `[Kong]`,
+  `[Spring Boot]`, `[Go]`, `[Node.js]`, `[Kubernetes]`, `[Snowflake]`,
+  `[ClickHouse]`, `[Stripe]`, … and a generic tech per kind (`[Service]`,
+  `[Database]`, `[Message Queue]`, `[Object Storage]`, `[WAF]`, …). Matching
+  ignores case, spaces, punctuation and a trailing version (`[PostgreSQL 16]`).
+  The editor's and the language server's completion list the whole catalog and
+  filter on aliases.
+- The language server offers a quick fix for an unknown tech stack: replace it
+  with the closest catalog tech.
+- `capacity { db timeout 250ms }`: what a failed call (`-x`) to a node costs
+  (1 000 ms by default).
+
+### Changed
+- An unknown tech stack no longer becomes a free, infinitely fast client. The
+  node keeps the name you wrote and is simulated as the kind its name suggests
+  (`[TigerBeetle DB]` is a database), else the kind of the closest catalog tech
+  (`[Postgress]`), else a service. It is still a warning, so existing diagrams
+  keep working, and the warning names the closest known tech.
+- Latency percentiles: each hop is a fixed half of its service time plus an
+  exponential tail for the rest of its mean, so the tail widens as a node fills
+  up (an idle hop's p99 is 2.8× its mean). Timeouts and transfer time add once
+  instead of being multiplied by the tail factor.
+- A use case's percentile is now the percentile of its scenarios mixed by their
+  shares, instead of one scenario's: it no longer jumps when a share crosses
+  1 − q. With 10% cache misses, p99 is close to the miss path's p90.
+- Queueing is M/M/c (Erlang C) over a shard's replicas, so large pools are no
+  longer penalised; writes that bind a single-primary store queue for its one
+  primary.
+- `survive` analyses the design again with one instance fewer and also
+  re-checks the latency requirements that held. On a sharded store it takes one
+  replica from one shard, and a single-primary store fails over to a replica.
+- Writes to a single-primary store depend on its primary: with a replica,
+  failover loses a tenth of each outage (PostgreSQL with replicas: 99.995% for
+  writes instead of 99.99999%).
+- Egress is charged on payloads a node you run sends to clients and third
+  parties: $0.09/GB from anything, $0.02/GB from a CDN. Services answering
+  users now pay; storage answering your own services or a CDN no longer does.
+- Nodes you run saturate on bandwidth as well as on requests; object storage
+  and CDNs scale out. A fan-out of N moves N payloads.
+- Failed calls (`-x`) add no load or egress to their target.
+- The practice problems are recalibrated: latency limits set against the old,
+  inflated tail are tightened to keep their margin over the reference
+  solutions (chat, file storage, news feed, pastebin, rate limiter, ride
+  matching, search autocomplete, ticket booking, URL shortener, video
+  streaming), and the statements explain egress as data sent to users.
 
 ### Fixed
 - On phones, switching back from Code to Diagram re-fits the diagram once the

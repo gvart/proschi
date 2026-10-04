@@ -36,7 +36,7 @@ Use these names exactly: the traffic, requirements and tests in
 
 ## Constraints
 
-- p99 of a call under **200 ms**, including the limit check.
+- p99 of a call under **150 ms**, including the limit check.
 - Available **99.9%** of the time.
 - Losing any single machine must not take the API down.
 - Nothing reaches the Orders API without passing the limiter: no connection

@@ -47,7 +47,7 @@ tests in `problem.proschi` refer to them.
 
 ## Constraints
 
-- p99 of a suggestion under **100 ms**; of a search under **300 ms**.
+- p99 of a suggestion under **50 ms**; of a search under **300 ms**.
 - Suggestions available **99.95%** of the time.
 - The search cluster is sized for searches only (about 9k rps); suggestions
   must never reach it, nor any database.

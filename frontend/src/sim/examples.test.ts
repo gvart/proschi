@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { examples } from '../dsl/examples';
 import { parse } from '../dsl/parser';
-import { analyze } from './analyze';
+import { analyze, hopLatency } from './analyze';
 import { runTests } from './tests';
 
 /** The bundled url-shortener example, parsed for real, holds up under its own traffic. */
@@ -22,7 +22,9 @@ describe('bundled url-shortener example', () => {
     // 100k redirects + 1k shortens enter through the load balancer and the API.
     expect(node('lb')).toMatchObject({ replicas: 3, capacityRps: 300_000, loadRps: 101_000 });
     expect(node('api')).toMatchObject({ replicas: 12, capacityRps: 240_000, loadRps: 101_000 });
-    expect(node('api').latencyMs).toBeCloseTo(4 / (1 - 101_000 / 240_000));
+    // Twelve replicas queue as one M/M/12 pool: barely above the 4 ms base at 42%.
+    expect(node('api').latencyMs).toBeCloseTo(hopLatency(4, 101_000 / 240_000, 12), 10);
+    expect(node('api').latencyMs).toBeLessThan(4.1);
     // Every redirect reads the cache, misses write it back: 100k + 9k, on 2 × 150k.
     expect(node('cache').capacityRps).toBe(300_000);
     expect(node('cache').loadRps).toBeCloseTo(109_000);
@@ -36,11 +38,13 @@ describe('bundled url-shortener example', () => {
     expect(analysis.totalCostUsd).toBe(3 * 50 + 12 * 100 + 2 * 150 + 3 * 450);
   });
 
-  it('sets p99 by the cache-miss path', () => {
+  it('takes p99 from the mixture, pulled up by the cache-miss path', () => {
     const redirect = analysis.useCases.find((u) => u.name === 'Redirect')!;
-    const miss = redirect.scenarios.find((s) => s.name === 'Cache miss')!;
+    const [hit, miss] = redirect.scenarios;
     expect(miss.share).toBeCloseTo(0.09);
-    expect(redirect.percentiles.p99).toBeCloseTo(miss.percentiles.p99);
+    expect(redirect.percentiles.p99).toBeGreaterThan(hit.percentiles.p99);
+    expect(redirect.percentiles.p99).toBeLessThan(miss.percentiles.p99);
+    expect(redirect.tailScenario.p99).toBe(1);
     expect(redirect.percentiles.p99).toBeLessThan(100);
   });
 

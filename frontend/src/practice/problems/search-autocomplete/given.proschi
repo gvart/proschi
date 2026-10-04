@@ -10,7 +10,7 @@ traffic {
 }
 
 requirements {
-  p99 "Suggest" < 100ms
+  p99 "Suggest" < 50ms
   p99 "Search" < 300ms
   availability "Suggest" >= 99.95%
   survive any node failure

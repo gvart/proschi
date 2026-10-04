@@ -1,5 +1,5 @@
 # expect-fail: Location updates are writes to the live map, never the database
-# expect-fail: p99 of Update location < 150 ms
+# expect-fail: p99 of Update location < 50 ms
 # Fails location updates written to the relational database: one primary cannot take them.
 import "problem.proschi"
 

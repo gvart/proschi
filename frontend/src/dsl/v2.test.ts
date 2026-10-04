@@ -117,7 +117,7 @@ describe('§7.1 assertions', () => {
       ['warning', "Unknown node 'ghost'"],
       ['warning', "Unknown node 'phantom'"],
     ]);
-    expect(problems('test "T" {\n  "Warm" starts at [Nope] or worker\n}')).toEqual([['warning', "Unknown tech stack 'Nope'"]]);
+    expect(problems('test "T" {\n  "Warm" starts at [Nope] or worker\n}')).toEqual([['warning', "Unknown tech stack 'Nope'. Did you mean 'Node.js'?"]]);
   });
 
   it('locates a union problem at the alternative', () => {

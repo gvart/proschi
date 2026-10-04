@@ -396,7 +396,7 @@
     },
     "section-keyword": {
       "name": "keyword.other.proschi",
-      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
+      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
     },
     "quantity": {
       "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx, 500 MB/s, 0.05 usd/GB.",

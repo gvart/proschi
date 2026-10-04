@@ -8,7 +8,7 @@ valid.
 | Piece | File | Gives you |
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths, failing requirements and tests |
+| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes (add a missing connection, replace an unknown tech stack with the suggested one), completion (keywords, node ids, the whole tech catalog with its aliases), hover, go to definition, find references, outline, formatting, links on import paths, failing requirements and tests |
 | Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` / `proschi test` / `proschi analyze` / `proschi problem` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)); requirements, tests and the capacity table (see [Simulation and tests](#simulation-and-tests)); checking and scaffolding practice problems (see [Practice](#practice)) |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 

@@ -9,7 +9,7 @@ traffic {
 }
 
 requirements {
-  p99 "Update location" < 150ms
+  p99 "Update location" < 50ms
   p99 "Request ride" < 300ms
   availability "Request ride" >= 99.9%
   durable "Request ride"

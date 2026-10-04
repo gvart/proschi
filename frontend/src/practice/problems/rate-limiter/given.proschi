@@ -8,7 +8,7 @@ traffic {
 }
 
 requirements {
-  p99 "Call API" < 200ms
+  p99 "Call API" < 150ms
   availability "Call API" >= 99.9%
   survive any node failure
   cost <= 3000 usd/month

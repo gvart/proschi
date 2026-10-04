@@ -17,8 +17,8 @@ traffic {
 
 requirements {
   p99 "Upload video" < 1s
-  p99 "Open video" < 150ms
-  p99 "Stream video" < 2s
+  p99 "Open video" < 75ms
+  p99 "Stream video" < 600ms
   availability "Stream video" >= 99.99%
   durable "Upload video"
   survive any node failure
