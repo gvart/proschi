@@ -198,16 +198,21 @@ describe('validateProblem', () => {
     expect(messages({ solution: STARTER })).toEqual(expect.arrayContaining([expect.stringMatching(/^solution\.proschi(:\d+)?: Fails "Echo goes through the API"/)]));
   });
 
+  it('reports capacity in the solution', () => {
+    expect(messages({ solution: `${SOLUTION}\ncapacity {\n  api 1m rps\n}\n` })).toEqual([expect.stringMatching(/^solution\.proschi:13: error: capacity is set by the problem; change the design \(replicas, shards, caching\) instead/)]);
+  });
+
   it('reports a starter that already passes, or has errors', () => {
     expect(messages({ starter: SOLUTION })).toEqual(['starter.proschi: The starter passes every test; it must leave something to solve']);
     expect(messages({ starter: `${STARTER}a [X]\na [Y]\n` })).toEqual(expect.arrayContaining([expect.stringMatching(/^starter\.proschi:\d+: error:/)]));
   });
 
-  it('reports wrong designs that pass what they name, name no test, or lack the header', () => {
+  it('reports wrong designs that pass what they name, name no test, lack the header or have errors', () => {
     const wrong = (source: string, expectFail = expectFailLines(source)) => messages({ wrong: [{ name: 'w', source, expectFail }] });
     expect(wrong(`# expect-fail: Echo goes through the API\n${SOLUTION}`)).toEqual(['wrong/w.proschi:1: Expected to fail "Echo goes through the API", but it passes']);
     expect(wrong(`# expect-fail: Echo is fast\n${STARTER}`)).toEqual(['wrong/w.proschi:1: No test or requirement is named "Echo is fast" (names: "Echo goes through the API")']);
     expect(wrong(STARTER)).toEqual(['wrong/w.proschi:1: Start the file with one or more "# expect-fail: <test name>" lines']);
     expect(wrong(`# expect-fail: Echo goes through the API\n\n${STARTER}`)).toEqual(['wrong/w.proschi:2: After the comment lines the file must start with import "problem.proschi"']);
+    expect(wrong(`# expect-fail: Echo goes through the API\n${STARTER}capacity {\n  client 1 rps\n}\n`)).toEqual([expect.stringMatching(/^wrong\/w\.proschi:\d+: error: capacity is set by the problem/)]);
   });
 });

@@ -4,7 +4,7 @@ import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/
 import { parseInline, parseMarkdown, safeHref } from './markdown';
 import { catalogErrors, findProblem, problems } from './catalog';
 import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, withSource } from './progress';
-import { PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
+import { CAPACITY_MESSAGE, PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
 import { validateProblem } from './validate';
 import type { Problem } from './types';
 
@@ -60,6 +60,55 @@ describe('problem catalog', () => {
     const run = runTests(parseSolution(p, source), defaultEngine);
     expect(run.blocked).toBeUndefined();
     expect(run.results.filter((r) => !r.passed)).toEqual([]);
+  });
+});
+
+describe('practice capacity rule', () => {
+  const p = findProblem('url-shortener')!;
+  const cheat = `${p.solution}\ncapacity {\n  db 1m rps cost 1 usd/month\n}\n`;
+
+  it('reference solutions set no capacity of their own beyond shards', () => {
+    for (const q of problems) {
+      for (const c of parseSolution(q, q.solution).diagram.capacity ?? []) {
+        if (c.loc.file !== PROBLEM_FILE) expect(Object.keys(c).sort(), q.id).toEqual(['loc', 'node', 'shards']);
+      }
+    }
+  });
+
+  it('reports capacity in the solver file as an error and ignores it', () => {
+    const parsed = parseSolution(p, cheat);
+    const errors = parsed.diagnostics.filter((d) => d.severity === 'error');
+    expect(errors).toEqual([expect.objectContaining({ message: expect.stringContaining(CAPACITY_MESSAGE), line: cheat.split('\n').indexOf('  db 1m rps cost 1 usd/month') + 1 })]);
+    expect(errors[0].file).toBeUndefined();
+    expect(parsed.diagram.capacity).toBeUndefined();
+    expect(runTests(parsed, defaultEngine).blocked).toBe('errors');
+    // The override has no effect on the simulation: same figures as without it.
+    const honest = defaultEngine.analyze(parseSolution(p, p.solution).diagram)!;
+    const cheated = defaultEngine.analyze(parsed.diagram)!;
+    expect(cheated.totalCostUsd).toBe(honest.totalCostUsd);
+    expect(cheated.nodes.find((n) => n.id === 'db')).toEqual(honest.nodes.find((n) => n.id === 'db'));
+    // A regular document believes it.
+    const plain = defaultEngine.analyze(parse(cheat.replace('import "problem.proschi"\n', p.given)).diagram)!;
+    expect(plain.totalCostUsd).toBeLessThan(honest.totalCostUsd);
+  });
+
+  it('keeps the given capacity, and shards from the solver file', () => {
+    const q = findProblem('ticket-booking')!;
+    const parsed = parseSolution(q, q.solution);
+    expect(parsed.diagnostics).toEqual([]);
+    expect(parsed.diagram.capacity?.map((c) => [c.node, c.loc.file])).toEqual([
+      ['payments', PROBLEM_FILE],
+      ['db', undefined],
+    ]);
+    const mixed = parseSolution(q, q.solution.replace('  db shards 2\n', '  db shards 2 writes 50k rps\n'));
+    expect(mixed.diagnostics.map((d) => d.message)).toEqual([expect.stringContaining(CAPACITY_MESSAGE)]);
+    expect(mixed.diagram.capacity?.find((c) => c.node === 'db')).toEqual({ node: 'db', shards: 2, loc: expect.anything() });
+  });
+
+  it('does not touch the given capacity or regular documents', () => {
+    const q = findProblem('payments')!;
+    expect(parseSolution(q, q.solution).diagram.capacity).toEqual([expect.objectContaining({ node: 'gateway', rps: 5000, latencyMs: 250 })]);
+    expect(parse(cheat.replace('import "problem.proschi"\n', p.given)).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
   });
 });
 
