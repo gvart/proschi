@@ -1,32 +1,18 @@
-import { compareProblems, readProblemMd, type ProblemMeta } from '../practice/problemFiles';
+import type { ProblemListing } from '../practice/listing';
 
 /**
  * The practice problems for the landing page, from the same folders as the
- * practice page (frontend/src/practice/problems/<id>/problem.md). Only the
- * problem.md files are bundled here, not the designs.
+ * practice page (frontend/src/practice/problems/<id>/problem.md). The page
+ * imports them prebuilt from `virtual:practice-listings`: only the list
+ * entries are bundled, not the statements or designs.
  */
 
-export type ProblemListing = Pick<ProblemMeta, 'title' | 'summary' | 'difficulty' | 'order'> & { id: string };
-
-/** problem.md files keyed `<id>/problem.md`, in list order; folders that cannot be read are left out (the practice tests report them). */
-export function listingsFrom(files: Record<string, string>): ProblemListing[] {
-  const out: ProblemListing[] = [];
-  for (const [path, text] of Object.entries(files)) {
-    const id = path.split('/')[0];
-    try {
-      const { title, summary, difficulty, order } = readProblemMd(id, text);
-      out.push({ id, title, summary, difficulty, ...(order !== undefined ? { order } : {}) });
-    } catch {
-      // Reported by the practice tests.
-    }
-  }
-  return out.sort(compareProblems);
-}
+export { listingsFrom } from '../practice/listing';
 
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 /** The `<li>` items of the landing page's practice list. */
-export function practiceListHtml(problems: ProblemListing[]): string {
+export function practiceListHtml(problems: Pick<ProblemListing, 'id' | 'title' | 'summary' | 'difficulty'>[]): string {
   return problems
     .map(
       (p) => `<li>

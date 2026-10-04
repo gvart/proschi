@@ -8,6 +8,7 @@ import { format } from '../dsl/format';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { heroScenarios, stepLines } from './player';
 import { listingsFrom, practiceListHtml } from './practiceList';
+import prebuiltListings from 'virtual:practice-listings';
 import { tallLayout, wideLayout } from './diagramLayout';
 
 function decodeEntities(s: string): string {
@@ -203,6 +204,11 @@ describe('practice section', () => {
     const html = practiceListHtml(listings);
     const ids = [...html.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
     expect(ids).toEqual(problems.map((p) => p.id));
+  });
+
+  it('prebuilds the same list for the landing and practice pages (virtual:practice-listings)', () => {
+    expect(prebuiltListings).toEqual(listings);
+    expect(prebuiltListings.map((p) => [p.id, p.tags, p.order])).toEqual(problems.map((p) => [p.id, p.tags, p.order]));
   });
 
   it('renders title, difficulty and summary, escaped', () => {
