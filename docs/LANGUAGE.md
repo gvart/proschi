@@ -86,6 +86,11 @@ produces: two spaces per block and aligned columns in runs of similar lines; see
 
 How a step label is read:
 
+- A request label may start with `x<N>` (fan-out: the step happens N times per
+  request) and `~<size>` (payload size), in either order, e.g.
+  `worker -> feeds : x200 LPUSH feed:{follower}` or
+  `client -> blobs : ~2MB PUT /files/{id}`. They are removed before the rest of
+  the label is read. See [Fan-out and payload size](#fan-out-and-payload-size).
 - `POST /orders` sets the HTTP method and endpoint. Only the standard verbs count: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.
 - The path may be a template with `{param}` segments, e.g. `GET /orders/{id}`. Braces inside the path are part of it, not a payload.
 - After the method and path, `json …`, `xml …` or `text …` sets the payload format and body. A body that starts with `{`, `[` or `<` is recognised without a keyword.
@@ -96,6 +101,35 @@ How a step label is read:
 `proschi check` can compare these steps with the OpenAPI specs of the services
 they call: endpoints, status codes and JSON payloads. See
 [Checking against OpenAPI](EDITORS.md#checking-against-openapi).
+
+### Fan-out and payload size
+
+| Prefix | Meaning | Parse output |
+|---|---|---|
+| `x<N>` | The step happens N times per request (N ≥ 1). Load counts N calls; latency counts the step once (batched or parallel). | `multiplier` |
+| `~<size>` | Payload size: a number (decimals allowed) and `B`, `KB`, `MB`, `GB` or `TB`. Units are decimal: 1 MB = 1000 KB. It adds transfer time and egress cost. | `sizeBytes` |
+
+A prefix counts only at the start of a request label and only when followed
+by whitespace or the end of the label, so `xml payload`, `x-request-id` and
+`GET /x200` are ordinary labels. `x0`, a prefix given twice and a malformed
+size (`~2mb`, `~2`, `~MB`) are errors at the prefix. Response (`-->`) labels
+and connection labels outside use cases are read as written.
+
+### Reads and writes
+
+Every request step has an `access`, `read` or `write`:
+
+1. With an HTTP method: `POST`, `PUT`, `PATCH` and `DELETE` write; `GET`,
+   `HEAD` and `OPTIONS` read.
+2. Otherwise the first word of the label (after any prefixes, compared
+   case-insensitively) decides. These words write: INSERT, UPDATE, UPSERT,
+   DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH, RPUSH, ZADD, HSET,
+   GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE.
+3. Everything else reads: GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH,
+   an event name such as `OrderPlaced`, …
+
+`durable` requirements and `writes X before responding` count write steps
+only, and reads and writes load a store's read and write capacity separately.
 
 How the protocol is inferred:
 
@@ -298,11 +332,12 @@ A quantity is a number, an optional magnitude and an optional unit:
 |---|---|
 | Number | `120`, `99.95` |
 | Magnitude | `k` (thousand), `m` (million), `b` (billion) |
-| Unit | `rps`, `rpm`, `rpd` (requests per second, minute, day); `ms`, `s`; `%`; `usd/month` |
+| Unit | `rps`, `rpm`, `rpd` (requests per second, minute, day); `ms`, `s`; `%`; `usd/month`; `MB/s`, `GB/s` (bandwidth); `usd/GB` (egress price) |
 
 The unit may be attached (`50ms`, `99.9%`, `100krps`) or one space away
 (`50 ms`, `100k rps`). Rates are normalised to requests per second (`6k rpm` is
-100 rps) and durations to milliseconds (`1.5s` is 1500 ms). `ms` is always
+100 rps), durations to milliseconds (`1.5s` is 1500 ms) and bandwidth to
+megabytes per second (`1 GB/s` is 1000 MB/s). `ms` is always
 milliseconds. A statement that wants a unit reports a quantity without one, or
 with the wrong one: `'100k' needs a unit: expected a rate, e.g. 100k rps, 6k rpm or 1m rpd`.
 
@@ -330,6 +365,7 @@ traffic {
 ```
 requirements {
   p99 "Redirect" < 50ms
+  p99 "Redirect" scenario "Cache hit" < 10ms
   p95 < 300ms                 # every use case
   availability "Redirect" >= 99.95%
   availability >= 99.9%       # every use case
@@ -343,6 +379,7 @@ requirements {
 | Requirement | Meaning |
 |---|---|
 | `p50`, `p90`, `p95`, `p99` or `p999` `["Use case"] < <duration>` | Latency percentile of the use case (or of every use case with traffic) under its traffic |
+| `p99 "Use case" scenario "S" < <duration>` | The same for one scenario of the use case. An unknown scenario is a warning. |
 | `availability ["Use case"] >= <percent>` | Computed availability of the use case |
 | `durable "Use case"` | Every success scenario writes to a durable node, synchronously, before the entry request is answered |
 | `survive any node failure` | Losing any single node instance keeps every use case working |
@@ -358,13 +395,30 @@ becomes a test that the simulation evaluates.
 capacity {
   db    20k rps latency 4ms availability 99.95% cost 400 usd/month durable
   cache 150k rps
+  users reads 30k rps writes 8k rps shards 4 consistency strong
+  blobs bandwidth 500 MB/s egress 0.05 usd/GB
 }
 ```
 
 Per-replica overrides of the default profile of a node, one line per node id,
-parts in any order: a rate, `latency <duration>`, `availability <percent>`,
-`cost <usd/month>`, `durable` or `volatile`. An unknown node id is a warning;
-a part given twice and a second line for the same node are errors.
+parts in any order:
+
+| Part | Meaning | Parse output |
+|---|---|---|
+| `<rate>` | Requests per second per replica, reads and writes alike | `rps` |
+| `reads <rate>`, `writes <rate>` | Separate read and write capacity per replica | `readRps`, `writeRps` |
+| `shards <n>` | Number of shards (n ≥ 1). Single-primary stores scale writes with shards, not replicas. | `shards` |
+| `latency <duration>` | Latency per call | `latencyMs` |
+| `availability <percent>` | Availability per replica | `availability` |
+| `cost <usd/month>` | Monthly cost per replica | `costUsd` |
+| `durable` or `volatile` | Whether a write there is durable | `durable` |
+| `consistency strong` or `consistency eventual` | What `any strong store` / `any eventual store` match | `consistency` |
+| `bandwidth <MB/s or GB/s>` | Network bandwidth per replica, for transfer time | `bandwidthMBps` |
+| `egress <usd/GB>` | Price of data leaving the node | `egressUsdPerGb` |
+
+An unknown node id is a warning, and so are `shards` or `consistency` on a
+node that is not a data store. A part given twice, a rate together with
+`reads` or `writes`, and a second line for the same node are errors.
 
 ### Entities
 
@@ -410,6 +464,12 @@ test "Redirect is served from the cache" {
 test "Clients only enter through the gateway" {
   no path from client to any database
 }
+test "Checkout answers before slow work" {
+  "Checkout" never waits for any queue or any external
+  "Checkout" calls ledger after gateway
+  any service never calls blobs
+  "Retry charge" starts at any queue
+}
 ```
 
 | Assertion | Holds when |
@@ -418,14 +478,23 @@ test "Clients only enter through the gateway" {
 | `U [scenario S] every scenario calls X` | every scenario of U calls X |
 | `U [scenario S] never calls X` | no scenario of U (or S) calls X |
 | `U [scenario S] calls X before Y` | in every scenario that calls Y, X is called earlier; and some scenario calls Y |
+| `U [scenario S] calls Y after X` | in every scenario that calls both, the last call to Y comes after the first call to X; and some scenario calls both |
+| `U [scenario S] never waits for X` | no synchronous (`->`) call to X happens before U's entry response. Async sends and calls after the response are fine; it also holds when X is never called |
 | `U [scenario S] writes X before responding` | every success scenario has a synchronous, non-failed step to X before the entry response |
 | `U [scenario S] responds <status>` | some scenario's entry response has that status (`201`, or a class `2xx`/`4xx`/`5xx`) |
 | `U has scenario S` | the scenario exists |
 | `U handles failure of X` | some success scenario of U contains a failed call (`-x`) to X |
+| `U starts at X` | U's entry request is sent by a node matching X |
+| `[in U] X calls Y` | some step (of U, or of any use case) is sent by a node matching X to a node matching Y |
+| `[in U] X never calls Y` | no step (of U, or of any use case) is sent by X to Y |
 | `no path from X to Y` | no connection or step goes directly from a node matching X to a node matching Y |
 | `X has replicas >= <n>` | every node matching X has at least n replicas |
 
-`U` and `S` are a use case and a scenario name in quotes. Order in a scenario
+`U` and `S` are a use case and a scenario name in quotes. An assertion that
+starts with a quoted use case is about that use case (`"U" calls X`: some step
+reaches X); one that starts with a selector or `in "U"` is about the sender
+(`X calls Y`: a step sent by X). `has scenario`, `handles failure of` and
+`starts at` are about the whole use case and take no `scenario`. Order in a scenario
 is the sequence order, requests and responses interleaved. Unknown use cases,
 scenarios (after `scenario`) and nodes are warnings; a test without
 assertions is a warning and two tests with one name are an error.
@@ -439,6 +508,8 @@ assertions is a warning and two tests with one name are an error.
 | `db` | the node with that id |
 | `[PostgreSQL]` | every node with that tech stack |
 | `any database` | every node of that kind |
+| `any strong store`, `any eventual store` | every data store of that consistency (relational databases and queues are strong; caches, most NoSQL stores, search, CDNs and object storage listings are eventual; `capacity { x consistency … }` overrides) |
+| `X or Y [or Z]` | a node matching any of them, e.g. `never calls any cache or any database` |
 
 A node's kind comes from its tech stack, falling back to its component type:
 
@@ -505,27 +576,34 @@ close        = "}" , [ alt-open ] ;
 traffic      = "traffic" , "{" , { string , quantity , [ "mix" , share , { "," , share } ] } , "}" ;
 share        = string , quantity ;                       (* "Cache hit" 90% *)
 requirements = "requirements" , "{" , { requirement } , "}" ;
-requirement  = percentile , [ string ] , "<" , quantity
+requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantity
              | "availability" , [ string ] , ">=" , quantity
              | "durable" , string
              | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
              | "cost" , "<=" , quantity ;
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
-capacity     = "capacity" , "{" , { id , { quantity | "latency" , quantity | "availability" , quantity
-             | "cost" , quantity | "durable" | "volatile" } } , "}" ;
+capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
+capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer
+             | "latency" , quantity | "availability" , quantity | "cost" , quantity
+             | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
+             | "bandwidth" , quantity | "egress" , quantity ;
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string
              | "{" , { "because" , string | "rejected" , string , string } , "}" ) ;
 test         = "test" , string , "{" , { assertion } , "}" ;
-assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ "before" , selector ]
+assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ ( "before" | "after" ) , selector ]
              | "every" , "scenario" , "calls" , selector | "never" , "calls" , selector
+             | "never" , "waits" , "for" , selector
              | "writes" , selector , "before" , "responding" | "responds" , status )
              | string , "has" , "scenario" , string
              | string , "handles" , "failure" , "of" , selector
+             | string , "starts" , "at" , selector
+             | [ "in" , string ] , selector , [ "never" ] , "calls" , selector
              | "no" , "path" , "from" , selector , "to" , selector
              | selector , "has" , "replicas" , ">=" , integer ;
-selector     = id | tech | "any" , kind ;
+selector     = selector-atom , { "or" , selector-atom } ;
+selector-atom = id | tech | "any" , kind | "any" , ( "strong" | "eventual" ) , "store" ;
 kind         = "client" | "edge" | "service" | "function" | "cache" | "database"
              | "search" | "analytics" | "queue" | "storage" | "external" | "other" ;
 status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
@@ -536,14 +614,16 @@ replicas     = "x" , digit , { digit } ;               (* one token, e.g. x3 *)
 quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
 number       = digit , { digit } , [ "." , digit , { digit } ] ;
 magnitude    = "k" | "m" | "b" ;
-unit         = "rps" | "rpm" | "rpd" | "ms" | "s" | "%" | "usd/month" ;
+unit         = "rps" | "rpm" | "rpd" | "ms" | "s" | "%" | "usd/month" | "MB/s" | "GB/s" | "usd/GB" ;
 id           = ( letter | "_" ) , { letter | digit | "_" } ;
 string       = '"' , { character - '"' | "\" , character } , '"' ;
 tech         = "[" , { character - "]" } , "]" ;
 team         = "@" , { letter | digit | "_" | "-" } ;
 integer      = [ "-" ] , digit , { digit } ;
 comment      = "#" , { character } ;            (* only where a token can start *)
-label        = { character } ;                  (* to end of line; see below *)
+label        = [ label-prefix , [ label-prefix ] ] , { character } ;  (* to end of line; see below *)
+label-prefix = ( "x" , digit , { digit } | "~" , number , size-unit ) , whitespace ;  (* requests only *)
+size-unit    = "B" | "KB" | "MB" | "GB" | "TB" ;
 ```
 
 Where each statement may appear:
@@ -561,7 +641,7 @@ Where each statement may appear:
 | `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test` | ✓ | | | |
 
 `-x` is only valid as a step. A label is read as described in
-[Use case steps](#use-case-steps): an optional HTTP method and path, an optional
+[Use case steps](#use-case-steps): optional `x<N>` / `~<size>` prefixes on a request, an optional HTTP method and path, an optional
 `json` / `xml` / `text` payload, and on a response a leading status code.
 
 The grammar describes syntax only. The parser also checks meaning: duplicate

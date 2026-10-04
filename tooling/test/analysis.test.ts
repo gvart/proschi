@@ -78,6 +78,16 @@ describe('analysis', () => {
     expect(tests.children.map((c) => [c.name, c.detail, c.kind])).toEqual([['Writes first', '1 assertion', 'test']]);
   });
 
+  it('offers assertions at the start of a line in a test block, and only there', () => {
+    const labels = (text: string, line: number, character: number) => complete(analyze(text), { line, character }).map((i) => i.label);
+    const inTest = complete(analyze('api [REST API]\ntest "T" {\n  "U" calls api\n  \n}'), { line: 3, character: 2 });
+    expect(inTest.map((i) => i.label)).toEqual(expect.arrayContaining(['"Use case" never waits for', '"Use case" starts at', 'node never calls node', 'api']));
+    expect(inTest.map((i) => i.label)).not.toContain('usecase');
+    expect(inTest.find((i) => i.label === '"Use case" calls … after …')?.snippet).toBe('"${1:Use case}" calls ${2:node} after ${3:node}');
+    expect(labels('api [REST API]\ntest "T" {\n}\n', 3, 0)).toContain('usecase');
+    expect(labels('requirements {\n  \n}', 1, 2)).not.toContain('"Use case" starts at');
+  });
+
   it('offers only alt after a closing brace', () => {
     const items = complete(analyze('usecase "U" {\n  alt "A" {\n  } a'), { line: 2, character: 5 });
     expect(items.map((i) => i.label)).toEqual(['alt']);

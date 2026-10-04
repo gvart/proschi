@@ -5,6 +5,7 @@ import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, isDataStore, isKind, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
+import { accessOf } from './access';
 import type {
   Assertion,
   CapacityOverride,
@@ -38,6 +39,10 @@ interface RawStep {
   arrow: Arrow;
   label: string;
   parallelGroup?: number;
+  /** `x200` at the start of the label (§7.3). */
+  multiplier?: number;
+  /** `~2MB` at the start of the label, in bytes (§7.3). */
+  sizeBytes?: number;
   loc: SourceLoc;
 }
 
@@ -98,10 +103,13 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   ms: 'a duration, e.g. 50ms or 1.5s',
   '%': 'a percentage, e.g. 99.9%',
   'usd/month': 'a monthly cost, e.g. 400 usd/month',
+  MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
+  'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, latency, availability, cost, durable or volatile, consistency, bandwidth or egress';
 const ASSERTION_HELP =
-  'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, no path from <node> to <node>, <node> has replicas >= 2, …';
-const ASSERTION_VERBS = 'calls, every scenario calls, never calls, writes, responds, has scenario or handles failure of';
+  'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
+const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
 
 const techByName = new Map<string, { type: ComponentType; techStack: TechStack }>(
   componentCatalog.map((c) => [c.techStack.toLowerCase(), { type: c.type, techStack: c.techStack }])
@@ -609,7 +617,21 @@ class Parser {
     if (top?.kind === 'usecase' || top?.kind === 'alt' || top?.kind === 'par') {
       const body = this.currentBody()!;
       body.openAlt = undefined;
-      body.items.push({ kind: 'step', step: { from, to, arrow, label, parallelGroup: top.kind === 'par' ? top.group : undefined, loc } });
+      // Fan-out and payload size prefixes belong to requests; a response label is read as before.
+      const prefixes = arrow === '-->' ? { rest: label } : this.readLabelPrefixes(label, labelToken!, line);
+      body.items.push({
+        kind: 'step',
+        step: {
+          from,
+          to,
+          arrow,
+          label: prefixes.rest,
+          parallelGroup: top.kind === 'par' ? top.group : undefined,
+          ...(prefixes.multiplier !== undefined ? { multiplier: prefixes.multiplier } : {}),
+          ...(prefixes.sizeBytes !== undefined ? { sizeBytes: prefixes.sizeBytes } : {}),
+          loc,
+        },
+      });
     } else if (arrow === '-x') {
       this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line));
     } else {
@@ -618,6 +640,44 @@ class Parser {
       this.edges.push({ id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || undefined, loc });
     }
     return lastLine;
+  }
+
+  /**
+   * Reads `x<N>` (fan-out) and `~<size>` (payload size) at the start of a step
+   * label, in either order (§7.3), and returns the label without them. A
+   * prefix must be followed by whitespace or end the label, so `xml …` and
+   * `x-request-id` are ordinary labels. Problems are reported at the prefix.
+   */
+  private readLabelPrefixes(label: string, token: Token | undefined, line: number): { rest: string; multiplier?: number; sizeBytes?: number } {
+    const out: { rest: string; multiplier?: number; sizeBytes?: number } = { rest: label };
+    if (!token) return out;
+    // Column of the label's first character: the label token starts at ':' and its value is trimmed.
+    const after = this.lines[line - 1].slice(token.col);
+    const base = token.col + 1 + (after.length - after.trimStart().length);
+    let offset = 0;
+    for (;;) {
+      const rest = label.slice(offset);
+      const at = (length: number): SourceLoc => ({ line, col: base + offset, length, ...this.fileField() });
+      const fanOut = /^x(\d+)(?=\s|$)/.exec(rest);
+      const size = rest.startsWith('~') ? /^~(\S*)/.exec(rest) : null;
+      const match = fanOut ?? size;
+      if (!match) break;
+      if (fanOut) {
+        const n = Number(fanOut[1]);
+        if (out.multiplier !== undefined) this.error('The fan-out is given twice; write one x<N>', at(match[0].length));
+        else if (n < 1) this.error('A fan-out needs at least one call per request: x1, x2, …', at(match[0].length));
+        else out.multiplier = n;
+      } else {
+        const bytes = parseSize(size![1]);
+        if (out.sizeBytes !== undefined) this.error('The payload size is given twice; write one ~<size>', at(match[0].length));
+        else if ('error' in bytes) this.error(bytes.error, at(match[0].length));
+        else out.sizeBytes = bytes.value;
+      }
+      offset += match[0].length;
+      offset += label.slice(offset).length - label.slice(offset).trimStart().length;
+    }
+    out.rest = label.slice(offset);
+    return out;
   }
 
   // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
@@ -753,10 +813,14 @@ class Parser {
       useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line) };
       i++;
     };
-    const commit = (requirement: Requirement) => {
+    const commit = (requirement: Requirement, scenario?: { name: string; loc: SourceLoc }) => {
       this.requirements.push(requirement);
       const named = useCase;
-      if (named) this.deferred.push(() => this.checkUseCase(named.name, named.loc));
+      if (named)
+        this.deferred.push(() => {
+          const found = this.checkUseCase(named.name, named.loc);
+          if (found && scenario) this.checkScenario(found, scenario.name, scenario.loc);
+        });
     };
     const withUseCase = () => (useCase ? { useCase: useCase.name } : {});
 
@@ -767,10 +831,25 @@ class Parser {
         return;
       }
       readUseCase();
+      // `p99 "Use case" scenario "S" < 100ms`: the latency of one scenario (§7.6).
+      let scenario: { name: string; loc: SourceLoc } | undefined;
+      if (isWord(tokens[i], 'scenario')) {
+        const name = tokens[i + 1];
+        if (!useCase) {
+          this.error(`A scenario belongs to a use case; write ${word} "Use case" scenario "Scenario" < 100ms`, this.locOf(tokens[i], line));
+          return;
+        }
+        if (name?.kind !== 'string') {
+          this.error('Expected a scenario name in quotes after scenario', this.locOf(name ?? tokens[i], line));
+          return;
+        }
+        scenario = { name: name.value, loc: this.locOf(name, line) };
+        i += 2;
+      }
       if (!this.expectOp(tokens, i, ['<', '<='], `${word} "Use case" < 50ms`, line)) return;
       const maxMs = this.quantityOf(tokens[i + 1], 'ms', tokens[i], line);
       if (maxMs === undefined || !this.expectEnd(tokens, i + 2, line)) return;
-      commit({ kind: 'latency', percentile, ...withUseCase(), maxMs, loc });
+      commit({ kind: 'latency', percentile, ...withUseCase(), ...(scenario ? { scenario: scenario.name } : {}), maxMs, loc }, scenario);
       return;
     }
 
@@ -855,8 +934,53 @@ class Parser {
         part = 'durable or volatile';
         override.durable = t.value === 'durable';
         i++;
+      } else if (isWord(t, 'reads') || isWord(t, 'writes')) {
+        // Separate read and write capacity (§7.2).
+        part = t.value;
+        const value = this.quantityOf(tokens[i + 1], 'rps', t, line);
+        if (value === undefined) return;
+        if (part === 'reads') override.readRps = value;
+        else override.writeRps = value;
+        i += 2;
+      } else if (isWord(t, 'shards')) {
+        part = 'shards';
+        const n = tokens[i + 1];
+        if (n?.kind !== 'number' || Number(n.value) < 1) {
+          this.error('Expected a whole number of shards, at least 1, e.g. shards 4', this.locOf(n ?? t, line));
+          return;
+        }
+        override.shards = Number(n.value);
+        i += 2;
+      } else if (isWord(t, 'consistency')) {
+        part = 'consistency';
+        const value = tokens[i + 1];
+        if (!isWord(value, 'strong') && !isWord(value, 'eventual')) {
+          this.error(`Expected strong or eventual after consistency${value ? `, not ${describe(value)}` : ''}`, this.locOf(value ?? t, line));
+          return;
+        }
+        override.consistency = value!.value as 'strong' | 'eventual';
+        i += 2;
+      } else if (isWord(t, 'bandwidth') || isWord(t, 'egress')) {
+        // Transfer time and egress price (§7.3).
+        part = t.value;
+        const value = this.quantityOf(tokens[i + 1], part === 'bandwidth' ? 'MBps' : 'usd/GB', t, line);
+        if (value === undefined) return;
+        if (part === 'bandwidth') {
+          if (value <= 0) {
+            this.error('Bandwidth must be more than 0', this.locOf(tokens[i + 1], line));
+            return;
+          }
+          override.bandwidthMBps = value;
+        } else override.egressUsdPerGb = value;
+        i += 2;
       } else {
-        this.error(`Unexpected ${describe(t)}; expected a rate, latency, availability, cost, durable or volatile`, this.locOf(t, line));
+        this.error(`Unexpected ${describe(t)}; expected ${CAPACITY_PARTS}`, this.locOf(t, line));
+        return;
+      }
+      // A plain rate is both the read and the write capacity, so it cannot be combined with either.
+      const clash = part === 'rate' ? ['reads', 'writes'].find((p) => seen.has(p)) : part === 'reads' || part === 'writes' ? (seen.has('rate') ? part : undefined) : undefined;
+      if (clash) {
+        this.error(`A rate sets both reads and writes; give either a rate or reads and writes for '${id.value}'`, this.locOf(t, line));
         return;
       }
       if (seen.has(part)) {
@@ -868,7 +992,7 @@ class Parser {
 
     const idLoc = this.locOf(id, line);
     if (seen.size === 0) {
-      this.warning(`Capacity line for '${id.value}' overrides nothing; add a rate, latency, availability, cost, durable or volatile`, idLoc);
+      this.warning(`Capacity line for '${id.value}' overrides nothing; add ${CAPACITY_PARTS}`, idLoc);
       return;
     }
     const first = this.capacity.find((c) => c.node === id.value);
@@ -878,7 +1002,15 @@ class Parser {
     }
     this.capacity.push(override);
     this.deferred.push(() => {
-      if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in capacity`, idLoc);
+      const node = this.nodes.get(id.value);
+      if (!node) {
+        this.warning(`Unknown node '${id.value}' in capacity`, idLoc);
+        return;
+      }
+      // Shards and consistency describe how a store keeps its data; elsewhere they mean nothing.
+      const storeOnly = ['shards', 'consistency'].filter((p) => seen.has(p));
+      if (storeOnly.length && !isDataStore(kindOf(node)))
+        this.warning(`'${id.value}' is not a data store (${DATA_STORE_KINDS.join(', ')}); ${storeOnly.join(' and ')} only apply to data stores`, idLoc);
     });
   }
 
@@ -1068,16 +1200,35 @@ class Parser {
       return done({ kind: 'noPath', from: from.selector, to: to.selector, loc }, to.next);
     }
 
-    // X has replicas >= n
+    // [in "U"] X calls Y, [in "U"] X never calls Y, X has replicas >= n
     if (first.kind !== 'string') {
       if (first.kind !== 'ident' && first.kind !== 'tech') {
         this.error(ASSERTION_HELP, this.locOf(first, line));
         return;
       }
-      const target = selector(0);
+      // `in "U"` scopes a sender assertion to one use case; `in` followed by anything else is a node id.
+      const inUseCase = isWord(first, 'in') && tokens[1]?.kind === 'string' ? { name: tokens[1].value, loc: this.locOf(tokens[1], line) } : undefined;
+      const target = selector(inUseCase ? 2 : 0);
       if (!target) return;
-      if (!isWord(tokens[target.next], 'has')) {
-        this.error(ASSERTION_HELP, this.locOf(tokens[target.next] ?? first, line));
+      const word = tokens[target.next];
+      if (isWord(word, 'calls') || isWord(word, 'never')) {
+        const never = word.value === 'never';
+        if (never && !expectWords(target.next + 1, ['calls'], 'any service never calls any storage')) return;
+        const to = selector(target.next + (never ? 2 : 1));
+        if (!to) return;
+        const assertion = done(
+          { kind: 'senderCalls', ...(inUseCase ? { useCase: inUseCase.name } : {}), from: target.selector, to: to.selector, quantifier: never ? 'never' : 'some', loc },
+          to.next,
+        );
+        if (assertion && inUseCase) this.deferred.push(() => this.checkUseCase(inUseCase.name, inUseCase.loc));
+        return assertion;
+      }
+      if (inUseCase) {
+        this.error(`Expected calls or never calls here, e.g. in "${inUseCase.name}" api calls db`, this.locOf(word ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      if (!isWord(word, 'has')) {
+        this.error(ASSERTION_HELP, this.locOf(word ?? first, line));
         return;
       }
       const i = target.next + 1;
@@ -1121,6 +1272,10 @@ class Parser {
         const then = selector(target.next + 1);
         if (!then) return;
         assertion = done({ kind: 'before', useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
+      } else if (isWord(tokens[target.next], 'after')) {
+        const after = selector(target.next + 1);
+        if (!after) return;
+        assertion = done({ kind: 'after', useCase, ...withScenario, target: target.selector, after: after.selector, loc }, after.next);
       } else {
         assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'some', loc }, target.next);
       }
@@ -1129,6 +1284,16 @@ class Parser {
       const target = selector(i + 3);
       if (!target) return;
       assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'every', loc }, target.next);
+    } else if (isWord(verb, 'never') && isWord(tokens[i + 1], 'waits')) {
+      if (!expectWords(i + 2, ['for'], `"${useCase}" never waits for any queue`)) return;
+      const target = selector(i + 3);
+      if (!target) return;
+      assertion = done({ kind: 'neverWaits', useCase, ...withScenario, target: target.selector, loc }, target.next);
+    } else if (isWord(verb, 'starts')) {
+      if (!wholeUseCase('starts at') || !expectWords(i + 1, ['at'], `"${useCase}" starts at any queue`)) return;
+      const target = selector(i + 2);
+      if (!target) return;
+      assertion = done({ kind: 'startsAt', useCase, target: target.selector, loc }, target.next);
     } else if (isWord(verb, 'never')) {
       if (!expectWords(i + 1, ['calls'], `"${useCase}" never calls any database`)) return;
       const target = selector(i + 2);
@@ -1173,8 +1338,25 @@ class Parser {
     return assertion;
   }
 
-  /** A node id, `[Tech]` or `any <kind>` starting at `tokens[i]`. */
+  /** A selector starting at `tokens[i]`: one or more of node id, `[Tech]`, `any <kind>`, `any strong store`, joined by `or`. */
   private parseSelector(tokens: Token[], i: number, line: number): ParsedSelector | undefined {
+    const atoms: SelectorAtom[] = [];
+    let next = i;
+    for (;;) {
+      const atom = this.parseSelectorAtom(tokens, next, line);
+      if (!atom) return undefined;
+      atoms.push(atom);
+      next = atom.next;
+      if (!isWord(tokens[next], 'or')) break;
+      next++;
+    }
+    // `X or Y or Z` is one flat union.
+    const selector: Selector = atoms.length === 1 ? atoms[0].selector : { anyOf: atoms.map((a) => a.selector) };
+    return { selector, next, atoms };
+  }
+
+  /** One node id, `[Tech]`, `any <kind>` or `any strong|eventual store` at `tokens[i]`. */
+  private parseSelectorAtom(tokens: Token[], i: number, line: number): SelectorAtom | undefined {
     const t = tokens[i];
     if (t?.kind === 'tech') {
       const tech = techByName.get(t.value.toLowerCase())?.techStack ?? t.value;
@@ -1182,8 +1364,15 @@ class Parser {
     }
     if (isWord(t, 'any')) {
       const kind = tokens[i + 1];
+      if (isWord(kind, 'strong') || isWord(kind, 'eventual')) {
+        if (!isWord(tokens[i + 2], 'store')) {
+          this.error(`Expected 'store' here, e.g. any ${kind.value} store`, this.locOf(tokens[i + 2] ?? kind, line));
+          return undefined;
+        }
+        return { selector: { consistency: kind.value as 'strong' | 'eventual' }, next: i + 3, token: t, loc: this.locOf(t, line) };
+      }
       if (kind?.kind !== 'ident' || !isKind(kind.value)) {
-        this.error(`Expected a kind after any: ${KINDS.join(', ')}`, this.locOf(kind ?? t, line));
+        this.error(`Expected a kind after any: ${KINDS.join(', ')}, or strong store / eventual store`, this.locOf(kind ?? t, line));
         return undefined;
       }
       return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line) };
@@ -1194,12 +1383,14 @@ class Parser {
   }
 
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
-  private checkSelectorLater({ selector, token, loc }: ParsedSelector) {
-    if ('tech' in selector && !techByName.has(token.value.toLowerCase())) this.warning(`Unknown tech stack '${token.value}'`, loc);
-    if ('node' in selector) {
-      this.deferred.push(() => {
-        if (!this.nodes.has(selector.node)) this.warning(`Unknown node '${selector.node}'`, loc);
-      });
+  private checkSelectorLater({ atoms }: ParsedSelector) {
+    for (const { selector, token, loc } of atoms) {
+      if ('tech' in selector && !techByName.has(token.value.toLowerCase())) this.warning(`Unknown tech stack '${token.value}'`, loc);
+      if ('node' in selector) {
+        this.deferred.push(() => {
+          if (!this.nodes.has(selector.node)) this.warning(`Unknown node '${selector.node}'`, loc);
+        });
+      }
     }
   }
 
@@ -1333,6 +1524,9 @@ class Parser {
         isConditional: false,
         ...(step.arrow === '-x' ? { failed: true } : {}),
         loc: step.loc,
+        ...(step.multiplier !== undefined ? { multiplier: step.multiplier } : {}),
+        ...(step.sizeBytes !== undefined ? { sizeBytes: step.sizeBytes } : {}),
+        access: accessOf(label.method, step.label),
       });
     }
 
@@ -1483,12 +1677,21 @@ function expand(items: Item[]): { names: string[]; conditions: string[]; locs: S
   return paths;
 }
 
-interface ParsedSelector {
+/** One alternative of a selector: a node id, `[Tech]`, `any <kind>` or `any strong store`. */
+interface SelectorAtom {
   selector: Selector;
-  /** Index of the token after the selector. */
+  /** Index of the token after it. */
   next: number;
   token: Token;
   loc: SourceLoc;
+}
+
+interface ParsedSelector {
+  /** The atom itself, or `{ anyOf }` for `X or Y …`. */
+  selector: Selector;
+  /** Index of the token after the selector. */
+  next: number;
+  atoms: SelectorAtom[];
 }
 
 function isWord(token: Token | undefined, word: string): boolean {
@@ -1567,6 +1770,19 @@ export function parseStepLabel(input: string): StepLabel {
   }
   const payload = splitPayload(input);
   return { name: payload.text, format: payload.body ? payload.format : undefined, body: payload.body };
+}
+
+const SIZE_UNITS: Record<string, number> = { B: 1, KB: 1e3, MB: 1e6, GB: 1e9, TB: 1e12 };
+
+/** `2MB`, `500KB`, `1.5GB` (decimal units) in bytes, from a `~<size>` label prefix. */
+export function parseSize(text: string): { value: number } | { error: string } {
+  const m = /^(\d+(?:\.\d+)?)([A-Za-z]*)$/.exec(text);
+  if (!m) return { error: `Expected a payload size after ~, e.g. ~2MB, ~500KB or ~1.5GB${text ? `, not '~${text}'` : ''}` };
+  const factor = SIZE_UNITS[m[2]];
+  if (factor === undefined) return { error: m[2] ? `Unknown size unit '${m[2]}' in '~${text}'; use B, KB, MB, GB or TB` : `'~${text}' needs a unit: B, KB, MB, GB or TB` };
+  const value = Math.round(Number(m[1]) * factor);
+  if (value <= 0) return { error: `A payload size must be more than 0, not '~${text}'` };
+  return { value };
 }
 
 function inferProtocol(isAsync: boolean, method: string | undefined, target: DiagramNode | undefined): Protocol {

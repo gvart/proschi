@@ -4,7 +4,9 @@ import type { Quantity } from './types';
  * Reads the value of a `quantity` (or `number`) token: a number, an optional
  * magnitude (k, m, b) and an optional unit (docs/design/hld-and-practice.md
  * §1.1). Rates come back in requests per second and durations in
- * milliseconds. A number without a unit has no `unit`.
+ * milliseconds, bandwidth (`500 MB/s`, `1 GB/s`) in megabytes per second and
+ * egress prices (`0.05 usd/GB`) in USD per gigabyte (§7.3). Sizes are decimal:
+ * 1 GB = 1000 MB. A number without a unit has no `unit`.
  */
 export function parseQuantity(text: string): { value: number; unit?: Quantity['unit'] } | { error: string } {
   const m = /^(\d+(?:\.\d+)?)(.*)$/.exec(text.replace(/\s+/g, ''));
@@ -22,7 +24,7 @@ export function parseQuantity(text: string): { value: number; unit?: Quantity['u
   if (magnitude && (rest === '' || after)) {
     return after ? { value: round(number * magnitude * after.factor), unit: after.unit } : { value: round(number * magnitude) };
   }
-  return { error: `Unknown unit '${suffix}' in '${text}'; use rps, rpm, rpd, ms, s, % or usd/month (with k, m or b for thousands, millions, billions)` };
+  return { error: `Unknown unit '${suffix}' in '${text}'; use rps, rpm, rpd, ms, s, %, usd/month, MB/s, GB/s or usd/GB (with k, m or b for thousands, millions, billions)` };
 }
 
 /** Drops floating point noise such as 1.15k = 1149.9999999999998. */
@@ -42,4 +44,7 @@ const UNITS = new Map<string, { unit: Quantity['unit']; factor: number }>([
   ['s', { unit: 'ms', factor: 1000 }],
   ['%', { unit: '%', factor: 1 }],
   ['usd/month', { unit: 'usd/month', factor: 1 }],
+  ['MB/s', { unit: 'MBps', factor: 1 }],
+  ['GB/s', { unit: 'MBps', factor: 1000 }],
+  ['usd/GB', { unit: 'usd/GB', factor: 1 }],
 ]);

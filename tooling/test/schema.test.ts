@@ -39,12 +39,14 @@ describe('JSON Schema', () => {
       'db [PostgreSQL]',
       'usecase "U" {',
       '  api -> db : x',
+      '  api -> db : x20 ~2MB INSERT row',
       '}',
       'traffic {',
       '  "U" 10 rps mix "U" 50%',
       '}',
       'requirements {',
       '  p999 "U" < 1s',
+      '  p99 "U" scenario "U" < 100ms',
       '  availability >= 99%',
       '  durable "U"',
       '  survive any node failure',
@@ -53,6 +55,7 @@ describe('JSON Schema', () => {
       '}',
       'capacity {',
       '  db 1k rps latency 2ms availability 99.9% cost 5 usd/month volatile',
+      '  api reads 2k rps writes 1k rps shards 2 consistency strong bandwidth 1 GB/s egress 0.09 usd/GB',
       '}',
       'entity E in db "d" {',
       '  id uuid key unique',
@@ -71,10 +74,15 @@ describe('JSON Schema', () => {
       '  "U" handles failure of db',
       '  no path from api to any cache',
       '  any service has replicas >= 2',
+      '  "U" never waits for any queue or any cache',
+      '  "U" scenario "U" calls db after api',
+      '  in "U" api calls any strong store',
+      '  api never calls any eventual store',
+      '  "U" starts at api',
       '}',
     ].join('\n');
     const result = JSON.parse(JSON.stringify(parse(source)));
-    expect(result.diagram.tests[0].assertions).toHaveLength(9);
+    expect(result.diagram.tests[0].assertions).toHaveLength(14);
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 

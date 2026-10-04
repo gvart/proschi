@@ -593,6 +593,23 @@
         "responseLoc": {
           "$ref": "#/$defs/loc",
           "description": "The `-->` line that answered the request."
+        },
+        "multiplier": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "`x200` at the start of the label: the step happens this many times per request (fan-out). Absent means 1."
+        },
+        "sizeBytes": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "`~2MB` at the start of the label: payload size in bytes (decimal units)."
+        },
+        "access": {
+          "enum": [
+            "read",
+            "write"
+          ],
+          "description": "From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one."
         }
       },
       "required": [
@@ -608,12 +625,13 @@
         "executionType",
         "isParallel",
         "isConditional",
+        "access",
         "loc"
       ],
       "additionalProperties": false
     },
     "selector": {
-      "description": "A node id, an exact tech stack, or every node of a kind (`any cache`).",
+      "description": "A node id, an exact tech stack, every node of a kind (`any cache`), every data store of a consistency (`any strong store`), or a union (`X or Y`).",
       "oneOf": [
         {
           "type": "object",
@@ -763,6 +781,10 @@
               "type": "string",
               "description": "Left out: every use case with traffic."
             },
+            "scenario": {
+              "type": "string",
+              "description": "`scenario \"S\"`: the latency of one scenario of the use case."
+            },
             "maxMs": {
               "type": "number"
             },
@@ -897,6 +919,35 @@
         "durable": {
           "type": "boolean",
           "description": "`durable` (true) or `volatile` (false)."
+        },
+        "readRps": {
+          "type": "number",
+          "description": "`reads`: read requests per second per replica."
+        },
+        "writeRps": {
+          "type": "number",
+          "description": "`writes`: write requests per second per replica."
+        },
+        "shards": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "Write capacity of single-primary stores scales with shards."
+        },
+        "consistency": {
+          "enum": [
+            "strong",
+            "eventual"
+          ]
+        },
+        "bandwidthMBps": {
+          "type": "number",
+          "exclusiveMinimum": 0,
+          "description": "`bandwidth`: megabytes per second per replica."
+        },
+        "egressUsdPerGb": {
+          "type": "number",
+          "minimum": 0,
+          "description": "`egress`: price of data leaving the node, in USD per GB."
         },
         "loc": {
           "$ref": "#/$defs/loc"

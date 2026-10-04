@@ -12,9 +12,10 @@ export interface Segment {
 }
 
 const TOKEN =
-  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|import|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)|((?<=\balt\s+"(?:[^"\\]|\\.)*"\s+)when\b)/g;
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|(@[A-Za-z_][\w-]*)|(-->|->>|->|-x(?!\w))|((?:^\s*|\}\s*)(?:title|import|group|usecase|par|alt)\b)|((?:^|\s)#.*$)|(\b[1-5]\d\d\b)|((?<=\balt\s+"(?:[^"\\]|\\.)*"\s+)when\b)|((?<=^[^:"]*:\s*(?:(?:x\d+|~\d+(?:\.\d+)?[KMGT]?B)\s+)*)(?:x\d+|~\d+(?:\.\d+)?[KMGT]?B)(?=\s|$))/g;
 
-const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'comment', 'status', 'keyword'];
+/** The last group is a `x200` / `~2MB` label prefix (§7.3). */
+const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'comment', 'status', 'keyword', 'number'];
 
 /**
  * Lines of the high-level design blocks (traffic, requirements, capacity,
@@ -22,7 +23,7 @@ const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'co
  * numbers.
  */
 const SECTION_TOKEN =
-  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|((?:^|\s)#.*$)|(\b\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month)\b| %)?)|(\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|never|every|responds|writes|responding|handles|failure|path|replicas|any|in|scenario|latency|availability|cost|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b|[<>]=?)/g;
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|((?:^|\s)#.*$)|(\b\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?)|(\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b|[<>]=?)/g;
 
 const SECTION_CLASSES: TokenClass[] = ['string', 'tech', 'comment', 'number', 'keyword'];
 

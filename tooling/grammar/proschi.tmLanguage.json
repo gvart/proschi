@@ -188,6 +188,18 @@
           "include": "#comment"
         },
         {
+          "comment": "`x200` (fan-out) and `~2MB` (payload size) at the start of a step label, in either order.",
+          "match": "\\G\\s*(x\\d+|~\\d+(?:\\.\\d+)?[KMGT]?B)(?=\\s|$)(?:\\s+(x\\d+|~\\d+(?:\\.\\d+)?[KMGT]?B)(?=\\s|$))?",
+          "captures": {
+            "1": {
+              "name": "constant.numeric.label-prefix.proschi"
+            },
+            "2": {
+              "name": "constant.numeric.label-prefix.proschi"
+            }
+          }
+        },
+        {
           "include": "#payload"
         },
         {
@@ -384,12 +396,12 @@
     },
     "section-keyword": {
       "name": "keyword.other.proschi",
-      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|never|every|responds|writes|responding|handles|failure|path|replicas|any|in|scenario|latency|availability|cost|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
+      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
     },
     "quantity": {
-      "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx.",
+      "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx, 500 MB/s, 0.05 usd/GB.",
       "name": "constant.numeric.proschi",
-      "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month)\\b| %)?"
+      "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month|usd/GB|MB/s|GB/s)\\b| %)?"
     }
   }
 }

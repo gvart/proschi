@@ -1,4 +1,5 @@
 import {
+  ASSERTIONS,
   KEYWORDS,
   addConnection,
   componentCatalog,
@@ -140,6 +141,11 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     range,
   }));
   if (!atLineStart) return nodes;
+  // Inside a test block a line is an assertion, never a statement.
+  if (inTestBlock(analysis.lines, pos.line) && !/\}/.test(before)) {
+    const assertions: CompletionItem[] = ASSERTIONS.map((a) => ({ label: a.label, kind: 'keyword', detail: a.detail, snippet: a.snippet, range }));
+    return [...assertions, ...nodes];
+  }
   const afterBrace = /\}\s*$/.test(before.slice(0, before.length - word.length));
   const keywords: CompletionItem[] = KEYWORDS.filter((k) => !afterBrace || k.label === 'alt').map((k) => ({
     label: k.label,
@@ -149,6 +155,19 @@ export function complete(analysis: Analysis, pos: Position): CompletionItem[] {
     range,
   }));
   return afterBrace ? keywords : [...keywords, ...nodes];
+}
+
+/**
+ * True when line `index` is inside a `test "…" {` block: the nearest line
+ * above that opens a block is a test header, and no line in between closes one.
+ */
+export function inTestBlock(lines: string[], index: number): boolean {
+  for (let i = index - 1; i >= 0; i--) {
+    const line = lines[i];
+    if (/^\s*\}/.test(line)) return false;
+    if (/\{\s*(?:#.*)?$/.test(line)) return /^\s*test\s+"/.test(line);
+  }
+  return false;
 }
 
 function describeNode(n: DiagramNode): string {

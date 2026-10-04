@@ -56,3 +56,23 @@ export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'decision', detail: 'A design decision with its reasons', snippet: 'decision "${1:Title}" {\n\tbecause "${2:reason}"$0\n}' },
   { label: 'test', detail: 'Flow assertions: "Use case" calls any cache', snippet: 'test "${1:Name}" {\n\t$0\n}' },
 ];
+
+/** Assertion forms offered at the start of a line inside a `test` block (docs/LANGUAGE.md, "test"). */
+export const ASSERTIONS: { label: string; detail: string; snippet: string }[] = [
+  { label: '"Use case" calls', detail: 'Some scenario calls the node', snippet: '"${1:Use case}" calls ${2:node}' },
+  { label: '"Use case" never calls', detail: 'No scenario calls the node', snippet: '"${1:Use case}" never calls ${2:node}' },
+  { label: '"Use case" every scenario calls', detail: 'Every scenario calls the node', snippet: '"${1:Use case}" every scenario calls ${2:node}' },
+  { label: '"Use case" calls … before …', detail: 'The first call to one node comes before the first call to another', snippet: '"${1:Use case}" calls ${2:node} before ${3:node}' },
+  { label: '"Use case" calls … after …', detail: 'The last call to one node comes after the first call to another', snippet: '"${1:Use case}" calls ${2:node} after ${3:node}' },
+  { label: '"Use case" never waits for', detail: 'No synchronous call to the node before the response', snippet: '"${1:Use case}" never waits for ${2:node}' },
+  { label: '"Use case" writes … before responding', detail: 'A write to the node happens before the response', snippet: '"${1:Use case}" writes ${2:node} before responding' },
+  { label: '"Use case" responds', detail: 'Status code or class of the entry response', snippet: '"${1:Use case}" responds ${2:2xx}' },
+  { label: '"Use case" starts at', detail: 'The entry request is sent by the node', snippet: '"${1:Use case}" starts at ${2:node}' },
+  { label: '"Use case" has scenario', detail: 'The use case has a scenario of this name', snippet: '"${1:Use case}" has scenario "${2:Scenario}"' },
+  { label: '"Use case" handles failure of', detail: 'A scenario fails the node and still answers', snippet: '"${1:Use case}" handles failure of ${2:node}' },
+  { label: 'node calls node', detail: 'Some step is sent by one node to the other', snippet: '${1:node} calls ${2:node}' },
+  { label: 'node never calls node', detail: 'No step is sent by one node to the other', snippet: '${1:node} never calls ${2:node}' },
+  { label: 'in "Use case" node calls node', detail: 'A step of the use case is sent by one node to the other', snippet: 'in "${1:Use case}" ${2:node} calls ${3:node}' },
+  { label: 'no path from … to …', detail: 'No chain of connections links the nodes', snippet: 'no path from ${1:node} to ${2:node}' },
+  { label: 'node has replicas >=', detail: 'Minimum replica count', snippet: '${1:node} has replicas >= ${2:2}' },
+];
