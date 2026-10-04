@@ -18,7 +18,16 @@ export interface Diagnostic extends SourceLoc {
 }
 
 /** A use case step with where it is written: the request line, and the `-->` line that answered it. */
-export type DiagramStep = FlowStep & { loc: SourceLoc; responseLoc?: SourceLoc };
+export type DiagramStep = FlowStep & {
+  loc: SourceLoc;
+  responseLoc?: SourceLoc;
+  /** `x200 …` at the start of a label: the step happens this many times per request (fan-out). Absent means 1. */
+  multiplier?: number;
+  /** `~2MB …` at the start of a label: payload size in bytes, for transfer time and egress cost. */
+  sizeBytes?: number;
+  /** Read or write, from the HTTP method or the label's verb (docs/design/hld-and-practice.md §7.2). */
+  access?: 'read' | 'write';
+};
 
 export type DiagramNodeKind = 'component' | 'group' | 'text';
 
@@ -105,6 +114,10 @@ export interface Diagram {
 export type Kind =
   | 'client'
   | 'edge'
+  | 'cdn'
+  | 'loadbalancer'
+  | 'gateway'
+  | 'dns'
   | 'service'
   | 'function'
   | 'cache'
@@ -123,7 +136,14 @@ export interface Quantity {
 }
 
 /** A node id, an exact tech stack, or every node of a kind (`any cache`). */
-export type Selector = { node: string } | { tech: string } | { kind: Kind };
+export type Selector =
+  | { node: string }
+  | { tech: string }
+  | { kind: Kind }
+  /** `any strong store` / `any eventual store` (§7.4). */
+  | { consistency: 'strong' | 'eventual' }
+  /** `X or Y` (§7.1). */
+  | { anyOf: Selector[] };
 
 /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%`; shares are fractions 0..1. */
 export interface TrafficEntry {
@@ -137,7 +157,7 @@ export type Percentile = 50 | 90 | 95 | 99 | 99.9;
 
 /** One line of `requirements { … }`; percentages are 0..100. */
 export type Requirement =
-  | { kind: 'latency'; percentile: Percentile; useCase?: string; maxMs: number; loc: SourceLoc }
+  | { kind: 'latency'; percentile: Percentile; useCase?: string; scenario?: string; maxMs: number; loc: SourceLoc }
   | { kind: 'availability'; useCase?: string; minPercent: number; loc: SourceLoc }
   | { kind: 'durable'; useCase: string; loc: SourceLoc }
   | { kind: 'survive'; target: Selector | 'any'; loc: SourceLoc }
@@ -152,6 +172,16 @@ export interface CapacityOverride {
   availability?: number;
   costUsd?: number;
   durable?: boolean;
+  /** Separate read and write capacity per replica (§7.2); `rps` sets both. */
+  readRps?: number;
+  writeRps?: number;
+  /** Write capacity scales with shards, not replicas, for single-primary stores (§7.2). */
+  shards?: number;
+  consistency?: 'strong' | 'eventual';
+  /** Network bandwidth per replica in megabytes per second (§7.3). */
+  bandwidthMBps?: number;
+  /** Egress price in USD per GB (§7.3). */
+  egressUsdPerGb?: number;
   loc: SourceLoc;
 }
 
@@ -187,7 +217,16 @@ export type Assertion =
   | { kind: 'hasScenario'; useCase: string; scenario: string; loc: SourceLoc }
   | { kind: 'handlesFailure'; useCase: string; target: Selector; loc: SourceLoc }
   | { kind: 'noPath'; from: Selector; to: Selector; loc: SourceLoc }
-  | { kind: 'replicas'; target: Selector; min: number; loc: SourceLoc };
+  | { kind: 'replicas'; target: Selector; min: number; loc: SourceLoc }
+  // §7.1 additions
+  /** `U [scenario S] never waits for X`: no synchronous call to X before U's entry response. */
+  | { kind: 'neverWaits'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
+  /** `U [scenario S] calls Y after X`: in every scenario calling both, the last call to Y follows the first call to X. */
+  | { kind: 'after'; useCase: string; scenario?: string; target: Selector; after: Selector; loc: SourceLoc }
+  /** `[in U] X calls Y` / `[in U] X never calls Y`: steps sent by X (not just reached). */
+  | { kind: 'senderCalls'; useCase?: string; from: Selector; to: Selector; quantifier: 'some' | 'never'; loc: SourceLoc }
+  /** `U starts at X`: U's entry request is sent by a node matching X. */
+  | { kind: 'startsAt'; useCase: string; target: Selector; loc: SourceLoc };
 
 export interface FlowTest {
   name: string;

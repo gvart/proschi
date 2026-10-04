@@ -409,6 +409,12 @@ function assertion(run: Run, a: Assertion): Check {
       if (short.length === 0) return pass(`${nodes.map(has).join(', ')} (minimum ${a.min})`);
       return fail(`${short.map(has).join(', ')} (minimum ${a.min})`, `Declare ${short[0].id} with x${a.min}`);
     }
+    // TODO(v2 §7.1): evaluate the new assertions.
+    case 'neverWaits':
+    case 'after':
+    case 'senderCalls':
+    case 'startsAt':
+      return fail(`"${a.kind}" assertions are not evaluated yet`, 'Coming in the next version');
   }
 }
 

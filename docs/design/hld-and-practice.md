@@ -468,3 +468,102 @@ is written; the cache is read before the database).
 | 2a | Simulation and tests (§2, §3): `frontend/src/sim/`, Analysis and Tests panels, `proschi test`/`analyze`, LSP diagnostics | wave 1 |
 | 2b | HLD (§4) and the practice platform shell (§5.3: pages, problem format, runner, progress) with two sample problems | wave 1; consumes §2/§3 types |
 | 3 | The 12 problems with reference solutions passing all tests; landing page section; release | wave 2 |
+
+---
+
+## 7. Version 2: closing the gaps found while writing problems
+
+Writing the twelve problems showed where checks were too coarse to tell a good
+design from a lucky one. This section extends §1–§3; everything above still
+holds unless stated here. Types are in `frontend/src/dsl/types.ts` (marked
+§7.x).
+
+### 7.1 Assertions
+
+| Assertion | Holds when |
+|---|---|
+| `U [scenario S] never waits for X` | no synchronous (`->`) call to a node matching X happens before U's entry response, in any scenario (or S). Async sends (`->>`) and calls after the response are fine. It passes when X is never called; add `calls X` to require the call. |
+| `U [scenario S] calls Y after X` | in every scenario that calls both, the **last** call to Y comes after the **first** call to X; and some scenario calls both. (Unlike `before`, which compares first calls; this expresses "book the ledger after the gateway" even when the same database was read earlier.) |
+| `[in U] X calls Y` | some step is **sent by** a node matching X to a node matching Y (in U, or in any use case) |
+| `[in U] X never calls Y` | no step is sent by X to Y. E.g. `any service never calls blobs`: bytes never pass through a server. |
+| `U starts at X` | U's entry request is sent by a node matching X (e.g. `"Retry charge" starts at any queue`) |
+
+**Selector unions:** `X or Y [or Z]` anywhere a selector is allowed
+(`never calls any cache or any database`).
+
+**Consistency selectors:** `any strong store`, `any eventual store` (§7.4).
+
+**Messages:** when a use case or scenario is missing, a test reports it once,
+not once per assertion.
+
+### 7.2 Reads, writes and single-primary stores
+
+- Every request step has an **access**: `write` if the HTTP method is POST,
+  PUT, PATCH or DELETE, or the label's first word (case-insensitive) is one of
+  INSERT, UPDATE, UPSERT, DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH,
+  RPUSH, ZADD, HSET, GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE;
+  `read` otherwise (GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH, …).
+- `durable U` and `writes X before responding` count **write** steps only. A
+  SELECT no longer counts as a durable write.
+- Profiles gain separate read and write capacity and a **write scaling** rule:
+  single-primary stores (relational databases: PostgreSQL, MySQL, Aurora, RDS,
+  SQL Server, Oracle, MariaDB, Cloud SQL, Azure SQL…) scale **reads** with
+  replicas but **writes only with shards**; partitioned stores (DynamoDB,
+  Cassandra, Bigtable, Spanner, Cosmos DB, Kafka, caches) scale both with
+  replicas. Defaults: relational 20k reads / 5k writes per node; NoSQL 20k /
+  20k; cache 100k / 100k.
+- `capacity { db reads 30k rps  writes 8k rps  shards 4 }` overrides; `rps`
+  alone still sets both.
+- Utilisation is computed separately for reads and writes; a node is saturated
+  when either is.
+
+### 7.3 Fan-out and payload size
+
+- A label may start with `x<N>` to say the step happens N times per request:
+  `worker -> feeds : x200 LPUSH feed:{follower}`. Load counts N calls; latency
+  counts the step once (assumed batched or parallel).
+- A label may start with `~<size>` (`~2MB`, `~500KB`, `~4GB`), before or after
+  `x<N>`: the payload size. It adds **transfer time** `size ÷ bandwidth` to the
+  hop (bandwidth per replica: client 10 MB/s, edge/cdn 1 000 MB/s, service
+  200 MB/s, storage 100 MB/s, others 100 MB/s; override `bandwidth 500 MB/s`)
+  and **egress cost** for data leaving storage or a CDN:
+  `rps × share × multiplier × size × 2 592 000 s/month × price`, with prices
+  storage $0.09/GB, cdn $0.02/GB, others $0 (override `egress 0.05 usd/GB`).
+  Egress appears in the cost total and per node in the Analysis panel.
+
+### 7.4 Consistency
+
+- Every data store has a consistency: `strong` (relational databases,
+  Spanner, etcd-like, queues for ordering) or `eventual` (caches, Cassandra,
+  DynamoDB default reads, Elasticsearch, CDNs, object storage listings).
+  Override with `capacity { table consistency strong }`.
+- Selectors `any strong store` / `any eventual store` match data stores by
+  consistency, so a test can require `"Hold seat" writes any strong store
+  before responding` and `"Hold seat" never calls any eventual store`.
+- Time (TTL, expiry, staleness windows) stays out of the model for now; model
+  expiry as a scenario.
+
+### 7.5 Edge sub-kinds
+
+`edge` splits into `cdn` (CloudFront, Azure CDN, Cloud CDN, Front Door),
+`loadbalancer` (AWS Load Balancer, GCP Load Balancing), `gateway` (AWS API
+Gateway, Azure API Management) and `dns` (Route53, Azure DNS, Cloud DNS).
+`any edge` still matches all four. Profiles: cdn 200k rps / 5 ms / 99.99% /
+$100; loadbalancer 100k / 2 ms / 99.99% / $50; gateway 10k / 10 ms / 99.95% /
+$100; dns: not on the request path (ignored for latency, 100% available).
+
+### 7.6 Requirements and fallbacks
+
+- Per-scenario latency: `p99 "Checkout" scenario "Replay" < 100ms`.
+- Fallback rule refined: a scenario is a fallback for n if it calls n with
+  `-x` **before** the entry response and has no successful synchronous call to
+  n before the entry response; calls to n after responding (a background
+  retry) no longer cancel the fallback.
+
+### 7.7 Delivery
+
+| Wave | Work |
+|---|---|
+| A | Parser and tooling for §7.1 syntax, §7.3 label prefixes, §7.2/§7.3/§7.4 capacity keys, §7.6 per-scenario latency; highlighting, formatter, schema, docs |
+| B | Simulation for §7.1–§7.6 (assertion evaluation, access classification, read/write capacity and write scaling, fan-out, transfer time and egress, consistency, edge sub-kinds in `dsl/kinds.ts` and profiles, fallback rule, message dedup) |
+| C | Revise the 12 problems to use the new checks so the key insights are enforced precisely (after A and B) |

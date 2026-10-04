@@ -663,6 +663,37 @@
             "kind"
           ],
           "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "consistency": {
+              "enum": [
+                "strong",
+                "eventual"
+              ]
+            }
+          },
+          "required": [
+            "consistency"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "anyOf": {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/selector"
+              },
+              "minItems": 2
+            }
+          },
+          "required": [
+            "anyOf"
+          ],
+          "additionalProperties": false
         }
       ]
     },
@@ -1211,6 +1242,122 @@
             "kind",
             "target",
             "min",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "neverWaits"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "after"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "after": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "after",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "senderCalls"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "from": {
+              "$ref": "#/$defs/selector"
+            },
+            "to": {
+              "$ref": "#/$defs/selector"
+            },
+            "quantifier": {
+              "enum": [
+                "some",
+                "never"
+              ]
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to",
+            "quantifier",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "startsAt"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
             "loc"
           ],
           "additionalProperties": false

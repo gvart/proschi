@@ -178,6 +178,8 @@ export const HOT_UTILIZATION = 0.7;
 export function selectorLabel(s: Selector): string {
   if ('node' in s) return s.node;
   if ('tech' in s) return `[${s.tech}]`;
+  if ('anyOf' in s) return s.anyOf.map(selectorLabel).join(' or ');
+  if ('consistency' in s) return `any ${s.consistency} store`;
   return `any ${s.kind}`;
 }
 
@@ -214,6 +216,14 @@ export function assertionLabel(a: Assertion): string {
       return `no path from ${selectorLabel(a.from)} to ${selectorLabel(a.to)}`;
     case 'replicas':
       return `${selectorLabel(a.target)} has replicas >= ${a.min}`;
+    case 'neverWaits':
+      return `${uc} never waits for ${selectorLabel(a.target)}`;
+    case 'after':
+      return `${uc} calls ${selectorLabel(a.target)} after ${selectorLabel(a.after)}`;
+    case 'senderCalls':
+      return `${a.useCase ? `in "${a.useCase}" ` : ''}${selectorLabel(a.from)} ${a.quantifier === 'never' ? 'never calls' : 'calls'} ${selectorLabel(a.to)}`;
+    case 'startsAt':
+      return `${uc} starts at ${selectorLabel(a.target)}`;
   }
 }
 

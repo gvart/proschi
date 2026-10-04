@@ -28,6 +28,11 @@ const NEUTRAL: Numbers = { rps: Infinity, latencyMs: 0, availability: 1, costUsd
 export const KIND_PROFILES: Record<Kind, Numbers> = {
   client: NEUTRAL,
   edge: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
+  // TODO(v2 §7.5): own numbers for the edge sub-kinds; for now they behave like edge.
+  cdn: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
+  loadbalancer: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
+  gateway: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
+  dns: { rps: 100_000, latencyMs: 2, availability: 0.9999, costUsd: 50, durable: false },
   service: { rps: 2_000, latencyMs: 10, availability: 0.995, costUsd: 100, durable: false },
   function: { rps: 10_000, latencyMs: 25, availability: 0.9995, costUsd: 200, durable: false },
   cache: { rps: 100_000, latencyMs: 1, availability: 0.999, costUsd: 150, durable: false },
