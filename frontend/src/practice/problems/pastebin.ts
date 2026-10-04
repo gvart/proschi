@@ -15,8 +15,8 @@ link can read the paste until it expires.
   to one year) and gets a short id back (\`201\`).
 - **Read paste**: anyone opens \`/<id>\` and gets the text. Name its three
   scenarios:
-  - \`"Cached"\`: the paste was read recently and is served from a cache or
-    the CDN.
+  - \`"Cached"\`: the paste was read recently and the CDN answers it from
+    its edge cache.
   - \`"Not cached"\`: the paste has to be looked up and fetched.
   - \`"Expired"\`: the paste exists but has expired; the reader gets \`404\`
     and its text is never fetched.
@@ -32,14 +32,20 @@ tests in \`problem.proschi\` refer to them.
   for expired pastes.
 - A paste is 10 KB on average and up to **10 MB**. Five years of pastes add
   up to about 80 TB.
+- 5k reads a second of 10 KB each send about **130 TB a month** to readers.
+  Put the size on every step that carries the text (\`~10KB\`), so the
+  simulation counts its transfer time and egress: data leaving object
+  storage costs **$0.09/GB**, data leaving a CDN **$0.02/GB**.
 
 ## Constraints
 
 - p99 of a read under **200 ms**, of creating a paste under **300 ms**.
+- A popular paste (\`"Cached"\`) loads in under **30 ms** at p99: only an
+  edge close to the reader is that fast.
 - Reads available **99.9%** of the time.
 - A paste is never lost once its id was returned.
 - Losing any single machine must not take the service down.
-- At most **$2,000 / month**.
+- At most **$6,000 / month**, egress included.
 
 ## What is given
 
@@ -57,10 +63,11 @@ traffic {
 requirements {
   p99 "Read paste" < 200ms
   p99 "Create paste" < 300ms
+  p99 "Read paste" scenario "Cached" < 30ms
   availability "Read paste" >= 99.9%
   durable "Create paste"
   survive any node failure
-  cost <= 2000 usd/month
+  cost <= 6000 usd/month
 }
 
 test "Paste text lives in object storage" {
@@ -73,13 +80,14 @@ test "Metadata lives in a database" {
   "Create paste" responds 201
 }
 
-test "Popular pastes never reach the stores" {
-  "Read paste" scenario "Cached" never calls any database
-  "Read paste" scenario "Cached" never calls any storage
+test "Popular pastes are served by the CDN" {
+  "Read paste" scenario "Cached" calls any cdn
+  "Read paste" scenario "Cached" never calls any service or any database or any storage
 }
 
 test "Expiry is checked before the text is fetched" {
   "Read paste" calls any database before any storage
+  "Read paste" scenario "Not cached" calls any storage after any database
   "Read paste" scenario "Expired" never calls any storage
   "Read paste" scenario "Expired" responds 404
 }
@@ -126,15 +134,16 @@ decision "Text in object storage, metadata in PostgreSQL" {
   rejected "Text in the database" "Bloats every row, backups and replicas with megabytes nobody queries"
 }
 decision "Serve reads through a CDN" {
-  because "A shared link is opened by many readers within minutes; the edge answers 90% of reads without touching the API"
-  rejected "Redis in front of the database" "Still needs enough API replicas to take all 5k rps"
+  because "A shared link is opened by many readers within minutes; the edge answers 90% of reads in a few milliseconds without touching the API, and its egress costs $0.02/GB instead of $0.09/GB from S3"
+  rejected "Redis behind the API" "Every read still crosses the load balancer and the API: too slow for 30 ms at p99, and the API must take all 5k rps"
+  rejected "Serve every read from S3" "130 TB a month at $0.09/GB is over $11,000 of egress"
 }
 decision "Short CDN lifetime" because "Caching for 5 minutes keeps an expired paste visible for at most 5 minutes past its expiry"
 
 usecase "Create paste" "Store a paste and return its id" {
-  user    -> cdn    : POST /pastes json {"text": "panic: runtime error", "expiresIn": "1d"}
-  cdn     -> api    : POST /pastes
-  api     -> bodies : PUT pastes/k7Qz2
+  user    -> cdn    : ~10KB POST /pastes json {"text": "panic: runtime error", "expiresIn": "1d"}
+  cdn     -> api    : ~10KB POST /pastes
+  api     -> bodies : ~10KB PUT pastes/k7Qz2
   bodies --> api    : 200
   api     -> meta   : INSERT Paste k7Qz2
   meta   --> api    : ok
@@ -143,15 +152,15 @@ usecase "Create paste" "Store a paste and return its id" {
 }
 
 usecase "Read paste" "Show the text of a paste" {
-  user -> cdn : GET /k7Qz2
+  user -> cdn : ~10KB GET /k7Qz2
 
   alt "Cached" when "the paste was read in the last few minutes" {
     cdn --> user : 200 text
   } alt "Not cached" when "nobody read it lately" {
-    cdn     -> api    : GET /k7Qz2
+    cdn     -> api    : ~10KB GET /k7Qz2
     api     -> meta   : SELECT Paste k7Qz2
     meta   --> api    : expires tomorrow
-    api     -> bodies : GET pastes/k7Qz2
+    api     -> bodies : ~10KB GET pastes/k7Qz2
     bodies --> api    : text
     api    --> cdn    : 200 text (Cache-Control: max-age=300)
     cdn    --> user   : 200 text
@@ -166,8 +175,8 @@ usecase "Read paste" "Show the text of a paste" {
 `,
   hints: [
     'Pastes can be 10 MB and add up to 80 TB. Which kind of store is built for large blobs, and what is left for the database?',
-    'Reads come in bursts for the same link. What can answer them before they reach your servers at all?',
+    'Reads come in bursts for the same link, and a popular paste must load in 30 ms. What can answer them before they reach your servers at all?',
     'Look up the paste row first: it tells you whether the paste expired, so an expired read never fetches the text.',
-    'The "Not cached" path sets p99 (9% of reads): it pays the CDN, the API, the database and object storage (~30 ms) one after the other.',
+    'Write ~10KB on the steps that carry the text. Each read that reaches object storage pays $0.09/GB of egress; one the CDN answers pays $0.02/GB. The "Not cached" path sets p99 (9% of reads): it pays the CDN, the API, the database and object storage (~30 ms) one after the other.',
   ],
 };

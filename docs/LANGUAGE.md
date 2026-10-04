@@ -122,11 +122,21 @@ Every request step has an `access`, `read` or `write`:
 1. With an HTTP method: `POST`, `PUT`, `PATCH` and `DELETE` write; `GET`,
    `HEAD` and `OPTIONS` read.
 2. Otherwise the first word of the label (after any prefixes, compared
-   case-insensitively) decides. These words write: INSERT, UPDATE, UPSERT,
-   DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH, RPUSH, ZADD, HSET,
-   GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE.
+   case-insensitively, the whole word) decides. The words in the table below
+   write.
 3. Everything else reads: GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH,
-   an event name such as `OrderPlaced`, …
+   GetItem, MGET, an event name such as `OrderPlaced`, …
+
+| Write verbs | Typical labels |
+|---|---|
+| INSERT, UPDATE, UPSERT, DELETE, CREATE | `INSERT order`, `UPDATE seat SET held` |
+| PUT, SET, WRITE, APPEND, SAVE, STORE, UPLOAD, COMMIT, RECORD, MARK | `PUT pastes/k7Qz2`, `STORE body`, `MARK paid` |
+| PUTITEM, UPDATEITEM, DELETEITEM, BATCHWRITEITEM | DynamoDB: `PutItem Url` |
+| INCR, INCRBY, DECR, HINCRBY, LPUSH, RPUSH, ZADD, HSET, SADD, XADD, MSET, GEOADD | Redis: `INCR rate:42`, `ZADD feed:7 p_981` |
+| RESERVE, HOLD, BOOK, CHARGE | claiming a resource or money: `HOLD seat 12A`, `CHARGE card` |
+| PUBLISH, SEND, ENQUEUE, PRODUCE, EMIT, NOTIFY | handing something on: `EMIT OrderShipped`, `NOTIFY bob` |
+
+Words that only start like a verb (`Stored`, `Booking`, `Notification`) read.
 
 `durable` requirements and `writes X before responding` count write steps
 only, and reads and writes load a store's read and write capacity separately.

@@ -314,9 +314,8 @@ formulas are in the [design](design/hld-and-practice.md#2-simulation).
   $0.02/GB, everything else free.
 - **Reads and writes.** Every request step is a read or a write: a write for
   POST, PUT, PATCH and DELETE or a label starting with a write verb (INSERT,
-  UPDATE, UPSERT, DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH, RPUSH,
-  ZADD, HSET, GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE), a read
-  otherwise. A request to a queue is always a write, whatever its label: the
+  UPDATE, PUT, SET, INCR, ZADD, PUBLISH, SEND, STORE, HOLD, …; the full list is
+  in [Reads and writes](LANGUAGE.md#reads-and-writes)), a read otherwise. A request to a queue is always a write, whatever its label: the
   queue stores the message.
 - **Load.** Each use case's rate is split over its scenarios by `mix` (all to
   the first scenario without one); every request step (`->`, `->>`, `-x`) adds
@@ -410,9 +409,13 @@ file has errors, 0 otherwise; files without requirements or tests pass.
 `--format json` prints every result (`id`, `name`, `category`, `passed`,
 `message`, `hint`, `loc`).
 
-`proschi analyze` prints load, capacity, utilisation, latency, availability
-and cost per node, the total cost, latency percentiles per use case and
-scenario, single points of failure and warnings. `--format json` prints the
+`proschi analyze` prints, per node, reads and writes separately (load of
+capacity and utilisation, e.g. `3k/15k rps 20%`; shards next to the
+replicas), the combined utilisation, latency, availability, egress (cost and
+volume per month) and cost; then the total cost with its egress part, latency
+percentiles per use case and scenario, single points of failure and warnings.
+The HLD's *Capacity estimates* table shows the same read/write split and
+egress. `--format json` prints the
 whole analysis (unlimited capacities come out as `null`).
 
 In CI, next to `check`:

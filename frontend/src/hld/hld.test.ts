@@ -149,6 +149,71 @@ describe('hld without simulation', () => {
   });
 });
 
+describe('capacity: reads, writes and egress', () => {
+  // A single-primary store with shards, and a bucket whose downloads leave as egress (§7.2, §7.3).
+  const source = `title "Uploads"
+user  "User"    [Actor]
+api   "API"     [REST API]   x4
+db    "Meta DB" [PostgreSQL] x2
+blobs "Blobs"   [AWS S3]     x2
+user -> api
+api  -> db
+api  -> blobs
+capacity {
+  db shards 3
+}
+traffic {
+  "Upload"   3k rps
+  "Download" 1k rps
+}
+usecase "Upload" {
+  user -> api : POST /files
+  api -> db : INSERT file
+  api -> blobs : ~1MB PUT file
+  api --> user : 201
+}
+usecase "Download" {
+  user -> api : GET /files/1
+  api -> db : SELECT file
+  api -> blobs : ~1MB GET file
+  api --> user : 200
+}
+`;
+  const doc = buildHld(parse(source).diagram);
+  const load = section(doc, 'capacity')!.load;
+  const row = (id: string) => load.find((n) => n.id === id)!;
+
+  it('splits load and capacity into reads and writes, with shards and egress', () => {
+    expect(row('db')).toMatchObject({
+      replicas: 2,
+      shards: 3,
+      readLoadRps: 1_000,
+      readCapacityRps: 120_000,
+      writeLoadRps: 3_000,
+      writeCapacityRps: 15_000,
+      writeScaling: 'shards',
+      egressGbPerMonth: 0,
+    });
+    expect(row('db').writeUtilization).toBeCloseTo(0.2);
+    // 1k rps × 1 MB × 2 592 000 s = 2 592 000 GB at $0.09/GB.
+    expect(row('blobs').egressGbPerMonth).toBeCloseTo(2_592_000);
+    expect(row('blobs').egressUsd).toBeCloseTo(233_280);
+    expect(section(doc, 'capacity')!.totalEgressUsd).toBeCloseTo(233_280);
+  });
+
+  it('renders the split in Markdown and HTML', () => {
+    const md = toMarkdown(doc);
+    expect(md).toContain('| Meta DB | 1k rps of 120k rps (0.8%) | 3k rps of 15k rps (20%) | 20% | 2 × 3 shards | — | $2,400 |');
+    expect(md).toContain('| Blobs | 1k rps of 10k rps (10%) | 3k rps of 10k rps (30%) | 40% | 2 | 2,592 TB, $233,280 | $233,380 |');
+    expect(md).toMatch(/\*\*Total cost:\*\* \$[\d,]+ \/ month \(\$233,280 of it egress\)/);
+    const html = toHtml(doc);
+    expect(html).toContain('<td>3k rps of 15k rps (20%)</td>');
+    expect(html).toContain('<td>2 × 3 shards</td>');
+    expect(html).toContain('of it egress)');
+    expectBalancedHtml(html);
+  });
+});
+
 describe('labels', () => {
   it('requirements read like their test names', () => {
     const loc = { line: 1, col: 1, length: 1 };
@@ -186,7 +251,8 @@ describe('toMarkdown', () => {
     expect(md).toContain('| p99 of Redirect < 50 ms | ❌ | p99 of Redirect is 75 ms (limit 50 ms) |');
     expect(md).toContain('| Shorten is durable | — | — |');
     expect(md).toContain('| Redirect | 100k rps | Cache hit 90%, Cache miss 10% |');
-    expect(md).toContain('| Load Balancer | 101k rps | 100k rps | 101% ⚠️ saturated | 1 | $50 |');
+    expect(md).toContain('| Component | Reads | Writes | Utilisation | Replicas | Egress / month | Cost / month |');
+    expect(md).toContain('| Load Balancer | 101k rps of 100k rps (101%) | — | 101% ⚠️ saturated | 1 | — | $50 |');
     expect(md).toContain('**Total cost:** $1,000 / month');
     expect(md).toContain('| **Shortener API** (`api`) | REST API | service | links | 3 | Creates codes and serves redirects | — |');
     expect(md).toContain('### Url (in Links DB)');

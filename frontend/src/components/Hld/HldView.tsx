@@ -5,6 +5,11 @@ import type { Diagram } from '../../dsl';
 import { buildSequence, findScenario, sequenceMessages } from '../../dsl/sequence';
 import {
   HOT_UTILIZATION,
+  LOAD_HEADINGS,
+  accessText,
+  egressText,
+  replicasText,
+  totalCostText,
   buildHld,
   hld,
   defaultEngine,
@@ -177,14 +182,22 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
             <>
               <H3>Load per component</H3>
               <Table
-                head={['Component', 'Load', 'Capacity', 'Utilisation', 'Replicas', 'Cost / month']}
-                rows={s.load.map((n) => [n.name, formatRps(n.loadRps), formatRps(n.capacityRps), <Utilization key="u" value={n.utilization} saturated={n.saturated} />, n.replicas, formatUsd(n.costUsd)])}
+                head={LOAD_HEADINGS}
+                rows={s.load.map((n) => [
+                  n.name,
+                  accessText(n, 'read'),
+                  accessText(n, 'write'),
+                  <Utilization key="u" value={n.utilization} saturated={n.saturated} />,
+                  replicasText(n),
+                  egressText(n),
+                  formatUsd(n.costUsd),
+                ])}
               />
             </>
           )}
           {s.totalCostUsd !== undefined && (
             <p className="mt-2">
-              <strong>Total cost:</strong> {formatUsd(s.totalCostUsd)} / month
+              <strong>Total cost:</strong> {totalCostText(s.totalCostUsd, s.totalEgressUsd)}
             </p>
           )}
         </>

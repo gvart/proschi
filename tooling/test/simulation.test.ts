@@ -141,9 +141,9 @@ describe('proschi analyze', () => {
       [
         'Items (<dir>/items.proschi)',
         '',
-        'Node  Kind      Replicas    Load  Capacity  Util  Latency  Availability  Cost/month',
-        'api   service          2  1k rps    4k rps   25%  13.3 ms      99.9975%        $200',
-        'db    database         1  1k rps   20k rps    5%   5.3 ms        99.95%        $400',
+        'Node  Kind      Replicas          Reads  Writes  Util  Latency  Availability  Egress/month  Cost/month',
+        'api   service          2  1k/4k rps 25%       -   25%  13.3 ms      99.9975%             -        $200',
+        'db    database         1  1k/20k rps 5%       -    5%   5.3 ms        99.95%             -        $400',
         '',
         'Total cost: $600/month',
         '',
@@ -209,6 +209,72 @@ describe('language server helpers', () => {
 });
 
 describe('with the language syntax', () => {
+  it('analyze splits reads and writes, shows shards and egress', () => {
+    writeFileSync(
+      join(dir, 'uploads.proschi'),
+      `title "Uploads"
+user  [Actor]
+api   [REST API]   x4
+db    [PostgreSQL] x2
+blobs [AWS S3]     x2
+user -> api
+api -> db
+api -> blobs
+capacity {
+  db shards 3
+}
+traffic {
+  "Upload"   3k rps
+  "Download" 1k rps
+}
+usecase "Upload" {
+  user -> api : POST /files
+  api -> db : INSERT file
+  api -> blobs : ~1MB PUT file
+  api --> user : 201
+}
+usecase "Download" {
+  user -> api : GET /files/1
+  api -> db : SELECT file
+  api -> blobs : ~1MB GET file
+  api --> user : 200
+}
+`,
+    );
+    const r = capture((out, err) => run(['analyze', join(dir, 'uploads.proschi')], out, err) as number);
+    expect(r.code).toBe(0);
+    const row = (id: string) => r.out.split('\n').find((l) => l.startsWith(`${id} `))!.split(/\s{2,}/);
+    expect(row('db')).toEqual(['db', 'database', '2x3 shards', '1k/120k rps 1%', '3k/15k rps 20%', '20%', '6.3 ms', '99.999975%', '-', '$2,400']);
+    expect(row('blobs')).toEqual(['blobs', 'storage', '2', '1k/10k rps 10%', '3k/10k rps 30%', '40%', '50 ms', '99.999999%', '$233,280 (2,592 TB)', '$233,380']);
+    expect(r.out).toMatch(/Total cost: \$[\d,]+\/month \(\$233,280\/month of it egress\)/);
+  });
+
+  it('hovers show reads and writes and egress when a node has both', () => {
+    const source = `user [Actor]
+api [REST API] x2
+blobs [AWS S3] x2
+user -> api
+api -> blobs
+traffic {
+  "Get" 100 rps
+  "Put" 100 rps
+}
+usecase "Get" {
+  user -> api : GET /f
+  api -> blobs : ~1MB GET f
+  api --> user : 200
+}
+usecase "Put" {
+  user -> api : POST /f
+  api -> blobs : ~1MB PUT f
+  api --> user : 201
+}
+`;
+    const text = nodeSimulation(parse(source).diagram, 'blobs')!;
+    expect(text).toContain('Reads 100 rps of 10k rps (1%) · writes 100 rps of 10k rps (1%)');
+    expect(text).toContain('of it egress, 259.2 TB)');
+  });
+
   it('runs the requirements and tests written in the file', () => {
     writeFileSync(
       join(dir, 'real.proschi'),

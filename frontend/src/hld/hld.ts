@@ -67,6 +67,20 @@ export interface LoadRow {
   utilization: number;
   saturated: boolean;
   replicas: number;
+  /** Partitions, each with `replicas` instances (§7.2); 1 unless `capacity { n shards … }`. */
+  shards: number;
+  /** Reads and writes separately: load, capacity (all replicas and shards) and utilisation (§7.2). */
+  readLoadRps: number;
+  readCapacityRps: number;
+  readUtilization: number;
+  writeLoadRps: number;
+  writeCapacityRps: number;
+  writeUtilization: number;
+  /** `shards`: writes go to one primary per shard (relational databases). */
+  writeScaling: 'replicas' | 'shards';
+  /** Data leaving the node per month and what it costs (§7.3); included in `costUsd`. */
+  egressGbPerMonth: number;
+  egressUsd: number;
   costUsd: number;
 }
 
@@ -150,7 +164,7 @@ export interface Risk {
 export type HldSection =
   | { kind: 'overview'; title: 'Overview'; summary?: string; components: number; useCases: number; teams: string[] }
   | { kind: 'requirements'; title: 'Requirements'; functional: FunctionalRequirement[]; nonFunctional: NonFunctionalRequirement[]; flowTests: FlowTestRow[] }
-  | { kind: 'capacity'; title: 'Capacity estimates'; traffic: TrafficRow[]; load: LoadRow[]; totalCostUsd?: number }
+  | { kind: 'capacity'; title: 'Capacity estimates'; traffic: TrafficRow[]; load: LoadRow[]; totalCostUsd?: number; totalEgressUsd?: number }
   | { kind: 'components'; title: 'Components'; components: Component[] }
   | { kind: 'dataModel'; title: 'Data model'; entities: DataEntity[] }
   | { kind: 'apis'; title: 'APIs'; endpoints: ApiEndpoint[] }
@@ -324,9 +338,28 @@ export function hld(diagram: Diagram, analysis?: Analysis, tests: TestResult[] =
   const traffic: TrafficRow[] = (diagram.traffic ?? []).map((t) => ({ useCase: t.useCase, rps: t.rps, mix: t.mix ?? [] }));
   const load: LoadRow[] = (analysis?.nodes ?? [])
     .filter((n) => n.kind !== 'client')
-    .map((n) => ({ id: n.id, name: name(n.id), loadRps: n.loadRps, capacityRps: n.capacityRps, utilization: n.utilization, saturated: n.saturated, replicas: n.replicas, costUsd: n.costUsd }));
+    .map((n) => ({
+      id: n.id,
+      name: name(n.id),
+      loadRps: n.loadRps,
+      capacityRps: n.capacityRps,
+      utilization: n.utilization,
+      saturated: n.saturated,
+      replicas: n.replicas,
+      shards: n.shards,
+      readLoadRps: n.readLoadRps,
+      readCapacityRps: n.readCapacityRps,
+      readUtilization: n.readUtilization,
+      writeLoadRps: n.writeLoadRps,
+      writeCapacityRps: n.writeCapacityRps,
+      writeUtilization: n.writeUtilization,
+      writeScaling: n.writeScaling,
+      egressGbPerMonth: n.egressGbPerMonth,
+      egressUsd: n.egressUsd,
+      costUsd: n.costUsd,
+    }));
   if (traffic.length || load.length) {
-    sections.push({ kind: 'capacity', title: 'Capacity estimates', traffic, load, totalCostUsd: analysis?.totalCostUsd });
+    sections.push({ kind: 'capacity', title: 'Capacity estimates', traffic, load, totalCostUsd: analysis?.totalCostUsd, totalEgressUsd: analysis?.totalEgressUsd });
   }
 
   // 4. Components
@@ -425,6 +458,32 @@ export function formatRps(rps: number): string {
 export const formatMs = (ms: number) => `${ms >= 100 ? Math.round(ms) : formatNumber(Number(ms.toFixed(1)))} ms`;
 export const formatPercent = (fraction: number) => `${formatNumber(Number((fraction * 100).toFixed(1)))}%`;
 export const formatUsd = (usd: number) => `$${Math.round(usd).toLocaleString('en-US')}`;
+
+/** `2.6 TB`, `260 GB`, `1.5 GB` */
+export function formatGb(gb: number): string {
+  const n = (x: number, digits: number) => Number(x.toFixed(digits)).toLocaleString('en-US');
+  return gb >= 1000 ? `${n(gb / 1000, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
+}
+
+/** Reads or writes of a load row: `10k rps of 40k rps (25%)`, or `—` without load. */
+export function accessText(n: LoadRow, access: 'read' | 'write'): string {
+  const [load, capacity, utilization] =
+    access === 'read' ? [n.readLoadRps, n.readCapacityRps, n.readUtilization] : [n.writeLoadRps, n.writeCapacityRps, n.writeUtilization];
+  return load > 0 ? `${formatRps(load)} of ${formatRps(capacity)} (${formatPercent(utilization)})` : '—';
+}
+
+/** `3`, or `2 × 4 shards`. */
+export const replicasText = (n: LoadRow): string => (n.shards > 1 ? `${n.replicas} × ${n.shards} shards` : String(n.replicas));
+
+/** `130 TB, $2,592`, or `—` when nothing leaves the node. */
+export const egressText = (n: LoadRow): string => (n.egressGbPerMonth > 0 ? `${formatGb(n.egressGbPerMonth)}, ${formatUsd(n.egressUsd)}` : '—');
+
+/** The column headings of the load table, shared by the renderers. */
+export const LOAD_HEADINGS = ['Component', 'Reads', 'Writes', 'Utilisation', 'Replicas', 'Egress / month', 'Cost / month'];
+
+/** `$4,900 / month`, with the egress part when there is any. */
+export const totalCostText = (totalUsd: number, egressUsd = 0): string =>
+  `${formatUsd(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd(egressUsd)} of it egress)` : ''}`;
 
 /** "201 {"id": 1}", "failed", or "—". */
 export function responseText(r: ApiResponse): string {

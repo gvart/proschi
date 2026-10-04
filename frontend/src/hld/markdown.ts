@@ -1,5 +1,10 @@
 import { toMermaidArchitecture, toMermaidSequence } from '../dsl/mermaid';
 import {
+  LOAD_HEADINGS,
+  accessText,
+  egressText,
+  replicasText,
+  totalCostText,
   formatMs,
   formatPercent,
   formatRps,
@@ -70,12 +75,20 @@ function renderSection(doc: HldDocument, s: HldSection): string[] {
           '### Load per component',
           '',
           ...table(
-            ['Component', 'Load', 'Capacity', 'Utilisation', 'Replicas', 'Cost / month'],
-            s.load.map((n) => [n.name, formatRps(n.loadRps), formatRps(n.capacityRps), `${formatPercent(n.utilization)}${n.saturated ? ' ⚠️ saturated' : ''}`, n.replicas, formatUsd(n.costUsd)]),
+            LOAD_HEADINGS,
+            s.load.map((n) => [
+              n.name,
+              accessText(n, 'read'),
+              accessText(n, 'write'),
+              `${formatPercent(n.utilization)}${n.saturated ? ' ⚠️ saturated' : ''}`,
+              replicasText(n),
+              egressText(n),
+              formatUsd(n.costUsd),
+            ]),
           ),
         );
       }
-      if (s.totalCostUsd !== undefined) out.push(`**Total cost:** ${formatUsd(s.totalCostUsd)} / month`, '');
+      if (s.totalCostUsd !== undefined) out.push(`**Total cost:** ${totalCostText(s.totalCostUsd, s.totalEgressUsd)}`, '');
       break;
     }
     case 'components':

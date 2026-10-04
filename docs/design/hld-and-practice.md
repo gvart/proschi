@@ -501,8 +501,10 @@ not once per assertion.
 - Every request step has an **access**: `write` if the HTTP method is POST,
   PUT, PATCH or DELETE, or the label's first word (case-insensitive) is one of
   INSERT, UPDATE, UPSERT, DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH,
-  RPUSH, ZADD, HSET, GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE;
-  `read` otherwise (GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH, …).
+  RPUSH, ZADD, HSET, GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE,
+  PUTITEM, UPDATEITEM, DELETEITEM, BATCHWRITEITEM, INCRBY, HINCRBY, SADD, XADD,
+  MSET, SAVE, STORE, UPLOAD, COMMIT, RECORD, MARK, RESERVE, HOLD, BOOK, EMIT,
+  NOTIFY; `read` otherwise (GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH, …).
 - `durable U` and `writes X before responding` count **write** steps only. A
   SELECT no longer counts as a durable write.
 - Profiles gain separate read and write capacity and a **write scaling** rule:

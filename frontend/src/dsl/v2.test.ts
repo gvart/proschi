@@ -221,6 +221,18 @@ describe('§7.2 access', () => {
     },
   );
 
+  it('classifies the storing words authors write as writes, and their look-alikes as reads', () => {
+    for (const label of ['PutItem Url', 'UpdateItem Seat', 'DeleteItem Hold', 'BatchWriteItem feeds', 'INCRBY rate:42 1', 'HINCRBY stats views 1', 'SADD online 42', 'XADD events *', 'MSET a 1 b 2']) {
+      expect(accessOfLabel(label)).toBe('write');
+    }
+    for (const label of ['save draft', 'Store body', 'upload chunk 3', 'COMMIT txn', 'record payment', 'mark paid', 'reserve seat 12A', 'hold seat 12A', 'book ride', 'emit OrderShipped', 'notify bob "New message"']) {
+      expect(accessOfLabel(label)).toBe('write');
+    }
+    for (const label of ['GetItem Url', 'MGET post:1 post:2', 'Stored', 'Recorded', 'Marker', 'Booking lookup', 'Notification sent', 'holding page']) {
+      expect(accessOfLabel(label)).toBe('read');
+    }
+  });
+
   it('uses the first word after the prefixes, and only the first word', () => {
     expect(accessOfLabel('x200 LPUSH feed')).toBe('write');
     expect(accessOfLabel('~2MB x3 SET k')).toBe('write');
