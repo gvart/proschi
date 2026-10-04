@@ -14,6 +14,3 @@ export function exampleLink(id: string): string | null {
   const example = examples.find((e) => e.id === id);
   return example ? editorLink(example.source) : null;
 }
-
-/** The use case shown in the hero, and how the editor names it in links. */
-export const HERO_USE_CASE = { name: 'Place order', id: 'place-order' };

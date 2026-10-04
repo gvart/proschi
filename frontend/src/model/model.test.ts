@@ -64,11 +64,12 @@ describe('simulation page', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('keeps the landing page’s content security policy', () => {
+  it('keeps the landing page’s content security policy, without its inline styles', () => {
     const csp = (html: string) => /http-equiv="%VITE_CSP_HTTP_EQUIV%"\s+content="([^"]+)"/.exec(html)?.[1];
     return import('../../index.html?raw').then(({ default: landing }) => {
       expect(csp(modelHtml)).toBeDefined();
-      expect(csp(modelHtml)).toBe(csp(landing));
+      // The landing page allows inline styles for its live demo (the editor); this page has no editor.
+      expect(csp(modelHtml)).toBe(csp(landing)?.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'"));
       expect(modelHtml).toContain('<meta name="referrer" content="strict-origin-when-cross-origin" />');
     });
   });

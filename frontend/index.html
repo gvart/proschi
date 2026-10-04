@@ -2,18 +2,20 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). frame-ancestors cannot be set from a meta tag. -->
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). Styles allow 'unsafe-inline' for the live demo
+         (CodeMirror inserts <style> elements, React Flow sets style attributes), as on the editor; scripts stay 'self' only.
+         frame-ancestors cannot be set from a meta tag. -->
     <meta
       http-equiv="%VITE_CSP_HTTP_EQUIV%"
-      content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <script src="./legacy-redirect.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Proschi: architecture diagrams as text, with request flows you can play</title>
+    <title>Proschi: draw systems by typing</title>
     <meta
       name="description"
-      content="Proschi is a small text language for microservice architectures. Describe services, databases and queues once, write use cases as step-by-step request flows with success and error scenarios, and play them back on the diagram. Runs in the browser, free and open source."
+      content="Write services and use cases as text. Proschi draws the architecture diagram and plays every request through it, the happy path and every failure. Free, open source, runs in your browser."
     />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#FFF8E7" />
@@ -43,31 +45,40 @@
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
-        <div class="wrap">
-          <p class="kicker">A text language for microservice architectures</p>
-          <h1 id="hero-title">Architecture diagrams as text, with request flows you can&nbsp;play.</h1>
-          <div class="hero__lede">
-            <p>
-              Write down your services, databases and queues once, the way you would in a design doc. Proschi draws
-              the diagram as you type. Then describe each use case step by step, with real payloads and status codes:
-              the happy path and every way it can fail. Press Play to watch the request move through the system,
-              one scenario at a time.
+        <div class="hero__wrap">
+          <div class="hero__text">
+            <p class="hero__kicker"><span class="ps-badge ps-badge--pink">Diagrams as code</span> for microservices</p>
+            <h1 id="hero-title" class="hero__title">Draw systems by <span class="hero__typed">typing<span class="hero__caret" aria-hidden="true"></span></span>.</h1>
+            <p class="hero__sub">
+              Write services and use cases as text. Proschi draws the diagram and plays every request through it.
             </p>
-            <div class="actions">
-              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./app/">Open the editor</a>
-              <a class="ps-btn ps-btn--secondary ps-btn--lg" id="hero-open" href="./app/">Open this example</a>
+            <div class="hero__ctas">
+              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./app/">Open the editor <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+              <a class="ps-btn ps-btn--secondary ps-btn--lg" href="#how">2-minute quickstart</a>
             </div>
-            <p class="fineprint">Runs in your browser. No account needed; the editor uploads nothing.</p>
+            <ul class="hero__facts" aria-label="In short">
+              <li>Free &amp; open source</li>
+              <li>No account</li>
+              <li>Runs in your browser</li>
+            </ul>
           </div>
 
-          <figure class="specimen" aria-labelledby="specimen-caption">
-            <div class="specimen__grid">
-              <div class="panel panel--source">
-                <div class="panel__head">
-                  <span>checkout.proschi</span>
-                  <span class="panel__meta">source</span>
+          <!-- The live demo (src/components/Demo/LiveDemo.tsx) replaces this poster once it loads. -->
+          <figure class="hero__demo" aria-label="Live demo: the Proschi editor">
+            <div id="live-demo" class="demo-host">
+              <div class="demo" data-mode="poster">
+                <div class="demo__bar">
+                  <span class="demo__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+                  <span class="demo__file">checkout.proschi</span>
+                  <ol class="demo__chapters" aria-hidden="true">
+                    <li><b>1</b> Write it</li>
+                    <li><b>2</b> See it</li>
+                    <li><b>3</b> Play it</li>
+                  </ol>
                 </div>
-                <pre class="code code--numbered" id="hero-source" data-proschi tabindex="0" aria-label="Proschi source for the checkout example"><code>title "Checkout"
+                <div class="demo__body">
+                  <div class="demo__code">
+                    <pre class="demo__poster-code" id="demo-source" data-proschi><code>title "Checkout"
 
 web "Web Shop" [Actor]
 
@@ -88,391 +99,230 @@ usecase "Place order" {
     api  -&gt; db     : INSERT order
     api -&gt;&gt; events : OrderPlaced {"orderId": "o-1"}
     api --&gt; web    : 201 {"orderId": "o-1"}
-  } alt "Out of stock" {
-    api --&gt; web : 409 {"error": "out_of_stock"}
   } alt "DB down" {
     api  -x db  : INSERT order
     api --&gt; web : 503 {"error": "retry_later"}
   }
 }</code></pre>
-              </div>
-
-              <div class="panel panel--diagram">
-                <div class="panel__head">
-                  <span>Diagram</span>
-                  <span class="panel__meta">rendered</span>
-                </div>
-                <div class="diagram">
-                  <svg
-                    id="hero-diagram"
-                    viewBox="0 0 640 344"
-                    role="img"
-                    aria-labelledby="diagram-title diagram-desc"
-                  >
-                    <title id="diagram-title">Checkout architecture</title>
-                    <desc id="diagram-desc">
-                      A Web Shop actor calls the Order API over HTTPS. The Order API and the Orders DB (PostgreSQL)
-                      sit inside an AWS VPC group. The Order API writes to the Orders DB over SQL and publishes to the
-                      OrderEvents Kafka topic. The use case “Place order” has three scenarios: the order is placed, the
-                      item is out of stock (409), or the database does not answer (503).
-                    </desc>
-                    <defs>
-                      <marker id="arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead" />
-                      </marker>
-                      <marker id="arrow-hot" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead arrowhead--hot" />
-                      </marker>
-                      <marker id="arrow-error" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
-                        <path d="M0 1 L9 5 L0 9 z" class="arrowhead arrowhead--error" />
-                      </marker>
-                    </defs>
-
-                    <!-- Desktop layout; src/landing/diagramLayout.ts also has a portrait one for phones. -->
-                    <rect id="d-group" class="d-group" x="206" y="14" width="204" height="316" />
-                    <text id="d-group-label" class="d-group-label" x="218" y="34">AWS VPC</text>
-
-                    <path id="edge-web-api" class="d-edge" d="M166 90 H231" marker-end="url(#arrow)" />
-                    <path id="edge-api-db" class="d-edge" d="M308 124 V228" marker-end="url(#arrow)" />
-                    <path id="edge-api-events" class="d-edge" d="M383 90 H472" marker-end="url(#arrow)" />
-                    <text id="label-web-api" class="d-edge-label" x="186" y="81" text-anchor="middle">HTTPS</text>
-                    <text id="label-api-db" class="d-edge-label" x="316" y="180">SQL</text>
-                    <text id="label-api-events" class="d-edge-label" x="442" y="81" text-anchor="middle">publish</text>
-
-                    <g class="d-node" id="node-web" transform="translate(16 56)">
-                      <rect width="150" height="68" />
-                      <circle class="d-glyph" cx="130" cy="17" r="4" />
-                      <path class="d-glyph" d="M122 33 q8 -10 16 0" />
-                      <text class="d-tech" x="12" y="22">Actor</text>
-                      <text class="d-name" x="12" y="46">Web Shop</text>
-                    </g>
-                    <g class="d-node" id="node-api" transform="translate(233 56)">
-                      <rect width="150" height="68" />
-                      <text class="d-tech" x="12" y="22">REST API</text>
-                      <text class="d-name" x="12" y="46">Order API</text>
-                      <text class="d-team" x="12" y="60">@orders</text>
-                    </g>
-                    <g class="d-node" id="node-db" transform="translate(233 230)">
-                      <path d="M0 9 a75 9 0 0 1 150 0 v58 a75 9 0 0 1 -150 0 z" />
-                      <path class="d-line" d="M0 9 a75 9 0 0 0 150 0" />
-                      <text class="d-tech" x="12" y="32">PostgreSQL</text>
-                      <text class="d-name" x="12" y="50">Orders DB</text>
-                      <text class="d-team" x="12" y="64">@orders</text>
-                    </g>
-                    <g class="d-node" id="node-events" transform="translate(474 56)">
-                      <rect width="150" height="68" />
-                      <path class="d-line" d="M120 6 v56 M128 6 v56 M136 6 v56" />
-                      <text class="d-tech" x="12" y="22">Kafka</text>
-                      <text class="d-name" x="12" y="46">OrderEvents</text>
-                      <text class="d-team" x="12" y="60">@platform</text>
-                    </g>
-
-                    <g id="d-legend" class="d-legend" transform="translate(474 248)" aria-hidden="true">
-                      <line x1="0" y1="0" x2="36" y2="0" class="d-key" marker-end="url(#arrow)" />
-                      <text x="46" y="4">request</text>
-                      <line x1="0" y1="24" x2="36" y2="24" class="d-key d-key--async" marker-end="url(#arrow)" />
-                      <text x="46" y="28">async</text>
-                      <line x1="0" y1="48" x2="36" y2="48" class="d-key d-key--response" marker-end="url(#arrow)" />
-                      <text x="46" y="52">response</text>
-                      <line x1="0" y1="72" x2="36" y2="72" class="d-key d-key--error" marker-end="url(#arrow-error)" />
-                      <text x="46" y="76">error</text>
-                    </g>
-                    <g id="d-titleblock" class="d-titleblock" transform="translate(16 256)" aria-hidden="true">
-                      <text x="0" y="0" class="d-tb-head">Checkout</text>
-                      <text x="0" y="20">4 nodes · 3 edges</text>
-                      <text x="0" y="38">1 use case</text>
-                      <text x="0" y="56">3 scenarios</text>
-                    </g>
-
-                    <circle id="packet" class="d-packet" r="6" cx="-20" cy="-20" />
-                    <path id="fail-mark" class="d-fail" d="M-7 -7 L7 7 M-7 7 L7 -7" transform="translate(-20 -20)" />
-                  </svg>
-                </div>
-                <div class="player" id="player" hidden>
-                  <div class="player__scenarios" id="player-scenarios" role="group" aria-label="Scenarios of Place order"></div>
-                  <div class="player__controls">
-                    <button type="button" class="ps-btn ps-btn--primary ps-btn--sm" id="player-toggle" aria-pressed="false">Play</button>
-                    <button type="button" class="ps-btn ps-btn--secondary ps-btn--sm" id="player-next">Next step</button>
                   </div>
-                  <p class="player__status" id="player-status" aria-live="polite">Use case “Place order”, 3 scenarios.</p>
-                  <pre class="player__payload code" id="player-payload" aria-hidden="true"></pre>
+                  <div class="demo__canvas demo__canvas--poster" aria-hidden="true">
+                    <div class="poster">
+                      <span class="poster__node poster__node--web">Web Shop</span>
+                      <span class="poster__group">AWS VPC</span>
+                      <span class="poster__node poster__node--api">Order API</span>
+                      <span class="poster__node poster__node--db">Orders DB</span>
+                      <span class="poster__node poster__node--events">OrderEvents</span>
+                    </div>
+                  </div>
+                </div>
+                <div class="demo__controls">
+                  <p class="demo__status">The editor, the diagram and the player load next.</p>
                 </div>
               </div>
             </div>
-            <figcaption id="specimen-caption">
-              <span class="figno">Fig. 1</span> The source on the left is the whole document. The editor lays out the
-              diagram automatically. The use case “Place order” splits into three scenarios with <code>alt</code>, and
-              each one plays back over the same diagram step by step. Error paths are drawn in red.
-            </figcaption>
           </figure>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="how-title">
-        <div class="wrap">
-          <header class="section__head">
-            <p class="section__no">01</p>
+      <section class="story story--how" id="how" aria-labelledby="how-title">
+        <div class="ps-wrap">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">01</p>
             <h2 id="how-title">How it works</h2>
+            <p class="story__lede">Three steps. The first one is typing.</p>
           </header>
 
-          <ol class="steps">
-            <li class="step">
-              <div class="step__text">
-                <h3><span class="step__no">1.1</span> Write the architecture</h3>
-                <p>
-                  One line per node: an id, a display name, a tech stack in brackets and an owning team. Groups draw a
-                  boundary around what they contain. Connections are arrows with an optional label.
+          <div class="hop">
+            <div class="hop__wire" aria-hidden="true"><span class="hop__packet"></span></div>
+            <ol class="hop__cards">
+              <li class="ps-card ps-card--yellow hop__card" data-reveal>
+                <p class="hop__n" aria-hidden="true">1</p>
+                <h3>Write it</h3>
+                <p>Services, databases and queues: one line each. Arrows say who calls whom.</p>
+                <pre class="snip" data-proschi><code>api "Order API" [REST API]
+db  "Orders DB" [PostgreSQL]
+
+api -&gt; db : SQL</code></pre>
+              </li>
+              <li class="ps-card ps-card--blue hop__card" data-reveal data-reveal-delay="1">
+                <p class="hop__n" aria-hidden="true">2</p>
+                <h3>See it</h3>
+                <p>Auto layout draws the diagram as you type. No boxes to drag.</p>
+                <svg class="mini" viewBox="0 0 220 96" aria-hidden="true">
+                  <path class="mini__edge" d="M78 48 H142" />
+                  <rect class="mini__node" x="6" y="26" width="72" height="44" rx="6" />
+                  <text x="42" y="53" text-anchor="middle">API</text>
+                  <path class="mini__node mini__node--db" d="M142 32 a36 7 0 0 1 72 0 v32 a36 7 0 0 1 -72 0 z" />
+                  <path class="mini__line" d="M142 32 a36 7 0 0 0 72 0" />
+                  <text x="178" y="58" text-anchor="middle">DB</text>
+                </svg>
+              </li>
+              <li class="ps-card ps-card--pink hop__card" data-reveal data-reveal-delay="2">
+                <p class="hop__n" aria-hidden="true">3</p>
+                <h3>Play it</h3>
+                <p>Press play. The request hops through the diagram: the happy path and every failure, step by step.</p>
+                <p class="hop__steps" aria-hidden="true">
+                  <span class="ps-badge ps-badge--pass">201 Placed</span>
+                  <span class="ps-badge ps-badge--fail">503 DB down</span>
                 </p>
-                <p>
-                  The editor autocompletes 108 tech stacks (AWS, GCP and Azure services, databases, queues, caches)
-                  and underlines mistakes as you type.
-                </p>
-              </div>
-              <pre class="code" data-proschi tabindex="0"><code>group vpc "AWS VPC" {
-  gateway "API Gateway"   [AWS API Gateway] @platform
-  orders  "Order Service" [REST API]        @orders
-}
-ordersDb "Orders DB" [PostgreSQL] @orders
-
-gateway -&gt; orders   : HTTP
-orders  -&gt; ordersDb : SQL
-orders  -&gt; events   : publish</code></pre>
-            </li>
-
-            <li class="step">
-              <div class="step__text">
-                <h3><span class="step__no">1.2</span> Describe a use case</h3>
-                <p>
-                  A use case is a request flow, written as a sequence of steps. <code>-&gt;</code> is a synchronous
-                  request, <code>-&gt;&gt;</code> is fire-and-forget, <code>--&gt;</code> answers the last open request.
-                  Steps carry an HTTP method and path, a JSON, XML or text payload, and a status code. Steps inside
-                  <code>par { }</code> run in parallel.
-                </p>
-              </div>
-              <pre class="code" data-proschi tabindex="0"><code>usecase "Create order" {
-  gateway -&gt; orders : POST /api/orders json {
-    "userId": "user123",
-    "items": [{ "productId": "prod-1", "quantity": 2 }]
-  }
-  par {
-    orders  -&gt; ordersDb : INSERT order
-    orders -&gt;&gt; events   : OrderCreated {"orderId": "order-789"}
-  }
-  orders --&gt; gateway : 201 {"status": "pending"}
-}</code></pre>
-            </li>
-
-            <li class="step">
-              <div class="step__text">
-                <h3><span class="step__no">1.3</span> Branch into scenarios</h3>
-                <p>
-                  One endpoint rarely has one outcome. Inside a use case, <code>alt "Name" { }</code> blocks that follow
-                  each other are alternatives: each one becomes its own scenario, and the steps before them are written
-                  once and shared. Steps after the blocks are shared again by every branch.
-                </p>
-                <p>
-                  <code>when "…"</code> says why a branch happens, and paths may name their variable parts, as in
-                  <code>/orders/{id}</code>. <code>-x</code> is a call that never gets an answer: a timeout or a refused
-                  connection. Scenarios whose entry request ends in a 4xx or 5xx, or fails, are marked as error paths.
-                </p>
-              </div>
-              <pre class="code" data-proschi tabindex="0"><code>usecase "Get order" {
-  gateway -&gt; orders : GET /api/orders/{id}
-
-  alt "Found" {
-    orders  -&gt; ordersDb : SELECT order
-    orders --&gt; gateway  : 200 {"id": 42, "status": "paid"}
-  } alt "Not found" when "no order has this id" {
-    orders  -&gt; ordersDb : SELECT order
-    orders --&gt; gateway  : 404 {"error": "not_found"}
-  } alt "DB timeout" {
-    orders  -x ordersDb : SELECT order
-    orders --&gt; gateway  : 504
-  }
-}</code></pre>
-            </li>
-
-            <li class="step">
-              <div class="step__text">
-                <h3><span class="step__no">1.4</span> Press Play</h3>
-                <p>
-                  Playback animates the use case over the architecture, one step at a time, and shows the request and
-                  response payload of each step. Tabs above the diagram switch between scenarios; services a scenario
-                  never touches fade out, and error responses and failed calls turn red.
-                </p>
-                <p>
-                  The use case picker groups use cases by the endpoint they start with, so everything about
-                  <code>POST /api/orders</code> sits together. It is a quick way to check that a flow actually touches
-                  the services you think it does, or to walk a new team member through the edge cases.
-                </p>
-              </div>
-              <dl class="facts">
-                <div><dt>Step 1</dt><dd><code>gateway → orders</code> POST /api/orders</dd></div>
-                <div><dt>Step 2</dt><dd><code>orders → ordersDb</code> INSERT order <span class="tag">parallel</span></dd></div>
-                <div><dt>Step 3</dt><dd><code>orders ⇢ events</code> OrderCreated <span class="tag">async</span></dd></div>
-                <div><dt>Reply</dt><dd><code>orders → gateway</code> 201 {"status": "pending"}</dd></div>
-                <div><dt>Alt</dt><dd>“Not found” <code>orders → gateway</code> 404 <span class="tag tag--error">error</span></dd></div>
-                <div><dt>Alt</dt><dd>“DB timeout” <code>orders ✕ ordersDb</code> no answer <span class="tag tag--error">failed</span></dd></div>
-              </dl>
-            </li>
-
-            <li class="step">
-              <div class="step__text">
-                <h3><span class="step__no">1.5</span> Share a link</h3>
-                <p>
-                  The whole document is compressed into the URL, after <code>#code=</code>. A link can also point at a
-                  specific step of a use case and scenario, so it opens straight into playback there: handy for a bug
-                  report that says “this is the error path I mean”. The fragment never reaches a
-                  server.
-                </p>
-              </div>
-              <pre class="code code--url" tabindex="0"><code>https://proschi.app/app/#code=<span class="tok-dim" id="share-sample">C4S2BsFMAICIGEAWkDGBrA9gV2LAUHgO…</span>&amp;uc=place-order&amp;alt=out-of-stock&amp;step=2</code></pre>
-            </li>
-          </ol>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="details-title">
-        <div class="wrap">
-          <header class="section__head">
-            <p class="section__no">02</p>
-            <h2 id="details-title">The rest of it</h2>
-          </header>
-
-          <table class="spec">
-            <caption class="visually-hidden">Proschi features</caption>
-            <tbody>
-              <tr>
-                <th scope="row">Text first</th>
-                <td>
-                  The text is the source of truth. Dragging a node on the canvas writes <code>pos x,y</code> back into
-                  it, double-click renames, dragging between two nodes adds <code>a -&gt; b</code>. Auto-layout (ELK)
-                  places everything without a position.
-                </td>
-              </tr>
-              <tr>
-                <th scope="row">Scenarios</th>
-                <td>
-                  The architecture is written once; any number of use cases play over it. <code>alt</code> branches give
-                  one use case its success and error paths without copying the shared steps, and the use case picker
-                  groups use cases by endpoint.
-                </td>
-              </tr>
-              <tr>
-                <th scope="row">Editors</th>
-                <td>
-                  Keep <code>.proschi</code> files next to your code, split across files with
-                  <code>import "infra.proschi"</code>. A VS Code extension with a live preview, a language server for
-                  IntelliJ, Neovim and others, and the <code>proschi</code> command (<code>check</code>, <code>fmt</code>,
-                  <code>render</code> to SVG or Markdown, and checks against your OpenAPI specs) all run the same parser as
-                  this editor. <a href="https://github.com/gvart/proschi/blob/main/docs/EDITORS.md">Editor setup</a>.
-                </td>
-              </tr>
-              <tr>
-                <th scope="row">Storage</th>
-                <td>Saved diagrams live in your browser's local storage. Nothing is sent anywhere, and there is no tracking.</td>
-              </tr>
-              <tr>
-                <th scope="row">Files</th>
-                <td>Download and open plain-text <code>.proschi</code> files, so diagrams can sit in a repository next to the code they describe.</td>
-              </tr>
-              <tr>
-                <th scope="row">Export</th>
-                <td>PNG or SVG of the current diagram, or Mermaid text for the architecture or a scenario, ready to paste into a GitHub README.</td>
-              </tr>
-              <tr>
-                <th scope="row">Errors</th>
-                <td>The parser never stops at the first problem. Each error has a line and column, and everything else still renders.</td>
-              </tr>
-              <tr>
-                <th scope="row">Source</th>
-                <td>Free and open source. <a href="https://github.com/gvart/proschi">Source on GitHub</a>.</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section class="section" aria-labelledby="practice-title">
-        <div class="wrap">
-          <header class="section__head">
-            <p class="section__no">03</p>
-            <h2 id="practice-title">Practice system design</h2>
-          </header>
-          <p class="section__intro">
-            Like LeetCode, for system design. Each problem gives you use cases, traffic and requirements; you design the
-            system in Proschi and press <strong>Run tests</strong>. The simulation checks latency under load, availability
-            when any node fails, durability and cost, and flow tests check the key idea, each with the measured value and a
-            hint when it fails. Everything runs in your browser.
-          </p>
-          <!-- Filled from frontend/src/practice/problems/*/problem.md by src/landing/main.ts. -->
-          <ul class="examples" id="practice-list"></ul>
-          <noscript>
-            <p class="section__intro">See every problem on the <a href="./practice/">practice page</a>.</p>
-          </noscript>
-          <div class="closing">
-            <a class="ps-btn ps-btn--primary" href="./practice/">Start practising</a>
+              </li>
+            </ol>
           </div>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="examples-title">
-        <div class="wrap">
-          <header class="section__head">
-            <p class="section__no">04</p>
-            <h2 id="examples-title">Examples</h2>
+      <section class="story story--break" aria-labelledby="break-title">
+        <div class="ps-wrap story__split">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">02</p>
+            <h2 id="break-title">Break it on purpose.</h2>
+            <p class="story__lede">
+              Every <code>alt</code> is a way your system fails. Watch the packet die at the database, not in production.
+            </p>
+            <button type="button" class="ps-btn ps-btn--danger" id="break-again" hidden>Break it again</button>
           </header>
-          <p class="section__intro">Each link opens the editor with the example loaded. Edit it as much as you like; your copy stays in your browser.</p>
+          <div class="break" data-reveal>
+            <pre class="snip snip--dark" data-proschi><code>usecase "Pay" {
+  web -&gt; api : POST /pay
 
-          <ul class="examples">
-            <li>
-              <a class="example" data-example="hello" href="./app/">
-                <span class="example__name">Hello Proschi</span>
-                <span class="example__desc">The basics: nodes, connections and one use case.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
+  alt "Paid" {
+    api  -&gt; db  : INSERT payment
+    api --&gt; web : 201
+  } alt "DB down" {
+    api  -x db  : INSERT payment
+    api --&gt; web : 503 {"error": "retry_later"}
+  }
+}</code></pre>
+            <figure class="crash" id="crash">
+              <svg viewBox="0 0 360 150" role="img" aria-labelledby="crash-title">
+                <title id="crash-title">The “DB down” scenario: the call from the Order API to the Orders DB gets no answer, and the API replies 503.</title>
+                <path class="crash__edge" d="M128 75 H236" />
+                <g class="crash__node crash__node--api">
+                  <rect x="12" y="45" width="116" height="60" rx="8" />
+                  <text x="70" y="72" text-anchor="middle" class="crash__tech">REST API</text>
+                  <text x="70" y="91" text-anchor="middle">Order API</text>
+                </g>
+                <g class="crash__node crash__node--db">
+                  <path d="M236 53 a56 9 0 0 1 112 0 v46 a56 9 0 0 1 -112 0 z" />
+                  <path class="crash__lid" d="M236 53 a56 9 0 0 0 112 0" />
+                  <text x="292" y="80" text-anchor="middle" class="crash__tech">PostgreSQL</text>
+                  <text x="292" y="98" text-anchor="middle">Orders DB</text>
+                </g>
+                <g class="crash__packet"><rect x="-8" y="-8" width="16" height="16" rx="3" /></g>
+                <g class="crash__x">
+                  <path d="M186 65 L206 85 M186 85 L206 65" />
+                </g>
+                <g class="crash__reply">
+                  <rect x="36" y="8" width="68" height="26" rx="13" />
+                  <text x="70" y="27" text-anchor="middle">503</text>
+                </g>
+              </svg>
+            </figure>
+          </div>
+        </div>
+      </section>
+
+      <section class="story story--test" aria-labelledby="test-title">
+        <div class="ps-wrap story__split story__split--flip">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">03</p>
+            <h2 id="test-title">Test your design.</h2>
+            <p class="story__lede">Requirements, traffic and capacity, checked in your browser. Green means it holds&nbsp;up.</p>
+            <button type="button" class="ps-btn ps-btn--primary" id="run-tests" hidden>Run the tests again</button>
+          </header>
+          <div class="checks" id="checks" data-reveal>
+            <pre class="snip snip--dark" data-proschi><code>traffic {
+  "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 9%, "Unknown code" 1%
+}
+
+requirements {
+  p99 "Redirect" &lt; 100ms
+  availability "Redirect" &gt;= 99.95%
+  survive any node failure
+  cost &lt;= 5000 usd/month
+}</code></pre>
+            <div class="results">
+              <p class="results__head">
+                <span>Tests <small>URL shortener example</small></span>
+                <span class="results__total ps-badge ps-badge--pass" id="checks-total">5 / 5 pass</span>
+              </p>
+              <ul class="results__list">
+                <li data-result="req:1"><b>p99 of Redirect &lt; 100 ms</b><span>p99 of Redirect is 24.3 ms (limit 100 ms)</span></li>
+                <li data-result="req:3"><b>availability of Redirect ≥ 99.95%</b><span>availability of Redirect is 99.999999% (limit 99.95%)</span></li>
+                <li data-result="req:6"><b>survive any node failure</b><span>Every use case keeps working after losing any of 4 nodes</span></li>
+                <li data-result="req:8"><b>cost ≤ $5,000/month</b><span>Total cost is $3,000/month (limit $5,000/month)</span></li>
+                <li data-result="test:Redirects are served from the cache"><b>Redirects are served from the cache</b><span>All 6 assertions hold</span></li>
+              </ul>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="story story--practice" id="practice" aria-labelledby="practice-title">
+        <div class="ps-wrap">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">04</p>
+            <h2 id="practice-title">Practice system design</h2>
+            <p class="story__lede">12 system design problems. Tests, not opinions.</p>
+          </header>
+          <!-- Filled from frontend/src/practice/problems/*/problem.md by src/landing/main.ts. -->
+          <ul class="tiles tiles--practice" id="practice-list"></ul>
+          <noscript>
+            <p class="story__lede">See every problem on the <a href="./practice/">practice page</a>.</p>
+          </noscript>
+          <p class="story__more">
+            <a class="ps-btn ps-btn--secondary" href="./practice/">All problems <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+          </p>
+        </div>
+      </section>
+
+      <section class="story story--examples" aria-labelledby="examples-title">
+        <div class="ps-wrap">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">05</p>
+            <h2 id="examples-title">Examples</h2>
+            <p class="story__lede">Open one, break it, make it yours.</p>
+          </header>
+          <ul class="tiles tiles--examples">
+            <li data-reveal>
+              <a class="ps-card ps-card--yellow ps-card--interactive tile" data-example="ecommerce" href="./app/">
+                <span class="tile__name">E-commerce platform</span>
+                <span class="tile__desc">Success and error scenarios per endpoint, parallel steps.</span>
+                <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
-            <li>
-              <a class="example" data-example="ecommerce" href="./app/">
-                <span class="example__name">E-commerce platform</span>
-                <span class="example__desc">Success and error scenarios per endpoint, multi-line payloads and parallel steps.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
+            <li data-reveal data-reveal-delay="1">
+              <a class="ps-card ps-card--pink ps-card--interactive tile" data-example="login" href="./app/">
+                <span class="tile__name">Login with sessions</span>
+                <span class="tile__desc">Wrong password, outage and log out.</span>
+                <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
-            <li>
-              <a class="example" data-example="serverless" href="./app/">
-                <span class="example__name">Serverless pipeline</span>
-                <span class="example__desc">API Gateway, Lambda, S3 and SQS with async processing.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
+            <li data-reveal data-reveal-delay="2">
+              <a class="ps-card ps-card--blue ps-card--interactive tile" data-example="events" href="./app/">
+                <span class="tile__name">Event-driven checkout</span>
+                <span class="tile__desc">Kafka fan-out to several consumers.</span>
+                <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
-            <li>
-              <a class="example" data-example="login" href="./app/">
-                <span class="example__name">Login with sessions</span>
-                <span class="example__desc">Log in with success, wrong-password and outage scenarios, plus log out.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-            <li>
-              <a class="example" data-example="events" href="./app/">
-                <span class="example__name">Event-driven checkout</span>
-                <span class="example__desc">Kafka fan-out to several consumers.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-            <li>
-              <a class="example" data-example="url-shortener" href="./app/">
-                <span class="example__name">URL shortener HLD</span>
-                <span class="example__desc">A high-level design: traffic, requirements, capacity, data model, decisions and flow tests.</span>
-                <span class="example__go" aria-hidden="true">Open →</span>
+            <li data-reveal data-reveal-delay="3">
+              <a class="ps-card ps-card--lilac ps-card--interactive tile" data-example="url-shortener" href="./app/">
+                <span class="tile__name">URL shortener HLD</span>
+                <span class="tile__desc">Traffic, requirements, capacity and tests.</span>
+                <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
           </ul>
+        </div>
+      </section>
 
-          <div class="closing">
-            <a class="ps-btn ps-btn--primary" href="./app/">Open the editor</a>
-            <a class="ps-btn ps-btn--secondary" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Read the language reference</a>
-          </div>
+      <section class="closer" aria-labelledby="closer-title">
+        <div class="ps-wrap closer__inner" data-reveal>
+          <h2 id="closer-title" class="closer__title">
+            <span>Free.</span> <span>Open source.</span> <span>No account.</span>
+          </h2>
+          <p class="closer__sub">Your diagrams never leave the browser.</p>
+          <a class="ps-btn ps-btn--primary ps-btn--lg closer__cta" data-magnetic href="./app/">Start typing <span class="ps-btn__trail" aria-hidden="true">→</span></a>
         </div>
       </section>
     </main>

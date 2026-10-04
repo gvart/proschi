@@ -1,7 +1,7 @@
-import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react';
 import { basicSetup } from 'codemirror';
 import { EditorView, keymap } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { indentWithTab } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
@@ -23,9 +23,17 @@ interface CodeEditorProps {
   diagnostics: Diagnostic[];
   nodeIds: string[];
   ref?: Ref<CodeEditorHandle>;
+  /** Shows the text without letting anyone change it (e.g. while a demo types it). */
+  readOnly?: boolean;
+  /** Focus the editor once it is created. Off by default: pages must not steal focus. */
+  autoFocus?: boolean;
+  /** Replaces the built-in look (an EditorView.theme and/or highlight style); can change later. */
+  theme?: Extension;
+  /** More extensions for this editor, e.g. decorations; can change later. */
+  extensions?: Extension;
 }
 
-const theme = EditorView.theme({
+const defaultTheme = EditorView.theme({
   '&': { height: '100%', fontSize: '13px', backgroundColor: '#ffffff' },
   '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', lineHeight: '1.6' },
   '.cm-gutters': { backgroundColor: '#f9fafb', borderRight: '1px solid #e5e7eb' },
@@ -42,9 +50,13 @@ function formatDocument(view: EditorView): boolean {
   return true;
 }
 
-export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref }: CodeEditorProps) {
+const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
+
+export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref, readOnly = false, autoFocus = false, theme, extensions }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  // Parts that can change after the editor is created.
+  const [readOnlyConf, themeConf, extraConf] = useMemo(() => [new Compartment(), new Compartment(), new Compartment()], []);
   const onChangeRef = useRef(onChange);
   const nodeIdsRef = useRef(nodeIds);
 
@@ -65,7 +77,9 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
           proschiLanguage,
           autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current)] }),
           lintGutter(),
-          theme,
+          readOnlyConf.of(readOnlyState(readOnly)),
+          themeConf.of(theme ?? defaultTheme),
+          extraConf.of(extensions ?? []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
@@ -73,6 +87,7 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
       }),
     });
     viewRef.current = view;
+    if (autoFocus) view.focus();
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -93,6 +108,16 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
     }
     view.dispatch({ changes: { from: start, to: endCurrent, insert: value.slice(start, endValue) } });
   }, [value]);
+
+  useEffect(() => {
+    viewRef.current?.dispatch({
+      effects: [
+        readOnlyConf.reconfigure(readOnlyState(readOnly)),
+        themeConf.reconfigure(theme ?? defaultTheme),
+        extraConf.reconfigure(extensions ?? []),
+      ],
+    });
+  }, [readOnly, theme, extensions, readOnlyConf, themeConf, extraConf]);
 
   useEffect(() => {
     const view = viewRef.current;
