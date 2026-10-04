@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -34,7 +34,8 @@ import {
   Network,
 } from 'lucide-react';
 import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
-import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
+import { toFlowEdges } from '../../dsl/layout';
+import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
@@ -57,17 +58,20 @@ import { addConnection, clearPositions, removeConnections, removeNode, renameNod
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
-import { UseCasePlayer } from '../UseCases/UseCasePlayback';
-import HldView from '../Hld/HldView';
-import AnalysisPanel from '../Analysis/AnalysisPanel';
-import TestsPanel from '../Analysis/TestsPanel';
+import PaneLoading from '../PaneLoading';
 import ViewTabs, { type View } from '../Analysis/ViewTabs';
 import { useSimulation } from '../Analysis/useSimulation';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
-import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
 import { downloadText, exportImage, fileNameFor } from './exportDiagram';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
+
+// Panes that are not visible at start load on first use.
+const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
+const HldView = lazy(() => import('../Hld/HldView'));
+const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
+const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
+const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
@@ -187,22 +191,14 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     });
   }, [diagram]);
 
-  useEffect(() => {
-    let cancelled = false;
-    layoutDiagram(diagram)
-      .then((laidOut) => {
-        if (cancelled) return;
-        // Keep what the user had selected across re-layouts.
-        setNodes((previous) => {
-          const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
-          return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
-        });
-      })
-      .catch((error) => console.error('Layout failed:', error));
-    return () => {
-      cancelled = true;
-    };
-  }, [diagram]);
+  // Keep what the user had selected across re-layouts.
+  const showLaidOut = useCallback((laidOut: Node[]) => {
+    setNodes((previous) => {
+      const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
+      return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
+    });
+  }, []);
+  const layoutSettled = useAutoLayout(diagram, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -548,44 +544,46 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
           )}
           <div className="flex-1 min-h-0 relative">
-            {playing && playedUseCase ? (
-              <UseCasePlayer
-                useCase={playedUseCase}
-                nodes={nodes}
-                edges={edges}
-                onBack={stopPlaying}
-                initialStep={initialStep}
-                onStepChange={setPlayStep}
-                showHeader={false}
-              />
-            ) : view === 'analysis' ? (
-              <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
-            ) : view === 'tests' ? (
-              <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
-            ) : view === 'hld' ? (
-              <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
-            ) : (
-              <ReactFlowProvider>
-                <DiagramView
+            <Suspense fallback={<PaneLoading />}>
+              {playing && playedUseCase ? (
+                <UseCasePlayer
+                  useCase={playedUseCase}
                   nodes={nodes}
                   edges={edges}
-                  onNodesChange={setNodes}
-                  onEdgesChange={setEdges}
-                  title={diagram.title}
-                  hasPinnedNodes={diagram.nodes.some((n) => n.position)}
-                  importedNodes={importedNodes}
-                  onMoveNodes={moveNodes}
-                  onConnectNodes={connectNodes}
-                  onRenameNode={renameFromCanvas}
-                  onResetLayout={() => editSource(clearPositions)}
-                  onDelete={deleteFromCanvas}
-                  fitKey={mobilePane}
-                  mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
-                  notice={notice}
-                  onNotice={setNotice}
+                  onBack={stopPlaying}
+                  initialStep={initialStep}
+                  onStepChange={setPlayStep}
+                  showHeader={false}
                 />
-              </ReactFlowProvider>
-            )}
+              ) : view === 'analysis' ? (
+                <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
+              ) : view === 'tests' ? (
+                <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
+              ) : view === 'hld' ? (
+                <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
+              ) : (
+                <ReactFlowProvider>
+                  <DiagramView
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={setNodes}
+                    onEdgesChange={setEdges}
+                    title={diagram.title}
+                    hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                    importedNodes={importedNodes}
+                    onMoveNodes={moveNodes}
+                    onConnectNodes={connectNodes}
+                    onRenameNode={renameFromCanvas}
+                    onResetLayout={() => editSource(clearPositions)}
+                    onDelete={deleteFromCanvas}
+                    fitKey={`${mobilePane}:${layoutSettled}`}
+                    mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
+                    notice={notice}
+                    onNotice={setNotice}
+                  />
+                </ReactFlowProvider>
+              )}
+            </Suspense>
             {nodes.length === 0 && !playing && view === 'diagram' && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-sm text-gray-400">
@@ -598,13 +596,15 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
       </div>
 
       {showExamples && (
-        <ExamplesGallery
-          onClose={() => setShowExamples(false)}
-          onPick={(example) => {
-            openDoc((s) => addDoc(s, example.source));
-            setShowExamples(false);
-          }}
-        />
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ExamplesGallery
+            onClose={() => setShowExamples(false)}
+            onPick={(example) => {
+              openDoc((s) => addDoc(s, example.source));
+              setShowExamples(false);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );

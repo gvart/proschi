@@ -30,11 +30,12 @@ const ROOT_OPTIONS = {
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',
 };
 
-type ElkInstance = { layout: (graph: ElkNode) => Promise<ElkNode> };
+/** What layoutBoxes needs from ELK: the bundled engine, or one running in a Web Worker (layout.ts). */
+export type ElkInstance = { layout: (graph: ElkNode) => Promise<ElkNode> };
 let elkPromise: Promise<ElkInstance> | undefined;
 
-// ELK is large, so it is loaded on first use and kept out of the main bundle.
-function getElk(): Promise<ElkInstance> {
+/** ELK on the calling thread. It is large, so it is loaded on first use and kept out of the main bundle. */
+export function bundledElk(): Promise<ElkInstance> {
   elkPromise ??= import('elkjs/lib/elk.bundled.js').then(({ default: ELK }) => new ELK());
   return elkPromise;
 }
@@ -54,9 +55,9 @@ export interface LaidOutNode {
  * Positions every node with ELK's layered algorithm. Groups become containers
  * sized around their members, and an explicit `pos x,y` wins over the layout.
  * Use case steps count as connections, so flows lay out sensibly even when the
- * architecture declares no edges.
+ * architecture declares no edges. `getElk` picks the ELK engine (default: bundled, on this thread).
  */
-export async function layoutBoxes(diagram: Diagram): Promise<LaidOutNode[]> {
+export async function layoutBoxes(diagram: Diagram, getElk: () => Promise<ElkInstance> = bundledElk): Promise<LaidOutNode[]> {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const elkNodes = new Map<string, ElkNode>();
 

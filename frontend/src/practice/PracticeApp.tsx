@@ -1,9 +1,12 @@
-import { useCallback, useEffect, useState } from 'react';
-import { defaultEngine, type Engine } from '../hld/engine';
+import { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import problems from 'virtual:practice-listings';
+import type { Engine } from '../hld/engine';
+import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
-import ProblemPage from './ProblemPage';
-import { findProblem, problems } from './catalog';
 import { loadProgress, saveProgress, type Progress } from './progress';
+
+// The editor, canvas, simulation and problem files load when a problem is opened.
+const ProblemRoute = lazy(() => import('./ProblemRoute'));
 
 /** `#/` is the list, `#/<problem id>` a problem; hash routes work under any sub-path. */
 function useHashRoute(): string {
@@ -17,7 +20,8 @@ function useHashRoute(): string {
   return route;
 }
 
-export default function PracticeApp({ engine = defaultEngine }: { engine?: Engine }) {
+/** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
+export default function PracticeApp({ engine }: { engine?: Engine }) {
   const route = useHashRoute();
   const [progress, setProgress] = useState<Progress>(loadProgress);
   const updateProgress = useCallback((update: (p: Progress) => Progress) => {
@@ -28,12 +32,18 @@ export default function PracticeApp({ engine = defaultEngine }: { engine?: Engin
     });
   }, []);
 
-  const problem = route ? findProblem(route) : undefined;
+  const problem = route ? problems.find((p) => p.id === route) : undefined;
   useEffect(() => {
     document.title = problem ? `${problem.title} · Proschi practice` : 'Practice · Proschi';
   }, [problem]);
 
-  if (problem) return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={updateProgress} engine={engine} />;
+  if (problem) {
+    return (
+      <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
+        <ProblemRoute key={problem.id} id={problem.id} progress={progress} onProgress={updateProgress} engine={engine} />
+      </Suspense>
+    );
+  }
 
   return (
     <div className="min-h-[100dvh] bg-gray-50">
