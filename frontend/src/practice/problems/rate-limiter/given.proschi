@@ -1,0 +1,32 @@
+title "Rate Limiter" "Rejects clients over 100 requests per minute before they reach the Orders API"
+
+client "Client"     [Actor]
+orders "Orders API" [REST API] x5 @orders "The service being protected"
+
+traffic {
+  "Call API" 5k rps mix "Allowed" 95%, "Limited" 5%
+}
+
+requirements {
+  p99 "Call API" < 200ms
+  availability "Call API" >= 99.9%
+  survive any node failure
+  cost <= 3000 usd/month
+}
+
+test "Limits are checked before the Orders API" {
+  "Call API" has scenario "Allowed"
+  "Call API" has scenario "Limited"
+  "Call API" calls any cache before orders
+}
+
+test "Rejected calls never reach the Orders API" {
+  "Call API" scenario "Limited" never calls orders
+  "Call API" scenario "Limited" responds 429
+  no path from client to orders
+}
+
+test "Every call is counted before it is let through" {
+  "Call API" writes any cache before responding
+  "Call API" every scenario calls any cache
+}

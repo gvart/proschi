@@ -1,0 +1,65 @@
+import "problem.proschi"
+
+events "Notification Queue"  [AWS SQS]  x2 @notify "Accepted events; redelivered until a worker deletes them"
+worker "Notification Worker" [REST API] x3 @notify "Checks preferences and calls the providers"
+
+orders -> events    : SendMessage
+events -> worker    : deliver
+worker -> prefs     : HTTPS
+worker -> email     : send
+worker -> sms       : send
+worker -> smsBackup : send
+worker -> push      : send
+
+entity NotificationEvent in events "One event to turn into a notification" {
+  id     string key
+  userId string
+  type   string
+  data   json
+}
+
+decision "Hand events over through a queue" {
+  because "Providers take ~200 ms and fail; the Order Service only waits for SQS to store the event (~5 ms)"
+  rejected "Call the providers from the Order Service" "Every order update would wait for, and fail with, a third party"
+}
+decision "Fail over SMS to a second provider" {
+  because "SMS has no other route to the user; a timeout on the primary is retried once on the backup"
+  rejected "Retry the primary only" "During an outage every SMS waits in the queue until the provider is back"
+}
+decision "At-least-once delivery" because "A worker deletes the event only after a provider accepted it; the event id is the provider's idempotency key, so a redelivered event is not sent twice"
+
+usecase "Notify" "Hand an order event over" {
+  orders  -> events : SEND OrderShipped {"userId": 42, "orderId": 981}
+  events --> orders : 200 queued
+}
+
+usecase "Deliver" "Turn an accepted event into a notification on the user's channel" {
+  events -> worker : OrderShipped {"userId": 42, "orderId": 981}
+  worker -> prefs  : GET /users/42/preferences
+
+  alt "Email" when "the user prefers email" {
+    prefs  --> worker : 200 {"channel": "email"}
+    worker  -> email  : send "Your order is on its way"
+    email  --> worker : 202
+    worker --> events : delete
+  } alt "Push" when "the user prefers push" {
+    prefs  --> worker : 200 {"channel": "push"}
+    worker  -> push   : send "Your order is on its way"
+    push   --> worker : 200
+    worker --> events : delete
+  } alt "SMS" when "the user prefers SMS" {
+    prefs  --> worker : 200 {"channel": "sms"}
+    worker  -> sms    : send "Your order is on its way"
+    sms    --> worker : 202
+    worker --> events : delete
+  } alt "SMS failover" when "the SMS provider times out" {
+    prefs     --> worker    : 200 {"channel": "sms"}
+    worker     -x sms       : send "Your order is on its way"
+    worker     -> smsBackup : send "Your order is on its way"
+    smsBackup --> worker    : 202
+    worker    --> events    : delete
+  } alt "Opted out" when "the user turned these notifications off" {
+    prefs  --> worker : 200 {"orderShipped": "off"}
+    worker --> events : delete
+  }
+}

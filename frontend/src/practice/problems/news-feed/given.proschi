@@ -1,0 +1,39 @@
+title "News Feed" "Shows each user the newest posts of the people they follow"
+
+user  "User"         [Actor]
+graph "Social Graph" [REST API] x4 @social "Who follows whom; already exists"
+
+capacity {
+  graph latency 50ms
+}
+
+traffic {
+  "Read feed"    10k rps
+  "Publish post" 500 rps
+}
+
+requirements {
+  p99 "Read feed" < 100ms
+  p99 "Publish post" < 150ms
+  availability "Read feed" >= 99.9%
+  durable "Publish post"
+  survive any node failure
+  cost <= 4000 usd/month
+}
+
+test "Reading the feed never queries a database" {
+  "Read feed" calls any cache
+  "Read feed" never calls any database or graph
+}
+
+test "Posts are stored before they reach any feed" {
+  "Publish post" writes any database before responding
+  "Publish post" calls any database before any cache
+  "Publish post" responds 201
+}
+
+test "Fan-out runs behind a queue" {
+  "Publish post" never waits for graph or any cache
+  "Publish post" calls any queue before graph
+  "Publish post" calls any cache after graph
+}

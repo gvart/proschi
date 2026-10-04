@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Shorten" and "Redirect".
+api "Shortener API" [REST API]
+
+visitor -> api
+
+usecase "Shorten" {
+  visitor -> api : POST /links json {"target": "https://example.com/a/long/path"}
+  api --> visitor : 201 {"code": "aZ3x9"}
+}

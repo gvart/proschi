@@ -1,0 +1,35 @@
+title "URL Shortener" "Turns long URLs into short codes and redirects visitors to them"
+
+visitor "Visitor" [Actor]
+
+traffic {
+  "Redirect" 10k rps mix "Cache hit" 95%, "Cache miss" 5%
+  "Shorten"  100 rps
+}
+
+requirements {
+  p99 "Redirect" < 100ms
+  p99 "Shorten" < 200ms
+  availability "Redirect" >= 99.9%
+  durable "Shorten"
+  survive any node failure
+  cost <= 3000 usd/month
+}
+
+test "Redirects read the cache first" {
+  "Redirect" calls any cache before any database
+  "Redirect" scenario "Cache hit" never calls any database
+}
+
+test "Misses fill the cache" {
+  "Redirect" scenario "Cache miss" calls any cache after any database
+}
+
+test "Codes are stored before they are returned" {
+  "Shorten" writes any database before responding
+  "Shorten" responds 201
+}
+
+test "Redirects redirect" {
+  "Redirect" responds 302
+}

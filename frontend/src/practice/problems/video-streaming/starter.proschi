@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add storage, metadata, the transcoding queue, the CDN and the use cases
+# "Upload video", "Transcode video", "Open video" and "Stream video".
+api "Video API" [REST API]
+
+creator -> api
+api     -> transcoder
+
+usecase "Upload video" {
+  creator     -> api        : ~2GB POST /videos json {"title": "My trip"}
+  api         -> transcoder : transcode
+  transcoder --> api        : renditions
+  api        --> creator    : 201 {"videoId": "v-9"}
+}

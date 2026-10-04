@@ -1,0 +1,16 @@
+import "problem.proschi"
+
+# Add the components and the use cases "Update location" and "Request ride".
+api "Dispatch API" [REST API]
+db  "Dispatch DB"  [PostgreSQL]
+
+driver -> api
+rider  -> api
+api    -> db
+
+usecase "Update location" {
+  driver -> api : PUT /drivers/d7/location json {"lat": 52.52, "lng": 13.40}
+  api    -> db  : UPDATE drivers SET lat, lng
+  db    --> api : ok
+  api   --> driver : 204
+}

@@ -1,0 +1,42 @@
+# expect-fail: Rejected calls never reach the Orders API
+# A direct connection from the client to the Orders API bypasses the limiter.
+import "problem.proschi"
+
+gateway  "API Gateway"  [AWS API Gateway] x2 @platform "Entry point; asks the limiter about every call"
+limiter  "Rate Limiter" [REST API]        x5 @platform "Fixed-window counters per client"
+counters "Counters"     [Redis]           x2 @platform "One counter per client and minute, expiring after 60 s"
+
+client  -> gateway
+client  -> orders
+gateway -> limiter  : check
+limiter -> counters : INCR / EXPIRE
+gateway -> orders   : HTTP
+
+entity Counter in counters "Requests of one client in the current minute" {
+  key    string key
+  count  int
+  expire time
+}
+
+decision "Shared counters in Redis" {
+  because "Every limiter replica must see the same count, and INCR is atomic and takes ~1 ms"
+  rejected "In-memory counters per replica" "A client spread over 5 replicas could make 5x its limit"
+}
+decision "Fixed one-minute windows" because "Simplest correct answer for 100 requests per minute; bursts at window edges are acceptable"
+
+usecase "Call API" "A client calls the protected API" {
+  client    -> gateway  : GET /orders
+  gateway   -> limiter  : check client-42
+  limiter   -> counters : INCR rate:client-42
+  counters --> limiter  : 37
+
+  alt "Allowed" when "the client made at most 100 calls this minute" {
+    limiter --> gateway : 200 allow
+    gateway  -> orders  : GET /orders
+    orders  --> gateway : 200 {"orders": []}
+    gateway --> client  : 200 {"orders": []}
+  } alt "Limited" when "the client is over its limit" {
+    limiter --> gateway : 429
+    gateway --> client  : 429 {"error": "rate_limited"}
+  }
+}

@@ -1,0 +1,55 @@
+title "Notification Fan-out" "Turns order events into email, SMS and push notifications"
+
+orders    "Order Service"       [REST API]        x4 @orders "Emits events when an order ships, is delayed or arrives"
+prefs     "Preferences"         [REST API]        x3 @accounts "Each user's channel and opt-outs; already exists"
+email     "Email Provider"      [Email Service]
+sms       "SMS Provider"        [SMS Service]
+smsBackup "Backup SMS Provider" [SMS Service]
+push      "Push Provider"       [Third Party API] "APNs and FCM"
+
+capacity {
+  email     2k rps
+  sms       500 rps
+  smsBackup 500 rps
+  push      10k rps
+}
+
+traffic {
+  "Notify"  1500 rps
+  "Deliver" 1500 rps mix "Email" 55%, "Push" 30%, "SMS" 10%, "SMS failover" 1%, "Opted out" 4%
+}
+
+requirements {
+  p99 "Notify" < 50ms
+  availability "Notify" >= 99.95%
+  durable "Notify"
+  survive any node failure
+  survive failure of sms
+  cost <= 2000 usd/month
+}
+
+test "The Order Service never waits for a provider" {
+  "Notify" never waits for any external
+  "Notify" writes any queue before responding
+  no path from orders to any external
+}
+
+test "Workers take events from the queue" {
+  "Deliver" starts at any queue
+}
+
+test "Preferences are checked before anything is sent" {
+  "Deliver" calls prefs before any external
+  "Deliver" scenario "Opted out" never calls any external
+}
+
+test "Each channel goes out through its provider" {
+  "Deliver" scenario "Email" calls email
+  "Deliver" scenario "Push" calls push
+  "Deliver" scenario "SMS" calls sms
+}
+
+test "SMS fails over to the backup provider" {
+  "Deliver" handles failure of sms
+  "Deliver" scenario "SMS failover" calls smsBackup after sms
+}

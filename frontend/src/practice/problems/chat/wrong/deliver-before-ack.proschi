@@ -1,0 +1,76 @@
+# expect-fail: Delivery happens after the ack
+# Delivering before the ack holds up the sender.
+import "problem.proschi"
+
+lb       "Load Balancer" [AWS Load Balancer] x2 @chat
+ws       "Chat Gateway"  [WebSocket]         x13 @chat "Holds the WebSockets; stores and routes messages"
+messages "Messages"      [Cassandra]         x2 @chat "Every message, partitioned by conversation"
+presence "Presence"      [Redis]             x2 @chat "Which gateway each online user is connected to"
+broker   "Message Bus"   [NATS]              x2 @chat "One subject per gateway server"
+history  "History API"   [REST API]          x3 @chat "Pages through a conversation"
+
+sender  -> lb
+lb      -> ws        : WebSocket
+lb      -> history   : HTTPS
+ws      -> messages  : write
+ws      -> presence  : lookup
+ws      -> broker    : publish / subscribe
+ws      -> recipient : WebSocket
+ws      -> push      : notify
+history -> messages  : read
+
+entity Message in messages "One message in a conversation" {
+  conversationId string key
+  sentAt         time   key
+  id             string unique
+  senderId       string
+  text           string
+}
+
+entity Presence in presence "Where a user is connected; expires 60 s after the last heartbeat" {
+  userId  string key
+  gateway string
+}
+
+decision "Store before the ack" {
+  because "The ack promises the message is safe; once it is in Cassandra, delivery can be retried from there"
+  rejected "Ack on receipt, store asynchronously" "A gateway crash would lose messages the sender already saw as sent"
+}
+decision "Cassandra for messages" {
+  because "Append-heavy writes at 10k rps, and history is one partition per conversation read newest first"
+  rejected "PostgreSQL" "A single primary and a growing table of billions of rows"
+}
+decision "Route between gateways with pub/sub" because "Each gateway subscribes to its own subject; presence says which subject reaches the recipient"
+decision "Deliver after the ack" because "Delivery and push notifications (200 ms) never hold up the sender"
+
+usecase "Send message" "Send a message to another user" {
+  sender    -> lb       : SEND {"to": "bob", "text": "On my way"}
+  lb        -> ws       : SEND
+  ws        -> messages : INSERT Message m_77
+  messages --> ws       : ok
+  ws        -> presence : GET presence:bob
+
+  alt "Online" when "the recipient has a WebSocket open" {
+    presence --> ws        : gateway ws-7
+    ws        -> broker    : PUBLISH gateway.ws-7 m_77
+    broker   --> ws        : ok
+    ws        -> recipient : MESSAGE m_77
+    recipient --> ws       : delivered
+    ws --> lb : ACK {"id": "m_77"}
+    lb --> sender : ACK {"id": "m_77"}
+  } alt "Offline" when "the recipient has no connection" {
+    presence --> ws   : nil
+    ws --> lb : ACK {"id": "m_77"}
+    lb --> sender : ACK {"id": "m_77"}
+    ws       ->> push : notify bob "New message"
+  }
+}
+
+usecase "Load history" "Show the last messages of a conversation" {
+  sender    -> lb       : GET /conversations/c_12/messages?limit=50
+  lb        -> history  : GET /conversations/c_12/messages?limit=50
+  history   -> messages : SELECT Message WHERE conversationId = c_12 LIMIT 50
+  messages --> history  : 50 messages
+  history  --> lb       : 200 {"messages": [...]}
+  lb       --> sender   : 200 {"messages": [...]}
+}

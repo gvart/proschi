@@ -1,0 +1,68 @@
+import "problem.proschi"
+
+cdn    "CDN"          [AWS CloudFront] x2 @pastes "Caches pastes at the edge for a few minutes"
+api    "Paste API"    [REST API]       x2 @pastes "Creates pastes and serves the ones the CDN misses"
+meta   "Paste DB"     [PostgreSQL]     x2 @pastes "One row per paste: id, size, expiry, where its text is"
+bodies "Paste Bodies" [AWS S3]         x2 @pastes "The text of every paste, one object per paste"
+
+user -> cdn
+cdn  -> api    : HTTPS (origin)
+api  -> meta   : read / write
+api  -> bodies : GET / PUT object
+
+entity Paste in meta "What the service knows about a paste" {
+  id        string key
+  bodyKey   string
+  sizeBytes int
+  createdAt time
+  expiresAt time   index
+}
+
+entity PasteBody in bodies "The text, stored as is" {
+  key  string key
+  text string
+}
+
+decision "Text in object storage, metadata in PostgreSQL" {
+  because "80 TB of blobs up to 10 MB are cheap and durable in S3; the database only holds small rows it can index by expiry"
+  rejected "Text in the database" "Bloats every row, backups and replicas with megabytes nobody queries"
+}
+decision "Serve reads through a CDN" {
+  because "A shared link is opened by many readers within minutes; the edge answers 90% of reads in a few milliseconds without touching the API, and its egress costs $0.02/GB instead of $0.09/GB from S3"
+  rejected "Redis behind the API" "Every read still crosses the load balancer and the API: too slow for 30 ms at p99, and the API must take all 5k rps"
+  rejected "Serve every read from S3" "130 TB a month at $0.09/GB is over $11,000 of egress"
+}
+decision "Short CDN lifetime" because "Caching for 5 minutes keeps an expired paste visible for at most 5 minutes past its expiry"
+
+usecase "Create paste" "Store a paste and return its id" {
+  user    -> cdn    : ~10KB POST /pastes json {"text": "panic: runtime error", "expiresIn": "1d"}
+  cdn     -> api    : ~10KB POST /pastes
+  api     -> bodies : ~10KB PUT pastes/k7Qz2
+  bodies --> api    : 200
+  api     -> meta   : INSERT Paste k7Qz2
+  meta   --> api    : ok
+  api    --> cdn    : 201 {"id": "k7Qz2"}
+  cdn    --> user   : 201 {"id": "k7Qz2"}
+}
+
+usecase "Read paste" "Show the text of a paste" {
+  user -> cdn : ~10KB GET /k7Qz2
+
+  alt "Cached" when "the paste was read in the last few minutes" {
+    cdn --> user : 200 text
+  } alt "Not cached" when "nobody read it lately" {
+    cdn     -> api    : ~10KB GET /k7Qz2
+    api     -> meta   : SELECT Paste k7Qz2
+    meta   --> api    : expires tomorrow
+    api     -> bodies : ~10KB GET pastes/k7Qz2
+    bodies --> api    : text
+    api    --> cdn    : 200 text (Cache-Control: max-age=300)
+    cdn    --> user   : 200 text
+  } alt "Expired" when "the paste is past its expiry" {
+    cdn   -> api  : GET /k7Qz2
+    api   -> meta : SELECT Paste k7Qz2
+    meta --> api  : expired yesterday
+    api  --> cdn  : 404
+    cdn  --> user : 404 {"error": "expired"}
+  }
+}

@@ -1,12 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
 import { examples, parse } from '../dsl';
-import { problems } from '../practice/problems';
+import { problems } from '../practice/catalog';
 import { decodeShareLink } from '../playground/share';
 import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { heroScenarios, stepLines } from './player';
+import { listingsFrom, practiceListHtml } from './practiceList';
 import { tallLayout, wideLayout } from './diagramLayout';
 
 function decodeEntities(s: string): string {
@@ -188,8 +189,33 @@ describe('old share links', () => {
 });
 
 describe('practice section', () => {
-  it('links every practice problem, in catalog order', () => {
-    const ids = [...landingHtml.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
+  const files = import.meta.glob<string>('../practice/problems/*/problem.md', { query: '?raw', import: 'default', eager: true });
+  const listings = listingsFrom(Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace('../practice/problems/', ''), text])));
+
+  it('has a container the list is rendered into, and a static link to the practice page', () => {
+    expect(landingHtml).toMatch(/<ul class="examples" id="practice-list"><\/ul>/);
+    expect(landingHtml).toMatch(/<noscript>[\s\S]*href="\.\/practice\/"[\s\S]*<\/noscript>/);
+    expect(landingHtml).not.toMatch(/href="\.\/practice\/#\//);
+  });
+
+  it('lists every practice problem from its folder, in catalog order', () => {
+    expect(listings.map((p) => [p.id, p.title, p.summary, p.difficulty])).toEqual(problems.map((p) => [p.id, p.title, p.summary, p.difficulty]));
+    const html = practiceListHtml(listings);
+    const ids = [...html.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
     expect(ids).toEqual(problems.map((p) => p.id));
+  });
+
+  it('renders title, difficulty and summary, escaped', () => {
+    const html = practiceListHtml([
+      { id: 'a', title: 'A <b>&', summary: 'Say "hi"', difficulty: 'hard' },
+      { id: 'b', title: 'B', summary: 'S', difficulty: 'easy' },
+    ]);
+    expect(html).toContain('<span class="example__name">A &lt;b&gt;&amp; <span class="tag tag--error">hard</span></span>');
+    expect(html).toContain('<span class="example__desc">Say &quot;hi&quot;</span>');
+    expect(html).toContain('<span class="tag">easy</span>');
+  });
+
+  it('leaves out folders whose problem.md cannot be read', () => {
+    expect(listingsFrom({ 'bad/problem.md': 'no front matter', ...Object.fromEntries(Object.entries(files).slice(0, 1).map(([k, v]) => [k.replace('../practice/problems/', ''), v])) })).toHaveLength(1);
   });
 });

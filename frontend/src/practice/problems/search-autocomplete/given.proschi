@@ -1,0 +1,46 @@
+title "Search Autocomplete" "Suggests completions while the user types, from an index rebuilt from past queries"
+
+user      "User"           [Actor]
+search    "Search Cluster" [Elasticsearch]   x3 @search "Full-text search over the catalogue, sized for searches"
+scheduler "Scheduler"      [AWS EventBridge] @search "Starts an index rebuild every 15 minutes"
+
+traffic {
+  "Suggest" 100k rps mix "Edge hit" 80%, "Edge miss" 20%
+  "Search"  2k rps
+}
+
+requirements {
+  p99 "Suggest" < 100ms
+  p99 "Search" < 300ms
+  availability "Suggest" >= 99.95%
+  survive any node failure
+  cost <= 5500 usd/month
+}
+
+test "Suggestions never touch the search cluster" {
+  "Suggest" never calls search
+  "Suggest" never calls any database
+}
+
+test "Suggestions are served by the CDN, then the cache" {
+  "Suggest" has scenario "Edge hit"
+  "Suggest" has scenario "Edge miss"
+  "Suggest" starts at user
+  in "Suggest" user calls any cdn
+  "Suggest" calls any cdn before any cache
+  "Suggest" scenario "Edge hit" never calls any service
+  "Suggest" scenario "Edge miss" calls any cache
+}
+
+test "Searches feed the query log without waiting for it" {
+  "Search" calls search
+  "Search" calls any queue
+  "Search" never waits for any queue
+  "Search" responds 200
+}
+
+test "The index is rebuilt offline from the query log" {
+  "Rebuild index" starts at scheduler
+  "Rebuild index" calls any queue before any cache
+  "Rebuild index" never calls search
+}

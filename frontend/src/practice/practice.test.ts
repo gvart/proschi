@@ -1,69 +1,65 @@
-import { format } from '../dsl/format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from '../dsl';
 import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/engine';
 import { parseInline, parseMarkdown, safeHref } from './markdown';
-import { findProblem, problems } from './problems';
+import { catalogErrors, findProblem, problems } from './catalog';
 import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, withSource } from './progress';
 import { PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
-import { DIFFICULTIES, type Problem } from './types';
+import { validateProblem } from './validate';
+import type { Problem } from './types';
 
-/** Use case names in the given `traffic` block. */
-const trafficUseCases = (given: string) => [...(given.match(/traffic\s*\{([\s\S]*?)\}/)?.[1] ?? '').matchAll(/^\s*"([^"]+)"/gm)].map((m) => m[1]);
+describe('problem catalog', () => {
+  it('reads every problem folder', () => {
+    expect(catalogErrors.map((e) => e.message)).toEqual([]);
+    expect(problems.length).toBeGreaterThanOrEqual(12);
+  });
 
-describe('problem index', () => {
-  it('has unique, URL-safe ids', () => {
+  it('has unique ids and finds problems by id', () => {
     const ids = problems.map((p) => p.id);
     expect(new Set(ids).size).toBe(ids.length);
-    for (const id of ids) expect(id).toMatch(/^[a-z0-9]+(-[a-z0-9]+)*$/);
     expect(findProblem('url-shortener')?.title).toBe('URL Shortener');
     expect(findProblem('nope')).toBeUndefined();
   });
 
-  it.each(problems.map((p) => [p.id, p] as const))('%s is complete', (_id, p: Problem) => {
-    expect(DIFFICULTIES).toContain(p.difficulty);
-    expect(p.title.trim()).not.toBe('');
-    expect(p.tags.length).toBeGreaterThan(0);
-    expect(p.hints.length).toBeGreaterThan(0);
-    expect(p.statement).toMatch(/^## Functional requirements$/m);
-    expect(p.starter.startsWith(`import "${PROBLEM_FILE}"\n`)).toBe(true);
-    expect(p.solution.startsWith(`import "${PROBLEM_FILE}"\n`)).toBe(true);
-    expect(p.given).not.toMatch(/^\s*import /m);
-    // The traffic names use cases the reference solution defines, and the statement asks for them.
-    const useCases = trafficUseCases(p.given);
-    expect(useCases.length).toBeGreaterThan(0);
-    for (const name of useCases) {
-      expect(p.solution).toContain(`usecase "${name}"`);
-      expect(p.statement).toContain(`**${name}**`);
-    }
+  it('lists problems by difficulty, then order, then title', () => {
+    expect(problems.map((p) => p.id)).toEqual([
+      'pastebin',
+      'rate-limiter',
+      'url-shortener',
+      'chat',
+      'file-storage',
+      'news-feed',
+      'notification-fanout',
+      'ride-matching',
+      'search-autocomplete',
+      'payments',
+      'ticket-booking',
+      'video-streaming',
+    ]);
   });
 
-  it.each(problems.map((p) => [p.id, p] as const))('%s starter has no errors of its own', (_id, p: Problem) => {
-    expect(parseSolution(p, p.starter).diagnostics.filter((d) => d.file === undefined && d.severity === 'error')).toEqual([]);
+  // validate.ts is the definition `proschi problem check` uses too.
+  it.each(problems.map((p) => [p.id, p] as const))('%s is a valid problem', (_id, p: Problem) => {
+    expect(validateProblem(p, defaultEngine).violations).toEqual([]);
   });
 
-  it.each(problems.map((p) => [p.id, p] as const))('%s given and solution parse without any diagnostic', (_id, p: Problem) => {
-    expect(parse(p.given).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
-    expect(parseSolution(p, p.solution).diagnostics).toEqual([]);
+  const wrong = problems.flatMap((p) => (p.wrong ?? []).map((w) => [`${p.id}/wrong/${w.name}`, p, w.name] as const));
+  it('has plausible wrong designs', () => expect(wrong.length).toBeGreaterThanOrEqual(36));
+  it.each(wrong)('%s fails the tests it names', (_name, p: Problem, name: string) => {
+    const report = validateProblem(p, defaultEngine).wrong.find((w) => w.name === name)!;
+    expect(report.expectFail.length).toBeGreaterThan(0);
+    expect(report.missing).toEqual([]);
+    for (const test of report.expectFail) expect(report.failed).toContain(test);
   });
 
-  it.each(problems.map((p) => [p.id, p] as const))('%s given and solution are in canonical format', (_id, p: Problem) => {
-    expect(format(p.given)).toBe(p.given);
-    expect(format(p.solution)).toBe(p.solution);
-  });
-
-  it.each(problems.map((p) => [p.id, p] as const))('%s reference solution passes every test', (_id, p: Problem) => {
-    const run = runTests(parseSolution(p, p.solution), defaultEngine);
+  it('notification-fanout: the SMS failover may check the primary in the background without losing the fallback', () => {
+    const p = findProblem('notification-fanout')!;
+    const from = '    smsBackup --> worker    : 202\n    worker    --> events    : delete\n';
+    expect(p.solution).toContain(from);
+    const source = p.solution.replace(from, `${from}    worker     -> sms       : GET /messages/m_1/status\n    sms       --> worker    : 404 never sent\n`);
+    const run = runTests(parseSolution(p, source), defaultEngine);
     expect(run.blocked).toBeUndefined();
     expect(run.results.filter((r) => !r.passed)).toEqual([]);
-    expect(run.solved).toBe(true);
-  });
-
-  it.each(problems.map((p) => [p.id, p] as const))('%s starter fails at least one test', (_id, p: Problem) => {
-    const run = runTests(parseSolution(p, p.starter), defaultEngine);
-    expect(run.blocked).toBeUndefined();
-    expect(run.results.length).toBeGreaterThan(0);
-    expect(run.solved).toBe(false);
   });
 });
 

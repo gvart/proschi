@@ -1,0 +1,10 @@
+import "problem.proschi"
+
+# Add the rate limiter, where its counters live, and the use case "Call API".
+
+client -> orders
+
+usecase "Call API" {
+  client  -> orders : GET /orders
+  orders --> client : 200
+}

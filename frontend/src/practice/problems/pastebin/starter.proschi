@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Create paste" and "Read paste".
+api "Paste API" [REST API]
+
+user -> api
+
+usecase "Create paste" {
+  user -> api : POST /pastes json {"text": "panic: runtime error", "expiresIn": "1d"}
+  api --> user : 201 {"id": "k7Qz2"}
+}

@@ -1,0 +1,122 @@
+# expect-fail: A seat is booked only once it is paid
+# Books the seat first, then charges.
+import "problem.proschi"
+
+lb    "Load Balancer" [AWS Load Balancer] x2 @platform
+api   "Booking API"   [REST API]          x20 @tickets "Seat maps, holds and bookings"
+cache "Seat Maps"     [Redis]             x2 @tickets "Rendered seat map per event, 2 s TTL"
+db    "Seats DB"      [PostgreSQL]        x2 @tickets "Seats, holds and bookings, sharded by seat; the only source of truth"
+
+capacity {
+  db shards 2
+}
+
+fan -> lb
+lb  -> api      : HTTPS
+api -> cache    : GET / SET / DEL
+api -> db       : SQL
+api -> payments : charge
+
+entity Seat in db "One seat of one event; held or booked by at most one fan" {
+  eventId     string key
+  seatId      string key
+  status      string
+  holdId      uuid   optional unique
+  heldBy      string optional
+  holdExpires time   optional index
+  bookingId   uuid   optional
+  version     int
+}
+
+entity Booking in db "A paid seat, on the shard of its seat" {
+  bookingId uuid   key
+  holdId    uuid   unique
+  eventId   string index
+  seatId    string
+  fanId     string index
+  paymentId string unique
+  createdAt time
+}
+
+decision "Holds are conditional writes in PostgreSQL" {
+  because "UPDATE … WHERE status = 'free' OR holdExpires < now() is atomic and strongly consistent: of two fans racing for a seat exactly one row update wins, the other gets 409"
+  rejected "Check the seat map cache, then write" "The cache is seconds stale and two fans read 'free' at the same moment; both would get the seat"
+  rejected "Redis SET NX with a TTL as the lock" "Fast and expires by itself, but a failover can drop the lock and the seat sells twice"
+}
+decision "Shard the seats by (eventId, seatId)" {
+  because "Every hold attempt is a write: 6.5k writes a second at the peak against 5k a PostgreSQL primary takes. Two shards give 10k, and a hold or a booking touches one seat, so it never spans shards"
+  rejected "More read replicas" "Replicas only serve reads; every write still lands on the one primary, which saturates"
+  rejected "DynamoDB" "Partitioned and cheap to scale, but its default reads are eventually consistent; the decision must come from a strongly consistent read-and-write"
+}
+decision "Holds expire by a deadline, not by a cleanup job" {
+  because "A hold is valid while holdExpires is in the future; an expired hold is simply overwritten by the next fan, so no sweeper has to run on time"
+  rejected "A scheduled job that releases holds" "Seats stay locked whenever the job is late or down"
+}
+decision "Confirm with a conditional update after the payment" {
+  because "The booking is written only if the hold is still this fan's; a payment that raced past the deadline is refunded instead of double-selling the seat"
+  rejected "Book first, then charge" "A declined card leaves a booked seat nobody paid for"
+}
+decision "Seat maps from a short-TTL cache, never invalidated by holds" {
+  because "Maps take three quarters of the traffic and may be two seconds stale; the TTL alone keeps them close enough, so the hold path touches only the database"
+  rejected "Read seat maps from the database" "20k rps on the database that must serve every hold with low latency"
+  rejected "Delete the cached map on every hold" "Puts the cache on the hold path, and a map rebuilt from a replica can still be stale"
+}
+
+usecase "View seats" "Load the seat map of an event" {
+  fan -> lb    : GET /events/e1/seats
+  lb  -> api   : GET /events/e1/seats
+  api -> cache : GET seatmap:e1
+
+  alt "Cache hit" when "the map was rendered in the last 2 seconds" {
+    cache --> api : seat map
+  } alt "Cache miss" when "the map expired" {
+    cache --> api   : nil
+    api    -> db    : SELECT seats of e1
+    db    --> api   : 48,000 rows
+    api   ->> cache : SET seatmap:e1 EX 2
+  }
+  api --> lb  : 200 {"seats": []}
+  lb  --> fan : 200 {"seats": []}
+}
+
+usecase "Hold seat" "Hold one seat for 10 minutes" {
+  fan -> lb  : POST /events/e1/holds json {"seat": "A-12"}
+  lb  -> api : POST /events/e1/holds
+  api -> db  : UPDATE seat SET held, holdExpires = now() + 10 min WHERE free OR holdExpires < now()
+
+  alt "Held" when "the seat was free or its hold expired" {
+    db  --> api : 1 row
+    api --> lb  : 201 {"holdId": "h-77", "expiresAt": "10:10:00"}
+    lb  --> fan : 201 {"holdId": "h-77", "expiresAt": "10:10:00"}
+  } alt "Taken" when "another fan holds or booked it" {
+    db  --> api : 0 rows
+    api --> lb  : 409 {"error": "seat_taken"}
+    lb  --> fan : 409 {"error": "seat_taken"}
+  }
+}
+
+usecase "Confirm booking" "Pay for a held seat and book it" {
+  fan -> lb  : POST /holds/h-77/confirm json {"card": "tok_visa"}
+  lb  -> api : POST /holds/h-77/confirm
+  api -> db  : SELECT hold h-77 WHERE heldBy = fan AND holdExpires > now()
+
+  alt "Paid" when "the hold is valid and the card is approved" {
+    db       --> api      : valid
+    api       -> db       : UPDATE seat SET booked WHERE holdId = h-77; INSERT booking
+    db       --> api      : 1 row
+    api       -> payments : POST /charges Idempotency-Key h-77
+    payments --> api      : 201 approved
+    api      --> lb       : 201 {"bookingId": "b-301"}
+    lb       --> fan      : 201 {"bookingId": "b-301"}
+  } alt "Payment declined" when "the provider declines the card" {
+    db       --> api      : valid
+    api       -> payments : POST /charges Idempotency-Key h-77
+    payments --> api      : 402 declined
+    api      --> lb       : 402 {"error": "card_declined"}
+    lb       --> fan      : 402 {"error": "card_declined"}
+  } alt "Hold expired" when "the deadline passed or the hold is not the fan's" {
+    db  --> api : no valid hold
+    api --> lb  : 409 {"error": "hold_expired"}
+    lb  --> fan : 409 {"error": "hold_expired"}
+  }
+}

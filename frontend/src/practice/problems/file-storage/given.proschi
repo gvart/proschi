@@ -1,0 +1,55 @@
+title "File Storage" "Stores users' files and serves them back, like a small Dropbox"
+
+user  "User"           [Actor]
+blobs "Object Storage" [AWS S3] x2 @storage "The bucket that holds every file's bytes"
+
+traffic {
+  "Download"     500 rps mix "CDN hit" 90%, "CDN miss" 10%
+  "List files"   2k rps
+  "Start upload" 200 rps
+  "Upload"       200 rps
+}
+
+requirements {
+  p99 "List files" < 200ms
+  p99 "Start upload" < 200ms
+  p99 "Upload" < 450ms
+  p99 "Download" < 500ms
+  availability >= 99.9%
+  durable "Start upload"
+  durable "Upload"
+  survive any node failure
+  cost <= 45000 usd/month
+}
+
+test "File bytes never pass through your servers" {
+  in "Upload" user calls blobs
+  in "Upload" any service or any function never calls blobs
+  in "Download" any service or any function never calls blobs
+  "Upload" never calls any edge
+}
+
+test "The API hands out pre-signed URLs for pending files" {
+  "Start upload" writes any database before responding
+  "Start upload" responds 201
+  "Start upload" never calls blobs
+}
+
+test "Uploads are finished without the client" {
+  "Upload" starts at user
+  in "Upload" user never calls any edge or any service or any function
+  "Upload" calls any database after blobs
+}
+
+test "Downloads are served by the CDN" {
+  "Download" has scenario "CDN hit"
+  "Download" has scenario "CDN miss"
+  in "Download" user calls any cdn
+  in "Download" user never calls blobs
+  "Download" scenario "CDN hit" never calls blobs
+  "Download" calls any cdn before blobs
+}
+
+test "Metadata stays behind the API" {
+  no path from user to any database
+}
