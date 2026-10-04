@@ -1,11 +1,11 @@
 /**
- * The optional Proschi API (backend/): sign-in and practice stats. Builds
- * without VITE_API_URL have no API, and the practice page works as before,
- * with progress in this browser only.
+ * The Proschi API (backend/): sign-in and practice stats, under /api and
+ * /auth on the site's own origin (proschi.app), with the session in an
+ * HttpOnly cookie. Builds without VITE_ACCOUNTS=true (GitHub Pages, the e2e
+ * tests) have no API, and the practice page keeps progress in the browser only.
  */
 
-export const API_URL = (import.meta.env.VITE_API_URL ?? '').replace(/\/+$/, '');
-export const apiEnabled = API_URL !== '';
+export const apiEnabled = import.meta.env.VITE_ACCOUNTS === 'true';
 
 export type ProviderId = 'github' | 'google';
 
@@ -18,20 +18,19 @@ export class ApiError extends Error {
   }
 }
 
-export async function api<T>(path: string, { method = 'GET', token, body }: { method?: string; token?: string; body?: unknown } = {}): Promise<T> {
+export async function api<T>(path: string, { method = 'GET', body }: { method?: string; body?: unknown } = {}): Promise<T> {
   const headers: Record<string, string> = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
   if (body !== undefined) headers['Content-Type'] = 'application/json';
-  const response = await fetch(`${API_URL}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
+  const response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
   if (response.status === 204) return undefined as T;
   const data = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) throw new ApiError(response.status, data.error ?? `${response.status} ${response.statusText}`);
   return data as T;
 }
 
-/** Where the sign-in button goes: the provider's page, then back to `returnTo` with ?login=<code>, which only works with `nonce`. */
-export function loginUrl(provider: ProviderId, returnTo: string, nonce: string): string {
-  return `${API_URL}/auth/${provider}/start?${new URLSearchParams({ return: returnTo, nonce })}`;
+/** Where the sign-in button goes: the provider's page, then back to `returnTo` (a path on this site), signed in. */
+export function loginUrl(provider: ProviderId, returnTo: string): string {
+  return `/auth/${provider}/start?${new URLSearchParams({ return: returnTo })}`;
 }
 
 export interface User {

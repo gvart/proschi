@@ -1,7 +1,7 @@
 # proschi
 
 Command-line checker and language server for
-[Proschi](https://gvart.github.io/proschi/), a small text language for
+[Proschi](https://proschi.app/), a small text language for
 microservice architectures and the request flows that run through them.
 
 ```sh

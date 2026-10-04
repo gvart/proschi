@@ -1,16 +1,16 @@
-import { configuredProviders, createSession, finishLogin, isProvider, logout, startLogin } from './auth';
+import { configuredProviders, finishLogin, isProvider, logout, startLogin } from './auth';
 import type { Env } from './env';
-import { errorResponse, HttpError, json, preflight, withCors } from './http';
+import { assertSameOrigin, errorResponse, HttpError, json } from './http';
 import { deleteMe, getMe, recordRun, updateMe } from './progress';
 import { getLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
- * The Proschi API (backend/README.md):
+ * proschi.app: the site (frontend/dist, served as static assets without
+ * running this code) and, under /api and /auth, the API (backend/README.md):
  *
  *   GET    /auth/providers                  sign-in providers on offer
  *   GET    /auth/<provider>/start?return=   → the provider's sign-in page
- *   GET    /auth/<provider>/callback        → the return page with ?login=<code>
- *   POST   /auth/session {code}             → {token, expiresAt}
+ *   GET    /auth/<provider>/callback        → the return path, signed in (session cookie)
  *   POST   /auth/logout
  *   GET    /api/me                          account and progress
  *   PATCH  /api/me {displayName?, publicProfile?}
@@ -23,6 +23,8 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
 
 async function route(request: Request, env: Env): Promise<Response> {
   const { pathname } = new URL(request.url);
+  if (!/^\/(api|auth)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
+  assertSameOrigin(request);
   const method = request.method;
   const parts = pathname.split('/').filter(Boolean);
   const is = (m: string, ...path: string[]) => method === m && parts.length === path.length && path.every((p, i) => p === '*' || p === parts[i]);
@@ -31,7 +33,6 @@ async function route(request: Request, env: Env): Promise<Response> {
   if ((is('GET', 'auth', '*', 'start') || is('GET', 'auth', '*', 'callback')) && isProvider(parts[1])) {
     return parts[2] === 'start' ? startLogin(request, env, parts[1]) : finishLogin(request, env, parts[1]);
   }
-  if (is('POST', 'auth', 'session')) return createSession(request, env);
   if (is('POST', 'auth', 'logout')) return logout(request, env);
   if (is('GET', 'api', 'me')) return getMe(request, env);
   if (is('PATCH', 'api', 'me')) return updateMe(request, env);
@@ -45,17 +46,12 @@ async function route(request: Request, env: Env): Promise<Response> {
 
 export default {
   async fetch(request, env): Promise<Response> {
-    if (request.method === 'OPTIONS') return preflight(request, env);
-    let response: Response;
     try {
-      response = await route(request, env);
+      return await route(request, env);
     } catch (e) {
-      if (e instanceof HttpError) response = errorResponse(e.status, e.message);
-      else {
-        console.error(e);
-        response = errorResponse(500, 'Internal error');
-      }
+      if (e instanceof HttpError) return errorResponse(e.status, e.message);
+      console.error(e);
+      return errorResponse(500, 'Internal error');
     }
-    return withCors(request, env, response);
   },
 } satisfies ExportedHandler<Env>;

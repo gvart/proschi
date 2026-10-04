@@ -46,6 +46,6 @@ npm run e2e          # or: npm run e2e:build (build, then test)
   never cover what a test looks at. Tour tests opt out with
   `test.use({ onboarding: 'fresh' })`.
 
-CI runs the suite in the `e2e` job of `.github/workflows/frontend.yml`; the
+CI runs the suite in the `e2e` job of `.github/workflows/site.yml`; the
 Pages deploy waits for it. On failure the HTML report and traces are uploaded
 as the `playwright-report` artifact.

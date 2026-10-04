@@ -199,7 +199,7 @@ do not, and the limits in `requirements` decide that:
    a queue).
 
 When the simulation's model changes, `problem check` shows which problems
-need recalibrating. [How the simulation works](https://gvart.github.io/proschi/model/)
+need recalibrating. [How the simulation works](https://proschi.app/model/)
 lists every formula and default number the limits are measured against, and
 explains to solvers what a passing verdict does and does not mean.
 

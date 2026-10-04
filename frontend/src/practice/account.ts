@@ -1,74 +1,18 @@
-import { loadJson, saveJson } from '../services/storage';
 import type { ServerProgress } from '../services/api';
 import type { Progress, Status } from './progress';
 
 /**
- * Practice accounts (backend/): the session token kept in this browser, the
- * sign-in redirect's URL parameters, and how browser and server progress
- * combine. Signed out, nothing here runs and progress stays in the browser.
+ * Practice accounts (backend/): the sign-in redirect's URL parameter and how
+ * browser and server progress combine. Signed out, nothing here runs and
+ * progress stays in the browser.
  */
 
-export const SESSION_KEY = 'proschi.session';
-export const NONCE_KEY = 'proschi.login-nonce';
-
-export interface Session {
-  token: string;
-  /** Unix seconds. */
-  expiresAt: number;
-}
-
-export function loadSession(now = Date.now()): Session | undefined {
-  const s = loadJson<Partial<Session> | null>(SESSION_KEY, null);
-  if (!s || typeof s.token !== 'string' || typeof s.expiresAt !== 'number' || s.expiresAt * 1000 <= now) return undefined;
-  return { token: s.token, expiresAt: s.expiresAt };
-}
-
-export function saveSession(session: Session | undefined): void {
-  if (session) saveJson(SESSION_KEY, session);
-  else
-    try {
-      localStorage.removeItem(SESSION_KEY);
-    } catch {
-      // Storage unavailable: nothing was saved.
-    }
-}
-
-/**
- * A new sign-in nonce, kept in this tab until the API redirects back; the
- * login code is exchanged only together with it. Undefined without storage.
- */
-export function newLoginNonce(): string | undefined {
-  const nonce = Array.from(crypto.getRandomValues(new Uint8Array(24)), (b) => b.toString(16).padStart(2, '0')).join('');
-  try {
-    sessionStorage.setItem(NONCE_KEY, nonce);
-    return nonce;
-  } catch {
-    return undefined;
-  }
-}
-
-/** The nonce of the sign-in this tab started, once. */
-export function takeLoginNonce(): string | undefined {
-  try {
-    const nonce = sessionStorage.getItem(NONCE_KEY) ?? undefined;
-    sessionStorage.removeItem(NONCE_KEY);
-    return nonce;
-  } catch {
-    return undefined;
-  }
-}
-
-/**
- * The sign-in result the API appended to the page URL (`login` code or
- * `login_error`), and the URL without them, to put back in the address bar.
- */
-export function takeLoginParams(href: string): { code?: string; error?: string; cleanUrl: string } {
+/** The sign-in error the API appended to the page URL (`login_error`), and the URL without it, to put back in the address bar. */
+export function takeLoginError(href: string): { error?: string; cleanUrl: string } {
   const url = new URL(href);
-  const code = url.searchParams.get('login') ?? undefined;
   const error = url.searchParams.get('login_error') ?? undefined;
-  url.searchParams.delete('login');
   url.searchParams.delete('login_error');
-  return { ...(code ? { code } : {}), ...(error ? { error } : {}), cleanUrl: url.toString() };
+  return { ...(error ? { error } : {}), cleanUrl: url.toString() };
 }
 
 const RANK: Status[] = ['todo', 'attempted', 'solved'];

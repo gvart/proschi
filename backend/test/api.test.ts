@@ -22,6 +22,7 @@ describe('progress', () => {
   it('needs a session', async () => {
     expect((await call('/api/me')).status).toBe(401);
     expect((await call('/api/me', { token: 'nope' })).status).toBe(401);
+    expect((await call('/api/nothing')).status).toBe(404);
     expect((await run('nope', { source: '', solved: false })).status).toBe(401);
   });
 

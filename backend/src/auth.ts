@@ -1,23 +1,19 @@
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, type Env } from './env';
-import { allowedOrigins, errorResponse, HttpError, json, readJson } from './http';
+import { errorResponse, HttpError } from './http';
 
 /**
  * Sign-in with GitHub or Google (OAuth 2 authorization code flow with PKCE).
+ * The site and the API share an origin, so the session is an HttpOnly cookie
+ * page scripts cannot read.
  *
- *   page → GET /auth/<provider>/start?return=<page URL>&nonce=<nonce>
+ *   page → GET /auth/<provider>/start?return=<path on this site>
  *        → provider → GET /auth/<provider>/callback
- *        → <page URL>?login=<one-time code>
- *   page → POST /auth/session {code, nonce} → {token}
+ *        → <path>, with the session cookie set
  *
- * The page keeps the nonce (sessionStorage) from start to exchange, so a
- * login code only works in the browser that started the sign-in: a link
- * carrying someone else's code cannot sign a visitor in to their account.
- *
- * The page keeps the token and sends it as `Authorization: Bearer`. A cookie
- * would be third-party for a page on another site (GitHub Pages), which
- * browsers increasingly block; the only cookie is the short-lived state
- * cookie on this origin during the redirect.
+ * A signed, short-lived state cookie set by /start ties the callback to the
+ * browser that started the sign-in, so a crafted callback link cannot sign a
+ * visitor in to someone else's account.
  */
 
 export type ProviderId = 'github' | 'google';
@@ -120,8 +116,9 @@ export function configuredProviders(env: Env): ProviderId[] {
 }
 
 const STATE_COOKIE = 'proschi_oauth';
+/** `__Host-`: only this exact host, Secure, Path=/. */
+export const SESSION_COOKIE = '__Host-proschi_session';
 const STATE_TTL = 600;
-const LOGIN_CODE_TTL = 120;
 export const SESSION_TTL = 30 * 24 * 3600;
 export const MAX_NAME = 40;
 
@@ -130,27 +127,26 @@ interface LoginState {
   state: string;
   verifier: string;
   returnTo: string;
-  nonceHash: string;
   expires: number;
 }
 
-const NONCE = /^[\w-]{16,128}$/;
-
-/** A page URL on an allowed origin. */
-function isAllowedReturn(env: Env, url: string): boolean {
-  try {
-    return allowedOrigins(env).includes(new URL(url).origin);
-  } catch {
-    return false;
-  }
+/** A path on this site to come back to; anything else (another origin, `//host`, a scheme) is refused. */
+function isReturnPath(path: string): boolean {
+  return path.startsWith('/') && !path.startsWith('//') && !path.startsWith('/\\') && !/[\u0000-\u001f]/.test(path);
 }
 
-function redirect(location: string, headers: HeadersInit = {}): Response {
-  return new Response(null, { status: 302, headers: { Location: location, 'Cache-Control': 'no-store', ...headers } });
+function redirect(location: string, headers: [string, string][] = []): Response {
+  const response = new Response(null, { status: 302, headers: { Location: location, 'Cache-Control': 'no-store' } });
+  for (const [name, value] of headers) response.headers.append(name, value);
+  return response;
 }
 
 function stateCookie(value: string, maxAge: number): string {
   return `${STATE_COOKIE}=${value}; Path=/auth/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
+}
+
+export function sessionCookie(value: string, maxAge: number): string {
+  return `${SESSION_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 }
 
 function readCookie(request: Request, name: string): string | undefined {
@@ -161,40 +157,31 @@ function readCookie(request: Request, name: string): string | undefined {
   return undefined;
 }
 
-function withParam(url: string, key: string, value: string): string {
-  const out = new URL(url);
-  out.searchParams.set(key, value);
-  return out.toString();
+function withParam(path: string, key: string, value: string): string {
+  const url = new URL(path, 'https://site.invalid');
+  url.searchParams.set(key, value);
+  return `${url.pathname}${url.search}${url.hash}`;
 }
 
 export async function startLogin(request: Request, env: Env, provider: ProviderId): Promise<Response> {
   const clientId = PROVIDERS[provider].clientId(env);
   if (!clientId || !configuredProviders(env).includes(provider)) return errorResponse(404, `Sign-in with ${provider} is not configured`);
   const url = new URL(request.url);
-  const returnTo = url.searchParams.get('return') ?? '';
-  if (!isAllowedReturn(env, returnTo)) return errorResponse(400, 'return must be a page on an allowed origin');
-  const nonce = url.searchParams.get('nonce') ?? '';
-  if (!NONCE.test(nonce)) return errorResponse(400, 'nonce must be 16 to 128 base64url characters');
-  const login: LoginState = {
-    provider,
-    state: randomToken(16),
-    verifier: randomToken(32),
-    returnTo,
-    nonceHash: await sha256(nonce),
-    expires: now() + STATE_TTL,
-  };
+  const returnTo = url.searchParams.get('return') ?? '/';
+  if (!isReturnPath(returnTo)) return errorResponse(400, 'return must be a path on this site');
+  const login: LoginState = { provider, state: randomToken(16), verifier: randomToken(32), returnTo, expires: now() + STATE_TTL };
   const cookie = await sign(encodeJson(login), env.SESSION_SECRET);
   const redirectUri = `${url.origin}/auth/${provider}/callback`;
-  return redirect(PROVIDERS[provider].authorizeUrl(clientId, redirectUri, login.state, await sha256(login.verifier)), {
-    'Set-Cookie': stateCookie(cookie, STATE_TTL),
-  });
+  return redirect(PROVIDERS[provider].authorizeUrl(clientId, redirectUri, login.state, await sha256(login.verifier)), [
+    ['Set-Cookie', stateCookie(cookie, STATE_TTL)],
+  ]);
 }
 
 async function readLoginState(request: Request, env: Env, provider: ProviderId): Promise<LoginState | undefined> {
   const cookie = readCookie(request, STATE_COOKIE);
   const value = cookie && (await unsign(cookie, env.SESSION_SECRET));
   const login = value ? (decodeJson(value) as LoginState | undefined) : undefined;
-  if (!login || login.provider !== provider || !(login.expires > now()) || !isAllowedReturn(env, login.returnTo)) return undefined;
+  if (!login || login.provider !== provider || !(login.expires > now()) || !isReturnPath(login.returnTo)) return undefined;
   return login;
 }
 
@@ -207,30 +194,25 @@ export async function finishLogin(request: Request, env: Env, provider: Provider
       headers: { 'Content-Type': 'text/plain; charset=utf-8', 'Set-Cookie': stateCookie('', 0) },
     });
   }
-  const back = (key: string, value: string) => redirect(withParam(login.returnTo, key, value), { 'Set-Cookie': stateCookie('', 0) });
+  const clearState: [string, string] = ['Set-Cookie', stateCookie('', 0)];
   const code = url.searchParams.get('code');
-  if (!code) return back('login_error', url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'failed');
+  if (!code) return redirect(withParam(login.returnTo, 'login_error', url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'failed'), [clearState]);
 
   let profile: Profile;
   try {
     profile = await PROVIDERS[provider].profile(env, code, `${url.origin}/auth/${provider}/callback`, login.verifier);
   } catch (e) {
     console.error(`Sign-in with ${provider} failed:`, e);
-    return back('login_error', 'failed');
+    return redirect(withParam(login.returnTo, 'login_error', 'failed'), [clearState]);
   }
   const userId = await upsertUser(env, provider, profile);
-  const loginCode = randomToken();
+  const token = randomToken();
   const t = now();
   await env.DB.batch([
-    env.DB.prepare('DELETE FROM login_codes WHERE expires_at <= ?').bind(t),
-    env.DB.prepare('INSERT INTO login_codes (code_hash, nonce_hash, user_id, expires_at) VALUES (?, ?, ?, ?)').bind(
-      await sha256(loginCode),
-      login.nonceHash,
-      userId,
-      t + LOGIN_CODE_TTL,
-    ),
+    env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(t),
+    env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), userId, t + SESSION_TTL),
   ]);
-  return back('login', loginCode);
+  return redirect(login.returnTo, [clearState, ['Set-Cookie', sessionCookie(token, SESSION_TTL)]]);
 }
 
 async function upsertUser(env: Env, provider: ProviderId, profile: Profile): Promise<string> {
@@ -259,40 +241,15 @@ export function cleanName(name: string): string | undefined {
   return cleaned || undefined;
 }
 
-/** POST /auth/session {code, nonce}: the one-time code from the callback and the page's nonce, exchanged for a session token. */
-export async function createSession(request: Request, env: Env): Promise<Response> {
-  const { code, nonce } = await readJson(request);
-  if (typeof code !== 'string' || !code || typeof nonce !== 'string' || !nonce) throw new HttpError(400, 'code and nonce are required');
-  const t = now();
-  // A wrong nonce consumes the code too, so a leaked code cannot be retried.
-  const row = await env.DB.prepare('DELETE FROM login_codes WHERE code_hash = ? AND expires_at > ? RETURNING user_id, nonce_hash')
-    .bind(await sha256(code), t)
-    .first<{ user_id: string; nonce_hash: string }>();
-  if (!row) throw new HttpError(401, 'The sign-in code is invalid or expired');
-  if (row.nonce_hash !== (await sha256(nonce))) throw new HttpError(401, 'The sign-in was started in another browser or tab; sign in again');
-  const token = randomToken();
-  const expiresAt = t + SESSION_TTL;
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(t),
-    env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), row.user_id, expiresAt),
-  ]);
-  return json({ token, expiresAt }, 200, { 'Cache-Control': 'no-store' });
-}
-
 export interface User {
   id: string;
   displayName: string;
   publicProfile: boolean;
 }
 
-function bearer(request: Request): string | undefined {
-  const match = /^Bearer\s+(\S+)$/i.exec(request.headers.get('Authorization') ?? '');
-  return match?.[1];
-}
-
-/** The signed-in user, or undefined without a valid bearer token. */
+/** The signed-in user, or undefined without a valid session cookie. */
 export async function authenticate(request: Request, env: Env): Promise<User | undefined> {
-  const token = bearer(request);
+  const token = readCookie(request, SESSION_COOKIE);
   if (!token) return undefined;
   const row = await env.DB.prepare(
     `SELECT u.id, u.display_name, u.public_profile FROM sessions s JOIN users u ON u.id = s.user_id
@@ -309,9 +266,9 @@ export async function requireUser(request: Request, env: Env): Promise<User> {
   return user;
 }
 
-/** POST /auth/logout: ends the session of the bearer token. */
+/** POST /auth/logout: ends the session and clears its cookie. */
 export async function logout(request: Request, env: Env): Promise<Response> {
-  const token = bearer(request);
+  const token = readCookie(request, SESSION_COOKIE);
   if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
-  return new Response(null, { status: 204 });
+  return new Response(null, { status: 204, headers: { 'Set-Cookie': sessionCookie('', 0) } });
 }

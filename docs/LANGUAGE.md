@@ -322,7 +322,7 @@ this way. These statements are blocks at the top level; each line inside a
 block follows that block's own rules. The design they describe is in
 [docs/design/hld-and-practice.md](design/hld-and-practice.md); how the
 simulation turns them into numbers, and how far to trust those numbers, is on
-[How the simulation works](https://gvart.github.io/proschi/model/).
+[How the simulation works](https://proschi.app/model/).
 
 ```
 title "URL Shortener" "Turns long URLs into short codes and redirects visitors"

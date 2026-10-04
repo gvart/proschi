@@ -44,12 +44,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const progressRef = useRef(progress);
   progressRef.current = progress;
   const onSignedIn = useCallback(
-    (me: Me, token: string) => {
+    (me: Me) => {
       const toImport = progressToImport(progressRef.current, me.progress).filter((item) => problems.some((p) => p.id === item.id));
       updateProgress((p) => mergeServerProgress(p, me.progress));
       void (async () => {
         for (const { id, source, solved } of toImport) {
-          await api(`/api/problems/${encodeURIComponent(id)}/runs`, { method: 'POST', token, body: { source, solved, imported: true } }).catch(() => undefined);
+          await api(`/api/problems/${encodeURIComponent(id)}/runs`, { method: 'POST', body: { source, solved, imported: true } }).catch(() => undefined);
         }
       })();
     },

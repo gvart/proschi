@@ -58,7 +58,7 @@ test "Notes are stored before they are returned" {
 - **HLD and simulation**: traffic, requirements, replicas, shards, capacity,
   entities and decisions turn a diagram into a high-level design document; the
   simulation computes load, latency, availability and cost per node and runs
-  your requirements and tests. [How the simulation works](https://gvart.github.io/proschi/model/)
+  your requirements and tests. [How the simulation works](https://proschi.app/model/)
   lists its formulas, its default numbers and what it leaves out.
 - **Practice**: system design problems (URL shortener, payments, chat, video
   streaming and more) whose tests tell you in the browser whether your design
@@ -75,10 +75,10 @@ test "Notes are stored before they are returned" {
 
 | | |
 |---|---|
-| Website | <https://gvart.github.io/proschi/> |
-| Editor | <https://gvart.github.io/proschi/app/> |
-| Practice | <https://gvart.github.io/proschi/practice/> |
-| How the simulation works | <https://gvart.github.io/proschi/model/> |
+| Website | <https://proschi.app/> |
+| Editor | <https://proschi.app/app/> |
+| Practice | <https://proschi.app/practice/> |
+| How the simulation works | <https://proschi.app/model/> |
 | npm package (CLI and language server) | [`proschi`](https://www.npmjs.com/package/proschi) |
 | VS Code extension (`.vsix`) | [GitHub releases](https://github.com/gvart/proschi/releases) |
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |
@@ -89,7 +89,7 @@ test "Notes are stored before they are returned" {
 
 ## Quick start
 
-Open the [editor](https://gvart.github.io/proschi/app/), pick one of the
+Open the [editor](https://proschi.app/app/), pick one of the
 Examples and edit the text; the diagram, scenarios, Analysis, Tests and HLD
 tabs follow as you type.
 
@@ -114,9 +114,10 @@ The repository has three packages:
   language (`src/dsl`), simulation (`src/sim`) and HLD (`src/hld`) live here.
 - `tooling/`: the CLI, language server, TextMate grammar, JSON Schema and VS
   Code extension, bundled from the frontend sources with esbuild.
-- `backend/`: the optional API for practice accounts and stats (Cloudflare
-  Workers and D1), which verifies solutions with the frontend's parser and
-  simulation. See [backend/README.md](backend/README.md).
+- `backend/`: the Cloudflare Worker that serves proschi.app: the built site,
+  and the API for practice accounts and stats (D1), which verifies solutions
+  with the frontend's parser and simulation. See
+  [backend/README.md](backend/README.md).
 
 ```sh
 # Web app

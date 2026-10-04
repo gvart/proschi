@@ -1,0 +1,137 @@
+name: Site
+
+on:
+  push:
+    branches: [main]
+    paths: ['frontend/**', 'backend/**', 'pages-redirect/**', '.github/workflows/site.yml']
+  pull_request:
+    paths: ['frontend/**', 'backend/**', 'pages-redirect/**', '.github/workflows/site.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: site-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      # Until the site is on Cloudflare, GitHub Pages serves it, without accounts.
+      - uses: actions/upload-pages-artifact@v5
+        if: github.event_name != 'pull_request' && vars.DEPLOY_CLOUDFLARE != 'true'
+        with:
+          path: frontend/dist
+
+  # Browser tests against `vite preview` of the production build (frontend/e2e).
+  e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - run: npm run e2e
+      - uses: actions/upload-artifact@v7
+        if: failure()
+        with:
+          name: playwright-report
+          path: |
+            frontend/playwright-report
+            frontend/test-results
+          retention-days: 14
+
+  # The Worker: API tests in workerd with a local D1. It bundles the parser,
+  # simulation and practice problems from frontend/src.
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+
+  # proschi.app: builds the site with accounts, migrates D1 and deploys the
+  # Worker that serves both (backend/README.md). Needs the repository variable
+  # DEPLOY_CLOUDFLARE = true and the secrets CLOUDFLARE_API_TOKEN and
+  # CLOUDFLARE_ACCOUNT_ID. A broken UI or API must not reach it.
+  cloudflare:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_CLOUDFLARE == 'true'
+    needs: [build, e2e, backend]
+    runs-on: ubuntu-latest
+    environment:
+      name: production
+      url: https://proschi.app/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          VITE_ACCOUNTS: 'true'
+      - run: npm ci && npm run deploy
+        working-directory: backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+
+  # GitHub Pages (gvart.github.io/proschi/): the site itself until it is on
+  # Cloudflare; after that, pages-redirect/, which sends every old URL (with
+  # its #code= share fragment) to the same path on proschi.app.
+  pages:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !cancelled() && (needs.cloudflare.result == 'success' || (needs.cloudflare.result == 'skipped' && vars.DEPLOY_CLOUDFLARE != 'true' && needs.build.result == 'success' && needs.e2e.result == 'success'))
+    needs: [build, e2e, cloudflare]
+    runs-on: ubuntu-latest
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v7
+        if: vars.DEPLOY_CLOUDFLARE == 'true'
+      - uses: actions/upload-pages-artifact@v5
+        if: vars.DEPLOY_CLOUDFLARE == 'true'
+        with:
+          path: pages-redirect
+      - id: deployment
+        uses: actions/deploy-pages@v5

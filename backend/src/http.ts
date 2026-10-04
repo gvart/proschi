@@ -1,5 +1,3 @@
-import type { Env } from './env';
-
 /** An error with the status and message the client sees. */
 export class HttpError extends Error {
   readonly status: number;
@@ -17,35 +15,16 @@ export function errorResponse(status: number, message: string): Response {
   return json({ error: message }, status, { 'Cache-Control': 'no-store' });
 }
 
-export function allowedOrigins(env: Env): string[] {
-  return env.ALLOWED_ORIGINS.split(',')
-    .map((o) => o.trim())
-    .filter(Boolean);
-}
-
-/** CORS for the allowed origins. The API authenticates with bearer tokens, not cookies, so no credentials mode. */
-export function withCors(request: Request, env: Env, response: Response): Response {
+/**
+ * Requests that change something must come from this site. The session
+ * cookie is SameSite=Lax, which already keeps it off cross-site POSTs; this
+ * also refuses any request whose Origin (sent by browsers on every POST,
+ * PATCH and DELETE) is another site.
+ */
+export function assertSameOrigin(request: Request): void {
+  if (request.method === 'GET' || request.method === 'HEAD') return;
   const origin = request.headers.get('Origin');
-  if (!origin || !allowedOrigins(env).includes(origin)) return response;
-  const out = new Response(response.body, response);
-  out.headers.set('Access-Control-Allow-Origin', origin);
-  out.headers.append('Vary', 'Origin');
-  return out;
-}
-
-export function preflight(request: Request, env: Env): Response {
-  const origin = request.headers.get('Origin');
-  if (!origin || !allowedOrigins(env).includes(origin)) return new Response(null, { status: 403 });
-  return new Response(null, {
-    status: 204,
-    headers: {
-      'Access-Control-Allow-Origin': origin,
-      'Access-Control-Allow-Methods': 'GET, POST, PATCH, DELETE',
-      'Access-Control-Allow-Headers': 'Authorization, Content-Type',
-      'Access-Control-Max-Age': '86400',
-      Vary: 'Origin',
-    },
-  });
+  if (origin !== null && origin !== new URL(request.url).origin) throw new HttpError(403, 'Cross-site request refused');
 }
 
 const MAX_BODY = 128 * 1024;

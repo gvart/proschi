@@ -2,8 +2,8 @@
 export interface Env {
   DB: D1Database;
   RUN_LIMITER: RateLimit;
-  /** Comma-separated origins that may call the API and that sign-in may return to. */
-  ALLOWED_ORIGINS: string;
+  /** The built site (frontend/dist), served for every path outside /api and /auth. */
+  ASSETS: Fetcher;
   /** Signs the OAuth state cookie. */
   SESSION_SECRET: string;
   GITHUB_CLIENT_ID?: string;

@@ -56,8 +56,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   // Bumped once a run is recorded (or, signed out, made), to show and refresh how others did.
   const [statsRefresh, setStatsRefresh] = useState(0);
   const [serverNote, setServerNote] = useState<string>();
-  const token = account.state.status === 'signed-in' ? account.state.token : undefined;
-  const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, token, statsRefresh);
+  const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, account.state.status === 'signed-in', statsRefresh);
 
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {

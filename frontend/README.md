@@ -1,8 +1,10 @@
 # Proschi web app
 
-The browser-only site deployed to <https://gvart.github.io/proschi/>: four
-Vite pages that share the same language and simulation code. Nothing runs on
-a server; documents and practice progress live in `localStorage`.
+The site at <https://proschi.app/>: four Vite pages that share the same
+language and simulation code, served by the Worker in `backend/`. The editor
+runs entirely in the browser; documents and practice progress live in
+`localStorage`. Built with `VITE_ACCOUNTS=true`, the practice page also offers
+sign-in and global stats from the API on the same origin (backend/README.md).
 
 | Page | Entry | Source |
 |---|---|---|
@@ -42,4 +44,4 @@ npm run preview    # serve dist/ locally
 - `src/catalog/`, `src/types/`, `src/utils/`: tech stacks, node types, icons
   and colors.
 
-The deploy workflow is `.github/workflows/frontend.yml`.
+The deploy workflow is `.github/workflows/site.yml`: proschi.app through the Worker in `backend/`, and GitHub Pages (the site, or a redirect once the site is on Cloudflare).

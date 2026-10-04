@@ -1,6 +1,6 @@
 # Proschi for VS Code
 
-Language support for [Proschi](https://gvart.github.io/proschi/), a small text
+Language support for [Proschi](https://proschi.app/), a small text
 language for microservice architectures and the request flows that run through
 them.
 

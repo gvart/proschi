@@ -1,22 +1,24 @@
 import { env, exports } from 'cloudflare:workers';
+import { SESSION_COOKIE } from '../src/auth';
 import { sha256 } from '../src/crypto';
 import { clearStatsCache } from '../src/stats';
 
-export const ORIGIN = 'http://localhost:5173';
+export const ORIGIN = 'https://proschi.test';
 
-/** A request to the Worker, as the practice page on ORIGIN sends it. */
+/** A request to the Worker, as a page on the site sends it; `token` is the session cookie. */
 export function call(path: string, init: Omit<RequestInit, 'body'> & { token?: string; body?: unknown } = {}): Promise<Response> {
   const { token, body, ...rest } = init;
   const headers = new Headers(rest.headers);
-  if (!headers.has('Origin')) headers.set('Origin', ORIGIN);
-  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const method = (rest.method ?? 'GET').toUpperCase();
+  if (method !== 'GET' && method !== 'HEAD' && !headers.has('Origin')) headers.set('Origin', ORIGIN);
+  if (token) headers.append('Cookie', `${SESSION_COOKIE}=${token}`);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
-  return (exports as unknown as { default: Fetcher }).default.fetch(new Request(`https://api.test${path}`, { ...rest, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
+  return (exports as unknown as { default: Fetcher }).default.fetch(new Request(`${ORIGIN}${path}`, { ...rest, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
 }
 
 let users = 0;
 
-/** A user with a session, created straight in the database; returns its id and bearer token. */
+/** A user with a session, created straight in the database; returns its id and session token. */
 export async function signedInUser(name = `user${++users}`, publicProfile = false): Promise<{ id: string; token: string }> {
   const id = crypto.randomUUID();
   const token = `token-${id}`;
@@ -29,6 +31,6 @@ export async function signedInUser(name = `user${++users}`, publicProfile = fals
 }
 
 export async function resetDatabase(): Promise<void> {
-  await env.DB.batch(['login_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
+  await env.DB.batch(['sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
   clearStatsCache();
 }

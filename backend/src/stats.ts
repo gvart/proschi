@@ -138,7 +138,8 @@ export async function getProblemStats(request: Request, env: Env, problemId: str
     p99Ms: distribution(data.p99s),
   };
 
-  if (!user) return json(stats, 200, PUBLIC_CACHE);
+  // Not cached by browsers either way: a page that signs in must not get its signed-out copy back.
+  if (!user) return json(stats, 200, { 'Cache-Control': 'no-store' });
   const mine = await env.DB.prepare('SELECT runs_to_solve, best_cost_usd, best_p99_ms FROM progress WHERE user_id = ? AND problem_id = ?')
     .bind(user.id, problemId)
     .first<{ runs_to_solve: number | null; best_cost_usd: number | null; best_p99_ms: number | null }>();
@@ -152,7 +153,7 @@ export async function getProblemStats(request: Request, env: Env, problemId: str
           fasterThan: mine.best_p99_ms !== null ? shareAbove(data.p99s, mine.best_p99_ms) : null,
         }
       : null;
-  return json({ ...stats, you }, 200, { 'Cache-Control': 'private, no-store' });
+  return json({ ...stats, you }, 200, { 'Cache-Control': 'no-store' });
 }
 
 /** GET /api/leaderboard: users who chose to appear, by problems solved, then by who got there first. */

@@ -9,9 +9,15 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Changed
+- The site moves to <https://proschi.app/>, served by a Cloudflare Worker
+  (`backend/`) together with its API. The old address,
+  `gvart.github.io/proschi/`, redirects every page and share link to the same
+  path on proschi.app.
+
 ### Added
-- Optional practice accounts and global stats, served by a new `backend/`
-  (Cloudflare Workers and D1). Sign in with GitHub or Google from the practice
+- Practice accounts and global stats, from the Worker's API and a D1
+  database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the
   browser is uploaded on first sign-in. The server re-runs a problem's tests
   with the same parser and simulation before it records a solve. The problem
@@ -19,9 +25,9 @@ deployed from `main` and ships with the same changes.
   solved it, the median number of test runs to solve it, and where your
   cheapest design's cost and fastest p99 fall among other solvers', and a
   leaderboard lists those who opt in under a display name they choose. No
-  email address is stored; the account menu deletes the account and its data.
-  Builds without `VITE_API_URL` work as before, with progress in the browser
-  only.
+  email address is stored; the session is an HttpOnly cookie on proschi.app,
+  and the account menu deletes the account and its data. Builds without
+  `VITE_ACCOUNTS=true` work as before, with progress in the browser only.
 
 ## [0.7.0] - 2026-10-04
 

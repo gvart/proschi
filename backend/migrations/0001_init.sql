@@ -15,22 +15,13 @@ CREATE TABLE identities (
 );
 CREATE INDEX identities_user ON identities (user_id);
 
--- Bearer tokens, stored as their SHA-256; times are Unix seconds.
+-- Session cookies, stored as their SHA-256; times are Unix seconds.
 CREATE TABLE sessions (
   token_hash TEXT PRIMARY KEY,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   expires_at INTEGER NOT NULL
 );
 CREATE INDEX sessions_user ON sessions (user_id);
-
--- One-time codes the OAuth callback hands to the page, exchanged for a session
--- together with the nonce the page kept when it started the sign-in.
-CREATE TABLE login_codes (
-  code_hash TEXT PRIMARY KEY,
-  nonce_hash TEXT NOT NULL,
-  user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  expires_at INTEGER NOT NULL
-);
 
 -- Per user and problem: test runs, the last design, and the first verified solve.
 CREATE TABLE progress (

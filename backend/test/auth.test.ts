@@ -1,10 +1,11 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { SESSION_COOKIE } from '../src/auth';
 import { call, ORIGIN, resetDatabase } from './helpers';
 
-const RETURN = `${ORIGIN}/practice/#/url-shortener`;
+const RETURN = '/practice/?a=1#/url-shortener';
 
-/** Answers the provider's token and profile endpoints. */
+/** Answers the providers' token and profile endpoints. */
 function mockProviders(profile: Record<string, unknown> = { id: 42, login: 'octocat' }) {
   const real = globalThis.fetch;
   return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -21,12 +22,15 @@ function mockProviders(profile: Record<string, unknown> = { id: 42, login: 'octo
   });
 }
 
-/** Starts a sign-in and returns the redirect to the provider and the state cookie. */
-const NONCE = 'page-nonce-0123456789';
+/** `name=value` of the Set-Cookie for `name`. */
+function setCookie(response: Response, name: string): string | undefined {
+  return response.headers.getSetCookie().find((c) => c.startsWith(`${name}=`));
+}
 
-async function start(provider = 'github', returnTo = RETURN, nonce = NONCE) {
-  const response = await call(`/auth/${provider}/start?${new URLSearchParams({ return: returnTo, nonce })}`, { redirect: 'manual' });
-  const cookie = (response.headers.get('Set-Cookie') ?? '').split(';')[0];
+/** Starts a sign-in and returns the redirect to the provider and the state cookie. */
+async function start(provider = 'github', returnTo = RETURN) {
+  const response = await call(`/auth/${provider}/start?${new URLSearchParams({ return: returnTo })}`, { redirect: 'manual' });
+  const cookie = (setCookie(response, 'proschi_oauth') ?? '').split(';')[0];
   return { response, cookie, location: new URL(response.headers.get('Location') ?? 'about:blank') };
 }
 
@@ -34,13 +38,12 @@ async function callback(provider: string, params: Record<string, string>, cookie
   return call(`/auth/${provider}/callback?${new URLSearchParams(params)}`, { redirect: 'manual', headers: { Cookie: cookie } });
 }
 
-/** The full sign-in: start, the provider's redirect back, the code exchange. */
+/** The full sign-in: start, the provider's redirect back; returns the callback response and the session token. */
 async function signIn(provider = 'github') {
   const { cookie, location } = await start(provider);
   const back = await callback(provider, { code: 'good-code', state: location.searchParams.get('state')! }, cookie);
-  const code = new URL(back.headers.get('Location')!).searchParams.get('login')!;
-  const session = await call('/auth/session', { method: 'POST', body: { code, nonce: NONCE } });
-  return { back, code, session, body: (await session.json()) as { token: string; expiresAt: number } };
+  const session = setCookie(back, SESSION_COOKIE);
+  return { back, session, token: session?.split(';')[0].split('=')[1] ?? '' };
 }
 
 describe('sign-in', () => {
@@ -56,67 +59,50 @@ describe('sign-in', () => {
     expect(response.status).toBe(302);
     expect(location.origin + location.pathname).toBe('https://github.com/login/oauth/authorize');
     expect(location.searchParams.get('client_id')).toBe('gh-client');
-    expect(location.searchParams.get('redirect_uri')).toBe('https://api.test/auth/github/callback');
+    expect(location.searchParams.get('redirect_uri')).toBe(`${ORIGIN}/auth/github/callback`);
     expect(location.searchParams.get('code_challenge_method')).toBe('S256');
     expect(location.searchParams.get('state')).toMatch(/^[\w-]{20,}$/);
     expect(cookie).toMatch(/^proschi_oauth=.+\..+$/);
-    expect(response.headers.get('Set-Cookie')).toMatch(/HttpOnly; Secure; SameSite=Lax/);
+    expect(setCookie(response, 'proschi_oauth')).toMatch(/HttpOnly; Secure; SameSite=Lax/);
   });
 
-  it('refuses to return to a page on another origin', async () => {
-    for (const bad of ['https://evil.example/practice/', 'javascript:alert(1)', '']) {
-      const { response } = await start('github', bad);
-      expect(response.status).toBe(400);
+  it('only returns to a path on this site', async () => {
+    for (const bad of ['https://evil.example/', '//evil.example/x', '/\\evil.example', 'javascript:alert(1)', 'practice/']) {
+      expect((await start('github', bad)).response.status, bad).toBe(400);
     }
   });
 
-  it('signs in with GitHub: one-time code, then a session that reads /api/me', async () => {
+  it('signs in with GitHub: back to the page with an HttpOnly session cookie that reads /api/me', async () => {
     mockProviders();
-    const { back, code, session, body } = await signIn();
+    const { back, session, token } = await signIn();
     expect(back.status).toBe(302);
-    const target = new URL(back.headers.get('Location')!);
-    expect(`${target.origin}${target.pathname}${target.hash}`).toBe(RETURN);
-    expect(back.headers.get('Set-Cookie')).toMatch(/Max-Age=0/);
-    expect(session.status).toBe(200);
-    expect(body.token).toMatch(/^[\w-]{40,}$/);
+    expect(back.headers.get('Location')).toBe(RETURN);
+    expect(session).toMatch(new RegExp(`^${SESSION_COOKIE}=[\\w-]{40,}; Path=/; Max-Age=2592000; HttpOnly; Secure; SameSite=Lax$`));
+    expect(setCookie(back, 'proschi_oauth')).toMatch(/Max-Age=0/);
 
-    const me = (await (await call('/api/me', { token: body.token })).json()) as { user: { id: string } };
+    const me = (await (await call('/api/me', { token })).json()) as { user: { id: string } };
     expect(me).toMatchObject({ user: { displayName: 'octocat', publicProfile: false, providers: ['github'] }, progress: {} });
 
-    // The code works once.
-    expect((await call('/auth/session', { method: 'POST', body: { code, nonce: NONCE } })).status).toBe(401);
     // Signing in again finds the same user.
     const again = await signIn();
-    expect(await (await call('/api/me', { token: again.body.token })).json()).toMatchObject({ user: { id: me.user.id } });
+    expect(await (await call('/api/me', { token: again.token })).json()).toMatchObject({ user: { id: me.user.id } });
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n).toBe(1);
   });
 
   it('signs in with Google', async () => {
     mockProviders();
-    const { body } = await signIn('google');
-    expect(await (await call('/api/me', { token: body.token })).json()).toMatchObject({ user: { displayName: 'Grace', providers: ['google'] } });
+    const { token } = await signIn('google');
+    expect(await (await call('/api/me', { token })).json()).toMatchObject({ user: { displayName: 'Grace', providers: ['google'] } });
   });
 
-  it('needs a nonce to start, and the same nonce to exchange the code, which a wrong one uses up', async () => {
-    expect((await start('github', RETURN, '')).response.status).toBe(400);
-    expect((await start('github', RETURN, 'short')).response.status).toBe(400);
-
+  it('rejects a callback without the state cookie of the browser that started the sign-in', async () => {
     mockProviders();
     const { cookie, location } = await start();
-    const back = await callback('github', { code: 'good-code', state: location.searchParams.get('state')! }, cookie);
-    const code = new URL(back.headers.get('Location')!).searchParams.get('login')!;
-    // Someone else's browser, with the code from a link but not the nonce.
-    const stolen = await call('/auth/session', { method: 'POST', body: { code, nonce: 'another-browser-nonce' } });
-    expect(stolen.status).toBe(401);
-    expect((await call('/auth/session', { method: 'POST', body: { code, nonce: NONCE } })).status).toBe(401);
-    expect((await call('/auth/session', { method: 'POST', body: { code } })).status).toBe(400);
-  });
-
-  it('rejects a callback whose state does not match the cookie', async () => {
-    mockProviders();
-    const { cookie } = await start();
-    expect((await callback('github', { code: 'good-code', state: 'forged' }, cookie)).status).toBe(400);
-    expect((await callback('github', { code: 'good-code', state: 'x' }, '')).status).toBe(400);
+    const forged = await callback('github', { code: 'good-code', state: 'forged' }, cookie);
+    expect(forged.status).toBe(400);
+    expect(setCookie(forged, SESSION_COOKIE)).toBeUndefined();
+    // Someone else's callback link, opened in a browser that started no sign-in.
+    expect((await callback('github', { code: 'good-code', state: location.searchParams.get('state')! }, '')).status).toBe(400);
   });
 
   it('rejects a state cookie from another provider', async () => {
@@ -128,25 +114,33 @@ describe('sign-in', () => {
     mockProviders();
     const first = await start();
     const cancelled = await callback('github', { error: 'access_denied', state: first.location.searchParams.get('state')! }, first.cookie);
-    expect(new URL(cancelled.headers.get('Location')!).searchParams.get('login_error')).toBe('cancelled');
+    expect(cancelled.headers.get('Location')).toBe('/practice/?a=1&login_error=cancelled#/url-shortener');
     const second = await start();
     const failed = await callback('github', { code: 'bad-code', state: second.location.searchParams.get('state')! }, second.cookie);
-    expect(new URL(failed.headers.get('Location')!).searchParams.get('login_error')).toBe('failed');
+    expect(failed.headers.get('Location')).toBe('/practice/?a=1&login_error=failed#/url-shortener');
+    expect(setCookie(failed, SESSION_COOKIE)).toBeUndefined();
   });
 
-  it('logs out', async () => {
+  it('logs out: ends the session and clears the cookie', async () => {
     mockProviders();
-    const { body } = await signIn();
-    expect((await call('/auth/logout', { method: 'POST', token: body.token })).status).toBe(204);
-    expect((await call('/api/me', { token: body.token })).status).toBe(401);
+    const { token } = await signIn();
+    const out = await call('/auth/logout', { method: 'POST', token });
+    expect(out.status).toBe(204);
+    expect(setCookie(out, SESSION_COOKIE)).toMatch(/Max-Age=0/);
+    expect((await call('/api/me', { token })).status).toBe(401);
   });
 
-  it('answers CORS preflights for allowed origins only', async () => {
-    const ok = await call('/api/me', { method: 'OPTIONS' });
-    expect(ok.status).toBe(204);
-    expect(ok.headers.get('Access-Control-Allow-Origin')).toBe(ORIGIN);
-    expect(ok.headers.get('Access-Control-Allow-Headers')).toContain('Authorization');
-    const bad = await call('/api/me', { method: 'OPTIONS', headers: { Origin: 'https://evil.example' } });
-    expect(bad.status).toBe(403);
+  it('refuses changes requested from another site', async () => {
+    mockProviders();
+    const { token } = await signIn();
+    for (const [path, method] of [
+      ['/auth/logout', 'POST'],
+      ['/api/me', 'DELETE'],
+      ['/api/me', 'PATCH'],
+    ]) {
+      const response = await call(path, { method, token, headers: { Origin: 'https://evil.example' }, body: {} });
+      expect(response.status, `${method} ${path}`).toBe(403);
+    }
+    expect((await call('/api/me', { token })).status).toBe(200);
   });
 });
