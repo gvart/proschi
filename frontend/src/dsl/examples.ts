@@ -181,10 +181,10 @@ usecase "Pay for an order" {
 export const urlShortenerExample = `title "URL Shortener" "Turns long URLs into short codes and redirects visitors to them"
 
 visitor "Visitor"       [Actor]
-lb      "Load Balancer" [AWS Load Balancer] @platform
-api     "Shortener API" [REST API]          @links    x3 "Creates codes and serves redirects"
+lb      "Load Balancer" [AWS Load Balancer] @platform x3
+api     "Shortener API" [REST API]          @links    x12 "Creates codes and serves redirects"
 cache   "Code cache"    [Redis]             @links    x2 "Recently used codes"
-db      "URL store"     [PostgreSQL]        @links    x2 "Every code and its target"
+db      "URL store"     [PostgreSQL]        @links    x3 "Every code and its target"
 
 visitor -> lb
 lb      -> api
@@ -244,7 +244,7 @@ traffic {
 }
 
 requirements {
-  p99 "Redirect" < 50ms
+  p99 "Redirect" < 100ms
   p95 < 300ms # every use case
   availability "Redirect" >= 99.95%
   availability >= 99.9%
@@ -256,6 +256,8 @@ requirements {
 
 # Per-replica overrides of the default profiles.
 capacity {
+  # Redirects are a cache lookup: a light, fast service.
+  api   20k rps latency 4ms
   cache 150k rps
   db    8k rps latency 4ms availability 99.95% cost 450 usd/month durable
 }
@@ -268,7 +270,7 @@ entity Url in db "One short code and where it points" {
 }
 
 decision "Cache redirects in Redis" {
-  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
+  because "Reads outnumber writes 100:1 and p99 must stay under 100 ms"
   rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
   rejected "Memcached" "No replication; losing a node empties the cache"
 }
