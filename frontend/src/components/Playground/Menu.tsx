@@ -33,14 +33,14 @@ export default function Menu({ trigger, label, align = 'left', children }: MenuP
         aria-label={label}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+        className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-ink hover:bg-ink/10"
       >
         {trigger}
       </button>
       {open && (
         <div
           role="menu"
-          className={`absolute z-50 mt-1 min-w-[16rem] max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`ps-light absolute z-50 mt-2 min-w-[16rem] max-w-[calc(100vw-2rem)] rounded-lg border-bw-2 border-ink bg-white py-1 shadow-brutal-md ${align === 'right' ? 'right-0' : 'left-0'}`}
         >
           {children(() => setOpen(false))}
         </div>

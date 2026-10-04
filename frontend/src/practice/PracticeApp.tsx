@@ -12,6 +12,8 @@ import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
 import HelpMenu from '../onboarding/HelpMenu';
 import { requestTour } from '../onboarding/seen';
+import Footer from '../design/Footer';
+import Header from '../design/Header';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -73,29 +75,31 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   }
 
   return (
-    <div className="min-h-[100dvh] bg-gray-50">
-      <header className="flex items-center gap-4 px-4 py-2.5 bg-white border-b border-gray-200">
-        <a href="../" className="text-lg font-bold text-gray-900 hover:text-blue-700">
-          Proschi
-        </a>
-        <span className="text-sm text-gray-500">Practice</span>
-        <a href="../app/" className="ml-auto text-sm text-gray-700 hover:text-blue-700">
-          Open the editor
-        </a>
-        <AccountMenu account={account} />
-        <HelpMenu
-          tourLabel="Take the practice tour"
-          onTour={() => {
-            // The tour runs on a problem page: open the first (easiest) problem with it.
-            requestTour('practice');
-            window.location.hash = `#/${problems[0]?.id ?? ''}`;
-          }}
-        />
-      </header>
-      {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">No problem called “{route}”. Pick one below.</p>}
-      <ProblemList problems={problems} progress={progress} stats={stats}>
-        {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
-      </ProblemList>
+    <div className="min-h-[100dvh] flex flex-col bg-paper">
+      <Header
+        base="../"
+        current="practice"
+        actions={
+          <>
+            <AccountMenu account={account} />
+            <HelpMenu
+              tourLabel="Take the practice tour"
+              onTour={() => {
+                // The tour runs on a problem page: open the first (easiest) problem with it.
+                requestTour('practice');
+                window.location.hash = `#/${problems[0]?.id ?? ''}`;
+              }}
+            />
+          </>
+        }
+      />
+      <div className="ps-light flex-1 bg-paper">
+        {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">No problem called “{route}”. Pick one below.</p>}
+        <ProblemList problems={problems} progress={progress} stats={stats}>
+          {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
+        </ProblemList>
+      </div>
+      <Footer base="../" />
     </div>
   );
 }

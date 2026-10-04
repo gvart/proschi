@@ -25,7 +25,7 @@
 
 .toc {
   margin-top: 28px;
-  border-top: 1px solid var(--rule);
+  border-top: var(--bw-2) solid var(--rule);
 }
 .toc ol {
   list-style: none;
@@ -98,8 +98,10 @@ var {
 .formula {
   font: 400 0.82rem/1.65 var(--mono);
   background: var(--paper-hi);
-  border: 1px solid var(--rule);
-  border-left: 3px solid var(--accent);
+  border: var(--bw-1) solid var(--rule);
+  border-left: 8px solid var(--accent);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
   padding: 14px 16px;
   overflow-x: auto;
   white-space: pre;
@@ -118,7 +120,7 @@ var {
   border-collapse: collapse;
   font: 400 0.85rem/1.4 var(--mono);
   background: var(--paper-hi);
-  border: 1px solid var(--rule);
+  border: var(--bw-1) solid var(--rule);
 }
 .mini th,
 .mini td {
@@ -146,7 +148,9 @@ var {
   margin-top: 16px;
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
-  border: 1px solid var(--rule);
+  border: var(--bw-1) solid var(--rule);
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
   background: var(--paper-hi);
 }
 .profiles {
@@ -240,7 +244,7 @@ var {
   color: var(--ink-3);
 }
 .facts--results dt {
-  color: #15803d;
+  color: var(--pass-ink);
 }
 .facts--results dt.is-fail {
   color: var(--error);
@@ -278,7 +282,7 @@ var {
 .caveats th {
   text-transform: none;
   letter-spacing: 0;
-  font: 600 1rem/1.35 var(--cond);
+  font: 700 1rem/1.35 var(--cond);
 }
 
 .plain {

@@ -5,7 +5,7 @@
     <!-- Enforced in builds; inert under `npm run dev` (see .env.production). frame-ancestors cannot be set from a meta tag. -->
     <meta
       http-equiv="%VITE_CSP_HTTP_EQUIV%"
-      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <script src="./legacy-redirect.js"></script>
@@ -15,8 +15,10 @@
       name="description"
       content="Proschi is a small text language for microservice architectures. Describe services, databases and queues once, write use cases as step-by-step request flows with success and error scenarios, and play them back on the diagram. Runs in the browser, free and open source."
     />
-    <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#f4f1ea" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#FFF8E7" />
+    <!-- Applies the saved or system theme before first paint. -->
+    <script src="./theme-init.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href="https://proschi.app/" />
 
@@ -33,36 +35,11 @@
     <meta property="og:image:height" content="630" />
     <meta property="og:image:alt" content="Proschi source text next to the architecture diagram it produces." />
     <meta name="twitter:card" content="summary_large_image" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
-    />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
-    <header class="masthead">
-      <div class="wrap masthead__inner">
-        <a class="wordmark" href="./" aria-label="Proschi home">
-          <svg class="wordmark__mark" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="1.5" y="3.5" width="8" height="6" />
-            <rect x="14.5" y="14.5" width="8" height="6" />
-            <path d="M9.5 6.5h4v11h1" />
-          </svg>
-          <span>Proschi</span>
-        </a>
-        <nav class="masthead__nav" aria-label="Main">
-          <a class="navlink hide-sm" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language</a>
-          <a class="navlink" href="./practice/">Practice</a>
-          <a class="navlink hide-sm" href="./model/">Simulation</a>
-          <a class="navlink hide-sm" href="https://github.com/gvart/proschi">GitHub</a>
-          <a class="btn btn--small" href="./app/">Open the editor</a>
-        </nav>
-      </div>
-    </header>
+    <!--shell:header-->
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
@@ -77,8 +54,8 @@
               one scenario at a time.
             </p>
             <div class="actions">
-              <a class="btn" href="./app/">Open the editor</a>
-              <a class="btn btn--ghost" id="hero-open" href="./app/">Open this example</a>
+              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./app/">Open the editor</a>
+              <a class="ps-btn ps-btn--secondary ps-btn--lg" id="hero-open" href="./app/">Open this example</a>
             </div>
             <p class="fineprint">Runs in your browser. No account needed; the editor uploads nothing.</p>
           </div>
@@ -214,8 +191,8 @@ usecase "Place order" {
                 <div class="player" id="player" hidden>
                   <div class="player__scenarios" id="player-scenarios" role="group" aria-label="Scenarios of Place order"></div>
                   <div class="player__controls">
-                    <button type="button" class="btn btn--small" id="player-toggle" aria-pressed="false">Play</button>
-                    <button type="button" class="btn btn--small btn--ghost" id="player-next">Next step</button>
+                    <button type="button" class="ps-btn ps-btn--primary ps-btn--sm" id="player-toggle" aria-pressed="false">Play</button>
+                    <button type="button" class="ps-btn ps-btn--secondary ps-btn--sm" id="player-next">Next step</button>
                   </div>
                   <p class="player__status" id="player-status" aria-live="polite">Use case “Place order”, 3 scenarios.</p>
                   <pre class="player__payload code" id="player-payload" aria-hidden="true"></pre>
@@ -434,7 +411,7 @@ orders  -&gt; events   : publish</code></pre>
             <p class="section__intro">See every problem on the <a href="./practice/">practice page</a>.</p>
           </noscript>
           <div class="closing">
-            <a class="btn" href="./practice/">Start practising</a>
+            <a class="ps-btn ps-btn--primary" href="./practice/">Start practising</a>
           </div>
         </div>
       </section>
@@ -493,25 +470,14 @@ orders  -&gt; events   : publish</code></pre>
           </ul>
 
           <div class="closing">
-            <a class="btn" href="./app/">Open the editor</a>
-            <a class="btn btn--ghost" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Read the language reference</a>
+            <a class="ps-btn ps-btn--primary" href="./app/">Open the editor</a>
+            <a class="ps-btn ps-btn--secondary" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Read the language reference</a>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="footer">
-      <div class="wrap footer__inner">
-        <p><strong>Proschi</strong> is free and open source software, released under the MIT license.</p>
-        <ul class="footer__links">
-          <li><a href="./app/">Editor</a></li>
-          <li><a href="./model/">How the simulation works</a></li>
-          <li><a href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language reference</a></li>
-          <li><a href="https://github.com/gvart/proschi">GitHub</a></li>
-          <li><a href="https://github.com/gvart/proschi/issues">Issues</a></li>
-        </ul>
-      </div>
-    </footer>
+    <!--shell:footer-->
 
     <script type="module" src="/src/landing/main.ts"></script>
   </body>

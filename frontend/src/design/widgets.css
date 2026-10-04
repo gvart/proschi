@@ -1,0 +1,172 @@
+/* Cards, badges and tabs (Card.tsx, Badge.tsx, Tabs.tsx), apart from
+   components.css so the static pages only load them once they use them.
+   Box model and fonts are set as in components.css. */
+
+:where(.ps-card, .ps-badge, .ps-tabs),
+:where(.ps-card, .ps-badge, .ps-tabs) *,
+:where(.ps-card, .ps-badge, .ps-tabs) ::before,
+:where(.ps-card, .ps-badge, .ps-tabs) ::after {
+  box-sizing: border-box;
+}
+
+/* ---------- cards ---------- */
+
+.ps-card {
+  --card-accent: transparent;
+  position: relative;
+  display: block;
+  margin: 0;
+  padding: 20px;
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-md);
+  text-decoration: none;
+}
+.ps-card--yellow {
+  --card-accent: rgb(var(--c-yellow));
+}
+.ps-card--pink {
+  --card-accent: rgb(var(--c-pink));
+}
+.ps-card--blue {
+  --card-accent: rgb(var(--c-blue));
+}
+.ps-card--lilac {
+  --card-accent: rgb(var(--c-lilac));
+}
+.ps-card--pass {
+  --card-accent: rgb(var(--c-pass));
+}
+.ps-card--fail {
+  --card-accent: rgb(var(--c-fail));
+}
+:is(.ps-card--yellow, .ps-card--pink, .ps-card--blue, .ps-card--lilac, .ps-card--pass, .ps-card--fail)::before {
+  content: '';
+  display: block;
+  height: 12px;
+  margin: -20px -20px 16px;
+  background: var(--card-accent);
+  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: calc(var(--r-md) - var(--bw-2)) calc(var(--r-md) - var(--bw-2)) 0 0;
+}
+.ps-card--interactive {
+  cursor: pointer;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    box-shadow var(--d-2) var(--e-out);
+}
+.ps-card--interactive:hover {
+  transform: translate(-3px, -3px) rotate(-0.6deg);
+  box-shadow: var(--sh-lg);
+}
+.ps-card--interactive:active {
+  transform: translate(6px, 6px);
+  box-shadow: 0 0 0 rgb(var(--c-shadow));
+  transition-duration: 60ms;
+}
+
+/* ---------- badges ---------- */
+
+.ps-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 9px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: var(--r-pill);
+  background: rgb(var(--badge-bg, var(--c-surface)));
+  color: rgb(var(--badge-fg, var(--c-ink)));
+  font: 700 var(--fs-12) / 1.2 var(--font-sans);
+  font-stretch: 110%;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.ps-badge--yellow {
+  --badge-bg: var(--c-yellow);
+}
+.ps-badge--pink {
+  --badge-bg: var(--c-pink);
+}
+.ps-badge--blue {
+  --badge-bg: var(--c-blue);
+}
+.ps-badge--lilac {
+  --badge-bg: var(--c-lilac);
+}
+.ps-badge--pass {
+  --badge-bg: var(--c-pass);
+}
+.ps-badge--fail {
+  --badge-bg: var(--c-fail);
+}
+:is(.ps-badge--yellow, .ps-badge--pink, .ps-badge--blue, .ps-badge--lilac, .ps-badge--pass, .ps-badge--fail) {
+  --badge-fg: var(--c-on-accent);
+}
+
+/* ---------- tabs ---------- */
+
+.ps-tabs {
+  display: flex;
+  gap: 2px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
+}
+.ps-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: none;
+  margin: 0;
+  padding: 10px 14px 13px;
+  border: 0;
+  background: none;
+  color: rgb(var(--c-muted));
+  font: 650 var(--fs-14) / 1 var(--font-sans);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: color var(--d-1) linear;
+}
+.ps-tab::after {
+  content: '';
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  bottom: 0;
+  height: 6px;
+  background: rgb(var(--c-ink));
+  border-radius: 3px 3px 0 0;
+  transform: scaleX(0);
+  transition: transform var(--d-spring) var(--e-spring);
+}
+.ps-tab:hover {
+  color: rgb(var(--c-ink));
+}
+.ps-tab:hover::after {
+  transform: scaleX(0.3);
+}
+.ps-tab[aria-selected='true'] {
+  color: rgb(var(--c-ink));
+}
+.ps-tab[aria-selected='true']::after {
+  transform: scaleX(1);
+}
+.ps-tab:focus-visible {
+  outline-offset: -3px;
+}
+.ps-tab__badge {
+  min-width: 1.5em;
+  padding: 2px 6px;
+  border: var(--bw-1) solid currentColor;
+  border-radius: var(--r-pill);
+  font-size: var(--fs-12);
+  text-align: center;
+}
+.ps-tabs--fill .ps-tab {
+  flex: 1;
+  justify-content: center;
+}

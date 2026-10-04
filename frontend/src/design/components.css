@@ -1,0 +1,740 @@
+/* The design components (src/design/*.tsx) as plain CSS classes, so static
+   pages, React pages and islands share one look: buttons, the header, theme
+   toggle, menu and footer, and scroll reveals (cards, badges and tabs are in
+   widgets.css). Everything is prefixed ps- and sets its own box model,
+   margins and fonts, so it looks the same with Tailwind's preflight (app,
+   practice) or without it (landing, model). */
+
+:where(.ps-header, .ps-footer, .ps-btn, .ps-iconbtn),
+:where(.ps-header, .ps-footer, .ps-btn, .ps-iconbtn) *,
+:where(.ps-header, .ps-footer, .ps-btn, .ps-iconbtn) ::before,
+:where(.ps-header, .ps-footer, .ps-btn, .ps-iconbtn) ::after {
+  box-sizing: border-box;
+}
+:where(.ps-header, .ps-footer) :where(h2, p, ul, li) {
+  margin: 0;
+  padding: 0;
+}
+:where(.ps-header, .ps-footer) ul {
+  list-style: none;
+}
+:where([class^='ps-'], [class*=' ps-']):focus-visible {
+  outline: 3px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+}
+
+.ps-wrap {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+@media (min-width: 720px) {
+  .ps-wrap {
+    padding: 0 32px;
+  }
+}
+
+.ps-icon {
+  display: inline-block;
+  flex: none;
+  width: 1.15em;
+  height: 1.15em;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+.ps-icon--ext {
+  width: 0.85em;
+  height: 0.85em;
+  opacity: 0.7;
+}
+
+.ps-hide-sm {
+  display: none;
+}
+@media (min-width: 480px) {
+  .ps-hide-sm {
+    display: inline;
+  }
+}
+
+/* ---------- buttons ---------- */
+
+/* Hover lifts toward the top left onto a bigger shadow; press sinks into
+   where the shadow was. Magnetic buttons also drift by --mx/--my (motion.ts),
+   on `translate` so it adds to these transforms. */
+.ps-btn {
+  --btn-bg: var(--c-surface);
+  --btn-fg: var(--c-ink);
+  --btn-sh: 3px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5em;
+  min-height: 44px;
+  margin: 0;
+  padding: 0 18px;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  background: rgb(var(--btn-bg));
+  color: rgb(var(--btn-fg));
+  box-shadow: var(--btn-sh) var(--btn-sh) 0 rgb(var(--c-shadow));
+  font: 700 var(--fs-16) / 1 var(--font-sans);
+  font-stretch: 108%;
+  letter-spacing: 0.005em;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+  translate: var(--mx, 0px) var(--my, 0px);
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    box-shadow var(--d-2) var(--e-out),
+    background-color var(--d-1) linear;
+}
+.ps-btn:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: calc(var(--btn-sh) + 3px) calc(var(--btn-sh) + 3px) 0 rgb(var(--c-shadow));
+}
+.ps-btn:active {
+  transform: translate(var(--btn-sh), var(--btn-sh)) scale(0.98);
+  box-shadow: 0 0 0 rgb(var(--c-shadow));
+  transition-duration: 60ms;
+}
+.ps-btn:disabled,
+.ps-btn[aria-disabled='true'] {
+  opacity: 0.55;
+  cursor: not-allowed;
+  transform: none;
+  box-shadow: var(--btn-sh) var(--btn-sh) 0 rgb(var(--c-shadow));
+}
+.ps-btn--primary {
+  --btn-bg: var(--c-yellow);
+  --btn-fg: var(--c-on-accent);
+}
+.ps-btn--danger {
+  --btn-bg: var(--c-fail);
+  --btn-fg: var(--c-on-accent);
+}
+.ps-btn--ghost {
+  --btn-bg: var(--c-paper);
+  box-shadow: none;
+}
+.ps-btn--ghost:hover {
+  box-shadow: 3px 3px 0 rgb(var(--c-shadow));
+}
+.ps-btn--sm {
+  --btn-sh: 3px;
+  min-height: 38px;
+  padding: 0 12px;
+  font-size: var(--fs-14);
+}
+.ps-btn--lg {
+  --btn-sh: 6px;
+  min-height: 58px;
+  padding: 0 28px;
+  font-size: var(--fs-18);
+  border-width: var(--bw-3);
+}
+.ps-btn__trail {
+  display: inline-flex;
+  transition: transform var(--d-spring) var(--e-spring);
+}
+.ps-btn:hover .ps-btn__trail {
+  transform: translateX(4px);
+}
+
+/* Square icon buttons: the theme toggle, the menu button. */
+.ps-iconbtn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  margin: 0;
+  padding: 0;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  box-shadow: 3px 3px 0 rgb(var(--c-shadow));
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    box-shadow var(--d-2) var(--e-out);
+}
+.ps-iconbtn:hover {
+  transform: translate(-2px, -2px) rotate(-4deg);
+  box-shadow: 6px 6px 0 rgb(var(--c-shadow));
+}
+.ps-iconbtn:active {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 rgb(var(--c-shadow));
+  transition-duration: 60ms;
+}
+
+/* ---------- theme toggle ---------- */
+
+.ps-theme__icon {
+  grid-area: 1 / 1;
+  width: 22px;
+  height: 22px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+  transform: rotate(-120deg) scale(0.3);
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    opacity var(--d-1) linear;
+}
+.ps-theme__icon--system .ps-theme__fill {
+  fill: currentColor;
+}
+.ps-theme__icon--light .ps-theme__fill {
+  fill: rgb(var(--c-yellow));
+}
+.ps-theme__icon--dark .ps-theme__fill {
+  fill: rgb(var(--c-lilac));
+}
+.ps-theme[data-pref='system'] .ps-theme__icon--system,
+.ps-theme[data-pref='light'] .ps-theme__icon--light,
+.ps-theme[data-pref='dark'] .ps-theme__icon--dark {
+  opacity: 1;
+  transform: none;
+}
+
+/* ---------- wordmark ---------- */
+
+.ps-wordmark {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  gap: 10px;
+  min-height: 44px;
+  color: rgb(var(--c-ink));
+  text-decoration: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.ps-wordmark__tile {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 40px;
+  height: 40px;
+  background: rgb(var(--c-yellow));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  box-shadow: 3px 3px 0 rgb(var(--c-shadow));
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    box-shadow var(--d-2) var(--e-out);
+}
+.ps-wordmark__tile svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+  overflow: visible;
+}
+.ps-wordmark__wire {
+  fill: none;
+  stroke: rgb(var(--c-on-accent));
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+.ps-wordmark__box {
+  fill: rgb(255 255 255);
+  stroke: rgb(var(--c-on-accent));
+  stroke-width: 2.2;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+.ps-wordmark__box--b {
+  fill: rgb(var(--c-pink));
+}
+.ps-wordmark__packet {
+  fill: rgb(var(--c-blue));
+  stroke: rgb(var(--c-on-accent));
+  stroke-width: 1.4;
+  opacity: 0;
+}
+.ps-wordmark__text {
+  display: inline-flex;
+  font: 800 1.65rem / 1 var(--font-display);
+  letter-spacing: -0.045em;
+  /* Bricolage sits a little high in its box. */
+  padding-bottom: 2px;
+}
+.ps-wordmark__text span {
+  display: inline-block;
+}
+.ps-wordmark:hover .ps-wordmark__tile {
+  transform: translate(-2px, -2px) rotate(-8deg);
+  box-shadow: 5px 5px 0 rgb(var(--c-shadow));
+}
+.ps-wordmark:active .ps-wordmark__tile {
+  transform: translate(3px, 3px);
+  box-shadow: 0 0 0 rgb(var(--c-shadow));
+}
+.ps-wordmark--compact .ps-wordmark__tile {
+  width: 36px;
+  height: 36px;
+}
+.ps-wordmark--compact .ps-wordmark__text {
+  font-size: 1.4rem;
+}
+@media (max-width: 639px) {
+  .ps-wordmark--compact .ps-wordmark__text {
+    display: none;
+  }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  /* A packet runs the wire and knocks the second box; the letters hop in turn. */
+  .ps-wordmark:hover .ps-wordmark__packet {
+    animation: ps-wire 640ms var(--e-out) both;
+  }
+  .ps-wordmark:hover .ps-wordmark__box--b {
+    animation: ps-knock 360ms 520ms var(--e-out);
+  }
+  .ps-wordmark:hover .ps-wordmark__text span {
+    animation: ps-hop 520ms var(--e-out);
+  }
+  .ps-wordmark__text span:nth-child(2) {
+    animation-delay: 40ms !important;
+  }
+  .ps-wordmark__text span:nth-child(3) {
+    animation-delay: 80ms !important;
+  }
+  .ps-wordmark__text span:nth-child(4) {
+    animation-delay: 120ms !important;
+  }
+  .ps-wordmark__text span:nth-child(5) {
+    animation-delay: 160ms !important;
+  }
+  .ps-wordmark__text span:nth-child(6) {
+    animation-delay: 200ms !important;
+  }
+  .ps-wordmark__text span:nth-child(7) {
+    animation-delay: 240ms !important;
+  }
+}
+@keyframes ps-wire {
+  0% {
+    opacity: 1;
+    transform: translate(9px, 7px);
+  }
+  40% {
+    transform: translate(14.5px, 7px);
+  }
+  85% {
+    opacity: 1;
+    transform: translate(14.5px, 15px);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(14.5px, 15px) scale(0.2);
+  }
+}
+@keyframes ps-knock {
+  40% {
+    transform: scale(1.25) rotate(8deg);
+  }
+}
+@keyframes ps-hop {
+  35% {
+    transform: translateY(-6px) rotate(-8deg);
+  }
+  70% {
+    transform: translateY(1px);
+  }
+}
+
+/* ---------- header ---------- */
+
+.ps-header {
+  position: sticky;
+  top: 0;
+  z-index: 40;
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  border-bottom: var(--bw-3) solid rgb(var(--c-ink));
+  font-family: var(--font-sans);
+}
+.ps-header__inner {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  max-width: 1200px;
+  min-height: 72px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+@media (min-width: 720px) {
+  .ps-header__inner {
+    padding: 0 32px;
+  }
+}
+.ps-header__end {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.ps-header__cta {
+  display: none;
+}
+@media (min-width: 400px) {
+  .ps-header__cta {
+    display: inline-flex;
+  }
+}
+
+.ps-nav {
+  display: none;
+  align-items: center;
+  gap: 2px;
+  margin-left: 20px;
+}
+@media (min-width: 900px) {
+  .ps-header:not(.ps-header--compact) .ps-nav {
+    display: flex;
+  }
+  .ps-header:not(.ps-header--compact) .ps-menu {
+    display: none;
+  }
+}
+/* Nav links pop up as yellow stickers on hover; the current page is underlined. */
+.ps-nav__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 40px;
+  padding: 0 12px;
+  border: var(--bw-1) solid transparent;
+  border-radius: var(--r-sm);
+  color: rgb(var(--c-ink));
+  font: 650 var(--fs-16) / 1 var(--font-sans);
+  text-decoration: none;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    background-color var(--d-1) linear,
+    box-shadow var(--d-2) var(--e-out);
+}
+.ps-nav__link:hover {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+  border-color: rgb(var(--c-ink));
+  box-shadow: 3px 3px 0 rgb(var(--c-shadow));
+  transform: translate(-1px, -2px) rotate(-3deg);
+}
+.ps-nav__link:active {
+  transform: translate(2px, 2px);
+  box-shadow: none;
+}
+.ps-nav__link[aria-current='page'] {
+  text-decoration: underline;
+  text-decoration-thickness: 4px;
+  text-decoration-color: rgb(var(--c-pink));
+  text-underline-offset: 6px;
+}
+
+/* The phone menu: a <details>, so it works without JavaScript (menu.ts adds closing). */
+.ps-menu {
+  position: relative;
+}
+.ps-menu__button {
+  list-style: none;
+}
+.ps-menu__button::-webkit-details-marker {
+  display: none;
+}
+.ps-menu__burger {
+  width: 22px;
+  height: 22px;
+}
+.ps-menu__burger path {
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    opacity var(--d-1) linear;
+}
+.ps-menu__burger path:nth-child(1) {
+  transform-origin: 12px 7px;
+}
+.ps-menu__burger path:nth-child(3) {
+  transform-origin: 12px 17px;
+}
+.ps-menu[open] .ps-menu__burger path:nth-child(1) {
+  transform: translateY(5px) rotate(45deg);
+}
+.ps-menu[open] .ps-menu__burger path:nth-child(2) {
+  opacity: 0;
+  transform: scaleX(0);
+}
+.ps-menu[open] .ps-menu__burger path:nth-child(3) {
+  transform: translateY(-5px) rotate(-45deg);
+}
+.ps-menu[open] .ps-menu__button {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+}
+.ps-menu__panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 12px);
+  z-index: 50;
+  display: grid;
+  gap: 4px;
+  min-width: 220px;
+  padding: 8px;
+  background: rgb(var(--c-surface));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-md);
+  transform-origin: top right;
+}
+@media (prefers-reduced-motion: no-preference) {
+  .ps-menu[open] .ps-menu__panel {
+    animation: ps-pop var(--d-spring) var(--e-spring);
+  }
+}
+@keyframes ps-pop {
+  from {
+    opacity: 0;
+    transform: translateY(-8px) scale(0.85) rotate(2deg);
+  }
+}
+.ps-menu__link {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  min-height: 48px;
+  padding: 0 12px;
+  border-radius: var(--r-sm);
+  color: rgb(var(--c-ink));
+  font: 700 var(--fs-20) / 1 var(--font-display);
+  letter-spacing: var(--ls-display);
+  text-decoration: none;
+}
+.ps-menu__link:hover {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+}
+.ps-menu__link[aria-current='page'] {
+  box-shadow: inset 4px 0 0 rgb(var(--c-pink));
+}
+
+/* The editor's slimmer bar: its own controls fill the middle and wrap on phones. */
+.ps-header--compact .ps-header__inner {
+  max-width: none;
+  min-height: 60px;
+  padding: 8px 12px;
+  gap: 8px;
+}
+@media (min-width: 640px) {
+  .ps-header--compact .ps-header__inner {
+    align-items: center;
+    padding: 6px 16px;
+    gap: 12px;
+  }
+}
+.ps-header--compact .ps-header__end {
+  gap: 8px;
+}
+.ps-header__tools {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+  min-width: 0;
+}
+/* On phones the toolbar's items join the bar's own row, and a group marked
+   .ps-header__wrap drops to a full-width row of its own under it. */
+@media (max-width: 639px) {
+  .ps-header--compact .ps-header__inner {
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .ps-header--compact .ps-header__tools {
+    display: contents;
+  }
+  .ps-header--compact .ps-header__end {
+    order: 1;
+  }
+  .ps-header__wrap {
+    order: 2;
+    flex-basis: 100%;
+  }
+}
+.ps-header--compact .ps-nav {
+  margin-left: 0;
+}
+.ps-header--compact .ps-nav__link {
+  padding: 0 8px;
+  font-size: var(--fs-14);
+}
+@media (min-width: 1280px) {
+  .ps-header--compact .ps-nav {
+    display: flex;
+  }
+  .ps-header--compact .ps-menu {
+    display: none;
+  }
+}
+
+/* ---------- reveal ---------- */
+
+/* Content is only hidden when it will be revealed: with scroll-driven
+   animations, or (html.ps-js, set by theme-init.js) with motion.ts's
+   IntersectionObserver fallback. */
+@media (prefers-reduced-motion: no-preference) {
+  @supports (animation-timeline: view()) {
+    [data-reveal] {
+      animation: ps-reveal linear both;
+      animation-timeline: view();
+      animation-range: entry 0% entry 70%;
+    }
+  }
+  @supports not (animation-timeline: view()) {
+    .ps-js [data-reveal] {
+      transition:
+        opacity var(--d-4) var(--e-out),
+        translate var(--d-4) var(--e-out);
+    }
+    .ps-js [data-reveal]:not(.is-in) {
+      opacity: 0;
+      translate: 0 32px;
+    }
+    .ps-js [data-reveal-delay='1'] {
+      transition-delay: 80ms;
+    }
+    .ps-js [data-reveal-delay='2'] {
+      transition-delay: 160ms;
+    }
+    .ps-js [data-reveal-delay='3'] {
+      transition-delay: 240ms;
+    }
+  }
+}
+@keyframes ps-reveal {
+  from {
+    opacity: 0;
+    translate: 0 40px;
+  }
+}
+
+/* ---------- footer ---------- */
+
+.ps-footer {
+  position: relative;
+  overflow: hidden;
+  background: rgb(var(--c-slab));
+  color: rgb(var(--c-on-slab));
+  border-top: var(--bw-3) solid rgb(var(--c-ink));
+  font: 400 var(--fs-16) / var(--lh-body) var(--font-sans);
+}
+.ps-footer__grid {
+  display: grid;
+  gap: 40px;
+  padding-top: 56px;
+  padding-bottom: 32px;
+}
+.ps-footer .ps-wordmark {
+  color: rgb(var(--c-on-slab));
+}
+.ps-footer .ps-wordmark__tile {
+  border-color: rgb(var(--c-on-slab));
+  box-shadow: 4px 4px 0 rgb(var(--c-pink));
+}
+.ps-footer__tagline {
+  max-width: 20ch;
+  margin-top: 20px !important;
+  font: 700 var(--fs-h3) / 1.15 var(--font-display);
+  letter-spacing: var(--ls-display);
+}
+.ps-footer__fine {
+  max-width: 36ch;
+  margin-top: 12px !important;
+  color: rgb(var(--c-on-slab) / 0.72);
+  font-size: var(--fs-14);
+}
+.ps-footer__nav {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 28px 16px;
+}
+.ps-footer__title {
+  margin-bottom: 10px !important;
+  color: rgb(var(--c-yellow));
+  font: 600 var(--fs-12) / 1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.ps-footer__link {
+  display: inline-flex;
+  align-items: center;
+  min-height: 36px;
+  padding: 0 6px;
+  margin-left: -6px;
+  border-radius: var(--r-sm);
+  color: inherit;
+  text-decoration: none;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    background-color var(--d-1) linear;
+}
+.ps-footer__link:hover {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+  transform: rotate(-2deg) translateX(4px);
+}
+/* The name again, huge and cropped by the page edge; letters fill in on hover. */
+.ps-footer__giant {
+  display: flex;
+  justify-content: center;
+  margin-bottom: -0.2em;
+  padding: 0 8px;
+  color: transparent;
+  font: 800 clamp(5rem, 25vw, 21rem) / 1 var(--font-display);
+  letter-spacing: -0.06em;
+  -webkit-text-stroke: 2px rgb(var(--c-on-slab) / 0.55);
+  user-select: none;
+}
+.ps-footer__giant span {
+  display: inline-block;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    color var(--d-2) linear,
+    -webkit-text-stroke-color var(--d-2) linear;
+}
+.ps-footer__giant span:hover {
+  color: rgb(var(--c-yellow));
+  -webkit-text-stroke-color: rgb(var(--c-yellow));
+  transform: translateY(-0.12em) rotate(-5deg);
+}
+.ps-footer__giant span:nth-child(even):hover {
+  color: rgb(var(--c-pink));
+  -webkit-text-stroke-color: rgb(var(--c-pink));
+  transform: translateY(-0.1em) rotate(4deg);
+}
+@media (min-width: 560px) {
+  .ps-footer__nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+@media (min-width: 900px) {
+  .ps-footer__grid {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr);
+    gap: 48px;
+  }
+}

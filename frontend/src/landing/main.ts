@@ -1,10 +1,14 @@
+import '../design/site.css';
 import './landing.css';
+import { enhance } from '../design/enhance';
 import { highlightElement } from './highlight';
 import { HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { responsiveLayout } from './diagramLayout';
 import { initPlayer } from './player';
 import { practiceListHtml } from './practiceList';
 import practiceProblems from 'virtual:practice-listings';
+
+enhance();
 
 const heroCode = document.querySelector<HTMLElement>('#hero-source code');
 const heroSource = heroCode?.textContent ?? '';
