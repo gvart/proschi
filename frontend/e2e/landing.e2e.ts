@@ -1,33 +1,55 @@
-import { canvasNodes, expect, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, expect, test, waitForCanvas } from './fixtures';
+import type { Page } from '@playwright/test';
+
+const demo = (page: Page) => page.locator('#live-demo');
+const status = (page: Page) => demo(page).getByRole('status');
 
 test.describe('landing page', () => {
-  // The hero player starts on its own when motion is welcome; reduced motion keeps it still until asked.
   test.beforeEach(async ({ page }) => {
     await page.emulateMedia({ reducedMotion: 'reduce' });
     await page.goto('./');
   });
 
-  test('loads with the hero', async ({ page }) => {
+  test('loads with the hero and the live demo', async ({ page }) => {
     await expect(page).toHaveTitle(/Proschi/);
-    await expect(page.getByRole('heading', { level: 1, name: /Architecture diagrams as text/ })).toBeVisible();
-    await expect(page.getByRole('img', { name: /Checkout architecture/ })).toBeVisible();
-    // Highlighting ran on the hero source.
-    await expect(page.locator('#hero-source code span').first()).toBeAttached();
+    await expect(page.getByRole('heading', { level: 1, name: /Draw systems by\s*typing/ })).toBeVisible();
+    await expect(page.getByRole('main').getByRole('link', { name: /Open the editor/ })).toHaveAttribute('href', './app/');
+    // The island replaced the poster: the real editor and canvas.
+    await expect(demo(page).locator('.cm-content')).toBeVisible();
+    await waitForCanvas(page, 4);
   });
 
-  test('hero playback plays a step', async ({ page }) => {
-    const status = page.locator('#player-status');
-    await expect(status).toContainText('Use case “Place order”');
-    await page.getByRole('button', { name: 'Next step' }).click();
-    await expect(status).toContainText(/Step 1 of \d+/);
-    await page.getByRole('button', { name: 'Next step' }).click();
-    await expect(status).toContainText(/Step 2 of \d+/);
+  test('under reduced motion the demo starts at the end, with a button to play the tour', async ({ page }) => {
+    await expect(status(page)).toHaveText('This is the real editor. Edit anything, or play the tour.');
+    await waitForCanvas(page, 4);
+    await expect(canvasNodes(page).filter({ hasText: 'OrderEvents' })).toBeVisible();
+    await expect(demo(page).getByRole('button', { name: 'Play tour' })).toBeVisible();
+    await expect(demo(page).getByRole('button', { name: 'Pause tour' })).toHaveCount(0);
 
-    await page.getByRole('button', { name: 'Play', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Pause', exact: true })).toHaveAttribute('aria-pressed', 'true');
-    await expect(status).toContainText(/Step 3 of \d+/);
-    await page.getByRole('button', { name: 'Pause', exact: true }).click();
-    await expect(page.getByRole('button', { name: 'Play', exact: true })).toHaveAttribute('aria-pressed', 'false');
+    // Playing a scenario is a click away.
+    await demo(page).getByRole('button', { name: /DB down/ }).click();
+    await expect(demo(page).getByRole('button', { name: /DB down/ })).toHaveAttribute('aria-pressed', 'true');
+
+    // Asked for, the tour plays (and can be paused).
+    await demo(page).getByRole('button', { name: 'Play tour' }).click();
+    const pause = demo(page).getByRole('button', { name: 'Pause tour' });
+    await expect(pause).toHaveAttribute('aria-pressed', 'false');
+    await pause.click();
+    await expect(demo(page).getByRole('button', { name: 'Resume tour' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(status(page)).toContainText('Paused');
+  });
+
+  test('a visitor can edit the demo and the diagram follows', async ({ page }) => {
+    await waitForCanvas(page, 4);
+    await appendCode(page, '\ncache "Session Cache" [Redis]\napi -> cache : GET\n');
+    await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
+    // "Open in the editor" carries the edited document.
+    const href = await demo(page).getByRole('link', { name: /Open in the editor/ }).getAttribute('href');
+    expect(href).toMatch(/^\.\/app\/#code=/);
+    await demo(page).getByRole('link', { name: /Open in the editor/ }).click();
+    await expect(page).toHaveURL(/\/proschi\/app\/#code=/);
+    await waitForCanvas(page);
+    await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
   });
 
   test('practice list shows 12 problems', async ({ page }) => {
@@ -45,9 +67,47 @@ test.describe('landing page', () => {
     await expect(canvasNodes(page).filter({ hasText: 'Load Balancer' })).toBeVisible();
   });
 
-  test('"Open this example" opens the hero in playback', async ({ page }) => {
-    await page.getByRole('link', { name: 'Open this example' }).click();
-    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Checkout');
-    await expect(page.getByText(/Step 1 of \d+/)).toBeVisible();
+  test('the story shows its end state without motion', async ({ page }) => {
+    await page.locator('#checks').scrollIntoViewIfNeeded();
+    await expect(page.getByText('5 / 5 pass')).toBeVisible();
+    await expect(page.getByRole('img', { name: /DB down/ })).toBeVisible();
+    // No burst under reduced motion.
+    await page.getByRole('button', { name: 'Run the tests again' }).click();
+    await expect(page.locator('.ps-celebrate')).toHaveCount(0);
+  });
+});
+
+test.describe('landing page tour', () => {
+  // Nothing in the browser before the visit, so "nothing saved" means an empty localStorage.
+  test.use({ onboarding: 'fresh' });
+
+  test('types, plays and hands over without moving focus or saving anything', async ({ page }) => {
+    await page.goto('./');
+    const historyLength = await page.evaluate(() => history.length);
+    await expect(status(page)).toContainText(/Write a service|what sits behind it/);
+    // The typing is hidden from assistive technology; the status line sums it up.
+    await expect(demo(page).locator('.demo__code')).toHaveAttribute('aria-hidden', 'true');
+    await expect(demo(page).getByRole('button', { name: 'Pause tour' })).toBeVisible();
+
+    await waitForCanvas(page, 1);
+    await expect(status(page)).toContainText('Press play', { timeout: 25_000 });
+    await expect(page.locator('.react-flow__edge.animated, .react-flow__edges g rect').first()).toBeAttached({ timeout: 10_000 });
+
+    await demo(page).getByRole('button', { name: 'Skip to the end' }).click();
+    await expect(status(page)).toHaveText('Your turn — edit anything.');
+    await expect(demo(page).locator('.cm-content')).toHaveAttribute('contenteditable', 'true');
+    await expect(demo(page).locator('.cm-content')).not.toBeFocused();
+
+    await appendCode(page, '\nqueue "Jobs" [SQS]\n');
+    await waitForCanvas(page, 5);
+    expect(await page.evaluate(() => [localStorage.length, sessionStorage.length, location.hash, history.length])).toEqual([0, 0, '', historyLength]);
+  });
+
+  test('does not steal focus while it plays', async ({ page }) => {
+    await page.goto('./');
+    await page.keyboard.press('Tab');
+    const focused = await page.evaluate(() => document.activeElement?.textContent);
+    await expect(status(page)).toContainText('Connect them', { timeout: 15_000 });
+    expect(await page.evaluate(() => document.activeElement?.textContent)).toBe(focused);
   });
 });

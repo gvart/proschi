@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useState, useEffect, useMemo, useRef } from 'react';
 import {
   ArrowLeft,
   Play,
@@ -56,19 +56,71 @@ interface UseCasePlayerProps {
   onStepChange?: (index: number) => void;
   /** Hide the title bar when the host already shows the use case and a way back. */
   showHeader?: boolean;
-  /** Start playing as soon as it opens, e.g. after a Play button outside it was pressed. */
+  /**
+   * Plays while true: from the moment it opens (e.g. after a Play button outside
+   * it was pressed), and again whenever it turns true; pauses when it turns false.
+   */
   autoPlay?: boolean;
+  /** Called once playback reaches the end of the last step (not when looping). */
+  onFinished?: () => void;
+  /** Start over from the first step after the last one, instead of stopping. */
+  loop?: boolean;
+  /**
+   * Just the canvas: no step panel, controls or minimap, and no pan or zoom,
+   * for an embedded preview whose host shows its own captions.
+   */
+  bare?: boolean;
 }
 
+/** How long each step is shown while playing. */
+const STEP_MS = 2000;
+
 /** Animated step-by-step playback of a use case over an architecture diagram. */
-function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange, showHeader = true, autoPlay = false }: UseCasePlayerProps) {
+function UseCasePlayerContent({
+  useCase,
+  nodes,
+  edges: architectureEdges,
+  onBack,
+  initialStep,
+  onStepChange,
+  showHeader = true,
+  autoPlay = false,
+  onFinished,
+  loop = false,
+  bare = false,
+}: UseCasePlayerProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
 
-  const playIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const animationIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const reactFlowWrapperRef = useRef<HTMLDivElement>(null);
+
+  // The packet's progress along the current edge, 0–100; resuming keeps where it was.
+  const resumeAnimation = useCallback(() => {
+    if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+    animationIntervalRef.current = setInterval(() => {
+      setAnimationProgress((prev) => {
+        if (prev >= 100) {
+          if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+          return 100;
+        }
+        return prev + 2;
+      });
+    }, 30);
+  }, []);
+
+  const startAnimation = useCallback(() => {
+    setAnimationProgress(0);
+    resumeAnimation();
+  }, [resumeAnimation]);
+
+  const onFinishedRef = useRef(onFinished);
+  const autoPlayRef = useRef(autoPlay);
+  useEffect(() => {
+    onFinishedRef.current = onFinished;
+    autoPlayRef.current = autoPlay;
+  });
 
   // Steps between nodes with no architecture edge get a hidden edge so they can still animate.
   const edges = useMemo(() => {
@@ -94,9 +146,10 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
     const start = useCaseKey === firstUseCaseKeyRef.current ? (initialStep ?? 0) : 0;
     setCurrentStepIndex(Math.min(Math.max(start, 0), Math.max(useCase.steps.length - 1, 0)));
     setAnimationProgress(0);
-    setIsPlaying(false);
-    if (playIntervalRef.current) clearInterval(playIntervalRef.current);
-    if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
+    const play = autoPlayRef.current && useCase.steps.length > 0;
+    setIsPlaying(play);
+    if (play) startAnimation();
+    else if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
     // initialStep only matters for the first use case; edits keep the current step.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [useCaseKey]);
@@ -112,54 +165,52 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
 
   useEffect(() => {
     return () => {
-      if (playIntervalRef.current) clearInterval(playIntervalRef.current);
       if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
     };
   }, []);
 
-  const startAnimation = () => {
-    setAnimationProgress(0);
-    if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
-
-    animationIntervalRef.current = setInterval(() => {
-      setAnimationProgress((prev) => {
-        if (prev >= 100) {
-          if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
-          return 100;
-        }
-        return prev + 2;
-      });
-    }, 30);
-  };
+  // While playing, move on one step every STEP_MS; at the end stop (or loop).
+  useEffect(() => {
+    if (!isPlaying) return;
+    const timer = setTimeout(() => {
+      if (currentStepIndex < useCase.steps.length - 1) {
+        setCurrentStepIndex(currentStepIndex + 1);
+        startAnimation();
+      } else if (loop) {
+        setCurrentStepIndex(0);
+        startAnimation();
+      } else {
+        setIsPlaying(false);
+        onFinishedRef.current?.();
+      }
+    }, STEP_MS);
+    return () => clearTimeout(timer);
+  }, [isPlaying, currentStepIndex, useCase.steps.length, loop, startAnimation]);
 
   const handlePlay = () => {
     setIsPlaying(true);
     startAnimation();
-
-    playIntervalRef.current = setInterval(() => {
-      setCurrentStepIndex((prev) => {
-        if (prev >= useCase.steps.length - 1) {
-          setIsPlaying(false);
-          if (playIntervalRef.current) clearInterval(playIntervalRef.current);
-          return prev;
-        }
-        startAnimation();
-        return prev + 1;
-      });
-    }, 2000);
   };
-
-  // Once, on opening; the host remounts the player (a new key) to play again.
-  useEffect(() => {
-    if (autoPlay && useCase.steps.length > 0) handlePlay();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   const handlePause = () => {
     setIsPlaying(false);
-    if (playIntervalRef.current) clearInterval(playIntervalRef.current);
     if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
   };
+
+  // `autoPlay` follows its host: playing while true, paused when it turns false.
+  const autoPlayedRef = useRef(autoPlay);
+  useEffect(() => {
+    if (autoPlay === autoPlayedRef.current) return;
+    autoPlayedRef.current = autoPlay;
+    if (autoPlay) {
+      // Resume where it was paused, mid-step if the packet was on its way.
+      setIsPlaying(true);
+      if (animationProgress < 100) resumeAnimation();
+    } else {
+      handlePause();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [autoPlay]);
 
   // Manual steps animate too, so a failed call still shows where it was cut off.
   const handleStepForward = () => {
@@ -262,7 +313,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       },
       style: {
         ...edge.style,
-        stroke: isActive ? (isError ? ERROR_COLOR : '#3b82f6') : '#b1b1b7',
+        stroke: isActive ? (isError ? ERROR_COLOR : '#111111') : '#b1b1b7',
         strokeWidth: isActive ? 3 : 2,
         strokeDasharray: isActive && step?.failed ? '6 4' : edge.style?.strokeDasharray,
         opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : onPath ? 0.45 : 0.12,
@@ -272,9 +323,9 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
   });
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className={`h-full flex flex-col ${bare ? '' : 'bg-gray-50'}`}>
       {/* Header */}
-      {showHeader && (
+      {showHeader && !bare && (
       <div className="bg-white border-b border-gray-200 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -305,14 +356,16 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
-          className="bg-gray-50"
-          panOnDrag={true}
-          zoomOnScroll={true}
+          className={bare ? '' : 'bg-gray-50'}
+          panOnDrag={!bare}
+          zoomOnScroll={!bare}
+          zoomOnPinch={!bare}
+          zoomOnDoubleClick={!bare}
           preventScrolling={false}
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-          <Controls showInteractive={false} />
-          <MiniMap
+          {!bare && <Controls showInteractive={false} />}
+          {!bare && <MiniMap
             className="!hidden md:!block"
             nodeColor={(node) => {
               if (highlightedNodes.has(node.id)) {
@@ -335,10 +388,11 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
                   return '#6b7280';
               }
             }}
-          />
+          />}
         </ReactFlow>
       </div>
 
+      {!bare && <>
       {/* Step Info Panel */}
       <div className="bg-white border-t border-gray-200 p-3 sm:p-4 max-h-[35vh] sm:max-h-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
@@ -511,6 +565,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           </div>
         </div>
       </div>
+      </>}
     </div>
   );
 }
