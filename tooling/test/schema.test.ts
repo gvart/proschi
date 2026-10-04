@@ -7,9 +7,11 @@ import { examples, parse } from '../src/proschi';
 const committed = JSON.parse(readFileSync(new URL('../schema/proschi-diagram.schema.json', import.meta.url), 'utf8'));
 const validate = new Ajv2020({ allErrors: true, strict: true }).compile(committed);
 
+// The document the landing page's live demo ends with: the static poster (frontend/index.html, #demo-source),
+// which frontend/src/landing/landing.test.ts checks against src/components/Demo/demoScript.ts.
 const landingHero = (() => {
   const html = readFileSync(new URL('../../frontend/index.html', import.meta.url), 'utf8');
-  const code = html.match(/id="hero-source"[^>]*><code>([\s\S]*?)<\/code>/)![1];
+  const code = html.match(/id="demo-source"[^>]*><code>([\s\S]*?)<\/code>/)![1];
   return code.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
 })();
 

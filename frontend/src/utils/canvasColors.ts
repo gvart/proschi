@@ -56,6 +56,7 @@ export const CANVAS_TOKEN_VARS: Record<keyof (typeof CANVAS_TOKENS)['light'], st
 export const CANVAS_ACCENT = 'rgb(var(--c-pink))';
 export const CANVAS_FAIL = 'rgb(var(--c-fail))';
 export const CANVAS_EDGE = 'rgb(var(--c-muted))';
+export const CANVAS_INK = 'rgb(var(--c-ink))';
 
 /** Tailwind's default `font-sans` stack, which the editor uses. */
 export const CANVAS_FONT =

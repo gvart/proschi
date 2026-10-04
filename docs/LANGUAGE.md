@@ -11,7 +11,7 @@ reports the same problems. See [Editor support](EDITORS.md) for VS Code,
 IntelliJ, Neovim, Helix, Sublime Text and CI, and the [grammar](#grammar) below
 for a summary of the syntax.
 
-```
+```proschi
 title "E-Commerce Platform"
 
 group vpc "AWS VPC" {
@@ -109,7 +109,7 @@ client: an unknown node has a finite capacity, a latency and a price. The
 warning names the closest catalog tech when there is one, and the language
 server offers to replace the name with it:
 
-```
+```text
 Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]
 ```
 
@@ -205,7 +205,7 @@ connection.
 One endpoint rarely has one outcome. `alt` blocks split a use case into
 scenarios without copying the steps they share:
 
-```
+```proschi
 usecase "Get order" {
   gateway -> orders : GET /api/orders/42      # shared by every scenario
 
@@ -272,7 +272,7 @@ The use case's `endpoint` stays the literal path; the group key is
 Write the infrastructure once and keep use cases in other files, e.g. one per
 team or domain:
 
-```
+```proschi
 # infra.proschi
 title "Shop infrastructure"
 gateway "API Gateway" [AWS API Gateway]
@@ -282,7 +282,7 @@ gateway -> orders
 orders -> ordersDb
 ```
 
-```
+```proschi fragment
 # checkout.proschi
 title "Checkout"
 import "infra.proschi"
@@ -322,9 +322,9 @@ this way. These statements are blocks at the top level; each line inside a
 block follows that block's own rules. The design they describe is in
 [docs/design/hld-and-practice.md](design/hld-and-practice.md); how the
 simulation turns them into numbers, and how far to trust those numbers, is on
-[How the simulation works](https://proschi.app/model/).
+[How the simulation works](https://proschi.app/docs/model/).
 
-```
+```proschi fragment
 title "URL Shortener" "Turns long URLs into short codes and redirects visitors"
 
 api   "Shortener API" [REST API]   x12
@@ -397,7 +397,7 @@ with the wrong one: `'100k' needs a unit: expected a rate, e.g. 100k rps, 6k rpm
 
 ### Traffic
 
-```
+```proschi fragment
 traffic {
   "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%
   "Shorten"  1k rps
@@ -416,7 +416,7 @@ traffic {
 
 ### Requirements
 
-```
+```proschi fragment
 requirements {
   p99 "Redirect" < 50ms
   p99 "Redirect" scenario "Cache hit" < 10ms
@@ -445,7 +445,7 @@ becomes a test that the simulation evaluates.
 
 ### Capacity
 
-```
+```proschi fragment
 capacity {
   db    20k rps latency 4ms availability 99.95% cost 400 usd/month durable
   cache 150k rps
@@ -478,7 +478,7 @@ node that is not a data store. A part given twice, a rate together with
 
 ### Entities
 
-```
+```proschi fragment
 entity Url in db "One short code and where it points" {
   code      string key
   target    string
@@ -496,7 +496,7 @@ entity Url in db "One short code and where it points" {
 
 ### Decisions
 
-```
+```proschi fragment
 decision "Cache redirects in Redis" {
   because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
   rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
@@ -512,7 +512,7 @@ decision "Base62 codes from a counter" because "Short, unique, no collisions to 
 
 Tests check how the design works. Every assertion line in a test must hold.
 
-```
+```proschi fragment
 test "Redirect is served from the cache" {
   "Redirect" calls any cache before any database
   "Redirect" scenario "Cache hit" never calls any database

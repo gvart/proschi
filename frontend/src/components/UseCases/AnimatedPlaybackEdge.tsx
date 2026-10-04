@@ -2,7 +2,12 @@ import { useEffect, useRef, useState } from 'react';
 import { BaseEdge, getBezierPath } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 
-const ERROR_COLOR = '#dc2626';
+// The design system's packet (src/design/tokens.css): pink, ink-outlined, red when the answer is an error.
+// Token colours go through `style` (CSS variables do not work in SVG presentation attributes), so they follow the theme.
+const PACKET_COLOR = 'rgb(var(--c-pink))';
+const ERROR_COLOR = 'rgb(var(--c-fail))';
+const INK = 'rgb(var(--c-ink))';
+const SHADOW = 'rgb(var(--c-shadow))';
 /** How far along the edge (in %) a failed call gets before it is cut off. */
 const FAIL_AT = 55;
 
@@ -68,63 +73,34 @@ export function AnimatedPlaybackEdge({
   }, [progress, isActive, isRequestResponse, failed, edgePath]);
 
   const replying = isRequestResponse && progress > 50;
-  const dotColor = isError && (replying || !isRequestResponse) ? ERROR_COLOR : '#3b82f6';
+  const dotColor = isError && (replying || !isRequestResponse) ? ERROR_COLOR : PACKET_COLOR;
+  // The packet tumbles a little as it travels, and turns around for the reply.
+  const spin = (progress / 100) * 180;
 
   return (
     <>
       {/* Hidden path for calculation */}
-      <path
-        ref={pathRef}
-        d={edgePath}
-        fill="none"
-        stroke="none"
-        style={{ visibility: 'hidden', pointerEvents: 'none' }}
-      />
+      <path ref={pathRef} d={edgePath} fill="none" stroke="none" style={{ visibility: 'hidden', pointerEvents: 'none' }} />
 
       {/* Visible edge */}
       <BaseEdge path={edgePath} markerEnd={markerEnd} style={style} />
 
-      {/* Animated dot traveling along the edge */}
+      {/* Where a failed call was cut off */}
       {isActive && failed && progress >= FAIL_AT && (
-        <g stroke={ERROR_COLOR} strokeWidth="3" strokeLinecap="round">
-          <line x1={dotPosition.x - 7} y1={dotPosition.y - 7} x2={dotPosition.x + 7} y2={dotPosition.y + 7} />
-          <line x1={dotPosition.x - 7} y1={dotPosition.y + 7} x2={dotPosition.x + 7} y2={dotPosition.y - 7} />
+        <g transform={`translate(${dotPosition.x} ${dotPosition.y})`} strokeLinecap="round">
+          <circle r="13" strokeWidth="2.5" style={{ fill: 'rgb(var(--c-surface))', stroke: INK }} />
+          <g strokeWidth="3.5" style={{ stroke: ERROR_COLOR }}>
+            <line x1={-5.5} y1={-5.5} x2={5.5} y2={5.5} />
+            <line x1={-5.5} y1={5.5} x2={5.5} y2={-5.5} />
+          </g>
         </g>
       )}
 
+      {/* The packet travelling along the edge */}
       {isActive && progress < 100 && !(failed && progress >= FAIL_AT) && (
-        <g>
-          {/* Pulsing outer circle */}
-          <circle
-            cx={dotPosition.x}
-            cy={dotPosition.y}
-            r="10"
-            fill={dotColor}
-            opacity="0.3"
-          >
-            <animate
-              attributeName="r"
-              values="10;14;10"
-              dur="1s"
-              repeatCount="indefinite"
-            />
-            <animate
-              attributeName="opacity"
-              values="0.3;0.1;0.3"
-              dur="1s"
-              repeatCount="indefinite"
-            />
-          </circle>
-
-          {/* Main dot */}
-          <circle
-            cx={dotPosition.x}
-            cy={dotPosition.y}
-            r="6"
-            fill={dotColor}
-            stroke="#ffffff"
-            strokeWidth="2"
-          />
+        <g transform={`translate(${dotPosition.x} ${dotPosition.y})`}>
+          <rect x="-6" y="-4" width="16" height="16" rx="3" transform={`rotate(${spin})`} style={{ fill: SHADOW }} />
+          <rect x="-8" y="-8" width="16" height="16" rx="3" strokeWidth="2.5" transform={`rotate(${spin})`} style={{ fill: dotColor, stroke: INK }} />
         </g>
       )}
     </>

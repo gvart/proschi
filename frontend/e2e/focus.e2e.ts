@@ -92,9 +92,9 @@ async function solveUrlShortener(page: Page) {
 test.describe('celebration', () => {
   test('the first solve bursts', async ({ page }) => {
     await solveUrlShortener(page);
-    await expect(page.locator('[data-celebrate]')).toBeAttached();
+    await expect(page.locator('.ps-celebrate')).toBeAttached();
     // It cleans up after itself.
-    await expect(page.locator('[data-celebrate]')).toHaveCount(0);
+    await expect(page.locator('.ps-celebrate')).toHaveCount(0);
   });
 
   test.describe('with reduced motion', () => {
@@ -103,14 +103,14 @@ test.describe('celebration', () => {
       await page.addInitScript(() => {
         // Record any burst, however briefly it is in the page.
         new MutationObserver((records) => {
-          if (records.some((r) => Array.from(r.addedNodes).some((n) => n instanceof HTMLElement && n.hasAttribute('data-celebrate')))) {
+          if (records.some((r) => Array.from(r.addedNodes).some((n) => n instanceof HTMLElement && n.classList.contains('ps-celebrate')))) {
             document.documentElement.dataset.celebrated = 'yes';
           }
         }).observe(document, { childList: true, subtree: true });
       });
       await solveUrlShortener(page);
       await page.waitForTimeout(300);
-      await expect(page.locator('[data-celebrate]')).toHaveCount(0);
+      await expect(page.locator('.ps-celebrate')).toHaveCount(0);
       expect(await page.evaluate(() => document.documentElement.dataset.celebrated)).toBeUndefined();
     });
   });

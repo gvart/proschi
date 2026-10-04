@@ -1,0 +1,93 @@
+{
+  "$comment": "The docs on the site (/docs/), built from these files by frontend/plugins/docsSite.ts. `pages` is the reading order (previous / next links); `source` is relative to this folder. Every page needs a stub at frontend/docs/<slug>/index.html (the docs home: frontend/docs/index.html). `nav` is the sidebar: an item names a page (with an optional anchor), or an `href` from the site root or an absolute URL.",
+  "pages": [
+    {
+      "slug": "",
+      "title": "Why Proschi",
+      "source": "WHY.md",
+      "description": "What Proschi is for: architecture diagrams as text, request flows you can play, and designs checked by a simulation in your browser."
+    },
+    {
+      "slug": "quickstart",
+      "title": "Quickstart",
+      "source": "QUICKSTART.md",
+      "description": "Your first Proschi diagram in two minutes: services, a request flow, a failure, and a requirement that checks itself."
+    },
+    {
+      "slug": "language",
+      "title": "Language reference",
+      "source": "LANGUAGE.md",
+      "description": "The Proschi language: nodes, groups, connections, use cases, scenarios, imports and the high-level design blocks, with the grammar."
+    },
+    {
+      "slug": "model",
+      "title": "How the simulation works",
+      "source": "../frontend/src/docs/model.html",
+      "description": "What Proschi's simulation models (load, reads and writes, replicas and shards, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
+    },
+    {
+      "slug": "editors",
+      "title": "Editor support",
+      "source": "EDITORS.md",
+      "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, on the command line and in CI: checking, formatting, OpenAPI, rendering and tests."
+    },
+    {
+      "slug": "practice-authoring",
+      "title": "Writing practice problems",
+      "source": "PRACTICE.md",
+      "description": "How a Proschi practice problem is put together: the statement, the given design, the reference solution, the wrong designs and the calibration."
+    },
+    {
+      "slug": "privacy",
+      "title": "Privacy",
+      "source": "PRIVACY.md",
+      "description": "What Proschi keeps in your browser, what an account stores on the server, what is logged and shared, and how to export or delete it."
+    }
+  ],
+  "nav": [
+    {
+      "title": "Start",
+      "items": [{ "page": "quickstart" }, { "page": "" }]
+    },
+    {
+      "title": "Language",
+      "items": [
+        { "page": "language", "label": "Reference" },
+        { "page": "language", "anchor": "use-case-steps", "label": "Use case steps" },
+        { "page": "language", "anchor": "scenarios", "label": "Scenarios" },
+        { "page": "language", "anchor": "high-level-design", "label": "High-level design" },
+        { "page": "language", "anchor": "tests", "label": "Tests" },
+        { "page": "language", "anchor": "grammar", "label": "Grammar" }
+      ]
+    },
+    {
+      "title": "Simulation",
+      "items": [{ "page": "model", "label": "How the model works" }]
+    },
+    {
+      "title": "Tools",
+      "items": [
+        { "page": "editors", "label": "Editor support" },
+        { "page": "editors", "anchor": "ci", "label": "CLI and CI" },
+        { "page": "editors", "anchor": "formatting", "label": "Formatting" },
+        { "page": "editors", "anchor": "checking-against-openapi", "label": "OpenAPI" },
+        { "page": "editors", "anchor": "rendering-and-export", "label": "Export" }
+      ]
+    },
+    {
+      "title": "Practice",
+      "items": [
+        { "href": "practice/", "label": "Solving problems" },
+        { "page": "practice-authoring", "label": "Writing problems" }
+      ]
+    },
+    {
+      "title": "About",
+      "items": [
+        { "page": "privacy" },
+        { "href": "https://github.com/gvart/proschi/blob/main/CHANGELOG.md", "label": "Changelog" },
+        { "href": "https://github.com/gvart/proschi", "label": "GitHub" }
+      ]
+    }
+  ]
+}

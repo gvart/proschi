@@ -1,107 +1,92 @@
 import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
+import mainSource from './main.ts?raw';
 import legacyRedirect from '../../public/legacy-redirect.js?raw';
 import { examples, parse } from '../dsl';
+import { urlShortenerExample } from '../dsl/examples';
+import { defaultEngine } from '../hld/engine';
 import { problems } from '../practice/catalog';
 import { decodeShareLink } from '../playground/share';
 import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
-import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
-import { heroScenarios, stepLines } from './player';
+import { APP_PATH, editorLink, exampleLink } from './links';
 import { listingsFrom, practiceListHtml } from './practiceList';
 import prebuiltListings from 'virtual:practice-listings';
-import { tallLayout, wideLayout } from './diagramLayout';
+import { DEMO_SCRIPT, DEMO_SOURCE, DEMO_USE_CASE, sourceAt } from '../components/Demo/demoScript';
 
 function decodeEntities(s: string): string {
   return s.replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&amp;/g, '&');
 }
 
-/** The Proschi text exactly as the landing page shows it in the hero. */
-function heroSource(): string {
-  const m = landingHtml.match(/<pre[^>]*id="hero-source"[^>]*><code>([\s\S]*?)<\/code><\/pre>/);
-  if (!m) throw new Error('hero source not found in index.html');
+/** The Proschi text the hero's static poster shows before the live demo loads. */
+function posterSource(): string {
+  const m = landingHtml.match(/<pre[^>]*id="demo-source"[^>]*><code>([\s\S]*?)<\/code><\/pre>/);
+  if (!m) throw new Error('demo poster source not found in index.html');
   expect(m[1]).not.toMatch(/<[a-z]/i); // plain text only, so what you see is what parses
   return decodeEntities(m[1]);
 }
 
-/** Every highlighted snippet on the page. */
+/** Every highlighted snippet on the page, apart from the poster. */
 function snippets(): string[] {
-  return [...landingHtml.matchAll(/<pre[^>]*data-proschi[^>]*><code>([\s\S]*?)<\/code><\/pre>/g)].map((m) => decodeEntities(m[1]));
+  return [...landingHtml.matchAll(/<pre[^>]*data-proschi[^>]*><code>([\s\S]*?)<\/code><\/pre>/g)]
+    .filter((m) => !m[0].includes('id="demo-source"'))
+    .map((m) => decodeEntities(m[1]));
 }
 
+/** The architecture part of the demo: everything typed before the use case. */
+const DEMO_ARCHITECTURE = sourceAt({ index: DEMO_SCRIPT.findIndex((s) => s.kind === 'type' && s.text.includes('usecase')), typed: 0 });
+
 describe('landing page hero', () => {
-  it('shows valid Proschi with no diagnostics', () => {
-    const { diagram, diagnostics } = parse(heroSource());
+  it('the poster shows exactly the document the live demo ends with', () => {
+    expect(posterSource()).toBe(DEMO_SOURCE);
+  });
+
+  it('the demo document is valid Proschi with the use case and both scenarios', () => {
+    const { diagram, diagnostics } = parse(DEMO_SOURCE);
     expect(diagnostics).toEqual([]);
-    expect(diagram.nodes.every((n) => !n.implicit)).toBe(true);
-    expect(diagram.nodes.map((n) => n.id).sort()).toEqual(['api', 'db', 'events', 'vpc', 'web']);
-    expect(diagram.edges).toHaveLength(3);
+    expect(diagram.useCases.map((u) => [u.id, u.name])).toEqual([[DEMO_USE_CASE.id, DEMO_USE_CASE.name]]);
+    expect(diagram.useCases[0].scenarios.map((s) => [s.name, s.outcome])).toEqual([
+      ['Placed', 'success'],
+      ['DB down', 'error'],
+    ]);
   });
 
-  it('names the use case the way the editor does in links', () => {
-    const { diagram } = parse(heroSource());
-    expect(diagram.useCases.map((u) => [u.id, u.name])).toEqual([[HERO_USE_CASE.id, HERO_USE_CASE.name]]);
-  });
-
-  it('animates the same scenarios and steps as the source declares', () => {
-    const source = heroSource();
-    const { diagram } = parse(source);
-    const [useCase] = diagram.useCases;
-    expect(useCase.scenarios.map((s) => [s.id, s.name, s.outcome])).toEqual(heroScenarios.map((s) => [s.id, s.name, s.outcome]));
-
-    for (const [i, hero] of heroScenarios.entries()) {
-      const parsed = useCase.scenarios[i].steps;
-      const requests = hero.steps.filter((s) => s.kind !== 'response');
-      expect(parsed.map((s) => [s.fromServiceId, s.toServiceId, !!s.failed])).toEqual(
-        requests.map((s) => [s.from, s.to, s.kind === 'failed']),
-      );
-      const reply = hero.steps.find((s) => s.kind === 'response')!;
-      expect(String(parsed[0].statusCode)).toBe(reply.label.slice(0, 3));
-      expect(!!reply.error).toBe(parsed[0].statusCode! >= 400);
-
-      const lines = stepLines(source.split('\n'), hero);
-      expect(lines.every((l) => l > 0), hero.name).toBe(true);
-      expect(new Set(lines).size).toBe(hero.steps.length);
-    }
-  });
-
-  it('every SVG edge the player uses exists', () => {
-    expect(landingHtml).toContain('id="fail-mark"');
-    expect(landingHtml).toContain('id="player-scenarios"');
-    expect(landingHtml).toContain('id="arrow-error"');
-    for (const step of heroScenarios.flatMap((s) => s.steps)) {
-      expect(landingHtml).toContain(`id="${step.edge}"`);
-      expect(landingHtml).toContain(`id="node-${step.from}"`);
-      expect(landingHtml).toContain(`id="node-${step.to}"`);
-    }
-  });
-
-  it('the wide diagram layout matches the SVG in index.html', () => {
-    expect(landingHtml).toContain(`viewBox="${wideLayout.viewBox}"`);
-    for (const [id, attrs] of Object.entries(wideLayout.elements)) {
-      const tag = landingHtml.match(new RegExp(`<[a-z]+[^>]*id="${id}"[^>]*>`))?.[0];
-      expect(tag, id).toBeTruthy();
-      for (const [name, value] of Object.entries(attrs)) {
-        if (name === 'text-anchor' && value === 'start') continue;
-        expect(tag, `${id} ${name}`).toContain(`${name}="${value}"`);
-      }
-    }
-    expect(Object.keys(tallLayout.elements).sort()).toEqual(Object.keys(wideLayout.elements).sort());
-  });
-
-  it('the share sample names a real scenario of the hero use case', () => {
-    const sample = landingHtml.match(/&amp;uc=([\w-]+)&amp;alt=([\w-]+)&amp;step=\d+/);
-    expect(sample?.[1]).toBe(HERO_USE_CASE.id);
-    expect(parse(heroSource()).diagram.useCases[0].scenarios.map((s) => s.id)).toContain(sample?.[2]);
-  });
-
-  it('links into playback of the hero use case', () => {
-    const link = editorLink(heroSource(), { useCase: HERO_USE_CASE.id, step: 1 });
+  it('"Open in the editor" links decode back to the demo', () => {
+    const link = editorLink(DEMO_SOURCE);
     expect(link.startsWith(`${APP_PATH}#code=`)).toBe(true);
-    expect(decodeShareLink(link.slice(APP_PATH.length))).toEqual({
-      source: heroSource(),
-      playback: { useCase: HERO_USE_CASE.id, step: 1 },
-    });
+    expect(decodeShareLink(link.slice(APP_PATH.length))).toEqual({ source: DEMO_SOURCE });
+  });
+
+  it('loads the demo island lazily, after a static first paint', () => {
+    expect(mainSource).toMatch(/import\('\.\/LandingDemo'\)/);
+    // Nothing React in the page's own bundle.
+    expect(mainSource).not.toMatch(/from '\.\/LandingDemo'|from 'react|Demo\/LiveDemo/);
+    expect(landingHtml).toMatch(/<div id="live-demo" class="demo-host">\s*<div class="demo" data-mode="poster">/);
+  });
+});
+
+describe('test results on the page', () => {
+  // The rows are what the simulation really says about the URL shortener example.
+  const diagram = parse(urlShortenerExample).diagram;
+  const results = defaultEngine.runTests(diagram, defaultEngine.analyze(diagram));
+
+  it('match the engine', () => {
+    const rows = [...landingHtml.matchAll(/<li data-result="([^"]+)"><b>([^<]+)<\/b><span>([^<]+)<\/span><\/li>/g)];
+    expect(rows.length).toBeGreaterThanOrEqual(4);
+    for (const [, id, name, message] of rows) {
+      const result = results.find((r) => r.id === decodeEntities(id));
+      expect(result, id).toBeDefined();
+      expect([decodeEntities(name), decodeEntities(message), result!.passed]).toEqual([result!.name, result!.message, true]);
+    }
+    expect(landingHtml).toContain(`${rows.length} / ${rows.length} pass`);
+  });
+
+  it('the snippet is taken from the example', () => {
+    const snippet = snippets().find((s) => s.startsWith('traffic {'))!;
+    const example = urlShortenerExample.split('\n').map((l) => l.trim().replace(/\s+/g, ' '));
+    for (const line of snippet.split('\n').filter((l) => l.trim() && l.trim() !== '}')) {
+      expect(example.some((l) => l.startsWith(line.trim().replace(/\s+/g, ' '))), line).toBe(true);
+    }
   });
 });
 
@@ -109,10 +94,12 @@ describe('landing page snippets', () => {
   it('only use syntax the parser accepts', () => {
     const all = snippets();
     expect(all.length).toBeGreaterThanOrEqual(3);
-    // The "how it works" snippets are parts of one document.
-    const [architecture, ...useCases] = all.slice(1);
-    const combined = [architecture, 'events "OrderEvents" [Kafka]', ...useCases].join('\n\n');
-    expect(parse(combined).diagnostics).toEqual([]);
+    for (const source of all) {
+      if (source.startsWith('traffic {')) continue; // checked against the example above
+      // Use cases are written against the demo's architecture.
+      const document = source.startsWith('usecase') ? `${DEMO_ARCHITECTURE}\n${source}` : source;
+      expect(parse(document).diagnostics, source).toEqual([]);
+    }
   });
 
   it('highlights alt and failed calls', () => {
@@ -172,9 +159,10 @@ describe('example links', () => {
     expect(decodeShareLink(link!.slice(APP_PATH.length))?.source).toBe(source);
   });
 
-  it('the page lists every example, and nothing else', () => {
+  it('the page shows four of the examples', () => {
     const ids = [...landingHtml.matchAll(/data-example="([^"]+)"/g)].map((m) => m[1]);
-    expect(ids).toEqual(examples.map((e) => e.id));
+    expect(ids).toHaveLength(4);
+    for (const id of ids) expect(examples.map((e) => e.id)).toContain(id);
     expect(exampleLink('nope')).toBeNull();
   });
 });
@@ -197,7 +185,7 @@ describe('practice section', () => {
   const listings = listingsFrom(Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace('../practice/problems/', ''), text])));
 
   it('has a container the list is rendered into, and a static link to the practice page', () => {
-    expect(landingHtml).toMatch(/<ul class="examples" id="practice-list"><\/ul>/);
+    expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list"><\/ul>/);
     expect(landingHtml).toMatch(/<noscript>[\s\S]*href="\.\/practice\/"[\s\S]*<\/noscript>/);
     expect(landingHtml).not.toMatch(/href="\.\/practice\/#\//);
   });
@@ -219,9 +207,10 @@ describe('practice section', () => {
       { id: 'a', title: 'A <b>&', summary: 'Say "hi"', difficulty: 'hard' },
       { id: 'b', title: 'B', summary: 'S', difficulty: 'easy' },
     ]);
-    expect(html).toContain('<span class="example__name">A &lt;b&gt;&amp; <span class="tag tag--error">hard</span></span>');
-    expect(html).toContain('<span class="example__desc">Say &quot;hi&quot;</span>');
-    expect(html).toContain('<span class="tag">easy</span>');
+    expect(html).toContain('<span class="tile__name">A &lt;b&gt;&amp;</span>');
+    expect(html).toContain('<span class="ps-badge ps-badge--pink">hard</span>');
+    expect(html).toContain('<span class="tile__desc">Say &quot;hi&quot;</span>');
+    expect(html).toContain('<span class="ps-badge ps-badge--pass">easy</span>');
   });
 
   it('leaves out folders whose problem.md cannot be read', () => {

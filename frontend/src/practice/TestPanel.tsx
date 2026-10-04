@@ -1,6 +1,6 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
 import { useEffect, useRef, type ReactNode } from 'react';
-import { celebrate } from './celebrate';
+import { celebrate } from '../design/celebrate';
 import { primaryButton, subBar } from '../components/Playground/ui';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { RunResult } from './workspace';
@@ -28,7 +28,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
   useEffect(() => {
     if (!solved || celebrated.current || !solvedRef.current) return;
     celebrated.current = true;
-    celebrate(solvedRef.current);
+    void celebrate(solvedRef.current);
   }, [solved]);
   return (
     <div className="h-full flex flex-col bg-surface">
@@ -77,7 +77,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
         {run && run.results.length > 0 && (
           <p className="px-3 pt-2 text-xs text-muted">
             Verdicts come from a deterministic model of your design, not a load test.{' '}
-            <a href="../model/#practice" target="_blank" rel="noopener" className="text-pop-blue hover:underline">
+            <a href="../docs/model/#practice" target="_blank" rel="noopener" className="text-pop-blue hover:underline">
               How is this calculated?
             </a>
           </p>

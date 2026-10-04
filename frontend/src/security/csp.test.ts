@@ -46,7 +46,8 @@ describe('Content-Security-Policy', () => {
 
   it('loads styles and fonts from the site only', () => {
     // Fonts are self-hosted (src/design/tokens.css); no page talks to a font CDN.
-    expect(csp(landingHtml).get('style-src')).toEqual(["'self'"]);
+    // The landing page's live demo is the editor (CodeMirror's runtime <style> elements, React Flow's style attributes).
+    expect(csp(landingHtml).get('style-src')).toEqual(["'self'", "'unsafe-inline'"]);
     expect(csp(landingHtml).get('font-src')).toEqual(["'self'"]);
     for (const html of [appHtml, practiceHtml]) {
       expect(csp(html).get('style-src')).toEqual(["'self'", "'unsafe-inline'"]); // CodeMirror's runtime <style> elements
