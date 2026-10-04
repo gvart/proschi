@@ -3,7 +3,12 @@ import type { FlowStep, Protocol } from '../services/api';
 import { componentCatalog } from '../catalog/componentCatalog';
 import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
+import { DATA_STORE_KINDS, KINDS, isDataStore, isKind, kindOf } from './kinds';
+import { parseQuantity } from './quantity';
 import type {
+  Assertion,
+  CapacityOverride,
+  Decision,
   Diagnostic,
   Diagram,
   DiagramEdge,
@@ -12,10 +17,17 @@ import type {
   DiagramScenario,
   DiagramStep,
   DiagramUseCase,
+  Entity,
+  FlowTest,
   ParseOptions,
   ParseResult,
+  Percentile,
+  Quantity,
+  Requirement,
   ResolvedImport,
+  Selector,
   SourceLoc,
+  TrafficEntry,
 } from './types';
 
 type Arrow = '->' | '->>' | '-->' | '-x';
@@ -55,13 +67,41 @@ type Frame =
   | { kind: 'group'; id: string; loc: SourceLoc }
   | { kind: 'usecase'; useCase: DiagramUseCase; body: Container; parCount: number; loc: SourceLoc }
   | { kind: 'alt'; name: string; body: Container; owner: Container; set: Item & { kind: 'alt' }; loc: SourceLoc }
-  | { kind: 'par'; group: number; loc: SourceLoc };
+  | { kind: 'par'; group: number; loc: SourceLoc }
+  | SectionFrame;
+
+/** The top-level blocks of docs/design/hld-and-practice.md §1, whose lines are read by their own rules. */
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+
+interface SectionFrame {
+  kind: 'section';
+  section: Section;
+  /** Misplaced or with a broken header: its lines are skipped so they are not read as nodes. */
+  discard?: boolean;
+  entity?: Entity;
+  decision?: Decision;
+  test?: FlowTest;
+  loc: SourceLoc;
+}
 
 const HTTP_METHODS = ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'HEAD', 'OPTIONS'];
 const DEFAULT_TECH: TechStack = 'Rectangle';
 const DEFAULT_GROUP_TECH: TechStack = 'Logical Group';
 /** Nested or repeated alt sets multiply; past this many scenarios the rest are dropped. */
 export const MAX_SCENARIOS = 32;
+/** `x3` on a node declaration: its replica count. */
+const REPLICAS = /^x(\d+)$/;
+const PERCENTILES: Record<string, Percentile> = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
+const FIELD_FLAGS = ['key', 'index', 'unique', 'optional'];
+const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
+  rps: 'a rate, e.g. 100k rps, 6k rpm or 1m rpd',
+  ms: 'a duration, e.g. 50ms or 1.5s',
+  '%': 'a percentage, e.g. 99.9%',
+  'usd/month': 'a monthly cost, e.g. 400 usd/month',
+};
+const ASSERTION_HELP =
+  'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, no path from <node> to <node>, <node> has replicas >= 2, …';
+const ASSERTION_VERBS = 'calls, every scenario calls, never calls, writes, responds, has scenario or handles failure of';
 
 const techByName = new Map<string, { type: ComponentType; techStack: TechStack }>(
   componentCatalog.map((c) => [c.techStack.toLowerCase(), { type: c.type, techStack: c.techStack }])
@@ -102,6 +142,16 @@ class Parser {
   /** `a|b` for every connection, both directions; filled before use cases are built. */
   private readonly connected = new Set<string>();
   private title?: string;
+  private summary?: string;
+  private readonly traffic: TrafficEntry[] = [];
+  private readonly requirements: Requirement[] = [];
+  private readonly capacity: CapacityOverride[] = [];
+  private readonly entities: Entity[] = [];
+  private readonly decisions: Decision[] = [];
+  private readonly tests: FlowTest[] = [];
+  /** Checks of use case, scenario and node names, run once every file is read and use cases are built. */
+  private readonly deferred: (() => void)[] = [];
+  private built: DiagramUseCase[] = [];
   private readonly options: ParseOptions;
 
   constructor(source: string, options: ParseOptions) {
@@ -122,12 +172,22 @@ class Parser {
     const useCases = this.useCases.map(({ useCase, body }) => this.buildUseCase(useCase, body));
     const endpoints = useCases.flatMap((u) => (u.endpoint ? [u.endpoint] : []));
     for (const u of useCases) if (u.endpoint) u.endpointGroup = endpointGroupKey(u.endpoint, endpoints);
+    this.built = useCases;
+    for (const check of this.deferred) check();
 
     const diagram: Diagram = {
       title: this.title,
       nodes: [...this.nodes.values()],
       edges: this.edges,
       useCases,
+      // The HLD sections are left out when a document has none, so older documents parse exactly as before.
+      ...(this.summary !== undefined ? { summary: this.summary } : {}),
+      ...(this.traffic.length ? { traffic: this.traffic } : {}),
+      ...(this.requirements.length ? { requirements: this.requirements } : {}),
+      ...(this.capacity.length ? { capacity: this.capacity } : {}),
+      ...(this.entities.length ? { entities: this.entities } : {}),
+      ...(this.decisions.length ? { decisions: this.decisions } : {}),
+      ...(this.tests.length ? { tests: this.tests } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -149,7 +209,9 @@ class Parser {
             ? `usecase '${frame.useCase.name}'`
             : frame.kind === 'alt'
               ? `alt '${frame.name}'`
-              : 'par block';
+              : frame.kind === 'par'
+                ? 'par block'
+                : sectionName(frame);
       this.error(`Missing } to close ${what}`, frame.loc);
     }
   }
@@ -162,8 +224,21 @@ class Parser {
     // A line the lexer could not read is skipped rather than half-interpreted.
     if (tokens.length === 0 || diagnostics.some((d) => d.severity === 'error')) return index;
 
-    const [first, second] = tokens;
+    const [first, second, third] = tokens;
     const loc = (t: Token): SourceLoc => this.locOf(t, line);
+
+    // Inside traffic, requirements, … every line follows the block's own rules.
+    const top = this.top();
+    if (top?.kind === 'section') {
+      if (first.kind === 'rbrace') {
+        this.stack.pop();
+        if (!top.discard) this.closeSection(top);
+        if (second) this.error('Unexpected input after }', loc(second));
+      } else if (!top.discard) {
+        this.parseSectionLine(top, tokens, line);
+      }
+      return index;
+    }
 
     if (first.kind === 'rbrace') {
       if (this.stack.length === 0) this.error('Unmatched }', loc(first));
@@ -202,6 +277,26 @@ class Parser {
       case 'import':
         this.parseImport(tokens, line);
         break;
+      // These words are keywords only in the shape of their statement, so older documents may still use them as ids.
+      case 'traffic':
+      case 'requirements':
+      case 'capacity':
+        if (second?.kind === 'lbrace') this.openSection(first.value, tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'entity':
+        if (second?.kind === 'ident') this.parseEntity(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'decision':
+        if (second?.kind === 'string' && (third?.kind === 'lbrace' || (third?.kind === 'ident' && third.value !== 'pos' && !REPLICAS.test(third.value))))
+          this.parseDecision(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'test':
+        if (second?.kind === 'string' && tokens[tokens.length - 1].kind === 'lbrace') this.parseTest(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
       default:
         this.parseNode(tokens, line);
     }
@@ -214,9 +309,13 @@ class Parser {
       this.error('Expected a title, e.g. title "My System"', this.locOf(tokens[0], line));
       return;
     }
+    const summary = tokens[2]?.kind === 'string' ? tokens[2] : undefined;
     // The root document names the diagram; titles of imported files are ignored.
-    if (this.file === undefined) this.title = value.value;
-    this.expectEnd(tokens, 2, line);
+    if (this.file === undefined) {
+      this.title = value.value;
+      if (summary) this.summary = summary.value;
+    }
+    this.expectEnd(tokens, summary ? 3 : 2, line);
   }
 
   private parseImport(tokens: Token[], line: number) {
@@ -451,6 +550,13 @@ class Parser {
         }
         node.position = { x: Number(x.value), y: Number(y.value) };
         i += 3;
+      } else if (t.kind === 'ident' && REPLICAS.test(t.value)) {
+        const replicas = Number(REPLICAS.exec(t.value)![1]);
+        if (replicas < 1) {
+          this.error('A node needs at least one replica: x1, x2, …', this.locOf(t, line));
+          return;
+        }
+        node.replicas = replicas;
       } else if (t.kind === 'label' || t.kind === 'arrow') {
         this.error(`Expected '${idToken.value} -> target' for a connection`, this.locOf(t, line));
         return;
@@ -512,6 +618,628 @@ class Parser {
       this.edges.push({ id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || undefined, loc });
     }
     return lastLine;
+  }
+
+  // ---- HLD sections: traffic, requirements, capacity, entity, decision, test (docs/design/hld-and-practice.md §1) ----
+
+  /**
+   * Starts a section block. Sections are top level only; a misplaced one, or
+   * one whose header is broken, still opens a block so that its lines and its
+   * `}` are not mistaken for nodes and the end of an enclosing block.
+   */
+  private openSection(section: Section, tokens: Token[], line: number, fill: Omit<SectionFrame, 'kind' | 'section' | 'loc'> = {}): boolean {
+    const keyword = tokens[0];
+    const loc = this.locOf(keyword, line);
+    if (this.stack.length > 0) {
+      this.error(`${section} is only allowed at the top level`, loc);
+      this.skipSection(section, tokens, line);
+      return false;
+    }
+    if (section === 'traffic' || section === 'requirements' || section === 'capacity') this.expectEnd(tokens, 2, line);
+    this.stack.push({ kind: 'section', section, ...fill, loc });
+    return true;
+  }
+
+  /** After an error in a section header: skips the block, if the line opens one. */
+  private skipSection(section: Section, tokens: Token[], line: number) {
+    if (tokens[tokens.length - 1].kind === 'lbrace') this.stack.push({ kind: 'section', section, discard: true, loc: this.locOf(tokens[0], line) });
+  }
+
+  private closeSection(frame: SectionFrame) {
+    if (frame.test && frame.test.assertions.length === 0) this.warning(`Test '${frame.test.name}' has no assertions`, frame.test.loc);
+  }
+
+  private parseSectionLine(frame: SectionFrame, tokens: Token[], line: number) {
+    switch (frame.section) {
+      case 'traffic':
+        return this.parseTrafficLine(tokens, line);
+      case 'requirements':
+        return this.parseRequirement(tokens, line);
+      case 'capacity':
+        return this.parseCapacityLine(tokens, line);
+      case 'entity':
+        return this.parseField(frame.entity!, tokens, line);
+      case 'decision':
+        return this.parseDecisionLine(frame.decision!, tokens, line);
+      case 'test': {
+        const assertion = this.parseAssertion(tokens, line);
+        if (assertion) frame.test!.assertions.push(assertion);
+        return;
+      }
+    }
+  }
+
+  /** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%` */
+  private parseTrafficLine(tokens: Token[], line: number) {
+    const [name, rate] = tokens;
+    if (name.kind !== 'string') {
+      this.error('Expected a use case name in quotes and a rate, e.g. "Redirect" 100k rps', this.locOf(name, line));
+      return;
+    }
+    const rps = this.quantityOf(rate, 'rps', name, line);
+    if (rps === undefined) return;
+    const entry: TrafficEntry = { useCase: name.value, rps, loc: this.lineLoc(tokens, line) };
+
+    const shares: { scenario: string; share: number; loc: SourceLoc }[] = [];
+    let i = 2;
+    if (tokens[i]) {
+      const mix = tokens[i++];
+      if (!isWord(mix, 'mix')) {
+        this.error(`Unexpected ${describe(mix)}; expected mix "Scenario" 90%, "Other" 10%`, this.locOf(mix, line));
+        return;
+      }
+      for (;;) {
+        const scenario = tokens[i];
+        if (scenario?.kind !== 'string') {
+          this.error('Expected a scenario name in quotes and its share, e.g. "Cache hit" 90%', this.locOf(scenario ?? tokens[i - 1], line));
+          return;
+        }
+        const share = this.quantityOf(tokens[i + 1], '%', scenario, line);
+        if (share === undefined) return;
+        const loc = this.locOf(scenario, line);
+        if (shares.some((s) => s.scenario === scenario.value)) {
+          this.error(`Scenario '${scenario.value}' is in the mix twice`, loc);
+          return;
+        }
+        shares.push({ scenario: scenario.value, share, loc });
+        i += 2;
+        if (!tokens[i]) break;
+        if (tokens[i].kind !== 'comma') {
+          this.error(`Expected , between mix shares, not ${describe(tokens[i])}`, this.locOf(tokens[i], line));
+          return;
+        }
+        i++;
+      }
+      const total = shares.reduce((sum, s) => sum + s.share, 0);
+      if (total <= 0) {
+        this.error('Mix shares must add up to more than 0%', this.locOf(mix, line));
+        return;
+      }
+      if (Math.abs(total - 100) > 1e-9) {
+        this.warning(`Mix shares add up to ${Number(total.toFixed(3))}%, not 100%; they are scaled to fit`, this.locOf(mix, line));
+      }
+      entry.mix = shares.map((s) => ({ scenario: s.scenario, share: s.share / total }));
+    }
+
+    const nameLoc = this.locOf(name, line);
+    const first = this.traffic.find((t) => t.useCase === entry.useCase);
+    if (first) {
+      this.error(`Duplicate traffic for '${entry.useCase}' (first ${this.where(first.loc, nameLoc)})`, nameLoc);
+      return;
+    }
+    this.traffic.push(entry);
+    this.deferred.push(() => {
+      const useCase = this.checkUseCase(entry.useCase, nameLoc);
+      if (useCase) for (const s of shares) this.checkScenario(useCase, s.scenario, s.loc);
+    });
+  }
+
+  /** One line of `requirements { … }`. */
+  private parseRequirement(tokens: Token[], line: number) {
+    const [first] = tokens;
+    const loc = this.lineLoc(tokens, line);
+    const help = 'Expected a requirement: p99 "Use case" < 50ms, availability >= 99.9%, durable "Use case", survive any node failure, cost <= 3000 usd/month';
+    if (first.kind !== 'ident') {
+      this.error(help, this.locOf(first, line));
+      return;
+    }
+    const word = first.value;
+
+    // An optional use case name after the keyword; without one the requirement holds for every use case.
+    let i = 1;
+    let useCase: { name: string; loc: SourceLoc } | undefined;
+    const readUseCase = () => {
+      if (tokens[i]?.kind !== 'string') return;
+      useCase = { name: tokens[i].value, loc: this.locOf(tokens[i], line) };
+      i++;
+    };
+    const commit = (requirement: Requirement) => {
+      this.requirements.push(requirement);
+      const named = useCase;
+      if (named) this.deferred.push(() => this.checkUseCase(named.name, named.loc));
+    };
+    const withUseCase = () => (useCase ? { useCase: useCase.name } : {});
+
+    if (/^p\d+$/.test(word)) {
+      const percentile = PERCENTILES[word];
+      if (percentile === undefined) {
+        this.error(`Unknown percentile '${word}'; use p50, p90, p95, p99 or p999`, this.locOf(first, line));
+        return;
+      }
+      readUseCase();
+      if (!this.expectOp(tokens, i, ['<', '<='], `${word} "Use case" < 50ms`, line)) return;
+      const maxMs = this.quantityOf(tokens[i + 1], 'ms', tokens[i], line);
+      if (maxMs === undefined || !this.expectEnd(tokens, i + 2, line)) return;
+      commit({ kind: 'latency', percentile, ...withUseCase(), maxMs, loc });
+      return;
+    }
+
+    switch (word) {
+      case 'availability': {
+        readUseCase();
+        if (!this.expectOp(tokens, i, ['>=', '>'], 'availability "Use case" >= 99.9%', line)) return;
+        const minPercent = this.quantityOf(tokens[i + 1], '%', tokens[i], line);
+        if (minPercent === undefined) return;
+        if (minPercent > 100) {
+          this.error('Availability cannot be more than 100%', this.locOf(tokens[i + 1], line));
+          return;
+        }
+        if (!this.expectEnd(tokens, i + 2, line)) return;
+        commit({ kind: 'availability', ...withUseCase(), minPercent, loc });
+        return;
+      }
+      case 'durable':
+        readUseCase();
+        if (!useCase) {
+          this.error('Expected a use case name in quotes, e.g. durable "Shorten"', this.locOf(tokens[1] ?? first, line));
+          return;
+        }
+        if (!this.expectEnd(tokens, i, line)) return;
+        commit({ kind: 'durable', useCase: useCase.name, loc });
+        return;
+      case 'survive': {
+        if (isWord(tokens[1], 'any') && isWord(tokens[2], 'node') && isWord(tokens[3], 'failure')) {
+          if (this.expectEnd(tokens, 4, line)) commit({ kind: 'survive', target: 'any', loc });
+          return;
+        }
+        if (!isWord(tokens[1], 'failure') || !isWord(tokens[2], 'of')) {
+          this.error('Expected survive any node failure, or survive failure of <node | [Tech] | any kind>', this.locOf(tokens[1] ?? first, line));
+          return;
+        }
+        const target = this.parseSelector(tokens, 3, line);
+        if (!target || !this.expectEnd(tokens, target.next, line)) return;
+        commit({ kind: 'survive', target: target.selector, loc });
+        this.checkSelectorLater(target);
+        return;
+      }
+      case 'cost': {
+        if (!this.expectOp(tokens, 1, ['<=', '<'], 'cost <= 3000 usd/month', line)) return;
+        const maxUsdPerMonth = this.quantityOf(tokens[2], 'usd/month', tokens[1], line);
+        if (maxUsdPerMonth === undefined || !this.expectEnd(tokens, 3, line)) return;
+        commit({ kind: 'cost', maxUsdPerMonth, loc });
+        return;
+      }
+      default:
+        this.error(`Unknown requirement '${word}'. ${help}`, this.locOf(first, line));
+    }
+  }
+
+  /** `db 20k rps latency 4ms availability 99.95% cost 400 usd/month durable`, parts in any order. */
+  private parseCapacityLine(tokens: Token[], line: number) {
+    const [id] = tokens;
+    if (id.kind !== 'ident') {
+      this.error('Expected a node id and its overrides, e.g. db 20k rps latency 4ms', this.locOf(id, line));
+      return;
+    }
+    const override: CapacityOverride = { node: id.value, loc: this.lineLoc(tokens, line) };
+    const seen = new Set<string>();
+    for (let i = 1; i < tokens.length; ) {
+      const t = tokens[i];
+      let part: string;
+      if (t.kind === 'quantity' || t.kind === 'number') {
+        part = 'rate';
+        const rps = this.quantityOf(t, 'rps', t, line);
+        if (rps === undefined) return;
+        override.rps = rps;
+        i++;
+      } else if (isWord(t, 'latency') || isWord(t, 'availability') || isWord(t, 'cost')) {
+        part = t.value;
+        const unit = part === 'latency' ? 'ms' : part === 'availability' ? '%' : 'usd/month';
+        const value = this.quantityOf(tokens[i + 1], unit, t, line);
+        if (value === undefined) return;
+        if (part === 'latency') override.latencyMs = value;
+        else if (part === 'availability') override.availability = value;
+        else override.costUsd = value;
+        i += 2;
+      } else if (isWord(t, 'durable') || isWord(t, 'volatile')) {
+        part = 'durable or volatile';
+        override.durable = t.value === 'durable';
+        i++;
+      } else {
+        this.error(`Unexpected ${describe(t)}; expected a rate, latency, availability, cost, durable or volatile`, this.locOf(t, line));
+        return;
+      }
+      if (seen.has(part)) {
+        this.error(`${part[0].toUpperCase()}${part.slice(1)} is given twice for '${id.value}'`, this.locOf(t, line));
+        return;
+      }
+      seen.add(part);
+    }
+
+    const idLoc = this.locOf(id, line);
+    if (seen.size === 0) {
+      this.warning(`Capacity line for '${id.value}' overrides nothing; add a rate, latency, availability, cost, durable or volatile`, idLoc);
+      return;
+    }
+    const first = this.capacity.find((c) => c.node === id.value);
+    if (first) {
+      this.error(`Duplicate capacity for '${id.value}' (first ${this.where(first.loc, idLoc)})`, idLoc);
+      return;
+    }
+    this.capacity.push(override);
+    this.deferred.push(() => {
+      if (!this.nodes.has(id.value)) this.warning(`Unknown node '${id.value}' in capacity`, idLoc);
+    });
+  }
+
+  /** `entity Url [in db] ["description"] {` */
+  private parseEntity(tokens: Token[], line: number) {
+    const name = tokens[1];
+    let i = 2;
+    let store: { id: string; loc: SourceLoc } | undefined;
+    if (isWord(tokens[i], 'in')) {
+      const id = tokens[i + 1];
+      if (id?.kind !== 'ident') {
+        this.error('Expected the id of the node that stores the entity after in, e.g. entity Url in db {', this.locOf(id ?? tokens[i], line));
+        this.skipSection('entity', tokens, line);
+        return;
+      }
+      store = { id: id.value, loc: this.locOf(id, line) };
+      i += 2;
+    }
+    const description = tokens[i]?.kind === 'string' ? tokens[i++].value : undefined;
+    if (tokens[i]?.kind !== 'lbrace') {
+      this.error('Expected { after the entity header, e.g. entity Url in db "Short codes" {', this.locOf(tokens[i] ?? tokens[i - 1], line));
+      this.skipSection('entity', tokens, line);
+      return;
+    }
+    this.expectEnd(tokens, i + 1, line);
+
+    const loc = this.locOf(name, line);
+    const entity: Entity = { name: name.value, ...(store ? { store: store.id } : {}), ...(description !== undefined ? { description } : {}), fields: [], loc };
+    const first = this.entities.find((e) => e.name === entity.name);
+    if (first) {
+      this.error(`Duplicate entity '${entity.name}' (first ${this.where(first.loc, loc)})`, loc);
+      this.skipSection('entity', tokens, line);
+      return;
+    }
+    if (!this.openSection('entity', tokens, line, { entity })) return;
+    this.entities.push(entity);
+    if (store) {
+      const { id, loc: storeLoc } = store;
+      this.deferred.push(() => {
+        const node = this.nodes.get(id);
+        if (!node) this.warning(`Unknown node '${id}'`, storeLoc);
+        else if (!isDataStore(kindOf(node)))
+          this.warning(`'${id}' is not a data store (${DATA_STORE_KINDS.join(', ')}); entity '${entity.name}' is placed in a ${kindOf(node)}`, storeLoc);
+      });
+    }
+  }
+
+  /** `code string key`: a field name, a type and flags. */
+  private parseField(entity: Entity, tokens: Token[], line: number) {
+    const [name, type] = tokens;
+    if (name.kind !== 'ident') {
+      this.error('Expected a field: name type [key] [index] [unique] [optional], e.g. code string key', this.locOf(name, line));
+      return;
+    }
+    if (type?.kind !== 'ident') {
+      this.error(`Expected a type after '${name.value}', e.g. ${name.value} string`, this.locOf(type ?? name, line));
+      return;
+    }
+    const flags: string[] = [];
+    for (const t of tokens.slice(2)) {
+      if (t.kind !== 'ident' || !FIELD_FLAGS.includes(t.value)) {
+        this.error(`Unknown field flag ${describe(t)}; use key, index, unique or optional`, this.locOf(t, line));
+        return;
+      }
+      if (flags.includes(t.value)) {
+        this.error(`Flag '${t.value}' is given twice`, this.locOf(t, line));
+        return;
+      }
+      flags.push(t.value);
+    }
+    if (entity.fields.some((f) => f.name === name.value)) {
+      this.error(`Duplicate field '${name.value}' in entity '${entity.name}'`, this.locOf(name, line));
+      return;
+    }
+    entity.fields.push({ name: name.value, type: type.value, flags });
+  }
+
+  /** `decision "Title" because "Reason"`, or `decision "Title" {` with because / rejected lines. */
+  private parseDecision(tokens: Token[], line: number) {
+    const title = tokens[1];
+    const decision: Decision = { title: title.value, rejected: [], loc: this.locOf(title, line) };
+    const third = tokens[2];
+    if (third.kind === 'lbrace') {
+      this.expectEnd(tokens, 3, line);
+      if (this.openSection('decision', tokens, line, { decision })) this.decisions.push(decision);
+      return;
+    }
+    if (!isWord(third, 'because')) {
+      this.error(`Expected because "reason" or { after the decision title, not ${describe(third)}`, this.locOf(third, line));
+      this.skipSection('decision', tokens, line);
+      return;
+    }
+    if (this.stack.length > 0) {
+      this.error('decision is only allowed at the top level', this.locOf(tokens[0], line));
+      return;
+    }
+    const reason = tokens[3];
+    if (reason?.kind !== 'string') {
+      this.error('Expected the reason in quotes after because', this.locOf(reason ?? third, line));
+      return;
+    }
+    if (!this.expectEnd(tokens, 4, line)) return;
+    decision.because = reason.value;
+    this.decisions.push(decision);
+  }
+
+  private parseDecisionLine(decision: Decision, tokens: Token[], line: number) {
+    const [word] = tokens;
+    if (isWord(word, 'because')) {
+      if (tokens[1]?.kind !== 'string') {
+        this.error('Expected the reason in quotes after because', this.locOf(tokens[1] ?? word, line));
+        return;
+      }
+      if (decision.because !== undefined) {
+        this.error('A decision has one because; list the other options with rejected "option" "reason"', this.locOf(word, line));
+        return;
+      }
+      if (this.expectEnd(tokens, 2, line)) decision.because = tokens[1].value;
+      return;
+    }
+    if (isWord(word, 'rejected')) {
+      const [, option, reason] = tokens;
+      if (option?.kind !== 'string' || reason?.kind !== 'string') {
+        const bad = option?.kind !== 'string' ? option : reason;
+        this.error('Expected rejected "option" "reason"', this.locOf(bad ?? tokens[tokens.length - 1], line));
+        return;
+      }
+      if (this.expectEnd(tokens, 3, line)) decision.rejected.push({ option: option.value, reason: reason.value });
+      return;
+    }
+    this.error('Expected because "reason" or rejected "option" "reason"', this.locOf(word, line));
+  }
+
+  /** `test "Name" {` */
+  private parseTest(tokens: Token[], line: number) {
+    const name = tokens[1];
+    const loc = this.locOf(name, line);
+    if (tokens[2].kind !== 'lbrace') {
+      this.error(`Expected { after the test name, not ${describe(tokens[2])}`, this.locOf(tokens[2], line));
+      this.skipSection('test', tokens, line);
+      return;
+    }
+    this.expectEnd(tokens, 3, line);
+    const first = this.tests.find((t) => t.name === name.value);
+    if (first) {
+      this.error(`Duplicate test '${name.value}' (first ${this.where(first.loc, loc)})`, loc);
+      this.skipSection('test', tokens, line);
+      return;
+    }
+    const test: FlowTest = { name: name.value, assertions: [], loc };
+    if (this.openSection('test', tokens, line, { test })) this.tests.push(test);
+  }
+
+  /** One assertion line of a test (docs/design/hld-and-practice.md §1.9). */
+  private parseAssertion(tokens: Token[], line: number): Assertion | undefined {
+    const loc = this.lineLoc(tokens, line);
+    const [first] = tokens;
+    const selectors: ParsedSelector[] = [];
+    const selector = (i: number) => {
+      const s = this.parseSelector(tokens, i, line);
+      if (s) selectors.push(s);
+      return s;
+    };
+    const done = (assertion: Assertion, end: number): Assertion | undefined => {
+      if (!this.expectEnd(tokens, end, line)) return undefined;
+      selectors.forEach((s) => this.checkSelectorLater(s));
+      return assertion;
+    };
+    const expectWords = (i: number, words: string[], example: string): boolean => {
+      for (const [k, w] of words.entries()) {
+        if (!isWord(tokens[i + k], w)) {
+          this.error(`Expected '${w}' here, e.g. ${example}`, this.locOf(tokens[i + k] ?? tokens[tokens.length - 1], line));
+          return false;
+        }
+      }
+      return true;
+    };
+
+    // no path from X to Y
+    if (isWord(first, 'no') && isWord(tokens[1], 'path')) {
+      const example = 'no path from client to any database';
+      if (!expectWords(2, ['from'], example)) return;
+      const from = selector(3);
+      if (!from || !expectWords(from.next, ['to'], example)) return;
+      const to = selector(from.next + 1);
+      if (!to) return;
+      return done({ kind: 'noPath', from: from.selector, to: to.selector, loc }, to.next);
+    }
+
+    // X has replicas >= n
+    if (first.kind !== 'string') {
+      if (first.kind !== 'ident' && first.kind !== 'tech') {
+        this.error(ASSERTION_HELP, this.locOf(first, line));
+        return;
+      }
+      const target = selector(0);
+      if (!target) return;
+      if (!isWord(tokens[target.next], 'has')) {
+        this.error(ASSERTION_HELP, this.locOf(tokens[target.next] ?? first, line));
+        return;
+      }
+      const i = target.next + 1;
+      const example = 'api has replicas >= 2';
+      if (!expectWords(i, ['replicas'], example) || !this.expectOp(tokens, i + 1, ['>='], example, line)) return;
+      const n = tokens[i + 2];
+      if (n?.kind !== 'number' || Number(n.value) < 1) {
+        this.error('Expected a whole number of replicas, at least 1', this.locOf(n ?? tokens[i + 1], line));
+        return;
+      }
+      return done({ kind: 'replicas', target: target.selector, min: Number(n.value), loc }, i + 3);
+    }
+
+    // "Use case" [scenario "S"] …
+    const useCase = first.value;
+    const useCaseLoc = this.locOf(first, line);
+    let i = 1;
+    let scenario: { name: string; loc: SourceLoc } | undefined;
+    if (isWord(tokens[i], 'scenario')) {
+      const s = tokens[i + 1];
+      if (s?.kind !== 'string') {
+        this.error('Expected a scenario name in quotes after scenario', this.locOf(s ?? tokens[i], line));
+        return;
+      }
+      scenario = { name: s.value, loc: this.locOf(s, line) };
+      i += 2;
+    }
+    const withScenario = scenario ? { scenario: scenario.name } : {};
+    const verb = tokens[i];
+    const wholeUseCase = (what: string): boolean => {
+      if (!scenario) return true;
+      this.error(`${what} is about the whole use case; leave out scenario "…"`, scenario.loc);
+      return false;
+    };
+
+    let assertion: Assertion | undefined;
+    if (isWord(verb, 'calls')) {
+      const target = selector(i + 1);
+      if (!target) return;
+      if (isWord(tokens[target.next], 'before')) {
+        const then = selector(target.next + 1);
+        if (!then) return;
+        assertion = done({ kind: 'before', useCase, ...withScenario, first: target.selector, then: then.selector, loc }, then.next);
+      } else {
+        assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'some', loc }, target.next);
+      }
+    } else if (isWord(verb, 'every')) {
+      if (!expectWords(i + 1, ['scenario', 'calls'], `"${useCase}" every scenario calls any cache`)) return;
+      const target = selector(i + 3);
+      if (!target) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'every', loc }, target.next);
+    } else if (isWord(verb, 'never')) {
+      if (!expectWords(i + 1, ['calls'], `"${useCase}" never calls any database`)) return;
+      const target = selector(i + 2);
+      if (!target) return;
+      assertion = done({ kind: 'calls', useCase, ...withScenario, target: target.selector, quantifier: 'never', loc }, target.next);
+    } else if (isWord(verb, 'writes')) {
+      const target = selector(i + 1);
+      if (!target || !expectWords(target.next, ['before', 'responding'], `"${useCase}" writes db before responding`)) return;
+      assertion = done({ kind: 'writesBeforeResponding', useCase, ...withScenario, target: target.selector, loc }, target.next + 2);
+    } else if (isWord(verb, 'responds')) {
+      const status = tokens[i + 1];
+      if (!status || (status.kind !== 'number' && status.kind !== 'quantity') || !/^[1-5](\d\d|xx)$/.test(status.value)) {
+        this.error('Expected a status code or class after responds, e.g. 201 or 4xx', this.locOf(status ?? verb, line));
+        return;
+      }
+      assertion = done({ kind: 'responds', useCase, ...withScenario, status: status.value, loc }, i + 2);
+    } else if (isWord(verb, 'has')) {
+      if (!wholeUseCase('has scenario') || !expectWords(i + 1, ['scenario'], `"${useCase}" has scenario "Not found"`)) return;
+      const name = tokens[i + 2];
+      if (name?.kind !== 'string') {
+        this.error('Expected a scenario name in quotes after has scenario', this.locOf(name ?? tokens[i + 1], line));
+        return;
+      }
+      assertion = done({ kind: 'hasScenario', useCase, scenario: name.value, loc }, i + 3);
+    } else if (isWord(verb, 'handles')) {
+      if (!wholeUseCase('handles failure') || !expectWords(i + 1, ['failure', 'of'], `"${useCase}" handles failure of cache`)) return;
+      const target = selector(i + 3);
+      if (!target) return;
+      assertion = done({ kind: 'handlesFailure', useCase, target: target.selector, loc }, target.next);
+    } else {
+      this.error(`Expected ${ASSERTION_VERBS} after "${useCase}"`, this.locOf(verb ?? first, line));
+      return;
+    }
+
+    // `has scenario "S"` is the assertion itself: a missing scenario fails the test rather than warning.
+    if (assertion) {
+      this.deferred.push(() => {
+        const found = this.checkUseCase(useCase, useCaseLoc);
+        if (found && scenario) this.checkScenario(found, scenario.name, scenario.loc);
+      });
+    }
+    return assertion;
+  }
+
+  /** A node id, `[Tech]` or `any <kind>` starting at `tokens[i]`. */
+  private parseSelector(tokens: Token[], i: number, line: number): ParsedSelector | undefined {
+    const t = tokens[i];
+    if (t?.kind === 'tech') {
+      const tech = techByName.get(t.value.toLowerCase())?.techStack ?? t.value;
+      return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line) };
+    }
+    if (isWord(t, 'any')) {
+      const kind = tokens[i + 1];
+      if (kind?.kind !== 'ident' || !isKind(kind.value)) {
+        this.error(`Expected a kind after any: ${KINDS.join(', ')}`, this.locOf(kind ?? t, line));
+        return undefined;
+      }
+      return { selector: { kind: kind.value }, next: i + 2, token: t, loc: this.locOf(t, line) };
+    }
+    if (t?.kind === 'ident') return { selector: { node: t.value }, next: i + 1, token: t, loc: this.locOf(t, line) };
+    this.error(`Expected a node id, [Tech] or any <kind>${t ? `, not ${describe(t)}` : ''}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    return undefined;
+  }
+
+  /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
+  private checkSelectorLater({ selector, token, loc }: ParsedSelector) {
+    if ('tech' in selector && !techByName.has(token.value.toLowerCase())) this.warning(`Unknown tech stack '${token.value}'`, loc);
+    if ('node' in selector) {
+      this.deferred.push(() => {
+        if (!this.nodes.has(selector.node)) this.warning(`Unknown node '${selector.node}'`, loc);
+      });
+    }
+  }
+
+  private checkUseCase(name: string, loc: SourceLoc): DiagramUseCase | undefined {
+    const useCase = this.built.find((u) => u.name === name);
+    if (!useCase) this.warning(`Unknown use case '${name}'`, loc);
+    return useCase;
+  }
+
+  private checkScenario(useCase: DiagramUseCase, name: string, loc: SourceLoc) {
+    if (useCase.scenarios.some((s) => s.name === name)) return;
+    const names = useCase.scenarios.map((s) => `'${s.name}'`).join(', ');
+    this.warning(`Use case '${useCase.name}' has no scenario '${name}'; its scenarios are ${names}`, loc);
+  }
+
+  /** The value of a quantity token in `unit`, or undefined after reporting what is wrong. `after` locates a missing token. */
+  private quantityOf(token: Token | undefined, unit: Quantity['unit'], after: Token, line: number): number | undefined {
+    const expected = UNIT_EXAMPLES[unit];
+    if (token?.kind !== 'quantity' && token?.kind !== 'number') {
+      this.error(`Expected ${expected}${token ? `, not ${describe(token)}` : ''}`, this.locOf(token ?? after, line));
+      return undefined;
+    }
+    const loc = this.locOf(token, line);
+    const q = parseQuantity(token.value);
+    if ('error' in q) {
+      this.error(q.error, loc);
+      return undefined;
+    }
+    if (q.unit !== unit) {
+      this.error(q.unit ? `Expected ${expected}, not '${token.value}'` : `'${token.value}' needs a unit: expected ${expected}`, loc);
+      return undefined;
+    }
+    return q.value;
+  }
+
+  private expectOp(tokens: Token[], i: number, ops: string[], example: string, line: number): boolean {
+    const t = tokens[i];
+    if (t?.kind === 'op' && ops.includes(t.value)) return true;
+    this.error(`Expected ${ops[0]} here, e.g. ${example}`, this.locOf(t ?? tokens[tokens.length - 1], line));
+    return false;
   }
 
   private buildUseCase(useCase: DiagramUseCase, body: Container): DiagramUseCase {
@@ -630,15 +1358,17 @@ class Parser {
   private addNode(node: DiagramNode) {
     const existing = this.nodes.get(node.id);
     if (existing) {
-      const first = existing.loc.file;
-      const where =
-        first === node.loc.file
-          ? `on line ${existing.loc.line}`
-          : `in ${fileName(first ?? this.options.path ?? 'the root document')} on line ${existing.loc.line}`;
-      this.error(`Duplicate id '${node.id}' (first declared ${where})`, node.loc);
+      this.error(`Duplicate id '${node.id}' (first declared ${this.where(existing.loc, node.loc)})`, node.loc);
       return;
     }
     this.nodes.set(node.id, node);
+  }
+
+  /** `on line 3`, or `in infra.proschi on line 3` when `first` is in another file than `later`. */
+  private where(first: SourceLoc, later: SourceLoc): string {
+    return first.file === later.file
+      ? `on line ${first.line}`
+      : `in ${fileName(first.file ?? this.options.path ?? 'the root document')} on line ${first.line}`;
   }
 
   private resolveTech(token: Token, line: number): { type: ComponentType; techStack: TechStack } {
@@ -685,8 +1415,18 @@ class Parser {
     return this.currentUseCase() !== undefined;
   }
 
-  private expectEnd(tokens: Token[], from: number, line: number) {
-    if (tokens.length > from) this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line));
+  /** Reports the first token from `from` on; true when there is none. */
+  private expectEnd(tokens: Token[], from: number, line: number): boolean {
+    if (tokens.length <= from) return true;
+    this.error(`Unexpected ${describe(tokens[from])}`, this.locOf(tokens[from], line));
+    return false;
+  }
+
+  /** From the first token of a line to the end of its last one. */
+  private lineLoc(tokens: Token[], line: number): SourceLoc {
+    const first = tokens[0];
+    const last = tokens[tokens.length - 1];
+    return { line, col: first.col, length: last.col + last.length - first.col, ...this.fileField() };
   }
 
   private locOf(token: Token | undefined, line: number): SourceLoc {
@@ -739,6 +1479,25 @@ function expand(items: Item[]): { names: string[]; conditions: string[]; locs: S
     paths = next;
   }
   return paths;
+}
+
+interface ParsedSelector {
+  selector: Selector;
+  /** Index of the token after the selector. */
+  next: number;
+  token: Token;
+  loc: SourceLoc;
+}
+
+function isWord(token: Token | undefined, word: string): boolean {
+  return token?.kind === 'ident' && token.value === word;
+}
+
+function sectionName(frame: SectionFrame): string {
+  if (frame.entity) return `entity '${frame.entity.name}'`;
+  if (frame.decision) return `decision '${frame.decision.title}'`;
+  if (frame.test) return `test '${frame.test.name}'`;
+  return `${frame.section} block`;
 }
 
 /** Last segment of a path, for messages. */

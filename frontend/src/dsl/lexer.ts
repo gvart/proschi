@@ -8,6 +8,8 @@ export type TokenKind =
   | 'arrow'   // -> ->> --> -x
   | 'label'   // everything after ':' on an edge/step line
   | 'number'  // 120, -40
+  | 'quantity' // 50ms, 99.9%, 100k rps, 2.5: a number with a fraction or a unit (see quantity.ts)
+  | 'op'      // < <= > >=
   | 'comma'
   | 'lbrace'
   | 'rbrace';
@@ -26,6 +28,9 @@ const IDENT_START = /[A-Za-z_]/;
 const IDENT_PART = /[A-Za-z0-9_]/;
 const TEAM_PART = /[A-Za-z0-9_-]/;
 const DIGIT = /[0-9]/;
+const LETTER = /[A-Za-z]/;
+/** Units that may follow a number after a space: `50 ms`, `100k rps`, `99.9 %`. */
+const SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month)(?![A-Za-z0-9_/])/;
 
 /**
  * Tokenizes a single source line. The language is line-oriented, so each line
@@ -97,8 +102,18 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
     }
 
     if (DIGIT.test(ch)) {
-      while (i < text.length && DIGIT.test(text[i])) i++;
-      tokens.push({ kind: 'number', value: text.slice(start, i), col: start + 1, length: i - start });
+      i = readQuantity(text, i);
+      const value = text.slice(start, i).replace(/[ \t]+/g, '');
+      // Plain integers stay numbers, so `pos 10,-20` reads as before.
+      const kind = /^\d+$/.test(value) ? 'number' : 'quantity';
+      tokens.push({ kind, value, col: start + 1, length: i - start });
+      continue;
+    }
+
+    if (ch === '<' || ch === '>') {
+      const value = text[i + 1] === '=' ? ch + '=' : ch;
+      tokens.push({ kind: 'op', value, col: start + 1, length: value.length });
+      i += value.length;
       continue;
     }
 
@@ -128,6 +143,34 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
   }
 
   return { tokens, diagnostics };
+}
+
+/**
+ * Reads a number starting at `start` with an optional fraction and unit:
+ * `120`, `2.5`, `50ms`, `99.9%`, `100krps`, `3000usd/month`, or with the unit
+ * one space away (`100k rps`). Returns the index after it. What the unit means
+ * is checked by the parser (quantity.ts), so `5xyz` is one token it can name.
+ */
+function readQuantity(text: string, start: number): number {
+  let i = start;
+  while (i < text.length && DIGIT.test(text[i])) i++;
+  if (text[i] === '.' && DIGIT.test(text[i + 1] ?? '')) {
+    i++;
+    while (i < text.length && DIGIT.test(text[i])) i++;
+  }
+  const suffixStart = i;
+  if (text[i] === '%') return i + 1;
+  while (i < text.length && LETTER.test(text[i])) i++;
+  if (i > suffixStart && text[i] === '/' && LETTER.test(text[i + 1] ?? '')) {
+    i++;
+    while (i < text.length && LETTER.test(text[i])) i++;
+  }
+  // Only a bare number or a magnitude (`100k`) can take a unit after a space.
+  if (/^[kmb]?$/.test(text.slice(suffixStart, i))) {
+    const unit = SEPARATE_UNIT.exec(text.slice(i));
+    if (unit) i += unit[0].length;
+  }
+  return i;
 }
 
 function readString(text: string, start: number): { value: string; end: number; closed: boolean } {

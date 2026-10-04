@@ -178,6 +178,122 @@ usecase "Pay for an order" {
 }
 `;
 
+export const urlShortenerExample = `title "URL Shortener" "Turns long URLs into short codes and redirects visitors to them"
+
+visitor "Visitor"       [Actor]
+lb      "Load Balancer" [AWS Load Balancer] @platform
+api     "Shortener API" [REST API]          @links    x3 "Creates codes and serves redirects"
+cache   "Code cache"    [Redis]             @links    x2 "Recently used codes"
+db      "URL store"     [PostgreSQL]        @links    x2 "Every code and its target"
+
+visitor -> lb
+lb      -> api
+api     -> cache : code lookups
+api     -> db    : SQL
+
+usecase "Redirect" "A visitor opens a short link" {
+  visitor -> lb  : GET /abc123
+  lb      -> api : GET /abc123
+  alt "Cache hit" when "the code was used recently" {
+    api    -> cache   : GET code:abc123
+    cache --> api     : https://example.com/a/very/long/path
+    api   --> lb      : 301
+    lb    --> visitor : 301
+  } alt "Cache miss" when "the code is not cached" {
+    api    -> cache   : GET code:abc123
+    cache --> api     : nil
+    api    -> db      : SELECT target FROM urls WHERE code = 'abc123'
+    db    --> api     : 1 row
+    api   ->> cache   : SET code:abc123
+    api   --> lb      : 301
+    lb    --> visitor : 301
+  } alt "Unknown code" when "no URL has that code" {
+    api    -> cache   : GET code:abc123
+    cache --> api     : nil
+    api    -> db      : SELECT target FROM urls WHERE code = 'abc123'
+    db    --> api     : 0 rows
+    api   --> lb      : 404
+    lb    --> visitor : 404
+  } alt "Cache down" when "Redis does not answer" {
+    api  -x cache   : GET code:abc123
+    api  -> db      : SELECT target FROM urls WHERE code = 'abc123'
+    db  --> api     : 1 row
+    api --> lb      : 301
+    lb  --> visitor : 301
+  }
+}
+
+usecase "Shorten" "Creates a short code for a long URL" {
+  visitor -> lb  : POST /links json {"target": "https://example.com/a/very/long/path"}
+  lb      -> api : POST /links json {"target": "https://example.com/a/very/long/path"}
+  alt "Created" {
+    api  -> db      : INSERT url
+    db  --> api     : code abc123
+    api --> lb      : 201 {"code": "abc123"}
+    lb  --> visitor : 201 {"code": "abc123"}
+  } alt "Invalid URL" when "the target is not a valid URL" {
+    api --> lb      : 400 {"error": "invalid_url"}
+    lb  --> visitor : 400 {"error": "invalid_url"}
+  }
+}
+
+# How much traffic each use case gets, and how it splits over the scenarios.
+traffic {
+  "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 9%, "Unknown code" 1%
+  "Shorten"  1k rps
+}
+
+requirements {
+  p99 "Redirect" < 50ms
+  p95 < 300ms # every use case
+  availability "Redirect" >= 99.95%
+  availability >= 99.9%
+  durable "Shorten"
+  survive any node failure
+  survive failure of any cache
+  cost <= 5000 usd/month
+}
+
+# Per-replica overrides of the default profiles.
+capacity {
+  cache 150k rps
+  db    8k rps latency 4ms availability 99.95% cost 450 usd/month durable
+}
+
+entity Url in db "One short code and where it points" {
+  code      string key
+  target    string
+  createdAt time   index
+  expiresAt time   optional
+}
+
+decision "Cache redirects in Redis" {
+  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
+  rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
+  rejected "Memcached" "No replication; losing a node empties the cache"
+}
+decision "Base62 codes from a counter" because "Short, unique, and no collisions to retry"
+
+test "Redirects are served from the cache" {
+  "Redirect" calls any cache before any database
+  "Redirect" scenario "Cache hit" never calls any database
+  "Redirect" scenario "Cache miss" calls db
+  "Redirect" every scenario calls api
+  "Redirect" handles failure of cache
+  "Redirect" responds 4xx
+}
+test "Short codes are durable" {
+  "Shorten" writes db before responding
+  "Shorten" scenario "Created" responds 201
+  "Shorten" has scenario "Invalid URL"
+}
+test "Visitors only enter through the load balancer" {
+  no path from visitor to any database
+  [REST API] has replicas >= 2
+  db has replicas >= 2
+}
+`;
+
 export interface Example {
   id: string;
   name: string;
@@ -191,4 +307,5 @@ export const examples: Example[] = [
   { id: 'serverless', name: 'Serverless pipeline', description: 'API Gateway, Lambda, S3 and SQS with async processing.', source: serverlessExample },
   { id: 'login', name: 'Login with sessions', description: 'Log in with success, wrong-password and outage scenarios, plus log out.', source: loginExample },
   { id: 'events', name: 'Event-driven checkout', description: 'Kafka fan-out to several consumers.', source: eventDrivenExample },
+  { id: 'url-shortener', name: 'URL shortener HLD', description: 'A high-level design: traffic, requirements, capacity, data model, decisions and flow tests.', source: urlShortenerExample },
 ];
