@@ -31,7 +31,7 @@ export function practiceListHtml(problems: ProblemListing[]): string {
     .map(
       (p) => `<li>
   <a class="example" href="./practice/#/${encodeURIComponent(p.id)}">
-    <span class="example__name">${escapeHtml(p.title)} <span class="tag${p.difficulty === 'hard' ? ' tag--error' : ''}">${p.difficulty}</span></span>
+    <span class="example__name">${escapeHtml(p.title)} <span class="tag${p.difficulty === 'hard' ? ' tag--error' : ''}">${escapeHtml(p.difficulty)}</span></span>
     <span class="example__desc">${escapeHtml(p.summary)}</span>
     <span class="example__go" aria-hidden="true">Solve →</span>
   </a>

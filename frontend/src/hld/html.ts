@@ -32,6 +32,9 @@ export function escapeHtml(text: string | number): string {
   return String(text).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
 }
 
+/** Content-Security-Policy of exported HTML pages: inline styles and data: images only. */
+export const EXPORT_CSP = "default-src 'none'; style-src 'unsafe-inline'; img-src data:; base-uri 'none'; form-action 'none'";
+
 const e = escapeHtml;
 const STATUS: Record<CheckStatus, string> = { pass: '<span class="pass">✓ pass</span>', fail: '<span class="fail">✗ fail</span>', unchecked: '<span class="muted">not checked</span>' };
 
@@ -217,6 +220,8 @@ export function toHtml(doc: HldDocument, figures: HldFigures = {}): string {
     '<html lang="en">',
     '<head>',
     '<meta charset="utf-8">',
+    // No scripts and nothing remote: content from the document can never run, even if escaping missed something.
+    `<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${e(doc.title)} — High-level design</title>`,
     `<style>${PAGE_STYLE}</style>`,

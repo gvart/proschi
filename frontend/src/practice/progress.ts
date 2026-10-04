@@ -1,5 +1,6 @@
 import { loadJson, saveJson } from '../services/storage';
 import type { Problem } from './types';
+import { isSafeKey } from '../playground/sanitize';
 
 /**
  * Practice progress, kept in this browser only: per problem its status and the
@@ -22,15 +23,36 @@ export const PROGRESS_KEY = 'proschi.practice';
 const STATUSES: Status[] = ['todo', 'attempted', 'solved'];
 
 export function loadProgress(): Progress {
-  const raw = loadJson<unknown>(PROGRESS_KEY, {});
+  return readProgress(loadJson<unknown>(PROGRESS_KEY, {}));
+}
+
+/**
+ * Progress from storage or a backup file: entries with a known status are
+ * kept, anything else (and prototype keys such as `__proto__`) is dropped.
+ */
+export function readProgress(raw: unknown): Progress {
   const progress: Progress = {};
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return progress;
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     const entry = value as Partial<ProblemProgress> | null;
-    if (!entry || !STATUSES.includes(entry.status as Status)) continue;
+    if (!isSafeKey(id) || !entry || typeof entry !== 'object' || !STATUSES.includes(entry.status as Status)) continue;
     progress[id] = { status: entry.status as Status, ...(typeof entry.source === 'string' ? { source: entry.source } : {}) };
   }
   return progress;
+}
+
+/**
+ * Restores progress from a backup into the current progress: per problem the
+ * better status wins (solved > attempted > todo); on a tie the current entry,
+ * with its last source, stays.
+ */
+export function mergeProgress(current: Progress, restored: Progress): Progress {
+  const out: Progress = { ...current };
+  for (const [id, entry] of Object.entries(restored)) {
+    const mine = out[id];
+    if (!mine || STATUSES.indexOf(entry.status) > STATUSES.indexOf(mine.status)) out[id] = entry;
+  }
+  return out;
 }
 
 export function saveProgress(progress: Progress): void {

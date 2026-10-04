@@ -1,6 +1,23 @@
-import { compressToEncodedURIComponent, decompressFromEncodedURIComponent } from 'lz-string';
+import { compressToEncodedURIComponent } from 'lz-string';
+import { TooLargeError, decompressBounded } from './lzBounded';
+import { fileMap } from './sanitize';
 
 const PREFIX = '#code=';
+
+/**
+ * Most text a share link may expand to (document and imported files together).
+ * LZ-string can expand a short hash enormously, so decoding stops here rather
+ * than freezing the tab on a crafted link.
+ */
+export const MAX_SHARE_CHARS = 2_000_000;
+
+/** Above this length, a copied link warns that chat apps may cut it. */
+export const LONG_LINK_CHARS = 8_000;
+
+export const LONG_LINK_MESSAGE =
+  'This link is long; some chat apps cut links over ~2 000–8 000 characters. Download the .proschi file to share it reliably.';
+
+export const TOO_LARGE_MESSAGE = 'This link holds a diagram larger than 2 MB, so it was not opened. Ask for the .proschi file instead.';
 
 /** Which use case, scenario and 1-based step a link should open in playback. */
 export interface PlaybackTarget {
@@ -17,6 +34,11 @@ export interface ShareLink {
   imports?: Record<string, string>;
 }
 
+/** A link that could not be opened, with a message for the person who followed it. */
+export interface ShareLinkError {
+  error: string;
+}
+
 /**
  * Encodes a document (and optionally a playback position) into a URL hash, like
  * mermaid.live. Nothing leaves the browser. The compressed alphabet never
@@ -31,20 +53,30 @@ export function encodeShareHash(source: string, playback?: PlaybackTarget, impor
   return `${code}&uc=${encodeURIComponent(playback.useCase)}${scenario}&step=${playback.step}`;
 }
 
-/** Reads a `#code=` hash; returns null if there is none or it is corrupt. */
-export function decodeShareLink(hash: string): ShareLink | null {
+/**
+ * Reads a `#code=` hash: null if there is none or it is corrupt, an error when
+ * it is too large to open. Malformed imports are dropped; the document still opens.
+ */
+export function readShareLink(hash: string): ShareLink | ShareLinkError | null {
   if (!hash.startsWith(PREFIX)) return null;
+  if (hash.length > MAX_SHARE_CHARS) return { error: TOO_LARGE_MESSAGE };
   const [code, ...rest] = hash.slice(PREFIX.length).split('&');
   let source: string | null;
   try {
-    source = decompressFromEncodedURIComponent(code);
-  } catch {
-    return null;
+    source = decompressBounded(code, MAX_SHARE_CHARS);
+  } catch (error) {
+    return error instanceof TooLargeError ? { error: TOO_LARGE_MESSAGE } : null;
   }
   if (!source) return null;
 
   // Read before URLSearchParams, which would turn the '+' of the compressed alphabet into spaces.
-  const imports = decodeImports(rest.find((p) => p.startsWith('imports='))?.slice('imports='.length));
+  const importsParam = rest.find((p) => p.startsWith('imports='))?.slice('imports='.length);
+  let imports: Record<string, string> | undefined;
+  try {
+    imports = decodeImports(importsParam, MAX_SHARE_CHARS - source.length);
+  } catch {
+    return { error: TOO_LARGE_MESSAGE };
+  }
   const params = new URLSearchParams(rest.filter((p) => !p.startsWith('imports=')).join('&'));
   const useCase = params.get('uc');
   const step = Number(params.get('step') ?? '1');
@@ -58,13 +90,18 @@ export function decodeShareLink(hash: string): ShareLink | null {
   };
 }
 
-function decodeImports(value: string | undefined): Record<string, string> | undefined {
+/** Reads a `#code=` hash; returns null if there is none, it is corrupt or too large. */
+export function decodeShareLink(hash: string): ShareLink | null {
+  const link = readShareLink(hash);
+  return link && 'source' in link ? link : null;
+}
+
+/** Imported files from `&imports=`; throws TooLargeError past `budget` characters. */
+function decodeImports(value: string | undefined, budget: number): Record<string, string> | undefined {
   if (!value) return undefined;
+  const json = decompressBounded(value, budget);
   try {
-    const parsed: unknown = JSON.parse(decompressFromEncodedURIComponent(value) ?? '');
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return undefined;
-    const entries = Object.entries(parsed).filter((e): e is [string, string] => typeof e[1] === 'string');
-    return entries.length ? Object.fromEntries(entries) : undefined;
+    return fileMap(JSON.parse(json ?? ''));
   } catch {
     return undefined;
   }
@@ -82,3 +119,6 @@ export function shareUrl(
 ): string {
   return `${location.origin}${location.pathname}${location.search}${encodeShareHash(source, playback, imports)}`;
 }
+
+/** Whether a copied link should come with the "may be cut" warning. */
+export const isLongLink = (url: string): boolean => url.length > LONG_LINK_CHARS;

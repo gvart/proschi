@@ -1,3 +1,5 @@
+import { MAX_PATH_LENGTH, fileMap, isRecord } from './sanitize';
+
 /** A diagram saved in this browser. Its name comes from the `title` line. */
 export interface SavedDiagram {
   id: string;
@@ -23,6 +25,39 @@ export interface DocumentState {
 
 export const BLANK_SOURCE = 'title "Untitled"\n\n';
 
+/**
+ * One saved diagram read from storage or a backup: its id and source must be
+ * strings; a bad date, file name or imports map is dropped, not fatal.
+ */
+export function readDiagram(value: unknown): SavedDiagram | null {
+  if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.source !== 'string') return null;
+  const updatedAt = typeof value.updatedAt === 'string' ? value.updatedAt : new Date(0).toISOString();
+  const fileName = typeof value.fileName === 'string' && value.fileName.trim() && value.fileName.length <= MAX_PATH_LENGTH ? value.fileName : undefined;
+  const imports = fileMap(value.imports);
+  return { id: value.id, source: value.source, updatedAt, ...(fileName ? { fileName } : {}), ...(imports ? { imports } : {}) };
+}
+
+/**
+ * The saved state as read from localStorage, which may be missing, damaged or
+ * hand-edited: well-formed diagrams are kept (the first of each id), the rest
+ * dropped. Null when no diagram is left.
+ */
+export function readState(value: unknown): DocumentState | null {
+  if (!isRecord(value) || !Array.isArray(value.docs)) return null;
+  const seen = new Set<string>();
+  const docs: SavedDiagram[] = [];
+  for (const item of value.docs) {
+    const doc = readDiagram(item);
+    if (doc && !seen.has(doc.id)) {
+      seen.add(doc.id);
+      docs.push(doc);
+    }
+  }
+  if (docs.length === 0) return null;
+  const currentId = typeof value.currentId === 'string' && seen.has(value.currentId) ? value.currentId : docs[0].id;
+  return { docs, currentId };
+}
+
 type Clock = () => string;
 type IdFactory = () => string;
 
@@ -30,9 +65,10 @@ export const defaultClock: Clock = () => new Date().toISOString();
 export const defaultIds: IdFactory = () => `doc-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 7)}`;
 
 interface InitialInput {
-  stored: DocumentState | null;
+  /** What localStorage held; checked here, since it may be damaged. */
+  stored: unknown;
   /** Source from the editor before named diagrams existed. */
-  legacySource: string | null;
+  legacySource: unknown;
   /** Source from a `#code=` share link. */
   sharedSource: string | null;
   /** Imported files carried by the share link. */
@@ -45,11 +81,11 @@ interface InitialInput {
  * identical saved one so reloading a shared URL never piles up copies.
  */
 export function initialState(input: InitialInput, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
-  const valid = input.stored?.docs?.length ? input.stored : null;
+  const valid = readState(input.stored);
   let docs = valid ? [...valid.docs] : [];
   let currentId = valid?.currentId ?? '';
 
-  if (docs.length === 0 && input.legacySource && input.legacySource !== input.sharedSource) {
+  if (docs.length === 0 && typeof input.legacySource === 'string' && input.legacySource && input.legacySource !== input.sharedSource) {
     docs.push({ id: newId(), source: input.legacySource, updatedAt: now() });
   }
 
