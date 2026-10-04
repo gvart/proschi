@@ -1,6 +1,8 @@
 import { buildSequence, sequenceMessages, type SequenceMessage } from '../dsl/sequence';
 import type { Diagram, DiagramNode, DiagramScenario, DiagramStep, DiagramUseCase, Selector } from '../dsl/types';
-import { kindOf } from '../dsl/kinds';
+import { kindMatches, kindOf } from '../dsl/kinds';
+import { stepAccess } from './access';
+import { profileOf } from './profiles';
 
 /**
  * How scenarios run, as the simulation and the tests read them: which steps
@@ -115,12 +117,18 @@ export function requestOrder(useCase: DiagramUseCase, scenario: DiagramScenario)
 }
 
 /**
- * Whether the scenario sends a synchronous, non-failed request to a node
- * accepted by `accept` before its entry request is answered.
+ * Whether the scenario sends a synchronous, non-failed write (§7.2) to a node
+ * accepted by `accept` before its entry request is answered. `isWrite`
+ * classifies steps (pass `accessIn(diagram)` so requests to queues count).
  */
-export function writesBeforeResponse(useCase: DiagramUseCase, scenario: DiagramScenario, accept: (nodeId: string) => boolean): boolean {
+export function writesBeforeResponse(
+  useCase: DiagramUseCase,
+  scenario: DiagramScenario,
+  accept: (nodeId: string) => boolean,
+  isWrite: (step: DiagramStep) => boolean = (step) => stepAccess(step) === 'write',
+): boolean {
   const { requests, beforeResponse } = requestOrder(useCase, scenario);
-  return requests.slice(0, beforeResponse).some((m) => !m.async && !m.failed && accept(m.to));
+  return requests.slice(0, beforeResponse).some((m) => !m.async && !m.failed && accept(m.to) && isWrite(m.step));
 }
 
 /** The scenario calls `nodeId` and gets an answer (or at least does not fail). */
@@ -133,11 +141,24 @@ export function needs(useCase: DiagramUseCase, nodeId: string): boolean {
   return useCase.scenarios.some((s) => s.outcome === 'success' && callsOk(s, nodeId));
 }
 
-/** Success scenarios that call `nodeId` with `-x` and complete without it. */
+/**
+ * Success scenarios that are a fallback for `nodeId` (§7.6): they call it
+ * with `-x` before the entry response and make no successful synchronous call
+ * to it before then. Calls after responding (a background retry) and async
+ * sends do not cancel the fallback.
+ *
+ * When the failed call itself comes after the response (the use case answers
+ * at once and a worker does the rest), the whole scenario is the window: the
+ * worker must complete without a successful synchronous call to the node.
+ */
 export function fallbacksFor(useCase: DiagramUseCase, nodeId: string): DiagramScenario[] {
-  return useCase.scenarios.filter(
-    (s) => s.outcome === 'success' && s.steps.some((step) => step.toServiceId === nodeId && step.failed) && !callsOk(s, nodeId),
-  );
+  return useCase.scenarios.filter((s) => {
+    if (s.outcome !== 'success') return false;
+    const { requests, beforeResponse } = requestOrder(useCase, s);
+    const early = requests.slice(0, beforeResponse).filter((m) => m.to === nodeId);
+    const window = early.some((m) => m.failed) ? early : requests.filter((m) => m.to === nodeId);
+    return window.some((m) => m.failed) && !window.some((m) => !m.failed && !m.async);
+  });
 }
 
 /** `db`, `[PostgreSQL]`, `any database`. */
@@ -151,17 +172,24 @@ export function selectorText(selector: Selector): string {
 
 /** Components (not groups or text) the selector picks. */
 export function selectNodes(diagram: Diagram, selector: Selector): DiagramNode[] {
-  return diagram.nodes.filter((n) => n.kind === 'component' && matches(n, selector));
+  return diagram.nodes.filter((n) => n.kind === 'component' && matches(n, selector, diagram));
 }
 
-export function matches(node: DiagramNode, selector: Selector): boolean {
+/**
+ * Whether the selector picks the node. `any edge` also picks the edge
+ * sub-kinds (§7.5); `any strong store` / `any eventual store` pick data stores
+ * by consistency (§7.4), taking `capacity` overrides from `diagram`.
+ */
+export function matches(node: DiagramNode, selector: Selector, diagram?: Diagram): boolean {
   if (node.kind !== 'component') return false;
   if ('node' in selector) return node.id === selector.node;
   if ('tech' in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
-  if ('anyOf' in selector) return selector.anyOf.some((s) => matches(node, s));
-  // TODO(v2 §7.4): consistency comes from the node's profile; not modelled yet.
-  if ('consistency' in selector) return false;
-  return kindOf(node) === selector.kind;
+  if ('anyOf' in selector) return selector.anyOf.some((s) => matches(node, s, diagram));
+  if ('consistency' in selector) {
+    const override = diagram?.capacity?.find((o) => o.node === node.id);
+    return profileOf(node, override).consistency === selector.consistency;
+  }
+  return kindMatches(kindOf(node), selector.kind);
 }
 
 /** `PostgreSQL` for a declared node, nothing for one only referenced. */

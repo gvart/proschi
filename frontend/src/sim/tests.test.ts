@@ -82,15 +82,15 @@ describe('latency requirements', () => {
   const traffic = (rps: number) => ({ traffic: [{ useCase: 'Read', rps }] });
 
   it('passes under the limit and states the value and limit', () => {
-    // p99 = 3 × (20 + 6.25) = 78.75 ms
+    // p99 = 3 × (20 + 5 / 0.95) = 75.79 ms
     const r = req(READ, { kind: 'latency', percentile: 99, useCase: 'Read', maxMs: 100 }, traffic(1000));
-    expect(r).toMatchObject({ passed: true, message: 'p99 of Read is 78.8 ms (limit 100 ms)' });
+    expect(r).toMatchObject({ passed: true, message: 'p99 of Read is 75.8 ms (limit 100 ms)' });
   });
 
   it('fails over the limit with a hint naming the slowest hop', () => {
     const r = req(READ, { kind: 'latency', percentile: 99, useCase: 'Read', maxMs: 50 }, traffic(1000));
     expect(r.passed).toBe(false);
-    expect(r.message).toBe('p99 of Read is 78.8 ms (limit 50 ms)');
+    expect(r.message).toBe('p99 of Read is 75.8 ms (limit 50 ms)');
     expect(r.hint).toContain('api (REST API) at 20 ms');
   });
 
@@ -214,7 +214,7 @@ ${write}
 
   it('fails for an async write', () => {
     const r = req(doc('  api ->> db : INSERT\n  api --> client : 201'), { kind: 'durable', useCase: 'Save' });
-    expect(r).toMatchObject({ passed: false, message: '"Save" writes only asynchronously (->>) to a durable store before responding' });
+    expect(r).toMatchObject({ passed: false, message: '"Save" writes to a durable store only asynchronously: api ->> db : INSERT at line 10' });
     expect(r.hint).toContain('synchronous request (->)');
   });
 
@@ -222,9 +222,9 @@ ${write}
     const r = req(doc('  api ->> q : ItemSaved\n  api --> client : 202\n  q ->> worker : ItemSaved\n  worker -> db : INSERT'), { kind: 'durable', useCase: 'Save' });
     expect(r.passed).toBe(false);
     // The queue send is async; the database write comes after the response.
-    expect(r.message).toContain('writes only asynchronously');
+    expect(r.message).toContain('writes to a durable store only asynchronously: api ->> q : ItemSaved');
     const after = req(doc('  api --> client : 202\n  worker -> db : INSERT'), { kind: 'durable', useCase: 'Save' });
-    expect(after).toMatchObject({ passed: false, message: '"Save" writes only after responding to a durable store before responding' });
+    expect(after).toMatchObject({ passed: false, message: '"Save" writes to a durable store only after responding: worker -> db : INSERT at line 11' });
     expect(after.hint).toContain('before the step that answers');
   });
 
@@ -250,7 +250,7 @@ ${write}
     api --> client : 400
   }`);
     const r = req(src, { kind: 'durable', useCase: 'Save' });
-    expect(r).toMatchObject({ passed: false, message: '"Queued" writes only asynchronously (->>) to a durable store before responding' });
+    expect(r).toMatchObject({ passed: false, message: '"Queued" writes to a durable store only asynchronously: api ->> q : later at line 14' });
   });
 
   it('fails for an unknown use case or one without success scenarios', () => {
@@ -437,7 +437,7 @@ usecase "Save" {
         message: '"Get" scenario "Hit" never calls any database',
       });
       const r = check(SHOP, { kind: 'calls', useCase: 'Get', target: { kind: 'database' }, quantifier: 'never' });
-      expect(r).toMatchObject({ passed: false, message: '"Miss" calls db (PostgreSQL)' });
+      expect(r).toMatchObject({ passed: false, message: '"Miss" calls db (PostgreSQL): api -> db : SELECT at line 23' });
       expect(r.hint).toContain('Take the call to db out of "Miss"');
     });
 
@@ -510,7 +510,7 @@ usecase "U" {
 
   describe('before', () => {
     it('holds when X comes before Y in every scenario that calls Y', () => {
-      expect(check(SHOP, { kind: 'before', useCase: 'Get', first: { kind: 'cache' }, then: { kind: 'database' } })).toMatchObject({ passed: false, message: 'In "Missing", db is called but any cache never is' });
+      expect(check(SHOP, { kind: 'before', useCase: 'Get', first: { kind: 'cache' }, then: { kind: 'database' } })).toMatchObject({ passed: false, message: 'In "Missing", db is called (api -> db : SELECT at line 32) but any cache never is' });
       const src = SHOP.replace(/ {4}api -> db : SELECT\n {4}db --> api : none\n {4}api --> gw : 404/, '    api -> cache : GET item\n    api -> db : SELECT\n    api --> gw : 404');
       expect(check(src, { kind: 'before', useCase: 'Get', first: { kind: 'cache' }, then: { kind: 'database' } })).toMatchObject({
         passed: true,
@@ -527,7 +527,7 @@ usecase "U" {
   api -> db : SELECT
   api -> cache : SET
 }`;
-      expect(check(src, { kind: 'before', useCase: 'U', first: { node: 'cache' }, then: { node: 'db' } })).toMatchObject({ passed: false, message: 'In "U", db is called before cache' });
+      expect(check(src, { kind: 'before', useCase: 'U', first: { node: 'cache' }, then: { node: 'db' } })).toMatchObject({ passed: false, message: 'In "U", db is called (api -> db : SELECT at line 6) before cache (api -> cache : SET at line 7)' });
     });
 
     it('fails when no scenario calls Y', () => {
@@ -558,14 +558,14 @@ usecase "U" {
     it('holds for a synchronous write before the entry response in every success scenario', () => {
       expect(check(SHOP, { kind: 'writesBeforeResponding', useCase: 'Save', target: { node: 'db' } })).toMatchObject({
         passed: true,
-        message: '"Save" writes db before responding',
+        message: '"Save" writes to db before responding',
       });
     });
 
     it('fails for async writes, writes after responding and missing writes', () => {
       expect(check(SHOP, { kind: 'writesBeforeResponding', useCase: 'Save', target: { node: 'q' } })).toMatchObject({
         passed: false,
-        message: '"Created" writes only asynchronously (->>) q before responding',
+        message: '"Created" writes to q only asynchronously: api ->> q : ItemCreated at line 44',
       });
       const after = `
 client [Actor]
@@ -577,10 +577,15 @@ usecase "U" {
   api -> db : INSERT
 }`;
       // A step after the response, sent by the entry's callee, comes after the response in sequence order.
-      expect(check(after, { kind: 'writesBeforeResponding', useCase: 'U', target: { node: 'db' } }).message).toBe('"U" writes only after responding db before responding');
-      expect(check(SHOP, { kind: 'writesBeforeResponding', useCase: 'Get', target: { node: 'db' } }).message).toBe(
-        '"Hit" never writes db before responding',
+      expect(check(after, { kind: 'writesBeforeResponding', useCase: 'U', target: { node: 'db' } }).message).toBe('"U" writes to db only after responding: api -> db : INSERT at line 8');
+      // A SELECT is a read (§7.2): it does not count as writing the database.
+      const reads = check(SHOP, { kind: 'writesBeforeResponding', useCase: 'Get', target: { node: 'db' } });
+      expect(reads.message).toBe(
+        '"Hit" never writes to db before responding; "Miss" only reads from db before responding: api -> db : SELECT at line 23 is a read; ' +
+          '"Cache down" only reads from db before responding: api -> db : SELECT at line 28 is a read; ' +
+          '"Missing" only reads from db before responding: api -> db : SELECT at line 32 is a read',
       );
+      expect(reads.hint).toBe('Add a synchronous write (->) to db before the entry request is answered');
     });
 
     it('fails for a scenario filter that is an error path', () => {

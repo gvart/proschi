@@ -181,7 +181,7 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
       ]),
     ], 2),
     '',
-    `Total cost: ${formatUsd(analysis.totalCostUsd)}`,
+    `Total cost: ${formatUsd(analysis.totalCostUsd)}${analysis.totalEgressUsd > 0 ? ` (${formatUsd(analysis.totalEgressUsd)} of it egress)` : ''}`,
     '',
   );
 

@@ -106,7 +106,7 @@ decision "Base62 codes from a counter" because "Short, unique, no collisions to 
 usecase "Shorten" "Create a short code for a long URL" {
   visitor -> lb      : POST /links json {"target": "https://example.com/a/long/path"}
   lb      -> api     : POST /links
-  api     -> db      : PutItem Url
+  api     -> db      : INSERT Url
   db     --> api     : ok
   api    --> lb      : 201 {"code": "aZ3x9"}
   lb     --> visitor : 201 {"code": "aZ3x9"}
