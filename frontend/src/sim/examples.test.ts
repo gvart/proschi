@@ -27,7 +27,11 @@ describe('bundled url-shortener example', () => {
     expect(node('cache').capacityRps).toBe(300_000);
     expect(node('cache').loadRps).toBeCloseTo(109_000);
     // Misses and unknown codes read the database, shortening writes it: 9k + 1k + 1k, on 3 × 8k.
-    expect(node('db')).toMatchObject({ replicas: 3, capacityRps: 24_000, costUsd: 1350, durable: true });
+    // `capacity { db 8k rps }` sets reads and writes; PostgreSQL writes go to one primary (§7.2):
+    // reads 10k on 3 × 8k, writes 1k on 8k; the busier side (reads, 41.7%) sets the utilisation.
+    expect(node('db')).toMatchObject({ replicas: 3, readCapacityRps: 24_000, writeCapacityRps: 8000, readLoadRps: 10_000, writeLoadRps: 1000, costUsd: 1350, durable: true });
+    expect(node('db').utilization).toBeCloseTo(10_000 / 24_000);
+    expect(node('db').capacityRps).toBeCloseTo(11_000 / (10_000 / 24_000));
     expect(node('db').loadRps).toBeCloseTo(11_000);
     expect(analysis.totalCostUsd).toBe(3 * 50 + 12 * 100 + 2 * 150 + 3 * 450);
   });

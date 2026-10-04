@@ -22,7 +22,11 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
     <div className="h-full overflow-y-auto bg-white">
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-sm">
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-          <Stat label="Total cost" value={formatUsd(analysis.totalCostUsd)} />
+          <Stat
+            label="Total cost"
+            value={formatUsd(analysis.totalCostUsd)}
+            note={analysis.totalEgressUsd > 0 ? `incl. ${formatUsd(analysis.totalEgressUsd).replace('/month', '')} egress` : undefined}
+          />
           <Stat label="Saturated nodes" value={String(saturated)} tone={saturated ? 'bad' : 'good'} />
           <Stat label="Single points of failure" value={String(analysis.singlePointsOfFailure.length)} tone={analysis.singlePointsOfFailure.length ? 'warn' : 'good'} />
           <Stat label="Use cases with traffic" value={String(analysis.useCases.filter((u) => u.rps > 0).length)} />
@@ -69,18 +73,41 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
                           <span className="block text-xs text-gray-400">
                             {node && !node.implicit ? node.techStack : n.kind} · {n.kind}
                             {n.durable ? ' · durable' : ''}
+                            {n.consistency ? ` · ${n.consistency}` : ''}
                           </span>
                         </button>
                       </td>
-                      <td className="py-1.5 pr-3 text-gray-700">
-                        {formatRps(n.loadRps)} <span className="text-gray-400">/ {formatRps(n.capacityRps)}</span>
+                      <td className="py-1.5 pr-3 text-gray-700 whitespace-nowrap">
+                        {splitsReadsAndWrites(n) ? (
+                          <>
+                            <span className="block" title="Reads: load / capacity">
+                              <span className="text-xs text-gray-400">R </span>
+                              {formatRps(n.readLoadRps)} <span className="text-gray-400">/ {formatRps(n.readCapacityRps)}</span>
+                            </span>
+                            <span className="block" title={n.writeScaling === 'shards' ? 'Writes: load / capacity (one primary per shard)' : 'Writes: load / capacity'}>
+                              <span className="text-xs text-gray-400">W </span>
+                              {formatRps(n.writeLoadRps)} <span className="text-gray-400">/ {formatRps(n.writeCapacityRps)}</span>
+                            </span>
+                          </>
+                        ) : (
+                          <>
+                            {formatRps(n.loadRps)} <span className="text-gray-400">/ {formatRps(n.capacityRps)}</span>
+                          </>
+                        )}
                       </td>
                       <td className="py-1.5 pr-3">
                         <UtilizationBar node={n} />
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-gray-700">{formatMs(n.latencyMs)}</td>
+                      <td className="py-1.5 pr-3 text-right text-gray-700 whitespace-nowrap">{formatMs(n.latencyMs)}</td>
                       <td className="py-1.5 pr-3 text-right text-gray-700">{formatAvailability(n.availability)}</td>
-                      <td className="py-1.5 text-right text-gray-700">{formatUsd(n.costUsd).replace('/month', '')}</td>
+                      <td className="py-1.5 text-right text-gray-700">
+                        {formatUsd(n.costUsd).replace('/month', '')}
+                        {n.egressUsd > 0 && (
+                          <span className="block text-xs text-gray-400" title={`${formatGb(n.egressGbPerMonth)} leave this node per month`}>
+                            {formatUsd(n.egressUsd).replace('/month', '')} egress
+                          </span>
+                        )}
+                      </td>
                     </tr>
                   );
                 })}
@@ -147,7 +174,8 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
           <Info size={14} className="mt-px flex-shrink-0" />
           <span>
             The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing
-            model; override them with <code>capacity {'{ … }'}</code>.
+            model. Relational databases take writes on one primary per shard, so read replicas add reads only; egress is charged for data leaving
+            storage ($0.09/GB) and CDNs ($0.02/GB). Override the numbers with <code>capacity {'{ … }'}</code>.
           </span>
         </p>
       </div>
@@ -155,14 +183,28 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
   );
 }
 
-function Stat({ label, value, tone }: { label: string; value: string; tone?: 'good' | 'warn' | 'bad' }) {
+function Stat({ label, value, tone, note }: { label: string; value: string; tone?: 'good' | 'warn' | 'bad'; note?: string }) {
   const color = tone === 'bad' ? 'text-red-700' : tone === 'warn' ? 'text-amber-700' : tone === 'good' ? 'text-green-700' : 'text-gray-900';
   return (
     <div className="rounded-md border border-gray-200 px-3 py-2">
       <div className="text-xs text-gray-500">{label}</div>
       <div className={`text-lg font-semibold tabular-nums ${color}`}>{value}</div>
+      {note && <div className="text-xs text-gray-500 tabular-nums">{note}</div>}
     </div>
   );
+}
+
+/**
+ * Reads and writes get their own line when they have separate capacity: a
+ * single-primary store (writes on the primary), or overrides that differ.
+ */
+function splitsReadsAndWrites(n: NodeAnalysis): boolean {
+  return n.writeLoadRps > 0 && (n.writeScaling === 'shards' || n.readCapacityRps !== n.writeCapacityRps);
+}
+
+/** `2.6 TB`, `260 GB` */
+function formatGb(gb: number): string {
+  return gb >= 1000 ? `${Number((gb / 1000).toFixed(1))} TB` : `${Number(gb.toFixed(gb < 10 ? 1 : 0))} GB`;
 }
 
 /** Red when saturated, amber above 70%, green otherwise. */
@@ -170,11 +212,16 @@ function UtilizationBar({ node }: { node: NodeAnalysis }) {
   const color = node.saturated ? 'bg-red-500' : node.utilization > HOT ? 'bg-amber-500' : 'bg-green-500';
   const text = node.saturated ? 'text-red-700 font-medium' : node.utilization > HOT ? 'text-amber-700' : 'text-gray-600';
   return (
-    <div className="flex items-center gap-2" title={node.saturated ? 'Saturated: more load than capacity' : undefined}>
+    <div className="flex flex-wrap items-center gap-x-2" title={node.saturated ? 'Saturated: more load than capacity' : undefined}>
       <div className="h-2 w-24 rounded-full bg-gray-100 overflow-hidden" role="meter" aria-valuenow={Math.round(node.utilization * 100)} aria-valuemin={0} aria-valuemax={100}>
         <div className={`h-full ${color}`} style={{ width: `${Math.min(100, node.utilization * 100)}%` }} />
       </div>
       <span className={`text-xs ${text}`}>{formatPercent(node.utilization)}</span>
+      {splitsReadsAndWrites(node) && (
+        <span className="text-xs text-gray-400 whitespace-nowrap" title="Read and write utilisation">
+          R {formatPercent(node.readUtilization)} · W {formatPercent(node.writeUtilization)}
+        </span>
+      )}
     </div>
   );
 }

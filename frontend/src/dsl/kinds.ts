@@ -8,15 +8,31 @@ import type { DiagramNode, Kind } from './types';
  */
 
 /** Every kind, in the order of the profile table. */
-export const KINDS: readonly Kind[] = ['client', 'edge', 'service', 'function', 'cache', 'database', 'search', 'analytics', 'queue', 'storage', 'external', 'other'];
+export const KINDS: readonly Kind[] = ['client', 'edge', 'cdn', 'loadbalancer', 'gateway', 'dns', 'service', 'function', 'cache', 'database', 'search', 'analytics', 'queue', 'storage', 'external', 'other'];
 
 /** Kinds that hold data: where an `entity` may live. */
 export const DATA_STORE_KINDS: readonly Kind[] = ['cache', 'database', 'search', 'analytics', 'queue', 'storage'];
 
+/**
+ * The sub-kinds of `edge` (§7.5). `any edge` matches all of them, and an edge
+ * tech that is none of them (a `cdn`-type component with another tech) stays
+ * plain `edge`.
+ */
+export const EDGE_KINDS: readonly Kind[] = ['edge', 'cdn', 'loadbalancer', 'gateway', 'dns'];
+
 /** Tech stacks whose component type would put them in another kind. */
 const BY_TECH: Partial<Record<string, Kind>> = {
-  'AWS API Gateway': 'edge',
-  'Azure API Management': 'edge',
+  'AWS CloudFront': 'cdn',
+  'Azure CDN': 'cdn',
+  'GCP Cloud CDN': 'cdn',
+  'Azure Front Door': 'cdn',
+  'AWS Load Balancer': 'loadbalancer',
+  'GCP Load Balancing': 'loadbalancer',
+  'AWS API Gateway': 'gateway',
+  'Azure API Management': 'gateway',
+  'AWS Route53': 'dns',
+  'Azure DNS': 'dns',
+  'GCP Cloud DNS': 'dns',
   Redis: 'cache',
   Elasticsearch: 'search',
   'GCP BigQuery': 'analytics',
@@ -56,4 +72,13 @@ export function isKind(word: string): word is Kind {
 
 export function isDataStore(kind: Kind): boolean {
   return DATA_STORE_KINDS.includes(kind);
+}
+
+export function isEdge(kind: Kind): boolean {
+  return EDGE_KINDS.includes(kind);
+}
+
+/** Whether a node of kind `actual` is selected by `any <wanted>`: `any edge` also picks the edge sub-kinds. */
+export function kindMatches(actual: Kind, wanted: Kind): boolean {
+  return actual === wanted || (wanted === 'edge' && isEdge(actual));
 }

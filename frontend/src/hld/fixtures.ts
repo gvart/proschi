@@ -1,6 +1,6 @@
 import { parse } from '../dsl/parser';
 import type { Diagram, SourceLoc } from '../dsl/types';
-import type { Analysis, TestResult } from './engine';
+import type { Analysis, NodeAnalysis, TestResult } from './engine';
 
 /**
  * A URL shortener with every HLD input, for tests. The structure is parsed;
@@ -106,13 +106,33 @@ export function shortenerDiagram(): Diagram {
 
 const percentiles = (mean: number) => ({ p50: mean, p90: mean * 1.6, p95: mean * 2, p99: mean * 3, p999: mean * 5 });
 
+type NodeFixture = Omit<
+  NodeAnalysis,
+  'shards' | 'readLoadRps' | 'writeLoadRps' | 'readCapacityRps' | 'writeCapacityRps' | 'readUtilization' | 'writeUtilization' | 'writeScaling' | 'egressGbPerMonth' | 'egressUsd'
+>;
+
+/** A node with all of its load counted as reads and no egress. */
+const node = (n: NodeFixture): NodeAnalysis => ({
+  shards: 1,
+  readLoadRps: n.loadRps,
+  writeLoadRps: 0,
+  readCapacityRps: n.capacityRps,
+  writeCapacityRps: n.capacityRps,
+  readUtilization: n.utilization,
+  writeUtilization: 0,
+  writeScaling: 'replicas',
+  egressGbPerMonth: 0,
+  egressUsd: 0,
+  ...n,
+});
+
 export const shortenerAnalysis: Analysis = {
   nodes: [
-    { id: 'visitor', kind: 'client', replicas: 1, loadRps: 0, capacityRps: Infinity, utilization: 0, saturated: false, latencyMs: 0, availability: 1, costUsd: 0, durable: false },
-    { id: 'lb', kind: 'edge', replicas: 1, loadRps: 101_000, capacityRps: 100_000, utilization: 1.01, saturated: true, latencyMs: 40, availability: 0.9999, costUsd: 50, durable: false },
-    { id: 'api', kind: 'service', replicas: 3, loadRps: 4_500, capacityRps: 6_000, utilization: 0.75, saturated: false, latencyMs: 40, availability: 0.99999, costUsd: 300, durable: false },
-    { id: 'cache', kind: 'cache', replicas: 1, loadRps: 100_000, capacityRps: 150_000, utilization: 0.67, saturated: false, latencyMs: 3, availability: 0.999, costUsd: 150, durable: false },
-    { id: 'db', kind: 'database', replicas: 1, loadRps: 11_000, capacityRps: 20_000, utilization: 0.55, saturated: false, latencyMs: 11, availability: 0.9999, costUsd: 500, durable: true },
+    node({ id: 'visitor', kind: 'client', replicas: 1, loadRps: 0, capacityRps: Infinity, utilization: 0, saturated: false, latencyMs: 0, availability: 1, costUsd: 0, durable: false }),
+    node({ id: 'lb', kind: 'edge', replicas: 1, loadRps: 101_000, capacityRps: 100_000, utilization: 1.01, saturated: true, latencyMs: 40, availability: 0.9999, costUsd: 50, durable: false }),
+    node({ id: 'api', kind: 'service', replicas: 3, loadRps: 4_500, capacityRps: 6_000, utilization: 0.75, saturated: false, latencyMs: 40, availability: 0.99999, costUsd: 300, durable: false }),
+    node({ id: 'cache', kind: 'cache', replicas: 1, loadRps: 100_000, capacityRps: 150_000, utilization: 0.67, saturated: false, latencyMs: 3, availability: 0.999, costUsd: 150, durable: false }),
+    node({ id: 'db', kind: 'database', replicas: 1, loadRps: 11_000, capacityRps: 20_000, utilization: 0.55, saturated: false, latencyMs: 11, availability: 0.9999, costUsd: 500, durable: true }),
   ],
   useCases: [
     {
@@ -128,6 +148,7 @@ export const shortenerAnalysis: Analysis = {
     },
   ],
   totalCostUsd: 1000,
+  totalEgressUsd: 0,
   singlePointsOfFailure: ['cache'],
   warnings: ['Shares of Redirect sum to 100%'],
 };

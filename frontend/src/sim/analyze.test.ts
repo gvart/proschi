@@ -24,7 +24,9 @@ describe('load and utilisation', () => {
     const a = analyze(diagramOf(READ, { traffic: [{ useCase: 'Read', rps: 1000 }] }));
     expect(node(a, 'client')).toMatchObject({ kind: 'client', loadRps: 0, capacityRps: Infinity, utilization: 0, saturated: false });
     expect(node(a, 'api')).toMatchObject({ kind: 'service', replicas: 1, loadRps: 1000, capacityRps: 2000, utilization: 0.5, saturated: false });
-    expect(node(a, 'db')).toMatchObject({ kind: 'database', loadRps: 1000, capacityRps: 5000, utilization: 0.2, durable: true });
+    // PostgreSQL serves 20k reads per replica (§7.2): 1k ÷ 20k = 5%.
+    expect(node(a, 'db')).toMatchObject({ kind: 'database', loadRps: 1000, capacityRps: 20_000, utilization: 0.05, durable: true });
+    expect(node(a, 'db')).toMatchObject({ readLoadRps: 1000, writeLoadRps: 0, readCapacityRps: 20_000, writeCapacityRps: 5000, readUtilization: 0.05, writeUtilization: 0 });
   });
 
   it('splits traffic over scenarios by mix and counts repeated, async and failed calls', () => {
@@ -94,7 +96,7 @@ usecase "Get" {
   it('marks nodes at or above 100% as saturated and warns about them and hot nodes', () => {
     const a = analyze(diagramOf(READ, { traffic: [{ useCase: 'Read', rps: 3000 }] }));
     expect(node(a, 'api')).toMatchObject({ utilization: 1.5, saturated: true });
-    expect(node(a, 'db')).toMatchObject({ utilization: 0.6, saturated: false });
+    expect(node(a, 'db')).toMatchObject({ utilization: 0.15, saturated: false });
     expect(a.warnings).toEqual(["'api' is saturated: 3k rps of 2k rps, 150%. Add replicas or take load off it."]);
 
     const exactly = analyze(diagramOf(READ, { traffic: [{ useCase: 'Read', rps: 2000 }] }));
@@ -153,15 +155,15 @@ describe('latency', () => {
 
   it('sums hop latencies on the synchronous path and scales percentiles', () => {
     const a = analyze(diagramOf(READ, { traffic: [{ useCase: 'Read', rps: 1000 }] }));
-    // api: 10 / (1 − 0.5) = 20; db: 5 / (1 − 0.2) = 6.25
+    // api: 10 / (1 − 0.5) = 20; db: 5 / (1 − 0.05) = 5.2632; mean 25.2632
     const [read] = a.useCases;
     expect(read.rps).toBe(1000);
-    expect(read.scenarios[0].meanMs).toBeCloseTo(26.25);
-    expect(read.percentiles.p50).toBeCloseTo(26.25);
-    expect(read.percentiles.p90).toBeCloseTo(42);
-    expect(read.percentiles.p95).toBeCloseTo(52.5);
-    expect(read.percentiles.p99).toBeCloseTo(78.75);
-    expect(read.percentiles.p999).toBeCloseTo(131.25);
+    expect(read.scenarios[0].meanMs).toBeCloseTo(25.2632, 3);
+    expect(read.percentiles.p50).toBeCloseTo(25.2632, 3);
+    expect(read.percentiles.p90).toBeCloseTo(40.4211, 3);
+    expect(read.percentiles.p95).toBeCloseTo(50.5263, 3);
+    expect(read.percentiles.p99).toBeCloseTo(75.7895, 3);
+    expect(read.percentiles.p999).toBeCloseTo(126.3158, 3);
   });
 
   it('computes latencies for use cases without traffic too', () => {

@@ -283,63 +283,114 @@ formulas are in the [design](design/hld-and-practice.md#2-simulation).
 ### The model
 
 - **Profiles.** Every node gets per-replica numbers from its tech stack (else
-  its component type): capacity in requests per second, base latency,
-  availability, monthly cost, and whether it keeps data. `capacity { … }`
-  overrides them per node. Clients (actors and plain shapes) have unlimited
-  capacity and add nothing. The defaults are teaching values, right to an order
-  of magnitude:
+  its component type): read and write capacity in requests per second, base
+  latency, availability, monthly cost, whether it keeps data, network
+  bandwidth, an egress price and, for data stores, a consistency.
+  `capacity { … }` overrides them per node. Clients (actors and plain shapes)
+  have unlimited capacity and add nothing. The defaults are teaching values,
+  right to an order of magnitude:
 
-  | Kind | rps / replica | Latency | Availability | Cost / month | Durable |
-  |---|---|---|---|---|---|
-  | edge (CDN, load balancer, API gateway, DNS) | 100k | 2 ms | 99.99% | $50 | no |
-  | service (REST, gRPC, containers, VMs) | 2k | 10 ms | 99.5% | $100 | no |
-  | function (Lambda, Cloud Run, …) | 10k | 25 ms | 99.95% | $200 | no |
-  | cache (Redis, Memcached, …) | 100k | 1 ms | 99.9% | $150 | no |
-  | database (SQL) | 5k | 5 ms | 99.95% | $400 | yes |
-  | database (DynamoDB, Cassandra, MongoDB, …) | 20k | 5 ms | 99.99% | $500 | yes |
-  | search (Elasticsearch) | 3k | 15 ms | 99.9% | $400 | yes |
-  | analytics (BigQuery, InfluxDB, TimescaleDB) | 200 | 500 ms | 99.9% | $300 | yes |
-  | queue (Kafka, SQS, Pub/Sub, …) | 50k | 5 ms | 99.99% | $200 | yes |
-  | storage (S3, Blob Storage, …) | 5k | 30 ms | 99.99% | $50 | yes |
-  | external (payment, email, third-party APIs) | 1k | 200 ms | 99.9% | $0 | no |
+  | Kind | Reads / writes per replica | Latency | Availability | Cost / month | Durable | Consistency |
+  |---|---|---|---|---|---|---|
+  | cdn (CloudFront, Azure CDN, Cloud CDN, Front Door) | 200k | 5 ms | 99.99% | $100 | no | — |
+  | loadbalancer (AWS Load Balancer, GCP Load Balancing) | 100k | 2 ms | 99.99% | $50 | no | — |
+  | gateway (AWS API Gateway, Azure API Management) | 10k | 10 ms | 99.95% | $100 | no | — |
+  | dns (Route53, Azure DNS, Cloud DNS): off the request path | ∞ | 0 | 100% | $0 | no | — |
+  | service (REST, gRPC, containers, VMs) | 2k | 10 ms | 99.5% | $100 | no | — |
+  | function (Lambda, Cloud Run, …) | 10k | 25 ms | 99.95% | $200 | no | — |
+  | cache (Redis, Memcached, …) | 100k | 1 ms | 99.9% | $150 | no | eventual |
+  | database, relational (PostgreSQL, MySQL, Aurora, RDS, SQL Server, …) | 20k reads / 5k writes per shard | 5 ms | 99.95% | $400 | yes | strong |
+  | database, partitioned (DynamoDB, Cassandra, Cosmos DB, CouchDB) | 20k | 5 ms | 99.99% | $500 | yes | eventual |
+  | database, partitioned (MongoDB, Bigtable, Firestore, Spanner) | 20k | 5 ms | 99.99% | $500 | yes | strong |
+  | search (Elasticsearch) | 3k | 15 ms | 99.9% | $400 | yes | eventual |
+  | analytics (BigQuery, InfluxDB, TimescaleDB) | 200 | 500 ms | 99.9% | $300 | yes | eventual |
+  | queue (Kafka, SQS, Pub/Sub, …) | 50k | 5 ms | 99.99% | $200 | yes | strong |
+  | storage (S3, Blob Storage, …) | 5k | 30 ms | 99.99% | $50 | yes | eventual |
+  | external (payment, email, third-party APIs) | 1k | 200 ms | 99.9% | $0 | no | — |
 
+  `any edge` selects all four edge kinds (and an edge tech that is none of
+  them). Bandwidth per replica: clients 10 MB/s, edge kinds 1 000 MB/s,
+  services 200 MB/s, everything else 100 MB/s. Egress: storage $0.09/GB, CDNs
+  $0.02/GB, everything else free.
+- **Reads and writes.** Every request step is a read or a write: a write for
+  POST, PUT, PATCH and DELETE or a label starting with a write verb (INSERT,
+  UPDATE, UPSERT, DELETE, PUT, SET, WRITE, APPEND, INCR, DECR, LPUSH, RPUSH,
+  ZADD, HSET, GEOADD, PUBLISH, SEND, ENQUEUE, PRODUCE, CHARGE, CREATE), a read
+  otherwise. A request to a queue is always a write, whatever its label: the
+  queue stores the message.
 - **Load.** Each use case's rate is split over its scenarios by `mix` (all to
   the first scenario without one); every request step (`->`, `->>`, `-x`) adds
-  its share to the target. Utilisation is load over capacity × replicas; at
-  100% a node is **saturated** and every latency requirement whose use case
-  sends it load fails.
+  its share to the target's reads or writes, times its fan-out (`x200 …` counts
+  200 calls).
+- **Capacity and utilisation.** Replicas and `shards` multiply capacity.
+  Relational databases are single-primary: replicas add reads, but every write
+  goes to one primary per shard, so write capacity grows only with
+  `shards` (`capacity { db shards 4 }`); utilisation is the busier of reads
+  and writes. Everything else serves reads and writes on the same replicas, so
+  their shares add up (load over capacity when both are equal). A node with
+  `shards` has replicas × shards instances and costs that many. At 100% a node
+  is **saturated** and every latency requirement whose use case sends it load
+  fails; the hint names shards when writes on a single-primary store are the
+  problem.
 - **Latency.** A hop costs its base latency ÷ (1 − utilisation), capped at 95%
-  utilisation. A scenario's mean is the sum over the synchronous path of its
-  entry request: a `par` block counts its slowest call, an async send (`->>`)
-  only the send, a failed call (`-x`) a 1 s timeout, and nothing after the
-  entry request is answered. Percentiles are the mean × 1.0 (p50), 1.6 (p90),
-  2.0 (p95), 3.0 (p99), 5.0 (p99.9). A use case's percentile is the slowest
-  scenario that carries at least the tail share: with 10% cache misses, p99 is
-  the miss path; with 0.5%, it is the hit path.
+  utilisation, plus the payload's transfer time: a `~2MB` label adds size ÷
+  the slower bandwidth of its two ends (2 MB to a client at 10 MB/s is 200 ms).
+  A fan-out step counts once. A scenario's mean is the sum over the
+  synchronous path of its entry request: a `par` block counts its slowest call,
+  an async send (`->>`) only the send, a failed call (`-x`) a 1 s timeout, and
+  nothing after the entry request is answered. Percentiles are the mean × 1.0
+  (p50), 1.6 (p90), 2.0 (p95), 3.0 (p99), 5.0 (p99.9). A use case's percentile
+  is the slowest scenario that carries at least the tail share: with 10% cache
+  misses, p99 is the miss path; with 0.5%, it is the hit path.
+  `p99 "U" scenario "S" < 100ms` measures one scenario, whatever its share.
 - **Availability.** A node with n replicas is up 1 − (1 − a)ⁿ of the time. A use
   case multiplies the nodes on the synchronous path of its main scenario; a
-  node with a fallback (a success scenario that calls it with `-x` and
-  completes without it) counts as up when either it or the fallback's extra
-  nodes are.
+  node with a fallback counts as up when either it or the fallback's extra
+  nodes are. A fallback is a success scenario that calls the node with `-x`
+  before answering the entry request and makes no successful synchronous call
+  to it before then; a retry after the response does not cancel it. (When the
+  use case answers at once and a worker does the rest, the worker's whole run
+  is the window.)
 - **Failure injection.** `survive any node failure` (or `survive failure of
   <selector>`) removes one instance of each node: with two or more replicas the
-  rest must carry the load; a single instance needs a fallback scenario in
-  every use case that uses it. Clients and external systems are only checked
-  when selected explicitly.
-- **Durability, cost.** `durable "U"` needs every success scenario to write to
-  a durable node synchronously before the entry request is answered. Cost is
-  the sum of replicas × cost.
+  rest must carry the load (losing a relational replica costs reads, not
+  writes); a single instance needs a fallback scenario in every use case that
+  uses it. Clients, DNS and external systems are only checked when selected
+  explicitly.
+- **Durability.** `durable "U"` and `writes X before responding` need every
+  success scenario to send a **write** synchronously, before the entry request
+  is answered (to a durable node for `durable`). A SELECT is not a write.
+- **Cost.** The sum of instances × cost, plus egress: data leaving storage or
+  a CDN costs rps × share × fan-out × size × 2 592 000 s/month × price
+  (1 GB = 10⁹ bytes). A read's payload leaves its target (the answer); a
+  write's leaves its sender. `capacity { blobs egress 0.05 usd/GB }` changes
+  the price, `bandwidth 500 MB/s` the bandwidth.
+- **Consistency.** `any strong store` and `any eventual store` select data
+  stores by consistency (`capacity { cache consistency strong }` overrides it),
+  so a test can require `"Hold seat" writes any strong store before
+  responding` and `"Hold seat" never calls any eventual store`.
+
+Test blocks also check `U never waits for X` (no synchronous call to X before
+the response; async sends and work after it are fine), `U calls Y after X`
+(the last call to Y follows the first call to X), `[in U] X calls Y` and
+`X never calls Y` (steps sent by X), `U starts at X` (who sends the entry
+request) and selector unions (`any cache or any database`).
 
 Every requirement line and every `test` block yields one result. Messages say
-what was measured and the limit (`p99 of Redirect is 73.4 ms (limit 100 ms)`);
-failures come with a hint naming the lever: add replicas, add a cache, add a
-fallback scenario, move work async.
+what was measured and the limit (`p99 of Redirect is 71.9 ms (limit 100 ms)`)
+and name the offending step with its line (`api -> gateway : CHARGE card at
+line 12 is synchronous`); a missing use case or scenario is reported once per
+test. Failures come with a hint naming the lever: add replicas or shards, add
+a cache, add a fallback scenario, move work async, serve downloads from a
+CDN.
 
 ### Web editor
 
 Above the diagram, **Analysis** shows per-node utilisation bars (amber above
-70%, red when saturated), latency percentiles per use case with a breakdown
-per scenario, availability, total cost, single points of failure and
+70%, red when saturated; separate read and write load, capacity and
+utilisation for stores where they differ), latency percentiles per use case
+with a breakdown per scenario, availability, cost per node with its egress,
+the total cost (and how much of it is egress), single points of failure and
 warnings. **Tests** lists every requirement and test with ✅/❌, its message
 and hint; click one to jump to its line. Both recompute as you type. Without
 `traffic`, Analysis explains how to add it.

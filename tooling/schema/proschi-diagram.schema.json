@@ -664,6 +664,10 @@
               "enum": [
                 "client",
                 "edge",
+                "cdn",
+                "loadbalancer",
+                "gateway",
+                "dns",
                 "service",
                 "function",
                 "cache",

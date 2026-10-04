@@ -124,7 +124,8 @@ describe('URL shortener', () => {
   it('fails the naive design on the specific problems', () => {
     const diagram = diagramOf(NAIVE, PROBLEM);
     const analysis = analyze(diagram);
-    expect(analysis.nodes.filter((n) => n.saturated).map((n) => n.id)).toEqual(['api', 'db']);
+    // One PostgreSQL replica serves 20k reads (§7.2), so only the API saturates.
+    expect(analysis.nodes.filter((n) => n.saturated).map((n) => n.id)).toEqual(['api']);
     expect(analysis.singlePointsOfFailure).toEqual(['api', 'db']);
 
     const results = byName(runTests(diagram, analysis));
@@ -136,9 +137,9 @@ describe('URL shortener', () => {
     expect(results['p99 of Redirect < 100 ms'].message).toBe('p99 of Redirect: api is saturated (10.1k rps of 2k rps, 505%) (limit 100 ms)');
     expect(results['p95 of every use case < 300 ms'].message).toContain('api is saturated');
     expect(results['availability of Redirect ≥ 99.95%'].message).toBe('availability of Redirect is 99.45% (limit 99.95%)');
-    expect(results['Shorten is durable'].message).toBe('"Shorten" writes only asynchronously (->>) to a durable store before responding');
+    expect(results['Shorten is durable'].message).toBe('"Shorten" writes to a durable store only asynchronously: api ->> db : INSERT url at line 23');
     expect(results['survive any node failure'].message).toBe('Losing api (REST API) breaks "Redirect" (and 3 more)');
-    expect(results['Redirect is served from the cache'].message).toBe('No node matches any cache; No node matches any cache; "Redirect" scenario "Cache hit" calls db (PostgreSQL)');
+    expect(results['Redirect is served from the cache'].message).toBe('No node matches any cache; "Redirect" scenario "Cache hit" calls db (PostgreSQL): api -> db : SELECT url at line 12');
     expect(results['Redirects survive a cache outage'].message).toContain('"Redirect" has no scenario "Cache down"');
     expect(results['The API is replicated'].message).toBe('api has 1 replica (minimum 2)');
   });
@@ -161,7 +162,10 @@ describe('URL shortener', () => {
     const lb = 2 / (1 - 10_100 / 200_000);
     const api = 10 / (1 - 10_100 / 32_000);
     const cache = 1 / (1 - 11_000 / 200_000);
-    const db = 5 / (1 - 1_100 / 10_000);
+    // 1k reads on 2 × 20k, 100 writes on one 5k primary: the busier side counts.
+    expect(node('db')).toMatchObject({ readLoadRps: 1000, writeLoadRps: 100, readCapacityRps: 40_000, writeCapacityRps: 5000 });
+    expect(node('db').utilization).toBeCloseTo(Math.max(1000 / 40_000, 100 / 5000));
+    const db = 5 / (1 - 1000 / 40_000);
     const redirect = analysis.useCases.find((u) => u.name === 'Redirect')!;
     expect(redirect.scenarios[0].meanMs).toBeCloseTo(lb + api + cache);
     expect(redirect.scenarios[1].meanMs).toBeCloseTo(lb + api + cache + db + cache);
@@ -171,7 +175,7 @@ describe('URL shortener', () => {
     expect(redirect.percentiles.p50).toBeCloseTo(lb + api + cache);
     expect(analysis.totalCostUsd).toBe(2 * 50 + 16 * 100 + 2 * 150 + 2 * 400);
 
-    expect(byName(results)['p99 of Redirect < 100 ms'].message).toBe('p99 of Redirect is 73.4 ms (limit 100 ms)');
+    expect(byName(results)['p99 of Redirect < 100 ms'].message).toBe('p99 of Redirect is 71.9 ms (limit 100 ms)');
   });
 
   it('flags the cache as a single point of failure without its fallback scenario', () => {

@@ -515,7 +515,19 @@ not once per assertion.
 - `capacity { db reads 30k rps  writes 8k rps  shards 4 }` overrides; `rps`
   alone still sets both.
 - Utilisation is computed separately for reads and writes; a node is saturated
-  when either is.
+  when either is. For a single-primary store the node's utilisation is the
+  busier side (replicas serve reads, primaries take writes). Every other node
+  serves both on the same replicas, so its utilisation is the sum of the two
+  shares (total load ÷ capacity when read and write capacity are equal, as in
+  §2.2).
+- A request to a **queue** is always a write (publish/enqueue, any arrow),
+  whatever its label: `api ->> jobs : OrderPlaced` counts against the queue's
+  write capacity and as a durable write. Everything else follows the step's
+  `access`.
+- `shards` multiplies a store into independent partitions, each with its own
+  primary and `x<n>` replicas: reads scale with replicas × shards, single-primary
+  writes with shards, partitioned writes with replicas × shards, and the node
+  costs replicas × shards instances.
 
 ### 7.3 Fan-out and payload size
 
@@ -530,6 +542,9 @@ not once per assertion.
   `rps × share × multiplier × size × 2 592 000 s/month × price`, with prices
   storage $0.09/GB, cdn $0.02/GB, others $0 (override `egress 0.05 usd/GB`).
   Egress appears in the cost total and per node in the Analysis panel.
+- Transfer time uses the slower of the two ends' bandwidth (the client's
+  10 MB/s bounds both uploads and downloads). A read's payload leaves its
+  target (the answer), a write's leaves its sender; 1 GB = 10⁹ bytes.
 
 ### 7.4 Consistency
 
@@ -538,7 +553,7 @@ not once per assertion.
   DynamoDB default reads, Elasticsearch, CDNs, object storage listings).
   Override with `capacity { table consistency strong }`.
 - Selectors `any strong store` / `any eventual store` match data stores by
-  consistency, so a test can require `"Hold seat" writes any strong store
+  consistency (data store kinds only: CDNs cache content but are not matched), so a test can require `"Hold seat" writes any strong store
   before responding` and `"Hold seat" never calls any eventual store`.
 - Time (TTL, expiry, staleness windows) stays out of the model for now; model
   expiry as a scenario.
@@ -554,11 +569,17 @@ $100; dns: not on the request path (ignored for latency, 100% available).
 
 ### 7.6 Requirements and fallbacks
 
-- Per-scenario latency: `p99 "Checkout" scenario "Replay" < 100ms`.
+- Per-scenario latency: `p99 "Checkout" scenario "Replay" < 100ms` measures that
+  scenario's own percentile, whatever its traffic share.
 - Fallback rule refined: a scenario is a fallback for n if it calls n with
   `-x` **before** the entry response and has no successful synchronous call to
   n before the entry response; calls to n after responding (a background
-  retry) no longer cancel the fallback.
+  retry) no longer cancel the fallback. When the `-x` itself comes after the
+  entry response (the use case answers at once and a worker does the rest),
+  the whole scenario is the window: it is a fallback if it has no successful
+  synchronous call to n at all.
+- DNS is left out of failure injection and single points of failure, like
+  clients and external systems.
 
 ### 7.7 Delivery
 
