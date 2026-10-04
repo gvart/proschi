@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
 import { examples, parse } from '../dsl';
+import { problems } from '../practice/problems';
 import { decodeShareLink } from '../playground/share';
 import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
@@ -175,5 +176,12 @@ describe('old share links', () => {
     expect(firstScript).toBeLessThan(head.indexOf('<link'));
     expect(head).toContain("location.hash.indexOf('#code=') === 0");
     expect(head).toContain("location.replace('./app/' + location.hash)");
+  });
+});
+
+describe('practice section', () => {
+  it('links every practice problem, in catalog order', () => {
+    const ids = [...landingHtml.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
+    expect(ids).toEqual(problems.map((p) => p.id));
   });
 });

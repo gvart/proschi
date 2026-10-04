@@ -55,9 +55,9 @@ how transcoding jobs reach the fleet, how segments reach viewers, the
 connections and the three use cases.`,
   given: `title "Video Platform" "Creators upload videos; viewers stream them from the edge"
 
-creator    "Creator"     [Actor]
-viewer     "Viewer"      [Actor]
-transcoder "Transcoder"  [AWS ECS] x10 @media "Turns an original into HLS renditions; a minute per video"
+creator    "Creator"    [Actor]
+viewer     "Viewer"     [Actor]
+transcoder "Transcoder" [AWS ECS] x10 @media "Turns an original into HLS renditions; a minute per video"
 
 capacity {
   transcoder 0.5 rps latency 60s cost 200 usd/month

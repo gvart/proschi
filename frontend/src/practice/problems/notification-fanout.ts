@@ -54,8 +54,8 @@ holds the traffic, requirements and tests. Add the components, the
 connections and the use case.`,
   given: `title "Notification Fan-out" "Turns order events into email, SMS and push notifications"
 
-orders    "Order Service"       [REST API] x4 @orders   "Emits events when an order ships, is delayed or arrives"
-prefs     "Preferences"         [REST API] x3 @accounts "Each user's channel and opt-outs; already exists"
+orders    "Order Service"       [REST API]        x4 @orders "Emits events when an order ships, is delayed or arrives"
+prefs     "Preferences"         [REST API]        x3 @accounts "Each user's channel and opt-outs; already exists"
 email     "Email Provider"      [Email Service]
 sms       "SMS Provider"        [SMS Service]
 smsBackup "Backup SMS Provider" [SMS Service]

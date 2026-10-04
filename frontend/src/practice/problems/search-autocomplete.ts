@@ -57,7 +57,7 @@ cases.`,
 
 user      "User"           [Actor]
 search    "Search Cluster" [Elasticsearch]   x3 @search "Full-text search over the catalogue, sized for searches"
-scheduler "Scheduler"      [AWS EventBridge]    @search "Starts an index rebuild every 15 minutes"
+scheduler "Scheduler"      [AWS EventBridge] @search "Starts an index rebuild every 15 minutes"
 
 traffic {
   "Suggest" 100k rps mix "Edge hit" 80%, "Edge miss" 20%

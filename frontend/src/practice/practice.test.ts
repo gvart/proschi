@@ -1,3 +1,4 @@
+import { format } from '../dsl/format';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from '../dsl';
 import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/engine';
@@ -44,6 +45,11 @@ describe('problem index', () => {
   it.each(problems.map((p) => [p.id, p] as const))('%s given and solution parse without any diagnostic', (_id, p: Problem) => {
     expect(parse(p.given).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
     expect(parseSolution(p, p.solution).diagnostics).toEqual([]);
+  });
+
+  it.each(problems.map((p) => [p.id, p] as const))('%s given and solution are in canonical format', (_id, p: Problem) => {
+    expect(format(p.given)).toBe(p.given);
+    expect(format(p.solution)).toBe(p.solution);
   });
 
   it.each(problems.map((p) => [p.id, p] as const))('%s reference solution passes every test', (_id, p: Problem) => {

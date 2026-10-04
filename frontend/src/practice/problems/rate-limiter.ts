@@ -102,10 +102,10 @@ decision "Shared counters in Redis" {
 decision "Fixed one-minute windows" because "Simplest correct answer for 100 requests per minute; bursts at window edges are acceptable"
 
 usecase "Call API" "A client calls the protected API" {
-  client   -> gateway  : GET /orders
-  gateway  -> limiter  : check client-42
-  limiter  -> counters : INCR rate:client-42
-  counters --> limiter : 37
+  client    -> gateway  : GET /orders
+  gateway   -> limiter  : check client-42
+  limiter   -> counters : INCR rate:client-42
+  counters --> limiter  : 37
 
   alt "Allowed" when "the client made at most 100 calls this minute" {
     limiter --> gateway : 200 allow

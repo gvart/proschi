@@ -64,7 +64,7 @@ use case.`,
   given: `title "Payments" "Charges a card exactly once per checkout, even when clients retry and the gateway fails"
 
 shopper "Shopper"         [Actor]
-gateway "Payment Gateway" [Payment Gateway]      "External card processor; slow, and sometimes times out"
+gateway "Payment Gateway" [Payment Gateway] "External card processor; slow, and sometimes times out"
 ledger  "Ledger"          [PostgreSQL]      x2 @finance "Double-entry ledger; only approved money is booked here"
 
 capacity {
