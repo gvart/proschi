@@ -44,9 +44,16 @@ interface TourProps {
   steps: TourStep[];
   phone: boolean;
   onClose: (finished: boolean) => void;
+  /** On phones: the band of the screen the docked card covers (null when none), so a canvas can fit around it. */
+  onCover?: (band: CoverBand | null) => void;
 }
 
-export default function Tour({ label, steps, phone, onClose }: TourProps) {
+export interface CoverBand {
+  top: number;
+  bottom: number;
+}
+
+export default function Tour({ label, steps, phone, onClose, onCover }: TourProps) {
   const [index, setIndex] = useState(0);
   const step = steps[Math.min(index, steps.length - 1)];
   const last = index >= steps.length - 1;
@@ -59,10 +66,13 @@ export default function Tour({ label, steps, phone, onClose }: TourProps) {
   const focusNext = useRef(false);
   const [target, setTarget] = useState<Box | null>(null);
   const [announce, setAnnounce] = useState('');
+  const coverRef = useRef<string>('');
+  const onCoverRef = useRef(onCover);
 
   useEffect(() => {
     stepsRef.current = steps;
     onCloseRef.current = onClose;
+    onCoverRef.current = onCover;
   });
 
   const go = useCallback((next: number, byButton: boolean) => {
@@ -84,6 +94,8 @@ export default function Tour({ label, steps, phone, onClose }: TourProps) {
     if (focusNext.current && document.activeElement === before) primaryRef.current?.focus({ preventScroll: true });
     focusNext.current = false;
   }, [index]);
+
+  useEffect(() => () => onCoverRef.current?.(null), []);
 
   // Focus the popover when the tour opens (keyboard users land in it) and give focus back when it closes.
   useEffect(() => {
@@ -147,6 +159,12 @@ export default function Tour({ label, steps, phone, onClose }: TourProps) {
     });
     pop.style.top = `${Math.round(top)}px`;
     pop.style.left = `${Math.round(left)}px`;
+    const band = phone ? { top: Math.round(top), bottom: Math.round(top + pop.offsetHeight) } : null;
+    const bandKey = band ? `${band.top}:${band.bottom}` : '';
+    if (bandKey !== coverRef.current) {
+      coverRef.current = bandKey;
+      onCoverRef.current?.(band);
+    }
     if (!pop.dataset.placed) {
       // Glide between steps, but appear in place the first time: transitions start once that frame is drawn.
       pop.dataset.placed = 'pending';

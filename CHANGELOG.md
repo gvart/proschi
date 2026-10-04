@@ -33,6 +33,12 @@ deployed from `main` and ships with the same changes.
   the editor's Analysis and Tests tabs and the practice test panel
   ("How is this calculated?").
 
+### Fixed
+- On phones, switching back from Code to Diagram re-fits the diagram once the
+  canvas has its real size again; it used to be fitted into a stale 500×500
+  box and end up off centre or partly off screen. While a tour card is docked
+  over the canvas, the diagram is fitted into the space above it.
+
 ## [0.6.0] - 2026-10-04
 
 ### Security

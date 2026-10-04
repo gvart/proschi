@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { appendCode, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
 /** The default document (the e-commerce example) has six components and a group. */
 const DEFAULT_NODES = 6;
@@ -188,5 +188,23 @@ test.describe('editor on a phone', () => {
     await expect(diagramTab).toHaveAttribute('aria-selected', 'true');
     await expect(canvasNodes(page).filter({ hasText: 'Phone Node' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);
+  });
+
+  test('the diagram is fitted again after switching back from Code', async ({ page }) => {
+    await page.goto('app/');
+    const panes = page.getByRole('tablist', { name: 'View', exact: true });
+    await waitForCanvas(page, DEFAULT_NODES);
+    await expectDiagramFitted(page);
+    // Edit while the canvas is hidden, then come back: the pane only gets its size again after it is shown.
+    await panes.getByRole('tab', { name: /Code/ }).click();
+    await appendCode(page, '\nwide "A Node With A Rather Long Name" [Redis]\norders -> wide\n');
+    await panes.getByRole('tab', { name: /Diagram/ }).click();
+    await expect(canvasNodes(page).filter({ hasText: 'A Node With A Rather Long Name' })).toBeVisible();
+    await expectDiagramFitted(page);
+    // Just switching tabs keeps it fitted too.
+    await panes.getByRole('tab', { name: /Code/ }).click();
+    await panes.getByRole('tab', { name: /Diagram/ }).click();
+    await waitForCanvas(page, DEFAULT_NODES);
+    await expectDiagramFitted(page);
   });
 });

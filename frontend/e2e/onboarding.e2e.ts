@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { ONBOARDING_KEY, canvasNodes, codeEditor, expect, test, waitForCanvas } from './fixtures';
+import { ONBOARDING_KEY, canvasNodes, codeEditor, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
 /** The tour popover (non-modal dialog), named after its tour and current step. */
 const editorTour = (page: Page) => page.getByRole('dialog', { name: /^Quick tour:/ });
@@ -178,6 +178,9 @@ test.describe('editor tour on a phone', () => {
     await expect(tour).toHaveAccessibleName('Quick tour: Play a use case');
     await expect(panes.getByRole('tab', { name: /Diagram/ })).toHaveAttribute('aria-selected', 'true');
     await expect(canvasNodes(page).filter({ hasText: 'My Order Service' })).toBeVisible();
+    // The diagram is fitted into the part of the canvas the docked card leaves free.
+    const card = (await tour.boundingBox())!;
+    await expectDiagramFitted(page, card.y);
   });
 });
 

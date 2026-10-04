@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import type { DiagramNode } from '../dsl';
 import { renameNode } from '../dsl/edit';
 import type { View } from '../components/Analysis/ViewTabs';
-import Tour, { type TourStep } from './Tour';
+import Tour, { type CoverBand, type TourStep } from './Tour';
 import { useIsPhone } from './layout';
 import { nameTarget, type NameTarget } from './nameTarget';
 import { markSeen } from './seen';
@@ -26,6 +26,7 @@ export interface EditorTourProps {
   /** Opens the URL shortener HLD example on its Tests tab. */
   openHldExample: () => void;
   onClose: () => void;
+  onCover?: (band: CoverBand | null) => void;
 }
 
 const q = (selector: string) => () => {
@@ -37,7 +38,7 @@ const Code = ({ children }: { children: string }) => <code className="rounded bg
 
 /** The editor's first-run tour: text → diagram, edit, play, analysis/tests, share. */
 export default function EditorTour(props: EditorTourProps) {
-  const { source, nodes, diagramKey, canPlay, playing, view, hasTraffic, copied, setMobilePane, stopPlaying, edit, selectInEditor, openHldExample, onClose } = props;
+  const { source, nodes, diagramKey, canPlay, playing, view, hasTraffic, copied, setMobilePane, stopPlaying, edit, selectInEditor, openHldExample, onClose, onCover } = props;
   const phone = useIsPhone();
   const [editing, setEditing] = useState<{ baseline: string; target?: NameTarget }>();
   const [played, setPlayed] = useState(false);
@@ -191,5 +192,5 @@ export default function EditorTour(props: EditorTourProps) {
     [phone, source, nodes, diagramKey, target, edited, playing, canPlay, played, view, hasTraffic, shared, setMobilePane, selectInEditor, edit, stopPlaying, openHldExample],
   );
 
-  return <Tour label="Quick tour" steps={steps} phone={phone} onClose={onClose} />;
+  return <Tour label="Quick tour" steps={steps} phone={phone} onClose={onClose} onCover={onCover} />;
 }

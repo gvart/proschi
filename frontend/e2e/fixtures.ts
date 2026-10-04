@@ -98,3 +98,36 @@ export async function editorText(page: Page): Promise<string> {
     return view.state.doc.toString();
   });
 }
+
+/** The box around every visible canvas node, in page pixels. */
+export async function nodesBox(page: Page): Promise<{ left: number; top: number; right: number; bottom: number }> {
+  return canvasNodes(page).evaluateAll((els) => {
+    const rects = els.map((e) => e.getBoundingClientRect());
+    return {
+      left: Math.min(...rects.map((r) => r.left)),
+      top: Math.min(...rects.map((r) => r.top)),
+      right: Math.max(...rects.map((r) => r.right)),
+      bottom: Math.max(...rects.map((r) => r.bottom)),
+    };
+  });
+}
+
+/** Waits until every canvas node lies inside the visible canvas (the view is fitted), optionally above `bottomLimit`. */
+export async function expectDiagramFitted(page: Page, bottomLimit = Infinity): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const pane = await page.locator('.react-flow:visible').boundingBox();
+        if (!pane) return 'no canvas';
+        const box = await nodesBox(page);
+        const inside =
+          box.left >= pane.x - 1 &&
+          box.right <= pane.x + pane.width + 1 &&
+          box.top >= pane.y - 1 &&
+          box.bottom <= Math.min(pane.y + pane.height, bottomLimit) + 1;
+        return inside ? 'fitted' : JSON.stringify({ pane, box });
+      },
+      { message: 'diagram fitted inside the canvas' },
+    )
+    .toBe('fitted');
+}

@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -73,6 +73,8 @@ import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import HelpMenu from '../../onboarding/HelpMenu';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
+import type { CoverBand } from '../../onboarding/Tour';
+import type { FitInset } from '../Diagram/useFitOnChange';
 
 // Panes that are not visible at start load on first use.
 const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
@@ -142,6 +144,8 @@ export default function Playground() {
   const [tour, setTour] = useState<StartMode>(initialTourMode);
   /** Bumped by Help → Take the tour, so a replay starts at the first step. */
   const [tourRun, setTourRun] = useState(0);
+  /** The screen band a phone tour card covers; the canvas fits the diagram around it. */
+  const [tourCover, setTourCover] = useState<CoverBand | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
@@ -675,6 +679,7 @@ export default function Playground() {
                     mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
                     notice={notice}
                     onNotice={setNotice}
+                    cover={tour === 'tour' ? tourCover : null}
                   />
                 </ReactFlowProvider>
               )}
@@ -727,6 +732,7 @@ export default function Playground() {
             selectInEditor={selectInEditor}
             openHldExample={openHldExample}
             onClose={() => setTour(null)}
+            onCover={setTourCover}
           />
         </Suspense>
       )}
@@ -827,6 +833,8 @@ interface DiagramViewProps {
   /** A short message shown over the canvas, e.g. why an edit was refused. */
   notice: string | null;
   onNotice: (message: string) => void;
+  /** A band of the screen covered by a floating card; fitting keeps the diagram clear of it. */
+  cover?: CoverBand | null;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -847,6 +855,7 @@ function DiagramView({
   importedNodes,
   notice,
   onNotice,
+  cover,
 }: DiagramViewProps) {
   const { getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
@@ -894,7 +903,21 @@ function DiagramView({
     }
   };
   // Re-fit once nodes are measured after being added or removed, not on every drag.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef });
+  // The part of the canvas a covering band hides, measured after layout.
+  const [inset, setInset] = useState<FitInset | undefined>(undefined);
+  const coverKey = cover ? `${cover.top}:${cover.bottom}` : '';
+  useLayoutEffect(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!cover || !rect || rect.height === 0) return setInset(undefined);
+    // A card docked low hides the bottom of the canvas, one docked high its top.
+    const low = cover.top + cover.bottom > rect.top + rect.bottom;
+    const top = low ? 0 : Math.max(0, cover.bottom - rect.top);
+    const bottom = low ? Math.max(0, rect.bottom - cover.top) : 0;
+    setInset((prev) => (prev?.top === top && prev?.bottom === bottom ? prev : { top, bottom }));
+    // coverKey captures cover by value; fitKey changes when the pane is shown again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverKey, fitKey]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef, inset });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
