@@ -9,6 +9,8 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-10-04
+
 ### Added
 - First-run onboarding. The editor opens with a five-step tour the first time
   (text → diagram, change a line, play a use case, Analysis/Tests, share and
@@ -200,7 +202,8 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...HEAD
+[0.7.0]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...tooling-v0.7.0
 [0.6.0]: https://github.com/gvart/proschi/compare/tooling-v0.5.0...tooling-v0.6.0
 [0.5.0]: https://github.com/gvart/proschi/compare/tooling-v0.4.0...tooling-v0.5.0
 [0.4.0]: https://github.com/gvart/proschi/compare/tooling-v0.3.0...tooling-v0.4.0
