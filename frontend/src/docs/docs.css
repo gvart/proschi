@@ -719,7 +719,7 @@
 .live__stage {
   position: relative;
   height: 340px;
-  background: #f9fafb;
+  background: rgb(var(--c-paper));
 }
 .live__stage--playing {
   height: 560px;

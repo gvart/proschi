@@ -7,7 +7,7 @@
 :where(.demo__canvas) ::before,
 :where(.demo__canvas) ::after {
   box-sizing: border-box;
-  border: 0 solid #e5e7eb;
+  border: 0 solid rgb(var(--c-ink) / 0.15);
 }
 
 @tailwind components;

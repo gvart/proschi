@@ -22,7 +22,7 @@ export function MermaidMenuItems({ source, close }: { source: MermaidSource; clo
   const { diagram, useCaseId, scenarioId } = source;
   return (
     <>
-      <div className="my-1 border-t border-gray-100" />
+      <div className="my-1 border-t border-ink/10" />
       <MenuItem
         onSelect={() => {
           close();

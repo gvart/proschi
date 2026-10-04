@@ -36,7 +36,7 @@ import {
 import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
-import { useFitOnChange } from '../Diagram/useFitOnChange';
+import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
@@ -70,6 +70,11 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
+import { useZenMode } from './useZenMode';
+import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
+import EditorZone from './EditorZone';
+import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
+import Tabs from '../../design/Tabs';
 import HelpMenu from '../../onboarding/HelpMenu';
 import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
@@ -149,6 +154,7 @@ export default function Playground() {
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
+  const zen = useZenMode();
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -380,21 +386,22 @@ export default function Playground() {
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <div className="ps-light h-[100dvh] flex flex-col bg-gray-50">
-      <Header base="../" current="editor" compact>
+    <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
+      <ZenCollapse zen={zen.zen}>
+        <Header base="../" current="editor" compact>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
           <Menu
             label="Diagrams"
             trigger={
               <>
-                <span className="max-w-[10rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
+                <span className="max-w-[7.5rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
                 <ChevronDown size={14} />
               </>
             }
           >
             {(close) => (
               <>
-                <div className="px-3 pt-1 pb-1.5 text-xs font-medium uppercase tracking-wide text-gray-400">Saved in this browser</div>
+                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>Saved in this browser</div>
                 <ul className="max-h-72 overflow-y-auto">
                   {sortedDocs.map((doc) => {
                     const title = titleOf(doc.source);
@@ -406,10 +413,10 @@ export default function Playground() {
                             openDoc((s) => selectDoc(s, doc.id));
                             close();
                           }}
-                          className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-gray-100 ${doc.id === docState.currentId ? 'font-semibold text-blue-700' : 'text-gray-700'}`}
+                          className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-ink/10 ${doc.id === docState.currentId ? 'font-bold text-ink shadow-[inset_4px_0_0_rgb(var(--c-pink))]' : 'text-ink/85'}`}
                         >
                           <span className="block truncate">{title}</span>
-                          <span className="block truncate text-xs font-normal text-gray-400">
+                          <span className="block truncate text-xs font-normal text-muted">
                             {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
                           </span>
                         </button>
@@ -417,14 +424,14 @@ export default function Playground() {
                           aria-label={`Rename file ${fileNameOf(doc)}`}
                           title="Rename the file imports refer to"
                           onClick={() => renameDocFile(doc.id, fileNameOf(doc))}
-                          className="p-1.5 rounded text-gray-400 hover:text-gray-700 hover:bg-gray-100"
+                          className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
                         >
                           <Pencil size={14} />
                         </button>
                         <button
                           aria-label={`Delete ${title}`}
                           onClick={() => deleteDoc(doc.id, title)}
-                          className="mr-1 p-1.5 rounded text-gray-400 hover:text-red-600 hover:bg-red-50"
+                          className="mr-1 p-1.5 rounded text-muted hover:text-fail hover:bg-fail/10"
                         >
                           <Trash2 size={14} />
                         </button>
@@ -432,7 +439,7 @@ export default function Playground() {
                     );
                   })}
                 </ul>
-                <div className="my-1 border-t border-gray-100" />
+                <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<FilePlus size={14} />}
                   onSelect={() => {
@@ -467,9 +474,9 @@ export default function Playground() {
                     editorRef.current?.format();
                   }}
                 >
-                  Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
+                  Format code <span className="ml-auto text-xs text-muted">Shift+Alt+F</span>
                 </MenuItem>
-                <div className="my-1 border-t border-gray-100" />
+                <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<Archive size={14} />}
                   onSelect={() => {
@@ -488,7 +495,7 @@ export default function Playground() {
                 >
                   Import backup…
                 </MenuItem>
-                <p className="px-3 pt-0.5 pb-1 text-xs text-gray-400">Saved in this browser only — export a backup.</p>
+                <p className="px-3 pt-0.5 pb-1 text-xs text-muted">Saved in this browser only — export a backup.</p>
               </>
             )}
           </Menu>
@@ -526,7 +533,7 @@ export default function Playground() {
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"
-            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-ink hover:bg-ink/10"
+            className={toolButton}
           >
             <BookOpen size={16} />
             <span className="hidden sm:inline">Examples</span>
@@ -541,7 +548,7 @@ export default function Playground() {
               setInitialStep(undefined);
             }}
             disabled={diagram.useCases.length === 0}
-            className="flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] text-sm border border-ink/40 rounded-md px-2 py-2 sm:py-1.5 bg-surface text-ink disabled:text-muted"
+            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] ${field}`}
           >
             {diagram.useCases.length === 0 && <option value="">No use cases</option>}
             {useCaseGroups.map((group) =>
@@ -561,7 +568,7 @@ export default function Playground() {
             <button
               onClick={stopPlaying}
               aria-label="Back to diagram"
-              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-ink/40 text-ink hover:bg-ink/10"
+              className={outlineButton}
             >
               <LayoutGrid size={16} />
               <span className="hidden sm:inline">Diagram</span>
@@ -573,62 +580,64 @@ export default function Playground() {
               data-tour="play"
               aria-label="Play"
               title={canPlay ? 'Play this use case' : 'Add a usecase with steps to play it'}
-              className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-2 sm:py-1.5 rounded-md border-bw-1 border-ink bg-pop-yellow text-on-accent shadow-brutal-sm transition-[transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px active:translate-x-[3px] active:translate-y-[3px] active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+              className={primaryButton}
             >
               <Play size={16} />
               <span className="hidden sm:inline">Play</span>
             </button>
           )}
 
+          <ZenButton zen={zen} className={iconButton} />
+
           <button
             onClick={copyShareLink}
             data-tour="share"
             aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-ink/40 text-ink hover:bg-ink/10"
+            className={outlineButton}
           >
             {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
             <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
           </button>
         </div>
-      </Header>
-      {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
+        </Header>
+        {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
 
-      <div role="tablist" aria-label="View" data-tour="panes" className="md:hidden flex bg-white border-b border-gray-200">
-        {(['code', 'diagram'] as const).map((pane) => (
-          <button
-            key={pane}
-            role="tab"
-            aria-selected={mobilePane === pane}
-            onClick={() => setMobilePane(pane)}
-            className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 ${mobilePane === pane ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
-          >
-            {pane === 'code' ? <Code2 size={16} /> : <Network size={16} />}
-            {pane === 'code' ? 'Code' : playing ? 'Playback' : VIEW_LABEL[view]}
-            {pane === 'code' && problemCount > 0 && (
-              <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{problemCount}</span>
-            )}
-          </button>
-        ))}
-      </div>
+        <div data-tour="panes" className="md:hidden bg-surface">
+          <Tabs
+            label="View"
+            idPrefix="pane"
+            fill
+            value={mobilePane}
+            onChange={setMobilePane}
+            items={[
+              { id: 'code', label: 'Code', icon: <Code2 size={16} />, badge: problemCount > 0 ? problemCount : undefined },
+              { id: 'diagram', label: playing ? 'Playback' : VIEW_LABEL[view], icon: <Network size={16} /> },
+            ]}
+          />
+        </div>
+      </ZenCollapse>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <section
+        <EditorZone
+          id="pane-panel-code"
           data-tour="code"
-          className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r border-gray-200 bg-white`}
+          className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r-bw-2`}
         >
           <div className="flex-1 min-h-0">
             <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
-        </section>
+        </EditorZone>
 
-        <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
-          {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
-          {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
-            <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
-          )}
-          <div className="flex-1 min-h-0 relative">
+        <section id="pane-panel-diagram" className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
+          <ZenCollapse zen={zen.zen}>
+            {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
+            {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
+              <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
+            )}
+          </ZenCollapse>
+          <div id={playing ? undefined : `view-panel-${view}`} className="flex-1 min-h-0 relative">
             <Suspense fallback={<PaneLoading />}>
               {playing && playedUseCase ? (
                 <UseCasePlayer
@@ -679,8 +688,8 @@ export default function Playground() {
                 </div>
               ) : (
                 <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-sm text-gray-400">
-                    Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>
+                  <p className="text-sm text-muted">
+                    Start typing, e.g. <code className="px-1 bg-ink/5 rounded font-mono">api -&gt; db</code>
                   </p>
                 </div>
               ))}
@@ -722,6 +731,7 @@ export default function Playground() {
           />
         </Suspense>
       )}
+      <ZenStatus zen={zen} />
       {tour === 'hint' && (
         <Suspense fallback={null}>
           <TourHint
@@ -765,9 +775,9 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
     <div
       role="tablist"
       aria-label={`Scenarios of ${useCase.name}`}
-      className="flex items-center gap-1 px-2 py-1.5 bg-white border-b border-gray-200 overflow-x-auto"
+      className={`flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto ${subBar}`}
     >
-      <span className="hidden sm:inline px-1.5 text-xs font-medium uppercase tracking-wide text-gray-400 flex-shrink-0">Scenarios</span>
+      <span className={`hidden sm:inline px-1.5 flex-shrink-0 ${eyebrow}`}>Scenarios</span>
       {useCase.scenarios.map((s: DiagramScenario) => {
         const active = s.id === current;
         const error = s.outcome === 'error';
@@ -780,17 +790,15 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
             aria-selected={active}
             onClick={() => onPick(s.id)}
             title={s.condition ? `Play “${s.name}” — when ${s.condition}` : `Play “${s.name}”`}
-            className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border px-3 py-1.5 sm:py-1 text-sm whitespace-nowrap ${
+            className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border-bw-1 px-3 py-1.5 sm:py-1 text-sm font-semibold whitespace-nowrap transition-[transform,box-shadow] duration-d1 ${
               active
-                ? error
-                  ? 'border-red-600 bg-red-50 text-red-800'
-                  : 'border-blue-600 bg-blue-50 text-blue-800'
-                : 'border-gray-200 text-gray-700 hover:bg-gray-50'
+                ? `border-ink text-on-accent shadow-brutal-sm ${error ? 'bg-fail' : 'bg-pop-pink'}`
+                : 'border-ink/25 text-ink/85 hover:border-ink hover:bg-surface'
             }`}
           >
-            <span aria-hidden="true" className={`h-2 w-2 rounded-full ${error ? 'bg-red-500' : 'bg-green-500'}`} />
+            <span aria-hidden="true" className={`h-2 w-2 rounded-[2px] border border-current ${error ? 'bg-fail' : 'bg-pass'}`} />
             {s.name}
-            {status !== undefined && <span className={`text-xs tabular-nums ${error ? 'text-red-600' : 'text-gray-400'}`}>{status}</span>}
+            {status !== undefined && <span className={`font-mono text-xs tabular-nums ${active ? '' : error ? 'text-fail' : 'text-muted'}`}>{status}</span>}
             <span className="sr-only">{error ? '(error path)' : '(success path)'}</span>
           </button>
         );
@@ -963,14 +971,15 @@ function DiagramView({
         deleteKeyCode={null}
         zoomOnDoubleClick={false}
         fitView
+        fitViewOptions={FIT_VIEW_OPTIONS}
         minZoom={0.1}
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls showInteractive={false} />
         {(selection.nodes.length > 0 || selection.edges.length > 0) && (
-          <Panel position="top-left" className="flex items-center gap-1 rounded-md border border-gray-200 bg-white p-1 shadow-sm">
-            <span className="px-2 text-xs text-gray-500">
+          <Panel position="top-left" className="flex items-center gap-1 rounded border-bw-1 border-ink bg-surface p-1 shadow-brutal-sm">
+            <span className="px-2 text-xs text-muted">
               {selection.nodes.length === 1 && selection.edges.length === 0
                 ? (selection.nodes[0].data?.name ?? selection.nodes[0].id)
                 : `${selection.nodes.length + selection.edges.length} selected`}
@@ -978,7 +987,7 @@ function DiagramView({
             {selection.nodes.length === 1 && selection.edges.length === 0 && (
               <button
                 onClick={() => promptRename(selection.nodes[0])}
-                className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm text-gray-700 hover:bg-gray-100"
+                className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm font-semibold text-ink hover:bg-ink/10"
               >
                 <Pencil size={14} />
                 Rename
@@ -986,7 +995,7 @@ function DiagramView({
             )}
             <button
               onClick={deleteSelection}
-              className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm text-red-600 hover:bg-red-50"
+              className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm font-semibold text-red-700 dark:text-red-300 hover:bg-fail/10"
             >
               <Trash2 size={14} />
               Delete
@@ -994,12 +1003,12 @@ function DiagramView({
           </Panel>
         )}
         {notice && (
-          <Panel position="bottom-center" role="status" className="rounded-md bg-gray-900/90 px-3 py-1.5 text-xs text-white shadow">
+          <Panel position="bottom-center" role="status" className="rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
             {notice}
           </Panel>
         )}
         {nodes.length > 0 && (
-          <Panel position="bottom-right" className="hidden md:block text-xs text-gray-400 bg-white/80 rounded px-2 py-1">
+          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
             Drag to pin · double-click to rename · drag between dots to connect · Delete removes
           </Panel>
         )}
@@ -1009,7 +1018,7 @@ function DiagramView({
               <button
                 onClick={onResetLayout}
                 title="Remove every pos x,y and lay the diagram out automatically"
-                className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+                className={toolButton}
               >
                 <LayoutGrid size={16} />
                 Auto-layout
@@ -1062,7 +1071,7 @@ interface DiagnosticsPanelProps {
 function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
   if (diagnostics.length === 0) {
     return (
-      <div className="flex items-center gap-2 px-3 py-2 text-xs text-green-700 border-t border-gray-200 bg-gray-50">
+      <div className="flex items-center gap-2 px-3 py-2 text-xs text-pass border-t border-ink/15">
         <CheckCircle2 size={14} />
         No problems
       </div>
@@ -1070,20 +1079,20 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
   }
 
   return (
-    <ul data-testid="diagnostics" className="max-h-36 overflow-y-auto border-t border-gray-200 bg-gray-50 text-xs">
+    <ul data-testid="diagnostics" className="max-h-36 overflow-y-auto border-t border-ink/15 text-xs font-mono">
       {diagnostics.map((d, i) => (
         <li key={i}>
-          <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100">
+          <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
             {d.severity === 'error' ? (
-              <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-px" />
+              <AlertCircle size={14} className="text-fail flex-shrink-0 mt-px" />
             ) : (
-              <AlertTriangle size={14} className="text-amber-600 flex-shrink-0 mt-px" />
+              <AlertTriangle size={14} className="text-pop-yellow flex-shrink-0 mt-px" />
             )}
-            <span className="text-gray-500 tabular-nums flex-shrink-0">
+            <span className="text-muted tabular-nums flex-shrink-0">
               {d.file ? `${d.file}:` : ''}
               {d.line}:{d.col}
             </span>
-            <span className="text-gray-800">{d.message}</span>
+            <span className="text-ink font-sans">{d.message}</span>
           </button>
         </li>
       ))}

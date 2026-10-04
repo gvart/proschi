@@ -8,6 +8,8 @@ import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
 import { format, formattedOffset } from '../../dsl/format';
 import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
+import { editorLayout, focusThemeFor } from './editorThemes';
+import { useEditorTheme } from './useEditorTheme';
 
 export interface CodeEditorHandle {
   goTo: (line: number, col: number) => void;
@@ -27,18 +29,14 @@ interface CodeEditorProps {
   readOnly?: boolean;
   /** Focus the editor once it is created. Off by default: pages must not steal focus. */
   autoFocus?: boolean;
-  /** Replaces the built-in look (an EditorView.theme and/or highlight style); can change later. */
+  /**
+   * Replaces the look (an EditorView.theme and/or highlight style); can change later. By default the
+   * editor uses the focus theme the visitor's choice resolves to (editorThemes.ts: dark unless they picked light).
+   */
   theme?: Extension;
   /** More extensions for this editor, e.g. decorations; can change later. */
   extensions?: Extension;
 }
-
-const defaultTheme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px', backgroundColor: '#ffffff' },
-  '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', lineHeight: '1.6' },
-  '.cm-gutters': { backgroundColor: '#f9fafb', borderRight: '1px solid #e5e7eb' },
-  '&.cm-focused': { outline: 'none' },
-});
 
 function formatDocument(view: EditorView): boolean {
   const before = view.state.doc.toString();
@@ -55,6 +53,8 @@ const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly),
 export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref, readOnly = false, autoFocus = false, theme, extensions }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const mode = useEditorTheme();
+  const look = theme ?? focusThemeFor(mode);
   // Parts that can change after the editor is created.
   const [readOnlyConf, themeConf, extraConf] = useMemo(() => [new Compartment(), new Compartment(), new Compartment()], []);
   const onChangeRef = useRef(onChange);
@@ -77,8 +77,9 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
           proschiLanguage,
           autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current)] }),
           lintGutter(),
+          editorLayout,
           readOnlyConf.of(readOnlyState(readOnly)),
-          themeConf.of(theme ?? defaultTheme),
+          themeConf.of(look),
           extraConf.of(extensions ?? []),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
@@ -113,11 +114,11 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
     viewRef.current?.dispatch({
       effects: [
         readOnlyConf.reconfigure(readOnlyState(readOnly)),
-        themeConf.reconfigure(theme ?? defaultTheme),
+        themeConf.reconfigure(look),
         extraConf.reconfigure(extensions ?? []),
       ],
     });
-  }, [readOnly, theme, extensions, readOnlyConf, themeConf, extraConf]);
+  }, [readOnly, look, extensions, readOnlyConf, themeConf, extraConf]);
 
   useEffect(() => {
     const view = viewRef.current;
@@ -150,5 +151,5 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
     },
   }));
 
-  return <div ref={hostRef} className="proschi-editor h-full overflow-hidden" />;
+  return <div ref={hostRef} data-editor-theme={theme ? undefined : mode} className="proschi-editor h-full overflow-hidden" />;
 }

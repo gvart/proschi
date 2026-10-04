@@ -5,13 +5,14 @@
 @tailwind base;
 @tailwind utilities;
 
-.live__stage *,
-.live__stage ::before,
-.live__stage ::after {
+/* :where() keeps this reset at zero specificity, so the canvas's own borders (Canvas/canvas.css) win. */
+:where(.live__stage) *,
+:where(.live__stage) ::before,
+:where(.live__stage) ::after {
   box-sizing: border-box;
   border-width: 0;
   border-style: solid;
-  border-color: rgb(229 231 235);
+  border-color: rgb(var(--c-ink) / 0.15);
 }
 .live__stage :where(h1, h2, h3, p, pre, figure) {
   margin: 0;

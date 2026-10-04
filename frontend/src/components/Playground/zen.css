@@ -1,0 +1,89 @@
+/* Zen mode: chrome folds up with a hard, snappy motion; no fades. */
+.zen-collapse {
+  display: grid;
+  /* minmax(0, …): the column must not grow to the content's min-content width (phones). */
+  grid-template-columns: minmax(0, 1fr);
+  grid-template-rows: 1fr;
+  transition: grid-template-rows var(--d-2, 220ms) var(--e-out, cubic-bezier(0.2, 0.9, 0.1, 1));
+}
+.zen-collapse[data-open='false'] {
+  grid-template-rows: 0fr;
+}
+.zen-collapse-inner {
+  min-width: 0;
+  min-height: 0;
+  /* Clipped while folding; menus may overflow again once it is open. */
+  overflow: hidden;
+  transition:
+    transform var(--d-2, 220ms) var(--e-snap, cubic-bezier(0.5, -0.4, 0.3, 1.4)),
+    visibility 0s linear 0s;
+}
+.zen-collapse[data-open='true'] > .zen-collapse-inner {
+  animation: zen-unclip var(--d-2, 220ms) step-end forwards;
+}
+.zen-collapse[data-open='false'] > .zen-collapse-inner {
+  transform: translateY(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--d-2, 220ms) var(--e-snap, cubic-bezier(0.5, -0.4, 0.3, 1.4)),
+    visibility 0s linear var(--d-2, 220ms);
+}
+@keyframes zen-unclip {
+  from {
+    overflow: hidden;
+  }
+  to {
+    overflow: visible;
+  }
+}
+
+.zen-exit {
+  position: fixed;
+  top: 10px;
+  left: 50%;
+  margin-left: -36px;
+  z-index: 60;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font: 600 12px/1.4 var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+  color: rgb(var(--c-ink, 17 17 17));
+  background: rgb(var(--c-surface, 255 255 255));
+  border: 2px solid rgb(var(--c-ink, 17 17 17));
+  box-shadow: 3px 3px 0 rgb(var(--c-shadow, 17 17 17));
+  opacity: 0.55;
+  transition:
+    opacity var(--d-1, 120ms) ease,
+    transform var(--d-1, 120ms) ease,
+    box-shadow var(--d-1, 120ms) ease;
+  animation: zen-exit-in var(--d-3, 420ms) var(--e-snap, cubic-bezier(0.5, -0.4, 0.3, 1.4)) backwards;
+}
+.zen-exit:hover,
+.zen-exit:focus-visible {
+  opacity: 1;
+  transform: translate(-2px, -2px);
+  box-shadow: 5px 5px 0 rgb(var(--c-shadow, 17 17 17));
+}
+.zen-exit:focus-visible {
+  outline: 3px solid rgb(var(--c-blue, 61 90 254));
+  outline-offset: 2px;
+}
+@keyframes zen-exit-in {
+  from {
+    transform: translateY(-200%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .zen-collapse,
+  .zen-collapse-inner,
+  .zen-collapse[data-open='false'] > .zen-collapse-inner,
+  .zen-exit {
+    transition: none;
+    animation: none;
+  }
+  .zen-collapse[data-open='true'] > .zen-collapse-inner {
+    overflow: visible;
+  }
+}

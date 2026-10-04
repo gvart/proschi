@@ -4,7 +4,7 @@ import { parseMarkdown, type Block, type Inline } from './markdown';
 /** Renders a problem statement; see markdown.ts for what it understands. */
 export default function Markdown({ source }: { source: string }) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
-  return <div className="space-y-3 text-sm leading-relaxed text-gray-800">{blocks.map((b, i) => <BlockView key={i} block={b} />)}</div>;
+  return <div className="space-y-3 text-sm leading-relaxed text-ink">{blocks.map((b, i) => <BlockView key={i} block={b} />)}</div>;
 }
 
 function BlockView({ block }: { block: Block }) {
@@ -13,7 +13,7 @@ function BlockView({ block }: { block: Block }) {
       const Tag = (['h1', 'h2', 'h3', 'h4'] as const)[block.level - 1];
       const size = block.level === 1 ? 'text-xl' : block.level === 2 ? 'text-base' : 'text-sm';
       return (
-        <Tag className={`${size} pt-2 font-semibold text-gray-900`}>
+        <Tag className={`${size} pt-2 font-semibold text-ink`}>
           <Inlines nodes={block.children} />
         </Tag>
       );
@@ -46,7 +46,7 @@ function BlockView({ block }: { block: Block }) {
       );
     }
     case 'code':
-      return <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 p-3 font-mono text-xs">{block.text}</pre>;
+      return <pre className="overflow-x-auto rounded-md border border-ink/15 bg-paper p-3 font-mono text-xs">{block.text}</pre>;
   }
 }
 
@@ -57,7 +57,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
         return n.text;
       case 'code':
         return (
-          <code key={i} className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.85em]">
+          <code key={i} className="rounded bg-ink/5 px-1 py-0.5 font-mono text-[0.85em]">
             {n.text}
           </code>
         );
@@ -75,7 +75,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
         );
       case 'link':
         return (
-          <a key={i} href={n.href} className="text-blue-700 underline hover:text-blue-900" {...(/^https?:/.test(n.href) ? { target: '_blank', rel: 'noreferrer' } : {})}>
+          <a key={i} href={n.href} className="text-pop-blue underline hover:text-pop-blue" {...(/^https?:/.test(n.href) ? { target: '_blank', rel: 'noreferrer' } : {})}>
             <Inlines nodes={n.children} />
           </a>
         );

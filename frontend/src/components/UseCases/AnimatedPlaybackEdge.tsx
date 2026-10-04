@@ -3,9 +3,11 @@ import { BaseEdge, getBezierPath } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 
 // The design system's packet (src/design/tokens.css): pink, ink-outlined, red when the answer is an error.
-const PACKET_COLOR = '#FF5DA2';
-const ERROR_COLOR = '#FF3B30';
-const INK = '#111111';
+// Token colours go through `style` (CSS variables do not work in SVG presentation attributes), so they follow the theme.
+const PACKET_COLOR = 'rgb(var(--c-pink))';
+const ERROR_COLOR = 'rgb(var(--c-fail))';
+const INK = 'rgb(var(--c-ink))';
+const SHADOW = 'rgb(var(--c-shadow))';
 /** How far along the edge (in %) a failed call gets before it is cut off. */
 const FAIL_AT = 55;
 
@@ -86,8 +88,8 @@ export function AnimatedPlaybackEdge({
       {/* Where a failed call was cut off */}
       {isActive && failed && progress >= FAIL_AT && (
         <g transform={`translate(${dotPosition.x} ${dotPosition.y})`} strokeLinecap="round">
-          <circle r="13" fill="#FFFFFF" stroke={INK} strokeWidth="2.5" />
-          <g stroke={ERROR_COLOR} strokeWidth="3.5">
+          <circle r="13" strokeWidth="2.5" style={{ fill: 'rgb(var(--c-surface))', stroke: INK }} />
+          <g strokeWidth="3.5" style={{ stroke: ERROR_COLOR }}>
             <line x1={-5.5} y1={-5.5} x2={5.5} y2={5.5} />
             <line x1={-5.5} y1={5.5} x2={5.5} y2={-5.5} />
           </g>
@@ -97,8 +99,8 @@ export function AnimatedPlaybackEdge({
       {/* The packet travelling along the edge */}
       {isActive && progress < 100 && !(failed && progress >= FAIL_AT) && (
         <g transform={`translate(${dotPosition.x} ${dotPosition.y})`}>
-          <rect x="-6" y="-4" width="16" height="16" rx="3" fill={INK} transform={`rotate(${spin})`} />
-          <rect x="-8" y="-8" width="16" height="16" rx="3" fill={dotColor} stroke={INK} strokeWidth="2.5" transform={`rotate(${spin})`} />
+          <rect x="-6" y="-4" width="16" height="16" rx="3" transform={`rotate(${spin})`} style={{ fill: SHADOW }} />
+          <rect x="-8" y="-8" width="16" height="16" rx="3" strokeWidth="2.5" transform={`rotate(${spin})`} style={{ fill: dotColor, stroke: INK }} />
         </g>
       )}
     </>

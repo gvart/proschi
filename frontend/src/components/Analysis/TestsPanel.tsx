@@ -15,15 +15,15 @@ export default function TestsPanel({ results, onSelect }: TestsPanelProps) {
   const failed = results.filter((r) => !r.passed).length;
 
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="h-full overflow-y-auto bg-surface">
       <div className="max-w-3xl mx-auto px-4 py-4 text-sm">
         <div className="mb-3 flex items-baseline justify-between gap-3">
-          <p className={`font-medium ${failed ? 'text-red-700' : 'text-green-700'}`}>
+          <p className={`font-medium ${failed ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}`}>
             {failed ? `${failed} of ${results.length} failing` : `All ${results.length} passing`}
           </p>
           <ModelLink />
         </div>
-        <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
+        <ul className="divide-y divide-ink/10 rounded-md border border-ink/15">
           {results.map((r) => (
             <li key={r.id} className="px-3 py-2">
               <Row passed={r.passed} title={r.name} message={r.message} hint={r.hint} loc={r.loc} onSelect={onSelect} strong />
@@ -60,27 +60,27 @@ function Row({ passed, title, message, hint, loc, onSelect, strong }: RowProps) 
     <button
       onClick={() => loc && onSelect(loc)}
       disabled={!loc}
-      className="w-full flex items-start gap-2 text-left rounded hover:bg-gray-50 disabled:hover:bg-transparent"
+      className="w-full flex items-start gap-2 text-left rounded hover:bg-ink/5 disabled:hover:bg-transparent"
       title={loc ? `${loc.file ? `${loc.file}:` : 'Line '}${loc.line}` : undefined}
     >
-      <Icon size={strong ? 16 : 14} className={`mt-0.5 flex-shrink-0 ${passed ? 'text-green-600' : 'text-red-600'}`} aria-label={passed ? 'passed' : 'failed'} />
+      <Icon size={strong ? 16 : 14} className={`mt-0.5 flex-shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} aria-label={passed ? 'passed' : 'failed'} />
       <span className="min-w-0">
-        {title && <span className="block font-medium text-gray-900">{title}</span>}
-        <span className={`block ${strong ? 'text-gray-600' : 'text-xs text-gray-600'}`}>{message}</span>
-        {!passed && hint && <span className={`block text-amber-800 ${strong ? 'text-xs mt-0.5' : 'text-xs'}`}>{hint}</span>}
+        {title && <span className="block font-medium text-ink">{title}</span>}
+        <span className={`block ${strong ? 'text-ink/75' : 'text-xs text-ink/75'}`}>{message}</span>
+        {!passed && hint && <span className={`block text-amber-800 dark:text-amber-200 ${strong ? 'text-xs mt-0.5' : 'text-xs'}`}>{hint}</span>}
       </span>
-      {loc && <span className="ml-auto flex-shrink-0 text-xs text-gray-400 tabular-nums">{loc.file ? `${loc.file}:` : ''}{loc.line}</span>}
+      {loc && <span className="ml-auto flex-shrink-0 text-xs text-muted tabular-nums">{loc.file ? `${loc.file}:` : ''}{loc.line}</span>}
     </button>
   );
 }
 
 function EmptyState() {
   return (
-    <div className="h-full overflow-y-auto bg-white">
-      <div className="max-w-lg mx-auto px-6 py-10 text-sm text-gray-600 space-y-3">
-        <h2 className="text-base font-semibold text-gray-900">No requirements or tests</h2>
+    <div className="h-full overflow-y-auto bg-surface">
+      <div className="max-w-lg mx-auto px-6 py-10 text-sm text-ink/75 space-y-3">
+        <h2 className="text-base font-semibold text-ink">No requirements or tests</h2>
         <p>Requirements are checked against the analysis of your traffic; tests check how the flows work.</p>
-        <pre className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-800 overflow-x-auto">
+        <pre className="rounded-md bg-paper border border-ink/15 px-3 py-2 text-xs text-ink overflow-x-auto">
           {`requirements {
   p99 "Redirect" < 100ms
   availability >= 99.9%

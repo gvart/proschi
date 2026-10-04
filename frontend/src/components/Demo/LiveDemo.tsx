@@ -201,7 +201,7 @@ export default function LiveDemo({ editorHref, still = false }: LiveDemoProps) {
           />
         </div>
 
-        <div className="demo__canvas ps-light">
+        <div className="demo__canvas">
           <div className="demo__flow">
             {played ? (
               <UseCasePlayer

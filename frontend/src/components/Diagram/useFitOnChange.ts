@@ -2,6 +2,10 @@ import { useEffect, useRef, type RefObject } from 'react';
 import { getNodesBounds, getViewportForBounds, useNodesInitialized, useReactFlow, useStore, useStoreApi } from 'reactflow';
 
 const PADDING = 0.15;
+/** Fitting never zooms in past this, so a diagram of two nodes is not blown up to fill the pane. */
+export const FIT_MAX_ZOOM = 1.1;
+/** For `<ReactFlow fitView fitViewOptions>`, the first fit before this hook takes over. */
+export const FIT_VIEW_OPTIONS = { padding: PADDING, maxZoom: FIT_MAX_ZOOM };
 
 /** Parts of the pane covered by something floating over it (e.g. a tour card docked to a phone's edge). */
 export interface FitInset {
@@ -53,10 +57,10 @@ export function useFitOnChange(key: string, { duration, wrapper, inset }: FitOpt
       if ((top || bottom) && free > height / 4) {
         const nodes = getNodes().filter((n) => !n.hidden);
         if (nodes.length === 0) return;
-        const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), width, free, minZoom, maxZoom, PADDING);
+        const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), width, free, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), PADDING);
         setViewport({ ...viewport, y: viewport.y + top }, { duration });
       } else {
-        fitView({ padding: PADDING, duration });
+        fitView({ padding: PADDING, maxZoom: FIT_MAX_ZOOM, duration });
       }
     });
     return () => cancelAnimationFrame(frame);

@@ -172,6 +172,9 @@ describe('live demo', () => {
     expect(graph.size).toBeGreaterThan(10);
     for (const [file, text] of graph) {
       expect(FORBIDDEN.some((re) => re.test(file)), file).toBe(false);
+      // The site theme preference: the editor reads it to pick its focus theme. Only the header's
+      // theme toggle writes it, and the demo renders none (the tour test spies on setItem too).
+      if (file.endsWith('/src/design/theme.ts')) continue;
       expect(text, file).not.toMatch(/\b(localStorage|sessionStorage|indexedDB)\b/);
       expect(text, file).not.toMatch(/history\.(replaceState|pushState)/);
     }

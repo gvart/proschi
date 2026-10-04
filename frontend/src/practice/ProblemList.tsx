@@ -1,6 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
+import { field } from '../components/Playground/ui';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -33,30 +34,30 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
       (!query || `${p.title} ${p.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())),
   );
   const solved = problems.filter((p) => statusOf(progress, p.id) === 'solved').length;
-  const select = 'text-sm border border-gray-300 rounded-md px-2 py-2 sm:py-1.5 bg-white';
+  const select = field;
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-6 sm:py-10">
-      <h1 className="text-2xl font-semibold text-gray-900">System design practice</h1>
-      <p className="mt-1 text-sm text-gray-600">
+    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
+      <h1 className="font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">System design practice</h1>
+      <p className="mt-3 max-w-2xl text-base text-ink/80">
         Each problem gives use cases, traffic and requirements. Design the system in Proschi; the tests run in your browser and explain what holds up and
         what does not.
       </p>
-      <p className="mt-2 text-sm text-gray-500">
+      <p className="mt-3 inline-flex rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold tabular-nums text-ink">
         {solved} of {problems.length} solved
         {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
       </p>
 
-      <div className="mt-5 flex flex-wrap items-center gap-2">
+      <div className="mt-7 flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">
           <span className="sr-only">Search</span>
-          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+          <Search size={14} className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted" />
           <input
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search problems"
-            className="w-full text-sm border border-gray-300 rounded-md pl-8 pr-2 py-2 sm:py-1.5"
+            className={`w-full ${field} pl-8 placeholder:text-muted`}
           />
         </label>
         <select aria-label="Difficulty" value={difficulty} onChange={(e) => setDifficulty(e.target.value as Problem['difficulty'] | '')} className={select}>
@@ -85,31 +86,34 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
         </select>
       </div>
 
-      <ul className="mt-4 divide-y divide-gray-200 rounded-lg border border-gray-200 bg-white">
+      <ul className="mt-5 divide-y-2 divide-ink overflow-hidden rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md">
         {shown.map((p) => {
           const s = statusOf(progress, p.id);
           return (
             <li key={p.id}>
-              <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50">
+              <a
+                href={`#/${p.id}`}
+                className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-none focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
+              >
                 <StatusIcon status={s} />
                 <span className="flex-1 min-w-0">
-                  <span className="block font-medium text-gray-900">{p.title}</span>
-                  <span className="mt-0.5 flex flex-wrap gap-1">
+                  <span className="block font-display text-lg font-bold leading-tight text-ink">{p.title}</span>
+                  <span className="mt-1 flex flex-wrap gap-1">
                     {p.tags.map((t) => (
-                      <span key={t} className="rounded bg-gray-100 px-1.5 py-0.5 text-xs text-gray-600">
+                      <span key={t} className="rounded border border-ink/25 px-1.5 py-0.5 font-mono text-[11px] text-ink/75">
                         {t}
                       </span>
                     ))}
                   </span>
                 </span>
                 <SolveRate summary={stats?.problems[p.id]} />
-                <span className="hidden sm:inline text-xs text-gray-500">{STATUS_LABEL[s]}</span>
+                <span className="hidden sm:inline text-xs text-muted">{STATUS_LABEL[s]}</span>
                 <DifficultyBadge difficulty={p.difficulty} />
               </a>
             </li>
           );
         })}
-        {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-gray-400">No problem matches these filters.</li>}
+        {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">No problem matches these filters.</li>}
       </ul>
       {children}
     </main>
@@ -121,7 +125,7 @@ function SolveRate({ summary }: { summary?: StatsSummary['problems'][string] }) 
   if (!summary || summary.attempted === 0) return null;
   const runs = summary.medianRunsToSolve !== null ? `; a median of ${Math.round(summary.medianRunsToSolve * 10) / 10} test runs to solve` : '';
   return (
-    <span className="hidden sm:inline text-xs tabular-nums text-gray-500" title={`Solved by ${summary.solved} of ${summary.attempted} who tried${runs}`}>
+    <span className="hidden sm:inline text-xs tabular-nums text-muted" title={`Solved by ${summary.solved} of ${summary.attempted} who tried${runs}`}>
       {Math.round((summary.solved / summary.attempted) * 100)}% solved
     </span>
   );
