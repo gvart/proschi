@@ -10,7 +10,31 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
 /** Known-benign console errors. Each entry needs a comment saying why it is harmless. */
 const ALLOWED_CONSOLE_ERRORS: RegExp[] = [];
 
-export const test = base.extend<{ errors: string[] }>({
+/** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
+export const ONBOARDING_KEY = 'proschi.onboarding';
+
+export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void }>({
+  /**
+   * First-run tours would cover the pages most tests look at, so by default
+   * every page starts with them marked as seen. Tests of the tours themselves
+   * use `test.use({ onboarding: 'fresh' })`.
+   */
+  onboarding: ['seen', { option: true }],
+  onboardingSeen: [
+    async ({ context, onboarding }, use) => {
+      if (onboarding === 'seen') {
+        await context.addInitScript((key) => {
+          try {
+            window.localStorage.setItem(key, JSON.stringify({ editor: true, practice: true }));
+          } catch {
+            // Storage blocked: the tours fall back to memory.
+          }
+        }, ONBOARDING_KEY);
+      }
+      await use();
+    },
+    { auto: true },
+  ],
   errors: [
     async ({ context }, use) => {
       const errors: string[] = [];
@@ -73,4 +97,37 @@ export async function editorText(page: Page): Promise<string> {
     if (!view) throw new Error('editorText: cannot find the CodeMirror view behind .cm-content');
     return view.state.doc.toString();
   });
+}
+
+/** The box around every visible canvas node, in page pixels. */
+export async function nodesBox(page: Page): Promise<{ left: number; top: number; right: number; bottom: number }> {
+  return canvasNodes(page).evaluateAll((els) => {
+    const rects = els.map((e) => e.getBoundingClientRect());
+    return {
+      left: Math.min(...rects.map((r) => r.left)),
+      top: Math.min(...rects.map((r) => r.top)),
+      right: Math.max(...rects.map((r) => r.right)),
+      bottom: Math.max(...rects.map((r) => r.bottom)),
+    };
+  });
+}
+
+/** Waits until every canvas node lies inside the visible canvas (the view is fitted), optionally above `bottomLimit`. */
+export async function expectDiagramFitted(page: Page, bottomLimit = Infinity): Promise<void> {
+  await expect
+    .poll(
+      async () => {
+        const pane = await page.locator('.react-flow:visible').boundingBox();
+        if (!pane) return 'no canvas';
+        const box = await nodesBox(page);
+        const inside =
+          box.left >= pane.x - 1 &&
+          box.right <= pane.x + pane.width + 1 &&
+          box.top >= pane.y - 1 &&
+          box.bottom <= Math.min(pane.y + pane.height, bottomLimit) + 1;
+        return inside ? 'fitted' : JSON.stringify({ pane, box });
+      },
+      { message: 'diagram fitted inside the canvas' },
+    )
+    .toBe('fitted');
 }

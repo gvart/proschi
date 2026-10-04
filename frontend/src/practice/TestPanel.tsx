@@ -28,6 +28,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect }: 
         )}
         <button
           onClick={onRun}
+          data-tour="run"
           className="ml-auto inline-flex items-center gap-1.5 text-sm px-3 py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700"
         >
           <Play size={14} />

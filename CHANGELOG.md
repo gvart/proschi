@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- First-run onboarding. The editor opens with a five-step tour the first time
+  (text → diagram, change a line, play a use case, Analysis/Tests, share and
+  backup); most steps move on when you do the thing. Practice gets a three-step
+  intro on the first problem. Tours are small non-modal popovers (Esc or X to
+  skip, keyboard and screen reader friendly, reduced motion respected) and load
+  only when shown. Shared diagrams and example links open without a tour, with
+  at most a small corner hint. `?tour=1` / `?tour=0` force or suppress it.
+- A Help (?) menu in the editor and practice headers: replay the tour, a syntax
+  cheat-sheet (checked against the parser and docs/LANGUAGE.md in tests), the
+  language reference and how the simulation works.
+- An empty diagram offers a start: a template with the syntax in comments, an
+  example, or practice. An example picked while the diagram is empty replaces it.
 - A "How the simulation works" page at `/proschi/model/`: every rule the
   simulation uses (load from traffic, reads and writes, replicas, shards and
   single-primary writes, queueing, percentiles, fan-out and payloads,
@@ -20,6 +32,12 @@ deployed from `main` and ships with the same changes.
   number on the page from the simulation code. Linked from the landing page,
   the editor's Analysis and Tests tabs and the practice test panel
   ("How is this calculated?").
+
+### Fixed
+- On phones, switching back from Code to Diagram re-fits the diagram once the
+  canvas has its real size again; it used to be fitted into a stale 500×500
+  box and end up off centre or partly off screen. While a tour card is docked
+  over the canvas, the diagram is fitted into the space above it.
 
 ## [0.6.0] - 2026-10-04
 

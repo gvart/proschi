@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -34,7 +34,7 @@ import {
   Archive,
   ArchiveRestore,
 } from 'lucide-react';
-import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
+import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { useFitOnChange } from '../Diagram/useFitOnChange';
@@ -46,6 +46,7 @@ import {
   currentDoc,
   fileNameOf,
   initialState,
+  isBlank,
   removeDoc,
   renameFile,
   selectDoc,
@@ -70,6 +71,10 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
+import HelpMenu from '../../onboarding/HelpMenu';
+import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
+import type { CoverBand } from '../../onboarding/Tour';
+import type { FitInset } from '../Diagram/useFitOnChange';
 
 // Panes that are not visible at start load on first use.
 const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
@@ -77,6 +82,10 @@ const HldView = lazy(() => import('../Hld/HldView'));
 const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
 const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
+// First-run help costs nothing until it is shown.
+const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
+const TourHint = lazy(() => import('../../onboarding/TourHint'));
+const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
@@ -98,6 +107,13 @@ function loadInitialState(): DocumentState {
     sharedImports: link?.imports,
     fallbackSource: ecommerceExample,
   });
+}
+
+/** The tour on a first visit; only a hint over a shared diagram or example link, which should be seen first. */
+function initialTourMode(): StartMode {
+  const deepLink = readShareLink(window.location.hash) !== null || new URLSearchParams(window.location.search).has('example');
+  const returning = loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
+  return startMode('editor', { deepLink, returning });
 }
 
 export default function Playground() {
@@ -125,6 +141,11 @@ export default function Playground() {
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
   const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
+  const [tour, setTour] = useState<StartMode>(initialTourMode);
+  /** Bumped by Help → Take the tour, so a replay starts at the first step. */
+  const [tourRun, setTourRun] = useState(0);
+  /** The screen band a phone tour card covers; the canvas fits the diagram around it. */
+  const [tourCover, setTourCover] = useState<CoverBand | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
@@ -341,6 +362,19 @@ export default function Playground() {
     if (target && !current.imports?.[d.file]) openDoc((s) => selectDoc(s, target.id));
   };
 
+  const selectInEditor = useCallback((line: number, col: number, length: number, focus: boolean) => editorRef.current?.select(line, col, length, focus), []);
+  const diagramKey = useMemo(() => `${diagram.nodes.map((n) => `${n.id}:${n.name}`).join('|')}#${diagram.edges.length}`, [diagram]);
+  const openExample = (exampleSource: string) =>
+    // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
+    openDoc((s) => (isBlank(currentDoc(s).source) ? removeDoc(addDoc(s, exampleSource), s.currentId) : addDoc(s, exampleSource)));
+  const openHldExample = () => {
+    const example = examples.find((e) => e.id === 'url-shortener');
+    if (!example) return;
+    openExample(example.source);
+    setView('tests');
+    setMobilePane('diagram');
+  };
+
   const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -463,6 +497,13 @@ export default function Playground() {
             )}
           </Menu>
         </div>
+        <HelpMenu
+          className="sm:order-last"
+          onTour={() => {
+            setTourRun((n) => n + 1);
+            setTour('tour');
+          }}
+        />
         <input
           ref={fileInputRef}
           type="file"
@@ -543,6 +584,7 @@ export default function Playground() {
             <button
               onClick={startPlaying}
               disabled={!canPlay}
+              data-tour="play"
               aria-label="Play"
               title={canPlay ? 'Play this use case' : 'Add a usecase with steps to play it'}
               className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -554,6 +596,7 @@ export default function Playground() {
 
           <button
             onClick={copyShareLink}
+            data-tour="share"
             aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
             className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
@@ -565,7 +608,7 @@ export default function Playground() {
       </header>
       {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
 
-      <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
+      <div role="tablist" aria-label="View" data-tour="panes" className="md:hidden flex bg-white border-b border-gray-200">
         {(['code', 'diagram'] as const).map((pane) => (
           <button
             key={pane}
@@ -585,6 +628,7 @@ export default function Playground() {
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
         <section
+          data-tour="code"
           className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r border-gray-200 bg-white`}
         >
           <div className="flex-1 min-h-0">
@@ -635,17 +679,25 @@ export default function Playground() {
                     mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
                     notice={notice}
                     onNotice={setNotice}
+                    cover={tour === 'tour' ? tourCover : null}
                   />
                 </ReactFlowProvider>
               )}
             </Suspense>
-            {nodes.length === 0 && !playing && view === 'diagram' && (
-              <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                <p className="text-sm text-gray-400">
-                  Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>
-                </p>
-              </div>
-            )}
+            {nodes.length === 0 && !playing && view === 'diagram' &&
+              (isBlank(source) ? (
+                <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+                  <Suspense fallback={null}>
+                    <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
+                  </Suspense>
+                </div>
+              ) : (
+                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                  <p className="text-sm text-gray-400">
+                    Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>
+                  </p>
+                </div>
+              ))}
           </div>
         </section>
       </div>
@@ -655,8 +707,42 @@ export default function Playground() {
           <ExamplesGallery
             onClose={() => setShowExamples(false)}
             onPick={(example) => {
-              openDoc((s) => addDoc(s, example.source));
+              openExample(example.source);
               setShowExamples(false);
+            }}
+          />
+        </Suspense>
+      )}
+
+      {tour === 'tour' && (
+        <Suspense fallback={null}>
+          <EditorTour
+            key={tourRun}
+            source={source}
+            nodes={diagram.nodes}
+            diagramKey={diagramKey}
+            canPlay={canPlay}
+            playing={playing}
+            view={view}
+            hasTraffic={(diagram.traffic ?? []).length > 0}
+            copied={copied}
+            setMobilePane={setMobilePane}
+            stopPlaying={stopPlaying}
+            edit={editSource}
+            selectInEditor={selectInEditor}
+            openHldExample={openHldExample}
+            onClose={() => setTour(null)}
+            onCover={setTourCover}
+          />
+        </Suspense>
+      )}
+      {tour === 'hint' && (
+        <Suspense fallback={null}>
+          <TourHint
+            onStart={() => setTour('tour')}
+            onDismiss={() => {
+              markSeen('editor');
+              setTour(null);
             }}
           />
         </Suspense>
@@ -747,6 +833,8 @@ interface DiagramViewProps {
   /** A short message shown over the canvas, e.g. why an edit was refused. */
   notice: string | null;
   onNotice: (message: string) => void;
+  /** A band of the screen covered by a floating card; fitting keeps the diagram clear of it. */
+  cover?: CoverBand | null;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -767,6 +855,7 @@ function DiagramView({
   importedNodes,
   notice,
   onNotice,
+  cover,
 }: DiagramViewProps) {
   const { getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
@@ -814,7 +903,21 @@ function DiagramView({
     }
   };
   // Re-fit once nodes are measured after being added or removed, not on every drag.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef });
+  // The part of the canvas a covering band hides, measured after layout.
+  const [inset, setInset] = useState<FitInset | undefined>(undefined);
+  const coverKey = cover ? `${cover.top}:${cover.bottom}` : '';
+  useLayoutEffect(() => {
+    const rect = wrapperRef.current?.getBoundingClientRect();
+    if (!cover || !rect || rect.height === 0) return setInset(undefined);
+    // A card docked low hides the bottom of the canvas, one docked high its top.
+    const low = cover.top + cover.bottom > rect.top + rect.bottom;
+    const top = low ? 0 : Math.max(0, cover.bottom - rect.top);
+    const bottom = low ? Math.max(0, rect.bottom - cover.top) : 0;
+    setInset((prev) => (prev?.top === top && prev?.bottom === bottom ? prev : { top, bottom }));
+    // coverKey captures cover by value; fitKey changes when the pane is shown again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [coverKey, fitKey]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef, inset });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
