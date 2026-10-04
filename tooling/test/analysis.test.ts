@@ -37,6 +37,10 @@ describe('analysis', () => {
     const pg = items.find((i) => i.label === 'PostgreSQL')!;
     expect(pg).toMatchObject({ kind: 'tech', insertText: 'PostgreSQL]', range: { start: { line: 0, character: 4 } } });
     expect(complete(analyze('db [Postg]'), { line: 0, character: 9 }).find((i) => i.label === 'PostgreSQL')?.insertText).toBe('PostgreSQL');
+    // The whole catalog, with aliases to filter on: typing S3 finds AWS S3.
+    expect(items.length).toBeGreaterThan(200);
+    expect(items.find((i) => i.label === 'AWS S3')?.filterText).toContain('S3');
+    expect(pg.filterText).toContain('Postgres');
   });
 
   it('completes keywords and node ids at the start of a line, ids after an arrow', () => {
@@ -155,7 +159,19 @@ describe('analysis', () => {
     const fixed = applyEdit(doc, fix.edit);
     expect(fixed).toBe(doc.replace('api -> db : SQL\n', 'api -> db : SQL\nweb -> api\n'));
     expect(analyze(fixed).diagnostics).toEqual([]);
-    expect(quickFix(a, "Unknown tech stack 'Nope'; drawing a Rectangle")).toBeNull();
+    expect(quickFix(a, "Unknown tech stack 'Cobol'; simulated as a generic service, like [Service]")).toBeNull();
+  });
+
+  it('quick-fixes an unknown tech stack with the suggested one', () => {
+    const src = 'db "Orders" [Postgress] x2\n';
+    const b = analyze(src);
+    const warning = b.diagnostics[0];
+    expect(warning.message).toMatch(/^Unknown tech stack 'Postgress'\. Did you mean 'PostgreSQL'\?/);
+    const fix = quickFix(b, warning.message, toRange(warning))!;
+    expect(fix.title).toBe("Change to 'PostgreSQL'");
+    expect(applyEdit(src, fix.edit)).toBe('db "Orders" [PostgreSQL] x2\n');
+    // Without a suggestion there is nothing to fix.
+    expect(quickFix(b, "Unknown tech stack 'Zzyzx'; simulated as a generic service, like [Service]", toRange(warning))).toBeNull();
   });
 });
 

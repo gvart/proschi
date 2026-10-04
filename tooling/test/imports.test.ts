@@ -29,7 +29,7 @@ describe('proschi check with imports', () => {
     const results = checkFiles([checkout, payments]);
     expect(results.map((r) => [r.file, r.diagnostics.map((d) => `${d.line}:${d.severity}:${d.message}`)])).toEqual([
       [checkout, []],
-      [infra, ["4:warning:Unknown tech stack 'Cobol'; drawing a Rectangle"]],
+      [infra, ["4:warning:Unknown tech stack 'Cobol'; simulated as a generic service, like [Service]"]],
       // gateway -> orders is connected in infra.proschi, so only orders -> psp warns.
       [payments, ["2:error:Cannot find 'missing.proschi'", "4:warning:No connection between 'orders' and 'psp' in the architecture; add 'orders -> psp'"]],
     ]);

@@ -98,16 +98,18 @@ export const proschiStreamParser: StreamParser<LexState> = {
 /** Syntax highlighting for Proschi documents. */
 export const proschiLanguage = StreamLanguage.define(proschiStreamParser);
 
-const techOptions: Completion[] = componentCatalog.map((c) => ({
-  label: c.techStack,
-  type: 'type',
-  detail: c.category,
-  apply: (view: EditorView, _completion: Completion, from: number, to: number) => {
-    const closed = view.state.sliceDoc(to, to + 1) === ']';
-    const insert = closed ? c.techStack : `${c.techStack}]`;
-    view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length + (closed ? 1 : 0) } });
-  },
-}));
+/** Inserts `tech` and closes the bracket unless it already is. */
+const applyTech = (tech: string) => (view: EditorView, _completion: Completion, from: number, to: number) => {
+  const closed = view.state.sliceDoc(to, to + 1) === ']';
+  const insert = closed ? tech : `${tech}]`;
+  view.dispatch({ changes: { from, to, insert }, selection: { anchor: from + insert.length + (closed ? 1 : 0) } });
+};
+
+/** Every catalog tech, and each alias (`S3`, `Postgres`) inserting the tech it stands for. */
+const techOptions: Completion[] = componentCatalog.flatMap((c) => [
+  { label: c.techStack, type: 'type', detail: c.category, apply: applyTech(c.techStack) },
+  ...('aliases' in c ? c.aliases : []).map((alias: string) => ({ label: alias, type: 'type', detail: `→ ${c.techStack}`, boost: -1, apply: applyTech(c.techStack) })),
+]);
 
 const keywordOptions: Completion[] = [
   { label: 'title', type: 'keyword', apply: 'title "', detail: 'document title' },

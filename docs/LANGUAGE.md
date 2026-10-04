@@ -72,8 +72,50 @@ produces: two spaces per block and aligned columns in runs of similar lines; see
 | Comment | `# …` | Anywhere a token can start. A `#` inside quotes or a JSON payload is kept. |
 
 - **Ids** are letters, digits and `_`, starting with a letter or `_`.
-- **Tech** is any entry of the component palette, e.g. `[AWS Lambda]` or `[Redis]`. Matching ignores case. An unknown tech gives a warning and draws a rectangle.
+- **Tech** names a technology from the catalog (about 210 of them, see [Tech stacks](#tech-stacks)), e.g. `[AWS Lambda]`, `[Redis]` or `[Spring Boot]`. It decides the node's icon, its [kind](#selectors-and-kinds) and its default numbers in the simulation.
 - **Annotation tech stacks** (`Text Note`, `Sticky Note`, `Comment`) make text nodes. The description, or else the name, becomes the text.
+
+### Tech stacks
+
+The catalog lives in `frontend/src/catalog/componentCatalog.ts`; the editor's
+and the language server's completion list all of it. Each entry has the names
+people usually write as aliases, so `[S3]`, `[Amazon S3]` and `[AWS S3]` are
+the same node, and so are `[Postgres]` and `[PostgreSQL]`, `[ALB]` and
+`[AWS Load Balancer]`, `[k8s]` and `[Kubernetes]`. Matching ignores case,
+spaces and punctuation (`[route 53]`, `[pubsub]`, `[nodejs]`) and a trailing
+version (`[PostgreSQL 16]`, `[Redis 7.2]`). The parse output always holds the
+catalog name.
+
+| Group | Examples |
+|---|---|
+| Generic, one per kind | `Service`, `Worker`, `Database`, `NoSQL Database`, `Cache`, `Message Queue`, `Object Storage`, `CDN`, `Load Balancer`, `API Gateway`, `DNS`, `WAF`, `Function`, `Search Engine`, `Data Warehouse` |
+| Services and runtimes | `REST API`, `gRPC`, `GraphQL`, `WebSocket`, `Spring Boot`, `Kotlin`, `Java`, `Go`, `Node.js`, `Python`, `Django`, `FastAPI`, `.NET`, `Kubernetes`, `Docker`, `AWS ECS`, `AWS EKS`, `GCP GKE`, `Azure AKS` |
+| Functions | `AWS Lambda`, `GCP Cloud Functions`, `GCP Cloud Run`, `Azure Functions`, `Cloudflare Workers` |
+| Relational and NoSQL | `PostgreSQL`, `MySQL`, `MariaDB`, `SQL Server`, `Oracle`, `AWS Aurora`, `AWS RDS`, `GCP Cloud SQL`, `CockroachDB`, `GCP Spanner`, `DynamoDB`, `Cassandra`, `ScyllaDB`, `MongoDB`, `Azure Cosmos DB`, `Neo4j`, `etcd` |
+| Caches | `Redis`, `Valkey`, `Memcached`, `AWS ElastiCache`, `GCP Memorystore`, `Hazelcast` |
+| Queues and streams | `Kafka`, `AWS Kinesis`, `AWS SQS`, `AWS SNS`, `RabbitMQ`, `GCP Pub/Sub`, `NATS`, `AWS EventBridge`, `Azure Service Bus`, `Apache Pulsar`, `Redpanda` |
+| Search and analytics | `Elasticsearch`, `OpenSearch`, `Solr`, `GCP BigQuery`, `Snowflake`, `AWS Redshift`, `ClickHouse`, `InfluxDB`, `TimescaleDB` |
+| Storage | `AWS S3`, `GCP Cloud Storage`, `Azure Blob Storage`, `MinIO`, `Cloudflare R2` |
+| Edge | `AWS CloudFront`, `Fastly`, `Akamai`, `Cloudflare`, `AWS Load Balancer`, `nginx`, `Envoy`, `HAProxy`, `Kubernetes Ingress`, `AWS API Gateway`, `Kong`, `AWS Route53`, `AWS WAF` |
+| External | `Stripe`, `PayPal`, `Twilio`, `SendGrid`, `Auth0`, `Okta`, `APNs`, `FCM`, `Payment Gateway`, `Third Party API` |
+
+A tech the catalog does not know is a warning, not an error, so a document
+that uses one still renders and simulates. The node keeps the text you wrote
+and is drawn and simulated as the kind its name suggests: `[TigerBeetle DB]`
+is a database, `[Acme Queue]` a queue, `[In-house Search Index]` a search
+node. Without a telling word it takes the kind of the closest catalog tech
+(`[Postgress]` is a database), and otherwise it is a service. It is never a
+client: an unknown node has a finite capacity, a latency and a price. The
+warning names the closest catalog tech when there is one, and the language
+server offers to replace the name with it:
+
+```
+Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]
+```
+
+To keep a product name the catalog lacks without the warning, use the generic
+tech of its kind instead (`[Database]`, `[Message Queue]`) and put the product
+in the node's name or description.
 
 ## Use case steps
 
@@ -523,22 +565,27 @@ assertions is a warning and two tests with one name are an error.
 | `any strong store`, `any eventual store` | every data store of that consistency (relational databases and queues are strong; caches, most NoSQL stores, search, CDNs and object storage listings are eventual; `capacity { x consistency … }` overrides) |
 | `X or Y [or Z]` | a node matching any of them, e.g. `never calls any cache or any database` |
 
-A node's kind comes from its tech stack, falling back to its component type:
+A node's kind comes from its tech stack (an unknown tech: from its name, see
+[Tech stacks](#tech-stacks)):
 
 | Kind | Tech stacks (examples) |
 |---|---|
-| `client` | Actor, shapes and nodes without a tech |
-| `edge` | CloudFront, Load Balancer, Route53, API Gateway, Front Door, CDN |
-| `service` | REST API, gRPC, GraphQL, WebSocket, EC2, ECS, EKS, Fargate, VMs |
-| `function` | Lambda, Cloud Functions, Azure Functions, Cloud Run, App Engine |
-| `cache` | Redis, ElastiCache, Memcached, Hazelcast, Aerospike, Azure Cache |
-| `database` | PostgreSQL, MySQL, Aurora, RDS, DynamoDB, Cassandra, MongoDB, Cosmos DB, Spanner, … |
-| `search` | Elasticsearch |
-| `analytics` | BigQuery, InfluxDB, TimescaleDB |
-| `queue` | Kafka, SQS, SNS, Kinesis, Pub/Sub, RabbitMQ, Service Bus, … |
-| `storage` | S3, Blob Storage, Cloud Storage, EFS, EBS |
-| `external` | Payment Gateway, Email/SMS Service, Auth Service, Third Party API |
-| `other` | groups and text nodes |
+| `client` | Actor, Browser, Mobile App, shapes and nodes without a tech |
+| `edge` | WAF, AWS WAF, Global Accelerator; `any edge` also selects the four kinds below |
+| `cdn` | CDN, CloudFront, Fastly, Akamai, Cloudflare, Azure CDN, Cloud CDN, Front Door |
+| `loadbalancer` | Load Balancer, AWS Load Balancer (ALB, NLB, ELB), nginx, Envoy, HAProxy, Traefik, Ingress |
+| `gateway` | API Gateway, AWS API Gateway, Azure API Management, Apigee, Kong |
+| `dns` | DNS, Route53, Azure DNS, Cloud DNS |
+| `service` | Service, Worker, REST API, gRPC, GraphQL, WebSocket, Spring Boot, Go, Node.js, Kubernetes, EC2, ECS, EKS, Fargate, VMs |
+| `function` | Function, Lambda, Cloud Functions, Azure Functions, Cloud Run, App Engine, Cloudflare Workers |
+| `cache` | Cache, Redis, Valkey, ElastiCache, Memcached, Memorystore, Hazelcast, Aerospike |
+| `database` | Database, PostgreSQL, MySQL, Aurora, RDS, CockroachDB, Spanner, DynamoDB, Cassandra, ScyllaDB, MongoDB, Cosmos DB, Neo4j, … |
+| `search` | Search Engine, Elasticsearch, OpenSearch, Solr, Algolia |
+| `analytics` | Data Warehouse, BigQuery, Snowflake, Redshift, ClickHouse, InfluxDB, TimescaleDB |
+| `queue` | Message Queue, Kafka, SQS, SNS, Kinesis, Pub/Sub, RabbitMQ, NATS, Service Bus, … |
+| `storage` | Object Storage, S3, Blob Storage, Cloud Storage, MinIO, R2, EFS, EBS |
+| `external` | Third Party API, Payment Gateway, Stripe, Twilio, SendGrid, Auth0, Email/SMS Service |
+| `other` | groups, text nodes and the Note shape |
 
 ## Editing on the canvas
 
@@ -657,7 +704,7 @@ Where each statement may appear:
 `json` / `xml` / `text` payload, and on a response a leading status code.
 
 The grammar describes syntax only. The parser also checks meaning: duplicate
-ids, unknown tech stacks, responses without a matching request, steps between
+ids, unknown tech stacks (a warning), responses without a matching request, steps between
 nodes the architecture does not connect, import cycles and missing imported
 files, unknown use cases, scenarios and nodes in the high-level design
 sections, and so on.

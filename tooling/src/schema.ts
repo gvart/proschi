@@ -92,7 +92,12 @@ export function diagramSchema() {
           kind: { enum: ['component', 'group', 'text'] },
           name: str,
           type: { enum: componentTypes },
-          techStack: { enum: componentCatalog.map((c) => c.techStack) },
+          techStack: {
+            type: 'string',
+            description: 'A tech stack from the component catalog (see `examples`), or the text of an unknown one, in which case `inferredKind` is set.',
+            examples: componentCatalog.map((c) => c.techStack),
+          },
+          inferredKind: { enum: [...KINDS], description: 'Only for a tech the catalog does not know: the kind the simulation gives the node, from the words in its name.' },
           ownerTeam: str,
           description: str,
           parent: { ...str, description: 'Id of the enclosing group.' },

@@ -120,7 +120,7 @@ function drawCard(p: Placed, dx: number, dy: number, idPrefix: string): string {
     `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}">`,
     `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(width - 2)}" height="${r(height - 2)}" rx="8" fill="#ffffff" stroke="${GRAY.border}" stroke-width="2" filter="url(#${idPrefix}shadow)"/>`,
     `<rect x="${r(x + PAD_X)}" y="${r(y + PAD_Y)}" width="36" height="36" rx="4" fill="${typeColor(node.type)}"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 20, '#ffffff'),
+    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 20, '#ffffff', node.type),
     text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 600, fill: GRAY.name }),
     text(textX, y + PAD_Y + 32, fit(node.techStack, textMax, 12), { size: 12, fill: GRAY.tech }),
     node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: GRAY.team }) : '',

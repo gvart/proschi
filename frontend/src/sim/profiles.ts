@@ -1,4 +1,4 @@
-import type { TechStack } from '../types/canvas';
+import { componentCatalog, type TechProfileKey } from '../catalog/componentCatalog';
 import type { CapacityOverride, DiagramNode, Kind } from '../dsl/types';
 import { isDataStore, kindOf } from '../dsl/kinds';
 
@@ -82,19 +82,12 @@ export const KIND_PROFILES: Record<Kind, Row> = {
 /** Partitioned NoSQL stores: 20k reads and 20k writes per replica (§7.2). */
 const NOSQL: Row = { rps: 20_000, latencyMs: 5, availability: 0.9999, costUsd: 500, durable: true, consistency: 'eventual' };
 const NOSQL_STRONG: Row = { ...NOSQL, consistency: 'strong' };
+const PROFILE_ROWS: Record<TechProfileKey, Row> = { nosql: NOSQL, nosqlStrong: NOSQL_STRONG };
 
-/** Techs whose numbers differ from their kind's. Relational techs use the `database` row. */
-export const TECH_PROFILES: Partial<Record<TechStack, Row>> = {
-  DynamoDB: NOSQL,
-  'AWS DynamoDB': NOSQL,
-  Cassandra: NOSQL,
-  CouchDB: NOSQL,
-  'Azure Cosmos DB': NOSQL,
-  MongoDB: NOSQL_STRONG,
-  'GCP Bigtable': NOSQL_STRONG,
-  'GCP Firestore': NOSQL_STRONG,
-  'GCP Spanner': NOSQL_STRONG,
-};
+/** Techs whose numbers differ from their kind's (the catalog's `profile`). Relational techs use the `database` row. */
+export const TECH_PROFILES: Readonly<Record<string, Row>> = Object.fromEntries(
+  componentCatalog.flatMap((c) => ('profile' in c ? [[c.techStack, PROFILE_ROWS[c.profile]]] : [])),
+);
 
 /** Bandwidth per replica by kind, MB/s (§7.3); kinds not listed get 100. */
 const BANDWIDTH: Partial<Record<Kind, number>> = {
@@ -111,7 +104,7 @@ const DEFAULT_BANDWIDTH_MBPS = 100;
 /** The node's per-replica profile: tech table, else kind table, then the `capacity` override. */
 export function profileOf(node: DiagramNode, override?: CapacityOverride): Profile {
   const kind = kindOf(node);
-  const base = TECH_PROFILES[node.techStack] ?? KIND_PROFILES[kind];
+  const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : undefined) ?? KIND_PROFILES[kind];
   const baseRead = base.readRps ?? base.rps;
   const baseWrite = base.writeRps ?? base.rps;
   const readRps = override?.readRps ?? override?.rps ?? baseRead;

@@ -4,7 +4,7 @@
  * thin adapter around it, so the CLI, the language server and the web editor
  * can never disagree about what is valid.
  */
-export { parse } from '../../frontend/src/dsl/parser';
+export { DID_YOU_MEAN, parse } from '../../frontend/src/dsl/parser';
 export { addConnection } from '../../frontend/src/dsl/edit';
 export { format } from '../../frontend/src/dsl/format';
 export { examples } from '../../frontend/src/dsl/examples';

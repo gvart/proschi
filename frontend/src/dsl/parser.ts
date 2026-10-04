@@ -1,8 +1,8 @@
-import type { ComponentType, TechStack } from '../types/canvas';
-import { componentCatalog } from '../catalog/componentCatalog';
+import type { ComponentType, TechName, TechStack } from '../types/canvas';
+import { findTech, suggestTech } from '../catalog/componentCatalog';
 import { BracketCounter, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
-import { DATA_STORE_KINDS, KINDS, isDataStore, isKind, kindOf } from './kinds';
+import { DATA_STORE_KINDS, KINDS, TYPE_OF_KIND, isDataStore, isKind, kindFromName, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
 import { accessOf } from './access';
 import type {
@@ -21,6 +21,7 @@ import type {
   DiagramUseCase,
   Entity,
   FlowTest,
+  Kind,
   ParseOptions,
   ParseResult,
   Percentile,
@@ -122,9 +123,38 @@ const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
 
-const techByName = new Map<string, { type: ComponentType; techStack: TechStack }>(
-  componentCatalog.map((c) => [c.techStack.toLowerCase(), { type: c.type, techStack: c.techStack }])
-);
+/** The generic catalog tech of each kind, named in the warning about an unknown tech. */
+const GENERIC_TECH: Record<Kind, string> = {
+  client: 'Actor',
+  edge: 'WAF',
+  cdn: 'CDN',
+  loadbalancer: 'Load Balancer',
+  gateway: 'API Gateway',
+  dns: 'DNS',
+  service: 'Service',
+  function: 'Function',
+  cache: 'Cache',
+  database: 'Database',
+  search: 'Search Engine',
+  analytics: 'Data Warehouse',
+  queue: 'Message Queue',
+  storage: 'Object Storage',
+  external: 'Third Party API',
+  other: 'Note',
+};
+
+/**
+ * `Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is
+ * simulated as a generic database, like [Database]`. The language server's
+ * quick fix reads the suggestion back with `DID_YOU_MEAN`.
+ */
+export function unknownTechMessage(tech: string, kind: Kind, suggestion?: string): string {
+  const simulated = `simulated as a generic ${kind}${suggestion === GENERIC_TECH[kind] ? '' : `, like [${GENERIC_TECH[kind]}]`}`;
+  return suggestion ? `Unknown tech stack '${tech}'. Did you mean '${suggestion}'? Until then it is ${simulated}` : `Unknown tech stack '${tech}'; ${simulated}`;
+}
+
+/** Reads the suggestion out of an unknown-tech warning. */
+export const DID_YOU_MEAN = /^Unknown tech stack '(.*)'\. Did you mean '([^']+)'\?/;
 
 /**
  * Parses Proschi source text into a diagram. Parsing never throws: problems are
@@ -425,12 +455,12 @@ class Parser {
 
     let i = 2;
     let name = idToken.value;
-    let techStack = DEFAULT_GROUP_TECH;
+    let techStack: TechStack = DEFAULT_GROUP_TECH;
     if (tokens[i]?.kind === 'string') name = tokens[i++].value;
     if (tokens[i]?.kind === 'tech') {
       const tech = tokens[i++];
-      const resolved = this.resolveTech(tech, line);
-      if (resolved.type === 'group') techStack = resolved.techStack;
+      const resolved = findTech(tech.value);
+      if (resolved?.type === 'group') techStack = resolved.techStack;
       else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line));
     }
     let position: { x: number; y: number } | undefined;
@@ -581,6 +611,7 @@ class Parser {
         const resolved = this.resolveTech(t, line);
         node.type = resolved.type;
         node.techStack = resolved.techStack;
+        if (resolved.inferredKind) node.inferredKind = resolved.inferredKind;
         node.kind = resolved.type === 'text' ? 'text' : resolved.type === 'group' ? 'group' : 'component';
       } else if (t.kind === 'team') {
         node.ownerTeam = t.value;
@@ -1399,7 +1430,7 @@ class Parser {
   private parseSelectorAtom(tokens: Token[], i: number, line: number): SelectorAtom | undefined {
     const t = tokens[i];
     if (t?.kind === 'tech') {
-      const tech = techByName.get(t.value.toLowerCase())?.techStack ?? t.value;
+      const tech = findTech(t.value)?.techStack ?? t.value;
       return { selector: { tech }, next: i + 1, token: t, loc: this.locOf(t, line) };
     }
     if (isWord(t, 'any')) {
@@ -1425,7 +1456,10 @@ class Parser {
   /** Warns about a selector naming a tech stack that does not exist, and (once every file is read) a node that does not. */
   private checkSelectorLater({ atoms }: ParsedSelector) {
     for (const { selector, token, loc } of atoms) {
-      if ('tech' in selector && !techByName.has(token.value.toLowerCase())) this.warning(`Unknown tech stack '${token.value}'`, loc);
+      if ('tech' in selector && !findTech(token.value)) {
+        const suggestion = suggestTech(token.value);
+        this.warning(`Unknown tech stack '${token.value}'${suggestion ? `. Did you mean '${suggestion}'?` : ''}`, loc);
+      }
       if ('node' in selector) {
         this.deferred.push(() => {
           if (!this.nodes.has(selector.node)) this.warning(`Unknown node '${selector.node}'`, loc);
@@ -1607,11 +1641,27 @@ class Parser {
       : `in ${fileName(first.file ?? this.options.path ?? 'the root document')} on line ${first.line}`;
   }
 
-  private resolveTech(token: Token, line: number): { type: ComponentType; techStack: TechStack } {
-    const resolved = techByName.get(token.value.toLowerCase());
-    if (resolved) return resolved;
-    this.warning(`Unknown tech stack '${token.value}'; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
-    return { type: 'shape', techStack: DEFAULT_TECH };
+  /**
+   * A node's `[Tech]`: the catalog entry it names (name or alias), or for an
+   * unknown tech the text as written, with a warning that names the closest
+   * catalog tech. It is drawn and simulated as the kind its name suggests
+   * (`TigerBeetle DB`: database), else the kind of that closest tech
+   * (`Postgress`: database), else a service; never a free, infinitely fast
+   * client.
+   */
+  private resolveTech(token: Token, line: number): { type: ComponentType; techStack: TechName; inferredKind?: Kind } {
+    const found = findTech(token.value);
+    if (found) return { type: found.type, techStack: found.techStack };
+    const text = token.value.trim();
+    if (!text) {
+      this.warning(`Empty tech stack; drawing a ${DEFAULT_TECH}`, this.locOf(token, line));
+      return { type: 'shape', techStack: DEFAULT_TECH };
+    }
+    const suggestion = suggestTech(text);
+    const closest = suggestion && findTech(suggestion);
+    const kind = kindFromName(text) ?? (closest ? kindOf({ kind: 'component', type: closest.type, techStack: closest.techStack }) : undefined) ?? 'service';
+    this.warning(unknownTechMessage(text, kind, suggestion), this.locOf(token, line));
+    return { type: TYPE_OF_KIND[kind], techStack: text, inferredKind: kind };
   }
 
   private useCaseId(name: string): string {

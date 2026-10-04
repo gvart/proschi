@@ -176,6 +176,7 @@ connection.onCompletion(
       kind: COMPLETION_KIND[item.kind],
       detail: item.detail,
       textEdit: { range: item.range, newText: item.snippet ?? item.insertText ?? item.label },
+      ...(item.filterText ? { filterText: item.filterText } : {}),
       insertTextFormat: item.snippet ? InsertTextFormat.Snippet : InsertTextFormat.PlainText,
     })),
   ),
@@ -244,7 +245,7 @@ connection.onCodeAction((params) => {
   const actions: CodeAction[] = [];
   for (const diagnostic of params.context.diagnostics) {
     if (diagnostic.source !== 'proschi') continue;
-    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message);
+    const fix = typeof diagnostic.message === 'string' && quickFix(analysis, diagnostic.message, diagnostic.range);
     if (!fix) continue;
     actions.push({
       title: fix.title,

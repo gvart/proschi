@@ -1,5 +1,5 @@
 import type { ReactElement } from 'react';
-import type { TechStack, ComponentType } from '../types/canvas';
+import type { ComponentType, TechName, TechStack } from '../types/canvas';
 import {
   // Lucide icons
   Server,
@@ -22,6 +22,15 @@ import {
   Layers,
   StickyNote,
   FolderOpen,
+  Smartphone,
+  Monitor,
+  Search,
+  BarChart3,
+  Shield,
+  Shuffle,
+  DoorOpen,
+  Bell,
+  KeyRound,
 } from 'lucide-react';
 import {
   // AWS Icons
@@ -59,10 +68,73 @@ import {
   SiGooglecloud,
   // Service icons
   SiGraphql,
+  // Languages, platforms, proxies
+  SiSpringboot,
+  SiKotlin,
+  SiOpenjdk,
+  SiGo,
+  SiNodedotjs,
+  SiPython,
+  SiDjango,
+  SiFastapi,
+  SiFlask,
+  SiRubyonrails,
+  SiDotnet,
+  SiPhp,
+  SiRust,
+  SiElixir,
+  SiKubernetes,
+  SiDocker,
+  SiCloudflareworkers,
+  SiNginx,
+  SiEnvoyproxy,
+  SiTraefikproxy,
+  SiKong,
+  SiCloudflare,
+  SiFastly,
+  SiAkamai,
+  // Stores, queues, analytics
+  SiCockroachlabs,
+  SiScylladb,
+  SiApachehbase,
+  SiEtcd,
+  SiAmazondocumentdb,
+  SiOpensearch,
+  SiApachesolr,
+  SiMeilisearch,
+  SiAlgolia,
+  SiSnowflake,
+  SiClickhouse,
+  SiApachedruid,
+  SiDatabricks,
+  SiPrometheus,
+  SiTimescale,
+  SiAmazonredshift,
+  SiGooglebigquery,
+  SiGooglecloudspanner,
+  SiGooglecloudstorage,
+  SiGooglepubsub,
+  SiMinio,
+  SiNatsdotio,
+  SiApachepulsar,
+  // External services
+  SiStripe,
+  SiPaypal,
+  SiAdyen,
+  SiBraintree,
+  SiTwilio,
+  SiSendgrid,
+  SiMailgun,
+  SiAuth0,
+  SiOkta,
+  SiGooglemaps,
+  SiOpenai,
+  SiFirebase,
+  SiAmazonsimpleemailservice,
 } from 'react-icons/si';
 
-// Icon mapping for each TechStack
-export const techStackIcons: Record<TechStack, ReactElement> = {
+/** Icons of tech stacks that have their own; the rest get their component type's (`typeIcons`). */
+export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   // Generic Shapes
   Rectangle: <Square className="w-5 h-5" />,
   Circle: <Circle className="w-5 h-5" />,
@@ -70,7 +142,35 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   Cylinder: <Database className="w-5 h-5" />,
   Cloud: <Cloud className="w-5 h-5" />,
   Actor: <User className="w-5 h-5" />,
+  Browser: <Monitor className="w-5 h-5" />,
+  'Mobile App': <Smartphone className="w-5 h-5" />,
   Note: <FileText className="w-5 h-5" />,
+
+  // Generic components
+  'Load Balancer': <Shuffle className="w-5 h-5" />,
+  'API Gateway': <DoorOpen className="w-5 h-5" />,
+  WAF: <Shield className="w-5 h-5" />,
+  'Search Engine': <Search className="w-5 h-5" />,
+  'Data Warehouse': <BarChart3 className="w-5 h-5" />,
+
+  // Languages and frameworks, platforms
+  'Spring Boot': <SiSpringboot className="w-5 h-5" />,
+  Kotlin: <SiKotlin className="w-5 h-5" />,
+  Java: <SiOpenjdk className="w-5 h-5" />,
+  Go: <SiGo className="w-5 h-5" />,
+  'Node.js': <SiNodedotjs className="w-5 h-5" />,
+  Python: <SiPython className="w-5 h-5" />,
+  Django: <SiDjango className="w-5 h-5" />,
+  FastAPI: <SiFastapi className="w-5 h-5" />,
+  Flask: <SiFlask className="w-5 h-5" />,
+  'Ruby on Rails': <SiRubyonrails className="w-5 h-5" />,
+  '.NET': <SiDotnet className="w-5 h-5" />,
+  PHP: <SiPhp className="w-5 h-5" />,
+  Rust: <SiRust className="w-5 h-5" />,
+  Elixir: <SiElixir className="w-5 h-5" />,
+  Kubernetes: <SiKubernetes className="w-5 h-5" />,
+  Docker: <SiDocker className="w-5 h-5" />,
+  'Cloudflare Workers': <SiCloudflareworkers className="w-5 h-5" />,
 
   // Services
   'REST API': <Server className="w-5 h-5" />,
@@ -121,18 +221,18 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   'GCP GKE': <Container className="w-5 h-5" />,
 
   // GCP Storage
-  'GCP Cloud Storage': <HardDrive className="w-5 h-5" />,
+  'GCP Cloud Storage': <SiGooglecloudstorage className="w-5 h-5" />,
   'GCP Persistent Disk': <HardDrive className="w-5 h-5" />,
 
   // GCP Database
   'GCP Cloud SQL': <Database className="w-5 h-5" />,
   'GCP Firestore': <Database className="w-5 h-5" />,
   'GCP Bigtable': <Database className="w-5 h-5" />,
-  'GCP Spanner': <Database className="w-5 h-5" />,
-  'GCP BigQuery': <Database className="w-5 h-5" />,
+  'GCP Spanner': <SiGooglecloudspanner className="w-5 h-5" />,
+  'GCP BigQuery': <SiGooglebigquery className="w-5 h-5" />,
 
   // GCP Messaging
-  'GCP Pub/Sub': <MessageSquare className="w-5 h-5" />,
+  'GCP Pub/Sub': <SiGooglepubsub className="w-5 h-5" />,
 
   // GCP CDN/Network
   'GCP Cloud CDN': <Globe className="w-5 h-5" />,
@@ -183,7 +283,7 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   Elasticsearch: <SiElasticsearch className="w-5 h-5" />,
   Neo4j: <SiNeo4J className="w-5 h-5" />,
   InfluxDB: <SiInfluxdb className="w-5 h-5" />,
-  TimescaleDB: <Database className="w-5 h-5" />,
+  TimescaleDB: <SiTimescale className="w-5 h-5" />,
   MariaDB: <SiMariadb className="w-5 h-5" />,
   SQLite: <SiSqlite className="w-5 h-5" />,
   Oracle: <SiOracle className="w-5 h-5" />,
@@ -199,8 +299,8 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   RabbitMQ: <SiRabbitmq className="w-5 h-5" />,
   SQS: <MessageSquare className="w-5 h-5" />,
   'Redis Queue': <SiRedis className="w-5 h-5" />,
-  NATS: <MessageSquare className="w-5 h-5" />,
-  'Apache Pulsar': <MessageSquare className="w-5 h-5" />,
+  NATS: <SiNatsdotio className="w-5 h-5" />,
+  'Apache Pulsar': <SiApachepulsar className="w-5 h-5" />,
   ActiveMQ: <MessageSquare className="w-5 h-5" />,
   ZeroMQ: <MessageSquare className="w-5 h-5" />,
 
@@ -211,6 +311,63 @@ export const techStackIcons: Record<TechStack, ReactElement> = {
   'Email Service': <ExternalLink className="w-5 h-5" />,
   'SMS Service': <ExternalLink className="w-5 h-5" />,
   'Analytics Service': <ExternalLink className="w-5 h-5" />,
+  'Push Service': <Bell className="w-5 h-5" />,
+  Stripe: <SiStripe className="w-5 h-5" />,
+  PayPal: <SiPaypal className="w-5 h-5" />,
+  Adyen: <SiAdyen className="w-5 h-5" />,
+  Braintree: <SiBraintree className="w-5 h-5" />,
+  Twilio: <SiTwilio className="w-5 h-5" />,
+  SendGrid: <SiSendgrid className="w-5 h-5" />,
+  Mailgun: <SiMailgun className="w-5 h-5" />,
+  Auth0: <SiAuth0 className="w-5 h-5" />,
+  Okta: <SiOkta className="w-5 h-5" />,
+  'Google Maps': <SiGooglemaps className="w-5 h-5" />,
+  APNs: <Bell className="w-5 h-5" />,
+  FCM: <SiFirebase className="w-5 h-5" />,
+  OpenAI: <SiOpenai className="w-5 h-5" />,
+  'AWS SES': <SiAmazonsimpleemailservice className="w-5 h-5" />,
+  'AWS Cognito': <KeyRound className="w-5 h-5" />,
+
+  // Stores, search and analytics
+  CockroachDB: <SiCockroachlabs className="w-5 h-5" />,
+  ScyllaDB: <SiScylladb className="w-5 h-5" />,
+  HBase: <SiApachehbase className="w-5 h-5" />,
+  etcd: <SiEtcd className="w-5 h-5" />,
+  'AWS DocumentDB': <SiAmazondocumentdb className="w-5 h-5" />,
+  'AWS Redshift': <SiAmazonredshift className="w-5 h-5" />,
+  'AWS OpenSearch': <SiOpensearch className="w-5 h-5" />,
+  OpenSearch: <SiOpensearch className="w-5 h-5" />,
+  Solr: <SiApachesolr className="w-5 h-5" />,
+  Meilisearch: <SiMeilisearch className="w-5 h-5" />,
+  Algolia: <SiAlgolia className="w-5 h-5" />,
+  Snowflake: <SiSnowflake className="w-5 h-5" />,
+  ClickHouse: <SiClickhouse className="w-5 h-5" />,
+  'Apache Druid': <SiApachedruid className="w-5 h-5" />,
+  Databricks: <SiDatabricks className="w-5 h-5" />,
+  Prometheus: <SiPrometheus className="w-5 h-5" />,
+  Valkey: <SiRedis className="w-5 h-5" />,
+  KeyDB: <SiRedis className="w-5 h-5" />,
+  'GCP Memorystore': <SiRedis className="w-5 h-5" />,
+  MinIO: <SiMinio className="w-5 h-5" />,
+  'Cloudflare R2': <SiCloudflare className="w-5 h-5" />,
+  Redpanda: <SiApachekafka className="w-5 h-5" />,
+  'AWS MSK': <SiApachekafka className="w-5 h-5" />,
+
+  // CDN, proxies and gateways
+  Cloudflare: <SiCloudflare className="w-5 h-5" />,
+  Fastly: <SiFastly className="w-5 h-5" />,
+  Akamai: <SiAkamai className="w-5 h-5" />,
+  nginx: <SiNginx className="w-5 h-5" />,
+  Envoy: <SiEnvoyproxy className="w-5 h-5" />,
+  HAProxy: <Shuffle className="w-5 h-5" />,
+  Traefik: <SiTraefikproxy className="w-5 h-5" />,
+  'Kubernetes Ingress': <SiKubernetes className="w-5 h-5" />,
+  Kong: <SiKong className="w-5 h-5" />,
+  'Spring Cloud Gateway': <SiSpringboot className="w-5 h-5" />,
+  'AWS WAF': <Shield className="w-5 h-5" />,
+  'AWS Global Accelerator': <Globe className="w-5 h-5" />,
+  'Azure Load Balancer': <Network className="w-5 h-5" />,
+  'Azure Application Gateway': <Network className="w-5 h-5" />,
 
   // Text & Annotations
   'Text Note': <StickyNote className="w-5 h-5" />,
@@ -256,9 +413,26 @@ export const categoryIcons: Record<string, ReactElement> = {
   Grouping: <FolderOpen className="w-5 h-5" />,
 };
 
-// Helper function to get icon for a tech stack
-export function getTechStackIcon(techStack: TechStack): ReactElement {
-  return techStackIcons[techStack] || <Server className="w-5 h-5" />;
+/** Icons by component type, for tech stacks without their own (generic and unknown ones included). */
+export const typeIcons: Record<ComponentType, ReactElement> = {
+  shape: <Square className="w-5 h-5" />,
+  service: <Server className="w-5 h-5" />,
+  database: <Database className="w-5 h-5" />,
+  queue: <MessageSquare className="w-5 h-5" />,
+  external: <ExternalLink className="w-5 h-5" />,
+  serverless: <Zap className="w-5 h-5" />,
+  compute: <Cpu className="w-5 h-5" />,
+  container: <Container className="w-5 h-5" />,
+  storage: <HardDrive className="w-5 h-5" />,
+  cache: <Layers className="w-5 h-5" />,
+  cdn: <Globe className="w-5 h-5" />,
+  text: <StickyNote className="w-5 h-5" />,
+  group: <FolderOpen className="w-5 h-5" />,
+};
+
+/** The icon of a tech stack: its own, else its component type's. */
+export function getTechStackIcon(techStack: TechName, type?: ComponentType): ReactElement {
+  return techStackIcons[techStack as TechStack] ?? (type ? typeIcons[type] : undefined) ?? <Server className="w-5 h-5" />;
 }
 
 // Helper function to get color for a component type

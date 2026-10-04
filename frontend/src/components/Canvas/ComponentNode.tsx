@@ -7,7 +7,7 @@ import { getTechStackIcon, getComponentTypeColor } from '../../utils/iconMapping
 
 const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
   const color = getComponentTypeColor(data.type);
-  const icon = getTechStackIcon(data.techStack);
+  const icon = getTechStackIcon(data.techStack, data.type);
 
   return (
     <div

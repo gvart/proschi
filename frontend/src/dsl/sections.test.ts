@@ -216,7 +216,7 @@ describe('requirements', () => {
       ['warning', "Unknown use case 'Nope'"],
       ['warning', "Unknown use case 'Nope2'"],
       ['warning', "Unknown node 'ghost'"],
-      ['warning', "Unknown tech stack 'Nope'"],
+      ['warning', "Unknown tech stack 'Nope'. Did you mean 'Node.js'?"],
     ]);
   });
 
