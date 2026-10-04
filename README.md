@@ -62,7 +62,10 @@ test "Notes are stored before they are returned" {
   lists its formulas, its default numbers and what it leaves out.
 - **Practice**: system design problems (URL shortener, payments, chat, video
   streaming and more) whose tests tell you in the browser whether your design
-  holds up.
+  holds up. Optionally sign in with GitHub or Google to keep progress across
+  devices, see each problem's solve rate, compare your design's cost and p99
+  with other solvers', and join the leaderboard; the server re-runs the tests
+  before it records a solve. See [the backend](backend/README.md).
 - **CLI, LSP and VS Code**: `proschi check`, `fmt`, `render`, `test`,
   `analyze` and `problem` for CI; a language server for any LSP editor; a VS
   Code extension with a diagram preview. Use case steps can also be checked
@@ -105,12 +108,15 @@ For VS Code, download `proschi-<version>.vsix` from the
 
 ## Contributing
 
-The repository has two packages:
+The repository has three packages:
 
 - `frontend/`: the website, editor and practice platform (React, Vite). The
   language (`src/dsl`), simulation (`src/sim`) and HLD (`src/hld`) live here.
 - `tooling/`: the CLI, language server, TextMate grammar, JSON Schema and VS
   Code extension, bundled from the frontend sources with esbuild.
+- `backend/`: the optional API for practice accounts and stats (Cloudflare
+  Workers and D1), which verifies solutions with the frontend's parser and
+  simulation. See [backend/README.md](backend/README.md).
 
 ```sh
 # Web app
@@ -126,10 +132,17 @@ npm run typecheck
 npm test           # builds dist/ first
 node dist/cli.cjs check ../frontend/src/practice/problems
 npm run package:vscode   # dist/proschi.vsix
+
+# Backend
+cd backend
+npm ci
+npm run typecheck
+npm test           # in the Workers runtime, with a local D1
 ```
 
 A change to the language goes in `frontend/src/dsl/` with tests next to it;
-both test suites must pass, since the tooling bundles the same code.
+all three test suites must pass, since the tooling and the backend bundle the
+same code.
 
 ### Adding a practice problem
 

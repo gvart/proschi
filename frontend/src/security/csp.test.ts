@@ -32,7 +32,8 @@ describe('Content-Security-Policy', () => {
       expect(policy.get('object-src')).toEqual(["'none'"]);
       expect(policy.get('base-uri')).toEqual(["'self'"]);
       expect(policy.get('form-action')).toEqual(["'none'"]);
-      expect(policy.get('connect-src')).toEqual(["'self'"]);
+      // Only practice talks to the optional API (backend/); the build fills in its origin, or nothing.
+      expect(policy.get('connect-src')).toEqual(name === 'practice' ? ["'self'", '%VITE_API_ORIGIN%'] : ["'self'"]);
       expect(policy.get('worker-src')).toEqual(["'self'", 'blob:']);
       // The meta must come before any script so it applies to all of them.
       const head = html.slice(0, html.indexOf('</head>'));

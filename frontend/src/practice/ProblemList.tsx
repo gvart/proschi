@@ -1,19 +1,24 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
+import type { StatsSummary } from '../services/api';
 
 interface ProblemListProps {
   problems: ProblemListing[];
   progress: Progress;
+  /** Global solve rates, when the API is there. */
+  stats?: StatsSummary;
+  /** After the list, e.g. the leaderboard. */
+  children?: ReactNode;
 }
 
 const STATUS_LABEL: Record<Status, string> = { todo: 'To do', attempted: 'Attempted', solved: 'Solved' };
 
 /** Every problem with its difficulty, tags and status, filtered by those and by a search. */
-export default function ProblemList({ problems, progress }: ProblemListProps) {
+export default function ProblemList({ problems, progress, stats, children }: ProblemListProps) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState<'' | Problem['difficulty']>('');
   const [tag, setTag] = useState('');
@@ -39,6 +44,7 @@ export default function ProblemList({ problems, progress }: ProblemListProps) {
       </p>
       <p className="mt-2 text-sm text-gray-500">
         {solved} of {problems.length} solved
+        {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
       </p>
 
       <div className="mt-5 flex flex-wrap items-center gap-2">
@@ -96,6 +102,7 @@ export default function ProblemList({ problems, progress }: ProblemListProps) {
                     ))}
                   </span>
                 </span>
+                <SolveRate summary={stats?.problems[p.id]} />
                 <span className="hidden sm:inline text-xs text-gray-500">{STATUS_LABEL[s]}</span>
                 <DifficultyBadge difficulty={p.difficulty} />
               </a>
@@ -104,6 +111,18 @@ export default function ProblemList({ problems, progress }: ProblemListProps) {
         })}
         {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-gray-400">No problem matches these filters.</li>}
       </ul>
+      {children}
     </main>
+  );
+}
+
+/** "40% solved" over everyone who recorded a run; nothing until someone has. */
+function SolveRate({ summary }: { summary?: StatsSummary['problems'][string] }) {
+  if (!summary || summary.attempted === 0) return null;
+  const runs = summary.medianRunsToSolve !== null ? `; a median of ${Math.round(summary.medianRunsToSolve * 10) / 10} test runs to solve` : '';
+  return (
+    <span className="hidden sm:inline text-xs tabular-nums text-gray-500" title={`Solved by ${summary.solved} of ${summary.attempted} who tried${runs}`}>
+      {Math.round((summary.solved / summary.attempted) * 100)}% solved
+    </span>
   );
 }

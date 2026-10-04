@@ -9,6 +9,20 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Added
+- Optional practice accounts and global stats, served by a new `backend/`
+  (Cloudflare Workers and D1). Sign in with GitHub or Google from the practice
+  header to keep progress and designs across devices; progress already in the
+  browser is uploaded on first sign-in. The server re-runs a problem's tests
+  with the same parser and simulation before it records a solve. The problem
+  list shows each problem's solve rate, a solved problem shows how many
+  solved it, the median number of test runs to solve it, and where your
+  cheapest design's cost and fastest p99 fall among other solvers', and a
+  leaderboard lists those who opt in under a display name they choose. No
+  email address is stored; the account menu deletes the account and its data.
+  Builds without `VITE_API_URL` work as before, with progress in the browser
+  only.
+
 ## [0.7.0] - 2026-10-04
 
 ### Added

@@ -15,7 +15,8 @@ Status: accepted · Owner: gvart · Applies to: language, tooling, web editor
 
 Both rest on the same three additions: language for scale and requirements, a
 deterministic simulation, and executable tests. Everything runs in the browser
-and in the CLI; there is no backend in this phase.
+and in the CLI; there is no backend in this phase. (Optional accounts and
+global practice stats came later, in `backend/`; see backend/README.md.)
 
 Non-goals for this phase: accounts, leaderboards, server-side hidden tests,
 benchmark-accurate performance numbers (the simulation teaches orders of

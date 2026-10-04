@@ -1,0 +1,25 @@
+// The Proschi API: sign-in and practice stats (backend/README.md).
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "proschi-api",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-08-15",
+  "observability": { "enabled": true },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "proschi",
+      // `npx wrangler d1 create proschi` prints this id; it is not a secret.
+      "database_id": "00000000-0000-0000-0000-000000000000",
+      "migrations_dir": "migrations"
+    }
+  ],
+  // Verifying a solution runs the simulation, so test runs are rate limited per user.
+  "ratelimits": [{ "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } }],
+  "vars": {
+    // Pages that may call the API and that sign-in may return to, comma-separated.
+    "ALLOWED_ORIGINS": "https://gvart.github.io,http://localhost:5173,http://localhost:4173"
+  }
+  // Secrets (`npx wrangler secret put <NAME>`, or .dev.vars locally):
+  // SESSION_SECRET, GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET, GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET
+}

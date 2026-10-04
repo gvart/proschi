@@ -485,7 +485,11 @@ and flow test, with what was measured and how to fix what fails.
   list the result of each assertion line. Hints open one at a time;
   the reference solution is shown after solving, or before with a confirmation.
 - Progress (to do, attempted, solved) and your last code per problem are kept
-  in this browser only.
+  in this browser. When the site has the optional API (backend/README.md),
+  signing in with GitHub or Google also keeps them on the server, across
+  devices: the server re-runs the tests before it records a solve, and shows
+  how many solved each problem, how your design's cost and p99 compare with
+  other solvers', and a leaderboard of those who opt in.
 
 - In practice, `capacity` comes from the problem only: a `capacity` line in
   your file is an error (*capacity is set by the problem; change the design

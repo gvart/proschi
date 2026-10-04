@@ -32,6 +32,9 @@ jobs:
       - run: npm run lint
       - run: npm test
       - run: npm run build
+        env:
+          # The practice API (backend/README.md); unset, the site has no sign-in or global stats.
+          VITE_API_URL: ${{ vars.PROSCHI_API_URL }}
       - uses: actions/upload-pages-artifact@v5
         if: github.event_name != 'pull_request'
         with:

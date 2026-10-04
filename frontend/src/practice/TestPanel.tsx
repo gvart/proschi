@@ -1,4 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { RunResult } from './workspace';
 
@@ -11,10 +12,12 @@ interface TestPanelProps {
   onRun: () => void;
   /** Jumps to a line of the solution. */
   onSelect: (loc: SourceLoc) => void;
+  /** How others did on this problem (CommunityStats), shown under the verdict. */
+  community?: ReactNode;
 }
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelect }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community }: TestPanelProps) {
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
   return (
     <div className="h-full flex flex-col bg-white">
@@ -58,6 +61,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect }: 
             </span>
           </div>
         )}
+        {community}
 
         {run && run.results.length > 0 && (
           <p className="px-3 pt-2 text-xs text-gray-500">

@@ -1,5 +1,5 @@
 import { fileURLToPath } from 'node:url'
-import { defineConfig, type PluginOption } from 'vite'
+import { defineConfig, loadEnv, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
 
@@ -23,24 +23,34 @@ function manualChunks(id: string): string | undefined {
   return VENDOR_CHUNKS.find(([, pattern]) => pattern.test(id))?.[0]
 }
 
+// The practice page may call the API (backend/) when VITE_API_URL is set; its
+// CSP's connect-src gets that origin through %VITE_API_ORIGIN% (empty otherwise).
+function setApiOrigin(mode: string): void {
+  const url = process.env.VITE_API_URL ?? loadEnv(mode, process.cwd(), 'VITE_').VITE_API_URL ?? ''
+  process.env.VITE_API_ORIGIN = url ? new URL(url).origin : ''
+}
+
 // https://vite.dev/config/
-export default defineConfig(async () => ({
-  plugins: [react(), practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))), await analyzer()],
-  // Relative asset paths so the build works under any sub-path,
-  // e.g. https://<user>.github.io/proschi/ on GitHub Pages.
-  base: './',
-  build: {
-    rollupOptions: {
-      // Four pages: the landing page at the root, the editor under app/,
-      // system design practice under practice/, and how the simulation
-      // works under model/.
-      input: {
-        landing: fileURLToPath(new URL('./index.html', import.meta.url)),
-        app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
-        practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
-        model: fileURLToPath(new URL('./model/index.html', import.meta.url)),
+export default defineConfig(async ({ mode }) => {
+  setApiOrigin(mode)
+  return {
+    plugins: [react(), practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))), await analyzer()],
+    // Relative asset paths so the build works under any sub-path,
+    // e.g. https://<user>.github.io/proschi/ on GitHub Pages.
+    base: './',
+    build: {
+      rollupOptions: {
+        // Four pages: the landing page at the root, the editor under app/,
+        // system design practice under practice/, and how the simulation
+        // works under model/.
+        input: {
+          landing: fileURLToPath(new URL('./index.html', import.meta.url)),
+          app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+          practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
+          model: fileURLToPath(new URL('./model/index.html', import.meta.url)),
+        },
+        output: { manualChunks },
       },
-      output: { manualChunks },
     },
-  },
-}))
+  }
+})

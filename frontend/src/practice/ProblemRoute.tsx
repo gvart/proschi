@@ -3,6 +3,7 @@ import { defaultEngine, type Engine } from '../hld/engine';
 import ProblemPage from './ProblemPage';
 import { loadProblem } from './loadProblem';
 import type { Progress } from './progress';
+import type { Account } from './useAccount';
 
 interface ProblemRouteProps {
   id: string;
@@ -10,6 +11,7 @@ interface ProblemRouteProps {
   onProgress: (update: (p: Progress) => Progress) => void;
   /** Defaults to the simulation in frontend/src/sim. */
   engine?: Engine;
+  account: Account;
 }
 
 /**
@@ -17,7 +19,7 @@ interface ProblemRouteProps {
  * chunk only when a problem is opened, and it fetches only that problem's
  * files (suspending until they are there), so the list stays light.
  */
-export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine }: ProblemRouteProps) {
+export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine, account }: ProblemRouteProps) {
   const problem = use(loadProblem(id));
   if (!problem) {
     return (
@@ -26,5 +28,5 @@ export default function ProblemRoute({ id, progress, onProgress, engine = defaul
       </p>
     );
   }
-  return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={onProgress} engine={engine} />;
+  return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={onProgress} engine={engine} account={account} />;
 }

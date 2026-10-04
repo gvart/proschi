@@ -1,0 +1,26 @@
+{
+  "name": "proschi-backend",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "^0.22.0",
+    "@cloudflare/workers-types": "^5.20261004.1",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.11",
+    "wrangler": "^4.147.0"
+  },
+  "description": "Sign-in and practice stats for Proschi, on Cloudflare Workers and D1",
+  "scripts": {
+    "problems": "node scripts/problems.mjs",
+    "predev": "npm run problems",
+    "dev": "wrangler dev",
+    "pretypecheck": "npm run problems",
+    "typecheck": "tsc --noEmit",
+    "pretest": "npm run problems",
+    "test": "vitest run",
+    "predeploy": "npm run problems",
+    "deploy": "wrangler d1 migrations apply proschi --remote && wrangler deploy",
+    "migrate:local": "wrangler d1 migrations apply proschi --local"
+  }
+}
