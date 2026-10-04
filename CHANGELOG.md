@@ -28,6 +28,20 @@ deployed from `main` and ships with the same changes.
   email address is stored; the session is an HttpOnly cookie on proschi.app,
   and the account menu deletes the account and its data. Builds without
   `VITE_ACCOUNTS=true` work as before, with progress in the browser only.
+- Account controls in the practice account menu: link a second sign-in
+  (GitHub and Google) to the same account and unlink one, sign out everywhere,
+  and download everything the server stores about you as JSON. Sessions
+  renew while in use and expired ones are purged daily.
+- Problems have an optional `version` in their front matter (docs/PRACTICE.md),
+  and the simulation a version of its own; global stats count only solves of
+  the current versions, so a changed problem's stats start afresh.
+- The API is hardened: rate limits on sign-in, account changes, uploads and
+  stats; security headers and a request id on every response; structured
+  logs without query strings; sign-in refuses to run without a strong
+  session secret; display names that impersonate the site or contain slurs
+  are refused; browser progress is uploaded in one request on sign-in. Every
+  deploy goes to staging.proschi.app and passes a smoke test before
+  production, which records a database bookmark to restore from.
 
 ## [0.7.0] - 2026-10-04
 

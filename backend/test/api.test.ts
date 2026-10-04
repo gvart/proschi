@@ -1,8 +1,8 @@
 import { env } from 'cloudflare:workers';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { findProblem } from '../src/verify';
-import { clearStatsCache } from '../src/stats';
-import { call, resetDatabase, signedInUser } from './helpers';
+import { cacheKey, clearStatsCache } from '../src/stats';
+import { call, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 const ID = 'url-shortener';
 const problem = findProblem(ID)!;
@@ -12,7 +12,7 @@ function run(token: string, body: Record<string, unknown>, id = ID) {
 }
 
 async function stats(path: string, token?: string) {
-  clearStatsCache();
+  await clearStatsCache();
   return (await (await call(path, { token })).json()) as Record<string, any>;
 }
 
@@ -82,13 +82,14 @@ describe('progress', () => {
 
   it('limits test runs per user', async () => {
     const { token } = await signedInUser();
+    await withinOneWindow();
     const statuses: number[] = [];
     for (let i = 0; i < 31; i++) statuses.push((await run(token, { source: 'x', solved: false })).status);
     expect(statuses.slice(0, 30).every((s) => s === 200)).toBe(true);
     expect(statuses[30]).toBe(429);
     const other = await signedInUser();
     expect((await run(other.token, { source: 'x', solved: false })).status).toBe(200);
-  });
+  }, WINDOW_TIMEOUT);
 
   it('renames, opts in to the leaderboard, and deletes the account with its progress', async () => {
     const { id, token } = await signedInUser();
@@ -143,17 +144,18 @@ describe('stats', () => {
     expect((await call('/api/stats/no-such-problem')).status).toBe(404);
   });
 
-  it('answers signed-in users fresh, so their own run counts even while the public answer is cached', async () => {
+  it('answers signed-in users from the shared cache, with where their latest design falls in it', async () => {
     const other = await signedInUser();
     await run(other.token, { source: problem.solution, solved: true });
     const me = await signedInUser();
     expect(await stats(`/api/stats/${ID}`)).toMatchObject({ solved: 1 });
+    await vi.waitFor(async () => expect(await caches.default.match(cacheKey(`problem/${ID}`))).toBeDefined());
     await run(me.token, { source: problem.solution, solved: true });
-    // No clearStatsCache: the anonymous answer is still memoized.
+    // No clearStatsCache: both answers come from the cached distribution, which predates my solve.
     const anonymous = (await (await call(`/api/stats/${ID}`)).json()) as Record<string, any>;
     const signedIn = (await (await call(`/api/stats/${ID}`, { token: me.token })).json()) as Record<string, any>;
     expect(anonymous.solved).toBe(1);
-    expect(signedIn).toMatchObject({ solved: 2, you: { cheaperThan: 0 } });
+    expect(signedIn).toMatchObject({ solved: 1, costUsd: { count: 1 }, you: { cheaperThan: 0, runsToSolve: 1 } });
   });
 
   it('ranks only users who opted in, by problems solved, then who got there first', async () => {

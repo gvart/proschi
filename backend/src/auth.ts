@@ -1,6 +1,9 @@
+import type { Ctx } from './context';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
-import { now, type Env } from './env';
-import { errorResponse, HttpError } from './http';
+import { now, secretOk, type Env } from './env';
+import { errorResponse, HttpError, rateLimit } from './http';
+import { errorText, log } from './log';
+import { rejectName } from './moderation';
 
 /**
  * Sign-in with GitHub or Google (OAuth 2 authorization code flow with PKCE).
@@ -14,6 +17,9 @@ import { errorResponse, HttpError } from './http';
  * A signed, short-lived state cookie set by /start ties the callback to the
  * browser that started the sign-in, so a crafted callback link cannot sign a
  * visitor in to someone else's account.
+ *
+ * Signed in, /start?link=1 adds the provider's identity to the account
+ * instead: the callback links it and starts no new session.
  */
 
 export type ProviderId = 'github' | 'google';
@@ -110,8 +116,9 @@ export function isProvider(id: string): id is ProviderId {
   return Object.prototype.hasOwnProperty.call(PROVIDERS, id);
 }
 
-/** The providers with credentials; the page offers only these. */
+/** The providers with credentials; the page offers only these. None without a usable SESSION_SECRET. */
 export function configuredProviders(env: Env): ProviderId[] {
+  if (!secretOk(env)) return [];
   return (Object.keys(PROVIDERS) as ProviderId[]).filter((id) => PROVIDERS[id].clientId(env) && PROVIDERS[id].clientSecret(env));
 }
 
@@ -128,6 +135,8 @@ interface LoginState {
   verifier: string;
   returnTo: string;
   expires: number;
+  /** Linking: the signed-in user to add the identity to. */
+  linkUserId?: string;
 }
 
 /** A path on this site to come back to; anything else (another origin, `//host`, a scheme) is refused. */
@@ -163,13 +172,24 @@ function withParam(path: string, key: string, value: string): string {
   return `${url.pathname}${url.search}${url.hash}`;
 }
 
-export async function startLogin(request: Request, env: Env, provider: ProviderId): Promise<Response> {
+/** Without a usable SESSION_SECRET sign-in fails closed: state cookies signed with an empty or short one could be forged. */
+function unavailable(ctx: Ctx): Response {
+  log('error', 'Sign-in is unavailable: SESSION_SECRET is missing or shorter than 32 characters', { requestId: ctx.requestId });
+  return errorResponse(503, 'Sign-in is unavailable (server misconfigured)');
+}
+
+/** GET /auth/<provider>/start?return=<path>[&link=1] */
+export async function startLogin(request: Request, ctx: Ctx, provider: ProviderId): Promise<Response> {
+  const { env } = ctx;
+  if (!secretOk(env)) return unavailable(ctx);
+  await rateLimit(env.AUTH_LIMITER, ctx.ip, 'Too many sign-in attempts; wait a minute');
   const clientId = PROVIDERS[provider].clientId(env);
   if (!clientId || !configuredProviders(env).includes(provider)) return errorResponse(404, `Sign-in with ${provider} is not configured`);
   const url = new URL(request.url);
   const returnTo = url.searchParams.get('return') ?? '/';
   if (!isReturnPath(returnTo)) return errorResponse(400, 'return must be a path on this site');
   const login: LoginState = { provider, state: randomToken(16), verifier: randomToken(32), returnTo, expires: now() + STATE_TTL };
+  if (url.searchParams.get('link') === '1') login.linkUserId = (await requireUser(request, ctx)).id;
   const cookie = await sign(encodeJson(login), env.SESSION_SECRET);
   const redirectUri = `${url.origin}/auth/${provider}/callback`;
   return redirect(PROVIDERS[provider].authorizeUrl(clientId, redirectUri, login.state, await sha256(login.verifier)), [
@@ -177,7 +197,7 @@ export async function startLogin(request: Request, env: Env, provider: ProviderI
   ]);
 }
 
-async function readLoginState(request: Request, env: Env, provider: ProviderId): Promise<LoginState | undefined> {
+async function readLoginState(request: Request, env: Env & { SESSION_SECRET: string }, provider: ProviderId): Promise<LoginState | undefined> {
   const cookie = readCookie(request, STATE_COOKIE);
   const value = cookie && (await unsign(cookie, env.SESSION_SECRET));
   const login = value ? (decodeJson(value) as LoginState | undefined) : undefined;
@@ -185,7 +205,11 @@ async function readLoginState(request: Request, env: Env, provider: ProviderId):
   return login;
 }
 
-export async function finishLogin(request: Request, env: Env, provider: ProviderId): Promise<Response> {
+/** GET /auth/<provider>/callback */
+export async function finishLogin(request: Request, ctx: Ctx, provider: ProviderId): Promise<Response> {
+  const { env } = ctx;
+  if (!secretOk(env)) return unavailable(ctx);
+  await rateLimit(env.AUTH_LIMITER, ctx.ip, 'Too many sign-in attempts; wait a minute');
   const url = new URL(request.url);
   const login = await readLoginState(request, env, provider);
   if (!login || url.searchParams.get('state') !== login.state) {
@@ -202,17 +226,42 @@ export async function finishLogin(request: Request, env: Env, provider: Provider
   try {
     profile = await PROVIDERS[provider].profile(env, code, `${url.origin}/auth/${provider}/callback`, login.verifier);
   } catch (e) {
-    console.error(`Sign-in with ${provider} failed:`, e);
+    log('warn', `Sign-in with ${provider} failed`, { requestId: ctx.requestId, error: errorText(e) });
     return redirect(withParam(login.returnTo, 'login_error', 'failed'), [clearState]);
   }
+
+  if (login.linkUserId) {
+    // Only while still signed in as the user who started linking.
+    const user = await authenticate(request, ctx);
+    if (user?.id !== login.linkUserId) return redirect(withParam(login.returnTo, 'login_error', 'failed'), [clearState]);
+    const linked = await linkIdentity(env, user.id, provider, profile.subject);
+    if (linked === 'in_use') return redirect(withParam(login.returnTo, 'login_error', 'identity_in_use'), [clearState]);
+    if (linked === 'provider_taken') return redirect(withParam(login.returnTo, 'login_error', 'provider_linked'), [clearState]);
+    return redirect(withParam(login.returnTo, 'linked', provider), [clearState]);
+  }
+
   const userId = await upsertUser(env, provider, profile);
   const token = randomToken();
   const t = now();
-  await env.DB.batch([
-    env.DB.prepare('DELETE FROM sessions WHERE expires_at <= ?').bind(t),
-    env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at) VALUES (?, ?, ?)').bind(await sha256(token), userId, t + SESSION_TTL),
-  ]);
+  await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
+    .bind(await sha256(token), userId, t + SESSION_TTL, t)
+    .run();
   return redirect(login.returnTo, [clearState, ['Set-Cookie', sessionCookie(token, SESSION_TTL)]]);
+}
+
+/**
+ * Adds a provider identity to a user. 'in_use': it already signs in to
+ * another account; 'provider_taken': the user has another identity with the
+ * provider (one each, identities_user_provider).
+ */
+async function linkIdentity(env: Env, userId: string, provider: ProviderId, subject: string): Promise<'linked' | 'already' | 'in_use' | 'provider_taken'> {
+  const { meta } = await env.DB.prepare('INSERT INTO identities (provider, subject, user_id) VALUES (?, ?, ?) ON CONFLICT DO NOTHING')
+    .bind(provider, subject, userId)
+    .run();
+  if (meta.changes > 0) return 'linked';
+  const owner = await env.DB.prepare('SELECT user_id FROM identities WHERE provider = ? AND subject = ?').bind(provider, subject).first<{ user_id: string }>();
+  if (!owner) return 'provider_taken';
+  return owner.user_id === userId ? 'already' : 'in_use';
 }
 
 async function upsertUser(env: Env, provider: ProviderId, profile: Profile): Promise<string> {
@@ -221,7 +270,8 @@ async function upsertUser(env: Env, provider: ProviderId, profile: Profile): Pro
     .first<{ user_id: string }>();
   if (existing) return existing.user_id;
   const id = crypto.randomUUID();
-  const name = cleanName(profile.name) ?? 'Proschi user';
+  const cleaned = cleanName(profile.name);
+  const name = cleaned && !rejectName(cleaned) ? cleaned : 'Proschi user';
   await env.DB.batch([
     env.DB.prepare('INSERT INTO users (id, display_name, public_profile, created_at) VALUES (?, ?, 0, ?)').bind(id, name, now()),
     env.DB.prepare('INSERT INTO identities (provider, subject, user_id) VALUES (?, ?, ?)').bind(provider, profile.subject, id),
@@ -247,28 +297,69 @@ export interface User {
   publicProfile: boolean;
 }
 
-/** The signed-in user, or undefined without a valid session cookie. */
-export async function authenticate(request: Request, env: Env): Promise<User | undefined> {
+/**
+ * The signed-in user, or undefined without a valid session cookie. Sessions
+ * slide: one used in the second half of its 30 days gets 30 more, and the
+ * response carries the renewed cookie.
+ */
+export async function authenticate(request: Request, ctx: Ctx): Promise<User | undefined> {
   const token = readCookie(request, SESSION_COOKIE);
   if (!token) return undefined;
-  const row = await env.DB.prepare(
-    `SELECT u.id, u.display_name, u.public_profile FROM sessions s JOIN users u ON u.id = s.user_id
+  const hash = await sha256(token);
+  const t = now();
+  const row = await ctx.env.DB.prepare(
+    `SELECT u.id, u.display_name, u.public_profile, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`,
   )
-    .bind(await sha256(token), now())
-    .first<{ id: string; display_name: string; public_profile: number }>();
-  return row ? { id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1 } : undefined;
+    .bind(hash, t)
+    .first<{ id: string; display_name: string; public_profile: number; expires_at: number }>();
+  if (!row) return undefined;
+  ctx.userId = row.id;
+  if (row.expires_at - t < SESSION_TTL / 2) {
+    // Conditional, so of concurrent requests only the first renews it.
+    const { meta } = await ctx.env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ? AND expires_at = ?')
+      .bind(t + SESSION_TTL, hash, row.expires_at)
+      .run();
+    if (meta.changes > 0) ctx.setCookies.push(sessionCookie(token, SESSION_TTL));
+  }
+  return { id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1 };
 }
 
-export async function requireUser(request: Request, env: Env): Promise<User> {
-  const user = await authenticate(request, env);
+export async function requireUser(request: Request, ctx: Ctx): Promise<User> {
+  const user = await authenticate(request, ctx);
   if (!user) throw new HttpError(401, 'Sign in first');
   return user;
 }
 
 /** POST /auth/logout: ends the session and clears its cookie. */
-export async function logout(request: Request, env: Env): Promise<Response> {
+export async function logout(request: Request, ctx: Ctx): Promise<Response> {
   const token = readCookie(request, SESSION_COOKIE);
-  if (token) await env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
+  if (token) await ctx.env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
   return new Response(null, { status: 204, headers: { 'Set-Cookie': sessionCookie('', 0) } });
+}
+
+/** POST /api/me/sessions/revoke-all: signs the user out everywhere, this browser included. */
+export async function revokeAllSessions(request: Request, ctx: Ctx): Promise<Response> {
+  const user = await requireUser(request, ctx);
+  await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
+  await ctx.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
+  // Instead of a renewal authenticate may have queued.
+  ctx.setCookies = [sessionCookie('', 0)];
+  return new Response(null, { status: 204 });
+}
+
+/** DELETE /api/me/identities/<provider>: unlinks a sign-in, unless it is the account's only one. */
+export async function unlinkIdentity(request: Request, ctx: Ctx, provider: string): Promise<Response> {
+  const user = await requireUser(request, ctx);
+  await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
+  // One statement, so two concurrent unlinks cannot remove both identities.
+  const { meta } = await ctx.env.DB.prepare(
+    'DELETE FROM identities WHERE user_id = ?1 AND provider = ?2 AND (SELECT COUNT(*) FROM identities WHERE user_id = ?1) > 1',
+  )
+    .bind(user.id, provider)
+    .run();
+  if (meta.changes > 0) return new Response(null, { status: 204 });
+  const linked = await ctx.env.DB.prepare('SELECT 1 FROM identities WHERE user_id = ? AND provider = ?').bind(user.id, provider).first();
+  if (!linked) throw new HttpError(404, `No ${provider} sign-in is linked`);
+  throw new HttpError(409, "Can't remove your only sign-in");
 }

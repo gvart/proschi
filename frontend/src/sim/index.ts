@@ -16,4 +16,5 @@ export {
 export { runTests, requirementName, type AssertionResult, type TestResult } from './tests';
 export { kindOf, KINDS } from '../dsl/kinds';
 export { profileOf, KIND_PROFILES, TECH_PROFILES, type Profile } from './profiles';
+export { SIM_VERSION } from './version';
 export { formatAvailability, formatMs, formatPercent, formatRps, formatUsd } from './format';

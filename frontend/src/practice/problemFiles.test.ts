@@ -125,6 +125,8 @@ describe('problem folders', () => {
     expect(p).toMatchObject({ id: 'echo', title: 'Echo', summary: 'Says it back.', difficulty: 'easy', tags: ['basics'], hints: ['Connect the client to the API.'], given: GIVEN, starter: STARTER, solution: SOLUTION });
     expect(p.statement).toBe(MD.slice(MD.indexOf('Echo the request.')).trimEnd());
     expect(p.order).toBeUndefined();
+    expect(p.version).toBeUndefined();
+    expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'version: 2\ntags:') })).version).toBe(2);
     expect(p.wrong).toEqual([{ name: 'no-api', source: expect.stringContaining('# expect-fail'), expectFail: ['Echo goes through the API'] }]);
   });
 
@@ -138,6 +140,8 @@ describe('problem folders', () => {
     ['a bad difficulty', 'echo', files({ 'problem.md': MD.replace('difficulty: easy', 'difficulty: trivial') }), /'difficulty' must be one of easy, medium, hard/],
     ['a missing summary', 'echo', files({ 'problem.md': MD.replace('summary: Says it back.\n', '') }), /'summary' must be a non-empty string/],
     ['a string order', 'echo', files({ 'problem.md': MD.replace('tags:', 'order: first\ntags:') }), /'order' must be a number/],
+    ['a fractional version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 1.5\ntags:') }), /'version' must be a whole number from 1/],
+    ['a zero version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 0\ntags:') }), /'version' must be a whole number from 1/],
     ['tags that are not a list', 'echo', files({ 'problem.md': MD.replace('tags: [basics]', 'tags: basics') }), /'tags' must be a list/],
     ['an empty statement', 'echo', files({ 'problem.md': MD.slice(0, MD.indexOf('---\n\n') + 4) }), /statement .* is empty/],
   ])('reject %s, naming the folder', (_name, id, folderFiles, message) => {

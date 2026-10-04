@@ -49,9 +49,9 @@ export function expectFailLines(source: string): string[] {
   return names;
 }
 
-const FIELDS = ['title', 'summary', 'difficulty', 'tags', 'order', 'hints'];
+const FIELDS = ['title', 'summary', 'difficulty', 'tags', 'order', 'hints', 'version'];
 
-export type ProblemMeta = Pick<Problem, 'title' | 'summary' | 'difficulty' | 'tags' | 'order' | 'statement' | 'hints'>;
+export type ProblemMeta = Pick<Problem, 'title' | 'summary' | 'difficulty' | 'tags' | 'order' | 'statement' | 'hints' | 'version'>;
 
 /** Reads problem.md of folder `id`: the front matter fields and the statement. Throws ProblemFolderError. */
 export function readProblemMd(id: string, text: string): ProblemMeta {
@@ -81,6 +81,8 @@ export function readProblemMd(id: string, text: string): ProblemMeta {
   if (!DIFFICULTIES.includes(difficulty)) fail(`'difficulty' must be one of ${DIFFICULTIES.join(', ')}`);
   const order = data.order;
   if (order !== undefined && typeof order !== 'number') fail("'order' must be a number");
+  const version = data.version;
+  if (version !== undefined && !(typeof version === 'number' && Number.isInteger(version) && version >= 1)) fail("'version' must be a whole number from 1");
   if (body === '') fail('The statement (the Markdown after the front matter) is empty');
   return {
     title: str('title'),
@@ -90,6 +92,7 @@ export function readProblemMd(id: string, text: string): ProblemMeta {
     ...(typeof order === 'number' ? { order } : {}),
     statement: body,
     hints: list('hints'),
+    ...(typeof version === 'number' ? { version } : {}),
   };
 }
 
