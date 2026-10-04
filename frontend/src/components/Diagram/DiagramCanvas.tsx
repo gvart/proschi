@@ -1,10 +1,10 @@
-import { useEffect } from 'react';
-import ReactFlow, { Background, BackgroundVariant, Controls, ReactFlowProvider, useNodesInitialized, useReactFlow } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Controls, ReactFlowProvider } from 'reactflow';
 import type { Edge, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
+import { useFitOnChange } from './useFitOnChange';
 
 /**
  * A read-only canvas of a parsed diagram, for pages that show a design without
@@ -23,14 +23,7 @@ interface DiagramCanvasProps {
 }
 
 function Canvas({ nodes, edges, compact, fitKey }: DiagramCanvasProps) {
-  const { fitView } = useReactFlow();
-  const measured = useNodesInitialized();
-  const structure = nodes.map((n) => n.id).join('|');
-  useEffect(() => {
-    if (!measured) return;
-    const frame = requestAnimationFrame(() => fitView({ padding: 0.15 }));
-    return () => cancelAnimationFrame(frame);
-  }, [structure, measured, fitView, fitKey]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey ?? ''}`);
 
   return (
     <ReactFlow

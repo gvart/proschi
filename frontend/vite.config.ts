@@ -15,6 +15,7 @@ async function analyzer(): Promise<PluginOption> {
 const VENDOR_CHUNKS: [string, RegExp][] = [
   ['react', /\/node_modules\/(react|react-dom|scheduler)\//],
   ['codemirror', /\/node_modules\/(@codemirror|@lezer|codemirror|@marijn|crelt|style-mod|w3c-keyname)\//],
+  ['html-to-image', /\/node_modules\/html-to-image\//],
   ['reactflow', /\/node_modules\/(reactflow|@reactflow|d3-[a-z]+|zustand|classcat|use-sync-external-store)\//],
 ]
 

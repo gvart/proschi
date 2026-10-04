@@ -7,7 +7,6 @@ import ReactFlow, {
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
-  useNodesInitialized,
   useReactFlow,
 } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
@@ -36,6 +35,7 @@ import {
 import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
+import { useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
@@ -699,7 +699,7 @@ function DiagramView({
   notice,
   onNotice,
 }: DiagramViewProps) {
-  const { fitView, getNodes } = useReactFlow();
+  const { getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
@@ -744,19 +744,8 @@ function DiagramView({
       setExporting(false);
     }
   };
-  const measured = useNodesInitialized();
-  const structure = nodes.map((n) => n.id).join('|');
-
   // Re-fit once nodes are measured after being added or removed, not on every drag.
-  useEffect(() => {
-    if (!measured) return;
-    const frame = requestAnimationFrame(() => {
-      // A hidden pane (the other mobile tab) has no size; fitting it would produce NaN.
-      if (!wrapperRef.current?.offsetWidth) return;
-      fitView({ padding: 0.15, duration: 200 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [structure, measured, fitView, fitKey]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
