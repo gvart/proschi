@@ -20,7 +20,11 @@
     "pretest": "npm run problems",
     "test": "vitest run",
     "predeploy": "npm run problems",
-    "deploy": "wrangler d1 migrations apply proschi --remote && wrangler deploy",
+    "deploy": "npm run backup && wrangler d1 migrations apply proschi --remote && wrangler deploy",
+    "predeploy:staging": "npm run problems",
+    "deploy:staging": "wrangler d1 migrations apply proschi-staging --remote --env staging && wrangler deploy --env staging",
+    "backup": "node scripts/backup.mjs proschi",
+    "smoke": "node scripts/smoke.mjs",
     "migrate:local": "wrangler d1 migrations apply proschi --local"
   }
 }

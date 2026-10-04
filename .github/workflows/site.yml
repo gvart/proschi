@@ -102,12 +102,43 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # proschi.app: builds the site with accounts, migrates D1 and deploys the
-  # Worker that serves both (backend/README.md), once the Cloudflare secrets
-  # are set. A broken UI or API must not reach it.
-  cloudflare:
+  # staging.proschi.app: every deploy goes there first, with its own D1
+  # (backend/README.md), and must pass the smoke test before production.
+  cloudflare-staging:
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
     needs: [config, build, e2e, backend]
+    runs-on: ubuntu-latest
+    environment:
+      name: staging
+      url: https://staging.proschi.app/
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            frontend/package-lock.json
+            backend/package-lock.json
+      - run: npm ci && npm run build
+        working-directory: frontend
+        env:
+          VITE_ACCOUNTS: 'true'
+      - run: npm ci && npm run deploy:staging
+        working-directory: backend
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - run: node scripts/smoke.mjs https://staging.proschi.app
+        working-directory: backend
+
+  # proschi.app: builds the site with accounts, backs up and migrates D1 and
+  # deploys the Worker that serves both (backend/README.md), once the
+  # Cloudflare secrets are set and staging passed. A broken UI or API must not
+  # reach it.
+  cloudflare:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
+    needs: [config, build, e2e, backend, cloudflare-staging]
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -125,11 +156,23 @@ jobs:
         working-directory: frontend
         env:
           VITE_ACCOUNTS: 'true'
-      - run: npm ci && npm run deploy
+      # npm run backup prints the D1 bookmark before migrating, and sets the step output.
+      - id: deploy
+        run: npm ci && npm run deploy
         working-directory: backend
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+      - id: smoke
+        run: node scripts/smoke.mjs https://proschi.app
+        working-directory: backend
+      - if: failure() && steps.smoke.outcome == 'failure'
+        env:
+          BOOKMARK: ${{ steps.deploy.outputs.bookmark }}
+        run: |
+          echo "::error::proschi.app failed its smoke test after the deploy. To roll back (backend/README.md):"
+          echo "  cd backend && npx wrangler rollback"
+          echo "  and, only if the migration broke the data: npx wrangler d1 time-travel restore proschi --bookmark=$BOOKMARK"
 
   # GitHub Pages (gvart.github.io/proschi/): the site itself until it is on
   # Cloudflare; after that, pages-redirect/, which sends every old URL (with
