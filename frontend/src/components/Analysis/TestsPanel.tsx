@@ -1,6 +1,7 @@
 import { CheckCircle2, XCircle } from 'lucide-react';
 import type { SourceLoc } from '../../dsl';
 import type { TestResult } from '../../sim';
+import ModelLink from './ModelLink';
 
 interface TestsPanelProps {
   results: TestResult[];
@@ -16,9 +17,12 @@ export default function TestsPanel({ results, onSelect }: TestsPanelProps) {
   return (
     <div className="h-full overflow-y-auto bg-white">
       <div className="max-w-3xl mx-auto px-4 py-4 text-sm">
-        <p className={`mb-3 font-medium ${failed ? 'text-red-700' : 'text-green-700'}`}>
-          {failed ? `${failed} of ${results.length} failing` : `All ${results.length} passing`}
-        </p>
+        <div className="mb-3 flex items-baseline justify-between gap-3">
+          <p className={`font-medium ${failed ? 'text-red-700' : 'text-green-700'}`}>
+            {failed ? `${failed} of ${results.length} failing` : `All ${results.length} passing`}
+          </p>
+          <ModelLink />
+        </div>
         <ul className="divide-y divide-gray-100 rounded-md border border-gray-200">
           {results.map((r) => (
             <li key={r.id} className="px-3 py-2">

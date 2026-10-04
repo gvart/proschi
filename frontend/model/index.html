@@ -1,0 +1,956 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). frame-ancestors cannot be set from a meta tag. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>How the simulation works · Proschi</title>
+    <meta
+      name="description"
+      content="What Proschi's simulation models (load, reads and writes, replicas and shards, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
+    />
+    <meta name="color-scheme" content="light" />
+    <meta name="theme-color" content="#f4f1ea" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="canonical" href="https://gvart.github.io/proschi/model/" />
+
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
+    />
+  </head>
+  <body>
+    <a class="skip" href="#main">Skip to content</a>
+
+    <header class="masthead">
+      <div class="wrap masthead__inner">
+        <a class="wordmark" href="../" aria-label="Proschi home">
+          <svg class="wordmark__mark" viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="1.5" y="3.5" width="8" height="6" />
+            <rect x="14.5" y="14.5" width="8" height="6" />
+            <path d="M9.5 6.5h4v11h1" />
+          </svg>
+          <span>Proschi</span>
+        </a>
+        <nav class="masthead__nav" aria-label="Main">
+          <a class="navlink hide-sm" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language</a>
+          <a class="navlink" href="../practice/">Practice</a>
+          <a class="navlink hide-sm" href="https://github.com/gvart/proschi">GitHub</a>
+          <a class="btn btn--small" href="../app/">Open the editor</a>
+        </nav>
+      </div>
+    </header>
+
+    <main id="main">
+      <section class="hero" aria-labelledby="hero-title">
+        <div class="wrap">
+          <p class="kicker">The simulation behind Analysis, Tests and practice verdicts</p>
+          <h1 id="hero-title">How the simulation works, and how far to trust&nbsp;it.</h1>
+          <div class="lede">
+            <p>
+              Every number in the editor's <strong>Analysis</strong> and <strong>Tests</strong> tabs and every practice
+              verdict comes from one small analytical model: a handful of formulas over your diagram, its
+              <code>traffic</code> and a table of default numbers per technology. It runs in milliseconds, has no
+              randomness and never measures anything. Same text in, same numbers out.
+            </p>
+            <p>
+              That makes it good at one thing: telling a sound design from a broken one, and showing which node gives
+              out first. It is not a load test and not a capacity plan. This page lists every rule the model uses, with
+              the real default numbers, then everything it leaves out and which way each omission pushes the numbers.
+            </p>
+          </div>
+          <nav class="toc" aria-label="On this page">
+            <ol>
+              <li><a href="#modelled">What is modelled</a></li>
+              <li><a href="#examples">Worked examples</a></li>
+              <li><a href="#quirks">Simplifications that may surprise you</a></li>
+              <li><a href="#not-modelled">What is not modelled</a></li>
+              <li><a href="#reading">How to read the results</a></li>
+              <li><a href="#practice">Practice verdicts</a></li>
+            </ol>
+          </nav>
+        </div>
+      </section>
+
+      <section class="section" id="modelled" aria-labelledby="modelled-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">01</p>
+            <h2 id="modelled-title">What is modelled</h2>
+          </header>
+          <p class="section__intro">
+            The code is in <a href="https://github.com/gvart/proschi/tree/main/frontend/src/sim"><code>frontend/src/sim/</code></a>
+            (<code>profiles.ts</code>, <code>analyze.ts</code>, <code>flow.ts</code>, <code>tests.ts</code>). Each rule
+            below is what that code does today; the numbers in this page are checked against it by a test.
+          </p>
+
+          <ol class="rules">
+            <li class="rule" id="load">
+              <div class="rule__text">
+                <h3><span class="step__no">1.1</span> Load comes from traffic</h3>
+                <p>
+                  A use case with rate <var>R</var> splits its traffic over its scenarios by <code>mix</code>; without
+                  <code>mix</code> it all goes to the first scenario, and shares that do not add up to 100% are scaled.
+                  Every request step (<code>-&gt;</code>, <code>-&gt;&gt;</code> and <code>-x</code>) adds its rate to the
+                  node it targets. Responses add nothing.
+                </p>
+                <p>
+                  Every step counts, also steps after the response and the work an async consumer does later, so a
+                  queue's consumer carries load even though the user never waits for it. A use case without a traffic
+                  line adds no load.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>load(n) = Σ  R(U) × share(s) × N(step)
+          over every request step to n
+          in every scenario s of every use case
+
+N(step) = the x&lt;N&gt; fan-out, 1 without one</code></pre>
+            </li>
+
+            <li class="rule" id="reads-writes">
+              <div class="rule__text">
+                <h3><span class="step__no">1.2</span> Reads and writes</h3>
+                <p>
+                  Each request step is a <em>write</em> when its HTTP method is POST, PUT, PATCH or DELETE, or, without a
+                  method, when the first word of its label is a write verb: INSERT, UPDATE, UPSERT, DELETE, SET, PUBLISH,
+                  SEND, ENQUEUE, CHARGE, CREATE, SAVE, STORE, UPLOAD, RESERVE, HOLD and about thirty more
+                  (<a href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md#reads-and-writes">full list</a>).
+                  Everything else (GET, SELECT, QUERY, SCAN, LOOKUP, an event name) is a read. A request to a queue is
+                  always a write, whatever its label.
+                </p>
+                <p>
+                  Reads and writes are counted separately against separate capacities, and only writes count for
+                  <code>durable</code> and <code>writes X before responding</code>.
+                </p>
+              </div>
+              <dl class="facts">
+                <div><dt>Write</dt><dd><code>api -&gt; db : INSERT order</code></dd></div>
+                <div><dt>Write</dt><dd><code>user -&gt; api : POST /orders</code></dd></div>
+                <div><dt>Write</dt><dd><code>api -&gt;&gt; jobs : OrderPlaced</code> <span class="tag">queue</span></dd></div>
+                <div><dt>Read</dt><dd><code>api -&gt; cache : GET feed:{user}</code></dd></div>
+                <div><dt>Read</dt><dd><code>api -&gt; db : SELECT posts</code></dd></div>
+              </dl>
+            </li>
+
+            <li class="rule" id="replicas">
+              <div class="rule__text">
+                <h3><span class="step__no">1.3</span> Replicas, shards and single-primary writes</h3>
+                <p>
+                  A node declared with <code>x&lt;n&gt;</code> has <var>n</var> replicas; <code>capacity { db shards 4 }</code>
+                  splits a store into independent partitions, each with its own replicas. Every replica of every shard
+                  is assumed to get an equal slice of the load.
+                </p>
+                <p>
+                  Relational databases (PostgreSQL, MySQL, Aurora, RDS, SQL Server, …) are <em>single-primary</em>: their
+                  replicas serve reads, but every write goes to the one primary of its shard, so replicas add read
+                  capacity and only shards add write capacity. Everything else, including partitioned NoSQL stores,
+                  caches and queues, serves reads and writes on every replica.
+                </p>
+                <p>
+                  A node's utilisation is the busier side for a single-primary store (replicas and primaries work in
+                  parallel) and the sum of both shares for everything else (they share the same machines). At or above
+                  100% the node is <strong>saturated</strong>: every latency requirement of a use case that sends it
+                  load fails. Above <span data-pin="const|hot">70%</span> it is shown as hot.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>read capacity  = reads × replicas × shards
+write capacity = writes × shards              single-primary
+               = writes × replicas × shards   everything else
+
+ρ_read  = read load  ÷ read capacity
+ρ_write = write load ÷ write capacity
+
+ρ = max(ρ_read, ρ_write)   single-primary
+  = ρ_read + ρ_write       everything else</code></pre>
+            </li>
+
+            <li class="rule" id="queueing">
+              <div class="rule__text">
+                <h3><span class="step__no">1.4</span> Utilisation turns into queueing</h3>
+                <p>
+                  Each node has a base latency per call when idle (from its profile, below). Under load a hop takes
+                  longer by the classic single-queue factor <code>1 ÷ (1 − ρ)</code>, the mean response time of an
+                  M/M/1 queue. Utilisation is capped at <span data-pin="const|queueCap">95%</span> in this formula, so a
+                  saturated node has a finite latency (at most <span data-pin="const|maxSlowdown">20×</span> its base)
+                  and fails its requirements through saturation instead.
+                </p>
+                <p>
+                  The same factor is used whatever the number of replicas: ρ is the node's total utilisation, not a
+                  per-replica queue.
+                </p>
+              </div>
+              <div class="figure">
+                <pre class="formula" tabindex="0"><code>hop(n) = base(n) ÷ (1 − min(ρ(n), 0.95))</code></pre>
+                <table class="mini">
+                  <caption class="visually-hidden">Slowdown over the idle latency by utilisation</caption>
+                  <thead><tr><th scope="col">ρ</th><th scope="col">10%</th><th scope="col">50%</th><th scope="col">70%</th><th scope="col">90%</th><th scope="col">≥ 95%</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row">slowdown</th>
+                      <td data-pin="const|slowdown@10">1.1×</td>
+                      <td data-pin="const|slowdown@50">2×</td>
+                      <td data-pin="const|slowdown@70">3.3×</td>
+                      <td data-pin="const|slowdown@90">10×</td>
+                      <td data-pin="const|maxSlowdown">20×</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </li>
+
+            <li class="rule" id="percentiles">
+              <div class="rule__text">
+                <h3><span class="step__no">1.5</span> Latency and percentiles</h3>
+                <p>
+                  A scenario's mean latency is the sum of the hops on the <em>synchronous critical path</em> of its entry
+                  request: requests sent before the entry request is answered, by the entry's sender or by a node still
+                  working on it synchronously. A <code>par</code> group counts its slowest member; an async send
+                  (<code>-&gt;&gt;</code>) counts its own hop but not the receiver's work; a failed call
+                  (<code>-x</code>) costs a fixed timeout of <span data-pin="const|timeout">1000 ms</span> instead of the
+                  target's latency.
+                </p>
+                <p>
+                  Percentiles are not simulated: each one is the mean times a fixed factor. A use case's percentile is
+                  the slowest scenario that carries at least the tail share: with 10% cache misses, p99 is the miss
+                  path's p99; with 0.5%, it is the hit path's. When no single scenario is that big, scenarios are
+                  taken slowest first until their shares reach the tail.
+                </p>
+              </div>
+              <div class="figure">
+                <pre class="formula" tabindex="0"><code>mean(s) = Σ over the parts of the critical path of
+            max over the hops of the part of
+              hop(target) + transfer(step)      or the timeout for -x
+
+p_q(s)  = mean(s) × f(q)
+p_q(U)  = max { p_q(s) : share(s) ≥ 1 − q }</code></pre>
+                <table class="mini">
+                  <caption class="visually-hidden">Percentile factors</caption>
+                  <thead><tr><th scope="col">q</th><th scope="col">p50</th><th scope="col">p90</th><th scope="col">p95</th><th scope="col">p99</th><th scope="col">p999</th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <th scope="row">f(q)</th>
+                      <td data-pin="const|f50">1.0×</td>
+                      <td data-pin="const|f90">1.6×</td>
+                      <td data-pin="const|f95">2.0×</td>
+                      <td data-pin="const|f99">3.0×</td>
+                      <td data-pin="const|f999">5.0×</td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </li>
+
+            <li class="rule" id="payload">
+              <div class="rule__text">
+                <h3><span class="step__no">1.6</span> Fan-out and payload size</h3>
+                <p>
+                  A label that starts with <code>x200</code> means the step happens 200 times per request: load counts
+                  200 calls, latency counts the step once (as if the calls were batched or parallel).
+                </p>
+                <p>
+                  A label with <code>~2MB</code> gives the step a payload. It adds transfer time at the slower of the
+                  two ends' per-replica bandwidth (client 10 MB/s, edge, CDN, load balancer and gateway 1,000 MB/s,
+                  service 200 MB/s, everything else 100 MB/s), once per hop even with a fan-out. It also adds egress:
+                  a read's payload leaves the node it asks, a write's leaves the sender, and data leaving storage
+                  (<span data-pin="profile|AWS S3.egress">$0.09/GB</span>) or a CDN
+                  (<span data-pin="profile|AWS CloudFront.egress">$0.02/GB</span>) is charged. Data leaving anything else is free.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>transfer(step) = size ÷ min(bandwidth(from), bandwidth(to))
+
+egress GB/month = R × share × N × size × 2,592,000 s ÷ 10⁹
+egress cost     = egress GB × price of the node it leaves</code></pre>
+            </li>
+
+            <li class="rule" id="availability">
+              <div class="rule__text">
+                <h3><span class="step__no">1.7</span> Availability</h3>
+                <p>
+                  Each replica is up a fixed fraction of the time (profile below), independently of every other. A node
+                  is up when any of its replicas is. A use case is up when every node on the synchronous path of its
+                  main scenario (the one with the largest share) is up, except that a node with a <em>fallback</em>
+                  only takes the use case down when its fallback path is down too.
+                </p>
+                <p>
+                  A fallback is a success scenario that calls the node with <code>-x</code> before the entry response
+                  and completes without a successful synchronous call to it. Load and saturation do not affect
+                  availability.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>A(n) = 1 − (1 − a(n))^replicas
+
+A(U) = Π over nodes n on the main path of
+         A(n)                                   no fallback
+         1 − (1 − A(n)) × (1 − A(fallback))     with one</code></pre>
+            </li>
+
+            <li class="rule" id="cost">
+              <div class="rule__text">
+                <h3><span class="step__no">1.8</span> Cost</h3>
+                <p>
+                  Each replica of each shard costs a flat monthly price from its profile, whatever its load, plus the
+                  egress above, for a 30-day month. Clients, DNS and external systems cost nothing. There are no
+                  instance sizes, tiers, reservations or per-request prices.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>cost = Σ over nodes  replicas × shards × cost(n) + egress cost(n)</code></pre>
+            </li>
+
+            <li class="rule" id="failures">
+              <div class="rule__text">
+                <h3><span class="step__no">1.9</span> Failures: survive, fallbacks, single points of failure</h3>
+                <p>
+                  <code>survive any node failure</code> takes every node you run (not clients, external systems or DNS)
+                  and removes one instance. With two or more replicas, the node's capacity is recomputed with one
+                  replica fewer and the check fails if it saturates. With one replica, every use case whose success
+                  scenarios need the node must have a fallback scenario for it. <code>survive failure of
+                  &lt;selector&gt;</code> does the same for the selected nodes.
+                </p>
+                <p>
+                  The Analysis tab lists as <em>single points of failure</em> the single-replica nodes that some use case
+                  needs and has no fallback for. A failed call (<code>-x</code>) in a scenario is how a design says
+                  "and this is what happens when that node is down".
+                </p>
+              </div>
+              <dl class="facts">
+                <div><dt>x2+</dt><dd>one replica fewer must not saturate the node</dd></div>
+                <div><dt>x1</dt><dd>every use case that needs it has a fallback scenario</dd></div>
+                <div><dt>Skipped</dt><dd>clients, external systems, DNS, notes</dd></div>
+              </dl>
+            </li>
+
+            <li class="rule" id="kinds">
+              <div class="rule__text">
+                <h3><span class="step__no">1.10</span> Kinds, edge sub-kinds and consistency</h3>
+                <p>
+                  A node's kind comes from its tech stack, falling back to its component type, and picks its profile.
+                  The edge splits into <code>cdn</code>, <code>loadbalancer</code>, <code>gateway</code> and
+                  <code>dns</code>, each with its own numbers; <code>any edge</code> still selects all of them. DNS is
+                  off the request path: it adds no latency, never fails and costs nothing.
+                </p>
+                <p>
+                  Every data store has a consistency, <code>strong</code> or <code>eventual</code>, used only by the
+                  selectors <code>any strong store</code> and <code>any eventual store</code> in tests. It is a label:
+                  replication lag, staleness and TTLs are not simulated.
+                </p>
+              </div>
+              <pre class="formula" tabindex="0"><code>any edge            cdn, loadbalancer, gateway, dns
+any strong store    relational, MongoDB, Spanner, queues …
+any eventual store  caches, DynamoDB, Cassandra, search, storage …</code></pre>
+            </li>
+          </ol>
+
+          <h3 class="subhead" id="profiles">Default profiles, per replica</h3>
+          <p class="section__intro">
+            Teaching values, right to an order of magnitude, not benchmarks. <code>capacity { … }</code> overrides any
+            of them per node (see <a href="#reading">How to read the results</a>).
+          </p>
+          <div class="table-wrap" tabindex="0" role="region" aria-label="Default profiles">
+            <table class="profiles">
+              <thead>
+                <tr>
+                  <th scope="col">Kind</th>
+                  <th scope="col">Examples</th>
+                  <th scope="col" class="num">Reads/s</th>
+                  <th scope="col" class="num">Writes/s</th>
+                  <th scope="col" class="num">Latency</th>
+                  <th scope="col" class="num">Avail.</th>
+                  <th scope="col" class="num">Cost/mo</th>
+                  <th scope="col" class="num">Bandwidth</th>
+                  <th scope="col" class="num">Egress</th>
+                  <th scope="col">Durable</th>
+                  <th scope="col">Consistency</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr><th scope="row">client</th><td>Actor, shapes without a tech</td><td class="num" data-pin="profile|Actor.reads">∞</td><td class="num" data-pin="profile|Actor.writes">∞</td><td class="num" data-pin="profile|Actor.latency">0 ms</td><td class="num" data-pin="profile|Actor.availability">100%</td><td class="num" data-pin="profile|Actor.cost">$0</td><td class="num" data-pin="profile|Actor.bandwidth">10 MB/s</td><td class="num" data-pin="profile|Actor.egress">—</td><td data-pin="profile|Actor.durable">no</td><td data-pin="profile|Actor.consistency">—</td></tr>
+                <tr><th scope="row">cdn</th><td>CloudFront, Azure CDN, Cloud CDN, Front Door</td><td class="num" data-pin="profile|AWS CloudFront.reads">200k</td><td class="num" data-pin="profile|AWS CloudFront.writes">200k</td><td class="num" data-pin="profile|AWS CloudFront.latency">5 ms</td><td class="num" data-pin="profile|AWS CloudFront.availability">99.99%</td><td class="num" data-pin="profile|AWS CloudFront.cost">$100</td><td class="num" data-pin="profile|AWS CloudFront.bandwidth">1,000 MB/s</td><td class="num" data-pin="profile|AWS CloudFront.egress">$0.02/GB</td><td data-pin="profile|AWS CloudFront.durable">no</td><td data-pin="profile|AWS CloudFront.consistency">—</td></tr>
+                <tr><th scope="row">loadbalancer</th><td>AWS Load Balancer, GCP Load Balancing</td><td class="num" data-pin="profile|AWS Load Balancer.reads">100k</td><td class="num" data-pin="profile|AWS Load Balancer.writes">100k</td><td class="num" data-pin="profile|AWS Load Balancer.latency">2 ms</td><td class="num" data-pin="profile|AWS Load Balancer.availability">99.99%</td><td class="num" data-pin="profile|AWS Load Balancer.cost">$50</td><td class="num" data-pin="profile|AWS Load Balancer.bandwidth">1,000 MB/s</td><td class="num" data-pin="profile|AWS Load Balancer.egress">—</td><td data-pin="profile|AWS Load Balancer.durable">no</td><td data-pin="profile|AWS Load Balancer.consistency">—</td></tr>
+                <tr><th scope="row">gateway</th><td>AWS API Gateway, Azure API Management</td><td class="num" data-pin="profile|AWS API Gateway.reads">10k</td><td class="num" data-pin="profile|AWS API Gateway.writes">10k</td><td class="num" data-pin="profile|AWS API Gateway.latency">10 ms</td><td class="num" data-pin="profile|AWS API Gateway.availability">99.95%</td><td class="num" data-pin="profile|AWS API Gateway.cost">$100</td><td class="num" data-pin="profile|AWS API Gateway.bandwidth">1,000 MB/s</td><td class="num" data-pin="profile|AWS API Gateway.egress">—</td><td data-pin="profile|AWS API Gateway.durable">no</td><td data-pin="profile|AWS API Gateway.consistency">—</td></tr>
+                <tr><th scope="row">dns</th><td>Route53, Azure DNS, Cloud DNS</td><td class="num" data-pin="profile|AWS Route53.reads">∞</td><td class="num" data-pin="profile|AWS Route53.writes">∞</td><td class="num" data-pin="profile|AWS Route53.latency">0 ms</td><td class="num" data-pin="profile|AWS Route53.availability">100%</td><td class="num" data-pin="profile|AWS Route53.cost">$0</td><td class="num" data-pin="profile|AWS Route53.bandwidth">1,000 MB/s</td><td class="num" data-pin="profile|AWS Route53.egress">—</td><td data-pin="profile|AWS Route53.durable">no</td><td data-pin="profile|AWS Route53.consistency">—</td></tr>
+                <tr><th scope="row">service</th><td>REST API, gRPC, GraphQL, EC2, ECS, EKS</td><td class="num" data-pin="profile|REST API.reads">2k</td><td class="num" data-pin="profile|REST API.writes">2k</td><td class="num" data-pin="profile|REST API.latency">10 ms</td><td class="num" data-pin="profile|REST API.availability">99.5%</td><td class="num" data-pin="profile|REST API.cost">$100</td><td class="num" data-pin="profile|REST API.bandwidth">200 MB/s</td><td class="num" data-pin="profile|REST API.egress">—</td><td data-pin="profile|REST API.durable">no</td><td data-pin="profile|REST API.consistency">—</td></tr>
+                <tr><th scope="row">function</th><td>Lambda, Cloud Functions, Cloud Run</td><td class="num" data-pin="profile|AWS Lambda.reads">10k</td><td class="num" data-pin="profile|AWS Lambda.writes">10k</td><td class="num" data-pin="profile|AWS Lambda.latency">25 ms</td><td class="num" data-pin="profile|AWS Lambda.availability">99.95%</td><td class="num" data-pin="profile|AWS Lambda.cost">$200</td><td class="num" data-pin="profile|AWS Lambda.bandwidth">100 MB/s</td><td class="num" data-pin="profile|AWS Lambda.egress">—</td><td data-pin="profile|AWS Lambda.durable">no</td><td data-pin="profile|AWS Lambda.consistency">—</td></tr>
+                <tr><th scope="row">cache</th><td>Redis, ElastiCache, Memcached</td><td class="num" data-pin="profile|Redis.reads">100k</td><td class="num" data-pin="profile|Redis.writes">100k</td><td class="num" data-pin="profile|Redis.latency">1 ms</td><td class="num" data-pin="profile|Redis.availability">99.9%</td><td class="num" data-pin="profile|Redis.cost">$150</td><td class="num" data-pin="profile|Redis.bandwidth">100 MB/s</td><td class="num" data-pin="profile|Redis.egress">—</td><td data-pin="profile|Redis.durable">no</td><td data-pin="profile|Redis.consistency">eventual</td></tr>
+                <tr><th scope="row">database, relational</th><td>PostgreSQL, MySQL, Aurora, RDS, SQL Server</td><td class="num" data-pin="profile|PostgreSQL.reads">20k</td><td class="num" data-pin="profile|PostgreSQL.writes">5k</td><td class="num" data-pin="profile|PostgreSQL.latency">5 ms</td><td class="num" data-pin="profile|PostgreSQL.availability">99.95%</td><td class="num" data-pin="profile|PostgreSQL.cost">$400</td><td class="num" data-pin="profile|PostgreSQL.bandwidth">100 MB/s</td><td class="num" data-pin="profile|PostgreSQL.egress">—</td><td data-pin="profile|PostgreSQL.durable">yes</td><td data-pin="profile|PostgreSQL.consistency">strong</td></tr>
+                <tr><th scope="row">database, NoSQL</th><td>DynamoDB, Cassandra, CouchDB, Cosmos DB</td><td class="num" data-pin="profile|DynamoDB.reads">20k</td><td class="num" data-pin="profile|DynamoDB.writes">20k</td><td class="num" data-pin="profile|DynamoDB.latency">5 ms</td><td class="num" data-pin="profile|DynamoDB.availability">99.99%</td><td class="num" data-pin="profile|DynamoDB.cost">$500</td><td class="num" data-pin="profile|DynamoDB.bandwidth">100 MB/s</td><td class="num" data-pin="profile|DynamoDB.egress">—</td><td data-pin="profile|DynamoDB.durable">yes</td><td data-pin="profile|DynamoDB.consistency">eventual</td></tr>
+                <tr><th scope="row">database, NoSQL</th><td>MongoDB, Bigtable, Firestore, Spanner</td><td class="num" data-pin="profile|MongoDB.reads">20k</td><td class="num" data-pin="profile|MongoDB.writes">20k</td><td class="num" data-pin="profile|MongoDB.latency">5 ms</td><td class="num" data-pin="profile|MongoDB.availability">99.99%</td><td class="num" data-pin="profile|MongoDB.cost">$500</td><td class="num" data-pin="profile|MongoDB.bandwidth">100 MB/s</td><td class="num" data-pin="profile|MongoDB.egress">—</td><td data-pin="profile|MongoDB.durable">yes</td><td data-pin="profile|MongoDB.consistency">strong</td></tr>
+                <tr><th scope="row">search</th><td>Elasticsearch</td><td class="num" data-pin="profile|Elasticsearch.reads">3k</td><td class="num" data-pin="profile|Elasticsearch.writes">3k</td><td class="num" data-pin="profile|Elasticsearch.latency">15 ms</td><td class="num" data-pin="profile|Elasticsearch.availability">99.9%</td><td class="num" data-pin="profile|Elasticsearch.cost">$400</td><td class="num" data-pin="profile|Elasticsearch.bandwidth">100 MB/s</td><td class="num" data-pin="profile|Elasticsearch.egress">—</td><td data-pin="profile|Elasticsearch.durable">yes</td><td data-pin="profile|Elasticsearch.consistency">eventual</td></tr>
+                <tr><th scope="row">analytics</th><td>BigQuery, InfluxDB, TimescaleDB</td><td class="num" data-pin="profile|GCP BigQuery.reads">200</td><td class="num" data-pin="profile|GCP BigQuery.writes">200</td><td class="num" data-pin="profile|GCP BigQuery.latency">500 ms</td><td class="num" data-pin="profile|GCP BigQuery.availability">99.9%</td><td class="num" data-pin="profile|GCP BigQuery.cost">$300</td><td class="num" data-pin="profile|GCP BigQuery.bandwidth">100 MB/s</td><td class="num" data-pin="profile|GCP BigQuery.egress">—</td><td data-pin="profile|GCP BigQuery.durable">yes</td><td data-pin="profile|GCP BigQuery.consistency">eventual</td></tr>
+                <tr><th scope="row">queue</th><td>Kafka, SQS, SNS, Kinesis, Pub/Sub</td><td class="num" data-pin="profile|Kafka.reads">50k</td><td class="num" data-pin="profile|Kafka.writes">50k</td><td class="num" data-pin="profile|Kafka.latency">5 ms</td><td class="num" data-pin="profile|Kafka.availability">99.99%</td><td class="num" data-pin="profile|Kafka.cost">$200</td><td class="num" data-pin="profile|Kafka.bandwidth">100 MB/s</td><td class="num" data-pin="profile|Kafka.egress">—</td><td data-pin="profile|Kafka.durable">yes</td><td data-pin="profile|Kafka.consistency">strong</td></tr>
+                <tr><th scope="row">storage</th><td>S3, Blob Storage, Cloud Storage</td><td class="num" data-pin="profile|AWS S3.reads">5k</td><td class="num" data-pin="profile|AWS S3.writes">5k</td><td class="num" data-pin="profile|AWS S3.latency">30 ms</td><td class="num" data-pin="profile|AWS S3.availability">99.99%</td><td class="num" data-pin="profile|AWS S3.cost">$50</td><td class="num" data-pin="profile|AWS S3.bandwidth">100 MB/s</td><td class="num" data-pin="profile|AWS S3.egress">$0.09/GB</td><td data-pin="profile|AWS S3.durable">yes</td><td data-pin="profile|AWS S3.consistency">eventual</td></tr>
+                <tr><th scope="row">external</th><td>Payment gateway, email, SMS, third-party APIs</td><td class="num" data-pin="profile|Payment Gateway.reads">1k</td><td class="num" data-pin="profile|Payment Gateway.writes">1k</td><td class="num" data-pin="profile|Payment Gateway.latency">200 ms</td><td class="num" data-pin="profile|Payment Gateway.availability">99.9%</td><td class="num" data-pin="profile|Payment Gateway.cost">$0</td><td class="num" data-pin="profile|Payment Gateway.bandwidth">100 MB/s</td><td class="num" data-pin="profile|Payment Gateway.egress">—</td><td data-pin="profile|Payment Gateway.durable">no</td><td data-pin="profile|Payment Gateway.consistency">—</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <p class="note">
+            Relational databases take <span data-pin="profile|PostgreSQL.writes">5k</span> writes per second per
+            <em>shard</em> (on the primary), not per replica. A tech stack the editor does not know is drawn as a plain
+            shape and counted as a client: infinite capacity, no latency, free. The editor warns about it; fix the name
+            before you trust the numbers.
+          </p>
+        </div>
+      </section>
+
+      <section class="section" id="examples" aria-labelledby="examples-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">02</p>
+            <h2 id="examples-title">Worked examples</h2>
+          </header>
+          <p class="section__intro">
+            Every number in this section comes from running the simulation on the source shown next to it, and a test
+            fails if the code and the page disagree. Paste a source into the <a href="../app/">editor</a> to see the
+            same numbers in its Analysis and Tests tabs.
+          </p>
+
+          <article class="example-block" aria-labelledby="ex-feed-title">
+            <h3 id="ex-feed-title"><span class="step__no">2.1</span> A cached read path</h3>
+            <div class="example-grid">
+              <pre class="code" data-proschi data-example="feed" tabindex="0" aria-label="Proschi source for the feed example"><code>title "Feed"
+
+user  "User"       [Actor]
+api   "Feed API"   [REST API]   x6
+cache "Feed cache" [Redis]      x2
+db    "Feed DB"    [PostgreSQL] x2
+
+user -&gt; api  : HTTPS
+api -&gt; cache : RESP
+api -&gt; db    : SQL
+
+usecase "Read feed" {
+  user -&gt; api : GET /feed
+  alt "Cache hit" {
+    api  -&gt; cache : GET feed:{user}
+    api --&gt; user  : 200
+  } alt "Cache miss" {
+    api  -&gt; cache : GET feed:{user}
+    api  -&gt; db    : SELECT posts
+    api  -&gt; cache : SET feed:{user}
+    api --&gt; user  : 200
+  }
+}
+
+usecase "Post" {
+  user -&gt; api  : POST /posts
+  api  -&gt; db   : INSERT post
+  api --&gt; user : 201
+}
+
+traffic {
+  "Read feed" 6k rps mix "Cache hit" 90%, "Cache miss" 10%
+  "Post"      1k rps
+}
+
+requirements {
+  p99 "Read feed" &lt; 150ms
+  availability "Read feed" &gt;= 99.9%
+  durable "Post"
+  survive any node failure
+  cost &lt;= 2500 usd/month
+}</code></pre>
+              <div class="example-text">
+                <p>
+                  <strong>Load.</strong> <code>api</code> receives every entry request: 6k reads and 1k writes a second
+                  against <span data-pin="feed|node.api.capacityRps">12k rps</span> (6 × 2k), so
+                  ρ = <span data-pin="feed|node.api.readUtilization">50%</span> + <span data-pin="feed|node.api.writeUtilization">8%</span>
+                  = <span data-pin="feed|node.api.utilization">58%</span>. <code>db</code> gets only the misses
+                  (10% of 6k = <span data-pin="feed|node.db.readLoadRps">600 rps</span> SELECTs) and every post
+                  (<span data-pin="feed|node.db.writeLoadRps">1k rps</span> INSERTs). Its two replicas serve
+                  <span data-pin="feed|node.db.readCapacityRps">40k rps</span> of reads but its one primary takes
+                  <span data-pin="feed|node.db.writeCapacityRps">5k rps</span> of writes, so writes set its utilisation:
+                  <span data-pin="feed|node.db.utilization">20%</span>.
+                </p>
+                <p>
+                  <strong>Latency.</strong> At <span data-pin="feed|node.api.utilization">58%</span> the API's 10 ms becomes
+                  <span data-pin="feed|node.api.latencyMs">24 ms</span>; the cache stays at
+                  <span data-pin="feed|node.cache.latencyMs">1 ms</span> and the database at
+                  <span data-pin="feed|node.db.latencyMs">6.3 ms</span>. The hit path is api + cache, mean
+                  <span data-pin="feed|sc.Read feed.Cache hit.meanMs">25 ms</span>; the miss path adds the SELECT and the SET,
+                  mean <span data-pin="feed|sc.Read feed.Cache miss.meanMs">32.3 ms</span>.
+                </p>
+                <p>
+                  <strong>Percentiles.</strong> Misses carry 10% of the traffic, at least the 1% tail, so p99 is the miss
+                  path's: <span data-pin="feed|sc.Read feed.Cache miss.meanMs">32.3 ms</span> × 3 =
+                  <span data-pin="feed|uc.Read feed.p99">97 ms</span>. p50 is the hit path's,
+                  <span data-pin="feed|uc.Read feed.p50">25 ms</span>.
+                </p>
+                <p>
+                  <strong>Cost.</strong> 6 × $100 + 2 × $150 + 2 × $400 = <span data-pin="feed|total.cost">$1,700</span> a month.
+                </p>
+                <dl class="facts facts--results">
+                  <div><dt data-pin="feed|test.1.verdict">pass</dt><dd data-pin="feed|test.1.message">p99 of Read feed is 97 ms (limit 150 ms)</dd></div>
+                  <div><dt data-pin="feed|test.2.verdict">pass</dt><dd data-pin="feed|test.2.message">availability of Read feed is 99.9999% (limit 99.9%)</dd></div>
+                  <div><dt data-pin="feed|test.3.verdict">pass</dt><dd data-pin="feed|test.3.message">"Post" writes to a durable store before responding</dd></div>
+                  <div><dt data-pin="feed|test.4.verdict">pass</dt><dd data-pin="feed|test.4.message">Every use case keeps working after losing any of 3 nodes</dd></div>
+                  <div><dt data-pin="feed|test.5.verdict">pass</dt><dd data-pin="feed|test.5.message">Total cost is $1,700/month (limit $2,500/month)</dd></div>
+                </dl>
+              </div>
+            </div>
+          </article>
+
+          <article class="example-block" aria-labelledby="ex-orders-title">
+            <h3 id="ex-orders-title"><span class="step__no">2.2</span> Replicas do not scale writes</h3>
+            <div class="example-grid">
+              <div>
+                <pre class="code" data-proschi data-example="orders" tabindex="0" aria-label="Proschi source for the orders example"><code>title "Orders"
+
+client "Client"    [Actor]
+api    "Order API" [REST API]   x8
+db     "Orders DB" [PostgreSQL] x3
+
+client -&gt; api : HTTPS
+api    -&gt; db  : SQL
+
+usecase "Place order" {
+  client -&gt; api    : POST /orders
+  api    -&gt; db     : INSERT order
+  api   --&gt; client : 201
+}
+
+traffic {
+  "Place order" 6k rps
+}
+
+requirements {
+  p99 "Place order" &lt; 100ms
+}</code></pre>
+                <p class="code-caption">Then add two shards:</p>
+                <pre class="code" data-proschi data-example="orders-sharded" data-extends="orders" tabindex="0" aria-label="The capacity block added to the orders example"><code>capacity {
+  db shards 2
+}</code></pre>
+              </div>
+              <div class="example-text">
+                <p>
+                  <strong>Saturated.</strong> 6k INSERTs a second reach a PostgreSQL primary that takes
+                  <span data-pin="profile|PostgreSQL.writes">5k</span>. Three replicas give
+                  <span data-pin="orders|node.db.readCapacityRps">60k rps</span> of read capacity, none of it usable for writes,
+                  so the database runs at <span data-pin="orders|node.db.utilization">120%</span> and the requirement fails
+                  however much time is left:
+                </p>
+                <dl class="facts facts--results">
+                  <div><dt class="is-fail" data-pin="orders|test.1.verdict">fail</dt><dd><span data-pin="orders|test.1.message">p99 of Place order: db is saturated (reads 0 rps of 60k rps, 0%; writes 6k rps of 5k rps, 120%) (limit 100 ms)</span><span class="hint" data-pin="orders|test.1.hint">Writes to db (PostgreSQL) need 6k rps and each primary takes 5k rps; read replicas do not add write capacity. Add shards (capacity { db shards 2 } keeps writes under 70%), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue</span></dd></div>
+                </dl>
+                <p>
+                  <strong>Sharded.</strong> With <code>shards 2</code> there are two primaries, each with three replicas:
+                  write capacity <span data-pin="orders-sharded|node.db.writeCapacityRps">10k rps</span>, utilisation
+                  <span data-pin="orders-sharded|node.db.utilization">60%</span>, and the database hop takes
+                  <span data-pin="orders-sharded|node.db.latencyMs">12.5 ms</span>. The cost doubles too: 3 replicas × 2 shards ×
+                  $400 = <span data-pin="orders-sharded|node.db.costUsd">$2,400</span>.
+                </p>
+                <dl class="facts facts--results">
+                  <div><dt data-pin="orders-sharded|test.1.verdict">pass</dt><dd data-pin="orders-sharded|test.1.message">p99 of Place order is 85.5 ms (limit 100 ms)</dd></div>
+                </dl>
+                <p>
+                  Moving the table to a partitioned store such as DynamoDB, which scales writes with replicas, would
+                  pass as well. In a practice problem <code>shards</code> is the one capacity setting you may write
+                  yourself, because how many shards to run is a design decision.
+                </p>
+              </div>
+            </div>
+          </article>
+
+          <article class="example-block" aria-labelledby="ex-photos-title">
+            <h3 id="ex-photos-title"><span class="step__no">2.3</span> Bytes, bandwidth and egress</h3>
+            <div class="example-grid example-grid--even">
+              <pre class="code" data-proschi data-example="photos-api" tabindex="0" aria-label="Proschi source: photos through the API"><code>title "Photos through the API"
+
+viewer "Viewer"    [Actor]
+api    "Photo API" [REST API] x2
+blobs  "Photos"    [AWS S3]   x2
+
+usecase "View photo" {
+  viewer -&gt; api    : ~2MB GET /photos/{id}
+  api    -&gt; blobs  : ~2MB GET photo
+  api   --&gt; viewer : 200
+}
+
+traffic {
+  "View photo" 20 rps
+}</code></pre>
+              <pre class="code" data-proschi data-example="photos-cdn" tabindex="0" aria-label="Proschi source: photos through a CDN"><code>title "Photos through a CDN"
+
+viewer "Viewer" [Actor]
+cdn    "CDN"    [AWS CloudFront] x2
+blobs  "Photos" [AWS S3]         x2
+
+usecase "View photo" {
+  viewer -&gt; cdn : ~2MB GET /photos/{id}
+  alt "Edge hit" {
+    cdn --&gt; viewer : 200
+  } alt "Edge miss" {
+    cdn   -&gt; blobs  : ~2MB GET photo
+    cdn  --&gt; viewer : 200
+  }
+}
+
+traffic {
+  "View photo" 20 rps mix "Edge hit" 95%, "Edge miss" 5%
+}</code></pre>
+            </div>
+            <div class="example-text example-text--wide">
+              <p>
+                <strong>Transfer time.</strong> A 2 MB answer to the viewer moves at the viewer's 10 MB/s: 200 ms, more
+                than every node's own latency together. Through the API the photo also crosses api ↔ storage at
+                storage's 100 MB/s (20 ms), so the mean is <span data-pin="photos-api|uc.View photo.p50">260 ms</span> and
+                p99 <span data-pin="photos-api|uc.View photo.p99">780 ms</span>. Through the CDN, hits take
+                <span data-pin="photos-cdn|sc.View photo.Edge hit.meanMs">205 ms</span> and misses
+                <span data-pin="photos-cdn|sc.View photo.Edge miss.meanMs">255 ms</span>; misses are 5% of traffic, so they set
+                p95 and p99: <span data-pin="photos-cdn|uc.View photo.p99">765 ms</span>. Latency barely improves, because
+                the viewer's own bandwidth dominates both designs.
+              </p>
+              <p>
+                <strong>Egress.</strong> 20 photos of 2 MB a second is
+                <span data-pin="photos-api|node.blobs.egressGbPerMonth">103,680 GB</span> a month. Served from storage, that is
+                <span data-pin="photos-api|node.blobs.egressUsd">$9,331</span> of egress and
+                <span data-pin="photos-api|total.cost">$9,631</span> in total. Served from the CDN, the edge sends the same
+                bytes for <span data-pin="photos-cdn|node.cdn.egressUsd">$2,074</span> and storage only sends the misses
+                (<span data-pin="photos-cdn|node.blobs.egressGbPerMonth">5,184 GB</span>,
+                <span data-pin="photos-cdn|node.blobs.egressUsd">$467</span>): <span data-pin="photos-cdn|total.cost">$2,840</span>
+                in total. The photo API's own 2 MB answers are free in the model, because only storage and CDNs
+                charge for egress.
+              </p>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section" id="quirks" aria-labelledby="quirks-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">03</p>
+            <h2 id="quirks-title">Simplifications that may surprise you</h2>
+          </header>
+          <p class="section__intro">
+            These follow directly from the formulas above. None of them changes which of two designs is better in
+            ordinary cases, but each one moves absolute numbers in a known direction.
+          </p>
+          <table class="spec caveats">
+            <caption class="visually-hidden">Simplifications in the model and their effect</caption>
+            <tbody>
+              <tr>
+                <th scope="row">Timeouts in percentiles <span class="tag tag--pess">pessimistic</span></th>
+                <td>
+                  The tail factor multiplies the whole mean, timeouts and transfer time included. A scenario with one
+                  <code>-x</code> has a p99 of at least <span data-pin="const|timeoutP99">3000 ms</span>, although the timeout
+                  itself is a fixed <span data-pin="const|timeout">1000 ms</span>.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Fixed tail shape <span class="tag">either way</span></th>
+                <td>
+                  p99 is always 3× the mean, at 10% utilisation and at 94%. Real tails widen as a node fills up. For a
+                  single M/M/1 queue the response time is exponential: p50 ≈ 0.7× and p99 ≈ 4.6× the mean. So the model's
+                  p50 is high and its p99 low for one busy hop; sums of several hops have narrower tails, where 3× is
+                  closer.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Scenario percentiles do not mix <span class="tag tag--pess">pessimistic</span></th>
+                <td>
+                  A use case's p99 is one scenario's p99, not the p99 of the mixed distribution. With 10% cache misses
+                  the true p99 is close to the miss path's p90, but the model reports the miss path's p99. Percentiles
+                  also jump as a share crosses the tail: 5% misses set p95, 4.9% do not.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">One queue per node <span class="tag tag--pess">pessimistic</span></th>
+                <td>
+                  Queueing uses the node's total utilisation in the single-server formula, whatever its replica count.
+                  A pool of 20 replicas at 80% waits much less than one server at 80% (M/M/c), so large pools look slower
+                  than they are near saturation.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Bandwidth is not a limit <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  Payload size adds transfer time to one request but never saturates anything. A service passing
+                  10k × 2 MB a second through 200 MB/s shows no saturation.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Fan-out counted once <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  <code>x200</code> multiplies load but adds one hop of latency and one transfer. The slowest of 200
+                  parallel calls is far slower than a typical one (tail at scale).
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Independent replicas <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  <code>1 − (1 − a)^n</code> assumes replicas never fail together: six service replicas at 99.5% each
+                  show as <span data-pin="const|sixServices">99.999999%</span>. A bad deploy, a zone outage or a shared dependency
+                  takes them all at once.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Primaries and failover <span class="tag">either way</span></th>
+                <td>
+                  Single-primary writes need the primary, but replicas raise the store's availability as if any of them
+                  could take writes (optimistic). <code>survive</code> on a store with replicas only removes read
+                  capacity, never the primary; on a sharded store it removes one replica from every shard at once
+                  (pessimistic).
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">survive checks capacity only <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  After losing a replica, only that node is checked for saturation. Latency requirements, availability
+                  and the other nodes are not re-evaluated with the smaller pool.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Saturation does not spread <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  A saturated node still passes its full load downstream and its latency stops growing at
+                  <span data-pin="const|maxSlowdown">20×</span>. Real queues grow without bound, time out and push
+                  retries upstream. Designs with a saturated node already fail, so this matters only for reading their
+                  latencies.
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="not-modelled" aria-labelledby="not-modelled-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">04</p>
+            <h2 id="not-modelled-title">What is not modelled</h2>
+          </header>
+          <p class="section__intro">
+            Most omissions make the model <em>optimistic</em>: real systems are slower, less available and dearer than
+            the numbers say. Treat a design that only just passes as one that would fail.
+          </p>
+          <table class="spec caveats">
+            <caption class="visually-hidden">What the model leaves out and what that does to the numbers</caption>
+            <tbody>
+              <tr>
+                <th scope="row">Cold starts <span class="tag tag--opt">optimistic</span></th>
+                <td>A function always takes its 25 ms. Real cold starts add hundreds of milliseconds to the tail, more for big runtimes.</td>
+              </tr>
+              <tr>
+                <th scope="row">GC pauses, CPU steal, noisy neighbours <span class="tag tag--opt">optimistic</span></th>
+                <td>Every replica is equally fast all the time. Pauses and shared hardware fatten p99 and p999 well beyond 3× and 5× the mean.</td>
+              </tr>
+              <tr>
+                <th scope="row">Network latency and jitter <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  A hop costs the target's latency only; there is no separate round trip, no cross-zone or cross-region
+                  distance and no packet loss. Multi-region designs look as fast as single-zone ones.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Retries and thundering herds <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  A failed call costs one timeout and the scenario moves on. Retries that double the load on a sick
+                  node, retry storms after an outage and a cold cache stampeding the database do not exist.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Partial and grey failures <span class="tag tag--opt">optimistic</span></th>
+                <td>Nodes are up or down. A slow replica, a half-broken network path or a dependency that answers with errors at 2% is not representable, except as a scenario you write.</td>
+              </tr>
+              <tr>
+                <th scope="row">Cache hit rate <span class="tag">either way</span></th>
+                <td>
+                  The hit rate is whatever <code>mix</code> says. Warm-up, eviction, a cache emptied by a restart, and
+                  hit rates that change with traffic or data size are not modelled. Pick the rate you would actually
+                  measure, and model the cold case as its own scenario.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Hot keys and skew <span class="tag tag--opt">optimistic</span></th>
+                <td>Load is spread evenly over every replica and shard. One celebrity account or one hot partition saturates a real shard long before the average does.</td>
+              </tr>
+              <tr>
+                <th scope="row">Traffic shape and autoscaling <span class="tag tag--opt">optimistic</span></th>
+                <td>
+                  Traffic is one constant rate and replica counts are fixed. Peaks, daily cycles, bursts and the minutes
+                  an autoscaler needs to catch up are not modelled. Enter your peak rate, not your average.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Contention and per-request work <span class="tag">either way</span></th>
+                <td>
+                  Every request to a node costs the same capacity: a key lookup and a five-table join, a 1 KB and a 1 MB
+                  write. Locks, connection pools, transactions and replication work on followers are not modelled.
+                </td>
+              </tr>
+              <tr>
+                <th scope="row">Queues and consumers <span class="tag">either way</span></th>
+                <td>Backlog, consumer lag, ordering, redelivery and dead letters are out of scope. A queue is a node that takes writes; its consumers are steps with load.</td>
+              </tr>
+              <tr>
+                <th scope="row">Time and consistency <span class="tag">either way</span></th>
+                <td>TTLs, expiry, replication lag and stale reads are not simulated; <code>strong</code> and <code>eventual</code> are labels for tests. Model expiry or a stale read as a scenario.</td>
+              </tr>
+              <tr>
+                <th scope="row">Third-party limits <span class="tag tag--opt">optimistic</span></th>
+                <td>External systems are free, take 1k requests a second per replica and never rate-limit you.</td>
+              </tr>
+              <tr>
+                <th scope="row">Real cloud pricing <span class="tag">either way</span></th>
+                <td>
+                  One flat monthly price per replica. No instance sizes, reserved or spot pricing, per-request pricing
+                  (Lambda, DynamoDB on demand, API Gateway), storage at rest, free tiers or egress tiers. Internet egress
+                  from services and inter-zone traffic are free (optimistic); storage to a service in the same region is
+                  charged at storage's internet price (pessimistic).
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section class="section" id="reading" aria-labelledby="reading-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">05</p>
+            <h2 id="reading-title">How to read the results</h2>
+          </header>
+
+          <ol class="rules">
+            <li class="rule">
+              <div class="rule__text">
+                <h3><span class="step__no">5.1</span> Compare designs, find the bottleneck</h3>
+                <p>
+                  The model is deterministic and its inputs are rough, so read its numbers <em>relatively</em>. Two
+                  designs under the same traffic and profiles compare fairly: a cache that takes p99 from 300 ms to
+                  40 ms, a database that goes from 120% to 60%, a CDN that cuts egress by four. A 10% difference
+                  between two designs is inside the error of the teaching values.
+                </p>
+                <p>
+                  The utilisation column shows where the design gives out first. Raise the traffic until something turns
+                  amber (above <span data-pin="const|hot">70%</span>) or red (saturated): that node, and the lever the hint
+                  names (replicas, shards, a cache, async work), is what the design is really about.
+                </p>
+                <p>
+                  Do not size a fleet from these numbers or quote them as SLOs. A capacity plan needs load tests of your
+                  own services, your peak traffic and your cloud bill.
+                </p>
+              </div>
+              <dl class="facts">
+                <div><dt>Good for</dt><dd>comparing designs, finding the first bottleneck, spotting single points of failure, sanity-checking a budget</dd></div>
+                <div><dt>Not for</dt><dd>capacity plans, SLO commitments, cost forecasts, tail-latency estimates</dd></div>
+                <div><dt>Fixed</dt><dd>no randomness, no warm-up: the same text always gives the same numbers</dd></div>
+              </dl>
+            </li>
+
+            <li class="rule">
+              <div class="rule__text">
+                <h3><span class="step__no">5.2</span> Calibrate with your own measurements</h3>
+                <p>
+                  <code>capacity { … }</code> replaces any default for one node, per replica. Once you have real numbers,
+                  put them in and the rest of the model works from them:
+                </p>
+                <ul class="plain">
+                  <li><strong>Rate</strong> (<code>3k rps</code>, or <code>reads … writes …</code>): the throughput at which one replica stops keeping up in a load test, since the model adds queueing delay on top. Not the rate at which latency is still fine.</li>
+                  <li><strong>Latency</strong>: the median per call at low load, measured from the caller, so it includes the network.</li>
+                  <li><strong>Availability</strong>: per replica, from your provider's SLA or your incident history.</li>
+                  <li><strong>Cost</strong>: what one replica costs on your bill. <strong>Egress</strong> and <strong>bandwidth</strong>: your prices and your instance's network.</li>
+                  <li><strong>Shards</strong>, <strong>durable</strong>, <strong>consistency</strong>: how the store is actually set up.</li>
+                </ul>
+                <p>
+                  Calibrated rates fix the capacity side; the omissions in section 04 still apply, so keep headroom.
+                </p>
+              </div>
+              <pre class="code" data-proschi tabindex="0"><code>capacity {
+  api   3k rps latency 12ms cost 140 usd/month
+  db    reads 25k rps writes 6k rps availability 99.95%
+  users shards 4 consistency strong
+  blobs bandwidth 500 MB/s egress 0.05 usd/GB
+}</code></pre>
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section class="section" id="practice" aria-labelledby="practice-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">06</p>
+            <h2 id="practice-title">Practice verdicts</h2>
+          </header>
+
+          <ol class="rules">
+            <li class="rule">
+              <div class="rule__text">
+                <h3><span class="step__no">6.1</span> What "Solved" means</h3>
+                <p>
+                  A practice problem is solved when every requirement and every test in the problem's given file passes
+                  against your design, with the same simulation as the editor. The problem fixes the traffic, the
+                  limits and any capacity numbers; a <code>capacity</code> line in your own file is an error, except
+                  <code>shards &lt;n&gt;</code>, so you cannot buy your way out with a bigger node.
+                </p>
+                <p>
+                  Passing means <strong>the design is sound under this model</strong>: the requests flow the right way,
+                  nothing saturates at the given traffic with the default numbers, every node you run can fail without
+                  breaking a use case, and the bill fits the budget. It does not mean the system would hold up in
+                  production; section 04 is still true.
+                </p>
+              </div>
+              <dl class="facts">
+                <div><dt>Latency</dt><dd>p99 limits fail when the path is too long, a node queues, or any node a use case loads is saturated</dd></div>
+                <div><dt>Failure</dt><dd>survive and availability fail on single points of failure</dd></div>
+                <div><dt>Cost</dt><dd>the budget fails designs that throw replicas at the problem</dd></div>
+                <div><dt>Flow</dt><dd>tests check the key idea: cache before database, write before responding, never wait for a queue</dd></div>
+              </dl>
+            </li>
+
+            <li class="rule">
+              <div class="rule__text">
+                <h3><span class="step__no">6.2</span> Why brute force fails</h3>
+                <p>
+                  Each problem's limits are set between the reference solution and the shortcuts a candidate might try:
+                  loose enough that the intended design passes with room, tight enough that the shortcut does not. More
+                  replicas fix saturation but break the cost budget; skipping the cache saves its cost but loads the
+                  database and the p99; a load balancer in front of storage fails the flow test that asks for a CDN.
+                </p>
+                <p>
+                  Every problem keeps those shortcuts as <code>wrong/*.proschi</code> designs, each naming the tests it
+                  must fail. <code>proschi problem check</code> runs them in CI, so a change to the model or the limits
+                  that lets a shortcut pass is caught before it ships.
+                  <a href="https://github.com/gvart/proschi/blob/main/docs/PRACTICE.md#calibrating-a-problem">How problems are calibrated</a>.
+                </p>
+              </div>
+              <pre class="code" data-proschi tabindex="0"><code># expect-fail: p99 of Hold seat &lt; 200 ms
+# Scales the relational database with read replicas instead of shards.
+import "problem.proschi"
+
+# … the rest of the design …
+db "Seats DB" [PostgreSQL] x4</code></pre>
+            </li>
+          </ol>
+
+          <div class="closing">
+            <a class="btn" href="../practice/">Start practising</a>
+            <a class="btn btn--ghost" href="../app/">Open the editor</a>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="wrap footer__inner">
+        <p><strong>Proschi</strong> is free and open source software, released under the MIT license.</p>
+        <ul class="footer__links">
+          <li><a href="../">Home</a></li>
+          <li><a href="../app/">Editor</a></li>
+          <li><a href="../practice/">Practice</a></li>
+          <li><a href="https://github.com/gvart/proschi/tree/main/frontend/src/sim">Simulation source</a></li>
+          <li><a href="https://github.com/gvart/proschi">GitHub</a></li>
+        </ul>
+      </div>
+    </footer>
+
+    <script type="module" src="../src/model/main.ts"></script>
+  </body>
+</html>

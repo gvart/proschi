@@ -278,7 +278,9 @@ Beyond what talks to what, a document can say how much traffic flows, how fast
 and reliable the system must be, what data lives where and why it is built
 this way. These statements are blocks at the top level; each line inside a
 block follows that block's own rules. The design they describe is in
-[docs/design/hld-and-practice.md](design/hld-and-practice.md).
+[docs/design/hld-and-practice.md](design/hld-and-practice.md); how the
+simulation turns them into numbers, and how far to trust those numbers, is on
+[How the simulation works](https://gvart.github.io/proschi/model/).
 
 ```
 title "URL Shortener" "Turns long URLs into short codes and redirects visitors"
