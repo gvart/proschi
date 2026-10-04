@@ -10,10 +10,12 @@ export default defineConfig({
   base: './',
   build: {
     rollupOptions: {
-      // Two pages: the landing page at the root, the editor under app/.
+      // Three pages: the landing page at the root, the editor under app/,
+      // system design practice under practice/.
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
+        practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
       },
     },
   },
