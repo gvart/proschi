@@ -26,9 +26,12 @@ export class ProblemFolderError extends Error {
   readonly folder: string;
   readonly file?: string;
   readonly line?: number;
+  /** The message without the folder and file. */
+  readonly detail: string;
   constructor(folder: string, message: string, file?: string, line?: number) {
     super(`problems/${folder}: ${file ? `${file}${line ? `:${line}` : ''}: ` : ''}${message}`);
     this.name = 'ProblemFolderError';
+    this.detail = message;
     this.folder = folder;
     this.file = file;
     this.line = line;

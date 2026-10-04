@@ -2,7 +2,8 @@
  * `proschi check` validates .proschi files (for CI and pre-commit hooks);
  * `proschi parse` prints the parsed diagram as JSON (see schema/);
  * `proschi fmt` formats them (see fmt.ts);
- * `proschi test` and `proschi analyze` run the simulation (see simulation.ts).
+ * `proschi test` and `proschi analyze` run the simulation (see simulation.ts);
+ * `proschi problem check|new` validates and scaffolds practice problems (see problem.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -12,6 +13,7 @@ import { RENDER_HELP, RENDER_USAGE } from './render/usage';
 import { FMT_HELP, FMT_USAGE, runFmt } from './fmt';
 import { checkFiles, parseFile } from './imports';
 import { SIM_HELP, SIM_USAGE, runAnalyze, runTest } from './simulation';
+import { PROBLEM_HELP, PROBLEM_USAGE, runProblem } from './problem';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -22,6 +24,7 @@ const USAGE = `Usage:
 ${RENDER_USAGE}
 ${FMT_USAGE}
 ${SIM_USAGE}
+${PROBLEM_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
@@ -34,7 +37,8 @@ parse   Prints {"diagram", "diagnostics"} as JSON; the shape is described by
         schema/proschi-diagram.schema.json.
 ${RENDER_HELP}
 ${FMT_HELP}
-${SIM_HELP}`;
+${SIM_HELP}
+${PROBLEM_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -106,6 +110,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
   if (command === 'fmt') return runFmt(rest, collectFiles, out, err);
   if (command === 'test') return runTest(rest, collectFiles, out, err);
   if (command === 'analyze') return runAnalyze(rest, out, err);
+  if (command === 'problem') return runProblem(rest, out, err);
 
   if (command === 'check') {
     let strict = false;
