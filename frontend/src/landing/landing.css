@@ -594,7 +594,8 @@ h1 {
   color: var(--ink-3);
   font-style: italic;
 }
-.tok-status {
+.tok-status,
+.tok-number {
   color: var(--ink);
   font-weight: 500;
 }

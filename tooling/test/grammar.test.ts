@@ -124,6 +124,79 @@ describe('TextMate grammar', () => {
     expect(scopeOf(lines, '#2')).toBe('string.quoted.double.json.proschi');
   });
 
+  it('scopes section blocks: header keywords, section words, quantities and operators', () => {
+    const lines = tokenize(
+      [
+        'traffic {',
+        '  "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%',
+        '}',
+        'requirements {',
+        '  p99 "Redirect" < 50ms # tail',
+        '  survive failure of any cache',
+        '  cost <= 3000 usd/month',
+        '}',
+        'mix -> any',
+      ].join('\n'),
+    );
+    expect(lines[0]).toEqual([
+      ['traffic', 'keyword.control.proschi'],
+      ['{', 'punctuation.section.block.begin.proschi'],
+    ]);
+    expect(lines[1].filter(([, s]) => !s.startsWith('punctuation.definition.string'))).toEqual([
+      ['Redirect', 'string.quoted.double.proschi'],
+      ['100k rps', 'constant.numeric.proschi'],
+      ['mix', 'keyword.other.proschi'],
+      ['Cache hit', 'string.quoted.double.proschi'],
+      ['90%', 'constant.numeric.proschi'],
+      [',', 'punctuation.separator.comma.proschi'],
+      ['Cache miss', 'string.quoted.double.proschi'],
+      ['10%', 'constant.numeric.proschi'],
+    ]);
+    expect(lines[2]).toEqual([['}', 'punctuation.section.block.end.proschi']]);
+    expect(scopeOf([lines[4]], 'p99')).toBe('keyword.other.proschi');
+    expect(scopeOf([lines[4]], '<')).toBe('keyword.operator.comparison.proschi');
+    expect(scopeOf([lines[4]], '50ms')).toBe('constant.numeric.proschi');
+    expect(scopeOf([lines[4]], '# tail')).toBe('comment.line.number-sign.proschi');
+    expect(lines[5].map(([, s]) => s)).toEqual(['keyword.other.proschi', 'keyword.other.proschi', 'keyword.other.proschi', 'keyword.other.proschi', 'variable.other.node.proschi']);
+    expect(scopeOf([lines[6]], '3000 usd/month')).toBe('constant.numeric.proschi');
+    // After the block the words are ids again.
+    expect(lines[8]).toEqual([
+      ['mix', 'variable.other.node.proschi'],
+      ['->', 'keyword.operator.arrow.proschi'],
+      ['any', 'variable.other.node.proschi'],
+    ]);
+  });
+
+  it('scopes entity, decision and test blocks and the one-line decision', () => {
+    const lines = tokenize(
+      'entity Url in db "Codes" {\n  code string key\n}\ndecision "Base62" because "short"\ntest "T" {\n  "Redirect" never calls any database\n  api has replicas >= 2\n}\nnext [Redis]',
+    );
+    expect(lines[0].slice(0, 4)).toEqual([
+      ['entity', 'keyword.control.proschi'],
+      ['Url', 'variable.other.node.proschi'],
+      ['in', 'keyword.other.proschi'],
+      ['db', 'variable.other.node.proschi'],
+    ]);
+    expect(scopeOf([lines[1]], 'key')).toBe('keyword.other.proschi');
+    expect(lines[3].filter(([, s]) => s.startsWith('keyword'))).toEqual([
+      ['decision', 'keyword.control.proschi'],
+      ['because', 'keyword.other.proschi'],
+    ]);
+    expect(lines[5].filter(([, s]) => s.startsWith('keyword')).map(([t]) => t)).toEqual(['never', 'calls', 'any']);
+    expect(scopeOf([lines[6]], '>=')).toBe('keyword.operator.comparison.proschi');
+    expect(scopeOf([lines[6]], '2')).toBe('constant.numeric.proschi');
+    expect(lines[8]).toEqual([
+      ['next', 'variable.other.node.proschi'],
+      ['[Redis]', 'entity.name.type.tech.proschi'],
+    ]);
+  });
+
+  it('keeps nodes named like section keywords, and scopes replicas', () => {
+    expect(tokenize('test "Runner" [REST API]')[0][0]).toEqual(['test', 'variable.other.node.proschi']);
+    expect(scopeOf(tokenize('api "API" [REST API] @links x3'), 'x3')).toBe('constant.numeric.replicas.proschi');
+    expect(tokenize('  x3 [Redis]')[0][0]).toEqual(['x3', 'variable.other.node.proschi']);
+  });
+
   it.each(examples.map((e) => [e.id, e.source]))('tokenizes the %s example without leaving a block open', (_id, source) => {
     let state = vsctm.INITIAL;
     for (const line of source.split('\n')) state = grammar.tokenizeLine(line, state).ruleStack;
