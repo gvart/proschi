@@ -432,13 +432,13 @@ requirements {
 
 | Requirement | Meaning |
 |---|---|
-| `p50`, `p90`, `p95`, `p99` or `p999` `["Use case"] < <duration>` | Latency percentile of the use case (or of every use case with traffic) under its traffic |
+| `p50`, `p90`, `p95`, `p99` or `p999` `["Use case"] < <duration>` | Latency percentile of the use case (or of every use case with traffic) under its traffic, over all its scenarios mixed by their shares |
 | `p99 "Use case" scenario "S" < <duration>` | The same for one scenario of the use case. An unknown scenario is a warning. |
 | `availability ["Use case"] >= <percent>` | Computed availability of the use case |
 | `durable "Use case"` | Every success scenario writes to a durable node, synchronously, before the entry request is answered |
-| `survive any node failure` | Losing any single node instance keeps every use case working |
+| `survive any node failure` | Losing any single node instance keeps every use case working: with replicas, the node does not saturate and every latency requirement that held still holds |
 | `survive failure of <selector>` | The same, for the selected nodes only |
-| `cost <= <usd/month>` | Sum of replica costs |
+| `cost <= <usd/month>` | Sum of replica costs and egress |
 
 `<=` is also accepted for latency and `>` for availability. Each requirement
 becomes a test that the simulation evaluates.
@@ -451,6 +451,7 @@ capacity {
   cache 150k rps
   users reads 30k rps writes 8k rps shards 4 consistency strong
   blobs bandwidth 500 MB/s egress 0.05 usd/GB
+  pay   timeout 300ms
 }
 ```
 
@@ -467,8 +468,9 @@ parts in any order:
 | `cost <usd/month>` | Monthly cost per replica | `costUsd` |
 | `durable` or `volatile` | Whether a write there is durable | `durable` |
 | `consistency strong` or `consistency eventual` | What `any strong store` / `any eventual store` match | `consistency` |
-| `bandwidth <MB/s or GB/s>` | Network bandwidth per replica, for transfer time | `bandwidthMBps` |
-| `egress <usd/GB>` | Price of data leaving the node | `egressUsdPerGb` |
+| `bandwidth <MB/s or GB/s>` | Network bandwidth per replica, for transfer time (and, for nodes you run, how many bytes they can move) | `bandwidthMBps` |
+| `egress <usd/GB>` | Price of data the node sends to clients and third parties (internet egress) | `egressUsdPerGb` |
+| `timeout <duration>` | What a failed call (`-x`) to the node costs; 1 000 ms by default | `timeoutMs` |
 
 An unknown node id is a warning, and so are `shards` or `consistency` on a
 node that is not a data store. A part given twice, a rate together with
@@ -645,7 +647,7 @@ capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
 capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
-             | "bandwidth" , quantity | "egress" , quantity ;
+             | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity ;
 entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
 flag         = "key" | "index" | "unique" | "optional" ;
 decision     = "decision" , string , ( "because" , string

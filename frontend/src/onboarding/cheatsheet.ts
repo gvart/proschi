@@ -27,7 +27,7 @@ export const CHEAT_SECTIONS: CheatSection[] = [
   {
     id: 'nodes',
     title: 'Nodes',
-    note: '`id "Name" [Tech] @team x<replicas>`, parts in any order. Undeclared ids become plain nodes.',
+    note: '`id "Name" [Tech] @team x<replicas>`, parts in any order. `[Tech]` is one of about 210 catalog techs, aliases too (`[S3]`, `[Postgres]`). Undeclared ids become plain nodes.',
     ref: '#statements',
     code: `title "Shop" "Sells things online"
 
@@ -91,7 +91,7 @@ api  -> db    : SQL`,
   {
     id: 'hld',
     title: 'Traffic and requirements',
-    note: 'The simulation loads the design with this traffic and checks every requirement (Analysis and Tests tabs).',
+    note: 'The simulation loads the design with this traffic and checks every requirement (Analysis and Tests tabs). `capacity` overrides a node\'s numbers, e.g. how long a failed call to it takes.',
     ref: '#high-level-design',
     code: `traffic {
   "Get order"   2k rps mix "Cache hit" 90%, "Cache miss" 10%
@@ -103,6 +103,10 @@ requirements {
   availability >= 99.9%
   durable "Place order"
   cost <= 2000 usd/month
+}
+
+capacity {
+  db timeout 250ms
 }`,
   },
   {

@@ -265,75 +265,102 @@ A deterministic, analytical model in `frontend/src/sim/` (pure TypeScript, no
 DOM): `analyze(diagram, options?) → Analysis`. It runs in milliseconds, so the
 editor re-runs it on every change.
 
-This section is the original design; §7 refines it. For the model as the code
-implements it today, with its default numbers and its limits, see
-[How the simulation works](https://gvart.github.io/proschi/model/)
-(`frontend/model/index.html`, whose numbers a test recomputes from the code).
+This section describes the model as the code implements it today, §7's
+refinements included. [How the simulation works](https://gvart.github.io/proschi/model/)
+(`frontend/model/index.html`) states every rule with its default numbers,
+worked examples and limits; a test recomputes each number on that page from
+the code.
 
 ### 2.1 Profiles
 
-Every node gets a per-replica profile: kind, capacity (rps), base latency (ms),
-availability, monthly cost, and whether it is durable. Profiles come from a
-table keyed by tech stack, falling back to the component type; `capacity`
-overrides win. Defaults (teaching values, documented in the UI as such):
+Every node gets a per-replica profile: kind, read and write capacity, base
+latency, availability, monthly cost, durability, consistency, bandwidth and
+internet egress price. The tech catalog (`frontend/src/catalog/componentCatalog.ts`,
+about 205 techs with aliases) gives each tech its kind and, where it differs
+from the kind's, its profile row; `capacity` overrides win. A tech the catalog
+does not know is simulated as the kind its name suggests, else the kind of the
+closest catalog tech, else a service, never as a client. Defaults (teaching
+values):
 
-| Kind | Techs (examples) | rps / replica | latency | availability | cost / month | durable |
-|---|---|---|---|---|---|---|
-| client | Actor, shapes with no tech | ∞ | 0 | 100% | 0 | — |
-| edge | CloudFront, Load Balancer, Route53, API Gateway, Front Door, CDN | 100k | 2 ms | 99.99% | 50 | no |
-| service | REST API, gRPC, GraphQL, WebSocket, EC2, ECS, EKS, Fargate, VMs | 2k | 10 ms | 99.5% | 100 | no |
-| function | Lambda, Cloud Functions, Azure Functions, Cloud Run, App Engine | 10k | 25 ms | 99.95% | 200 | no |
-| cache | Redis, ElastiCache, Memcached, Hazelcast, Aerospike, Azure Cache | 100k | 1 ms | 99.9% | 150 | no |
-| database | PostgreSQL, MySQL, Aurora, RDS, SQL Server, Oracle, Cloud SQL, MariaDB | 5k | 5 ms | 99.95% | 400 | yes |
-| database (NoSQL) | DynamoDB, Cassandra, MongoDB, Cosmos DB, Bigtable, Firestore, Spanner | 20k | 5 ms | 99.99% | 500 | yes |
-| search | Elasticsearch | 3k | 15 ms | 99.9% | 400 | yes |
-| analytics | BigQuery, InfluxDB, TimescaleDB | 200 | 500 ms | 99.9% | 300 | yes |
-| queue | Kafka, SQS, SNS, Kinesis, Pub/Sub, RabbitMQ, Service Bus, … | 50k | 5 ms | 99.99% | 200 | yes |
-| storage | S3, Blob Storage, Cloud Storage, EFS, EBS | 5k | 30 ms | 99.99% | 50 | yes |
-| external | Payment Gateway, Email/SMS Service, Auth Service, Third Party API | 1k | 200 ms | 99.9% | 0 | — |
+| Kind | Techs (examples) | reads / replica | writes | latency | availability | cost / month | bandwidth | egress | durable |
+|---|---|---|---|---|---|---|---|---|---|
+| client | Actor, Browser, Mobile App, shapes with no tech | ∞ | ∞ | 0 | 100% | 0 | 10 MB/s | — | — |
+| edge | WAF, AWS WAF, Global Accelerator | 100k | 100k | 2 ms | 99.99% | 50 | 1,000 MB/s | $0.09/GB | no |
+| cdn | CloudFront, Fastly, Akamai, Cloudflare, Azure CDN, Cloud CDN | 200k | 200k | 5 ms | 99.99% | 100 | 1,000 MB/s | $0.02/GB | no |
+| loadbalancer | AWS Load Balancer (ALB, NLB), nginx, Envoy, HAProxy | 100k | 100k | 2 ms | 99.99% | 50 | 1,000 MB/s | $0.09/GB | no |
+| gateway | AWS API Gateway, Azure API Management, Kong, Apigee | 10k | 10k | 10 ms | 99.95% | 100 | 1,000 MB/s | $0.09/GB | no |
+| dns | Route53, Azure DNS, Cloud DNS | ∞ | ∞ | 0 | 100% | 0 | 1,000 MB/s | — | no |
+| service | Service, REST API, gRPC, Spring Boot, Go, Node.js, ECS, EKS, Kubernetes | 2k | 2k | 10 ms | 99.5% | 100 | 200 MB/s | $0.09/GB | no |
+| function | Lambda, Cloud Functions, Azure Functions, Cloud Run | 10k | 10k | 25 ms | 99.95% | 200 | 100 MB/s | $0.09/GB | no |
+| cache | Redis, Valkey, ElastiCache, Memcached | 100k | 100k | 1 ms | 99.9% | 150 | 100 MB/s | $0.09/GB | no |
+| database (relational) | PostgreSQL, MySQL, Aurora, RDS, SQL Server, Oracle | 20k | 5k per shard | 5 ms | 99.95% | 400 | 100 MB/s | $0.09/GB | yes |
+| database (NoSQL) | DynamoDB, Cassandra, ScyllaDB, MongoDB, CockroachDB, Spanner | 20k | 20k | 5 ms | 99.99% | 500 | 100 MB/s | $0.09/GB | yes |
+| search | Elasticsearch, OpenSearch, Solr | 3k | 3k | 15 ms | 99.9% | 400 | 100 MB/s | $0.09/GB | yes |
+| analytics | BigQuery, Snowflake, Redshift, ClickHouse | 200 | 200 | 500 ms | 99.9% | 300 | 100 MB/s | $0.09/GB | yes |
+| queue | Kafka, Kinesis, SQS, SNS, Pub/Sub, RabbitMQ | 50k | 50k | 5 ms | 99.99% | 200 | 100 MB/s | $0.09/GB | yes |
+| storage | S3, GCS, Azure Blob, MinIO | 5k | 5k | 30 ms | 99.99% | 50 | 100 MB/s | $0.09/GB | yes |
+| external | Stripe, Twilio, SendGrid, third-party APIs | 1k | 1k | 200 ms | 99.9% | 0 | 100 MB/s | — | — |
 
 Annotations, groups and text nodes are ignored.
 
 ### 2.2 Load
 
-For each use case U with traffic R and scenario shares m(s):
-every request step (`->`, `->>`, `-x`) in scenario s adds `R · m(s)` to the
-target node's load. Responses add nothing. Use cases without traffic add no
-load but are still checked for structure.
+For each use case U with traffic R and scenario shares m(s): every request
+step that gets through (`->`, `->>`) in scenario s adds `R · m(s) · N` to the
+target node's reads or writes (§7.2), N being the `x<N>` fan-out. Responses
+add nothing, and a failed call (`-x`) adds nothing either: its target is down
+in that scenario.
 
-Utilisation `ρ(n) = load(n) / (rps(n) · replicas(n))`. A node with `ρ ≥ 1` is
-**saturated**: every latency requirement touching it fails, with the message
-naming the node and its load.
+Request utilisation is reads ÷ read capacity plus writes ÷ write capacity, or
+the busier of the two for a single-primary store (§7.2). Nodes you run (not
+clients, third parties, DNS, object storage or CDNs) also have a bandwidth
+utilisation: payload bytes in and out per second over their replicas'
+bandwidth. A node's utilisation is the larger of the two; at 100% or more it
+is **saturated** and every latency requirement touching it fails.
 
 ### 2.3 Latency
 
-- Hop latency: `base(n) / (1 − min(ρ(n), 0.95))` (queueing grows sharply near
-  saturation).
-- Scenario mean latency: the sum of hop latencies over the **synchronous**
-  critical path of the entry request: sync requests (`->`) count; a `par` group
-  counts its slowest member; async sends (`->>`) count only their own send
-  hop, not downstream work; a failed call (`-x`) counts a timeout of 1 000 ms
-  (overridable later).
-- Scenario percentile: `p_q(s) = mean(s) × f(q)` with
-  `f(50)=1.0, f(90)=1.6, f(95)=2.0, f(99)=3.0, f(99.9)=5.0`.
-- Use case percentile: `p_q(U) = max { p_q(s) : m(s) ≥ 1 − q }`: a scenario
-  carrying more than the tail share dominates that percentile. With 10% cache
-  misses, p99 is the miss path; with 0.5% it is the hit path. This is
-  intentional and explained in the UI.
+- Queueing is M/M/c: each replica of a shard is a server whose service time
+  is the base latency (writes that bind a single-primary store queue for its
+  one primary). A request waits with the Erlang C probability C, on average
+  `base / (c (1 − ρ))`; ρ is capped at 0.95. Mean hop latency:
+  `base + C · base / (c (1 − ρ))`, which is `base / (1 − ρ)` for one server.
+- A hop's time is a fixed part, half its base latency, plus an exponential
+  tail carrying the rest of its mean. Its q-quantile is
+  `fixed + tail · ln(1 / (1 − q))`: an idle hop's p99 is 2.8× its mean, and
+  the ratio grows with queueing.
+- A scenario's critical path is the synchronous requests sent before the
+  entry response; a `par` group counts its slowest member; async sends count
+  only their own hop; a failed call (`-x`) costs a fixed timeout (1 000 ms,
+  or `capacity { n timeout … }`). Transfer time is `N × size / min(bandwidth)`
+  and, like a timeout, adds once to every percentile. A path's quantile takes
+  every hop at the same quantile (pessimistic for long paths).
+- A use case's percentile is the percentile of the mixture of its scenarios:
+  the t with `Σ m(s) · P(s ≤ t) = q`, solved by bisection. With 10% cache
+  misses, p99 is near the miss path's p90.
 
 ### 2.4 Availability
 
 - Node: `A(n) = 1 − (1 − a(n))^replicas(n)`.
-- Use case: the product of `A(n)` over the distinct nodes on the synchronous
-  path of its main scenario (largest share), except that a node n with a
-  fallback, meaning a success scenario of U that calls n with `-x` and
-  completes without n, contributes `1 − (1 − A(n)) · (1 − A(fallback path))`.
+- A write to a single-primary store needs its primary: `1 − (1 − a) · 0.1`
+  with a replica to fail over to (a tenth of each outage is lost to the
+  failover), `a` without one.
+- Use case: the product over the distinct nodes on the synchronous path of
+  its main scenario (largest share), using the write availability for
+  single-primary stores the main path writes to; a node n with a fallback, a
+  success scenario that calls n with `-x` and completes without n,
+  contributes `1 − (1 − A(n)) · (1 − A(fallback path))`.
 
 ### 2.5 Failure injection
 
-For `survive any node failure` (or the selected nodes), for each node n:
-- `replicas(n) ≥ 2`: remove one replica, recompute load; it passes if no node
-  becomes saturated.
+For `survive any node failure` (or the selected nodes), for each node n you
+run:
+- `replicas(n) ≥ 2`: analyse the design again with one replica fewer. It
+  passes if n does not saturate and every latency requirement that held still
+  holds. Load is spread evenly over shards and keys cannot move between them,
+  so on a sharded store this is the shard that lost the replica. A
+  single-primary store that loses its primary promotes a replica: write
+  capacity stays, reads lose one replica.
 - `replicas(n) = 1`: every use case whose success scenarios need n must have a
   success scenario that handles n failing (`-x n`, then completes without n).
   Otherwise it fails: *Losing db (PostgreSQL) breaks "Shorten": add a replica
@@ -341,18 +368,21 @@ For `survive any node failure` (or the selected nodes), for each node n:
 
 ### 2.6 Durability and cost
 
-- `durable U`: every success scenario has a synchronous, non-failed request to
+- `durable U`: every success scenario has a synchronous, non-failed write to
   a durable node before the entry response (sequence order).
-- Cost: `Σ replicas(n) × cost(n)`.
+- Cost: `Σ replicas(n) × shards(n) × cost(n)` plus egress: payloads a node you
+  run sends to a client or a third party, `GB/month × its egress price`.
+  Traffic between your own nodes is free.
 
 ### 2.7 Output
 
-```ts
-export interface NodeAnalysis { id: string; kind: Kind; replicas: number; loadRps: number; capacityRps: number; utilization: number; saturated: boolean; latencyMs: number; availability: number; costUsd: number; durable: boolean }
-export interface ScenarioAnalysis { id: string; name: string; share: number; meanMs: number; percentiles: Record<'p50' | 'p90' | 'p95' | 'p99' | 'p999', number> }
-export interface UseCaseAnalysis { id: string; name: string; rps: number; scenarios: ScenarioAnalysis[]; percentiles: ScenarioAnalysis['percentiles']; availability: number }
-export interface Analysis { nodes: NodeAnalysis[]; useCases: UseCaseAnalysis[]; totalCostUsd: number; singlePointsOfFailure: string[]; warnings: string[] }
-```
+`NodeAnalysis` (per node: replicas, shards, read and write load, capacity and
+utilisation, bandwidth load, capacity and utilisation, servers and wait
+probability, mean latency, availability and write availability, cost and
+egress), `ScenarioAnalysis` (share, mean, percentiles), `UseCaseAnalysis`
+(rps, scenarios, mixture percentiles, the scenario that dominates each
+percentile's tail, availability) and `Analysis` (nodes, use cases, total cost
+and egress, single points of failure, warnings); see `frontend/src/sim/analyze.ts`.
 
 ---
 
@@ -545,6 +575,10 @@ not once per assertion.
 - Transfer time uses the slower of the two ends' bandwidth (the client's
   10 MB/s bounds both uploads and downloads). A read's payload leaves its
   target (the answer), a write's leaves its sender; 1 GB = 10⁹ bytes.
+- Since then (see §2): egress is charged on payloads a node you run sends to
+  a client or a third party ($0.09/GB, a CDN $0.02/GB), not on every byte
+  leaving storage; a fan-out of N moves N payloads; and nodes you run
+  saturate when their payloads exceed their bandwidth.
 
 ### 7.4 Consistency
 

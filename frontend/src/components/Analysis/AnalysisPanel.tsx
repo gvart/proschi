@@ -105,7 +105,7 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
                       <td className="py-1.5 text-right text-gray-700">
                         {formatUsd(n.costUsd).replace('/month', '')}
                         {n.egressUsd > 0 && (
-                          <span className="block text-xs text-gray-400" title={`${formatGb(n.egressGbPerMonth)} leave this node per month`}>
+                          <span className="block text-xs text-gray-400" title={`${formatGb(n.egressGbPerMonth)} a month sent to clients and third parties`}>
                             {formatUsd(n.egressUsd).replace('/month', '')} egress
                           </span>
                         )}
@@ -121,8 +121,8 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
         <section>
           <h2 className="mb-1 font-semibold text-gray-900">Use cases</h2>
           <p className="mb-2 text-xs text-gray-500">
-            A scenario that carries more than a percentile's tail share sets that percentile: with 10% cache misses, p99 is the miss path; with
-            0.5%, it is the hit path.
+            Percentiles are over all requests, the scenarios mixed by their shares: with 10% cache misses, p99 is close to the miss path's
+            p90.
           </p>
           <div className="space-y-3">
             {analysis.useCases.map((u) => (
@@ -176,8 +176,8 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
           <Info size={14} className="mt-px flex-shrink-0" />
           <span>
             The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing
-            model. Relational databases take writes on one primary per shard, so read replicas add reads only; egress is charged for data leaving
-            storage ($0.09/GB) and CDNs ($0.02/GB). Override the numbers with <code>capacity {'{ … }'}</code>.
+            model. Relational databases take writes on one primary per shard, so read replicas add reads only; egress is charged for data a node sends to
+            clients and third parties ($0.09/GB, from a CDN $0.02/GB). Override the numbers with <code>capacity {'{ … }'}</code>.
           </span>
         </p>
       </div>
