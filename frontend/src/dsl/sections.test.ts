@@ -89,7 +89,7 @@ describe('older documents', () => {
 
   it('may still use the new keywords as node ids', () => {
     const { diagram, diagnostics } = parse(
-      'traffic [REST API]\ntest "Test runner"\nentity\ndecision "Decision Engine" [REST API] x2\nrequirements\ncapacity "C"\ntraffic -> test',
+      'traffic [REST API]\ntest "Test runner"\nentity pos 10,20\ndecision "Decision Engine" [REST API] x2\nrequirements x2\ncapacity "C"\ntraffic -> test',
     );
     expect(diagnostics).toEqual([]);
     expect(diagram.nodes.map((n) => n.id)).toEqual(['traffic', 'test', 'entity', 'decision', 'requirements', 'capacity']);
@@ -147,6 +147,7 @@ describe('traffic', () => {
   it('reports duplicate use case lines and rates without a rate unit', () => {
     expect(bodyProblems('traffic {\n  "Shorten" 1 rps\n  "Shorten" 2 rps\n}')).toEqual([['error', "Duplicate traffic for 'Shorten' (first on line 24)"]]);
     expect(bodyProblems('traffic {\n  "Shorten" 100k\n}')).toEqual([['error', "'100k' needs a unit: expected a rate, e.g. 100k rps, 6k rpm or 1m rpd"]]);
+    expect(bodyProblems('traffic {\n  "Shorten" 50 ms\n}')).toEqual([['error', "Expected a rate, e.g. 100k rps, 6k rpm or 1m rpd, not '50 ms'"]]);
     expect(bodyProblems('traffic {\n  "Shorten" 50ms\n}')).toEqual([['error', "Expected a rate, e.g. 100k rps, 6k rpm or 1m rpd, not '50ms'"]]);
     expect(bodyProblems('traffic {\n  "Shorten"\n}')).toEqual([['error', 'Expected a rate, e.g. 100k rps, 6k rpm or 1m rpd']]);
     expect(bodyProblems('traffic {\n  "Shorten" 5 qps\n}')).toEqual([['error', "'5' needs a unit: expected a rate, e.g. 100k rps, 6k rpm or 1m rpd"]]);

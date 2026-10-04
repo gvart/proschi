@@ -285,7 +285,7 @@ class Parser {
         else this.parseNode(tokens, line);
         break;
       case 'entity':
-        if (second?.kind === 'ident') this.parseEntity(tokens, line);
+        if (second?.kind === 'ident' && second.value !== 'pos' && !REPLICAS.test(second.value)) this.parseEntity(tokens, line);
         else this.parseNode(tokens, line);
         break;
       case 'decision':
@@ -1223,13 +1223,15 @@ class Parser {
       return undefined;
     }
     const loc = this.locOf(token, line);
-    const q = parseQuantity(token.value);
+    // As written, e.g. `100k rps`; the token value has the space removed.
+    const written = this.lines[line - 1].slice(token.col - 1, token.col - 1 + token.length);
+    const q = parseQuantity(written);
     if ('error' in q) {
       this.error(q.error, loc);
       return undefined;
     }
     if (q.unit !== unit) {
-      this.error(q.unit ? `Expected ${expected}, not '${token.value}'` : `'${token.value}' needs a unit: expected ${expected}`, loc);
+      this.error(q.unit ? `Expected ${expected}, not '${written}'` : `'${written}' needs a unit: expected ${expected}`, loc);
       return undefined;
     }
     return q.value;
