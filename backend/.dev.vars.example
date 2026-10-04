@@ -1,7 +1,7 @@
 # Copy to .dev.vars for `npm run dev` (http://localhost:8787). OAuth test apps
 # need the callback URLs http://localhost:8787/auth/github/callback and
 # http://localhost:8787/auth/google/callback. A provider without credentials
-# is not offered.
+# is not offered, and none is without a SESSION_SECRET of 32 characters or more.
 SESSION_SECRET=change-me-to-a-long-random-string
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=

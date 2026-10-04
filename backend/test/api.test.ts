@@ -1,7 +1,7 @@
 import { env } from 'cloudflare:workers';
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { findProblem } from '../src/verify';
-import { clearStatsCache } from '../src/stats';
+import { cacheKey, clearStatsCache } from '../src/stats';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 const ID = 'url-shortener';
@@ -12,7 +12,7 @@ function run(token: string, body: Record<string, unknown>, id = ID) {
 }
 
 async function stats(path: string, token?: string) {
-  clearStatsCache();
+  await clearStatsCache();
   return (await (await call(path, { token })).json()) as Record<string, any>;
 }
 
@@ -143,17 +143,18 @@ describe('stats', () => {
     expect((await call('/api/stats/no-such-problem')).status).toBe(404);
   });
 
-  it('answers signed-in users fresh, so their own run counts even while the public answer is cached', async () => {
+  it('answers signed-in users from the shared cache, with where their latest design falls in it', async () => {
     const other = await signedInUser();
     await run(other.token, { source: problem.solution, solved: true });
     const me = await signedInUser();
     expect(await stats(`/api/stats/${ID}`)).toMatchObject({ solved: 1 });
+    await vi.waitFor(async () => expect(await caches.default.match(cacheKey(`problem/${ID}`))).toBeDefined());
     await run(me.token, { source: problem.solution, solved: true });
-    // No clearStatsCache: the anonymous answer is still memoized.
+    // No clearStatsCache: both answers come from the cached distribution, which predates my solve.
     const anonymous = (await (await call(`/api/stats/${ID}`)).json()) as Record<string, any>;
     const signedIn = (await (await call(`/api/stats/${ID}`, { token: me.token })).json()) as Record<string, any>;
     expect(anonymous.solved).toBe(1);
-    expect(signedIn).toMatchObject({ solved: 2, you: { cheaperThan: 0 } });
+    expect(signedIn).toMatchObject({ solved: 1, costUsd: { count: 1 }, you: { cheaperThan: 0, runsToSolve: 1 } });
   });
 
   it('ranks only users who opted in, by problems solved, then who got there first', async () => {

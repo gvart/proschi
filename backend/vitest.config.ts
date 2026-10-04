@@ -11,7 +11,7 @@ export default defineConfig(async () => {
         miniflare: {
           bindings: {
             TEST_MIGRATIONS: migrations,
-            SESSION_SECRET: 'test-secret',
+            SESSION_SECRET: 'test-secret-at-least-32-characters-long',
             GITHUB_CLIENT_ID: 'gh-client',
             GITHUB_CLIENT_SECRET: 'gh-secret',
             GOOGLE_CLIENT_ID: 'google-client',

@@ -144,3 +144,73 @@ describe('sign-in', () => {
     expect((await call('/api/me', { token })).status).toBe(200);
   });
 });
+
+describe('linking sign-ins', () => {
+  beforeEach(resetDatabase);
+  afterEach(() => vi.restoreAllMocks());
+
+  /** Signed in with `token`, adds `provider`: start with link=1, then the provider's redirect back. */
+  async function link(provider: string, token: string, callbackToken = token) {
+    const response = await call(`/auth/${provider}/start?${new URLSearchParams({ return: '/practice/', link: '1' })}`, { token, redirect: 'manual' });
+    expect(response.status).toBe(302);
+    const state = new URL(response.headers.get('Location')!).searchParams.get('state')!;
+    const cookie = `${(setCookie(response, 'proschi_oauth') ?? '').split(';')[0]}; ${SESSION_COOKIE}=${callbackToken}`;
+    return callback(provider, { code: 'good-code', state }, cookie);
+  }
+
+  const providers = async (token: string) => ((await (await call('/api/me', { token })).json()) as { user: { providers: string[] } }).user.providers;
+
+  it('adds a provider to the signed-in account, without a new session', async () => {
+    mockProviders();
+    const { token } = await signIn('github');
+    const back = await link('google', token);
+    expect(back.headers.get('Location')).toBe('/practice/?linked=google');
+    expect(setCookie(back, SESSION_COOKIE)).toBeUndefined();
+    expect(await providers(token)).toEqual(['github', 'google']);
+    // Signing in with either finds the same account.
+    const viaGoogle = await signIn('google');
+    expect(await (await call('/api/me', { token: viaGoogle.token })).json()).toMatchObject({ user: { providers: ['github', 'google'] } });
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n).toBe(1);
+    // Linking it again changes nothing.
+    expect((await link('google', token)).headers.get('Location')).toBe('/practice/?linked=google');
+  });
+
+  it('needs a session, the same one at the callback', async () => {
+    mockProviders();
+    expect((await call('/auth/google/start?return=/&link=1', { redirect: 'manual' })).status).toBe(401);
+    const { token } = await signIn('github');
+    const other = await signIn('google');
+    const back = await link('google', token, other.token);
+    expect(back.headers.get('Location')).toBe('/practice/?login_error=failed');
+  });
+
+  it('refuses an identity that signs in to another account', async () => {
+    mockProviders();
+    await signIn('google');
+    const { token } = await signIn('github');
+    expect((await link('google', token)).headers.get('Location')).toBe('/practice/?login_error=identity_in_use');
+    expect(await providers(token)).toEqual(['github']);
+  });
+
+  it('refuses a second identity with the same provider', async () => {
+    mockProviders();
+    const { token } = await signIn('github');
+    vi.restoreAllMocks();
+    mockProviders({ id: 43, login: 'other-octocat' });
+    expect((await link('github', token)).headers.get('Location')).toBe('/practice/?login_error=provider_linked');
+    expect(await providers(token)).toEqual(['github']);
+  });
+
+  it('unlinks a provider, but not the only one left', async () => {
+    mockProviders();
+    const { token } = await signIn('github');
+    await link('google', token);
+    expect((await call('/api/me/identities/google', { method: 'DELETE', token })).status).toBe(204);
+    expect(await providers(token)).toEqual(['github']);
+    const last = await call('/api/me/identities/github', { method: 'DELETE', token });
+    expect(last.status).toBe(409);
+    expect(await last.json()).toEqual({ error: "Can't remove your only sign-in" });
+    expect((await call('/api/me/identities/google', { method: 'DELETE', token })).status).toBe(404);
+    expect(await providers(token)).toEqual(['github']);
+  });
+});

@@ -22,6 +22,11 @@ export function problemIds(): string[] {
   return Object.keys(problemFolders);
 }
 
+/** Every problem's id and content version (problem.md `version`, 1 when absent); stats count only progress on these. */
+export function currentVersions(): { id: string; v: number }[] {
+  return problemIds().map((id) => ({ id, v: findProblem(id)?.version ?? 1 }));
+}
+
 export interface Verdict {
   solved: boolean;
   passed: number;
