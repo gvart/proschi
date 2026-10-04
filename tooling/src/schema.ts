@@ -1,6 +1,5 @@
-import type { ExecutionType, FlowStep, Protocol } from '../../frontend/src/services/api';
 import type { ComponentType } from '../../frontend/src/types/canvas';
-import type { Assertion, Percentile, Requirement } from '../../frontend/src/dsl/types';
+import type { Assertion, ExecutionType, FlowStep, Percentile, Protocol, Requirement } from '../../frontend/src/dsl/types';
 import { KINDS } from '../../frontend/src/dsl/kinds';
 import { componentCatalog } from './proschi';
 

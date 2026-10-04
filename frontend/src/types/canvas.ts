@@ -180,18 +180,3 @@ export interface CanvasEdge {
   labelStyle?: React.CSSProperties;
   labelBgStyle?: React.CSSProperties;
 }
-
-export interface CanvasState {
-  nodes: CanvasNode[];
-  edges: CanvasEdge[];
-  viewport: { x: number; y: number; zoom: number };
-}
-
-export interface Project {
-  id: string;
-  name: string;
-  description?: string;
-  createdAt: string;
-  updatedAt: string;
-  canvasState: CanvasState;
-}

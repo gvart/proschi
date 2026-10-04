@@ -91,11 +91,7 @@ function loadInitialState(): DocumentState {
   });
 }
 
-interface PlaygroundProps {
-  onOpenBuilder: () => void;
-}
-
-export default function Playground({ onOpenBuilder }: PlaygroundProps) {
+export default function Playground() {
   const [docState, setDocState] = useState(loadInitialState);
   const current = currentDoc(docState);
   const source = current.source;
@@ -409,16 +405,6 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                   }}
                 >
                   Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
-                </MenuItem>
-                <div className="my-1 border-t border-gray-100" />
-                <MenuItem
-                  icon={<Network size={14} />}
-                  onSelect={() => {
-                    close();
-                    onOpenBuilder();
-                  }}
-                >
-                  Visual builder (classic)
                 </MenuItem>
               </>
             )}
