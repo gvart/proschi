@@ -626,16 +626,39 @@ usecase "U" {
   });
 
   describe('no path', () => {
-    it('follows chains of connections in their direction', () => {
+    it('allows chains through other nodes but not a direct connection', () => {
       expect(check(SHOP, { kind: 'noPath', from: { kind: 'client' }, to: { kind: 'database' } })).toMatchObject({
-        passed: false,
-        message: 'client → gw → api → db connects any client to any database',
-      });
-      expect(check(SHOP, { kind: 'noPath', from: { kind: 'database' }, to: { kind: 'client' } }).passed).toBe(true);
-      expect(check(SHOP, { kind: 'noPath', from: { node: 'cache' }, to: { node: 'db' } })).toMatchObject({
         passed: true,
-        message: 'No chain of connections leads from cache to db',
+        message: 'No connection or step goes directly from any client to any database',
       });
+      const direct = `${SHOP}\nclient -> db`;
+      const line = direct.split('\n').indexOf('client -> db') + 1;
+      const r = check(direct, { kind: 'noPath', from: { kind: 'client' }, to: { kind: 'database' } });
+      expect(r).toMatchObject({ passed: false, message: `The connection client -> db (line ${line}) goes directly from any client to any database` });
+      expect(r.hint).toContain('Route it through');
+    });
+
+    it('takes the connection direction as written', () => {
+      expect(check(SHOP, { kind: 'noPath', from: { node: 'api' }, to: { node: 'gw' } }).passed).toBe(true);
+      expect(check(SHOP, { kind: 'noPath', from: { node: 'gw' }, to: { node: 'api' } }).message).toMatch(/^The connection gw -> api \(line \d+\)/);
+    });
+
+    it('fails for a use case step that goes directly', () => {
+      const src = `
+client [Actor]
+api [REST API]
+db [PostgreSQL]
+usecase "Peek" {
+  client -> api : GET
+  alt "Direct" {
+    client -> db : SELECT
+  } alt "Proper" {
+    api -> db : SELECT
+  }
+}`;
+      expect(check(src, { kind: 'noPath', from: { node: 'client' }, to: { kind: 'database' } }).message).toBe(
+        'The step client -> db in "Peek" scenario "Direct" (line 8) goes directly from client to any database',
+      );
     });
 
     it('holds when a selector matches nothing', () => {

@@ -487,35 +487,28 @@ function responds(run: Run, a: Extract<Assertion, { kind: 'responds' }>): Check 
   return fail(`${sc.label} never responds ${a.status}; it answers ${seen.join(', ') || 'nothing'}`, `Add a scenario (alt) whose entry request is answered with ${a.status}`);
 }
 
-/** A chain of architecture connections from a node matching `from` to one matching `to`. */
+/**
+ * `no path from X to Y`: no architecture connection and no use case step goes
+ * directly from a node matching X to one matching Y. (Chains through other
+ * nodes are allowed: client → gateway → service → db is how a working design
+ * reaches its database.)
+ */
 function noPath(run: Run, from: Selector, to: Selector): Check {
-  const sources = selectNodes(run.diagram, from).map((n) => n.id);
+  const sources = new Set(selectNodes(run.diagram, from).map((n) => n.id));
   const targets = new Set(selectNodes(run.diagram, to).map((n) => n.id));
   const [x, y] = [selectorText(from), selectorText(to)];
-  const next = new Map<string, string[]>();
-  for (const e of run.diagram.edges) next.set(e.source, [...(next.get(e.source) ?? []), e.target]);
-  for (const start of sources) {
-    const previous = new Map<string, string>();
-    const queue = [start];
-    const seen = new Set([start]);
-    while (queue.length) {
-      const at = queue.shift()!;
-      for (const n of next.get(at) ?? []) {
-        if (targets.has(n)) {
-          const path = [n, at];
-          for (let p = previous.get(at); p !== undefined; p = previous.get(p)) path.push(p);
-          path.reverse();
-          return fail(
-            `${path.join(' → ')} connects ${x} to ${y}`,
-            `Remove or reroute the connection ${path.at(-2)} -> ${path.at(-1)}, e.g. through a service that guards ${y}`,
-          );
-        }
-        if (seen.has(n)) continue;
-        seen.add(n);
-        previous.set(n, at);
-        queue.push(n);
+  const line = (loc: SourceLoc) => `${loc.file ? `${loc.file}:` : 'line '}${loc.line}`;
+  const hint = `Route it through a node that guards ${y} (a gateway or a service) instead of going there directly`;
+  const edge = run.diagram.edges.find((e) => sources.has(e.source) && targets.has(e.target));
+  if (edge) return fail(`The connection ${edge.source} -> ${edge.target} (${line(edge.loc)}) goes directly from ${x} to ${y}`, hint);
+  for (const u of run.diagram.useCases) {
+    for (const s of u.scenarios) {
+      const step = s.steps.find((st) => sources.has(st.fromServiceId) && targets.has(st.toServiceId));
+      if (step) {
+        const where = u.scenarios.length > 1 ? `${quote(u.name)} scenario ${quote(s.name)}` : quote(u.name);
+        return fail(`The step ${step.fromServiceId} -> ${step.toServiceId} in ${where} (${line(step.loc)}) goes directly from ${x} to ${y}`, hint);
       }
     }
   }
-  return pass(`No chain of connections leads from ${x} to ${y}`);
+  return pass(`No connection or step goes directly from ${x} to ${y}`);
 }
