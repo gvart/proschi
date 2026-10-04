@@ -1,5 +1,7 @@
 import type { ExecutionType, FlowStep, Protocol } from '../../frontend/src/services/api';
 import type { ComponentType } from '../../frontend/src/types/canvas';
+import type { Assertion, Percentile, Requirement } from '../../frontend/src/dsl/types';
+import { KINDS } from '../../frontend/src/dsl/kinds';
 import { componentCatalog } from './proschi';
 
 /**
@@ -13,11 +15,16 @@ import { componentCatalog } from './proschi';
 const PROTOCOLS: Record<Protocol, true> = { REST: true, GRPC: true, SOAP: true, GRAPHQL: true, MESSAGING: true, OTHER: true };
 const EXECUTION: Record<ExecutionType, true> = { SYNC_REQUEST_RESPONSE: true, ASYNC_FIRE_AND_FORGET: true, ASYNC_REQUEST_RESPONSE: true };
 const FORMATS: Record<FlowStep['requestFormat'], true> = { JSON: true, XML: true, FREE_TEXT: true };
+const PERCENTILES: Record<Percentile, true> = { 50: true, 90: true, 95: true, 99: true, 99.9: true };
 
 const loc = { $ref: '#/$defs/loc' };
 const str = { type: 'string' };
 const int = { type: 'integer' };
 const bool = { type: 'boolean' };
+const num = { type: 'number' };
+const percent = { type: 'number', minimum: 0, maximum: 100 };
+const selector = { $ref: '#/$defs/selector' };
+const array = (ref: string, description?: string) => ({ type: 'array', items: { $ref: `#/$defs/${ref}` }, ...(description ? { description } : {}) });
 const file = { type: 'string', description: 'The imported file this is in; left out for the parsed file itself.' };
 const object = (properties: Record<string, unknown>, required: string[], description?: string) => ({
   type: 'object',
@@ -69,6 +76,14 @@ export function diagramSchema() {
           nodes: { type: 'array', items: { $ref: '#/$defs/node' } },
           edges: { type: 'array', items: { $ref: '#/$defs/edge' } },
           useCases: { type: 'array', items: { $ref: '#/$defs/useCase' } },
+          // High-level design sections; each is left out when the document has none.
+          summary: { ...str, description: 'Second string of `title`: the system summary.' },
+          traffic: array('traffic', '`traffic { … }` lines, one per use case.'),
+          requirements: array('requirement', '`requirements { … }` lines.'),
+          capacity: array('capacity', '`capacity { … }` lines: per-replica overrides of the default profiles.'),
+          entities: array('entity', '`entity` blocks: the data model.'),
+          decisions: array('decision', '`decision` statements.'),
+          tests: array('test', '`test` blocks of flow assertions.'),
         },
         ['nodes', 'edges', 'useCases'],
       ),
@@ -84,6 +99,7 @@ export function diagramSchema() {
           parent: { ...str, description: 'Id of the enclosing group.' },
           position: object({ x: { type: 'number' }, y: { type: 'number' } }, ['x', 'y'], 'Explicit `pos x,y`.'),
           implicit: { ...bool, description: 'Created because a connection or step referenced an undeclared id.' },
+          replicas: { type: 'integer', minimum: 1, description: '`x3`: number of replicas; absent means 1.' },
           loc,
         },
         ['id', 'kind', 'name', 'type', 'techStack', 'loc'],
@@ -141,6 +157,76 @@ export function diagramSchema() {
         },
         ['stepOrder', 'stepName', 'fromServiceId', 'toServiceId', 'protocol', 'httpMethod', 'endpoint', 'requestFormat', 'responseFormat', 'executionType', 'isParallel', 'isConditional', 'loc'],
       ),
+      selector: {
+        description: 'A node id, an exact tech stack, or every node of a kind (`any cache`).',
+        oneOf: [object({ node: str }, ['node']), object({ tech: str }, ['tech']), object({ kind: { enum: [...KINDS] } }, ['kind'])],
+      },
+      traffic: object(
+        {
+          useCase: str,
+          rps: { ...num, minimum: 0, description: 'Requests per second.' },
+          mix: {
+            type: 'array',
+            description: 'Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.',
+            items: object({ scenario: { ...str, description: 'Full scenario name, e.g. `A › B`.' }, share: { ...num, minimum: 0, maximum: 1 } }, ['scenario', 'share']),
+          },
+          loc,
+        },
+        ['useCase', 'rps', 'loc'],
+      ),
+      requirement: {
+        // Keyed by kind, so a new kind of requirement without a schema is a type error.
+        oneOf: Object.values({
+          latency: object(
+            { kind: { const: 'latency' }, percentile: { enum: Object.keys(PERCENTILES).map(Number) }, useCase: { ...str, description: 'Left out: every use case with traffic.' }, maxMs: num, loc },
+            ['kind', 'percentile', 'maxMs', 'loc'],
+          ),
+          availability: object({ kind: { const: 'availability' }, useCase: str, minPercent: percent, loc }, ['kind', 'minPercent', 'loc']),
+          durable: object({ kind: { const: 'durable' }, useCase: str, loc }, ['kind', 'useCase', 'loc']),
+          survive: object({ kind: { const: 'survive' }, target: { oneOf: [{ const: 'any' }, selector] }, loc }, ['kind', 'target', 'loc']),
+          cost: object({ kind: { const: 'cost' }, maxUsdPerMonth: num, loc }, ['kind', 'maxUsdPerMonth', 'loc']),
+        } satisfies Record<Requirement['kind'], unknown>),
+      },
+      capacity: object(
+        {
+          node: str,
+          rps: { ...num, description: 'Requests per second per replica.' },
+          latencyMs: num,
+          availability: percent,
+          costUsd: { ...num, description: 'Monthly cost per replica in USD.' },
+          durable: { ...bool, description: '`durable` (true) or `volatile` (false).' },
+          loc,
+        },
+        ['node', 'loc'],
+      ),
+      entity: object(
+        {
+          name: str,
+          store: { ...str, description: 'Id of the node the entity lives in.' },
+          description: str,
+          fields: { type: 'array', items: object({ name: str, type: str, flags: { type: 'array', items: { enum: ['key', 'index', 'unique', 'optional'] } } }, ['name', 'type', 'flags']) },
+          loc,
+        },
+        ['name', 'fields', 'loc'],
+      ),
+      decision: object(
+        { title: str, because: str, rejected: { type: 'array', items: object({ option: str, reason: str }, ['option', 'reason']) }, loc },
+        ['title', 'rejected', 'loc'],
+      ),
+      test: object({ name: str, assertions: array('assertion'), loc }, ['name', 'assertions', 'loc']),
+      assertion: {
+        description: 'One assertion line of a test.',
+        oneOf: Object.values({
+          calls: object({ kind: { const: 'calls' }, useCase: str, scenario: str, target: selector, quantifier: { enum: ['some', 'every', 'never'] }, loc }, ['kind', 'useCase', 'target', 'quantifier', 'loc']),
+          before: object({ kind: { const: 'before' }, useCase: str, scenario: str, first: selector, then: selector, loc }, ['kind', 'useCase', 'first', 'then', 'loc']),
+          writesBeforeResponding: object({ kind: { const: 'writesBeforeResponding' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
+          responds: object({ kind: { const: 'responds' }, useCase: str, scenario: str, status: { type: 'string', pattern: '^[1-5](\\d\\d|xx)$' }, loc }, ['kind', 'useCase', 'status', 'loc']),
+          hasScenario: object({ kind: { const: 'hasScenario' }, useCase: str, scenario: str, loc }, ['kind', 'useCase', 'scenario', 'loc']),
+          handlesFailure: object({ kind: { const: 'handlesFailure' }, useCase: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
+          noPath: object({ kind: { const: 'noPath' }, from: selector, to: selector, loc }, ['kind', 'from', 'to', 'loc']),
+          replicas: object({ kind: { const: 'replicas' }, target: selector, min: { type: 'integer', minimum: 1 }, loc }, ['kind', 'target', 'min', 'loc']),
+        } satisfies Record<Assertion['kind'], unknown>),
+      },
     },
   };
 }

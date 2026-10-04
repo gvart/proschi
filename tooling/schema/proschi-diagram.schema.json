@@ -138,6 +138,52 @@
           "items": {
             "$ref": "#/$defs/useCase"
           }
+        },
+        "summary": {
+          "type": "string",
+          "description": "Second string of `title`: the system summary."
+        },
+        "traffic": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/traffic"
+          },
+          "description": "`traffic { … }` lines, one per use case."
+        },
+        "requirements": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/requirement"
+          },
+          "description": "`requirements { … }` lines."
+        },
+        "capacity": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/capacity"
+          },
+          "description": "`capacity { … }` lines: per-replica overrides of the default profiles."
+        },
+        "entities": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/entity"
+          },
+          "description": "`entity` blocks: the data model."
+        },
+        "decisions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/decision"
+          },
+          "description": "`decision` statements."
+        },
+        "tests": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/test"
+          },
+          "description": "`test` blocks of flow assertions."
         }
       },
       "required": [
@@ -322,6 +368,11 @@
         "implicit": {
           "type": "boolean",
           "description": "Created because a connection or step referenced an undeclared id."
+        },
+        "replicas": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "`x3`: number of replicas; absent means 1."
         },
         "loc": {
           "$ref": "#/$defs/loc"
@@ -560,6 +611,611 @@
         "loc"
       ],
       "additionalProperties": false
+    },
+    "selector": {
+      "description": "A node id, an exact tech stack, or every node of a kind (`any cache`).",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "node": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "node"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "tech": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "tech"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "enum": [
+                "client",
+                "edge",
+                "service",
+                "function",
+                "cache",
+                "database",
+                "search",
+                "analytics",
+                "queue",
+                "storage",
+                "external",
+                "other"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "traffic": {
+      "type": "object",
+      "properties": {
+        "useCase": {
+          "type": "string"
+        },
+        "rps": {
+          "type": "number",
+          "minimum": 0,
+          "description": "Requests per second."
+        },
+        "mix": {
+          "type": "array",
+          "description": "Shares of the use case traffic per scenario, as fractions that add up to 1. Without a mix, all traffic goes to the first scenario.",
+          "items": {
+            "type": "object",
+            "properties": {
+              "scenario": {
+                "type": "string",
+                "description": "Full scenario name, e.g. `A › B`."
+              },
+              "share": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            },
+            "required": [
+              "scenario",
+              "share"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "useCase",
+        "rps",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "requirement": {
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "latency"
+            },
+            "percentile": {
+              "enum": [
+                50,
+                90,
+                95,
+                99,
+                99.9
+              ]
+            },
+            "useCase": {
+              "type": "string",
+              "description": "Left out: every use case with traffic."
+            },
+            "maxMs": {
+              "type": "number"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "percentile",
+            "maxMs",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "availability"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "minPercent": {
+              "type": "number",
+              "minimum": 0,
+              "maximum": 100
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "minPercent",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "durable"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "survive"
+            },
+            "target": {
+              "oneOf": [
+                {
+                  "const": "any"
+                },
+                {
+                  "$ref": "#/$defs/selector"
+                }
+              ]
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "cost"
+            },
+            "maxUsdPerMonth": {
+              "type": "number"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "maxUsdPerMonth",
+            "loc"
+          ],
+          "additionalProperties": false
+        }
+      ]
+    },
+    "capacity": {
+      "type": "object",
+      "properties": {
+        "node": {
+          "type": "string"
+        },
+        "rps": {
+          "type": "number",
+          "description": "Requests per second per replica."
+        },
+        "latencyMs": {
+          "type": "number"
+        },
+        "availability": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "costUsd": {
+          "type": "number",
+          "description": "Monthly cost per replica in USD."
+        },
+        "durable": {
+          "type": "boolean",
+          "description": "`durable` (true) or `volatile` (false)."
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "node",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "entity": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "store": {
+          "type": "string",
+          "description": "Id of the node the entity lives in."
+        },
+        "description": {
+          "type": "string"
+        },
+        "fields": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string"
+              },
+              "type": {
+                "type": "string"
+              },
+              "flags": {
+                "type": "array",
+                "items": {
+                  "enum": [
+                    "key",
+                    "index",
+                    "unique",
+                    "optional"
+                  ]
+                }
+              }
+            },
+            "required": [
+              "name",
+              "type",
+              "flags"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "name",
+        "fields",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "decision": {
+      "type": "object",
+      "properties": {
+        "title": {
+          "type": "string"
+        },
+        "because": {
+          "type": "string"
+        },
+        "rejected": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "option": {
+                "type": "string"
+              },
+              "reason": {
+                "type": "string"
+              }
+            },
+            "required": [
+              "option",
+              "reason"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "title",
+        "rejected",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "test": {
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "assertions": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/assertion"
+          }
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "name",
+        "assertions",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "assertion": {
+      "description": "One assertion line of a test.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "calls"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "quantifier": {
+              "enum": [
+                "some",
+                "every",
+                "never"
+              ]
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "quantifier",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "before"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "first": {
+              "$ref": "#/$defs/selector"
+            },
+            "then": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "first",
+            "then",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "writesBeforeResponding"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "responds"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "status": {
+              "type": "string",
+              "pattern": "^[1-5](\\d\\d|xx)$"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "status",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "hasScenario"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "scenario": {
+              "type": "string"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "scenario",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "handlesFailure"
+            },
+            "useCase": {
+              "type": "string"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "useCase",
+            "target",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "noPath"
+            },
+            "from": {
+              "$ref": "#/$defs/selector"
+            },
+            "to": {
+              "$ref": "#/$defs/selector"
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "from",
+            "to",
+            "loc"
+          ],
+          "additionalProperties": false
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "const": "replicas"
+            },
+            "target": {
+              "$ref": "#/$defs/selector"
+            },
+            "min": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "loc": {
+              "$ref": "#/$defs/loc"
+            }
+          },
+          "required": [
+            "kind",
+            "target",
+            "min",
+            "loc"
+          ],
+          "additionalProperties": false
+        }
+      ]
     }
   }
 }

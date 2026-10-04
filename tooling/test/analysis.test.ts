@@ -47,6 +47,37 @@ describe('analysis', () => {
     expect(after).toContain('db');
   });
 
+  it('completes the high-level design sections with snippets', () => {
+    const items = complete(analyze('t'), { line: 0, character: 1 });
+    for (const label of ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test']) {
+      expect(items.find((i) => i.label === label), label).toMatchObject({ kind: 'keyword', snippet: expect.stringContaining('{\n\t') });
+    }
+    expect(items.find((i) => i.label === 'entity')?.snippet).toBe('entity ${1:Name} in ${2:store} {\n\t${3:id} ${4:uuid} key$0\n}');
+  });
+
+  it('outlines the high-level design sections declared in this document', () => {
+    const hld = analyze(
+      `${doc}traffic {\n  "Place order" 50 rps\n}\nrequirements {\n  p99 < 200ms # every use case\n  durable "Place order"\n}\nentity Order in db {\n  id uuid key\n}\ndecision "Postgres" because "transactions"\ntest "Writes first" {\n  "Place order" writes db before responding\n}\n`,
+    );
+    const symbols = outline(hld);
+    expect(symbols.map((s) => [s.name, s.kind])).toEqual([
+      ['vpc', 'group'],
+      ['Place order', 'usecase'],
+      ['traffic', 'section'],
+      ['requirements', 'section'],
+      ['entities', 'section'],
+      ['decisions', 'section'],
+      ['tests', 'section'],
+    ]);
+    const [traffic, requirements, entities, decisions, tests] = symbols.slice(2);
+    expect(traffic.children.map((c) => [c.name, c.detail, c.kind])).toEqual([['Place order', '50 rps', 'traffic']]);
+    expect(requirements.children.map((c) => c.name)).toEqual(['p99 < 200ms', 'durable "Place order"']);
+    expect(requirements.range).toEqual({ start: requirements.children[0].range.start, end: requirements.children[1].range.end });
+    expect(entities.children.map((c) => [c.name, c.detail])).toEqual([['Order', 'in db · 1 field']]);
+    expect(decisions.children.map((c) => [c.name, c.detail])).toEqual([['Postgres', 'transactions']]);
+    expect(tests.children.map((c) => [c.name, c.detail, c.kind])).toEqual([['Writes first', '1 assertion', 'test']]);
+  });
+
   it('offers only alt after a closing brace', () => {
     const items = complete(analyze('usecase "U" {\n  alt "A" {\n  } a'), { line: 2, character: 5 });
     expect(items.map((i) => i.label)).toEqual(['alt']);

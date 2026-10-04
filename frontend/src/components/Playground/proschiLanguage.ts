@@ -1,5 +1,5 @@
 import { StreamLanguage, type StreamParser } from '@codemirror/language';
-import type { Completion, CompletionContext, CompletionResult } from '@codemirror/autocomplete';
+import { snippetCompletion, type Completion, type CompletionContext, type CompletionResult } from '@codemirror/autocomplete';
 import type { EditorView } from '@codemirror/view';
 import type { Text } from '@codemirror/state';
 import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
@@ -10,6 +10,8 @@ interface LexState {
   inLabel: boolean;
   /** Open { / [ in a payload, so multi-line JSON stays highlighted as a label. */
   depth: number;
+  /** Inside a traffic, requirements, capacity, entity, decision or test block, whose own words are keywords. */
+  inSection: boolean;
 }
 
 const KEYWORDS = /^(title|import|group|usecase|par|alt|pos)\b/;
@@ -17,16 +19,33 @@ const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
+const STRING = '"(?:[^"\\\\]|\\\\.)*"';
+/** A line that opens a section block, in the shapes the parser accepts. */
+export const SECTION_HEADER = new RegExp(
+  `^\\s*(?:(?:traffic|requirements|capacity)\\s*\\{|entity\\s+[A-Za-z_]\\w*\\b.*\\{|(?:decision|test)\\s+${STRING}.*\\{)\\s*(?:#.*)?$`,
+);
+/** `decision "…" because "…"`: a section statement without a block. */
+export const ONE_LINE_DECISION = new RegExp(`^\\s*decision\\s+${STRING}\\s+because\\b`);
+/** Words with a meaning inside section blocks (docs/LANGUAGE.md, "High-level design"). */
+const SECTION_WORDS =
+  /^(traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|never|every|responds|writes|responding|handles|failure|path|replicas|any|in|scenario|latency|availability|cost|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b/;
+/** A number with an optional fraction and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9 %. */
+const QUANTITY = /^-?\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month)\b| %)?/;
+
 /** Tokenizer behind the highlighting; exported for tests. */
 export const proschiStreamParser: StreamParser<LexState> = {
   name: 'proschi',
-  startState: () => ({ inLabel: false, depth: 0 }),
+  startState: () => ({ inLabel: false, depth: 0, inSection: false }),
   token(stream, state) {
     if (stream.sol() && state.depth <= 0) {
       state.inLabel = false;
       state.depth = 0;
+      if (/^\s*\}/.test(stream.string)) state.inSection = false;
+      else if (!state.inSection && SECTION_HEADER.test(stream.string)) state.inSection = true;
     }
     if (stream.eatSpace()) return null;
+    // Section words count on header lines and inside the block; the one-line decision has its own.
+    const sectionLine = state.inSection || ONE_LINE_DECISION.test(stream.string);
 
     const afterSpace = stream.pos === 0 || /\s/.test(stream.string[stream.pos - 1]);
     if (stream.peek() === '#' && afterSpace && state.depth <= 0) {
@@ -51,7 +70,11 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.match(/^\[[^\]]*\]?/)) return 'typeName';
     if (stream.match(/^@[\w-]*/)) return 'attributeName';
     if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
-    if (stream.match(/^-?\d+/)) return 'number';
+    if (stream.match(QUANTITY)) return 'number';
+    if (stream.match(/^[<>]=?/)) return 'operator';
+    if (sectionLine && stream.match(SECTION_WORDS)) return 'keyword';
+    // `x3` after a node id is its replica count.
+    if (!sectionLine && stream.string.slice(0, stream.pos).trim() && stream.match(/^x\d+\b/)) return 'number';
     if (stream.match(KEYWORDS)) return 'keyword';
     if (AFTER_ALT_NAME.test(stream.string.slice(0, stream.pos)) && stream.match(/^when\b/)) return 'keyword';
     if (stream.match(/^[A-Za-z_]\w*/)) return 'variableName';
@@ -60,6 +83,7 @@ export const proschiStreamParser: StreamParser<LexState> = {
       return 'punctuation';
     }
     if (stream.match(/^[{}]/)) return 'brace';
+    if (stream.eat(',')) return 'punctuation';
     stream.next();
     return null;
   },
@@ -87,6 +111,13 @@ const keywordOptions: Completion[] = [
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
   { label: 'alt', type: 'keyword', apply: 'alt "', detail: 'alt "Scenario" { … }' },
+  // The high-level design sections, top level only.
+  snippetCompletion('traffic {\n\t"${Use case}" ${100 rps}\n}', { label: 'traffic', type: 'keyword', detail: 'requests per use case' }),
+  snippetCompletion('requirements {\n\tp99 < ${200ms}\n}', { label: 'requirements', type: 'keyword', detail: 'latency, availability, durability, cost' }),
+  snippetCompletion('capacity {\n\t${node} ${1k rps}\n}', { label: 'capacity', type: 'keyword', detail: 'per-replica overrides' }),
+  snippetCompletion('entity ${Name} in ${store} {\n\t${id} ${uuid} key\n}', { label: 'entity', type: 'keyword', detail: 'entity Name in store { fields }' }),
+  snippetCompletion('decision "${Title}" {\n\tbecause "${reason}"\n}', { label: 'decision', type: 'keyword', detail: 'a trade-off and its reasons' }),
+  snippetCompletion('test "${Name}" {\n\t${}\n}', { label: 'test', type: 'keyword', detail: 'flow assertions' }),
 ];
 
 /** Completes tech stacks inside [ ] and node ids / keywords elsewhere. */

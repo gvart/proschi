@@ -196,7 +196,7 @@ usecase "Redirect" "A visitor opens a short link" {
   lb      -> api : GET /abc123
   alt "Cache hit" when "the code was used recently" {
     api    -> cache   : GET code:abc123
-    cache --> api     : https://example.com/a/very/long/path
+    cache --> api     : target example.com/a/very/long/path
     api   --> lb      : 301
     lb    --> visitor : 301
   } alt "Cache miss" when "the code is not cached" {
@@ -224,8 +224,8 @@ usecase "Redirect" "A visitor opens a short link" {
 }
 
 usecase "Shorten" "Creates a short code for a long URL" {
-  visitor -> lb  : POST /links json {"target": "https://example.com/a/very/long/path"}
-  lb      -> api : POST /links json {"target": "https://example.com/a/very/long/path"}
+  visitor -> lb  : POST /links json {"target": "example.com/a/very/long/path"}
+  lb      -> api : POST /links json {"target": "example.com/a/very/long/path"}
   alt "Created" {
     api  -> db      : INSERT url
     db  --> api     : code abc123

@@ -33,4 +33,11 @@ export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'usecase', detail: 'usecase "Name" { steps }', snippet: 'usecase "${1:Name}" {\n\t$0\n}' },
   { label: 'par', detail: 'Steps that run in parallel', snippet: 'par {\n\t$0\n}' },
   { label: 'alt', detail: 'One scenario of a use case', snippet: 'alt "${1:Scenario}" {\n\t$0\n}' },
+  // High-level design sections (top level).
+  { label: 'traffic', detail: 'Requests per use case: "Use case" 100 rps', snippet: 'traffic {\n\t"${1:Use case}" ${2:100 rps}$0\n}' },
+  { label: 'requirements', detail: 'Latency, availability, durability, resilience, cost', snippet: 'requirements {\n\tp99 < ${1:200ms}$0\n}' },
+  { label: 'capacity', detail: 'Per-replica overrides: node 1k rps latency 5ms', snippet: 'capacity {\n\t${1:node} ${2:1k rps}$0\n}' },
+  { label: 'entity', detail: 'entity Name in store { fields }', snippet: 'entity ${1:Name} in ${2:store} {\n\t${3:id} ${4:uuid} key$0\n}' },
+  { label: 'decision', detail: 'A design decision with its reasons', snippet: 'decision "${1:Title}" {\n\tbecause "${2:reason}"$0\n}' },
+  { label: 'test', detail: 'Flow assertions: "Use case" calls any cache', snippet: 'test "${1:Name}" {\n\t$0\n}' },
 ];
