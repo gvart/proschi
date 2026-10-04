@@ -148,9 +148,9 @@ export default function Tour({ label, steps, phone, onClose }: TourProps) {
     pop.style.top = `${Math.round(top)}px`;
     pop.style.left = `${Math.round(left)}px`;
     if (!pop.dataset.placed) {
-      // Glide between steps, but appear in place the first time.
-      void pop.offsetWidth;
-      pop.dataset.placed = 'true';
+      // Glide between steps, but appear in place the first time: transitions start once that frame is drawn.
+      pop.dataset.placed = 'pending';
+      requestAnimationFrame(() => requestAnimationFrame(() => (pop.dataset.placed = 'true')));
     }
   });
 
@@ -171,7 +171,7 @@ export default function Tour({ label, steps, phone, onClose }: TourProps) {
         aria-label={`${label}: ${step.title}`}
         aria-describedby={`${ids}-body`}
         tabIndex={-1}
-        className={`fixed z-40 rounded-xl border border-gray-200 bg-white shadow-xl outline-none motion-safe:data-[placed]:transition-[top,left] motion-safe:duration-200 ${
+        className={`fixed z-40 rounded-xl border border-gray-200 bg-white shadow-xl outline-none motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
           phone ? 'w-[calc(100vw-24px)]' : 'w-[22rem]'
         }`}
         style={{ top: -9999, left: -9999 }}
