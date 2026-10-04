@@ -18,10 +18,10 @@ test.describe('docs', () => {
 
     // "On this page" follows the headings.
     const toc = page.getByRole('navigation', { name: 'On this page' });
-    await toc.getByRole('link', { name: '3. Break it on purpose' }).click();
+    await toc.getByRole('link', { name: 'Break it on purpose' }).click();
     await expect(page).toHaveURL(/#3-break-it-on-purpose$/);
     await expect(page.getByRole('heading', { level: 2, name: /Break it on purpose/ })).toBeInViewport();
-    await expect(toc.getByRole('link', { name: '3. Break it on purpose' })).toHaveAttribute('aria-current', 'location');
+    await expect(toc.getByRole('link', { name: 'Break it on purpose' })).toHaveAttribute('aria-current', 'location');
 
     // A link inside the Markdown (LANGUAGE.md) lands on the site's page, at its anchor.
     await page.getByRole('link', { name: 'language reference', exact: true }).click();
@@ -46,6 +46,7 @@ test.describe('docs', () => {
     const stage = example.getByRole('region', { name: /playing Place order › DB down/ });
     await expect(stage).toBeVisible();
     await expect(stage.getByText(/Step 1 of \d+/)).toBeVisible();
+    await expect(stage.locator('.react-flow__minimap')).toBeHidden();
     await expect(stage.getByText(/Step 2 of \d+/)).toBeVisible({ timeout: 5_000 });
     await expect(stage.getByText('Failed', { exact: true })).toBeVisible({ timeout: 8_000 });
 

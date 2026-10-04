@@ -309,7 +309,7 @@
     border-color var(--d-2) var(--e-out),
     color var(--d-1) linear;
 }
-.toc__list > li > a:not(.toc__own-number)::before {
+.toc__list > li > a::before {
   content: counter(toc, decimal-leading-zero);
   flex: none;
   min-width: 2ch;
@@ -723,6 +723,10 @@
 }
 .live__stage--playing {
   height: 560px;
+}
+/* The player's minimap is for big diagrams; here it would crowd the small canvas. */
+.live__stage .react-flow__minimap {
+  display: none !important;
 }
 @media (max-width: 639px) {
   .live__stage {

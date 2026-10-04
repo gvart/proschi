@@ -82,6 +82,7 @@ describe('rendered pages', () => {
     expect(language.toc.find((t) => t.text === 'Reads and writes')).toEqual({ level: 3, id: 'reads-and-writes', text: 'Reads and writes' })
     expect(language.article).toContain('<h2 id="high-level-design">')
     const model = rendered.get('model')!
+    expect(layoutHtml(site, rendered.get('quickstart')!)).toContain('data-toc="3-break-it-on-purpose">Break it on purpose</a>')
     expect(model.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['modelled', 'examples', 'quirks', 'not-modelled', 'reading', 'practice'])
   })
 

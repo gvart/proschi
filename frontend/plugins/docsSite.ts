@@ -280,9 +280,8 @@ function tocHtml(toc: TocEntry[]): string {
   const items: string[] = []
   let open = false
   for (const entry of toc) {
-    // Headings that number themselves ("1. Two boxes") get no counter of their own.
-    const own = /^\d/.test(entry.text) ? ' class="toc__own-number"' : ''
-    const link = `<a href="#${entry.id}" data-toc="${entry.id}"${own}>${escapeHtml(entry.text)}</a>`
+    // The list numbers its entries, so a heading's own "1. " is left out here.
+    const link = `<a href="#${entry.id}" data-toc="${entry.id}">${escapeHtml(entry.text.replace(/^\d+\.\s+/, ''))}</a>`
     if (entry.level === 2) {
       if (open) items.push('</ol></li>')
       open = false
