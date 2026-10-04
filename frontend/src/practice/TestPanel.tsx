@@ -1,5 +1,5 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
-import type { Diagnostic } from '../dsl';
+import type { Diagnostic, SourceLoc } from '../dsl';
 import type { RunResult } from './workspace';
 
 interface TestPanelProps {
@@ -9,11 +9,12 @@ interface TestPanelProps {
   stale: boolean;
   diagnostics: Diagnostic[];
   onRun: () => void;
-  onSelectDiagnostic: (d: Diagnostic) => void;
+  /** Jumps to a line of the solution. */
+  onSelect: (loc: SourceLoc) => void;
 }
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelectDiagnostic }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect }: TestPanelProps) {
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
   return (
     <div className="h-full flex flex-col bg-white">
@@ -68,6 +69,19 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelectDiag
                   </p>
                   <p className="text-gray-600">{r.message}</p>
                   {!r.passed && r.hint && <p className="text-xs text-gray-500">Fix: {r.hint}</p>}
+                  {r.assertions && r.assertions.length > 1 && (
+                    <ul className="mt-1 space-y-0.5">
+                      {r.assertions.map((a, i) => (
+                        <li key={i} className="flex gap-1.5 text-xs">
+                          {a.passed ? <CheckCircle2 size={13} className="mt-px flex-shrink-0 text-green-600" /> : <XCircle size={13} className="mt-px flex-shrink-0 text-red-600" />}
+                          <span>
+                            <span className={a.passed ? 'text-gray-600' : 'text-gray-800'}>{a.message}</span>
+                            {!a.passed && a.hint && <span className="block text-gray-500">Fix: {a.hint}</span>}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </li>
             ))}
@@ -77,7 +91,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelectDiag
           <ul className="border-t border-gray-100 bg-gray-50 text-xs">
             {diagnostics.map((d, i) => (
               <li key={i}>
-                <button onClick={() => onSelectDiagnostic(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100">
+                <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100">
                   {d.severity === 'error' ? (
                     <AlertCircle size={14} className="text-red-600 flex-shrink-0 mt-px" />
                   ) : (

@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { ArrowLeft, BookOpen, Code2, Eye, FlaskConical, Lightbulb, Network, RotateCcw } from 'lucide-react';
-import type { Diagnostic } from '../dsl';
+import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
 import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
 import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
+import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
 import TestPanel from './TestPanel';
 import { DifficultyBadge, StatusIcon } from './Badges';
@@ -67,10 +68,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
     if (window.confirm('Replace your design with the starter code? Your current code is lost.')) setSource(problem.starter);
   };
 
-  const selectDiagnostic = (d: Diagnostic) => {
-    if (d.file !== undefined) return;
+  const goTo = (loc: SourceLoc | Diagnostic) => {
+    if (loc.file !== undefined) return;
     setPane('code');
-    editorRef.current?.goTo(d.line, d.col);
+    editorRef.current?.goTo(loc.line, loc.col);
   };
 
   const show = (p: Pane) => `${pane === p ? 'flex' : 'hidden'} md:flex`;
@@ -114,7 +115,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
         </aside>
 
         <div className={`${pane === 'statement' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 min-w-0 flex-col`}>
-          <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
+          <div className={`${pane === 'tests' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 flex-col lg:flex-row`}>
             <section className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col bg-white lg:border-r border-gray-200`}>
               <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-gray-100">
                 solution.proschi · imports <code>{PROBLEM_FILE}</code>
@@ -124,11 +125,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine }: P
               </div>
             </section>
             <section className={`${show('diagram')} flex-1 min-h-0 min-w-0 flex-col border-t lg:border-t-0 border-gray-200`}>
-              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={pane} />
+              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={pane} engine={engine} onSelect={goTo} />
             </section>
           </div>
           <section className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>
-            <TestPanel run={run?.result} stale={!!run && run.source !== source} diagnostics={diagnostics} onRun={runNow} onSelectDiagnostic={selectDiagnostic} />
+            <TestPanel run={run?.result} stale={!!run && run.source !== source} diagnostics={diagnostics} onRun={runNow} onSelect={goTo} />
           </section>
         </div>
       </div>
@@ -204,11 +205,14 @@ interface DiagramPaneProps {
   nodes: ReturnType<typeof useDiagramLayout>['nodes'];
   edges: ReturnType<typeof useDiagramLayout>['edges'];
   fitKey: string;
+  engine: Engine;
+  onSelect: (loc: SourceLoc) => void;
 }
 
-/** The design as a diagram, or one scenario played step by step. */
-function DiagramPane({ diagram, nodes, edges, fitKey }: DiagramPaneProps) {
-  const [tab, setTab] = useState<'diagram' | 'playback'>('diagram');
+/** The design as a diagram, one scenario played step by step, or its capacity analysis. */
+function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: DiagramPaneProps) {
+  const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
+  const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
     () => diagram.useCases.flatMap((u) => u.scenarios.filter((s) => s.steps.length > 0).map((s) => ({ key: `${u.id}/${s.id}`, useCase: u, scenario: s }))),
     [diagram],
@@ -223,11 +227,11 @@ function DiagramPane({ diagram, nodes, edges, fitKey }: DiagramPaneProps) {
   return (
     <div className="h-full w-full flex flex-col">
       <div className="flex items-center gap-1 px-2 py-1.5 bg-white border-b border-gray-200">
-        {(['diagram', 'playback'] as const).map((t) => (
+        {(['diagram', 'playback', 'analysis'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
-            disabled={t === 'playback' && !current}
+            disabled={(t === 'playback' && !current) || (t === 'analysis' && !engine.available)}
             className={`rounded-md px-2.5 py-1 text-sm capitalize disabled:opacity-40 ${tab === t ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
           >
             {t}
@@ -251,6 +255,8 @@ function DiagramPane({ diagram, nodes, edges, fitKey }: DiagramPaneProps) {
       <div className="flex-1 min-h-0 relative">
         {tab === 'playback' && played ? (
           <UseCasePlayer key={played.id} useCase={played} nodes={nodes} edges={edges} onBack={() => setTab('diagram')} showHeader={false} />
+        ) : tab === 'analysis' && analysis ? (
+          <AnalysisPanel diagram={diagram} analysis={analysis} onSelect={onSelect} />
         ) : (
           <DiagramCanvas nodes={nodes} edges={edges} fitKey={fitKey} />
         )}

@@ -7,9 +7,6 @@ import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, 
 import { PROBLEM_FILE, parseSolution, problemResolver, runTests } from './workspace';
 import { DIFFICULTIES, type Problem } from './types';
 
-/** The language additions of docs/design/hld-and-practice.md §1 are in the parser. */
-const languageReady = parse('title "T" "Summary"\na [REST API] x2\ntraffic {\n}\n').diagnostics.length === 0;
-
 /** Use case names in the given `traffic` block. */
 const trafficUseCases = (given: string) => [...(given.match(/traffic\s*\{([\s\S]*?)\}/)?.[1] ?? '').matchAll(/^\s*"([^"]+)"/gm)].map((m) => m[1]);
 
@@ -44,15 +41,23 @@ describe('problem index', () => {
     expect(parseSolution(p, p.starter).diagnostics.filter((d) => d.file === undefined && d.severity === 'error')).toEqual([]);
   });
 
-  // These switch on by themselves once the language and the simulation are merged.
-  it.skipIf(!languageReady).each(problems.map((p) => [p.id, p] as const))('%s given and solution parse without errors', (_id, p: Problem) => {
-    expect(parseSolution(p, p.solution).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+  it.each(problems.map((p) => [p.id, p] as const))('%s given and solution parse without any diagnostic', (_id, p: Problem) => {
+    expect(parse(p.given).diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    expect(parseSolution(p, p.solution).diagnostics).toEqual([]);
   });
 
-  it.skipIf(!defaultEngine.available || !languageReady).each(problems.map((p) => [p.id, p] as const))('%s reference solution passes every test', (_id, p: Problem) => {
+  it.each(problems.map((p) => [p.id, p] as const))('%s reference solution passes every test', (_id, p: Problem) => {
     const run = runTests(parseSolution(p, p.solution), defaultEngine);
+    expect(run.blocked).toBeUndefined();
     expect(run.results.filter((r) => !r.passed)).toEqual([]);
     expect(run.solved).toBe(true);
+  });
+
+  it.each(problems.map((p) => [p.id, p] as const))('%s starter fails at least one test', (_id, p: Problem) => {
+    const run = runTests(parseSolution(p, p.starter), defaultEngine);
+    expect(run.blocked).toBeUndefined();
+    expect(run.results.length).toBeGreaterThan(0);
+    expect(run.solved).toBe(false);
   });
 });
 

@@ -11,6 +11,8 @@ proschi check --strict --openapi orders=specs/orders.yaml docs/   # also against
 proschi parse checkout.proschi      # the parsed diagram as JSON
 proschi fmt docs/                   # format files in place (--check: only report, exit 1 for CI)
 proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
+proschi test docs/                  # run requirements and tests (exit 1 on a failure)
+proschi analyze shortener.proschi   # load, latency, availability and cost per node
 proschi-language-server --stdio     # for any editor with an LSP client
 ```
 
@@ -23,6 +25,13 @@ and CI: [docs/EDITORS.md](https://github.com/gvart/proschi/blob/main/docs/EDITOR
 OpenAPI 3.0/3.1 specs of the services they call (endpoints, status codes,
 JSON payloads), mapped in a `proschi.json` or with `--openapi`: see
 [Checking against OpenAPI](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#checking-against-openapi).
+
+`test` runs the `requirements { … }` and `test "…" { … }` blocks of each file
+against a capacity model of its `traffic { … }` (`--format text|github|json`);
+`analyze` prints that model as a table (`--format text|json`). The language
+server reports failing requirements and tests as warnings and adds load to
+node hovers. The model and its default numbers:
+[Simulation and tests](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#simulation-and-tests).
 
 ## Rendering
 

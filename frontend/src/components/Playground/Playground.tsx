@@ -22,7 +22,6 @@ import {
   ChevronDown,
   Download,
   FilePlus,
-  FileText,
   GraduationCap,
   Image,
   LayoutGrid,
@@ -34,7 +33,7 @@ import {
   Pencil,
   Network,
 } from 'lucide-react';
-import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase } from '../../dsl';
+import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
 import { loadJson, saveJson } from '../../services/storage';
 import {
@@ -60,6 +59,10 @@ import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import { UseCasePlayer } from '../UseCases/UseCasePlayback';
 import HldView from '../Hld/HldView';
+import AnalysisPanel from '../Analysis/AnalysisPanel';
+import TestsPanel from '../Analysis/TestsPanel';
+import ViewTabs, { type View } from '../Analysis/ViewTabs';
+import { useSimulation } from '../Analysis/useSimulation';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
@@ -69,6 +72,7 @@ import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
+const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', analysis: 'Analysis', tests: 'Tests', hld: 'HLD' };
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -114,8 +118,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [showExamples, setShowExamples] = useState(false);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
-  // The diagram pane shows the canvas (or playback), or the generated high-level design.
-  const [showHld, setShowHld] = useState(false);
+  const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -137,6 +140,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     [parsedSource, rootPath, importableKey],
   );
   const { diagram, diagnostics } = parsed;
+  const simulation = useSimulation(diagram);
   const imports = useMemo(() => usedImports(parsed, JSON.parse(importableKey), rootPath), [parsed, importableKey, rootPath]);
   const importsKey = JSON.stringify(imports);
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
@@ -271,7 +275,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
   const startPlaying = () => {
     setPlaying(true);
-    setShowHld(false);
+    setView('diagram');
     setMobilePane('diagram');
   };
 
@@ -298,8 +302,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     editSource((src) => addConnection(src, from, to));
   };
 
-  /** A problem in an imported file opens that file, if it is saved in this browser. */
-  const selectDiagnostic = (d: Diagnostic) => {
+  /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */
+  const selectDiagnostic = (d: SourceLoc) => {
     if (d.file === undefined) {
       editorRef.current?.goTo(d.line, d.col);
       return;
@@ -499,20 +503,6 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           )}
 
           <button
-            onClick={() => {
-              setShowHld((on) => !on);
-              setMobilePane('diagram');
-            }}
-            aria-label={showHld ? 'Back to diagram' : 'High-level design'}
-            aria-pressed={showHld}
-            title={showHld ? 'Back to the diagram' : 'The high-level design document generated from this diagram'}
-            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border ${showHld ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
-          >
-            <FileText size={16} />
-            <span className="hidden sm:inline">HLD</span>
-          </button>
-
-          <button
             onClick={copyShareLink}
             aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
@@ -534,7 +524,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 ${mobilePane === pane ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
           >
             {pane === 'code' ? <Code2 size={16} /> : <Network size={16} />}
-            {pane === 'code' ? 'Code' : showHld ? 'HLD' : playing ? 'Playback' : 'Diagram'}
+            {pane === 'code' ? 'Code' : playing ? 'Playback' : VIEW_LABEL[view]}
             {pane === 'code' && problemCount > 0 && (
               <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{problemCount}</span>
             )}
@@ -553,13 +543,12 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
         </section>
 
         <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
-          {!showHld && hasScenarios && useCase && scenario && (
+          {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
+          {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
             <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
           )}
           <div className="flex-1 min-h-0 relative">
-            {showHld ? (
-              <HldView diagram={diagram} nodes={nodes} edges={edges} />
-            ) : playing && playedUseCase ? (
+            {playing && playedUseCase ? (
               <UseCasePlayer
                 useCase={playedUseCase}
                 nodes={nodes}
@@ -569,6 +558,12 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 onStepChange={setPlayStep}
                 showHeader={false}
               />
+            ) : view === 'analysis' ? (
+              <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
+            ) : view === 'tests' ? (
+              <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
+            ) : view === 'hld' ? (
+              <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
             ) : (
               <ReactFlowProvider>
                 <DiagramView
@@ -591,7 +586,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 />
               </ReactFlowProvider>
             )}
-            {nodes.length === 0 && !playing && !showHld && (
+            {nodes.length === 0 && !playing && view === 'diagram' && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-sm text-gray-400">
                   Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>

@@ -6,6 +6,7 @@ import { buildSequence, findScenario, sequenceMessages } from '../../dsl/sequenc
 import {
   HOT_UTILIZATION,
   buildHld,
+  hld,
   defaultEngine,
   formatMs,
   formatPercent,
@@ -15,10 +16,12 @@ import {
   toHtml,
   toMarkdown,
   type CheckStatus,
+  type Analysis,
   type Engine,
   type HldDocument,
   type HldSection,
   type Risk,
+  type TestResult,
 } from '../../hld';
 import { downloadText, fileNameFor } from '../Playground/exportDiagram';
 import DiagramCanvas from '../Diagram/DiagramCanvas';
@@ -34,11 +37,14 @@ interface HldViewProps {
   /** The laid-out canvas, shown in the overview. */
   nodes: Node[];
   edges: Edge[];
+  /** Simulation results the host already has; without them the engine runs here. */
+  analysis?: Analysis;
+  results?: TestResult[];
   engine?: Engine;
 }
 
-export default function HldView({ diagram, nodes, edges, engine = defaultEngine }: HldViewProps) {
-  const doc = useMemo(() => buildHld(diagram, engine), [diagram, engine]);
+export default function HldView({ diagram, nodes, edges, analysis, results, engine = defaultEngine }: HldViewProps) {
+  const doc = useMemo(() => (analysis ? hld(diagram, analysis, results) : buildHld(diagram, engine)), [diagram, analysis, results, engine]);
   const hasChecks = doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length > 0 || s.flowTests.length > 0));
 
   return (
@@ -70,7 +76,7 @@ export default function HldView({ diagram, nodes, edges, engine = defaultEngine 
       <article className="max-w-4xl mx-auto px-4 py-6 text-sm text-gray-800">
         <h1 className="text-2xl font-semibold text-gray-900">{doc.title}</h1>
         <p className="text-gray-500">High-level design</p>
-        {hasChecks && !engine.available && (
+        {hasChecks && !doc.checked && (
           <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
             The simulation is not available yet, so requirements and tests are listed but not checked.
           </p>

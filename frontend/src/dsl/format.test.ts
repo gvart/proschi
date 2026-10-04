@@ -53,6 +53,12 @@ const messy: [string, string][] = [
   ['imports and tabs', `\timport   "shared/base.proschi"\nimport "other.proschi"\n\t\tapi\t"API"\t[REST API]\n`],
   ['unclosed payload', `usecase "U" {\n  a -> b : POST /x {\n      "open": [1, 2\n  b --> a : 200\n}\n`],
   ['unicode', `café "Café ☕" [REST API] @ü\nx "X" [Redis] @a\ncafé -> x : ünïcode\n`],
+  [
+    'HLD sections',
+    `title "S"   "Summary"\napi [REST API]   x3\ndb [PostgreSQL] x2\nusecase "U" {\napi -> db : x\n}\n\n\ntraffic{\n"U"   100k   rps   mix "U" 90%,"Other"   10 %\n   "V" 2 rpm\n}\nrequirements {\np99 "U"<50ms\n  survive any node failure\nsurvive failure of [Redis]\n  cost<=3000 usd/month # budget\n\n\n}\ncapacity {\ndb 20k rps latency 4ms\napi durable\n  ghost\n}\nentity Url in db "d" {\ncode string key\ncreatedAt time index optional\n}\ndecision "D" {\n because "b"\nrejected "x"   "y"\n}\ndecision "E" because "f"\ntest "T" {\n"U" calls any database before db\nno path from api to   [Redis]\napi has replicas>=2\nbad line here\n}\n`,
+  ],
+  ['misplaced sections', `group g {\ntraffic {\n"U" 1 rps\n}\nx [Redis]\n}\nusecase "U" {\ntest "T" {\nno path from a to b\n}\na -> b\n}\n`],
+  ['keywords as ids', `traffic [REST API]\ntest "Runner" x2\ndecision "Engine" [REST API]\ntraffic -> test\n`],
 ];
 
 const corpus: [string, string][] = [
@@ -189,6 +195,35 @@ describe('format', () => {
 
   it('turns CRLF line endings into LF', () => {
     expect(format('title "T"\r\na [Redis]\r\n')).toBe('title "T"\na [Redis]\n');
+  });
+
+  it('aligns traffic, capacity and entity fields in columns', () => {
+    expect(format('traffic {\n"Redirect" 100k rps mix "Hit" 90%, "Miss" 10%\n"Shorten"  1k rps\n"Delete" 10 rps mix "Gone" 100%\n}\n')).toBe(
+      ['traffic {', '  "Redirect" 100k rps mix "Hit" 90%, "Miss" 10%', '  "Shorten"  1k rps', '  "Delete"   10 rps   mix "Gone" 100%', '}', ''].join('\n'),
+    );
+    expect(format('capacity {\ndb 20k rps latency 4ms\ncache   150k rps\n}\n')).toBe('capacity {\n  db    20k rps latency 4ms\n  cache 150k rps\n}\n');
+    expect(format('entity Url in db {\ncode string key\ntarget string\ncreatedAt time index\n}\n')).toBe(
+      'entity Url in db {\n  code      string key\n  target    string\n  createdAt time   index\n}\n',
+    );
+  });
+
+  it('normalises spacing in quantities, operators and mixes', () => {
+    expect(format('traffic {\n  "U" 100k   rps mix "A" 90 %,"B"   10%\n}\n')).toBe('traffic {\n  "U" 100k rps mix "A" 90 %, "B" 10%\n}\n');
+    expect(format('requirements {\n  p99 "U"<50ms\n  cost<=3000   usd/month\n  availability>=99.9%\n}\n')).toBe(
+      'requirements {\n  p99 "U" < 50ms\n  cost <= 3000 usd/month\n  availability >= 99.9%\n}\n',
+    );
+  });
+
+  it('never reads section lines as nodes or connections', () => {
+    expect(format('requirements {\n  survive any node failure\n  durable "Shorten"\n}\ndecision "D" {\n  because "x"\n  rejected "long option" "r"\n}\n')).toBe(
+      'requirements {\n  survive any node failure\n  durable "Shorten"\n}\ndecision "D" {\n  because "x"\n  rejected "long option" "r"\n}\n',
+    );
+    // A one-line decision next to node declarations is not aligned with them.
+    expect(format('api "API" [REST API]\ndecision "Use REST" because "simple"\n')).toBe('api "API" [REST API]\ndecision "Use REST" because "simple"\n');
+  });
+
+  it('indents section blocks like other blocks', () => {
+    expect(format('test "T" {\n"U" calls db\n    no path from a to b\n}\n')).toBe('test "T" {\n  "U" calls db\n  no path from a to b\n}\n');
   });
 
   it('moves the rest of a node line into an empty team column', () => {

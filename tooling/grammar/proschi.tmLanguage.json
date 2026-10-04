@@ -10,6 +10,12 @@
       "include": "#comment"
     },
     {
+      "include": "#section"
+    },
+    {
+      "include": "#decision-line"
+    },
+    {
       "include": "#label"
     },
     {
@@ -20,6 +26,9 @@
     },
     {
       "include": "#keyword"
+    },
+    {
+      "include": "#node-id"
     },
     {
       "include": "#string"
@@ -35,6 +44,9 @@
     },
     {
       "include": "#position"
+    },
+    {
+      "include": "#replicas"
     },
     {
       "include": "#brace"
@@ -280,6 +292,104 @@
           "match": "[,:]"
         }
       ]
+    },
+    "node-id": {
+      "comment": "The id that starts a node declaration or connection.",
+      "match": "^\\s*([A-Za-z_][A-Za-z0-9_]*)\\b",
+      "captures": {
+        "1": {
+          "name": "variable.other.node.proschi"
+        }
+      }
+    },
+    "replicas": {
+      "comment": "`x3` after a node id: its replica count.",
+      "name": "constant.numeric.replicas.proschi",
+      "match": "(?<=\\s)x\\d+(?![A-Za-z0-9_])"
+    },
+    "section": {
+      "comment": "traffic, requirements, capacity, entity, decision and test blocks: top level, opened by a header line that ends with {, closed by a line starting with }.",
+      "name": "meta.block.section.proschi",
+      "begin": "^\\s*(?:(traffic|requirements|capacity)(?=\\s*\\{)|(entity)(?=\\s+[A-Za-z_])|(decision|test)(?=\\s+\"))(?=.*\\{\\s*(?:#.*)?$)",
+      "end": "^\\s*(\\})",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        },
+        "2": {
+          "name": "keyword.control.proschi"
+        },
+        "3": {
+          "name": "keyword.control.proschi"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.block.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#tech"
+        },
+        {
+          "include": "#section-keyword"
+        },
+        {
+          "include": "#quantity"
+        },
+        {
+          "name": "keyword.operator.comparison.proschi",
+          "match": "[<>]=?"
+        },
+        {
+          "name": "punctuation.separator.comma.proschi",
+          "match": ","
+        },
+        {
+          "name": "punctuation.section.block.begin.proschi",
+          "match": "\\{"
+        },
+        {
+          "include": "#identifier"
+        }
+      ]
+    },
+    "decision-line": {
+      "comment": "The one-line decision \"Title\" because \"Reason\".",
+      "begin": "^\\s*(decision)(?=\\s+\"(?:[^\"\\\\]|\\\\.)*\"\\s+because\\b)",
+      "end": "$",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#section-keyword"
+        }
+      ]
+    },
+    "section-keyword": {
+      "name": "keyword.other.proschi",
+      "match": "\\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|never|every|responds|writes|responding|handles|failure|path|replicas|any|in|scenario|latency|availability|cost|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\\b"
+    },
+    "quantity": {
+      "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx.",
+      "name": "constant.numeric.proschi",
+      "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month)\\b| %)?"
     }
   }
 }

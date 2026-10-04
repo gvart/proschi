@@ -46,7 +46,8 @@ usecase "Create order" {
 
 The architecture is written once. Any number of use cases can play over it,
 and each use case can branch into scenarios (success and error paths) with
-`alt`.
+`alt`. A document can also carry a [high-level design](#high-level-design):
+traffic, requirements, capacity, the data model, decisions and tests.
 
 The canonical style is what `proschi fmt` (or *Format code* in the editor)
 produces: two spaces per block and aligned columns in runs of similar lines; see
@@ -56,14 +57,18 @@ produces: two spaces per block and aligned columns in runs of similar lines; see
 
 | Statement | Syntax | Notes |
 |---|---|---|
-| Title | `title "Text"` | |
+| Title | `title "Text" ["Summary"]` | The optional second string is the system summary. |
 | Import | `import "path.proschi"` | Top level only. Adds everything the file declares. See [Imports](#imports). |
-| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y]` | Parts after the id may come in any order; the first string is the name, the second the description. |
+| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3]` | Parts after the id may come in any order; the first string is the name, the second the description. `x3` sets the number of replicas (default 1). |
 | Group | `group id ["Name"] [Style] [pos x,y] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
 | Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
 | Use case | `usecase "Name" ["Description"] { steps }` | Top level only. |
 | Parallel steps | `par { steps }` | Inside a use case or an `alt` block; steps in one block run in parallel. Cannot be nested. |
 | Scenario | `alt "Name" [when "condition"] { steps }` | Inside a use case or another `alt`. See [Scenarios](#scenarios). |
+| Traffic, requirements, capacity | `traffic { … }`, `requirements { … }`, `capacity { … }` | Top level only. See [High-level design](#high-level-design). |
+| Entity | `entity Name [in store] ["Description"] { fields }` | Top level only. The data model. |
+| Decision | `decision "Title" { … }` or `decision "Title" because "Reason"` | Top level only. |
+| Test | `test "Name" { assertions }` | Top level only. Flow assertions. |
 | Comment | `# …` | Anywhere a token can start. A `#` inside quotes or a JSON payload is kept. |
 
 - **Ids** are letters, digits and `_`, starting with a letter or `_`.
@@ -223,6 +228,235 @@ deleting something declared in an imported file is refused with a short
 message. Edit that file instead. The problems panel lists problems in imported
 files with the file name in front; clicking one opens that diagram.
 
+## High-level design
+
+Beyond what talks to what, a document can say how much traffic flows, how fast
+and reliable the system must be, what data lives where and why it is built
+this way. These statements are blocks at the top level; each line inside a
+block follows that block's own rules. The design they describe is in
+[docs/design/hld-and-practice.md](design/hld-and-practice.md).
+
+```
+title "URL Shortener" "Turns long URLs into short codes and redirects visitors"
+
+api   "Shortener API" [REST API]   x12
+cache "Code cache"    [Redis]      x2
+db    "URL store"     [PostgreSQL] x3
+# … connections and the use cases "Redirect" and "Shorten"
+
+traffic {
+  "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%
+  "Shorten"  1k rps
+}
+
+requirements {
+  p99 "Redirect" < 100ms
+  availability >= 99.9%
+  durable "Shorten"
+  survive any node failure
+  cost <= 3000 usd/month
+}
+
+capacity {
+  db 20k rps latency 4ms
+}
+
+entity Url in db "One short code and where it points" {
+  code      string key
+  target    string
+  createdAt time   index
+}
+
+decision "Cache redirects in Redis" {
+  because "Reads outnumber writes 100:1 and p99 must stay under 100 ms"
+  rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
+}
+
+test "Redirects are served from the cache" {
+  "Redirect" calls any cache before any database
+  "Redirect" scenario "Cache hit" never calls any database
+}
+```
+
+The *URL shortener HLD* example in the editor is a complete document using
+every statement.
+
+The words that open these blocks are keywords only in that shape (`traffic {`,
+`entity Name …`, `decision "…" {` or `decision "…" because`, `test "…" {`),
+so older documents that use them as node ids, e.g. `test "Test runner"
+[REST API]`, still parse. A malformed line inside a block is an error on that
+line and the rest of the block is still read; a misplaced block (inside a
+group or a use case) is an error and its lines are skipped. Imported files
+contribute all of these sections. In the parse output each section is left
+out when the document has none.
+
+### Quantities
+
+A quantity is a number, an optional magnitude and an optional unit:
+
+| Part | Values |
+|---|---|
+| Number | `120`, `99.95` |
+| Magnitude | `k` (thousand), `m` (million), `b` (billion) |
+| Unit | `rps`, `rpm`, `rpd` (requests per second, minute, day); `ms`, `s`; `%`; `usd/month` |
+
+The unit may be attached (`50ms`, `99.9%`, `100krps`) or one space away
+(`50 ms`, `100k rps`). Rates are normalised to requests per second (`6k rpm` is
+100 rps) and durations to milliseconds (`1.5s` is 1500 ms). `ms` is always
+milliseconds. A statement that wants a unit reports a quantity without one, or
+with the wrong one: `'100k' needs a unit: expected a rate, e.g. 100k rps, 6k rpm or 1m rpd`.
+
+### Traffic
+
+```
+traffic {
+  "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%
+  "Shorten"  1k rps
+}
+```
+
+- One line per use case: `"<use case>" <rate>`.
+- `mix` splits the use case's traffic over its scenarios by their full names
+  (`A › B` for nested branches; a use case without `alt` has one scenario,
+  named like the use case). Without `mix`, all traffic goes to the first
+  scenario.
+- Shares should add up to 100%. Otherwise there is a warning and they are
+  scaled to fit. In the parse output shares are fractions (`0.9`).
+- Unknown use case or scenario names are warnings, checked once every file is
+  read. A second line for the same use case is an error.
+
+### Requirements
+
+```
+requirements {
+  p99 "Redirect" < 50ms
+  p95 < 300ms                 # every use case
+  availability "Redirect" >= 99.95%
+  availability >= 99.9%       # every use case
+  durable "Shorten"
+  survive any node failure
+  survive failure of cache    # a node id, [Tech], or any <kind>
+  cost <= 3000 usd/month
+}
+```
+
+| Requirement | Meaning |
+|---|---|
+| `p50`, `p90`, `p95`, `p99` or `p999` `["Use case"] < <duration>` | Latency percentile of the use case (or of every use case with traffic) under its traffic |
+| `availability ["Use case"] >= <percent>` | Computed availability of the use case |
+| `durable "Use case"` | Every success scenario writes to a durable node, synchronously, before the entry request is answered |
+| `survive any node failure` | Losing any single node instance keeps every use case working |
+| `survive failure of <selector>` | The same, for the selected nodes only |
+| `cost <= <usd/month>` | Sum of replica costs |
+
+`<=` is also accepted for latency and `>` for availability. Each requirement
+becomes a test that the simulation evaluates.
+
+### Capacity
+
+```
+capacity {
+  db    20k rps latency 4ms availability 99.95% cost 400 usd/month durable
+  cache 150k rps
+}
+```
+
+Per-replica overrides of the default profile of a node, one line per node id,
+parts in any order: a rate, `latency <duration>`, `availability <percent>`,
+`cost <usd/month>`, `durable` or `volatile`. An unknown node id is a warning;
+a part given twice and a second line for the same node are errors.
+
+### Entities
+
+```
+entity Url in db "One short code and where it points" {
+  code      string key
+  target    string
+  createdAt time   index
+}
+```
+
+- `entity <Name> [in <node id>] ["Description"] {`, then one field per line:
+  `<name> <type> {flag}` with the flags `key`, `index`, `unique` and
+  `optional`. Types are free identifiers: `string`, `int`, `time`, `uuid`,
+  `json`, …
+- `in <node>` places the entity in a store. It is a warning when that node is
+  not a data store: a cache, database, search, analytics, queue or storage
+  node (see [kinds](#selectors-and-kinds)).
+
+### Decisions
+
+```
+decision "Cache redirects in Redis" {
+  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
+  rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
+  rejected "Memcached" "No replication; losing a node empties the cache"
+}
+decision "Base62 codes from a counter" because "Short, unique, no collisions to retry"
+```
+
+`because "<reason>"` at most once, and any number of
+`rejected "<option>" "<reason>"`. The one-line form takes only `because`.
+
+### Tests
+
+Tests check how the design works. Every assertion line in a test must hold.
+
+```
+test "Redirect is served from the cache" {
+  "Redirect" calls any cache before any database
+  "Redirect" scenario "Cache hit" never calls any database
+}
+test "Clients only enter through the gateway" {
+  no path from client to any database
+}
+```
+
+| Assertion | Holds when |
+|---|---|
+| `U [scenario S] calls X` | some scenario of U (or S) has a step to a node matching X |
+| `U [scenario S] every scenario calls X` | every scenario of U calls X |
+| `U [scenario S] never calls X` | no scenario of U (or S) calls X |
+| `U [scenario S] calls X before Y` | in every scenario that calls Y, X is called earlier; and some scenario calls Y |
+| `U [scenario S] writes X before responding` | every success scenario has a synchronous, non-failed step to X before the entry response |
+| `U [scenario S] responds <status>` | some scenario's entry response has that status (`201`, or a class `2xx`/`4xx`/`5xx`) |
+| `U has scenario S` | the scenario exists |
+| `U handles failure of X` | some success scenario of U contains a failed call (`-x`) to X |
+| `no path from X to Y` | no chain of architecture connections leads from a node matching X to one matching Y |
+| `X has replicas >= <n>` | every node matching X has at least n replicas |
+
+`U` and `S` are a use case and a scenario name in quotes. Order in a scenario
+is the sequence order, requests and responses interleaved. Unknown use cases,
+scenarios (after `scenario`) and nodes are warnings; a test without
+assertions is a warning and two tests with one name are an error.
+
+### Selectors and kinds
+
+`X` and `Y` above, and `survive failure of`, take a selector:
+
+| Selector | Matches |
+|---|---|
+| `db` | the node with that id |
+| `[PostgreSQL]` | every node with that tech stack |
+| `any database` | every node of that kind |
+
+A node's kind comes from its tech stack, falling back to its component type:
+
+| Kind | Tech stacks (examples) |
+|---|---|
+| `client` | Actor, shapes and nodes without a tech |
+| `edge` | CloudFront, Load Balancer, Route53, API Gateway, Front Door, CDN |
+| `service` | REST API, gRPC, GraphQL, WebSocket, EC2, ECS, EKS, Fargate, VMs |
+| `function` | Lambda, Cloud Functions, Azure Functions, Cloud Run, App Engine |
+| `cache` | Redis, ElastiCache, Memcached, Hazelcast, Aerospike, Azure Cache |
+| `database` | PostgreSQL, MySQL, Aurora, RDS, DynamoDB, Cassandra, MongoDB, Cosmos DB, Spanner, … |
+| `search` | Elasticsearch |
+| `analytics` | BigQuery, InfluxDB, TimescaleDB |
+| `queue` | Kafka, SQS, SNS, Kinesis, Pub/Sub, RabbitMQ, Service Bus, … |
+| `storage` | S3, Blob Storage, Cloud Storage, EFS, EBS |
+| `external` | Payment Gateway, Email/SMS Service, Auth Service, Third Party API |
+| `other` | groups and text nodes |
+
 ## Editing on the canvas
 
 The text is the source of truth. Edits on the diagram are written back into it:
@@ -255,11 +489,12 @@ document     = { line } ;
 line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | node | connection
-             | group-open | usecase-open | par-open | alt-open | close ;
+             | group-open | usecase-open | par-open | alt-open | close
+             | traffic | requirements | capacity | entity | decision | test ;
 
-title        = "title" , ( string | id ) ;
+title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative file path *)
-node         = id , { string | tech | team | position } ;  (* 1st string: name, 2nd: description *)
+node         = id , { string | tech | team | position | replicas } ;  (* 1st string: name, 2nd: description *)
 connection   = id , arrow , id , [ ":" , label ] ;
 group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
 usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
@@ -267,8 +502,41 @@ par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
 close        = "}" , [ alt-open ] ;
 
+traffic      = "traffic" , "{" , { string , quantity , [ "mix" , share , { "," , share } ] } , "}" ;
+share        = string , quantity ;                       (* "Cache hit" 90% *)
+requirements = "requirements" , "{" , { requirement } , "}" ;
+requirement  = percentile , [ string ] , "<" , quantity
+             | "availability" , [ string ] , ">=" , quantity
+             | "durable" , string
+             | "survive" , ( "any" , "node" , "failure" | "failure" , "of" , selector )
+             | "cost" , "<=" , quantity ;
+percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
+capacity     = "capacity" , "{" , { id , { quantity | "latency" , quantity | "availability" , quantity
+             | "cost" , quantity | "durable" | "volatile" } } , "}" ;
+entity       = "entity" , id , [ "in" , id ] , [ string ] , "{" , { id , id , { flag } } , "}" ;
+flag         = "key" | "index" | "unique" | "optional" ;
+decision     = "decision" , string , ( "because" , string
+             | "{" , { "because" , string | "rejected" , string , string } , "}" ) ;
+test         = "test" , string , "{" , { assertion } , "}" ;
+assertion    = string , [ "scenario" , string ] , ( "calls" , selector , [ "before" , selector ]
+             | "every" , "scenario" , "calls" , selector | "never" , "calls" , selector
+             | "writes" , selector , "before" , "responding" | "responds" , status )
+             | string , "has" , "scenario" , string
+             | string , "handles" , "failure" , "of" , selector
+             | "no" , "path" , "from" , selector , "to" , selector
+             | selector , "has" , "replicas" , ">=" , integer ;
+selector     = id | tech | "any" , kind ;
+kind         = "client" | "edge" | "service" | "function" | "cache" | "database"
+             | "search" | "analytics" | "queue" | "storage" | "external" | "other" ;
+status       = digit , digit , digit | digit , "xx" ;     (* 201, 4xx *)
+
 arrow        = "->" | "->>" | "-->" | "-x" ;
 position     = "pos" , integer , "," , integer ;
+replicas     = "x" , digit , { digit } ;               (* one token, e.g. x3 *)
+quantity     = number , [ magnitude ] , [ unit ] ;     (* 50ms, 100k rps, 99.9% *)
+number       = digit , { digit } , [ "." , digit , { digit } ] ;
+magnitude    = "k" | "m" | "b" ;
+unit         = "rps" | "rpm" | "rpd" | "ms" | "s" | "%" | "usd/month" ;
 id           = ( letter | "_" ) , { letter | digit | "_" } ;
 string       = '"' , { character - '"' | "\" , character } , '"' ;
 tech         = "[" , { character - "]" } , "]" ;
@@ -290,6 +558,7 @@ Where each statement may appear:
 | `usecase` | ✓ | | | |
 | `par` | | | ✓ | |
 | `alt` | | | ✓ | |
+| `traffic`, `requirements`, `capacity`, `entity`, `decision`, `test` | ✓ | | | |
 
 `-x` is only valid as a step. A label is read as described in
 [Use case steps](#use-case-steps): an optional HTTP method and path, an optional
@@ -298,5 +567,6 @@ Where each statement may appear:
 The grammar describes syntax only. The parser also checks meaning: duplicate
 ids, unknown tech stacks, responses without a matching request, steps between
 nodes the architecture does not connect, import cycles and missing imported
-files, and so on.
+files, unknown use cases, scenarios and nodes in the high-level design
+sections, and so on.
 Those checks are what the language server and `proschi check` report.

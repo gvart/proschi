@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
 import { examples, parse } from '../dsl';
 import { decodeShareLink } from '../playground/share';
-import { highlightLine } from './highlight';
+import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { heroScenarios, stepLines } from './player';
@@ -119,6 +119,24 @@ describe('landing page snippets', () => {
     expect(cls('import "infra.proschi"')).toEqual([['import', 'keyword'], ['"infra.proschi"', 'string']]);
     expect(cls('  } alt "Missing" when "no such order" {')).toEqual([['} alt', 'keyword'], ['"Missing"', 'string'], ['when', 'keyword'], ['"no such order"', 'string']]);
     expect(cls('  when -> b')).toEqual([['->', 'arrow']]);
+  });
+
+  it('highlights section blocks: their words as keywords, quantities as numbers', () => {
+    const lines = highlightLines(['traffic {', '  "Redirect" 100k rps mix "Hit" 90%, "Miss" 10%', '}', 'mix -> any', 'decision "D" because "r"', 'test "T" {', '  no path from client to any database', '}']);
+    const cls = (i: number) => lines[i].filter((seg) => seg.cls).map((seg) => [seg.text.trim(), seg.cls]);
+    expect(cls(0)).toEqual([['traffic', 'keyword']]);
+    expect(cls(1)).toEqual([
+      ['"Redirect"', 'string'],
+      ['100k rps', 'number'],
+      ['mix', 'keyword'],
+      ['"Hit"', 'string'],
+      ['90%', 'number'],
+      ['"Miss"', 'string'],
+      ['10%', 'number'],
+    ]);
+    expect(cls(3)).toEqual([['->', 'arrow']]);
+    expect(cls(4)).toEqual([['decision', 'keyword'], ['"D"', 'string'], ['because', 'keyword'], ['"r"', 'string']]);
+    expect(cls(6).map(([t]) => t)).toEqual(['no', 'path', 'from', 'to', 'any']);
   });
 
   it('are in canonical format', () => {

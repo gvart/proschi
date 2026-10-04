@@ -2,7 +2,6 @@ import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from '../dsl';
 import { shortenerAnalysis, shortenerDiagram, shortenerTests } from './fixtures';
 import { assertionLabel, buildHld, hld, nullEngine, requirementLabel, section, toHtml, toMarkdown, type Engine } from './index';
-import { kindOf } from './kinds';
 
 /** Every opened tag is closed, in order (void elements aside). */
 function expectBalancedHtml(html: string) {
@@ -40,10 +39,10 @@ describe('hld', () => {
     ]);
     expect(s.nonFunctional.map((r) => [r.label, r.status])).toEqual([
       ['p99 of Redirect < 50 ms', 'fail'],
-      ['availability of every use case >= 99.9%', 'pass'],
+      ['availability of every use case ≥ 99.9%', 'pass'],
       ['Shorten is durable', 'unchecked'],
       ['survive any node failure', 'unchecked'],
-      ['cost <= 3000 usd/month', 'pass'],
+      ['cost ≤ $3,000/month', 'pass'],
     ]);
     expect(s.nonFunctional[0]).toMatchObject({ measured: 'p99 of Redirect is 75 ms (limit 50 ms)', hint: 'Add replicas to Load Balancer', category: 'latency' });
     expect(s.flowTests[0]).toMatchObject({
@@ -153,8 +152,8 @@ describe('hld without simulation', () => {
 describe('labels', () => {
   it('requirements read like their test names', () => {
     const loc = { line: 1, col: 1, length: 1 };
-    expect(requirementLabel({ kind: 'latency', percentile: 99.9, maxMs: 300, loc })).toBe('p99.9 of every use case < 300 ms');
-    expect(requirementLabel({ kind: 'availability', useCase: 'Redirect', minPercent: 99.95, loc })).toBe('availability of Redirect >= 99.95%');
+    expect(requirementLabel({ kind: 'latency', percentile: 99.9, maxMs: 300, loc })).toBe('p999 of every use case < 300 ms');
+    expect(requirementLabel({ kind: 'availability', useCase: 'Redirect', minPercent: 99.95, loc })).toBe('availability of Redirect ≥ 99.95%');
     expect(requirementLabel({ kind: 'survive', target: { node: 'cache' }, loc })).toBe('survive failure of cache');
     expect(requirementLabel({ kind: 'survive', target: { kind: 'database' }, loc })).toBe('survive failure of any database');
   });
@@ -167,19 +166,6 @@ describe('labels', () => {
     expect(assertionLabel({ kind: 'hasScenario', useCase: 'U', scenario: 'S', loc })).toBe('"U" has scenario "S"');
     expect(assertionLabel({ kind: 'handlesFailure', useCase: 'U', target: { kind: 'cache' }, loc })).toBe('"U" handles failure of any cache');
     expect(assertionLabel({ kind: 'replicas', target: { kind: 'service' }, min: 2, loc })).toBe('any service has replicas >= 2');
-  });
-
-  it('kinds come from the tech, then the component type', () => {
-    const kind = (src: string) => kindOf(parse(src).diagram.nodes[0]);
-    expect(kind('a [Azure Cache for Redis]')).toBe('cache');
-    expect(kind('a [Redis Queue]')).toBe('queue');
-    expect(kind('a [AWS Lambda]')).toBe('function');
-    expect(kind('a [GCP BigQuery]')).toBe('analytics');
-    expect(kind('a [Payment Gateway]')).toBe('external');
-    expect(kind('a [Actor]')).toBe('client');
-    expect(kind('a [AWS S3]')).toBe('storage');
-    expect(kind('a [gRPC]')).toBe('service');
-    expect(kind('a')).toBe('client');
   });
 });
 

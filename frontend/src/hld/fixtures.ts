@@ -134,9 +134,9 @@ export const shortenerAnalysis: Analysis = {
 
 export const shortenerTests: TestResult[] = [
   { id: 'req:0', name: 'p99 of Redirect < 50 ms', category: 'latency', passed: false, message: 'p99 of Redirect is 75 ms (limit 50 ms)', hint: 'Add replicas to Load Balancer', loc: at(110) },
-  { id: 'req:1', name: 'availability of every use case >= 99.9%', category: 'availability', passed: true, message: 'Redirect is 99.95%', loc: at(111) },
+  { id: 'req:1', name: 'availability of every use case ≥ 99.9%', category: 'availability', passed: true, message: 'Redirect is 99.95%', loc: at(111) },
   // Matched by name: no position.
-  { id: 'req:4', name: 'cost <= 3000 usd/month', category: 'cost', passed: true, message: 'Cost is $1,000 (limit $3,000)' },
+  { id: 'req:4', name: 'cost ≤ $3,000/month', category: 'cost', passed: true, message: 'Cost is $1,000 (limit $3,000)' },
   { id: 'test:Redirect is served from the cache', name: 'Redirect is served from the cache', category: 'flow', passed: true, message: 'All 2 assertions hold', loc: at(150) },
   { id: 'test:No direct path', name: 'No direct path', category: 'flow', passed: false, message: 'visitor → lb → api → db', hint: 'Remove the connection', loc: at(160) },
 ];

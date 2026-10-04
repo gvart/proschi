@@ -10,6 +10,7 @@ import {
   type ParseResult,
   type SourceLoc,
 } from './proschi';
+import { nodeSimulation } from './simulation';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -217,18 +218,24 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   if (n.implicit) lines.push('', '_Not declared; created because it is referenced._');
   else if (n.loc.file) lines.push('', `_Declared in ${n.loc.file.split(/[\\/]/).pop()}_`);
   if (useCases.length) lines.push('', `Used in: ${useCases.map((u) => `“${u.name}”`).join(', ')}`);
+  const load = nodeSimulation(analysis.diagram, n.id);
+  if (load) lines.push('', load);
   return { markdown: lines.join('\n'), range: hit.range };
 }
 
 export interface OutlineSymbol {
   name: string;
   detail?: string;
-  kind: 'node' | 'group' | 'usecase' | 'scenario';
+  kind: 'node' | 'group' | 'usecase' | 'scenario' | 'section' | 'traffic' | 'requirement' | 'entity' | 'decision' | 'test';
   range: Range;
   children: OutlineSymbol[];
 }
 
-/** Groups with their members, then use cases with their scenarios; only what this document declares. */
+/**
+ * Groups with their members, then use cases with their scenarios, then the
+ * high-level design sections (traffic, requirements, entities, decisions,
+ * tests); only what this document declares.
+ */
 export function outline(analysis: Analysis): OutlineSymbol[] {
   const declared = analysis.diagram.nodes.filter((n) => !n.implicit && !n.loc.file);
   const symbolOf = (n: DiagramNode): OutlineSymbol => ({
@@ -255,7 +262,32 @@ export function outline(analysis: Analysis): OutlineSymbol[] {
           }))
         : [],
   }));
-  return [...top, ...useCases];
+  return [...top, ...useCases, ...sections(analysis)];
+}
+
+/** One symbol per high-level design section that has entries in this document, spanning them. */
+function sections(analysis: Analysis): OutlineSymbol[] {
+  const { diagram, lines } = analysis;
+  const own = <T extends { loc: SourceLoc }>(items: T[] | undefined) => (items ?? []).filter((i) => !i.loc.file);
+  const item = (kind: OutlineSymbol['kind'], name: string, loc: SourceLoc, detail?: string): OutlineSymbol => ({ name, detail: detail || undefined, kind, range: toRange(loc), children: [] });
+  const sourceOf = (loc: SourceLoc) => (lines[loc.line - 1] ?? '').slice(loc.col - 1, loc.col - 1 + loc.length);
+  const count = (n: number, what: string) => `${n} ${what}${n === 1 ? '' : 's'}`;
+
+  const groups: [string, OutlineSymbol[]][] = [
+    ['traffic', own(diagram.traffic).map((t) => item('traffic', t.useCase, t.loc, [`${t.rps} rps`, t.mix ? count(t.mix.length, 'scenario') : ''].filter(Boolean).join(' · ')))],
+    ['requirements', own(diagram.requirements).map((r) => item('requirement', sourceOf(r.loc), r.loc))],
+    ['entities', own(diagram.entities).map((e) => item('entity', e.name, e.loc, [e.store ? `in ${e.store}` : '', count(e.fields.length, 'field')].filter(Boolean).join(' · ')))],
+    ['decisions', own(diagram.decisions).map((d) => item('decision', d.title, d.loc, d.because))],
+    ['tests', own(diagram.tests).map((t) => item('test', t.name, t.loc, count(t.assertions.length, 'assertion')))],
+  ];
+  return groups
+    .filter(([, children]) => children.length)
+    .map(([name, children]) => ({
+      name,
+      kind: 'section' as const,
+      range: { start: children[0].range.start, end: children.reduce((end, c) => (c.range.end.line >= end.line ? c.range.end : end), children[0].range.end) },
+      children,
+    }));
 }
 
 export interface TextEdit {

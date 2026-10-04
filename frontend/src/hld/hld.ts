@@ -12,7 +12,8 @@ import type {
   SourceLoc,
 } from '../dsl/types';
 import type { Analysis, ScenarioAnalysis, TestResult } from './engine';
-import { kindOf } from './kinds';
+import { kindOf } from '../dsl/kinds';
+import { requirementName } from '../sim';
 
 /**
  * A high-level design document built from a diagram, plus the simulation's
@@ -182,21 +183,8 @@ export function selectorLabel(s: Selector): string {
 
 const formatNumber = (n: number) => (Number.isInteger(n) ? String(n) : String(Number(n.toFixed(3))));
 
-/** A requirement as a sentence, matching the test names of §1.5: "p99 of Redirect < 50 ms". */
-export function requirementLabel(r: Requirement): string {
-  switch (r.kind) {
-    case 'latency':
-      return `p${r.percentile} of ${r.useCase ?? 'every use case'} < ${formatNumber(r.maxMs)} ms`;
-    case 'availability':
-      return `availability of ${r.useCase ?? 'every use case'} >= ${formatNumber(r.minPercent)}%`;
-    case 'durable':
-      return `${r.useCase} is durable`;
-    case 'survive':
-      return r.target === 'any' ? 'survive any node failure' : `survive failure of ${selectorLabel(r.target)}`;
-    case 'cost':
-      return `cost <= ${formatNumber(r.maxUsdPerMonth)} usd/month`;
-  }
-}
+/** A requirement as a sentence, the same as its test name: "p99 of Redirect < 50 ms". */
+export const requirementLabel: (r: Requirement) => string = requirementName;
 
 const REQUIREMENT_CATEGORY: Record<Requirement['kind'], TestResult['category']> = {
   latency: 'latency',
