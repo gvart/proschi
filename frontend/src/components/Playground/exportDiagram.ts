@@ -20,7 +20,11 @@ export function downloadUrl(url: string, fileName: string) {
 }
 
 export function downloadText(text: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  downloadBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), fileName);
+}
+
+export function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
   downloadUrl(url, fileName);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
