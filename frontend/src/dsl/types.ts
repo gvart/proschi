@@ -36,6 +36,8 @@ export interface DiagramNode {
   position?: { x: number; y: number };
   /** Created because an edge or step referenced an undeclared id. */
   implicit?: boolean;
+  /** `x3`: number of replicas; absent means 1. See docs/design/hld-and-practice.md §1.3. */
+  replicas?: number;
   loc: SourceLoc;
 }
 
@@ -88,6 +90,103 @@ export interface Diagram {
   nodes: DiagramNode[];
   edges: DiagramEdge[];
   useCases: DiagramUseCase[];
+  // HLD and practice additions (docs/design/hld-and-practice.md §1). Absent means none.
+  /** Second string of `title`: the system summary. */
+  summary?: string;
+  traffic?: TrafficEntry[];
+  requirements?: Requirement[];
+  capacity?: CapacityOverride[];
+  entities?: Entity[];
+  decisions?: Decision[];
+  tests?: FlowTest[];
+}
+
+/** Simulation class of a node (docs/design/hld-and-practice.md §2.1). */
+export type Kind =
+  | 'client'
+  | 'edge'
+  | 'service'
+  | 'function'
+  | 'cache'
+  | 'database'
+  | 'search'
+  | 'analytics'
+  | 'queue'
+  | 'storage'
+  | 'external'
+  | 'other';
+
+/** A node id, an exact tech stack, or every node of a kind (`any cache`). */
+export type Selector = { node: string } | { tech: string } | { kind: Kind };
+
+/** `"Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%`; shares are fractions 0..1. */
+export interface TrafficEntry {
+  useCase: string;
+  rps: number;
+  mix?: { scenario: string; share: number }[];
+  loc: SourceLoc;
+}
+
+export type Percentile = 50 | 90 | 95 | 99 | 99.9;
+
+/** One line of `requirements { … }`; percentages are 0..100. */
+export type Requirement =
+  | { kind: 'latency'; percentile: Percentile; useCase?: string; maxMs: number; loc: SourceLoc }
+  | { kind: 'availability'; useCase?: string; minPercent: number; loc: SourceLoc }
+  | { kind: 'durable'; useCase: string; loc: SourceLoc }
+  | { kind: 'survive'; target: Selector | 'any'; loc: SourceLoc }
+  | { kind: 'cost'; maxUsdPerMonth: number; loc: SourceLoc };
+
+/** One line of `capacity { … }`: per-replica overrides of the default profile. */
+export interface CapacityOverride {
+  node: string;
+  rps?: number;
+  latencyMs?: number;
+  /** 0..100 */
+  availability?: number;
+  costUsd?: number;
+  durable?: boolean;
+  loc: SourceLoc;
+}
+
+export interface EntityField {
+  name: string;
+  type: string;
+  /** key, index, unique, optional */
+  flags: string[];
+}
+
+export interface Entity {
+  name: string;
+  /** Node id of the store it lives in. */
+  store?: string;
+  description?: string;
+  fields: EntityField[];
+  loc: SourceLoc;
+}
+
+export interface Decision {
+  title: string;
+  because?: string;
+  rejected: { option: string; reason: string }[];
+  loc: SourceLoc;
+}
+
+/** One assertion line inside `test "…" { … }` (docs/design/hld-and-practice.md §1.9). */
+export type Assertion =
+  | { kind: 'calls'; useCase: string; scenario?: string; target: Selector; quantifier: 'some' | 'every' | 'never'; loc: SourceLoc }
+  | { kind: 'before'; useCase: string; scenario?: string; first: Selector; then: Selector; loc: SourceLoc }
+  | { kind: 'writesBeforeResponding'; useCase: string; scenario?: string; target: Selector; loc: SourceLoc }
+  | { kind: 'responds'; useCase: string; scenario?: string; status: string; loc: SourceLoc }
+  | { kind: 'hasScenario'; useCase: string; scenario: string; loc: SourceLoc }
+  | { kind: 'handlesFailure'; useCase: string; target: Selector; loc: SourceLoc }
+  | { kind: 'noPath'; from: Selector; to: Selector; loc: SourceLoc }
+  | { kind: 'replicas'; target: Selector; min: number; loc: SourceLoc };
+
+export interface FlowTest {
+  name: string;
+  assertions: Assertion[];
+  loc: SourceLoc;
 }
 
 /** One `import "path"` statement, in the root document or in an imported file. */
