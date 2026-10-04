@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
 import appHtml from '../../app/index.html?raw';
 import practiceHtml from '../../practice/index.html?raw';
-import modelHtml from '../../model/index.html?raw';
+import docsHtml from '../../docs/index.html?raw';
 import themeInit from '../../public/theme-init.js?raw';
 import tailwindConfig from '../../tailwind.config.js?raw';
 import { renderShell } from './shell';
@@ -13,7 +13,7 @@ import { THEME_COLOR, THEME_KEY, nextThemePref, resolveTheme, themeToggleLabel, 
 // Read from disk: vitest stubs CSS imports, ?raw included.
 const tokensCss = readFileSync(new URL('./tokens.css', import.meta.url), 'utf8');
 
-const PAGES = { landing: landingHtml, app: appHtml, practice: practiceHtml, model: modelHtml };
+const PAGES = { landing: landingHtml, app: appHtml, practice: practiceHtml, docs: docsHtml };
 
 /** The custom properties a CSS block (by its selector's start) declares. */
 function declared(css: string, selector: string): Map<string, string> {
@@ -87,7 +87,7 @@ describe('pages', () => {
 
   it.each([
     ['landing', landingHtml],
-    ['model', modelHtml],
+    ['docs', docsHtml],
   ])('%s gets the shared header and footer', (_, html) => {
     expect(html).toContain('<!--shell:header-->');
     expect(html).toContain('<!--shell:footer-->');
@@ -102,7 +102,7 @@ describe('shell', () => {
     expect(header).toContain('href="../practice/"');
     expect(header).toContain('href="../app/"');
     expect(header).toMatch(/class="ps-wordmark" href="\.\.\/"/);
-    expect(footer).toContain('href="./model/"');
+    expect(footer).toContain('href="./docs/model/"');
     expect(footer).toContain('https://github.com/gvart/proschi');
   });
 

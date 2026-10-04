@@ -22,7 +22,7 @@ import { profileOf, type Profile } from '../sim/profiles';
 import { runTests, type TestResult } from '../sim/tests';
 
 /**
- * The numbers on the "How the simulation works" page (model/index.html) are
+ * The numbers on the "How the simulation works" page (src/docs/model.html, served at /docs/model/) are
  * plain text, so the page needs no JavaScript to read. Each one sits in an
  * element with `data-pin="<scope>|<path>"`, and `resolvePin` computes what
  * the text must be from the simulation itself; model.test.ts compares the two,
