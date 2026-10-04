@@ -159,7 +159,13 @@ export function diagramSchema() {
       ),
       selector: {
         description: 'A node id, an exact tech stack, or every node of a kind (`any cache`).',
-        oneOf: [object({ node: str }, ['node']), object({ tech: str }, ['tech']), object({ kind: { enum: [...KINDS] } }, ['kind'])],
+        oneOf: [
+          object({ node: str }, ['node']),
+          object({ tech: str }, ['tech']),
+          object({ kind: { enum: [...KINDS] } }, ['kind']),
+          object({ consistency: { enum: ['strong', 'eventual'] } }, ['consistency']),
+          object({ anyOf: { type: 'array', items: selector, minItems: 2 } }, ['anyOf']),
+        ],
       },
       traffic: object(
         {
@@ -225,6 +231,10 @@ export function diagramSchema() {
           handlesFailure: object({ kind: { const: 'handlesFailure' }, useCase: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
           noPath: object({ kind: { const: 'noPath' }, from: selector, to: selector, loc }, ['kind', 'from', 'to', 'loc']),
           replicas: object({ kind: { const: 'replicas' }, target: selector, min: { type: 'integer', minimum: 1 }, loc }, ['kind', 'target', 'min', 'loc']),
+          neverWaits: object({ kind: { const: 'neverWaits' }, useCase: str, scenario: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
+          after: object({ kind: { const: 'after' }, useCase: str, scenario: str, target: selector, after: selector, loc }, ['kind', 'useCase', 'target', 'after', 'loc']),
+          senderCalls: object({ kind: { const: 'senderCalls' }, useCase: str, from: selector, to: selector, quantifier: { enum: ['some', 'never'] }, loc }, ['kind', 'from', 'to', 'quantifier', 'loc']),
+          startsAt: object({ kind: { const: 'startsAt' }, useCase: str, target: selector, loc }, ['kind', 'useCase', 'target', 'loc']),
         } satisfies Record<Assertion['kind'], unknown>),
       },
     },

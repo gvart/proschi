@@ -144,6 +144,8 @@ export function fallbacksFor(useCase: DiagramUseCase, nodeId: string): DiagramSc
 export function selectorText(selector: Selector): string {
   if ('node' in selector) return selector.node;
   if ('tech' in selector) return `[${selector.tech}]`;
+  if ('anyOf' in selector) return selector.anyOf.map(selectorText).join(' or ');
+  if ('consistency' in selector) return `any ${selector.consistency} store`;
   return `any ${selector.kind}`;
 }
 
@@ -156,6 +158,9 @@ export function matches(node: DiagramNode, selector: Selector): boolean {
   if (node.kind !== 'component') return false;
   if ('node' in selector) return node.id === selector.node;
   if ('tech' in selector) return node.techStack.toLowerCase() === selector.tech.toLowerCase();
+  if ('anyOf' in selector) return selector.anyOf.some((s) => matches(node, s));
+  // TODO(v2 §7.4): consistency comes from the node's profile; not modelled yet.
+  if ('consistency' in selector) return false;
   return kindOf(node) === selector.kind;
 }
 
