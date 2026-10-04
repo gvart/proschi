@@ -56,10 +56,12 @@ interface UseCasePlayerProps {
   onStepChange?: (index: number) => void;
   /** Hide the title bar when the host already shows the use case and a way back. */
   showHeader?: boolean;
+  /** Start playing as soon as it opens, e.g. after a Play button outside it was pressed. */
+  autoPlay?: boolean;
 }
 
 /** Animated step-by-step playback of a use case over an architecture diagram. */
-function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange, showHeader = true }: UseCasePlayerProps) {
+function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack, initialStep, onStepChange, showHeader = true, autoPlay = false }: UseCasePlayerProps) {
   const [currentStepIndex, setCurrentStepIndex] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
   const [animationProgress, setAnimationProgress] = useState(0);
@@ -146,6 +148,12 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       });
     }, 2000);
   };
+
+  // Once, on opening; the host remounts the player (a new key) to play again.
+  useEffect(() => {
+    if (autoPlay && useCase.steps.length > 0) handlePlay();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const handlePause = () => {
     setIsPlaying(false);

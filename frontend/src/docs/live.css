@@ -1,0 +1,37 @@
+/* The live examples' diagram and player use the app's Tailwind classes. Loaded
+   with the island only. No preflight (tailwind.docs.config.js): the few resets
+   those components rely on are scoped to the stage below. */
+@config '../../tailwind.docs.config.js';
+@tailwind base;
+@tailwind utilities;
+
+.live__stage *,
+.live__stage ::before,
+.live__stage ::after {
+  box-sizing: border-box;
+  border-width: 0;
+  border-style: solid;
+  border-color: rgb(229 231 235);
+}
+.live__stage :where(h1, h2, h3, p, pre, figure) {
+  margin: 0;
+  font: inherit;
+  letter-spacing: normal;
+}
+.live__stage :where(button) {
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  line-height: inherit;
+  cursor: pointer;
+}
+.live__stage :where(svg, img) {
+  display: block;
+  vertical-align: middle;
+}
+.live__stage :where(hr) {
+  height: 0;
+  border-top-width: 1px;
+}

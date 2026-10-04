@@ -191,7 +191,7 @@ test.describe('help menu', () => {
     await expect(editorTour(page)).toHaveCount(0); // the fixture marks tours as seen
     const help = page.getByRole('button', { name: 'Help' });
     await help.click();
-    await expect(page.getByRole('menuitem', { name: 'How the simulation works' })).toHaveAttribute('href', '../model/');
+    await expect(page.getByRole('menuitem', { name: 'How the simulation works' })).toHaveAttribute('href', '../docs/model/');
     await page.getByRole('menuitem', { name: 'Syntax cheat-sheet' }).click();
     const sheet = page.getByRole('dialog', { name: 'Syntax cheat-sheet' });
     await expect(sheet).toBeVisible();
@@ -245,7 +245,7 @@ test.describe('practice tour', () => {
     await expect(tour).toHaveAccessibleName('Practice tour: Edit the starter, run the tests');
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(tour).toHaveAccessibleName('Practice tour: Budgets make brute force fail');
-    await expect(tour.getByRole('link', { name: 'How the simulation works' })).toHaveAttribute('href', '../model/');
+    await expect(tour.getByRole('link', { name: 'How the simulation works' })).toHaveAttribute('href', '../docs/model/');
     await tour.getByRole('button', { name: 'Finish' }).click();
     await expect(tour).toHaveCount(0);
 

@@ -3,6 +3,7 @@ import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
 import { siteShell } from './plugins/siteShell'
+import { docsSite } from './plugins/docsSite'
 
 // `ANALYZE=1 npx vite build` also writes dist/stats.html, a treemap of every chunk.
 async function analyzer(): Promise<PluginOption> {
@@ -29,6 +30,11 @@ export default defineConfig(async () => ({
   plugins: [
     react(),
     practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
+    // Before siteShell: the docs pages' layout goes in first, the header and footer around it.
+    docsSite({
+      docsDir: fileURLToPath(new URL('../docs', import.meta.url)),
+      stubsDir: fileURLToPath(new URL('./docs', import.meta.url)),
+    }),
     siteShell(),
     await analyzer(),
   ],
@@ -39,9 +45,9 @@ export default defineConfig(async () => ({
     // Fonts stay files: the static pages' CSP allows fonts from 'self' only, not data: URLs.
     assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
     rollupOptions: {
-      // Four pages: the landing page at the root, the editor under app/,
-      // system design practice under practice/, and how the simulation
-      // works under model/.
+      // The landing page at the root, the editor under app/, system design
+      // practice under practice/, and model/, which forwards to the docs.
+      // docsSite adds the docs pages (docs/**/index.html).
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),

@@ -13,12 +13,9 @@ export interface SiteLink {
 }
 
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
-const LANGUAGE_URL = `${GITHUB_URL}/blob/main/docs/LANGUAGE.md`;
-
 /** The header's links; the editor is its call to action instead. */
 export const NAV: SiteLink[] = [
-  // The docs live on GitHub until they move onto the site.
-  { label: 'Docs', href: LANGUAGE_URL, page: 'docs' },
+  { label: 'Docs', href: 'docs/', page: 'docs' },
   { label: 'Practice', href: 'practice/', page: 'practice' },
   { label: 'GitHub', href: GITHUB_URL },
 ];
@@ -36,9 +33,10 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
   {
     title: 'Learn',
     links: [
-      { label: 'Language reference', href: LANGUAGE_URL },
-      { label: 'How the simulation works', href: 'model/' },
-      { label: 'Editor support', href: `${GITHUB_URL}/blob/main/docs/EDITORS.md` },
+      { label: 'Quickstart', href: 'docs/quickstart/' },
+      { label: 'Language reference', href: 'docs/language/' },
+      { label: 'How the simulation works', href: 'docs/model/' },
+      { label: 'Editor support', href: 'docs/editors/' },
     ],
   },
   {
@@ -46,6 +44,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     links: [
       { label: 'GitHub', href: GITHUB_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
+      { label: 'Privacy', href: 'docs/privacy/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },
