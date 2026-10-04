@@ -901,13 +901,11 @@ h3 {
 }
 .break {
   display: grid;
-  gap: 24px;
+  gap: 28px;
 }
-@media (min-width: 640px) {
-  .break {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-    align-items: center;
-  }
+/* The crash first, big; the text that causes it under it. */
+.break .crash {
+  order: -1;
 }
 .break .snip--dark {
   border: var(--bw-2) solid rgb(var(--c-on-slab) / 0.4);
@@ -1121,8 +1119,18 @@ h3 {
 }
 @media (min-width: 640px) {
   .checks {
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1.15fr);
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     align-items: start;
+  }
+  /* The snippet tucks under the results card, like a file behind its test report. */
+  .checks .snip {
+    margin-top: 48px;
+    margin-right: -48px;
+    rotate: -2deg;
+  }
+  .checks .results {
+    position: relative;
+    z-index: 1;
   }
 }
 .results {

@@ -26,6 +26,7 @@ const PARSE_DELAY_MS = 150;
 const TOUR_EXTENSIONS = [typingCaret];
 const FREE_EXTENSIONS = [editorLabel];
 const NO_OP = () => {};
+const NO_DIAGNOSTICS: ReturnType<typeof parse>['diagnostics'] = [];
 
 const CHAPTERS = ['Write it', 'See it', 'Play it'] as const;
 
@@ -192,7 +193,7 @@ export default function LiveDemo({ editorHref, still = false }: LiveDemoProps) {
           <CodeEditor
             value={source}
             onChange={touring ? NO_OP : setFreeSource}
-            diagnostics={touring ? [] : diagnostics}
+            diagnostics={touring ? NO_DIAGNOSTICS : diagnostics}
             nodeIds={nodeIds}
             readOnly={touring}
             theme={demoEditorTheme}
