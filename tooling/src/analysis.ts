@@ -10,6 +10,7 @@ import {
   type ParseResult,
   type SourceLoc,
 } from './proschi';
+import { nodeSimulation } from './simulation';
 
 /** 0-based position, as LSP uses. */
 export interface Position {
@@ -217,6 +218,8 @@ export function hover(analysis: Analysis, pos: Position): { markdown: string; ra
   if (n.implicit) lines.push('', '_Not declared; created because it is referenced._');
   else if (n.loc.file) lines.push('', `_Declared in ${n.loc.file.split(/[\\/]/).pop()}_`);
   if (useCases.length) lines.push('', `Used in: ${useCases.map((u) => `“${u.name}”`).join(', ')}`);
+  const load = nodeSimulation(analysis.diagram, n.id);
+  if (load) lines.push('', load);
   return { markdown: lines.join('\n'), range: hit.range };
 }
 

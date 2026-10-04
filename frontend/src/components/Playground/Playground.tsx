@@ -32,7 +32,7 @@ import {
   Pencil,
   Network,
 } from 'lucide-react';
-import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase } from '../../dsl';
+import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
 import { loadJson, saveJson } from '../../services/storage';
 import {
@@ -57,6 +57,10 @@ import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import { UseCasePlayer } from '../UseCases/UseCasePlayback';
+import AnalysisPanel from '../Analysis/AnalysisPanel';
+import TestsPanel from '../Analysis/TestsPanel';
+import ViewTabs, { type View } from '../Analysis/ViewTabs';
+import { useSimulation } from '../Analysis/useSimulation';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
@@ -111,6 +115,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [showExamples, setShowExamples] = useState(false);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
+  const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -132,6 +137,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     [parsedSource, rootPath, importableKey],
   );
   const { diagram, diagnostics } = parsed;
+  const simulation = useSimulation(diagram);
   const imports = useMemo(() => usedImports(parsed, JSON.parse(importableKey), rootPath), [parsed, importableKey, rootPath]);
   const importsKey = JSON.stringify(imports);
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
@@ -266,6 +272,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
   const startPlaying = () => {
     setPlaying(true);
+    setView('diagram');
     setMobilePane('diagram');
   };
 
@@ -292,8 +299,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
     editSource((src) => addConnection(src, from, to));
   };
 
-  /** A problem in an imported file opens that file, if it is saved in this browser. */
-  const selectDiagnostic = (d: Diagnostic) => {
+  /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */
+  const selectDiagnostic = (d: SourceLoc) => {
     if (d.file === undefined) {
       editorRef.current?.goTo(d.line, d.col);
       return;
@@ -523,7 +530,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
         </section>
 
         <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
-          {hasScenarios && useCase && scenario && (
+          {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
+          {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
             <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
           )}
           <div className="flex-1 min-h-0 relative">
@@ -537,6 +545,10 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 onStepChange={setPlayStep}
                 showHeader={false}
               />
+            ) : view === 'analysis' ? (
+              <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
+            ) : view === 'tests' ? (
+              <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
             ) : (
               <ReactFlowProvider>
                 <DiagramView
@@ -559,7 +571,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 />
               </ReactFlowProvider>
             )}
-            {nodes.length === 0 && !playing && (
+            {nodes.length === 0 && !playing && view === 'diagram' && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-sm text-gray-400">
                   Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>

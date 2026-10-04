@@ -34,6 +34,8 @@ describe('kindOf', () => {
     ['Azure Blob Storage', 'storage'],
     ['Payment Gateway', 'external'],
     ['Sticky Note', 'other'],
+    ['Note', 'other'],
+    ['Cylinder', 'client'],
     ['Network Boundary', 'other'],
   ])('%s is a %s', (tech, kind) => {
     expect(kindOfTech(tech)).toBe(kind);
@@ -52,7 +54,7 @@ describe('kindOf', () => {
     for (const c of componentCatalog) {
       const kind = kindOf({ kind: c.type === 'group' ? 'group' : c.type === 'text' ? 'text' : 'component', type: c.type, techStack: c.techStack });
       expect(KINDS, c.techStack).toContain(kind);
-      if (c.type !== 'group' && c.type !== 'text') expect(kind, c.techStack).not.toBe('other');
+      if (c.type !== 'group' && c.type !== 'text' && c.techStack !== 'Note') expect(kind, c.techStack).not.toBe('other');
     }
   });
 

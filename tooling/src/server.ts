@@ -2,7 +2,7 @@
  * Proschi language server (LSP over stdio). Any editor with an LSP client
  * gets the same diagnostics as the web editor, plus completion, hover,
  * go-to-definition, references, an outline, formatting and links on import
- * paths. Imports resolve from disk relative to the document, preferring the
+ * paths, and failing requirements and tests as warnings (source `proschi-test`). Imports resolve from disk relative to the document, preferring the
  * text of open (possibly unsaved) documents.
  */
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -26,6 +26,7 @@ import { openApiDiagnostics, watchedFiles } from './openapi/config';
 import { analyze, complete, declaration, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
+import { testDiagnostics } from './simulation';
 
 declare const PROSCHI_VERSION: string;
 
@@ -101,8 +102,19 @@ function validate(document: TextDocument) {
       ...openApiFindings(document, analysis.diagram)
         .filter((d) => d.file === undefined)
         .map(toLsp('proschi-openapi')),
+      ...simulationFindings(analysis.diagram).map(toLsp('proschi-test')),
     ],
   });
+}
+
+/** Failing requirements and tests; the simulation must never take the other diagnostics down with it. */
+function simulationFindings(diagram: Analysis['diagram']) {
+  try {
+    return testDiagnostics(diagram);
+  } catch (e) {
+    connection.console.error(`Simulation failed: ${String(e)}`);
+    return [];
+  }
 }
 
 /** Findings against the specs named in the nearest proschi.json, for documents saved on disk. */

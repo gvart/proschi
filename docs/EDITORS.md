@@ -8,8 +8,8 @@ valid.
 | Piece | File | Gives you |
 |---|---|---|
 | TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths |
-| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)) |
+| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes, completion (keywords, node ids, tech stacks), hover, go to definition, find references, outline, formatting, links on import paths, failing requirements and tests |
+| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` / `proschi test` / `proschi analyze` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)); requirements, tests and the capacity table (see [Simulation and tests](#simulation-and-tests)) |
 | JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
 
 ## Releasing
@@ -117,7 +117,8 @@ proschi check --strict --format github .   # warnings fail too; GitHub annotatio
 warning) and 2 on bad usage. `--format json` prints machine-readable results.
 
 To keep files in the canonical layout, add `proschi fmt --check docs/` (see
-[Formatting](#formatting)).
+[Formatting](#formatting)). To hold designs to their requirements, add
+`proschi test --format github docs/` (see [Simulation and tests](#simulation-and-tests)).
 
 `proschi parse diagram.proschi` prints `{"diagram": …, "diagnostics": […]}`. It
 matches the JSON Schema, so other tools can read nodes, edges, use cases and
@@ -267,3 +268,110 @@ editor title bar, or the command palette) opens a panel with the architecture
 and a scenario picker showing that scenario's sequence diagram. It updates as
 you type and follows the active `.proschi` editor; while the document has
 errors it lists them above the last good rendering.
+
+## Simulation and tests
+
+A document with `traffic { … }` gets a capacity model, and its
+`requirements { … }` and `test "…" { … }` blocks become checks that run
+everywhere: in the web editor, on the command line and in the language
+server. The model is deterministic and analytical, so it runs in milliseconds
+on every change. The syntax is in the [language reference](LANGUAGE.md); the
+formulas are in the [design](design/hld-and-practice.md#2-simulation).
+
+### The model
+
+- **Profiles.** Every node gets per-replica numbers from its tech stack (else
+  its component type): capacity in requests per second, base latency,
+  availability, monthly cost, and whether it keeps data. `capacity { … }`
+  overrides them per node. Clients (actors and plain shapes) have unlimited
+  capacity and add nothing. The defaults are teaching values, right to an order
+  of magnitude:
+
+  | Kind | rps / replica | Latency | Availability | Cost / month | Durable |
+  |---|---|---|---|---|---|
+  | edge (CDN, load balancer, API gateway, DNS) | 100k | 2 ms | 99.99% | $50 | no |
+  | service (REST, gRPC, containers, VMs) | 2k | 10 ms | 99.5% | $100 | no |
+  | function (Lambda, Cloud Run, …) | 10k | 25 ms | 99.95% | $200 | no |
+  | cache (Redis, Memcached, …) | 100k | 1 ms | 99.9% | $150 | no |
+  | database (SQL) | 5k | 5 ms | 99.95% | $400 | yes |
+  | database (DynamoDB, Cassandra, MongoDB, …) | 20k | 5 ms | 99.99% | $500 | yes |
+  | search (Elasticsearch) | 3k | 15 ms | 99.9% | $400 | yes |
+  | analytics (BigQuery, InfluxDB, TimescaleDB) | 200 | 500 ms | 99.9% | $300 | yes |
+  | queue (Kafka, SQS, Pub/Sub, …) | 50k | 5 ms | 99.99% | $200 | yes |
+  | storage (S3, Blob Storage, …) | 5k | 30 ms | 99.99% | $50 | yes |
+  | external (payment, email, third-party APIs) | 1k | 200 ms | 99.9% | $0 | no |
+
+- **Load.** Each use case's rate is split over its scenarios by `mix` (all to
+  the first scenario without one); every request step (`->`, `->>`, `-x`) adds
+  its share to the target. Utilisation is load over capacity × replicas; at
+  100% a node is **saturated** and every latency requirement whose use case
+  sends it load fails.
+- **Latency.** A hop costs its base latency ÷ (1 − utilisation), capped at 95%
+  utilisation. A scenario's mean is the sum over the synchronous path of its
+  entry request: a `par` block counts its slowest call, an async send (`->>`)
+  only the send, a failed call (`-x`) a 1 s timeout, and nothing after the
+  entry request is answered. Percentiles are the mean × 1.0 (p50), 1.6 (p90),
+  2.0 (p95), 3.0 (p99), 5.0 (p99.9). A use case's percentile is the slowest
+  scenario that carries at least the tail share: with 10% cache misses, p99 is
+  the miss path; with 0.5%, it is the hit path.
+- **Availability.** A node with n replicas is up 1 − (1 − a)ⁿ of the time. A use
+  case multiplies the nodes on the synchronous path of its main scenario; a
+  node with a fallback (a success scenario that calls it with `-x` and
+  completes without it) counts as up when either it or the fallback's extra
+  nodes are.
+- **Failure injection.** `survive any node failure` (or `survive failure of
+  <selector>`) removes one instance of each node: with two or more replicas the
+  rest must carry the load; a single instance needs a fallback scenario in
+  every use case that uses it. Clients and external systems are only checked
+  when selected explicitly.
+- **Durability, cost.** `durable "U"` needs every success scenario to write to
+  a durable node synchronously before the entry request is answered. Cost is
+  the sum of replicas × cost.
+
+Every requirement line and every `test` block yields one result. Messages say
+what was measured and the limit (`p99 of Redirect is 73.4 ms (limit 100 ms)`);
+failures come with a hint naming the lever: add replicas, add a cache, add a
+fallback scenario, move work async.
+
+### Web editor
+
+Above the diagram, **Analysis** shows per-node utilisation bars (amber above
+70%, red when saturated), latency percentiles per use case with a breakdown
+per scenario, availability, total cost, single points of failure and
+warnings. **Tests** lists every requirement and test with ✅/❌, its message
+and hint; click one to jump to its line. Both recompute as you type. Without
+`traffic`, Analysis explains how to add it.
+
+### Command line
+
+```sh
+proschi test docs/                           # every *.proschi below docs/
+proschi test --format github shortener.proschi
+proschi analyze shortener.proschi            # the capacity table
+```
+
+`proschi test` follows imports like `check`, prints each result (with the
+hint for failures) and exits with 1 when a requirement or test fails or a
+file has errors, 0 otherwise; files without requirements or tests pass.
+`--format github` writes an error annotation per failure at its line;
+`--format json` prints every result (`id`, `name`, `category`, `passed`,
+`message`, `hint`, `loc`).
+
+`proschi analyze` prints load, capacity, utilisation, latency, availability
+and cost per node, the total cost, latency percentiles per use case and
+scenario, single points of failure and warnings. `--format json` prints the
+whole analysis (unlimited capacities come out as `null`).
+
+In CI, next to `check`:
+
+```yaml
+- run: npx proschi check --format github docs/
+- run: npx proschi test --format github docs/
+```
+
+### Language server
+
+Failing requirements and tests are warnings on their lines (source
+`proschi-test`); for a `test` block, also on each failing assertion. When the
+document has traffic, hovering a node adds its load, utilisation, latency,
+availability and cost.

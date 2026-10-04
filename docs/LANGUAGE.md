@@ -239,9 +239,9 @@ block follows that block's own rules. The design they describe is in
 ```
 title "URL Shortener" "Turns long URLs into short codes and redirects visitors"
 
-api   "Shortener API" [REST API]   x3
+api   "Shortener API" [REST API]   x12
 cache "Code cache"    [Redis]      x2
-db    "URL store"     [PostgreSQL] x2
+db    "URL store"     [PostgreSQL] x3
 # … connections and the use cases "Redirect" and "Shorten"
 
 traffic {
@@ -250,7 +250,7 @@ traffic {
 }
 
 requirements {
-  p99 "Redirect" < 50ms
+  p99 "Redirect" < 100ms
   availability >= 99.9%
   durable "Shorten"
   survive any node failure
@@ -268,7 +268,7 @@ entity Url in db "One short code and where it points" {
 }
 
 decision "Cache redirects in Redis" {
-  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
+  because "Reads outnumber writes 100:1 and p99 must stay under 100 ms"
   rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
 }
 

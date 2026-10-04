@@ -24,6 +24,20 @@ export type {
 export type { DiagramScenario } from '../../frontend/src/dsl/types';
 export { toMermaidArchitecture, toMermaidSequence } from '../../frontend/src/dsl/mermaid';
 export { buildSequence, type SequenceMessage } from '../../frontend/src/dsl/sequence';
+// `analyze` is the editor's simulation; tooling's own analysis.ts has an `analyze` for documents.
+export {
+  analyze as simulate,
+  runTests,
+  formatAvailability,
+  formatMs,
+  formatPercent,
+  formatRps,
+  formatUsd,
+  HOT,
+  type Analysis as SimAnalysis,
+  type NodeAnalysis,
+  type TestResult,
+} from '../../frontend/src/sim';
 
 /** Keywords that start a statement, with a one-line hint for completion lists. */
 export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
