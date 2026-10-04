@@ -1,5 +1,32 @@
 import type { ComponentType, TechStack } from '../types/canvas';
-import type { FlowStep } from '../services/api';
+
+// Use case steps, as the parser produces them and the player animates them.
+export type ExecutionType = 'SYNC_REQUEST_RESPONSE' | 'ASYNC_FIRE_AND_FORGET' | 'ASYNC_REQUEST_RESPONSE';
+export type Protocol = 'REST' | 'GRPC' | 'SOAP' | 'GRAPHQL' | 'MESSAGING' | 'OTHER';
+
+export interface FlowStep {
+  id?: string;
+  stepOrder: number;
+  stepName: string;
+  fromServiceId: string;
+  toServiceId: string;
+  protocol: Protocol;
+  httpMethod: string;
+  endpoint: string;
+  requestFormat: 'JSON' | 'XML' | 'FREE_TEXT';
+  requestBody?: string;
+  responseFormat: 'JSON' | 'XML' | 'FREE_TEXT';
+  responseBody?: string;
+  statusCode?: number;
+  description?: string;
+  executionType: ExecutionType;
+  parallelGroup?: number;
+  isParallel: boolean;
+  isConditional: boolean;
+  conditionExpression?: string;
+  /** The call never got an answer (connection refused, timeout); written `a -x b`. */
+  failed?: boolean;
+}
 
 /** 1-based source position of a construct, used for diagnostics and editor links. */
 export interface SourceLoc {
