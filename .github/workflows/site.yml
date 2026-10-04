@@ -102,10 +102,11 @@ jobs:
       - run: npm run typecheck
       - run: npm test
 
-  # staging.proschi.app: every deploy goes there first, with its own D1
-  # (backend/README.md), and must pass the smoke test before production.
+  # staging.proschi.app, once the repository variable STAGING_ENABLED is
+  # 'true' (after its D1 and secrets are set up, backend/README.md): every
+  # deploy goes there first and must pass the smoke test before production.
   cloudflare-staging:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true' && vars.STAGING_ENABLED == 'true'
     needs: [config, build, e2e, backend]
     runs-on: ubuntu-latest
     environment:
@@ -134,10 +135,14 @@ jobs:
 
   # proschi.app: builds the site with accounts, backs up and migrates D1 and
   # deploys the Worker that serves both (backend/README.md), once the
-  # Cloudflare secrets are set and staging passed. A broken UI or API must not
-  # reach it.
+  # Cloudflare secrets are set and staging passed (or is not enabled). A
+  # broken UI or API must not reach it. `always()` lets it run after a skipped
+  # staging job, so the other needs are checked explicitly.
   cloudflare:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
+    if: >-
+      always() && !cancelled() && github.ref == 'refs/heads/main' && github.event_name != 'pull_request' &&
+      needs.config.outputs.cloudflare == 'true' && needs.build.result == 'success' && needs.e2e.result == 'success' &&
+      needs.backend.result == 'success' && (needs.cloudflare-staging.result == 'success' || needs.cloudflare-staging.result == 'skipped')
     needs: [config, build, e2e, backend, cloudflare-staging]
     runs-on: ubuntu-latest
     environment:

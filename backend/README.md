@@ -100,9 +100,10 @@ solve locally either way.
    With both set, the next push to `main` (or Actions → Site → Run workflow)
    then:
    - builds the site with `VITE_ACCOUNTS=true`;
-   - deploys to **staging** (staging.proschi.app, with its own D1) and runs
-     `scripts/smoke.mjs` against it;
-   - only then, for production: prints the D1 Time Travel bookmark
+   - when staging is enabled (step 5), deploys to **staging**
+     (staging.proschi.app, with its own D1) and runs `scripts/smoke.mjs`
+     against it;
+   - only then (or straight away without staging), for production: prints the D1 Time Travel bookmark
      (`npm run backup`), applies `migrations/` to D1, deploys the Worker on
      proschi.app (Cloudflare creates the DNS records and certificates) and runs
      the smoke test; when that fails, the log shows how to roll back;
@@ -127,6 +128,12 @@ solve locally either way.
 
    A provider is offered once both of its secrets are set; no redeploy is
    needed.
+5. **Staging (optional).** Once the `proschi-staging` D1 id is in
+   `wrangler.jsonc` and staging's secrets are set, add the repository
+   variable `STAGING_ENABLED` = `true` (GitHub repo → Settings → Secrets and
+   variables → Actions → Variables). From then on every deploy goes to
+   staging first, and a staging deploy or smoke test that fails stops the
+   production deploy. Without the variable, production deploys as before.
 
 With the CLI instead: `npx wrangler login`, `npx wrangler secret put <NAME>`
 (`--env staging` for staging), and, after `VITE_ACCOUNTS=true npm run build`
