@@ -22,6 +22,8 @@ import {
   ChevronDown,
   Download,
   FilePlus,
+  FileText,
+  GraduationCap,
   Image,
   LayoutGrid,
   Link,
@@ -57,6 +59,7 @@ import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import { UseCasePlayer } from '../UseCases/UseCasePlayback';
+import HldView from '../Hld/HldView';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
@@ -111,6 +114,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
   const [showExamples, setShowExamples] = useState(false);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
+  // The diagram pane shows the canvas (or playback), or the generated high-level design.
+  const [showHld, setShowHld] = useState(false);
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -266,6 +271,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
 
   const startPlaying = () => {
     setPlaying(true);
+    setShowHld(false);
     setMobilePane('diagram');
   };
 
@@ -426,6 +432,16 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
         />
 
         <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <a
+            href="../practice/"
+            aria-label="Practice"
+            title="System design practice problems"
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+          >
+            <GraduationCap size={16} />
+            <span className="hidden lg:inline">Practice</span>
+          </a>
+
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"
@@ -483,6 +499,20 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
           )}
 
           <button
+            onClick={() => {
+              setShowHld((on) => !on);
+              setMobilePane('diagram');
+            }}
+            aria-label={showHld ? 'Back to diagram' : 'High-level design'}
+            aria-pressed={showHld}
+            title={showHld ? 'Back to the diagram' : 'The high-level design document generated from this diagram'}
+            className={`inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border ${showHld ? 'border-blue-600 bg-blue-50 text-blue-800' : 'border-gray-300 text-gray-700 hover:bg-gray-50'}`}
+          >
+            <FileText size={16} />
+            <span className="hidden sm:inline">HLD</span>
+          </button>
+
+          <button
             onClick={copyShareLink}
             aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
@@ -504,7 +534,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 ${mobilePane === pane ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
           >
             {pane === 'code' ? <Code2 size={16} /> : <Network size={16} />}
-            {pane === 'code' ? 'Code' : playing ? 'Playback' : 'Diagram'}
+            {pane === 'code' ? 'Code' : showHld ? 'HLD' : playing ? 'Playback' : 'Diagram'}
             {pane === 'code' && problemCount > 0 && (
               <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{problemCount}</span>
             )}
@@ -523,11 +553,13 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
         </section>
 
         <section className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
-          {hasScenarios && useCase && scenario && (
+          {!showHld && hasScenarios && useCase && scenario && (
             <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
           )}
           <div className="flex-1 min-h-0 relative">
-            {playing && playedUseCase ? (
+            {showHld ? (
+              <HldView diagram={diagram} nodes={nodes} edges={edges} />
+            ) : playing && playedUseCase ? (
               <UseCasePlayer
                 useCase={playedUseCase}
                 nodes={nodes}
@@ -559,7 +591,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
                 />
               </ReactFlowProvider>
             )}
-            {nodes.length === 0 && !playing && (
+            {nodes.length === 0 && !playing && !showHld && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-sm text-gray-400">
                   Start typing, e.g. <code className="px-1 bg-gray-100 rounded">api -&gt; db</code>

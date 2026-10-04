@@ -1,4 +1,4 @@
-import { buildSequence, findScenario } from '../dsl/sequence';
+import { buildSequence, findScenario, sequenceMessages } from '../dsl/sequence';
 import {
   formatMs,
   formatPercent,
@@ -70,8 +70,7 @@ function messageList(doc: HldDocument, useCaseId: string, scenarioId: string): s
   if (!found) return '';
   const sequence = buildSequence(found.useCase, found.scenario, doc.diagram.nodes);
   const name = (id: string) => sequence.participants.find((p) => p.id === id)?.name ?? id;
-  const items = sequence.items.flatMap((item) => (item.kind === 'message' ? [item.message] : item.branches.flat()));
-  return `<ol class="messages">${items
+  return `<ol class="messages">${sequenceMessages(sequence.items)
     .map((m) => {
       const arrow = m.kind === 'response' ? '⇠' : m.failed ? '✗→' : m.async ? '⇢' : '→';
       return `<li${m.error ? ' class="error"' : ''}>${e(name(m.from))} ${arrow} ${e(name(m.to))}${m.label ? `: <code>${e(m.label)}</code>` : ''}</li>`;
