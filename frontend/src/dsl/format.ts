@@ -22,8 +22,15 @@ export function format(source: string): string {
 
   tidyBlankLines(entries).forEach((entry) => {
     const last = run[run.length - 1];
-    if (last && (entry.kind !== last.kind || entry.depth !== last.depth || (last.kind === 'connection' && last.continuation.length))) flush();
-    if (entry.kind === 'node' || entry.kind === 'connection') run.push(entry);
+    if (
+      last &&
+      (entry.kind !== last.kind ||
+        entry.depth !== last.depth ||
+        (last.kind === 'connection' && last.continuation.length) ||
+        (last.kind === 'cells' && entry.kind === 'cells' && entry.section !== last.section))
+    )
+      flush();
+    if (entry.kind === 'node' || entry.kind === 'connection' || entry.kind === 'cells') run.push(entry);
     else {
       flush();
       out.push(entry.kind === 'blank' ? '' : indent(entry.depth) + entry.text);
@@ -52,6 +59,8 @@ export function formattedOffset(before: string, after: string, offset: number): 
 const INDENT = '  ';
 /** Words that start a statement other than a node declaration. */
 const KEYWORDS = new Set(['title', 'import', 'group', 'usecase', 'par', 'alt']);
+/** Sections whose lines are laid out in aligned columns. */
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
 
 interface Base {
   depth: number;
@@ -77,6 +86,17 @@ interface ConnectionEntry extends Base {
   continuation: string[];
 }
 
+/**
+ * A line inside a section whose parts line up in columns: traffic (use case,
+ * rate, mix), capacity (node, overrides) and entity fields (name, type,
+ * flags). Every cell but the last is padded.
+ */
+interface CellsEntry extends Base {
+  kind: 'cells';
+  section: Section;
+  cells: string[];
+}
+
 /** Any other line, written out as is at its depth. */
 interface LineEntry {
   kind: 'line' | 'blank';
@@ -87,11 +107,13 @@ interface LineEntry {
   closes?: boolean;
 }
 
-type Entry = NodeEntry | ConnectionEntry | LineEntry;
+type Entry = NodeEntry | ConnectionEntry | CellsEntry | LineEntry;
 
 function classify(lines: string[]): Entry[] {
   const entries: Entry[] = [];
   let depth = 0;
+  /** The top-level section block the line is in, if any. */
+  let section: Section | undefined;
 
   for (let i = 0; i < lines.length; i++) {
     const raw = lines[i];
@@ -112,8 +134,16 @@ function classify(lines: string[]): Entry[] {
     const base = { depth, original, tokens, comment };
     const [first, second, third, fourth] = tokens;
 
+    // Lines of a section are never nodes or connections (the parser reads them by the section's rules).
+    const inSection = section !== undefined && depth === 1 && first.kind !== 'rbrace';
+    const cells = inSection ? sectionCells(section!, raw, tokens) : undefined;
+    if (cells) {
+      entries.push({ ...base, kind: 'cells', section: section!, cells });
+      continue;
+    }
+
     // Same shape test as the parser, so multi-line payloads are found the same way.
-    if (first.kind === 'ident' && second?.kind === 'arrow' && third?.kind === 'ident' && tokens.length <= 4 && (!fourth || fourth.kind === 'label')) {
+    if (!inSection && first.kind === 'ident' && second?.kind === 'arrow' && third?.kind === 'ident' && tokens.length <= 4 && (!fourth || fourth.kind === 'label')) {
       const entry: ConnectionEntry = { ...base, kind: 'connection', from: first.value, arrow: second.value, to: third.value, label: fourth?.value, continuation: [] };
       if (fourth && bracketDepth(fourth.value) > 0) {
         // The payload continues until its brackets balance; keep its own indentation relative to the step.
@@ -131,7 +161,8 @@ function classify(lines: string[]): Entry[] {
       continue;
     }
 
-    if (first.kind === 'ident' && !KEYWORDS.has(first.value) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma'].includes(t.kind))) {
+    const oneLineDecision = first.value === 'decision' && second?.kind === 'string' && third?.kind === 'ident' && third.value === 'because';
+    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma'].includes(t.kind))) {
       let k = 1;
       const take = (kind: Token['kind']) => (tokens[k]?.kind === kind ? source(raw, tokens[k++]) : '');
       const cells: NodeEntry['cells'] = [first.value, take('string'), take('tech'), take('team'), join(raw, tokens.slice(k))];
@@ -144,10 +175,48 @@ function classify(lines: string[]): Entry[] {
     const code = join(raw, tokens);
     const text = withComment(code, comment);
     entries.push({ kind: 'line', depth: Math.max(0, depth - (closes ? 1 : 0)), text: sameTokens(text, tokens) ? text : original, opens, closes });
+    if (depth === 0) section = sectionOpenedBy(tokens);
     for (const t of tokens) depth = Math.max(0, depth + (t.kind === 'lbrace' ? 1 : t.kind === 'rbrace' ? -1 : 0));
+    if (depth === 0) section = undefined;
   }
 
   return entries;
+}
+
+/** The section a top-level line opens, recognised by the same shapes as the parser. */
+function sectionOpenedBy(tokens: Token[]): Section | undefined {
+  const [first, second] = tokens;
+  if (first.kind !== 'ident' || tokens[tokens.length - 1].kind !== 'lbrace') return undefined;
+  switch (first.value) {
+    case 'traffic':
+    case 'requirements':
+    case 'capacity':
+      return second?.kind === 'lbrace' ? first.value : undefined;
+    case 'entity':
+      return second?.kind === 'ident' ? 'entity' : undefined;
+    case 'decision':
+    case 'test':
+      return second?.kind === 'string' ? first.value : undefined;
+    default:
+      return undefined;
+  }
+}
+
+/** The columns of a section line, or undefined to write it as a plain line. */
+function sectionCells(section: Section, raw: string, tokens: Token[]): string[] | undefined {
+  const [first, second] = tokens;
+  if (tokens.some((t) => t.kind === 'lbrace' || t.kind === 'rbrace' || t.kind === 'arrow' || t.kind === 'label')) return undefined;
+  const rest = (from: number) => (tokens.length > from ? [join(raw, tokens.slice(from))] : []);
+  switch (section) {
+    case 'traffic':
+      return first.kind === 'string' && (second?.kind === 'quantity' || second?.kind === 'number') ? [source(raw, first), source(raw, second), ...rest(2)] : undefined;
+    case 'capacity':
+      return first.kind === 'ident' && tokens.length > 1 ? [first.value, ...rest(1)] : undefined;
+    case 'entity':
+      return first.kind === 'ident' && second?.kind === 'ident' ? [first.value, second.value, ...rest(2)] : undefined;
+    default:
+      return undefined;
+  }
 }
 
 /** Drops blank lines at the ends, after `{`, before `}` and after another blank line. */
@@ -169,8 +238,9 @@ function tidyBlankLines(entries: Entry[]): Entry[] {
 
 /** Lays out a run of node declarations or connections at one depth, with aligned columns. */
 function renderRun(run: Entry[]): string[] {
-  const codes = run[0].kind === 'node' ? alignNodes(run as NodeEntry[]) : alignConnections(run as ConnectionEntry[]);
-  const items = run as (NodeEntry | ConnectionEntry)[];
+  const codes =
+    run[0].kind === 'node' ? alignNodes(run as NodeEntry[]) : run[0].kind === 'cells' ? alignCells(run as CellsEntry[]) : alignConnections(run as ConnectionEntry[]);
+  const items = run as (NodeEntry | ConnectionEntry | CellsEntry)[];
 
   // Trailing comments line up when more than one line of the run has one.
   const commented = items.filter((e) => e.comment);
@@ -192,6 +262,13 @@ function alignNodes(run: NodeEntry[]): string[] {
     for (let c = 0; c < columns; c++) if (widths[c]) line += pad(cells[c], widths[c] + 1);
     return (line + cells[4]).trimEnd();
   });
+}
+
+/** Pads every cell but a row's last to the widest cell of its column. */
+function alignCells(run: CellsEntry[]): string[] {
+  const widths: number[] = [];
+  for (const { cells } of run) cells.slice(0, -1).forEach((c, i) => (widths[i] = Math.max(widths[i] ?? 0, len(c))));
+  return run.map(({ cells }) => cells.map((c, i) => (i < cells.length - 1 ? pad(c, widths[i] + 1) : c)).join(''));
 }
 
 /** `from` and the arrow are right-aligned, so targets start in one column; then ` : label`. */
@@ -216,12 +293,12 @@ function commentOf(raw: string, tokens: Token[]): string {
   return raw.slice(last.col - 1 + last.length).trim();
 }
 
-/** Tokens as written, one space apart; `x,y` stays tight and a label is `: text`. */
+/** Tokens as written, one space apart; `x,y` stays tight, other commas are followed by a space, and a label is `: text`. */
 function join(raw: string, tokens: Token[]): string {
   let out = '';
   for (const [i, t] of tokens.entries()) {
     const text = t.kind === 'label' ? ':' + (t.value ? ' ' + t.value : '') : source(raw, t);
-    const tight = t.kind === 'comma' || tokens[i - 1]?.kind === 'comma';
+    const tight = t.kind === 'comma' || (tokens[i - 1]?.kind === 'comma' && t.kind === 'number');
     out += (i === 0 || tight ? '' : ' ') + text;
   }
   return out;
@@ -240,7 +317,11 @@ function reindent(line: string, delta: number): string {
   return body ? ' '.repeat(Math.max(0, width(lead) + delta)) + body : '';
 }
 
-const source = (raw: string, t: Token) => raw.slice(t.col - 1, t.col - 1 + t.length);
+/** A token as written; the space inside a quantity such as `100k   rps` becomes one. */
+const source = (raw: string, t: Token) => {
+  const text = raw.slice(t.col - 1, t.col - 1 + t.length);
+  return t.kind === 'quantity' ? text.replace(/[ \t]+/g, ' ') : text;
+};
 const withComment = (code: string, comment: string) => (comment ? code + ' ' + comment : code);
 const leadingSpace = (line: string) => /^[ \t]*/.exec(line)![0];
 /** Columns of leading whitespace; a tab counts as one indentation step. */

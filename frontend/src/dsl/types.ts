@@ -116,6 +116,12 @@ export type Kind =
   | 'external'
   | 'other';
 
+/** A quantity after unit normalisation: rates in requests per second, durations in milliseconds. */
+export interface Quantity {
+  value: number;
+  unit: 'rps' | 'ms' | '%' | 'usd/month';
+}
+
 /** A node id, an exact tech stack, or every node of a kind (`any cache`). */
 export type Selector = { node: string } | { tech: string } | { kind: Kind };
 

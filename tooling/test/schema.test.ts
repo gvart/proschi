@@ -32,6 +32,52 @@ describe('JSON Schema', () => {
     expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
   });
 
+  it('describes every requirement, assertion and selector', () => {
+    const source = [
+      'title "T" "Summary"',
+      'api [REST API] x2',
+      'db [PostgreSQL]',
+      'usecase "U" {',
+      '  api -> db : x',
+      '}',
+      'traffic {',
+      '  "U" 10 rps mix "U" 50%',
+      '}',
+      'requirements {',
+      '  p999 "U" < 1s',
+      '  availability >= 99%',
+      '  durable "U"',
+      '  survive any node failure',
+      '  survive failure of [Redis]',
+      '  cost <= 10 usd/month',
+      '}',
+      'capacity {',
+      '  db 1k rps latency 2ms availability 99.9% cost 5 usd/month volatile',
+      '}',
+      'entity E in db "d" {',
+      '  id uuid key unique',
+      '}',
+      'decision "D" {',
+      '  because "b"',
+      '  rejected "o" "r"',
+      '}',
+      'test "All" {',
+      '  "U" calls any database',
+      '  "U" scenario "U" every scenario calls db',
+      '  "U" calls api before [PostgreSQL]',
+      '  "U" writes db before responding',
+      '  "U" responds 2xx',
+      '  "U" has scenario "X"',
+      '  "U" handles failure of db',
+      '  no path from api to any cache',
+      '  any service has replicas >= 2',
+      '}',
+    ].join('\n');
+    const result = JSON.parse(JSON.stringify(parse(source)));
+    expect(result.diagram.tests[0].assertions).toHaveLength(9);
+    expect(validate(result), JSON.stringify(validate.errors, null, 2)).toBe(true);
+  });
+
   it('rejects fields it does not know', () => {
     const result = JSON.parse(JSON.stringify(parse('a -> b')));
     result.diagram.nodes[0].colour = 'red';

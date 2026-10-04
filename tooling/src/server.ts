@@ -206,7 +206,18 @@ connection.onReferences((params) => {
   return references(analysisOf(doc), params.position).map((range) => ({ uri: params.textDocument.uri, range }));
 });
 
-const SYMBOL_KIND = { node: SymbolKind.Object, group: SymbolKind.Namespace, usecase: SymbolKind.Function, scenario: SymbolKind.Event };
+const SYMBOL_KIND: Record<OutlineSymbol['kind'], SymbolKind> = {
+  node: SymbolKind.Object,
+  group: SymbolKind.Namespace,
+  usecase: SymbolKind.Function,
+  scenario: SymbolKind.Event,
+  section: SymbolKind.Module,
+  traffic: SymbolKind.Property,
+  requirement: SymbolKind.Constant,
+  entity: SymbolKind.Struct,
+  decision: SymbolKind.Key,
+  test: SymbolKind.Method,
+};
 
 function toSymbol(s: OutlineSymbol): DocumentSymbol {
   return { name: s.name, detail: s.detail, kind: SYMBOL_KIND[s.kind], range: s.range, selectionRange: s.range, children: s.children.map(toSymbol) };
