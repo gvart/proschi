@@ -8,7 +8,7 @@ traffic {
 }
 
 requirements {
-  p99 "Redirect" < 100ms
+  p99 "Redirect" < 50ms
   p99 "Shorten" < 200ms
   availability "Redirect" >= 99.9%
   durable "Shorten"

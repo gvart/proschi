@@ -1,5 +1,5 @@
 # expect-fail: File bytes never pass through your servers
-# expect-fail: p99 of Upload < 450 ms
+# expect-fail: p99 of Upload < 220 ms
 # Fails an upload proxied through the API: the bytes pass a server, and the extra hops miss the latency.
 import "problem.proschi"
 

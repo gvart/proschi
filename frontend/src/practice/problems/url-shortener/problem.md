@@ -5,7 +5,7 @@ difficulty: easy
 tags: [caching, read-heavy, durability]
 hints:
   - Redirects outnumber shortening 100 to 1. What can answer a redirect without touching the database?
-  - "On a miss, read the database, then SET the code in the cache (->> is fine), so the next visitor hits. p99 is decided by the slowest scenario that carries at least 1% of traffic: the cache miss path counts."
+  - "On a miss, read the database, then SET the code in the cache (->> is fine), so the next visitor hits. p99 is taken over all redirects, hits and misses mixed by their share: the 10% of misses decide it."
   - "One instance of anything is a single point of failure: use x2 or more on every component."
   - A REST API handles about 2k rps per replica in the simulation; size the API so it stays well below 70% busy.
 ---
@@ -31,7 +31,7 @@ tests in `problem.proschi` refer to them.
 
 ## Constraints
 
-- p99 of a redirect under **100 ms**, of shortening under **200 ms**.
+- p99 of a redirect under **50 ms**, of shortening under **200 ms**.
 - Redirects available **99.9%** of the time.
 - A short code is never lost once it was returned to the visitor: it is
   written (`INSERT`, `PutItem`, …) to a database before the answer.

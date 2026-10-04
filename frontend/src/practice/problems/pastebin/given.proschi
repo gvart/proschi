@@ -8,7 +8,7 @@ traffic {
 }
 
 requirements {
-  p99 "Read paste" < 200ms
+  p99 "Read paste" < 100ms
   p99 "Create paste" < 300ms
   p99 "Read paste" scenario "Cached" < 30ms
   availability "Read paste" >= 99.9%

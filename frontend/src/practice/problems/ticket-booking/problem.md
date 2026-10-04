@@ -55,7 +55,7 @@ Use these names exactly: the traffic, requirements and tests in
 - A fan is never charged without a valid hold, and a seat is booked only
   after its payment was approved. The booking is a write that comes after the
   payment, even though the same store was read to check the hold before it.
-- p99 of a seat map under **150 ms**, of a hold under **200 ms**, of a
+- p99 of a seat map under **50 ms**, of a hold under **130 ms**, of a
   confirmation under **1.5 s** (the payment provider takes about 250 ms).
 - Holds and bookings are stored durably before the fan hears back.
 - Losing any single machine must not stop the sale.

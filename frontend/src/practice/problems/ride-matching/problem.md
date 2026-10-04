@@ -39,7 +39,7 @@ tests in `problem.proschi` refer to them.
 
 ## Constraints
 
-- p99 of a location update under **150 ms**; of a ride request under
+- p99 of a location update under **50 ms**; of a ride request under
   **300 ms**.
 - Ride requests available **99.9%** of the time.
 - A trip is never lost once the rider was told about it, and it lives in a

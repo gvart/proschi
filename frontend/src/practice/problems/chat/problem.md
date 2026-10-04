@@ -39,7 +39,7 @@ tests in `problem.proschi` refer to them.
 
 ## Constraints
 
-- p99 of sending (until the ack) under **150 ms**, of loading history under
+- p99 of sending (until the ack) under **100 ms**, of loading history under
   **200 ms**.
 - Sending available **99.95%** of the time.
 - The ack is a promise: a message is never lost once the sender saw it.

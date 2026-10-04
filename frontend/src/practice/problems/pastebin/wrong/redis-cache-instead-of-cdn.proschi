@@ -33,9 +33,9 @@ decision "Text in object storage, metadata in PostgreSQL" {
   rejected "Text in the database" "Bloats every row, backups and replicas with megabytes nobody queries"
 }
 decision "Serve reads through a CDN" {
-  because "A shared link is opened by many readers within minutes; the edge answers 90% of reads in a few milliseconds without touching the API, and its egress costs $0.02/GB instead of $0.09/GB from S3"
+  because "A shared link is opened by many readers within minutes; the edge answers 90% of reads in a few milliseconds without touching the API, and the text it sends to readers costs $0.02/GB instead of the $0.09/GB the API would pay"
   rejected "Redis behind the API" "Every read still crosses the load balancer and the API: too slow for 30 ms at p99, and the API must take all 5k rps"
-  rejected "Serve every read from S3" "130 TB a month at $0.09/GB is over $11,000 of egress"
+  rejected "Serve every read from S3" "Every read waits for the API, the database and S3: about 200 ms at p99 instead of 80, and S3 runs at half its request rate"
 }
 decision "Short CDN lifetime" because "Caching for 5 minutes keeps an expired paste visible for at most 5 minutes past its expiry"
 

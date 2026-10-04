@@ -1,4 +1,4 @@
-# expect-fail: p99 of Hold seat < 200 ms
+# expect-fail: p99 of Hold seat < 130 ms
 # Scales the relational database with read replicas instead of shards.
 import "problem.proschi"
 

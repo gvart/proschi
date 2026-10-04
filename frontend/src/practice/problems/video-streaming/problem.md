@@ -6,7 +6,7 @@ tags: [cdn, object-storage, queues, async, bandwidth, cost]
 hints:
   - A minute of transcoding cannot happen while the creator waits. What can hold the work until a transcoder is free, and who knows when the original has actually landed?
   - A 2 GB file over a 10 MB/s connection takes minutes. Let the API only record the video and hand out a presigned URL; the creator PUTs the file to object storage after the API has answered, and storage announces the new object on a queue (bucket ->> jobs). "Transcode video" starts at that queue.
-  - "Put the sizes on the steps (~2GB on the upload, ~4MB on segment downloads) and look at the cost: 10k segments a second is about 100 PB a month. At $0.09/GB from storage that blows the budget; at $0.02/GB from a CDN it fits."
+  - "Put the sizes on the steps (~2GB on the upload, ~4MB on segment downloads) and look at the cost: 10k segments a second is about 100 PB a month. At $0.09/GB sent from storage (or a load balancer) that blows the budget; at $0.02/GB from a CDN it fits."
   - "Segments never change once written, so a CDN in front of the bucket serves 99% of them; the bucket is only the origin for misses. A load balancer in front of storage does not help: the bytes still leave storage."
 ---
 
@@ -46,8 +46,9 @@ Use these names exactly: the traffic, requirements and tests in
 
 Write the payload sizes on the steps that carry them: `~2GB` on the
 creator's upload and `~4MB` on every segment download (`~4MB GET
-/hls/…`). They add transfer time, and bytes served from object storage or a
-CDN cost **egress**: $0.09 per GB from storage, $0.02 per GB from a CDN.
+/hls/…`). They add transfer time, and bytes sent to viewers cost
+**egress**: $0.09 per GB from storage or anything else you run, $0.02 per GB
+from a CDN.
 Copies inside the region (the transcoder reading the original, a CDN filling
 from storage aside) are left without a size here.
 
@@ -58,8 +59,8 @@ from storage aside) are left without a size here.
 - The video is recorded durably before the creator gets the upload URL.
 - No server of yours touches the video bytes on the way in: the creator
   uploads to storage directly.
-- p99 of opening a video under **150 ms**; a 4-second segment must arrive in
-  well under its own length: p99 under **2 s**, the transfer included.
+- p99 of opening a video under **75 ms**; a 4-second segment must arrive in
+  well under its own length: p99 under **600 ms**, the transfer included.
 - Streaming available **99.99%** of the time.
 - Losing any single machine must not stop uploads or playback.
 - At most **$2.5M / month**, bandwidth and the transcoding fleet included.

@@ -13,8 +13,8 @@ traffic {
 requirements {
   p99 "List files" < 200ms
   p99 "Start upload" < 200ms
-  p99 "Upload" < 450ms
-  p99 "Download" < 500ms
+  p99 "Upload" < 220ms
+  p99 "Download" < 200ms
   availability >= 99.9%
   durable "Start upload"
   durable "Upload"

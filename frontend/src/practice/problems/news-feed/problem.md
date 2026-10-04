@@ -38,7 +38,7 @@ Use these use case names exactly: the traffic, requirements and tests in
 
 ## Constraints
 
-- p99 of reading the feed under **100 ms**, of publishing under **150 ms**.
+- p99 of reading the feed under **50 ms**, of publishing under **90 ms**.
 - Reading the feed available **99.9%** of the time.
 - A post is never lost once the user got `201`, and no feed ever shows a
   post that was not stored.
