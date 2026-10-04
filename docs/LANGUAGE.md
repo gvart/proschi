@@ -422,7 +422,7 @@ test "Clients only enter through the gateway" {
 | `U [scenario S] responds <status>` | some scenario's entry response has that status (`201`, or a class `2xx`/`4xx`/`5xx`) |
 | `U has scenario S` | the scenario exists |
 | `U handles failure of X` | some success scenario of U contains a failed call (`-x`) to X |
-| `no path from X to Y` | no chain of architecture connections leads from a node matching X to one matching Y |
+| `no path from X to Y` | no connection or step goes directly from a node matching X to a node matching Y |
 | `X has replicas >= <n>` | every node matching X has at least n replicas |
 
 `U` and `S` are a use case and a scenario name in quotes. Order in a scenario

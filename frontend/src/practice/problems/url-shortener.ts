@@ -83,13 +83,13 @@ usecase "Shorten" {
 
 lb    "Load Balancer" [AWS Load Balancer] x2
 api   "Shortener API" [REST API]          x12 @links "Creates codes and serves redirects"
-cache "Code Cache"    [Redis]             x2  @links "Recently opened codes and their targets"
-db    "Links DB"      [DynamoDB]          x2  @links "Every code and its target"
+cache "Code Cache"    [Redis]             x2 @links "Recently opened codes and their targets"
+db    "Links DB"      [DynamoDB]          x2 @links "Every code and its target"
 
 visitor -> lb
-lb  -> api   : HTTPS
-api -> cache : GET / SET
-api -> db    : read / write
+lb      -> api   : HTTPS
+api     -> cache : GET / SET
+api     -> db    : read / write
 
 entity Url in db "One short code and where it points" {
   code      string key
@@ -104,11 +104,11 @@ decision "Cache redirects in Redis" {
 decision "Base62 codes from a counter" because "Short, unique, no collisions to retry"
 
 usecase "Shorten" "Create a short code for a long URL" {
-  visitor -> lb  : POST /links json {"target": "https://example.com/a/long/path"}
-  lb      -> api : POST /links
-  api     -> db  : PutItem Url
-  db     --> api : ok
-  api    --> lb  : 201 {"code": "aZ3x9"}
+  visitor -> lb      : POST /links json {"target": "https://example.com/a/long/path"}
+  lb      -> api     : POST /links
+  api     -> db      : PutItem Url
+  db     --> api     : ok
+  api    --> lb      : 201 {"code": "aZ3x9"}
   lb     --> visitor : 201 {"code": "aZ3x9"}
 }
 
@@ -120,9 +120,9 @@ usecase "Redirect" "Send a visitor to the target of a code" {
   alt "Cache hit" when "the code was opened recently" {
     cache --> api : target
   } alt "Cache miss" when "the code is not cached" {
-    cache --> api : nil
-    api    -> db  : GetItem Url
-    db    --> api : target
+    cache --> api   : nil
+    api    -> db    : GetItem Url
+    db    --> api   : target
     api   ->> cache : SET code:aZ3x9
   }
   api --> lb      : 302 Location

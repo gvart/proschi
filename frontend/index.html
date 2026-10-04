@@ -413,10 +413,114 @@ orders  -&gt; events   : publish</code></pre>
         </div>
       </section>
 
-      <section class="section" aria-labelledby="examples-title">
+      <section class="section" aria-labelledby="practice-title">
         <div class="wrap">
           <header class="section__head">
             <p class="section__no">03</p>
+            <h2 id="practice-title">Practice system design</h2>
+          </header>
+          <p class="section__intro">
+            Like LeetCode, for system design. Each problem gives you use cases, traffic and requirements; you design the
+            system in Proschi and press <strong>Run tests</strong>. The simulation checks latency under load, availability
+            when any node fails, durability and cost, and flow tests check the key idea, each with the measured value and a
+            hint when it fails. Everything runs in your browser.
+          </p>
+          <ul class="examples">
+            <li>
+              <a class="example" href="./practice/#/pastebin">
+                <span class="example__name">Pastebin <span class="tag">easy</span></span>
+                <span class="example__desc">Object storage for bodies, a CDN for hot reads.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/rate-limiter">
+                <span class="example__name">Rate Limiter <span class="tag">easy</span></span>
+                <span class="example__desc">Reject over-limit callers before they reach the service.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/url-shortener">
+                <span class="example__name">URL Shortener <span class="tag">easy</span></span>
+                <span class="example__desc">Cache-first redirects with a fallback when Redis is down.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/chat">
+                <span class="example__name">Chat <span class="tag">medium</span></span>
+                <span class="example__desc">Store before the ack, then deliver over pub/sub or push.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/file-storage">
+                <span class="example__name">File Storage <span class="tag">medium</span></span>
+                <span class="example__desc">Pre-signed uploads: the API never touches the bytes.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/news-feed">
+                <span class="example__name">News Feed <span class="tag">medium</span></span>
+                <span class="example__desc">Fan out on write through a queue into feed caches.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/notification-fanout">
+                <span class="example__name">Notification Fan-out <span class="tag">medium</span></span>
+                <span class="example__desc">Queue it, check preferences, fail over between providers.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/ride-matching">
+                <span class="example__name">Ride Matching <span class="tag">medium</span></span>
+                <span class="example__desc">100k location updates per second into a geo store, not a database.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/search-autocomplete">
+                <span class="example__name">Search Autocomplete <span class="tag">medium</span></span>
+                <span class="example__desc">Precomputed suggestions at the edge, rebuilt asynchronously.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/payments">
+                <span class="example__name">Payments with Idempotency <span class="tag tag--error">hard</span></span>
+                <span class="example__desc">Write the intent before the charge; replays never charge twice.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/ticket-booking">
+                <span class="example__name">Ticket Booking without Double-Booking <span class="tag tag--error">hard</span></span>
+                <span class="example__desc">The database decides holds; the cache only shows seat maps.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+            <li>
+              <a class="example" href="./practice/#/video-streaming">
+                <span class="example__name">Video Upload and Streaming <span class="tag tag--error">hard</span></span>
+                <span class="example__desc">Asynchronous transcoding and a CDN in front of storage.</span>
+                <span class="example__go" aria-hidden="true">Solve →</span>
+              </a>
+            </li>
+          </ul>
+          <div class="closing">
+            <a class="btn" href="./practice/">Start practising</a>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" aria-labelledby="examples-title">
+        <div class="wrap">
+          <header class="section__head">
+            <p class="section__no">04</p>
             <h2 id="examples-title">Examples</h2>
           </header>
           <p class="section__intro">Each link opens the editor with the example loaded. Edit it as much as you like; your copy stays in your browser.</p>
