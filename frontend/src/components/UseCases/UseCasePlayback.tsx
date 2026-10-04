@@ -56,7 +56,10 @@ interface UseCasePlayerProps {
   onStepChange?: (index: number) => void;
   /** Hide the title bar when the host already shows the use case and a way back. */
   showHeader?: boolean;
-  /** Plays while true: starts when it becomes true, pauses when it turns false. */
+  /**
+   * Plays while true: from the moment it opens (e.g. after a Play button outside
+   * it was pressed), and again whenever it turns true; pauses when it turns false.
+   */
   autoPlay?: boolean;
   /** Called once playback reaches the end of the last step (not when looping). */
   onFinished?: () => void;
@@ -143,8 +146,9 @@ function UseCasePlayerContent({
     const start = useCaseKey === firstUseCaseKeyRef.current ? (initialStep ?? 0) : 0;
     setCurrentStepIndex(Math.min(Math.max(start, 0), Math.max(useCase.steps.length - 1, 0)));
     setAnimationProgress(0);
-    setIsPlaying(autoPlayRef.current);
-    if (autoPlayRef.current) startAnimation();
+    const play = autoPlayRef.current && useCase.steps.length > 0;
+    setIsPlaying(play);
+    if (play) startAnimation();
     else if (animationIntervalRef.current) clearInterval(animationIntervalRef.current);
     // initialStep only matters for the first use case; edits keep the current step.
     // eslint-disable-next-line react-hooks/exhaustive-deps

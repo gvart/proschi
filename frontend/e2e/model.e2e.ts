@@ -14,7 +14,7 @@ test.describe('simulation page', () => {
   test('explains the model and is linked from the landing page', async ({ page }) => {
     await page.goto('./');
     await page.getByRole('contentinfo').getByRole('link', { name: 'How the simulation works' }).click();
-    await expect(page).toHaveURL(/\/proschi\/model\/$/);
+    await expect(page).toHaveURL(/\/proschi\/docs\/model\/$/);
     await expect(page).toHaveTitle(/How the simulation works/);
     await expect(modelHeading(page)).toBeVisible();
 
@@ -33,10 +33,16 @@ test.describe('simulation page', () => {
     await expect(page).toHaveURL(/\/proschi\/practice\/$/);
   });
 
+  test('its old address forwards to the docs, keeping the section', async ({ page }) => {
+    await page.goto('model/#practice');
+    await expect(page).toHaveURL(/\/proschi\/docs\/model\/#practice$/);
+    await expect(page.getByRole('heading', { level: 2, name: 'Practice verdicts' })).toBeInViewport();
+  });
+
   test('fits a phone screen', async ({ browser }) => {
     const context = await browser.newContext({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
     const page = await context.newPage();
-    await page.goto('model/');
+    await page.goto('docs/model/');
     await expect(modelHeading(page)).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
     expect(overflow).toBeLessThanOrEqual(0);
@@ -53,20 +59,20 @@ test.describe('simulation page', () => {
     await views.getByRole('tab', { name: 'Analysis' }).click();
     await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
     const fromAnalysis = await openInNewTab(page, () => page.getByRole('link', { name: 'How is this calculated?' }).click());
-    await expect(fromAnalysis).toHaveURL(/\/proschi\/model\/$/);
+    await expect(fromAnalysis).toHaveURL(/\/proschi\/docs\/model\/$/);
     await expect(modelHeading(fromAnalysis)).toBeVisible();
     await fromAnalysis.close();
 
     await views.getByRole('tab', { name: /Tests/ }).click();
     await expect(page.getByText(/^(All \d+ passing|\d+ of \d+ failing)$/)).toBeVisible();
-    await expect(page.getByRole('link', { name: 'How is this calculated?' })).toHaveAttribute('href', '../model/');
+    await expect(page.getByRole('link', { name: 'How is this calculated?' })).toHaveAttribute('href', '../docs/model/');
 
     await page.goto('practice/#/url-shortener');
     await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
     const fromPractice = await openInNewTab(page, () => page.getByRole('link', { name: 'How is this calculated?' }).click());
-    await expect(fromPractice).toHaveURL(/\/proschi\/model\/#practice$/);
+    await expect(fromPractice).toHaveURL(/\/proschi\/docs\/model\/#practice$/);
     await expect(fromPractice.getByRole('heading', { level: 2, name: 'Practice verdicts' })).toBeInViewport();
   });
 });

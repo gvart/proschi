@@ -58,7 +58,7 @@ test "Notes are stored before they are returned" {
 - **HLD and simulation**: traffic, requirements, replicas, shards, capacity,
   entities and decisions turn a diagram into a high-level design document; the
   simulation computes load, latency, availability and cost per node and runs
-  your requirements and tests. [How the simulation works](https://proschi.app/model/)
+  your requirements and tests. [How the simulation works](https://proschi.app/docs/model/)
   lists its formulas, its default numbers and what it leaves out.
 - **Practice**: system design problems (URL shortener, payments, chat, video
   streaming and more) whose tests tell you in the browser whether your design
@@ -78,7 +78,8 @@ test "Notes are stored before they are returned" {
 | Website | <https://proschi.app/> |
 | Editor | <https://proschi.app/app/> |
 | Practice | <https://proschi.app/practice/> |
-| How the simulation works | <https://proschi.app/model/> |
+| Docs, with a 2-minute quickstart | <https://proschi.app/docs/> |
+| How the simulation works | <https://proschi.app/docs/model/> |
 | npm package (CLI and language server) | [`proschi`](https://www.npmjs.com/package/proschi) |
 | VS Code extension (`.vsix`) | [GitHub releases](https://github.com/gvart/proschi/releases) |
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |

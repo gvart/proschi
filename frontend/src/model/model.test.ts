@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import modelHtml from '../../model/index.html?raw';
+import modelHtml from '../docs/model.html?raw';
 import { parse } from '../dsl/parser';
 import { pinResolver } from './pins';
 
@@ -64,13 +64,8 @@ describe('simulation page', () => {
     expect(wrong).toEqual([]);
   });
 
-  it('keeps the landing page’s content security policy, without its inline styles', () => {
-    const csp = (html: string) => /http-equiv="%VITE_CSP_HTTP_EQUIV%"\s+content="([^"]+)"/.exec(html)?.[1];
-    return import('../../index.html?raw').then(({ default: landing }) => {
-      expect(csp(modelHtml)).toBeDefined();
-      // The landing page allows inline styles for its live demo (the editor); this page has no editor.
-      expect(csp(modelHtml)).toBe(csp(landing)?.replace("style-src 'self' 'unsafe-inline'", "style-src 'self'"));
-      expect(modelHtml).toContain('<meta name="referrer" content="strict-origin-when-cross-origin" />');
-    });
+  it('is a fragment for the docs layout (plugins/docsSite.ts), which brings the page around it', () => {
+    expect(modelHtml).not.toMatch(/<(html|head|body|main|script)\b/);
+    expect(modelHtml.match(/<h1\b/g)).toHaveLength(1);
   });
 });

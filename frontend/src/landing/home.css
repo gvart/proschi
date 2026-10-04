@@ -258,14 +258,15 @@ h3 {
 .hero__demo {
   position: relative;
   min-width: 0;
+  margin-top: 18px;
 }
 /* A sticker on the window: it is the real thing. */
 .hero__demo::before {
   content: 'Live · try it';
   position: absolute;
   z-index: 3;
-  top: -16px;
-  right: 18px;
+  top: -30px;
+  left: 50%;
   padding: 6px 12px;
   background: rgb(var(--c-pink));
   color: rgb(var(--c-on-accent));
@@ -276,7 +277,8 @@ h3 {
   font-stretch: 112%;
   letter-spacing: 0.02em;
   text-transform: uppercase;
-  transform: rotate(4deg);
+  /* Above the window's title bar, clear of the file name and the step pills. */
+  transform: translateX(-50%) rotate(-3deg);
   pointer-events: none;
 }
 

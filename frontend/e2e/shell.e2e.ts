@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 
 /** The site's own pages; the header is the same on each, the footer on those that have one. */
-const PAGES = ['./', 'model/', 'app/', 'practice/'];
+const PAGES = ['./', 'docs/', 'app/', 'practice/'];
 
 const theme = (page: Page) => page.evaluate(() => document.documentElement.dataset.theme);
 const toggle = (page: Page) => page.locator('.ps-header').getByRole('button', { name: /^Theme:/ });
@@ -35,7 +35,7 @@ test.describe('shared header and footer', () => {
     await expect(toggle(page)).toHaveAttribute('data-pref', 'dark');
 
     // Applied before any module script runs on the next page (no flash of the wrong theme).
-    await page.goto('model/', { waitUntil: 'commit' });
+    await page.goto('docs/', { waitUntil: 'commit' });
     await page.waitForFunction(() => document.documentElement.dataset.theme !== undefined);
     expect(await theme(page)).toBe('dark');
     await page.goto('app/');

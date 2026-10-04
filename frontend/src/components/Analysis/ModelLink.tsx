@@ -2,7 +2,7 @@
 export default function ModelLink({ className = '' }: { className?: string }) {
   return (
     <p className={`text-right text-xs ${className}`}>
-      <a href="../model/" target="_blank" rel="noopener" className="text-blue-700 hover:underline">
+      <a href="../docs/model/" target="_blank" rel="noopener" className="text-blue-700 hover:underline">
         How is this calculated?
       </a>
     </p>

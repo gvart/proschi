@@ -66,7 +66,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
         {run && run.results.length > 0 && (
           <p className="px-3 pt-2 text-xs text-gray-500">
             Verdicts come from a deterministic model of your design, not a load test.{' '}
-            <a href="../model/#practice" target="_blank" rel="noopener" className="text-blue-700 hover:underline">
+            <a href="../docs/model/#practice" target="_blank" rel="noopener" className="text-blue-700 hover:underline">
               How is this calculated?
             </a>
           </p>
