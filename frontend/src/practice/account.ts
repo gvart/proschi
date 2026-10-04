@@ -1,4 +1,4 @@
-import type { ServerProgress } from '../services/api';
+import type { ProviderId, ServerProgress } from '../services/api';
 import type { Progress, Status } from './progress';
 
 /**
@@ -7,12 +7,30 @@ import type { Progress, Status } from './progress';
  * progress stays in the browser.
  */
 
-/** The sign-in error the API appended to the page URL (`login_error`), and the URL without it, to put back in the address bar. */
-export function takeLoginError(href: string): { error?: string; cleanUrl: string } {
+/**
+ * The sign-in error (`login_error`) or linked provider (`linked`) the API
+ * appended to the page URL, and the URL without them, to put back in the
+ * address bar.
+ */
+export function takeLoginError(href: string): { error?: string; linked?: string; cleanUrl: string } {
   const url = new URL(href);
   const error = url.searchParams.get('login_error') ?? undefined;
+  const linked = url.searchParams.get('linked') ?? undefined;
   url.searchParams.delete('login_error');
-  return { ...(error ? { error } : {}), cleanUrl: url.toString() };
+  url.searchParams.delete('linked');
+  return { ...(error ? { error } : {}), ...(linked ? { linked } : {}), cleanUrl: url.toString() };
+}
+
+export const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google' };
+
+/** What to tell the user about the sign-in or linking the API redirected back from. */
+export function loginMessage({ error, linked }: { error?: string; linked?: string }): string | undefined {
+  if (error === 'cancelled') return 'Sign-in cancelled.';
+  if (error === 'identity_in_use') return 'That sign-in already belongs to another Proschi account; delete that account first to link it here.';
+  if (error === 'provider_linked') return 'This account already has a sign-in with that provider; unlink it first.';
+  if (error) return 'Sign-in failed; try again.';
+  if (linked) return `${PROVIDER_LABEL[linked as ProviderId] ?? linked} sign-in linked: you can now sign in with either.`;
+  return undefined;
 }
 
 const RANK: Status[] = ['todo', 'attempted', 'solved'];

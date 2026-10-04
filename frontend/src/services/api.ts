@@ -11,10 +11,13 @@ export type ProviderId = 'github' | 'google';
 
 export class ApiError extends Error {
   readonly status: number;
-  constructor(status: number, message: string) {
+  /** Seconds to wait before retrying, from a 429's Retry-After. */
+  readonly retryAfter?: number;
+  constructor(status: number, message: string, retryAfter?: number) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
+    this.retryAfter = retryAfter;
   }
 }
 
@@ -24,13 +27,20 @@ export async function api<T>(path: string, { method = 'GET', body }: { method?: 
   const response = await fetch(path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body), credentials: 'same-origin' });
   if (response.status === 204) return undefined as T;
   const data = (await response.json().catch(() => ({}))) as { error?: string };
-  if (!response.ok) throw new ApiError(response.status, data.error ?? `${response.status} ${response.statusText}`);
+  if (!response.ok) {
+    const retryAfter = Number(response.headers.get('Retry-After') ?? NaN);
+    throw new ApiError(response.status, data.error ?? `${response.status} ${response.statusText}`, Number.isFinite(retryAfter) ? retryAfter : undefined);
+  }
   return data as T;
 }
 
-/** Where the sign-in button goes: the provider's page, then back to `returnTo` (a path on this site), signed in. */
-export function loginUrl(provider: ProviderId, returnTo: string): string {
-  return `/auth/${provider}/start?${new URLSearchParams({ return: returnTo })}`;
+/**
+ * Where the sign-in button goes: the provider's page, then back to
+ * `returnTo` (a path on this site), signed in. With `link`, the provider's
+ * sign-in is added to the signed-in account instead.
+ */
+export function loginUrl(provider: ProviderId, returnTo: string, link = false): string {
+  return `/auth/${provider}/start?${new URLSearchParams({ return: returnTo, ...(link ? { link: '1' } : {}) })}`;
 }
 
 export interface User {

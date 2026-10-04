@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { mergeServerProgress, progressToImport, takeLoginError } from './account';
+import { loginMessage, mergeServerProgress, progressToImport, takeLoginError } from './account';
 import type { ServerProgress } from '../services/api';
 import type { Progress } from './progress';
 
@@ -10,6 +10,16 @@ describe('takeLoginError', () => {
       cleanUrl: 'https://proschi.app/practice/?a=1#/chat',
     });
     expect(takeLoginError('https://proschi.app/practice/#/chat')).toEqual({ cleanUrl: 'https://proschi.app/practice/#/chat' });
+    expect(takeLoginError('https://proschi.app/practice/?linked=google#/chat')).toEqual({ linked: 'google', cleanUrl: 'https://proschi.app/practice/#/chat' });
+  });
+
+  it('explains each outcome', () => {
+    expect(loginMessage({})).toBeUndefined();
+    expect(loginMessage({ error: 'cancelled' })).toBe('Sign-in cancelled.');
+    expect(loginMessage({ error: 'identity_in_use' })).toMatch(/another Proschi account/);
+    expect(loginMessage({ error: 'provider_linked' })).toMatch(/already has a sign-in with that provider/);
+    expect(loginMessage({ error: 'failed' })).toBe('Sign-in failed; try again.');
+    expect(loginMessage({ linked: 'google' })).toMatch(/^Google sign-in linked/);
   });
 });
 

@@ -1,9 +1,7 @@
-import { Check, LogIn, LogOut, Pencil, Trash2, UserRound } from 'lucide-react';
+import { Check, Download, Link, LogIn, LogOut, MonitorX, Pencil, Trash2, Unlink, UserRound } from 'lucide-react';
 import Menu, { MenuItem } from '../components/Playground/Menu';
-import type { ProviderId } from '../services/api';
+import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
-
-const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google' };
 
 /** Sign in to sync progress and appear in the stats; signed in, the account's settings. Absent without an API. */
 export default function AccountMenu({ account }: { account: Account }) {
@@ -43,6 +41,8 @@ export default function AccountMenu({ account }: { account: Account }) {
   }
 
   const { user } = state;
+  const linked = user.providers ?? [];
+  const linkable = state.providers.filter((p) => !linked.includes(p));
   return (
     <Menu
       label="Account"
@@ -77,6 +77,33 @@ export default function AccountMenu({ account }: { account: Account }) {
           >
             Change display name
           </MenuItem>
+          {linkable.map((p) => (
+            <MenuItem key={`link-${p}`} onSelect={() => account.link(p)} icon={<Link size={14} />}>
+              Link {PROVIDER_LABEL[p]}
+            </MenuItem>
+          ))}
+          {linked.length >= 2 &&
+            linked.map((p) => (
+              <MenuItem
+                key={`unlink-${p}`}
+                onSelect={() => {
+                  close();
+                  if (window.confirm(`Stop signing in with ${PROVIDER_LABEL[p] ?? p}?`)) void account.unlink(p);
+                }}
+                icon={<Unlink size={14} />}
+              >
+                Unlink {PROVIDER_LABEL[p] ?? p}
+              </MenuItem>
+            ))}
+          <MenuItem
+            onSelect={() => {
+              close();
+              void account.downloadData();
+            }}
+            icon={<Download size={14} />}
+          >
+            Download my data
+          </MenuItem>
           <MenuItem
             onSelect={() => {
               close();
@@ -85,6 +112,15 @@ export default function AccountMenu({ account }: { account: Account }) {
             icon={<LogOut size={14} />}
           >
             Sign out
+          </MenuItem>
+          <MenuItem
+            onSelect={() => {
+              close();
+              if (window.confirm('Sign out on every device and browser, this one included?')) void account.signOutEverywhere();
+            }}
+            icon={<MonitorX size={14} />}
+          >
+            Sign out everywhere
           </MenuItem>
           <MenuItem
             onSelect={() => {

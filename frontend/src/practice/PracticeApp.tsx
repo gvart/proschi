@@ -4,7 +4,7 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import { loadProgress, saveProgress, type Progress } from './progress';
-import { api, type Me } from '../services/api';
+import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
 import AccountMenu from './AccountMenu';
@@ -28,6 +28,24 @@ function useHashRoute(): string {
   return route;
 }
 
+/**
+ * Uploads the browser's progress in one request. Signing in again and again
+ * within a minute hits the server's rate limit (429): then it waits, at least
+ * as long as the server asks, and tries again a few times.
+ */
+async function importProgress(items: { problemId: string; source: string; solved: boolean }[]): Promise<void> {
+  for (const backoff of [1, 4, 16, undefined]) {
+    try {
+      await api('/api/me/import', { method: 'POST', body: { items } });
+      return;
+    } catch (e) {
+      if (backoff === undefined || !(e instanceof ApiError && e.status === 429)) return;
+      const wait = Math.max(backoff, e.retryAfter ?? 0);
+      await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+    }
+  }
+}
+
 /** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const route = useHashRoute();
@@ -47,11 +65,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     (me: Me) => {
       const toImport = progressToImport(progressRef.current, me.progress).filter((item) => problems.some((p) => p.id === item.id));
       updateProgress((p) => mergeServerProgress(p, me.progress));
-      void (async () => {
-        for (const { id, source, solved } of toImport) {
-          await api(`/api/problems/${encodeURIComponent(id)}/runs`, { method: 'POST', body: { source, solved, imported: true } }).catch(() => undefined);
-        }
-      })();
+      if (toImport.length) void importProgress(toImport.map(({ id, source, solved }) => ({ problemId: id, source, solved })));
     },
     [updateProgress],
   );

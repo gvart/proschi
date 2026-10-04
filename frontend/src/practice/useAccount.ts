@@ -1,24 +1,32 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, apiEnabled, loginUrl, type Me, type ProviderId, type RunRecord, type User } from '../services/api';
-import { takeLoginError } from './account';
+import { loginMessage, takeLoginError } from './account';
 
 export type AccountState =
   | { status: 'off' }
   | { status: 'loading' }
   | { status: 'signed-out'; providers: ProviderId[]; message?: string }
-  | { status: 'signed-in'; user: User; message?: string };
+  /** `providers`: those on offer, to link; `user.providers` are the linked ones. */
+  | { status: 'signed-in'; user: User; providers: ProviderId[]; message?: string };
 
 export interface Account {
   state: AccountState;
   signIn: (provider: ProviderId) => void;
+  /** Adds a provider's sign-in to the account (through the provider's page). */
+  link: (provider: ProviderId) => void;
+  unlink: (provider: ProviderId) => Promise<void>;
   signOut: () => Promise<void>;
+  /** Ends every session of the account, this one included. */
+  signOutEverywhere: () => Promise<void>;
   update: (patch: Partial<Pick<User, 'displayName' | 'publicProfile'>>) => Promise<void>;
   remove: () => Promise<void>;
+  /** Saves everything the server stores about the account as proschi-data.json. */
+  downloadData: () => Promise<void>;
   /** Records a test run on the server, signed in; undefined otherwise or when it fails. */
   recordRun: (problemId: string, source: string, solved: boolean) => Promise<RunRecord | undefined>;
 }
 
-type Boot = { me: Me } | { providers: ProviderId[]; message?: string };
+type Boot = { me?: Me; providers: ProviderId[]; message?: string };
 
 let boot: Promise<Boot> | undefined;
 
@@ -27,21 +35,22 @@ async function providers(): Promise<ProviderId[]> {
 }
 
 /**
- * Once per page load: the account of the session cookie, or the sign-in
- * providers and why a sign-in the API redirected back from failed. Shared,
- * so StrictMode's second effect does not load it twice.
+ * Once per page load: the account of the session cookie, the sign-in
+ * providers, and what became of a sign-in or linking the API redirected back
+ * from. Shared, so StrictMode's second effect does not load it twice.
  */
 function bootAccount(): Promise<Boot> {
   boot ??= (async () => {
-    const { error, cleanUrl } = takeLoginError(window.location.href);
-    if (error) window.history.replaceState(window.history.state, '', cleanUrl);
-    let message = error === 'cancelled' ? 'Sign-in cancelled.' : error ? 'Sign-in failed; try again.' : undefined;
+    const { cleanUrl, ...outcome } = takeLoginError(window.location.href);
+    if (outcome.error || outcome.linked) window.history.replaceState(window.history.state, '', cleanUrl);
+    let message = loginMessage(outcome);
+    const offered = providers();
     try {
-      return { me: await api<Me>('/api/me') };
+      return { me: await api<Me>('/api/me'), providers: await offered, message };
     } catch (e) {
       if (!(e instanceof ApiError && e.status === 401)) message = 'Could not reach the server; your progress is kept in this browser.';
     }
-    return { providers: await providers(), message };
+    return { providers: await offered, message };
   })();
   return boot;
 }
@@ -59,12 +68,12 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
   useEffect(() => {
     if (!apiEnabled) return;
     let cancelled = false;
-    void bootAccount().then((result) => {
+    void bootAccount().then(({ me, providers, message }) => {
       if (cancelled) return;
-      if ('me' in result) {
-        setState({ status: 'signed-in', user: result.me.user });
-        onSignedInRef.current(result.me);
-      } else setState({ status: 'signed-out', providers: result.providers, message: result.message });
+      if (me) {
+        setState({ status: 'signed-in', user: me.user, providers, message });
+        onSignedInRef.current(me);
+      } else setState({ status: 'signed-out', providers, message });
     });
     return () => {
       cancelled = true;
@@ -76,10 +85,12 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
     setState({ status: 'signed-out', providers: await providers(), message });
   }, []);
 
-  const signIn = useCallback((provider: ProviderId) => {
+  const goToProvider = useCallback((provider: ProviderId, link: boolean) => {
     const { pathname, search, hash } = window.location;
-    window.location.assign(loginUrl(provider, `${pathname}${search}${hash}`));
+    window.location.assign(loginUrl(provider, `${pathname}${search}${hash}`, link));
   }, []);
+  const signIn = useCallback((provider: ProviderId) => goToProvider(provider, false), [goToProvider]);
+  const link = useCallback((provider: ProviderId) => goToProvider(provider, true), [goToProvider]);
 
   const signOut = useCallback(async () => {
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
@@ -101,6 +112,23 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
     [signedIn, signedOut],
   );
 
+  const unlink = useCallback(
+    async (provider: ProviderId) => {
+      const done = await whenSignedIn(() => api<void>(`/api/me/identities/${provider}`, { method: 'DELETE' }).then(() => true));
+      if (done) {
+        setState((s) =>
+          s.status === 'signed-in' ? { ...s, user: { ...s.user, providers: s.user.providers?.filter((p) => p !== provider) }, message: undefined } : s,
+        );
+      }
+    },
+    [whenSignedIn],
+  );
+
+  const signOutEverywhere = useCallback(async () => {
+    const done = await whenSignedIn(() => api<void>('/api/me/sessions/revoke-all', { method: 'POST' }).then(() => true));
+    if (done) await signedOut('Signed out on every device.');
+  }, [whenSignedIn, signedOut]);
+
   const update = useCallback(
     async (patch: Partial<Pick<User, 'displayName' | 'publicProfile'>>) => {
       const result = await whenSignedIn(() => api<{ user: User }>('/api/me', { method: 'PATCH', body: patch }));
@@ -114,11 +142,22 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
     if (done) await signedOut('Your account and its progress on the server are deleted.');
   }, [whenSignedIn, signedOut]);
 
+  const downloadData = useCallback(async () => {
+    const data = await whenSignedIn(() => api<unknown>('/api/me/export'));
+    if (data === undefined) return;
+    const url = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' }));
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'proschi-data.json';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+  }, [whenSignedIn]);
+
   const recordRun = useCallback(
     (problemId: string, source: string, solved: boolean) =>
       whenSignedIn(() => api<RunRecord>(`/api/problems/${encodeURIComponent(problemId)}/runs`, { method: 'POST', body: { source, solved } })),
     [whenSignedIn],
   );
 
-  return { state, signIn, signOut, update, remove, recordRun };
+  return { state, signIn, link, unlink, signOut, signOutEverywhere, update, remove, downloadData, recordRun };
 }
