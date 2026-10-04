@@ -25,6 +25,19 @@ function expectWellFormed(svg: string) {
   expect(svg).toContain(`<rect width="100%" height="100%" fill="${COLORS.background}"/>`);
 }
 
+/** Every opened HTML tag is closed in order; void elements and self-closed SVG elements aside. */
+function expectBalancedHtml(html: string) {
+  const voids = new Set(['meta', 'br', 'img', 'hr', 'input', 'link']);
+  const stack: string[] = [];
+  for (const [, close, name, selfClose] of html.matchAll(/<(\/?)([a-zA-Z][\w-]*)[^>]*?(\/?)>/g)) {
+    const tag = name.toLowerCase();
+    if (voids.has(tag) || selfClose) continue;
+    if (!close) stack.push(tag);
+    else expect(stack.pop(), `</${tag}>`).toBe(tag);
+  }
+  expect(stack).toEqual([]);
+}
+
 /** The `<g>` element of a step's message in a sequence SVG. */
 function stepGroups(svg: string, kind: string): string[] {
   return [...svg.matchAll(new RegExp(`<g data-step="\\d+" data-kind="${kind}"[^>]*>[\\s\\S]*?</g>`, 'g'))].map((m) => m[0]);
@@ -83,6 +96,32 @@ describe('proschi render', () => {
     for (const uc of diagram.useCases) for (const s of uc.scenarios) expect(html).toContain(`href="#${uc.id}--${s.id}"`);
     expect(html).not.toMatch(/<script|<link|https?:\/\/(?!www\.w3\.org)/);
     // Each inline SVG has its own marker ids.
+    const ids = [...html.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
+    expect(new Set(ids).size).toBe(ids.length);
+  });
+
+  it.each(exampleFiles.map((e) => [e.id, e]))('renders %s as an HLD in Markdown and HTML', async (_id, example) => {
+    const out = join(dir, 'hld', example.id);
+    const md = await capture(['render', example.file, '--out', out, '--format', 'hld-md']);
+    expect(md.code).toBe(0);
+    expect(md.out).toBe(join(out, `${example.id}.hld.md`));
+    expect((await capture(['render', example.file, '--out', out, '--format', 'hld-html'])).code).toBe(0);
+    const { diagram } = parse(example.source);
+    const scenarios = diagram.useCases.flatMap((uc) => uc.scenarios.filter((s) => s.steps.length).map((s) => `${uc.id}--${s.id}`));
+
+    const text = readFileSync(join(out, `${example.id}.hld.md`), 'utf8');
+    expect(text.startsWith(`# ${diagram.title}\n`)).toBe(true);
+    expect(text).toContain('\n## Overview\n');
+    expect(text).toContain('\n## Components\n');
+    expect(text.match(/^sequenceDiagram$/gm) ?? []).toHaveLength(scenarios.length);
+
+    const html = readFileSync(join(out, `${example.id}.hld.html`), 'utf8');
+    expect(html.startsWith('<!doctype html>')).toBe(true);
+    expectBalancedHtml(html);
+    expect(html).toContain('<section id="overview">');
+    // The architecture and one sequence diagram per scenario, as inline SVG.
+    expect(html.match(/<svg [^>]*font-family=/g)).toHaveLength(1 + scenarios.length);
+    expect(html).not.toMatch(/<script|<link|https?:\/\/(?!www\.w3\.org)/);
     const ids = [...html.matchAll(/<marker id="([^"]+)"/g)].map((m) => m[1]);
     expect(new Set(ids).size).toBe(ids.length);
   });

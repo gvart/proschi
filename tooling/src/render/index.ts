@@ -2,16 +2,18 @@
  * `proschi render`: a document as static files. `svg` writes the architecture
  * and one sequence diagram per scenario, `md` one Markdown file with Mermaid
  * blocks (GitHub renders them), `html` one self-contained page with the SVGs.
+ * `hld-md` and `hld-html` write the high-level design document instead.
  */
 import { toMermaidArchitecture, toMermaidSequence, type Diagram, type DiagramScenario, type DiagramUseCase } from '../proschi';
 import { renderArchitectureSvg } from './architecture';
 import { renderSequenceSvg, scenarioTitle } from './sequence';
+import { renderHldHtml, renderHldMarkdown } from './hld';
 import { esc } from './svg';
 
 export { renderArchitectureSvg } from './architecture';
 export { renderSequenceSvg, scenarioTitle } from './sequence';
 
-export const FORMATS = ['svg', 'md', 'html'] as const;
+export const FORMATS = ['svg', 'md', 'html', 'hld-md', 'hld-html'] as const;
 export type RenderFormat = (typeof FORMATS)[number];
 
 export interface RenderedFile {
@@ -138,6 +140,8 @@ export function renderHtml(diagram: Diagram, rendered: RenderedDiagram): string 
 export async function renderFiles(diagram: Diagram, format: RenderFormat, baseName: string): Promise<RenderedFile[]> {
   if (format === 'md') return [{ name: `${baseName}.md`, content: renderMarkdown(diagram) }];
   if (format === 'html') return [{ name: `${baseName}.html`, content: renderHtml(diagram, await renderSvgs(diagram, true)) }];
+  if (format === 'hld-md') return [{ name: `${baseName}.hld.md`, content: renderHldMarkdown(diagram) }];
+  if (format === 'hld-html') return [{ name: `${baseName}.hld.html`, content: renderHldHtml(diagram, await renderSvgs(diagram, true)) }];
   const { architecture, scenarios } = await renderSvgs(diagram);
   return [{ name: 'architecture.svg', content: `${architecture}\n` }, ...scenarios.map((s) => ({ name: `${s.slug}.svg`, content: `${s.svg}\n` }))];
 }

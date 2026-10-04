@@ -22,6 +22,7 @@ import {
   ChevronDown,
   Download,
   FilePlus,
+  GraduationCap,
   Image,
   LayoutGrid,
   Link,
@@ -57,6 +58,7 @@ import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import { UseCasePlayer } from '../UseCases/UseCasePlayback';
+import HldView from '../Hld/HldView';
 import AnalysisPanel from '../Analysis/AnalysisPanel';
 import TestsPanel from '../Analysis/TestsPanel';
 import ViewTabs, { type View } from '../Analysis/ViewTabs';
@@ -70,6 +72,7 @@ import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
+const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', analysis: 'Analysis', tests: 'Tests', hld: 'HLD' };
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -433,6 +436,16 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
         />
 
         <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+          <a
+            href="../practice/"
+            aria-label="Practice"
+            title="System design practice problems"
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+          >
+            <GraduationCap size={16} />
+            <span className="hidden lg:inline">Practice</span>
+          </a>
+
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"
@@ -511,7 +524,7 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
             className={`flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 text-sm font-medium border-b-2 ${mobilePane === pane ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
           >
             {pane === 'code' ? <Code2 size={16} /> : <Network size={16} />}
-            {pane === 'code' ? 'Code' : playing ? 'Playback' : 'Diagram'}
+            {pane === 'code' ? 'Code' : playing ? 'Playback' : VIEW_LABEL[view]}
             {pane === 'code' && problemCount > 0 && (
               <span className="ml-0.5 rounded-full bg-amber-100 px-1.5 text-xs text-amber-800">{problemCount}</span>
             )}
@@ -549,6 +562,8 @@ export default function Playground({ onOpenBuilder }: PlaygroundProps) {
               <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
             ) : view === 'tests' ? (
               <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
+            ) : view === 'hld' ? (
+              <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
             ) : (
               <ReactFlowProvider>
                 <DiagramView

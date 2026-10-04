@@ -10,7 +10,7 @@ proschi check docs/                 # validate every *.proschi file below docs/
 proschi check --strict --openapi orders=specs/orders.yaml docs/   # also against an OpenAPI spec
 proschi parse checkout.proschi      # the parsed diagram as JSON
 proschi fmt docs/                   # format files in place (--check: only report, exit 1 for CI)
-proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html)
+proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
 proschi test docs/                  # run requirements and tests (exit 1 on a failure)
 proschi analyze shortener.proschi   # load, latency, availability and cost per node
 proschi-language-server --stdio     # for any editor with an LSP client
@@ -36,7 +36,7 @@ node hovers. The model and its default numbers:
 ## Rendering
 
 ```
-proschi render [--out <dir>] [--format svg|md|html] <file>
+proschi render [--out <dir>] [--format svg|md|html|hld-md|hld-html] <file>
 ```
 
 - `svg` (default): `architecture.svg`, plus `<usecase>--<scenario>.svg` with a

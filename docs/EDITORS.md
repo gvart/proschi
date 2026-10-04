@@ -250,6 +250,8 @@ proschi render shop.proschi --out site --format html         # site/shop.html
 | `svg` | `architecture.svg` and one `<usecase>--<scenario>.svg` sequence diagram per scenario, e.g. `create-order--database-down.svg` |
 | `md` | `<file>.md`: the title, a Mermaid architecture block, and a heading and Mermaid sequence block per use case and scenario |
 | `html` | `<file>.html`: one self-contained page with every SVG and a scenario list |
+| `hld-md` | `<file>.hld.md`: the [high-level design document](#hld-documents) with Mermaid diagrams |
+| `hld-html` | `<file>.hld.html`: the same document as one self-contained page with every SVG |
 
 `--out` defaults to the current directory. The architecture SVG looks like
 the editor's canvas: the same top-down layout (pinned `pos x,y` positions
@@ -375,3 +377,60 @@ Failing requirements and tests are warnings on their lines (source
 `proschi-test`); for a `test` block, also on each failing assertion. When the
 document has traffic, hovering a node adds its load, utilisation, latency,
 availability and cost.
+
+## HLD documents
+
+Proschi turns a document into a high-level design (HLD): the structured write-up
+a design review expects, generated from the same text as the diagram. Sections
+without content are left out:
+
+| Section | From |
+|---|---|
+| Overview | `title "Name" "Summary"`, the architecture diagram, counts of components, use cases and teams |
+| Requirements | Functional: every use case with its description and scenarios (with `when` conditions). Non-functional: each line of `requirements { … }` and each `test` block, with pass/fail and the measured value |
+| Capacity estimates | The `traffic { … }` table; load, capacity, utilisation, replicas and cost per component; the total cost |
+| Components | Name, tech, kind (service, database, cache, queue, …), team, replicas (`x3`), responsibility (the node description), entities stored |
+| Data model | `entity` blocks: fields, types, flags and the store they live in |
+| APIs | Use cases grouped by endpoint (`GET /orders/42` and `GET /orders/{id}` share one): request body and the entry response of every scenario |
+| Scenarios | Per use case and scenario: condition, share of traffic, latency, and the sequence of messages |
+| Decisions | `decision` blocks: the choice, why, and the rejected options with reasons |
+| Risks | Failing requirements and tests, saturated and hot (over 70% busy) components, single points of failure, use cases without an error scenario |
+
+The checks (pass/fail, load, latency, cost, single points of failure) come
+from the [simulation](#simulation-and-tests); a document without traffic,
+requirements or tests simply has no such rows.
+
+**Web editor.** The *HLD* tab above the diagram (next to *Diagram*,
+*Analysis* and *Tests*) shows the document; *Markdown* and *HTML* download it. The browser HTML lists
+each scenario's messages instead of drawing sequence diagrams.
+
+**Command line.**
+
+```sh
+proschi render shop.proschi --out docs --format hld-md     # docs/shop.hld.md
+proschi render shop.proschi --out site --format hld-html   # site/shop.hld.html
+```
+
+The Markdown uses Mermaid blocks, which GitHub and GitLab render; the HTML
+embeds the same architecture and sequence SVGs as `--format html`, with no
+scripts or external files.
+
+## Practice
+
+The practice page (`practice/` next to the editor, linked from its header and
+the landing page) is a set of system design problems in the style of LeetCode.
+A problem gives use cases, traffic and requirements; you design the system in
+Proschi and *Run tests* checks it, in the browser, against every requirement
+and flow test, with what was measured and how to fix what fails.
+
+- The editor starts from the problem's starter code, which begins with
+  `import "problem.proschi"`. That file is the problem's given part (traffic,
+  requirements, tests and fixed nodes such as the client); it is read-only and
+  shown under the statement.
+- The diagram, playback and *Analysis* work as in the editor; test blocks
+  list the result of each assertion line. Hints open one at a time;
+  the reference solution is shown after solving, or before with a confirmation.
+- Progress (to do, attempted, solved) and your last code per problem are kept
+  in this browser only.
+
+Adding a problem: see [PRACTICE.md](PRACTICE.md).
