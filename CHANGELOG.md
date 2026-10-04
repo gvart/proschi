@@ -22,6 +22,35 @@ deployed from `main` and ships with the same changes.
   language reference and how the simulation works.
 - An empty diagram offers a start: a template with the syntax in comments, an
   example, or practice. An example picked while the diagram is empty replaces it.
+- A "How the simulation works" page at `/proschi/model/`: every rule the
+  simulation uses (load from traffic, reads and writes, replicas, shards and
+  single-primary writes, queueing, percentiles, fan-out and payloads,
+  availability, cost, failures, kinds and consistency) with its default
+  numbers, worked examples, the simplifications and omissions that make its
+  numbers optimistic or pessimistic, how to calibrate `capacity` with your own
+  measurements, and what a practice verdict means. A test recomputes every
+  number on the page from the simulation code. Linked from the landing page,
+  the editor's Analysis and Tests tabs and the practice test panel
+  ("How is this calculated?").
+
+## [0.6.0] - 2026-10-04
+
+### Security
+- Share links are decompressed with a 2 MB cap, so a crafted link can no longer
+  freeze the tab.
+- The parser and formatter are linear on adversarial input (unclosed payloads,
+  deep `alt` nesting, now capped at 16, repeated connections); a fuzz suite
+  guards this.
+- `proschi render` always escapes labels in SVG/HTML output; HTML exports carry
+  a strict Content-Security-Policy.
+- Corrupt or crafted saved state, progress and imported file maps are
+  validated, and `__proto__` keys are dropped.
+- Content-Security-Policy and referrer-policy meta tags on every page.
+
+### Added
+- Diagrams menu: Export all (.zip) and Import backup, with merging.
+- A notice with a download button when a share link is very long.
+- Playwright browser tests in CI; the Pages deploy waits for them.
 - Root README with a feature overview, links, quick start and contributing guide.
 - This changelog.
 - Dependabot for the frontend and tooling npm packages (weekly, minor and patch
@@ -29,6 +58,11 @@ deployed from `main` and ships with the same changes.
 - CI runs `proschi problem check` on the practice problems.
 
 ### Changed
+- Diagram layout runs in a Web Worker and shows a provisional grid that glides
+  into place.
+- Smaller pages: the landing page loads without React, the practice list loads
+  without the editor, and a problem loads only its own files.
+  The editor panes load on demand.
 - Workflows use the Node 24 majors of `actions/checkout`, `actions/setup-node`,
   `actions/upload-artifact`, `actions/upload-pages-artifact` and
   `actions/deploy-pages`.
@@ -112,7 +146,8 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.5.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...HEAD
+[0.6.0]: https://github.com/gvart/proschi/compare/tooling-v0.5.0...tooling-v0.6.0
 [0.5.0]: https://github.com/gvart/proschi/compare/tooling-v0.4.0...tooling-v0.5.0
 [0.4.0]: https://github.com/gvart/proschi/compare/tooling-v0.3.0...tooling-v0.4.0
 [0.3.0]: https://github.com/gvart/proschi/compare/tooling-v0.2.0...tooling-v0.3.0

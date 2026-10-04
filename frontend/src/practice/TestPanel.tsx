@@ -60,6 +60,14 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect }: 
         )}
 
         {run && run.results.length > 0 && (
+          <p className="px-3 pt-2 text-xs text-gray-500">
+            Verdicts come from a deterministic model of your design, not a load test.{' '}
+            <a href="../model/#practice" target="_blank" rel="noopener" className="text-blue-700 hover:underline">
+              How is this calculated?
+            </a>
+          </p>
+        )}
+        {run && run.results.length > 0 && (
           <ul className="divide-y divide-gray-100">
             {run.results.map((r) => (
               <li key={r.id} className="flex gap-2 px-3 py-2">

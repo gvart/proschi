@@ -265,6 +265,11 @@ A deterministic, analytical model in `frontend/src/sim/` (pure TypeScript, no
 DOM): `analyze(diagram, options?) → Analysis`. It runs in milliseconds, so the
 editor re-runs it on every change.
 
+This section is the original design; §7 refines it. For the model as the code
+implements it today, with its default numbers and its limits, see
+[How the simulation works](https://gvart.github.io/proschi/model/)
+(`frontend/model/index.html`, whose numbers a test recomputes from the code).
+
 ### 2.1 Profiles
 
 Every node gets a per-replica profile: kind, capacity (rps), base latency (ms),
