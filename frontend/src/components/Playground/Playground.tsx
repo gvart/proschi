@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -7,7 +7,6 @@ import ReactFlow, {
   ReactFlowProvider,
   applyEdgeChanges,
   applyNodeChanges,
-  useNodesInitialized,
   useReactFlow,
 } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
@@ -32,9 +31,13 @@ import {
   Code2,
   Pencil,
   Network,
+  Archive,
+  ArchiveRestore,
 } from 'lucide-react';
 import { ecommerceExample, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
-import { layoutDiagram, toFlowEdges } from '../../dsl/layout';
+import { toFlowEdges } from '../../dsl/layout';
+import { useAutoLayout } from '../Diagram/useDiagramLayout';
+import { useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
@@ -52,22 +55,28 @@ import {
 } from '../../playground/documents';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
-import { decodeShareLink, encodeShareHash, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { LONG_LINK_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
+import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
 import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
-import { UseCasePlayer } from '../UseCases/UseCasePlayback';
-import HldView from '../Hld/HldView';
-import AnalysisPanel from '../Analysis/AnalysisPanel';
-import TestsPanel from '../Analysis/TestsPanel';
+import PaneLoading from '../PaneLoading';
 import ViewTabs, { type View } from '../Analysis/ViewTabs';
 import { useSimulation } from '../Analysis/useSimulation';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
-import ExamplesGallery from './ExamplesGallery';
 import Menu, { MenuItem } from './Menu';
-import { downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
+import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
+
+// Panes that are not visible at start load on first use.
+const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
+const HldView = lazy(() => import('../Hld/HldView'));
+const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
+const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
+const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
@@ -83,8 +92,8 @@ const nodeTypes = {
 function loadInitialState(): DocumentState {
   const link = decodeShareLink(window.location.hash);
   return initialState({
-    stored: loadJson<DocumentState | null>(DOCS_KEY, null),
-    legacySource: loadJson<string | null>(LEGACY_SOURCE_KEY, null),
+    stored: loadJson<unknown>(DOCS_KEY, null),
+    legacySource: loadJson<unknown>(LEGACY_SOURCE_KEY, null),
     sharedSource: link?.source ?? null,
     sharedImports: link?.imports,
     fallbackSource: ecommerceExample,
@@ -118,6 +127,7 @@ export default function Playground() {
   const [copied, setCopied] = useState(false);
   const editorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const backupInputRef = useRef<HTMLInputElement>(null);
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -143,6 +153,11 @@ export default function Playground() {
   /** Nodes declared in imported files (id → file); canvas edits leave them alone. */
   const importedNodes = useMemo(() => new Map(diagram.nodes.flatMap((n) => (n.loc.file ? [[n.id, n.loc.file] as const] : []))), [diagram]);
   const [notice, setNotice] = useState<string | null>(null);
+  // A link that could not be opened says so; the banner also carries long-link and backup messages.
+  const [banner, setBanner] = useState<BannerMessage | null>(() => {
+    const link = readShareLink(window.location.hash);
+    return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
+  });
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4000);
@@ -183,22 +198,14 @@ export default function Playground() {
     });
   }, [diagram]);
 
-  useEffect(() => {
-    let cancelled = false;
-    layoutDiagram(diagram)
-      .then((laidOut) => {
-        if (cancelled) return;
-        // Keep what the user had selected across re-layouts.
-        setNodes((previous) => {
-          const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
-          return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
-        });
-      })
-      .catch((error) => console.error('Layout failed:', error));
-    return () => {
-      cancelled = true;
-    };
-  }, [diagram]);
+  // Keep what the user had selected across re-layouts.
+  const showLaidOut = useCallback((laidOut: Node[]) => {
+    setNodes((previous) => {
+      const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
+      return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
+    });
+  }, []);
+  const layoutSettled = useAutoLayout(diagram, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -235,6 +242,32 @@ export default function Playground() {
       setTimeout(() => setCopied(false), 2000);
     } catch {
       window.prompt('Copy this link:', url);
+    }
+    if (isLongLink(url)) {
+      setBanner({ message: LONG_LINK_MESSAGE, tone: 'warning', action: { label: 'Download .proschi', run: () => downloadText(source, rootPath) } });
+    }
+  };
+
+  const exportAll = () => {
+    downloadBlob(new Blob([buildBackup(docState, loadProgress())], { type: 'application/zip' }), backupFileName());
+  };
+
+  const importBackup = async (file: File | undefined) => {
+    if (!file) return;
+    try {
+      const backup = readBackup(new Uint8Array(await file.arrayBuffer()));
+      const plan = planMerge(docState, backup.docs);
+      let replaced = 0;
+      const next = applyMerge(docState, plan, ({ existing }) => {
+        const yes = window.confirm(`"${titleOf(existing.source)}" (${fileNameOf(existing)}) differs from the copy in the backup. Replace it with the backup's version?`);
+        if (yes) replaced++;
+        return yes;
+      });
+      openDoc(() => next);
+      saveProgress(mergeProgress(loadProgress(), backup.progress));
+      setBanner({ message: mergeSummary(plan, replaced, Object.keys(backup.progress).length) });
+    } catch (error) {
+      setBanner({ message: `Could not import ${file.name}: ${error instanceof Error ? error.message : String(error)}`, tone: 'warning' });
     }
   };
 
@@ -406,6 +439,26 @@ export default function Playground() {
                 >
                   Format code <span className="ml-auto text-xs text-gray-400">Shift+Alt+F</span>
                 </MenuItem>
+                <div className="my-1 border-t border-gray-100" />
+                <MenuItem
+                  icon={<Archive size={14} />}
+                  onSelect={() => {
+                    exportAll();
+                    close();
+                  }}
+                >
+                  Export all (.zip)
+                </MenuItem>
+                <MenuItem
+                  icon={<ArchiveRestore size={14} />}
+                  onSelect={() => {
+                    backupInputRef.current?.click();
+                    close();
+                  }}
+                >
+                  Import backup…
+                </MenuItem>
+                <p className="px-3 pt-0.5 pb-1 text-xs text-gray-400">Saved in this browser only — export a backup.</p>
               </>
             )}
           </Menu>
@@ -417,6 +470,17 @@ export default function Playground() {
           className="hidden"
           onChange={(e) => {
             importFile(e.target.files?.[0]);
+            e.target.value = '';
+          }}
+        />
+        <input
+          ref={backupInputRef}
+          type="file"
+          accept=".zip,application/zip"
+          className="hidden"
+          aria-label="Import backup"
+          onChange={(e) => {
+            importBackup(e.target.files?.[0]);
             e.target.value = '';
           }}
         />
@@ -499,6 +563,7 @@ export default function Playground() {
           </button>
         </div>
       </header>
+      {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
 
       <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
         {(['code', 'diagram'] as const).map((pane) => (
@@ -534,44 +599,46 @@ export default function Playground() {
             <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
           )}
           <div className="flex-1 min-h-0 relative">
-            {playing && playedUseCase ? (
-              <UseCasePlayer
-                useCase={playedUseCase}
-                nodes={nodes}
-                edges={edges}
-                onBack={stopPlaying}
-                initialStep={initialStep}
-                onStepChange={setPlayStep}
-                showHeader={false}
-              />
-            ) : view === 'analysis' ? (
-              <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
-            ) : view === 'tests' ? (
-              <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
-            ) : view === 'hld' ? (
-              <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
-            ) : (
-              <ReactFlowProvider>
-                <DiagramView
+            <Suspense fallback={<PaneLoading />}>
+              {playing && playedUseCase ? (
+                <UseCasePlayer
+                  useCase={playedUseCase}
                   nodes={nodes}
                   edges={edges}
-                  onNodesChange={setNodes}
-                  onEdgesChange={setEdges}
-                  title={diagram.title}
-                  hasPinnedNodes={diagram.nodes.some((n) => n.position)}
-                  importedNodes={importedNodes}
-                  onMoveNodes={moveNodes}
-                  onConnectNodes={connectNodes}
-                  onRenameNode={renameFromCanvas}
-                  onResetLayout={() => editSource(clearPositions)}
-                  onDelete={deleteFromCanvas}
-                  fitKey={mobilePane}
-                  mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
-                  notice={notice}
-                  onNotice={setNotice}
+                  onBack={stopPlaying}
+                  initialStep={initialStep}
+                  onStepChange={setPlayStep}
+                  showHeader={false}
                 />
-              </ReactFlowProvider>
-            )}
+              ) : view === 'analysis' ? (
+                <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
+              ) : view === 'tests' ? (
+                <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
+              ) : view === 'hld' ? (
+                <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
+              ) : (
+                <ReactFlowProvider>
+                  <DiagramView
+                    nodes={nodes}
+                    edges={edges}
+                    onNodesChange={setNodes}
+                    onEdgesChange={setEdges}
+                    title={diagram.title}
+                    hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                    importedNodes={importedNodes}
+                    onMoveNodes={moveNodes}
+                    onConnectNodes={connectNodes}
+                    onRenameNode={renameFromCanvas}
+                    onResetLayout={() => editSource(clearPositions)}
+                    onDelete={deleteFromCanvas}
+                    fitKey={`${mobilePane}:${layoutSettled}`}
+                    mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
+                    notice={notice}
+                    onNotice={setNotice}
+                  />
+                </ReactFlowProvider>
+              )}
+            </Suspense>
             {nodes.length === 0 && !playing && view === 'diagram' && (
               <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                 <p className="text-sm text-gray-400">
@@ -584,13 +651,15 @@ export default function Playground() {
       </div>
 
       {showExamples && (
-        <ExamplesGallery
-          onClose={() => setShowExamples(false)}
-          onPick={(example) => {
-            openDoc((s) => addDoc(s, example.source));
-            setShowExamples(false);
-          }}
-        />
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ExamplesGallery
+            onClose={() => setShowExamples(false)}
+            onPick={(example) => {
+              openDoc((s) => addDoc(s, example.source));
+              setShowExamples(false);
+            }}
+          />
+        </Suspense>
       )}
     </div>
   );
@@ -699,7 +768,7 @@ function DiagramView({
   notice,
   onNotice,
 }: DiagramViewProps) {
-  const { fitView, getNodes } = useReactFlow();
+  const { getNodes } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
@@ -744,19 +813,8 @@ function DiagramView({
       setExporting(false);
     }
   };
-  const measured = useNodesInitialized();
-  const structure = nodes.map((n) => n.id).join('|');
-
   // Re-fit once nodes are measured after being added or removed, not on every drag.
-  useEffect(() => {
-    if (!measured) return;
-    const frame = requestAnimationFrame(() => {
-      // A hidden pane (the other mobile tab) has no size; fitting it would produce NaN.
-      if (!wrapperRef.current?.offsetWidth) return;
-      fitView({ padding: 0.15, duration: 200 });
-    });
-    return () => cancelAnimationFrame(frame);
-  }, [structure, measured, fitView, fitKey]);
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { duration: 200, wrapper: wrapperRef });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),

@@ -1,6 +1,6 @@
 import type { ComponentType, TechStack } from '../types/canvas';
 import { componentCatalog } from '../catalog/componentCatalog';
-import { bracketDepth, tokenizeLine, type Token } from './lexer';
+import { BracketCounter, tokenizeLine, type Token } from './lexer';
 import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, isDataStore, isKind, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
@@ -84,6 +84,10 @@ interface SectionFrame {
   section: Section;
   /** Misplaced or with a broken header: its lines are skipped so they are not read as nodes. */
   discard?: boolean;
+  /** What a skipped block was, for "Missing } to close …" (an alt nested too deep). */
+  skipped?: string;
+  /** Blocks open inside a skipped alt. */
+  nested?: number;
   entity?: Entity;
   decision?: Decision;
   test?: FlowTest;
@@ -95,6 +99,12 @@ const DEFAULT_TECH: TechStack = 'Rectangle';
 const DEFAULT_GROUP_TECH: TechStack = 'Logical Group';
 /** Nested or repeated alt sets multiply; past this many scenarios the rest are dropped. */
 export const MAX_SCENARIOS = 32;
+/**
+ * How deep alt blocks may nest. Deeper ones are skipped with an error: they
+ * could add nothing past MAX_SCENARIOS, and unbounded nesting made parsing
+ * quadratic (a crafted share link could freeze the tab).
+ */
+export const MAX_ALT_DEPTH = 16;
 /** `x3` on a node declaration: its replica count. */
 const REPLICAS = /^x(\d+)$/;
 const PERCENTILES: Record<string, Percentile> = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
@@ -137,8 +147,12 @@ class Parser {
   private stack: Frame[] = [];
 
   private readonly diagnostics: Diagnostic[] = [];
+  /** Warnings reported so far (see `warning`). */
+  private readonly warned = new Set<string>();
   private readonly nodes = new Map<string, DiagramNode>();
   private readonly edges: DiagramEdge[] = [];
+  /** Connections so far per `from->to`, for the ids of repeated ones. */
+  private readonly edgeCount = new Map<string, number>();
   private readonly useCases: { useCase: DiagramUseCase; body: Container }[] = [];
   private readonly references: Reference[] = [];
   private readonly imports: DiagramImport[] = [];
@@ -239,6 +253,18 @@ class Parser {
     // Inside traffic, requirements, … every line follows the block's own rules.
     const top = this.top();
     if (top?.kind === 'section') {
+      if (top.skipped !== undefined) {
+        // A skipped alt: follow its inner blocks so its own `}` ends it.
+        const opens = tokens[tokens.length - 1].kind === 'lbrace';
+        if (first.kind !== 'rbrace') top.nested = (top.nested ?? 0) + (opens ? 1 : 0);
+        else if (top.nested) top.nested += opens ? 0 : -1;
+        else {
+          this.stack.pop();
+          if (second?.kind === 'ident' && second.value === 'alt') this.parseAlt(tokens.slice(1), line);
+          else if (second) this.error('Unexpected input after }', loc(second));
+        }
+        return index;
+      }
       if (first.kind === 'rbrace') {
         this.stack.pop();
         if (!top.discard) this.closeSection(top);
@@ -489,6 +515,13 @@ class Parser {
     }
     this.expectEnd(tokens, i + 1, line);
 
+    if (this.stack.filter((f) => f.kind === 'alt').length >= MAX_ALT_DEPTH) {
+      const loc = this.locOf(keyword, line);
+      this.error(`alt blocks can nest at most ${MAX_ALT_DEPTH} deep; this one is skipped`, loc);
+      this.stack.push({ kind: 'section', section: 'test', discard: true, skipped: `alt '${nameToken.value}'`, loc });
+      return;
+    }
+
     // Alt blocks that follow each other directly are alternatives to one another.
     const owner = top.body;
     let set = owner.openAlt;
@@ -594,12 +627,16 @@ class Parser {
     let label = labelToken?.value ?? '';
     let lastLine = index;
     // A JSON/XML payload may continue over several lines until its brackets balance.
-    if (bracketDepth(label) > 0) {
-      while (bracketDepth(label) > 0 && lastLine + 1 < this.lines.length) {
+    const brackets = new BracketCounter();
+    let depth = brackets.feed(label);
+    if (depth > 0) {
+      while (depth > 0 && lastLine + 1 < this.lines.length) {
         lastLine++;
-        label += '\n' + this.lines[lastLine];
+        const more = '\n' + this.lines[lastLine];
+        label += more;
+        depth = brackets.feed(more);
       }
-      if (bracketDepth(label) > 0) this.error('Unclosed { or [ in payload', this.locOf(labelToken, line));
+      if (depth > 0) this.error('Unclosed { or [ in payload', this.locOf(labelToken, line));
       label = label.trimEnd();
     }
 
@@ -637,7 +674,9 @@ class Parser {
       this.error("'-x' marks a failed call and is only allowed in use case steps", this.locOf(arrowToken, line));
     } else {
       const base = `${from}->${to}`;
-      const count = this.edges.filter((e) => e.id === base || e.id.startsWith(`${base}#`)).length;
+      // Counted in a map: scanning every edge made many duplicate connections quadratic.
+      const count = this.edgeCount.get(base) ?? 0;
+      this.edgeCount.set(base, count + 1);
       this.edges.push({ id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || undefined, loc });
     }
     return lastLine;
@@ -1641,7 +1680,10 @@ class Parser {
 
   private warning(message: string, loc: SourceLoc) {
     // Steps shared by several scenarios are checked once per scenario; report each problem once.
-    if (this.diagnostics.some((d) => d.message === message && d.line === loc.line && d.col === loc.col && d.file === loc.file)) return;
+    // A Set, not a scan of every diagnostic: many warnings made the scan quadratic.
+    const key = `${loc.file ?? ''}\n${loc.line}\n${loc.col}\n${message}`;
+    if (this.warned.has(key)) return;
+    this.warned.add(key);
     this.diagnostics.push({ severity: 'warning', message, ...loc });
   }
 }
@@ -1700,6 +1742,7 @@ function isWord(token: Token | undefined, word: string): boolean {
 }
 
 function sectionName(frame: SectionFrame): string {
+  if (frame.skipped) return frame.skipped;
   if (frame.entity) return `entity '${frame.entity.name}'`;
   if (frame.decision) return `decision '${frame.decision.title}'`;
   if (frame.test) return `test '${frame.test.name}'`;

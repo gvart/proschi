@@ -1,4 +1,4 @@
-import { bracketDepth, stripTrailingComment, tokenizeLine, type Token } from './lexer';
+import { BracketCounter, stripTrailingComment, tokenizeLine, type Token } from './lexer';
 
 /**
  * The canonical layout of a Proschi document: two spaces per open block,
@@ -145,14 +145,14 @@ function classify(lines: string[]): Entry[] {
     // Same shape test as the parser, so multi-line payloads are found the same way.
     if (!inSection && first.kind === 'ident' && second?.kind === 'arrow' && third?.kind === 'ident' && tokens.length <= 4 && (!fourth || fourth.kind === 'label')) {
       const entry: ConnectionEntry = { ...base, kind: 'connection', from: first.value, arrow: second.value, to: third.value, label: fourth?.value, continuation: [] };
-      if (fourth && bracketDepth(fourth.value) > 0) {
+      const brackets = new BracketCounter();
+      if (fourth && brackets.feed(fourth.value) > 0) {
         // The payload continues until its brackets balance; keep its own indentation relative to the step.
-        const delta = depth * INDENT.length - width(leadingSpace(raw));
-        let label = fourth.value;
-        while (bracketDepth(label) > 0 && i + 1 < lines.length) {
+        const delta = indent(depth).length - width(leadingSpace(raw));
+        while (i + 1 < lines.length) {
           const next = lines[++i];
-          label += '\n' + next;
           entry.continuation.push(reindent(next, delta));
+          if (brackets.feed('\n' + next) <= 0) break;
         }
         // An unclosed payload runs to the end of the file; its trailing blank lines are not part of it.
         while (entry.continuation[entry.continuation.length - 1] === '') entry.continuation.pop();
@@ -326,7 +326,9 @@ const withComment = (code: string, comment: string) => (comment ? code + ' ' + c
 const leadingSpace = (line: string) => /^[ \t]*/.exec(line)![0];
 /** Columns of leading whitespace; a tab counts as one indentation step. */
 const width = (space: string) => [...space].reduce((n, ch) => n + (ch === '\t' ? INDENT.length : 1), 0);
-const indent = (depth: number) => INDENT.repeat(depth);
+/** Indentation stops growing past MAX_INDENT levels, so a crafted file of `{` lines cannot blow up the output. */
+const MAX_INDENT = 32;
+const indent = (depth: number) => INDENT.repeat(Math.min(depth, MAX_INDENT));
 /** Length in code points, so names with accents or emoji align as well as a monospace font allows. */
 const len = (s: string) => [...s].length;
 const pad = (s: string, to: number) => s + ' '.repeat(Math.max(0, to - len(s)));

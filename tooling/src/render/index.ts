@@ -4,7 +4,7 @@
  * blocks (GitHub renders them), `html` one self-contained page with the SVGs.
  * `hld-md` and `hld-html` write the high-level design document instead.
  */
-import { toMermaidArchitecture, toMermaidSequence, type Diagram, type DiagramScenario, type DiagramUseCase } from '../proschi';
+import { EXPORT_CSP, toMermaidArchitecture, toMermaidSequence, type Diagram, type DiagramScenario, type DiagramUseCase } from '../proschi';
 import { renderArchitectureSvg } from './architecture';
 import { renderSequenceSvg, scenarioTitle } from './sequence';
 import { renderHldHtml, renderHldMarkdown } from './hld';
@@ -121,6 +121,8 @@ export function renderHtml(diagram: Diagram, rendered: RenderedDiagram): string 
     '<html lang="en">',
     '<head>',
     '<meta charset="utf-8">',
+    // No scripts and nothing remote: content from the document can never run, even if escaping missed something.
+    `<meta http-equiv="Content-Security-Policy" content="${EXPORT_CSP}">`,
     '<meta name="viewport" content="width=device-width, initial-scale=1">',
     `<title>${esc(title)}</title>`,
     `<style>${PAGE_STYLE}</style>`,

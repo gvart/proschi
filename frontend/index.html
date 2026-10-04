@@ -2,11 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <script>
-      // Old share links pointed at the site root (/proschi/#code=...). The editor
-      // now lives under app/, so forward them before anything else loads.
-      if (location.hash.indexOf('#code=') === 0) location.replace('./app/' + location.hash);
-    </script>
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). frame-ancestors cannot be set from a meta tag. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <script src="./legacy-redirect.js"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Proschi: architecture diagrams as text, with request flows you can play</title>
     <meta

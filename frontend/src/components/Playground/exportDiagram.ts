@@ -1,4 +1,3 @@
-import { toPng, toSvg } from 'html-to-image';
 import { getRectOfNodes, type Node } from 'reactflow';
 
 const PADDING = 32;
@@ -20,7 +19,11 @@ export function downloadUrl(url: string, fileName: string) {
 }
 
 export function downloadText(text: string, fileName: string) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/plain;charset=utf-8' }));
+  downloadBlob(new Blob([text], { type: 'text/plain;charset=utf-8' }), fileName);
+}
+
+export function downloadBlob(blob: Blob, fileName: string) {
+  const url = URL.createObjectURL(blob);
   downloadUrl(url, fileName);
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -30,6 +33,8 @@ export function downloadText(text: string, fileName: string) {
  * `nodes` must be React Flow's internal nodes so nested positions are absolute.
  */
 export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport: HTMLElement, fileName: string) {
+  // html-to-image is only needed here, so it loads on the first export.
+  const { toPng, toSvg } = await import('html-to-image');
   const bounds = getRectOfNodes(nodes);
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);

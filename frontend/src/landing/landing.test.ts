@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import landingHtml from '../../index.html?raw';
+import legacyRedirect from '../../public/legacy-redirect.js?raw';
 import { examples, parse } from '../dsl';
 import { problems } from '../practice/catalog';
 import { decodeShareLink } from '../playground/share';
@@ -8,6 +9,7 @@ import { format } from '../dsl/format';
 import { APP_PATH, HERO_USE_CASE, editorLink, exampleLink } from './links';
 import { heroScenarios, stepLines } from './player';
 import { listingsFrom, practiceListHtml } from './practiceList';
+import prebuiltListings from 'virtual:practice-listings';
 import { tallLayout, wideLayout } from './diagramLayout';
 
 function decodeEntities(s: string): string {
@@ -183,8 +185,10 @@ describe('old share links', () => {
     const firstScript = head.indexOf('<script');
     expect(firstScript).toBeGreaterThan(-1);
     expect(firstScript).toBeLessThan(head.indexOf('<link'));
-    expect(head).toContain("location.hash.indexOf('#code=') === 0");
-    expect(head).toContain("location.replace('./app/' + location.hash)");
+    // An external file, so the CSP can forbid inline scripts.
+    expect(head.slice(firstScript)).toMatch(/^<script src="\.\/legacy-redirect\.js"><\/script>/);
+    expect(legacyRedirect).toContain("location.hash.indexOf('#code=') === 0");
+    expect(legacyRedirect).toContain("location.replace('./app/' + location.hash)");
   });
 });
 
@@ -203,6 +207,11 @@ describe('practice section', () => {
     const html = practiceListHtml(listings);
     const ids = [...html.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
     expect(ids).toEqual(problems.map((p) => p.id));
+  });
+
+  it('prebuilds the same list for the landing and practice pages (virtual:practice-listings)', () => {
+    expect(prebuiltListings).toEqual(listings);
+    expect(prebuiltListings.map((p) => [p.id, p.tags, p.order])).toEqual(problems.map((p) => [p.id, p.tags, p.order]));
   });
 
   it('renders title, difficulty and summary, escaped', () => {
