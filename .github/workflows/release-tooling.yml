@@ -36,7 +36,7 @@ jobs:
       run:
         working-directory: tooling
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - name: Resolve the release tag
         run: |
           if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
@@ -49,7 +49,7 @@ jobs:
             tag="$GITHUB_REF_NAME"
           fi
           echo "VERSION=$tag" >> "$GITHUB_ENV"
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v7
         with:
           node-version: 22
           registry-url: https://registry.npmjs.org

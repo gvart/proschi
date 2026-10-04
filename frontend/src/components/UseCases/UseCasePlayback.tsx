@@ -18,8 +18,7 @@ import ReactFlow, {
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
 import '@reactflow/node-resizer/dist/style.css';
-import { api, type FlowStep, type UseCase } from '../../services/api';
-import { useCanvasStore } from '../../store/canvasStore';
+import type { FlowStep } from '../../dsl/types';
 import ComponentNode from '../Canvas/ComponentNode';
 import TextNode from '../Canvas/TextNode';
 import GroupNode from '../Canvas/GroupNode';
@@ -46,11 +45,6 @@ const connects = (edge: Edge, step: FlowStep) =>
   (edge.source === step.fromServiceId && edge.target === step.toServiceId) ||
   (edge.target === step.fromServiceId && edge.source === step.toServiceId);
 
-interface UseCasePlaybackProps {
-  useCaseId: string;
-  onBack: () => void;
-}
-
 interface UseCasePlayerProps {
   /** `condition` is the `when "…"` text of the scenario being played. */
   useCase: { id?: string; name: string; steps: FlowStep[]; condition?: string };
@@ -62,45 +56,6 @@ interface UseCasePlayerProps {
   onStepChange?: (index: number) => void;
   /** Hide the title bar when the host already shows the use case and a way back. */
   showHeader?: boolean;
-}
-
-/** Loads a stored use case and plays it against the current canvas. */
-function UseCasePlaybackContent({ useCaseId, onBack }: UseCasePlaybackProps) {
-  const [useCase, setUseCase] = useState<UseCase | null>(null);
-  const [loading, setLoading] = useState(true);
-  const nodes = useCanvasStore((state) => state.nodes);
-  const edges = useCanvasStore((state) => state.edges);
-
-  useEffect(() => {
-    let cancelled = false;
-    setLoading(true);
-    api
-      .getUseCase(useCaseId)
-      .then((data) => !cancelled && setUseCase(data))
-      .catch((error) => console.error('Failed to load use case:', error))
-      .finally(() => !cancelled && setLoading(false));
-    return () => {
-      cancelled = true;
-    };
-  }, [useCaseId]);
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-gray-500">Loading use case...</div>
-      </div>
-    );
-  }
-
-  if (!useCase) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="text-red-500">Use case not found</div>
-      </div>
-    );
-  }
-
-  return <UseCasePlayerContent useCase={useCase} nodes={nodes} edges={edges} onBack={onBack} />;
 }
 
 /** Animated step-by-step playback of a use case over an architecture diagram. */
@@ -549,14 +504,6 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
         </div>
       </div>
     </div>
-  );
-}
-
-export default function UseCasePlayback(props: UseCasePlaybackProps) {
-  return (
-    <ReactFlowProvider>
-      <UseCasePlaybackContent {...props} />
-    </ReactFlowProvider>
   );
 }
 
