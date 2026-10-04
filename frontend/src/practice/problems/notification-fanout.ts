@@ -12,9 +12,12 @@ an external email, SMS or push provider.
 
 ## Functional requirements
 
-- **Notify**: the Order Service emits an event (\`OrderShipped\`, …) for a
-  user. The user's preferences decide the channel; each event becomes at most
-  one notification. Model five scenarios:
+- **Notify**: the Order Service hands an event (\`OrderShipped\`, …) for a
+  user over and gets an answer as soon as the event is safely accepted.
+- **Deliver**: a queue hands an accepted event to a worker (the use case
+  starts with a step sent by the queue). The user's preferences decide the
+  channel; each event becomes at most one notification. Model five
+  scenarios:
   - \`"Email"\`, \`"Push"\`, \`"SMS"\`: the user prefers that channel and the
     notification goes out through its provider.
   - \`"SMS failover"\`: the SMS provider does not answer; the message goes
@@ -27,7 +30,8 @@ tests in \`problem.proschi\` refer to them.
 
 ## Scale
 
-- **1,500 events per second** at peak (evening delivery rounds).
+- **1,500 events per second** at peak (evening delivery rounds), each one
+  handed over once and delivered once.
 - 55% of users prefer email, 30% push, 10% SMS; 4% opted out. The SMS
   provider times out on about 1% of all events.
 - Providers are slow and flaky: about **200 ms** per call when they work,
@@ -51,7 +55,7 @@ tests in \`problem.proschi\` refer to them.
 \`prefs\` service (each user's channel and opt-outs) and the providers
 \`email\`, \`sms\`, \`smsBackup\` and \`push\`, with their rate limits. It also
 holds the traffic, requirements and tests. Add the components, the
-connections and the use case.`,
+connections and the two use cases.`,
   given: `title "Notification Fan-out" "Turns order events into email, SMS and push notifications"
 
 orders    "Order Service"       [REST API]        x4 @orders "Emits events when an order ships, is delayed or arrives"
@@ -69,7 +73,8 @@ capacity {
 }
 
 traffic {
-  "Notify" 1500 rps mix "Email" 55%, "Push" 30%, "SMS" 10%, "SMS failover" 1%, "Opted out" 4%
+  "Notify"  1500 rps
+  "Deliver" 1500 rps mix "Email" 55%, "Push" 30%, "SMS" 10%, "SMS failover" 1%, "Opted out" 4%
 }
 
 requirements {
@@ -82,29 +87,34 @@ requirements {
 }
 
 test "The Order Service never waits for a provider" {
-  "Notify" calls any queue before any external
+  "Notify" never waits for any external
+  "Notify" writes any queue before responding
   no path from orders to any external
 }
 
+test "Workers take events from the queue" {
+  "Deliver" starts at any queue
+}
+
 test "Preferences are checked before anything is sent" {
-  "Notify" calls prefs before any external
-  "Notify" scenario "Opted out" never calls any external
+  "Deliver" calls prefs before any external
+  "Deliver" scenario "Opted out" never calls any external
 }
 
 test "Each channel goes out through its provider" {
-  "Notify" scenario "Email" calls email
-  "Notify" scenario "Push" calls push
-  "Notify" scenario "SMS" calls sms
+  "Deliver" scenario "Email" calls email
+  "Deliver" scenario "Push" calls push
+  "Deliver" scenario "SMS" calls sms
 }
 
 test "SMS fails over to the backup provider" {
-  "Notify" handles failure of sms
-  "Notify" scenario "SMS failover" calls smsBackup
+  "Deliver" handles failure of sms
+  "Deliver" scenario "SMS failover" calls smsBackup after sms
 }
 `,
   starter: `import "problem.proschi"
 
-# Add the components, connections and the use case "Notify" with its five scenarios.
+# Add the components, connections and the use cases "Notify" and "Deliver" with its five scenarios.
 notifier "Notifier" [REST API]
 
 orders   -> notifier
@@ -147,38 +157,46 @@ decision "Fail over SMS to a second provider" {
 }
 decision "At-least-once delivery" because "A worker deletes the event only after a provider accepted it; the event id is the provider's idempotency key, so a redelivered event is not sent twice"
 
-usecase "Notify" "Turn an event into a notification on the user's channel" {
-  orders  -> events : OrderShipped {"userId": 42, "orderId": 981}
+usecase "Notify" "Hand an order event over" {
+  orders  -> events : SEND OrderShipped {"userId": 42, "orderId": 981}
   events --> orders : 200 queued
-  events ->> worker : OrderShipped
-  worker  -> prefs  : GET /users/42/preferences
+}
+
+usecase "Deliver" "Turn an accepted event into a notification on the user's channel" {
+  events -> worker : OrderShipped {"userId": 42, "orderId": 981}
+  worker -> prefs  : GET /users/42/preferences
 
   alt "Email" when "the user prefers email" {
-    prefs --> worker : 200 {"channel": "email"}
-    worker -> email  : send "Your order is on its way"
-    email --> worker : 202
+    prefs  --> worker : 200 {"channel": "email"}
+    worker  -> email  : send "Your order is on its way"
+    email  --> worker : 202
+    worker --> events : delete
   } alt "Push" when "the user prefers push" {
-    prefs --> worker : 200 {"channel": "push"}
-    worker -> push   : send "Your order is on its way"
-    push  --> worker : 200
+    prefs  --> worker : 200 {"channel": "push"}
+    worker  -> push   : send "Your order is on its way"
+    push   --> worker : 200
+    worker --> events : delete
   } alt "SMS" when "the user prefers SMS" {
-    prefs --> worker : 200 {"channel": "sms"}
-    worker -> sms    : send "Your order is on its way"
-    sms   --> worker : 202
+    prefs  --> worker : 200 {"channel": "sms"}
+    worker  -> sms    : send "Your order is on its way"
+    sms    --> worker : 202
+    worker --> events : delete
   } alt "SMS failover" when "the SMS provider times out" {
     prefs     --> worker    : 200 {"channel": "sms"}
     worker     -x sms       : send "Your order is on its way"
     worker     -> smsBackup : send "Your order is on its way"
     smsBackup --> worker    : 202
+    worker    --> events    : delete
   } alt "Opted out" when "the user turned these notifications off" {
-    prefs --> worker : 200 {"orderShipped": "off"}
+    prefs  --> worker : 200 {"orderShipped": "off"}
+    worker --> events : delete
   }
 }
 `,
   hints: [
     'Providers take 200 ms and have outages, but the Order Service needs an answer in under 50 ms. What can accept the event right away and keep it until it is sent?',
-    'Put the events on a queue and let workers do the rest; the queue stores them durably and redelivers them when a worker fails.',
-    'Ask the Preferences service before calling any provider, so an opted-out user is never contacted.',
+    'Split the work in two: "Notify" only puts the event on a queue; "Deliver" starts with the queue handing the event to a worker (events -> worker), which deletes it once it is handled.',
+    'In "Deliver", ask the Preferences service before calling any provider, so an opted-out user is never contacted.',
     'Model the SMS outage with a failed call (-x sms) followed by a call to smsBackup in the "SMS failover" scenario.',
   ],
 };

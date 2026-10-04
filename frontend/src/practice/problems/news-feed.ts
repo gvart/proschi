@@ -26,7 +26,9 @@ Use these use case names exactly: the traffic, requirements and tests in
 - **Publish post: 500 rps** at peak.
 - A user has 200 followers on average, and nobody has more than 5,000
   (accounts with millions of followers are a follow-up, not part of this
-  problem). So each post lands in about 200 feeds.
+  problem). So each post lands in about 200 feeds: write the step that adds
+  a post to one follower's feed with the fan-out prefix, \`x200\`, so the
+  simulation counts all ~100k feed writes a second.
 - A feed only needs its newest 500 post ids.
 
 ## Constraints
@@ -35,6 +37,9 @@ Use these use case names exactly: the traffic, requirements and tests in
 - Reading the feed available **99.9%** of the time.
 - A post is never lost once the user got \`201\`, and no feed ever shows a
   post that was not stored.
+- Publishing never waits for the social graph or for the feeds: the author
+  gets \`201\` as soon as the post is stored.
+- Reading a feed never touches a database or the social graph.
 - Losing any single machine must not take the service down.
 - At most **$4,000 / month**, the social graph included.
 
@@ -70,18 +75,19 @@ requirements {
 
 test "Reading the feed never queries a database" {
   "Read feed" calls any cache
-  "Read feed" never calls any database
-  "Read feed" never calls graph
+  "Read feed" never calls any database or graph
 }
 
 test "Posts are stored before they reach any feed" {
+  "Publish post" writes any database before responding
   "Publish post" calls any database before any cache
   "Publish post" responds 201
 }
 
 test "Fan-out runs behind a queue" {
-  "Publish post" calls graph
+  "Publish post" never waits for graph or any cache
   "Publish post" calls any queue before graph
+  "Publish post" calls any cache after graph
 }
 `,
   starter: `import "problem.proschi"
@@ -103,7 +109,7 @@ api       "Feed API"       [REST API]          x9 @feed "Publishes posts and ser
 posts     "Posts DB"       [Cassandra]         x2 @feed "Every post, partitioned by author"
 events    "Post Events"    [Kafka]             x2 @feed "PostCreated events for the fan-out"
 fanout    "Fan-out Worker" [REST API]          x2 @feed "Pushes each new post into its followers' feeds"
-feeds     "Feed Cache"     [Redis]             x2 @feed "The newest 500 post ids of every active user"
+feeds     "Feed Cache"     [Redis]             x3 @feed "The newest 500 post ids of every active user"
 postCache "Post Cache"     [Redis]             x2 @feed "Recent posts by id, so feeds can be shown without the database"
 
 user   -> lb
@@ -144,6 +150,10 @@ decision "Fan-out behind a queue" {
   because "Listing followers alone takes 50 ms and each post goes to ~200 feeds; the author gets 201 once the post is stored and the event is queued"
   rejected "Fan-out inside the request" "Publishing would wait for the graph and hundreds of cache writes"
 }
+decision "Three feed cache nodes" {
+  because "500 posts a second times 200 followers is 100k ZADDs a second on top of 10k reads; three nodes keep that under 40%, and the two left after a failure under 60%"
+  rejected "Two nodes" "One node alone cannot take 110k operations a second when the other fails"
+}
 decision "Store first, then fan out" because "A feed may only point at posts the database already holds; a failed fan-out is retried from the queue"
 decision "Celebrities are out of scope" because "With at most 5,000 followers pure fan-out on write works; huge accounts would need their posts merged at read time"
 
@@ -160,7 +170,7 @@ usecase "Publish post" "Store a post and push it into the followers' feeds" {
   fanout  -> graph     : GET /users/7/followers
   graph  --> fanout    : 200 [~200 follower ids]
   fanout  -> postCache : SET post:p_981
-  fanout  -> feeds     : ZADD feed:<follower> p_981 (pipelined, ~200)
+  fanout  -> feeds     : x200 ZADD feed:{follower} p_981
 }
 
 usecase "Read feed" "Show the newest posts of the people a user follows" {
@@ -177,7 +187,7 @@ usecase "Read feed" "Show the newest posts of the people a user follows" {
   hints: [
     'Feeds are read 20 times more often than posts are written. Could each feed be ready before anyone asks for it?',
     'Precompute feeds into a cache when a post is published (fan-out on write); then a read is a lookup of post ids plus the posts themselves, also from a cache.',
-    'Listing followers takes 50 ms and each post goes to ~200 feeds: do not make the author wait. Store the post, put an event on a queue, answer 201, and let a worker do the fan-out.',
-    'Store the post before any feed points at it, and size the Feed API for 10.5k rps at well under 70% busy.',
+    'Listing followers takes 50 ms and each post goes to ~200 feeds: do not make the author wait. Store the post, put an event on a queue, answer 201, and let a worker list the followers and write the feeds.',
+    'Write the feed step as x200 ZADD …: 500 posts a second become 100k feed writes a second. Size the feed cache so it survives losing a node under that load, and the Feed API for 10.5k rps at well under 70% busy.',
   ],
 };

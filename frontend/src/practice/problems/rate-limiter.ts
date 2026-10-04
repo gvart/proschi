@@ -26,12 +26,17 @@ Use these names exactly: the traffic, requirements and tests in
 - **5k rps** in total, of which about 5% is over the limit.
 - Counters must be shared: the limiter runs on several machines and a client
   may hit any of them.
+- Every call counts, allowed or not: the limiter increments the client's
+  counter (an atomic write such as \`INCR\`) before deciding. Reading the
+  counter and incrementing it later lets bursts through.
 
 ## Constraints
 
 - p99 of a call under **200 ms**, including the limit check.
 - Available **99.9%** of the time.
 - Losing any single machine must not take the API down.
+- Nothing reaches the Orders API without passing the limiter: no connection
+  from the client straight to it.
 - At most **$3,000 / month** for everything, the Orders API included.
 
 ## What is given
@@ -65,6 +70,12 @@ test "Limits are checked before the Orders API" {
 test "Rejected calls never reach the Orders API" {
   "Call API" scenario "Limited" never calls orders
   "Call API" scenario "Limited" responds 429
+  no path from client to orders
+}
+
+test "Every call is counted before it is let through" {
+  "Call API" writes any cache before responding
+  "Call API" every scenario calls any cache
 }
 `,
   starter: `import "problem.proschi"
@@ -120,7 +131,7 @@ usecase "Call API" "A client calls the protected API" {
 `,
   hints: [
     'The counters must be shared by every limiter replica. Which kind of store answers in about a millisecond?',
-    'Write the limit check before the call to the Orders API, and leave the call out of the "Limited" scenario altogether.',
+    'Write the limit check before the call to the Orders API, and leave the call out of the "Limited" scenario altogether. The check is a write: INCR the counter and decide on the value it returns.',
     'Every component needs a second replica to survive losing one machine; size the limiter for 5k rps at well under 70% busy.',
   ],
 };
