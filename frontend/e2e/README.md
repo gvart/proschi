@@ -27,6 +27,7 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 |---|---|
 | `landing.e2e.ts` | Hero, hero player, practice list (12 problems), example links into the editor |
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
+| `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
 
 ## Conventions
@@ -40,7 +41,10 @@ npm run e2e          # or: npm run e2e:build (build, then test)
   enough (today: the editor's diagnostics list).
 - No fixed sleeps: wait for a condition (`expect(...)`, `expect.poll`).
   Layout is asynchronous, so use `waitForCanvas()` before touching nodes.
-- Each test gets a fresh browser context, so `localStorage` starts empty.
+- Each test gets a fresh browser context, so `localStorage` starts empty,
+  except that the first-run tours are marked as seen (`fixtures.ts`), so they
+  never cover what a test looks at. Tour tests opt out with
+  `test.use({ onboarding: 'fresh' })`.
 
 CI runs the suite in the `e2e` job of `.github/workflows/frontend.yml`; the
 Pages deploy waits for it. On failure the HTML report and traces are uploaded

@@ -20,7 +20,7 @@ const TABS: { view: View; label: string; icon: typeof Network }[] = [
 export default function ViewTabs({ view, onChange, results }: ViewTabsProps) {
   const failed = results.filter((r) => !r.passed).length;
   return (
-    <div role="tablist" aria-label="Diagram view" className="flex items-center gap-1 px-2 bg-white border-b border-gray-200 overflow-x-auto">
+    <div role="tablist" aria-label="Diagram view" data-tour="views" className="flex items-center gap-1 px-2 bg-white border-b border-gray-200 overflow-x-auto">
       {TABS.map(({ view: v, label, icon: Icon }) => (
         <button
           key={v}

@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- First-run onboarding. The editor opens with a five-step tour the first time
+  (text → diagram, change a line, play a use case, Analysis/Tests, share and
+  backup); most steps move on when you do the thing. Practice gets a three-step
+  intro on the first problem. Tours are small non-modal popovers (Esc or X to
+  skip, keyboard and screen reader friendly, reduced motion respected) and load
+  only when shown. Shared diagrams and example links open without a tour, with
+  at most a small corner hint. `?tour=1` / `?tour=0` force or suppress it.
+- A Help (?) menu in the editor and practice headers: replay the tour, a syntax
+  cheat-sheet (checked against the parser and docs/LANGUAGE.md in tests), the
+  language reference and how the simulation works.
+- An empty diagram offers a start: a template with the syntax in comments, an
+  example, or practice. An example picked while the diagram is empty replaces it.
 - Root README with a feature overview, links, quick start and contributing guide.
 - This changelog.
 - Dependabot for the frontend and tooling npm packages (weekly, minor and patch

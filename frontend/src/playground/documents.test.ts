@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { BLANK_SOURCE, addDoc, currentDoc, initialState, removeDoc, selectDoc, titleOf, updateCurrent } from './documents';
+import { BLANK_SOURCE, addDoc, currentDoc, initialState, isBlank, removeDoc, selectDoc, titleOf, updateCurrent } from './documents';
 
 const clock = () => '2026-01-01T00:00:00.000Z';
 const ids = () => {
@@ -88,5 +88,18 @@ describe('titleOf', () => {
     ['subtitle "x"', 'Untitled'],
   ])('%j → %s', (source, title) => {
     expect(titleOf(source)).toBe(title);
+  });
+});
+
+describe('isBlank', () => {
+  it('is true for a new diagram, comments and whitespace only', () => {
+    expect(isBlank(BLANK_SOURCE)).toBe(true);
+    expect(isBlank('')).toBe(true);
+    expect(isBlank('  # notes\n\ntitle "X" "Summary"\n')).toBe(true);
+  });
+
+  it('is false as soon as anything else is written', () => {
+    expect(isBlank('title "X"\napi\n')).toBe(false);
+    expect(isBlank('api -> db')).toBe(false);
   });
 });

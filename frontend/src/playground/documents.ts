@@ -149,6 +149,11 @@ export function removeDoc(state: DocumentState, id: string, now: Clock = default
   return { docs, currentId: state.currentId === id ? docs[0].id : state.currentId };
 }
 
+/** Nothing but a title, comments and blank lines: a diagram that has not been started. */
+export function isBlank(source: string): boolean {
+  return source.split('\n').every((line) => /^\s*(?:#.*)?$/.test(line) || /^\s*title\b/.test(line));
+}
+
 /** Diagram name from its `title` line, without parsing the whole document. */
 export function titleOf(source: string): string {
   const match = source.match(/^[ \t]*title[ \t]+(?:"((?:[^"\\]|\\.)*)"|([A-Za-z_]\w*))/m);

@@ -4,6 +4,8 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import { loadProgress, saveProgress, type Progress } from './progress';
+import HelpMenu from '../onboarding/HelpMenu';
+import { requestTour } from '../onboarding/seen';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -55,6 +57,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         <a href="../app/" className="ml-auto text-sm text-gray-700 hover:text-blue-700">
           Open the editor
         </a>
+        <HelpMenu
+          tourLabel="Take the practice tour"
+          onTour={() => {
+            // The tour runs on a problem page: open the first (easiest) problem with it.
+            requestTour('practice');
+            window.location.hash = `#/${problems[0]?.id ?? ''}`;
+          }}
+        />
       </header>
       {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">No problem called “{route}”. Pick one below.</p>}
       <ProblemList problems={problems} progress={progress} />
