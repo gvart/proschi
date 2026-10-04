@@ -1,13 +1,15 @@
-import { useEffect, useImperativeHandle, useRef, type Ref } from 'react';
+import { useEffect, useImperativeHandle, useRef, useState, type Ref } from 'react';
 import { basicSetup } from 'codemirror';
 import { EditorView, keymap } from '@codemirror/view';
-import { EditorState } from '@codemirror/state';
+import { Compartment, EditorState } from '@codemirror/state';
 import { indentWithTab } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
 import { format, formattedOffset } from '../../dsl/format';
 import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
+import { editorLayout, focusThemeFor } from './editorThemes';
+import { useEditorTheme, type ResolvedTheme } from './useEditorTheme';
 
 export interface CodeEditorHandle {
   goTo: (line: number, col: number) => void;
@@ -23,14 +25,9 @@ interface CodeEditorProps {
   diagnostics: Diagnostic[];
   nodeIds: string[];
   ref?: Ref<CodeEditorHandle>;
+  /** Forces a focus theme; by default the editor follows the visitor's choice (dark unless they picked light). */
+  theme?: ResolvedTheme;
 }
-
-const theme = EditorView.theme({
-  '&': { height: '100%', fontSize: '13px', backgroundColor: '#ffffff' },
-  '.cm-scroller': { fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace', lineHeight: '1.6' },
-  '.cm-gutters': { backgroundColor: '#f9fafb', borderRight: '1px solid #e5e7eb' },
-  '&.cm-focused': { outline: 'none' },
-});
 
 function formatDocument(view: EditorView): boolean {
   const before = view.state.doc.toString();
@@ -42,9 +39,13 @@ function formatDocument(view: EditorView): boolean {
   return true;
 }
 
-export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref }: CodeEditorProps) {
+export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref, theme }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
+  const preferred = useEditorTheme();
+  const mode = theme ?? preferred;
+  const modeRef = useRef(mode);
+  const [themeSlot] = useState(() => new Compartment());
   const onChangeRef = useRef(onChange);
   const nodeIdsRef = useRef(nodeIds);
 
@@ -65,7 +66,8 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
           proschiLanguage,
           autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current)] }),
           lintGutter(),
-          theme,
+          editorLayout,
+          themeSlot.of(focusThemeFor(modeRef.current)),
           EditorView.updateListener.of((update) => {
             if (update.docChanged) onChangeRef.current(update.state.doc.toString());
           }),
@@ -76,6 +78,14 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
     return () => view.destroy();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Swap the focus theme in place when the visitor (or the OS) changes it.
+  useEffect(() => {
+    const view = viewRef.current;
+    if (!view || modeRef.current === mode) return;
+    modeRef.current = mode;
+    view.dispatch({ effects: themeSlot.reconfigure(focusThemeFor(mode)) });
+  }, [mode, themeSlot]);
 
   // Replace the document when the value changes from outside (e.g. loading an example).
   useEffect(() => {
@@ -125,5 +135,5 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref 
     },
   }));
 
-  return <div ref={hostRef} className="proschi-editor h-full overflow-hidden" />;
+  return <div ref={hostRef} data-editor-theme={mode} className="proschi-editor h-full overflow-hidden" />;
 }

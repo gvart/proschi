@@ -14,9 +14,9 @@ const pct = (fraction: number) => `${Math.round(fraction * 100)}%`;
 export default function CommunityStats({ stats, canSignIn }: CommunityStatsProps) {
   const { you } = stats;
   return (
-    <div className="m-3 rounded-md border border-gray-200 bg-gray-50 px-3 py-2 text-gray-700">
+    <div className="m-3 rounded-md border border-ink/15 bg-paper px-3 py-2 text-ink/85">
       <p className="flex items-center gap-2">
-        <Users size={16} className="flex-shrink-0 text-gray-500" />
+        <Users size={16} className="flex-shrink-0 text-muted" />
         <span>
           {stats.attempted === 0 ? (
             'Nobody has recorded a run of this problem yet.'
@@ -50,7 +50,7 @@ export default function CommunityStats({ stats, canSignIn }: CommunityStatsProps
           )}
         </div>
       )}
-      {stats.you === undefined && canSignIn && <p className="mt-1 text-xs text-gray-500">Sign in to record your solves and compare your design’s cost and latency with other solvers.</p>}
+      {stats.you === undefined && canSignIn && <p className="mt-1 text-xs text-muted">Sign in to record your solves and compare your design’s cost and latency with other solvers.</p>}
     </div>
   );
 }
@@ -74,18 +74,18 @@ function Metric({ label, value, comparison, distribution: d, mine, format }: Met
   const span = d ? d.max - d.min : 0;
   const at = (v: number) => (span > 0 ? `${Math.min(100, Math.max(0, ((v - d!.min) / span) * 100))}%` : '50%');
   return (
-    <div className="rounded border border-gray-200 bg-white px-2.5 py-2">
-      <p className="text-xs text-gray-500">{label}</p>
-      <p className="font-medium text-gray-900">{value}</p>
-      {comparison && <p className="text-xs text-gray-600">{comparison}</p>}
+    <div className="rounded border border-ink/15 bg-surface px-2.5 py-2">
+      <p className="text-xs text-muted">{label}</p>
+      <p className="font-medium text-ink">{value}</p>
+      {comparison && <p className="text-xs text-ink/75">{comparison}</p>}
       {d && d.count > 1 && (
         <div className="mt-2" aria-hidden>
-          <div className="relative h-2 rounded-full bg-gray-100">
-            <div className="absolute inset-y-0 rounded-full bg-blue-100" style={{ left: at(d.p25), right: `calc(100% - ${at(d.p75)})` }} />
-            <div className="absolute -top-0.5 h-3 w-0.5 bg-gray-400" style={{ left: at(d.median) }} />
-            <div className="absolute -top-1 h-4 w-1.5 -translate-x-1/2 rounded-sm bg-blue-600" style={{ left: at(mine) }} />
+          <div className="relative h-2 rounded-full bg-ink/5">
+            <div className="absolute inset-y-0 rounded-full bg-pop-blue/15" style={{ left: at(d.p25), right: `calc(100% - ${at(d.p75)})` }} />
+            <div className="absolute -top-0.5 h-3 w-0.5 bg-ink/40" style={{ left: at(d.median) }} />
+            <div className="absolute -top-1 h-4 w-1.5 -translate-x-1/2 rounded-sm bg-pop-yellow" style={{ left: at(mine) }} />
           </div>
-          <div className="mt-0.5 flex justify-between text-[11px] text-gray-400">
+          <div className="mt-0.5 flex justify-between text-[11px] text-muted">
             <span>{format(d.min)}</span>
             <span>median {format(d.median)}</span>
             <span>{format(d.max)}</span>

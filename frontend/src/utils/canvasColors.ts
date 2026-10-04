@@ -30,6 +30,33 @@ export const TAILWIND_HEX: Record<string, string> = {
   'text-yellow-800': '#854d0e',
 };
 
+/**
+ * The editor's canvas draws with the design tokens (src/design/tokens.css), not
+ * per-type colours: a monochrome card (surface, ink border, hard shadow) and one
+ * accent for what is happening now. Exporters without CSS variables can use the
+ * hex values; canvasColors.test.ts keeps them in step with tokens.css.
+ */
+export const CANVAS_TOKENS = {
+  light: { paper: '#FFF8E7', surface: '#FFFFFF', ink: '#111111', muted: '#5B5B5B', shadow: '#111111', accent: '#FF5DA2', fail: '#FF3B30' },
+  dark: { paper: '#141318', surface: '#1E1D24', ink: '#F4EFE3', muted: '#A9A5B4', shadow: '#605496', accent: '#FF7AB4', fail: '#FF6B61' },
+} as const;
+
+/** The token each CANVAS_TOKENS entry mirrors. */
+export const CANVAS_TOKEN_VARS: Record<keyof (typeof CANVAS_TOKENS)['light'], string> = {
+  paper: '--c-paper',
+  surface: '--c-surface',
+  ink: '--c-ink',
+  muted: '--c-muted',
+  shadow: '--c-shadow',
+  accent: '--c-pink',
+  fail: '--c-fail',
+};
+
+/** The one accent (selected, active), the failure colour and idle edges, as CSS for inline styles. */
+export const CANVAS_ACCENT = 'rgb(var(--c-pink))';
+export const CANVAS_FAIL = 'rgb(var(--c-fail))';
+export const CANVAS_EDGE = 'rgb(var(--c-muted))';
+
 /** Tailwind's default `font-sans` stack, which the editor uses. */
 export const CANVAS_FONT =
   "ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'";

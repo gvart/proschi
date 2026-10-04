@@ -23,7 +23,7 @@ export default function ProblemRoute({ id, progress, onProgress, engine = defaul
   const problem = use(loadProblem(id));
   if (!problem) {
     return (
-      <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">
+      <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">
         Problem “{id}” could not be loaded; reload the page to try again. <a href="#/" className="underline">Back to the list</a>
       </p>
     );

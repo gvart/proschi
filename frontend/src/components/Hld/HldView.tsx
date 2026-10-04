@@ -53,43 +53,43 @@ export default function HldView({ diagram, nodes, edges, analysis, results, engi
   const hasChecks = doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length > 0 || s.flowTests.length > 0));
 
   return (
-    <div className="h-full overflow-y-auto bg-gray-50">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 py-2 bg-white/95 backdrop-blur border-b border-gray-200">
+    <div className="h-full overflow-y-auto bg-paper">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 py-2 bg-surface/95 backdrop-blur border-b border-ink/15">
         <nav aria-label="HLD sections" className="flex-1 min-w-0 flex gap-3 overflow-x-auto text-sm whitespace-nowrap">
           {doc.sections.map((s) => (
-            <a key={s.kind} href={`#hld-${s.kind}`} className="text-gray-600 hover:text-blue-700">
+            <a key={s.kind} href={`#hld-${s.kind}`} className="text-ink/75 hover:text-pop-blue">
               {s.title}
             </a>
           ))}
         </nav>
         <button
           onClick={() => downloadText(toMarkdown(doc), fileNameFor(diagram.title, 'hld.md'))}
-          className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-ink/30 text-ink/85 hover:bg-ink/5"
         >
           <Download size={14} />
           Markdown
         </button>
         <button
           onClick={() => downloadText(toHtml(doc), fileNameFor(diagram.title, 'hld.html'))}
-          className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+          className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md border border-ink/30 text-ink/85 hover:bg-ink/5"
         >
           <Download size={14} />
           HTML
         </button>
       </div>
 
-      <article className="max-w-4xl mx-auto px-4 py-6 text-sm text-gray-800">
-        <h1 className="text-2xl font-semibold text-gray-900">{doc.title}</h1>
-        <p className="text-gray-500">High-level design</p>
+      <article className="max-w-4xl mx-auto px-4 py-6 text-sm text-ink">
+        <h1 className="text-2xl font-semibold text-ink">{doc.title}</h1>
+        <p className="text-muted">High-level design</p>
         {hasChecks && !doc.checked && (
-          <p className="mt-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">
+          <p className="mt-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">
             The simulation is not available yet, so requirements and tests are listed but not checked.
           </p>
         )}
-        {doc.sections.length === 0 && <p className="mt-6 text-gray-400">Add components and use cases to generate a design document.</p>}
+        {doc.sections.length === 0 && <p className="mt-6 text-muted">Add components and use cases to generate a design document.</p>}
         {doc.sections.map((s) => (
           <section key={s.kind} id={`hld-${s.kind}`} className="mt-8 scroll-mt-14">
-            <h2 className="mb-3 border-b border-gray-200 pb-1 text-lg font-semibold text-gray-900">{s.title}</h2>
+            <h2 className="mb-3 border-b border-ink/15 pb-1 text-lg font-semibold text-ink">{s.title}</h2>
             <SectionBody doc={doc} section={s} nodes={nodes} edges={edges} />
           </section>
         ))}
@@ -104,11 +104,11 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
       return (
         <>
           {s.summary && <p className="mb-2 text-base">{s.summary}</p>}
-          <p className="text-gray-500">
+          <p className="text-muted">
             {[`${s.components} components`, `${s.useCases} use cases`, s.teams.length ? `teams: ${s.teams.join(', ')}` : ''].filter(Boolean).join(' · ')}
           </p>
           {nodes.length > 0 && (
-            <div className="mt-3 h-72 rounded-lg border border-gray-200 bg-white overflow-hidden">
+            <div className="mt-3 h-72 rounded-lg border border-ink/15 bg-surface overflow-hidden">
               <DiagramCanvas nodes={nodes} edges={edges} compact />
             </div>
           )}
@@ -124,14 +124,14 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
                 {s.functional.map((f) => (
                   <li key={f.useCaseId}>
                     <strong>{f.name}</strong>
-                    {f.description && <span className="text-gray-600"> — {f.description}</span>}
+                    {f.description && <span className="text-ink/75"> — {f.description}</span>}
                     {(f.scenarios.length > 1 || f.scenarios[0]?.condition) && (
-                      <ul className="list-[circle] pl-5 text-gray-600">
+                      <ul className="list-[circle] pl-5 text-ink/75">
                         {f.scenarios.map((sc) => (
                           <li key={sc.id}>
                             {sc.name}
-                            {sc.outcome === 'error' && <span className="text-red-600"> (error)</span>}
-                            {sc.condition && <span className="text-gray-400"> — when {sc.condition}</span>}
+                            {sc.outcome === 'error' && <span className="text-red-600 dark:text-red-400"> (error)</span>}
+                            {sc.condition && <span className="text-muted"> — when {sc.condition}</span>}
                           </li>
                         ))}
                       </ul>
@@ -208,8 +208,8 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
           head={['Component', 'Tech', 'Kind', 'Team', 'Replicas', 'Responsibility', 'Stores']}
           rows={s.components.map((c) => [
             <span key="n">
-              <strong>{c.name}</strong> <code className="text-xs text-gray-500">{c.id}</code>
-              {c.group && <span className="block text-xs text-gray-400">in {c.group}</span>}
+              <strong>{c.name}</strong> <code className="text-xs text-muted">{c.id}</code>
+              {c.group && <span className="block text-xs text-muted">in {c.group}</span>}
             </span>,
             c.tech,
             c.kind,
@@ -227,9 +227,9 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
             <div key={e.name}>
               <H3>
                 {e.name}
-                {e.storeName && <span className="font-normal text-gray-500"> in {e.storeName}</span>}
+                {e.storeName && <span className="font-normal text-muted"> in {e.storeName}</span>}
               </H3>
-              {e.description && <p className="mb-1 text-gray-600">{e.description}</p>}
+              {e.description && <p className="mb-1 text-ink/75">{e.description}</p>}
               <Table head={['Field', 'Type', 'Flags']} rows={e.fields.map((f) => [<code key="f">{f.name}</code>, f.type, f.flags.join(', ')])} />
             </div>
           ))}
@@ -242,19 +242,19 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
             <div key={ep.endpoint}>
               <H3>
                 <code>{ep.endpoint}</code>
-                {ep.service && <span className="ml-2 text-xs font-normal text-gray-500">served by {ep.service}</span>}
+                {ep.service && <span className="ml-2 text-xs font-normal text-muted">served by {ep.service}</span>}
               </H3>
               {ep.operations.map((op) => (
                 <div key={op.useCaseId} className="mb-3">
                   <p className="font-medium">
                     {op.useCase}
-                    {op.endpoint !== ep.endpoint && <code className="ml-2 text-xs font-normal text-gray-500">{op.endpoint}</code>}
+                    {op.endpoint !== ep.endpoint && <code className="ml-2 text-xs font-normal text-muted">{op.endpoint}</code>}
                   </p>
-                  {op.request && <pre className="my-1 overflow-x-auto rounded-md border border-gray-200 bg-white p-2 text-xs">{op.request}</pre>}
+                  {op.request && <pre className="my-1 overflow-x-auto rounded-md border border-ink/15 bg-surface p-2 text-xs">{op.request}</pre>}
                   <Table
                     head={['Scenario', 'Response']}
                     rows={op.responses.map((r) => [
-                      <span key="s" className={r.outcome === 'error' ? 'text-red-700' : undefined}>
+                      <span key="s" className={r.outcome === 'error' ? 'text-red-700 dark:text-red-300' : undefined}>
                         {r.scenario}
                       </span>,
                       <code key="r" className="text-xs">
@@ -274,15 +274,15 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
           {s.useCases.map((u) => (
             <div key={u.useCaseId}>
               <H3>{u.name}</H3>
-              <p className="text-gray-500">{[u.endpoint, u.rps !== undefined ? formatRps(u.rps) : '', u.description].filter(Boolean).join(' · ')}</p>
+              <p className="text-muted">{[u.endpoint, u.rps !== undefined ? formatRps(u.rps) : '', u.description].filter(Boolean).join(' · ')}</p>
               {u.scenarios.map((sc) => (
-                <div key={sc.id} className="mt-2 rounded-lg border border-gray-200 bg-white p-3">
+                <div key={sc.id} className="mt-2 rounded-lg border border-ink/15 bg-surface p-3">
                   <p className="font-medium">
                     <span aria-hidden="true" className={`mr-1.5 inline-block h-2 w-2 rounded-full ${sc.outcome === 'error' ? 'bg-red-500' : 'bg-green-500'}`} />
                     {sc.name}
-                    {sc.outcome === 'error' && <span className="text-red-600"> (error)</span>}
+                    {sc.outcome === 'error' && <span className="text-red-600 dark:text-red-400"> (error)</span>}
                   </p>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-muted">
                     {[
                       sc.condition ? `When ${sc.condition}` : '',
                       sc.share !== undefined ? `${formatPercent(sc.share)} of traffic` : '',
@@ -302,7 +302,7 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
       return (
         <div className="space-y-4">
           {s.decisions.map((d) => (
-            <div key={d.title} className="rounded-lg border border-gray-200 bg-white p-3">
+            <div key={d.title} className="rounded-lg border border-ink/15 bg-surface p-3">
               <p className="font-semibold">{d.title}</p>
               {d.because && (
                 <p className="mt-1">
@@ -310,7 +310,7 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
                 </p>
               )}
               {d.rejected.length > 0 && (
-                <ul className="mt-1 list-disc pl-5 text-gray-600">
+                <ul className="mt-1 list-disc pl-5 text-ink/75">
                   {d.rejected.map((r) => (
                     <li key={r.option}>
                       <span className="line-through decoration-gray-400">{r.option}</span> — {r.reason}
@@ -330,8 +330,8 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
               <RiskIcon severity={r.severity} />
               <span>
                 <strong>{r.title}</strong>
-                {r.detail && <span className="text-gray-600"> — {r.detail}</span>}
-                {r.hint && <span className="block text-xs text-gray-500">Fix: {r.hint}</span>}
+                {r.detail && <span className="text-ink/75"> — {r.detail}</span>}
+                {r.hint && <span className="block text-xs text-muted">Fix: {r.hint}</span>}
               </span>
             </li>
           ))}
@@ -341,17 +341,17 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
 }
 
 function H3({ children }: { children: ReactNode }) {
-  return <h3 className="mt-4 mb-1.5 font-semibold text-gray-900">{children}</h3>;
+  return <h3 className="mt-4 mb-1.5 font-semibold text-ink">{children}</h3>;
 }
 
 function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
   return (
     <div className="overflow-x-auto">
-      <table className="w-full border-collapse bg-white text-left text-[13px]">
+      <table className="w-full border-collapse bg-surface text-left text-[13px]">
         <thead>
           <tr>
             {head.map((h) => (
-              <th key={h} className="border border-gray-200 bg-gray-50 px-2 py-1 font-medium text-gray-600">
+              <th key={h} className="border border-ink/15 bg-paper px-2 py-1 font-medium text-ink/75">
                 {h}
               </th>
             ))}
@@ -361,8 +361,8 @@ function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
           {rows.map((row, i) => (
             <tr key={i}>
               {row.map((c, j) => (
-                <td key={j} className="border border-gray-200 px-2 py-1 align-top">
-                  {c === undefined || c === '' ? <span className="text-gray-300">—</span> : c}
+                <td key={j} className="border border-ink/15 px-2 py-1 align-top">
+                  {c === undefined || c === '' ? <span className="text-ink/30">—</span> : c}
                 </td>
               ))}
             </tr>
@@ -376,18 +376,18 @@ function Table({ head, rows }: { head: string[]; rows: ReactNode[][] }) {
 function Status({ status }: { status: CheckStatus }) {
   if (status === 'pass')
     return (
-      <span className="inline-flex items-center gap-1 text-green-700">
+      <span className="inline-flex items-center gap-1 text-green-700 dark:text-green-300">
         <CheckCircle2 size={14} /> pass
       </span>
     );
   if (status === 'fail')
     return (
-      <span className="inline-flex items-center gap-1 text-red-700">
+      <span className="inline-flex items-center gap-1 text-red-700 dark:text-red-300">
         <XCircle size={14} /> fail
       </span>
     );
   return (
-    <span className="inline-flex items-center gap-1 text-gray-400">
+    <span className="inline-flex items-center gap-1 text-muted">
       <MinusCircle size={14} /> not checked
     </span>
   );
@@ -398,7 +398,7 @@ function Measured({ text, hint }: { text?: string; hint?: string }) {
   return (
     <span>
       {text}
-      {hint && <span className="block text-xs text-gray-500">Fix: {hint}</span>}
+      {hint && <span className="block text-xs text-muted">Fix: {hint}</span>}
     </span>
   );
 }
@@ -407,16 +407,16 @@ function Utilization({ value, saturated }: { value: number; saturated: boolean }
   const color = saturated ? 'bg-red-500' : value > HOT_UTILIZATION ? 'bg-amber-500' : 'bg-green-500';
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="h-1.5 w-16 rounded-full bg-gray-100 overflow-hidden">
+      <span className="h-1.5 w-16 rounded-full bg-ink/5 overflow-hidden">
         <span className={`block h-full ${color}`} style={{ width: `${Math.min(value, 1) * 100}%` }} />
       </span>
-      <span className={saturated ? 'text-red-700' : undefined}>{formatPercent(value)}</span>
+      <span className={saturated ? 'text-red-700 dark:text-red-300' : undefined}>{formatPercent(value)}</span>
     </span>
   );
 }
 
 function RiskIcon({ severity }: { severity: Risk['severity'] }) {
-  const color = severity === 'high' ? 'text-red-600' : severity === 'medium' ? 'text-amber-600' : 'text-gray-400';
+  const color = severity === 'high' ? 'text-red-600 dark:text-red-400' : severity === 'medium' ? 'text-amber-600 dark:text-amber-400' : 'text-muted';
   return <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${color}`} aria-label={`${severity} risk`} />;
 }
 
@@ -429,11 +429,11 @@ function SequenceList({ doc, useCaseId, scenarioId }: { doc: HldDocument; useCas
   return (
     <ol className="mt-2 space-y-0.5 text-xs">
       {sequenceMessages(sequence.items).map((m, i) => (
-        <li key={i} className={`flex gap-2 ${m.error ? 'text-red-700' : 'text-gray-700'} ${m.kind === 'response' ? 'pl-4 text-gray-500' : ''}`}>
-          <span className="w-4 flex-shrink-0 text-right tabular-nums text-gray-400">{m.kind === 'request' ? m.number : ''}</span>
+        <li key={i} className={`flex gap-2 ${m.error ? 'text-red-700 dark:text-red-300' : 'text-ink/85'} ${m.kind === 'response' ? 'pl-4 text-muted' : ''}`}>
+          <span className="w-4 flex-shrink-0 text-right tabular-nums text-muted">{m.kind === 'request' ? m.number : ''}</span>
           <span>
             {name(m.from)} {m.kind === 'response' ? '⇠' : m.failed ? '✗→' : m.async ? '⇢' : '→'} {name(m.to)}
-            {m.label && <code className="ml-1.5 text-gray-500">{m.label}</code>}
+            {m.label && <code className="ml-1.5 text-muted">{m.label}</code>}
           </span>
         </li>
       ))}

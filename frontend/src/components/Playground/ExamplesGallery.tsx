@@ -30,15 +30,15 @@ export default function ExamplesGallery({ onPick, onClose }: ExamplesGalleryProp
       <div
         role="dialog"
         aria-label="Examples"
-        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-xl bg-white shadow-xl"
+        className="w-full max-w-3xl max-h-[85vh] overflow-y-auto rounded-brutal border-bw-2 border-ink bg-surface text-ink shadow-brutal-lg"
         onMouseDown={(e) => e.stopPropagation()}
       >
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-200">
+        <div className="flex items-center justify-between px-5 py-4 border-b-bw-2 border-ink">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900">Examples</h2>
-            <p className="text-sm text-gray-500">Each one opens as a new diagram; your work stays in the diagrams menu.</p>
+            <h2 className="font-display text-2xl font-extrabold tracking-[-0.02em] text-ink">Examples</h2>
+            <p className="text-sm text-muted">Each one opens as a new diagram; your work stays in the diagrams menu.</p>
           </div>
-          <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-md text-gray-500 hover:bg-gray-100">
+          <button onClick={onClose} aria-label="Close" className="p-1.5 rounded-md text-muted hover:bg-ink/10">
             <X size={18} />
           </button>
         </div>
@@ -47,11 +47,11 @@ export default function ExamplesGallery({ onPick, onClose }: ExamplesGalleryProp
             <button
               key={example.id}
               onClick={() => onPick(example)}
-              className="text-left rounded-lg border border-gray-200 p-4 hover:border-blue-400 hover:shadow-sm transition"
+              className="ps-card ps-card--interactive text-left !p-4 !shadow-brutal-sm hover:!shadow-brutal-md"
             >
-              <div className="font-medium text-gray-900">{example.name}</div>
-              <div className="mt-1 text-sm text-gray-600">{example.description}</div>
-              <div className="mt-2 text-xs text-gray-400">{stats[example.id]}</div>
+              <div className="font-display text-lg font-bold leading-tight text-ink">{example.name}</div>
+              <div className="mt-1 text-sm text-ink/75">{example.description}</div>
+              <div className="mt-2 font-mono text-xs text-muted">{stats[example.id]}</div>
             </button>
           ))}
         </div>

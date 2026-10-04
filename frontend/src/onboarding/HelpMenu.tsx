@@ -23,7 +23,7 @@ export default function HelpMenu({ onTour, tourLabel = 'Take the tour', classNam
     <div ref={rootRef} className={className} data-tour="help" onPointerEnter={loadItems} onFocus={loadItems}>
       <Menu label="Help" align="right" trigger={<CircleHelp size={18} />}>
         {(close) => (
-          <Suspense fallback={<p className="px-3 py-1.5 text-sm text-gray-400">Loading…</p>}>
+          <Suspense fallback={<p className="px-3 py-1.5 text-sm text-muted">Loading…</p>}>
             <HelpMenuItems
               tourLabel={tourLabel}
               onTour={() => {

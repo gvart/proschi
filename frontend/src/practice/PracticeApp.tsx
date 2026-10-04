@@ -93,8 +93,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           </>
         }
       />
-      <div className="ps-light flex-1 bg-paper">
-        {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700">No problem called “{route}”. Pick one below.</p>}
+      <div className="flex-1 bg-paper">
+        {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{route}”. Pick one below.</p>}
         <ProblemList problems={problems} progress={progress} stats={stats}>
           {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
         </ProblemList>

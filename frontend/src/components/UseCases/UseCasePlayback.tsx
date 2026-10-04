@@ -17,6 +17,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Node, Edge } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { CANVAS_ACCENT, CANVAS_EDGE, CANVAS_FAIL } from '../../utils/canvasColors';
 import '@reactflow/node-resizer/dist/style.css';
 import type { FlowStep } from '../../dsl/types';
 import ComponentNode from '../Canvas/ComponentNode';
@@ -175,10 +176,10 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
   if (useCase.steps.length === 0) {
     return (
       <div className="flex items-center justify-center h-full flex-col gap-4">
-        <div className="text-gray-500">This use case has no steps to play</div>
+        <div className="text-muted">This use case has no steps to play</div>
         <button
           onClick={onBack}
-          className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+          className="inline-flex items-center gap-2 px-4 py-2 bg-pop-yellow text-on-accent font-semibold border-bw-1 border-ink shadow-brutal-sm rounded-lg hover:bg-pop-yellow/85 transition-colors"
         >
           <ArrowLeft size={20} />
           Back to Use Cases
@@ -219,11 +220,8 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       opacity: highlightedNodes.has(node.id) ? 1 : scenarioNodes.has(node.id) || node.type === 'groupNode' ? 0.45 : 0.15,
       transition: 'opacity 0.3s ease',
     },
-    className: errorNodes.has(node.id)
-      ? 'ring-4 ring-red-500 ring-opacity-60'
-      : highlightedNodes.has(node.id)
-        ? 'ring-4 ring-blue-500 ring-opacity-50'
-        : '',
+    // Styled in Canvas/canvas.css: one accent for the step's nodes, red for the one that failed.
+    className: errorNodes.has(node.id) ? 'pc-failing' : highlightedNodes.has(node.id) ? 'pc-active' : '',
   }));
 
   // Find active edges for current step(s)
@@ -254,7 +252,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       },
       style: {
         ...edge.style,
-        stroke: isActive ? (isError ? ERROR_COLOR : '#3b82f6') : '#b1b1b7',
+        stroke: isActive ? (isError ? ERROR_COLOR : CANVAS_ACCENT) : CANVAS_EDGE,
         strokeWidth: isActive ? 3 : 2,
         strokeDasharray: isActive && step?.failed ? '6 4' : edge.style?.strokeDasharray,
         opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : onPath ? 0.45 : 0.12,
@@ -264,21 +262,21 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
   });
 
   return (
-    <div className="h-full flex flex-col bg-gray-50">
+    <div className="h-full flex flex-col bg-paper">
       {/* Header */}
       {showHeader && (
-      <div className="bg-white border-b border-gray-200 px-6 py-4">
+      <div className="bg-surface border-b border-ink/15 px-6 py-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <button
               onClick={onBack}
-              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+              className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors"
             >
               <ArrowLeft size={20} />
             </button>
             <div>
-              <h2 className="text-2xl font-bold text-gray-900">{useCase.name}</h2>
-              <p className="text-sm text-gray-500">Playback Mode - Read Only</p>
+              <h2 className="text-2xl font-bold text-ink">{useCase.name}</h2>
+              <p className="text-sm text-muted">Playback Mode - Read Only</p>
             </div>
           </div>
         </div>
@@ -297,7 +295,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           nodesDraggable={false}
           nodesConnectable={false}
           elementsSelectable={false}
-          className="bg-gray-50"
+          className="bg-paper"
           panOnDrag={true}
           zoomOnScroll={true}
           preventScrolling={false}
@@ -306,41 +304,22 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
           <Controls showInteractive={false} />
           <MiniMap
             className="!hidden md:!block"
-            nodeColor={(node) => {
-              if (highlightedNodes.has(node.id)) {
-                return '#3b82f6';
-              }
-              switch (node.data.type) {
-                case 'service':
-                  return '#3b82f6';
-                case 'database':
-                  return '#10b981';
-                case 'queue':
-                  return '#a855f7';
-                case 'external':
-                  return '#f97316';
-                case 'text':
-                  return '#eab308';
-                case 'group':
-                  return node.data.borderColor || '#3b82f6';
-                default:
-                  return '#6b7280';
-              }
-            }}
+            nodeColor={(node) => (errorNodes.has(node.id) ? CANVAS_FAIL : highlightedNodes.has(node.id) ? CANVAS_ACCENT : CANVAS_EDGE)}
+            maskColor="rgb(var(--c-paper) / 0.6)"
           />
         </ReactFlow>
       </div>
 
       {/* Step Info Panel */}
-      <div className="bg-white border-t border-gray-200 p-3 sm:p-4 max-h-[35vh] sm:max-h-64 overflow-y-auto">
+      <div className="bg-surface border-t border-ink/15 p-3 sm:p-4 max-h-[35vh] sm:max-h-64 overflow-y-auto">
         <div className="max-w-6xl mx-auto">
           {useCase.condition && (
-            <p className="mb-2 text-sm text-gray-600">
-              <span className="font-medium text-gray-700">When:</span> {useCase.condition}
+            <p className="mb-2 text-sm text-ink/75">
+              <span className="font-medium text-ink/85">When:</span> {useCase.condition}
             </p>
           )}
           {currentSteps.length > 1 && (
-            <div className="mb-2 text-sm font-medium text-blue-600">
+            <div className="mb-2 text-sm font-medium text-pop-blue">
               ⚡ Parallel Execution ({currentSteps.length} steps running simultaneously)
             </div>
           )}
@@ -351,65 +330,65 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                        isErrorStep(step) ? 'bg-red-100 text-red-700' : 'bg-blue-100 text-blue-600'
+                        isErrorStep(step) ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-pop-blue/15 text-pop-blue'
                       }`}
                     >
                       {useCase.steps.indexOf(step) + 1}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-gray-900 break-words">{step.stepName}</h3>
+                        <h3 className="font-semibold text-ink break-words">{step.stepName}</h3>
                         {step.failed && (
-                          <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">Failed</span>
+                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">Failed</span>
                         )}
                         {!step.failed && (step.statusCode ?? 0) >= 400 && (
-                          <span className="px-2 py-0.5 text-xs bg-red-100 text-red-700 rounded">{step.statusCode}</span>
+                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">{step.statusCode}</span>
                         )}
                         {step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed && (
-                          <span className="px-2 py-0.5 text-xs bg-green-100 text-green-700 rounded">Sync</span>
+                          <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">Sync</span>
                         )}
                         {step.executionType === 'ASYNC_FIRE_AND_FORGET' && (
-                          <span className="px-2 py-0.5 text-xs bg-orange-100 text-orange-700 rounded">Fire & Forget</span>
+                          <span className="px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded">Fire & Forget</span>
                         )}
                         {step.executionType === 'ASYNC_REQUEST_RESPONSE' && (
-                          <span className="px-2 py-0.5 text-xs bg-purple-100 text-purple-700 rounded">Async</span>
+                          <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded">Async</span>
                         )}
                       </div>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-muted">
                         {nodes.find((n) => n.id === step.fromServiceId)?.data.name} →{' '}
                         {nodes.find((n) => n.id === step.toServiceId)?.data.name}
                       </p>
                     </div>
                     {`${step.httpMethod} ${step.endpoint}`.trim() !== step.stepName && (
-                      <div className="text-sm text-gray-500 break-all">
+                      <div className="text-sm text-muted break-all">
                         {step.httpMethod} {step.endpoint}
                       </div>
                     )}
                   </div>
 
                   {step.description && (
-                    <p className="text-sm text-gray-600 mb-3">{step.description}</p>
+                    <p className="text-sm text-ink/75 mb-3">{step.description}</p>
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
                     {step.requestBody && (
                       <div>
-                        <div className="text-xs font-medium text-gray-500 mb-1">
+                        <div className="text-xs font-medium text-muted mb-1">
                           Request ({step.requestFormat})
                         </div>
-                        <pre className="text-xs bg-gray-50 p-2 rounded border border-gray-200 overflow-auto max-h-32">
+                        <pre className="text-xs bg-paper p-2 rounded border border-ink/15 overflow-auto max-h-32">
                           {step.requestBody}
                         </pre>
                       </div>
                     )}
                     {step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
                       <div>
-                        <div className={`text-xs font-medium mb-1 ${isErrorStep(step) ? 'text-red-600' : 'text-gray-500'}`}>
+                        <div className={`text-xs font-medium mb-1 ${isErrorStep(step) ? 'text-red-600 dark:text-red-400' : 'text-muted'}`}>
                           Response ({step.responseFormat}){step.statusCode !== undefined && ` - ${step.statusCode}`}
                         </div>
                         <pre
                           className={`text-xs p-2 rounded border overflow-auto max-h-32 ${
-                            isErrorStep(step) ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200'
+                            isErrorStep(step) ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800' : 'bg-paper border-ink/15'
                           }`}
                         >
                           {step.responseBody}
@@ -417,10 +396,10 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
                       </div>
                     )}
                     {!step.responseBody && !step.failed && (step.statusCode ?? 0) >= 400 && (
-                      <div className="text-sm text-red-700">Answered with {step.statusCode}</div>
+                      <div className="text-sm text-red-700 dark:text-red-300">Answered with {step.statusCode}</div>
                     )}
                     {step.failed && (
-                      <div className="text-sm text-red-700">No response: the call failed (timeout, connection refused or similar).</div>
+                      <div className="text-sm text-red-700 dark:text-red-300">No response: the call failed (timeout, connection refused or similar).</div>
                     )}
                   </div>
                 </div>
@@ -432,13 +411,13 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
       </div>
 
       {/* Playback Controls */}
-      <div className="bg-white border-t border-gray-200 px-3 sm:px-6 py-3 sm:py-4">
+      <div className="bg-surface border-t border-ink/15 px-3 sm:px-6 py-3 sm:py-4">
         <div className="max-w-6xl mx-auto">
           <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
             <div className="flex items-center gap-2">
               <button
                 onClick={handleReset}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors"
                 title="Reset to start"
               >
                 <SkipBack size={20} />
@@ -446,7 +425,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
               <button
                 onClick={handleStepBack}
                 disabled={currentStepIndex === 0}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Previous step"
               >
                 <ChevronLeft size={20} />
@@ -454,7 +433,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
               {!isPlaying ? (
                 <button
                   onClick={handlePlay}
-                  className="p-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                  className="p-3 bg-pop-yellow text-on-accent font-semibold border-bw-1 border-ink shadow-brutal-sm hover:bg-pop-yellow/85 rounded-lg transition-colors"
                   title="Play"
                 >
                   <Play size={24} />
@@ -462,7 +441,7 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
               ) : (
                 <button
                   onClick={handlePause}
-                  className="p-3 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+                  className="p-3 bg-pop-yellow text-on-accent font-semibold border-bw-1 border-ink shadow-brutal-sm hover:bg-pop-yellow/85 rounded-lg transition-colors"
                   title="Pause"
                 >
                   <Pause size={24} />
@@ -471,14 +450,14 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
               <button
                 onClick={handleStepForward}
                 disabled={currentStepIndex === useCase.steps.length - 1}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Next step"
               >
                 <ChevronRight size={20} />
               </button>
               <button
                 onClick={() => setCurrentStepIndex(useCase.steps.length - 1)}
-                className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors"
                 title="Go to end"
               >
                 <SkipForward size={20} />
@@ -487,12 +466,12 @@ function UseCasePlayerContent({ useCase, nodes, edges: architectureEdges, onBack
 
             <div className="flex-1">
               <div className="flex items-center gap-3">
-                <span className="text-sm font-medium text-gray-700">
+                <span className="text-sm font-medium text-ink/85">
                   Step {currentStepIndex + 1} of {useCase.steps.length}
                 </span>
-                <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+                <div className="flex-1 h-2 bg-ink/10 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-blue-600 transition-all duration-300"
+                    className="h-full bg-pop-yellow transition-all duration-300"
                     style={{
                       width: `${((currentStepIndex + animationProgress / 100) / useCase.steps.length) * 100}%`,
                     }}

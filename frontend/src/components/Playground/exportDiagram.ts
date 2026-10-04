@@ -28,6 +28,11 @@ export function downloadBlob(blob: Blob, fileName: string) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function paperColor(): string {
+  const channels = getComputedStyle(document.documentElement).getPropertyValue('--c-paper').trim();
+  return channels ? `rgb(${channels})` : '#ffffff';
+}
+
 /**
  * Renders the whole diagram (not just the visible part) to PNG or SVG.
  * `nodes` must be React Flow's internal nodes so nested positions are absolute.
@@ -39,7 +44,8 @@ export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);
   const options = {
-    backgroundColor: '#ffffff',
+    // The page's paper colour, so a dark-theme export keeps its contrast.
+    backgroundColor: paperColor(),
     width,
     height,
     style: {

@@ -1,0 +1,29 @@
+/* The editor's surroundings use the focus palette (editorThemes.ts) as tokens,
+   so Tailwind token classes inside (bg-paper, text-muted, ...) match the code. */
+.editor-zone {
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  border-color: rgb(var(--c-ink) / 0.16);
+}
+.editor-zone[data-editor-zone='dark'] {
+  color-scheme: dark;
+  --c-paper: 22 23 27; /* #16171B, the editor background */
+  --c-surface: 27 28 33;
+  --c-ink: 201 204 211; /* #C9CCD3, the editor text */
+  --c-muted: 120 125 138;
+  --c-shadow: 0 0 0;
+  --c-blue: 154 167 199; /* the keyword colour */
+  --c-pass: 168 191 160; /* the string colour: calm green */
+  --c-fail: 255 107 97;
+}
+.editor-zone[data-editor-zone='light'] {
+  color-scheme: light;
+  --c-paper: 255 253 246; /* #FFFDF6 */
+  --c-surface: 251 247 234;
+  --c-ink: 42 42 42;
+  --c-muted: 110 106 96;
+  --c-blue: 61 79 184;
+  --c-pass: 47 122 85;
+  --c-fail: 198 40 40;
+  --c-yellow: 154 91 0; /* warnings: the number colour, readable on cream */
+}

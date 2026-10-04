@@ -30,6 +30,7 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
+| `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
 
 ## Conventions
 

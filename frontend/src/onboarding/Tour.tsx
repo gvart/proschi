@@ -178,7 +178,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
         <div
           aria-hidden="true"
           data-testid="tour-highlight"
-          className="pointer-events-none fixed z-40 rounded-lg ring-2 ring-blue-500 shadow-[0_0_0_6px_rgba(59,130,246,0.18)] motion-safe:transition-all motion-safe:duration-200"
+          className="pointer-events-none fixed z-40 rounded-lg ring-2 ring-pop-blue shadow-[0_0_0_6px_rgba(59,130,246,0.18)] motion-safe:transition-all motion-safe:duration-200"
           style={{ top: target.top - 3, left: target.left - 3, width: target.width + 6, height: target.height + 6 }}
         />
       )}
@@ -189,13 +189,13 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
         aria-label={`${label}: ${step.title}`}
         aria-describedby={`${ids}-body`}
         tabIndex={-1}
-        className={`fixed z-40 rounded-xl border border-gray-200 bg-white shadow-xl outline-none motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
+        className={`fixed z-40 rounded-xl border border-ink/15 bg-surface shadow-xl outline-none motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
           phone ? 'w-[calc(100vw-24px)]' : 'w-[22rem]'
         }`}
         style={{ top: -9999, left: -9999 }}
       >
         <div className="flex items-center gap-2 pl-4 pr-2 pt-2.5">
-          <span className="text-xs font-medium text-blue-700">
+          <span className="text-xs font-medium text-pop-blue">
             {label} · {index + 1} of {steps.length}
           </span>
           <button
@@ -203,20 +203,20 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
             onClick={() => onClose(false)}
             aria-label="Close tour"
             title="Close tour (Esc)"
-            className="ml-auto rounded-md p-1.5 text-gray-400 hover:bg-gray-100 hover:text-gray-700"
+            className="ml-auto rounded-md p-1.5 text-muted hover:bg-ink/10 hover:text-ink"
           >
             <X size={16} />
           </button>
         </div>
         <div className="px-4">
-          <h2 className="text-base font-semibold text-gray-900">{step.title}</h2>
-          <div id={`${ids}-body`} className="mt-1 space-y-2 text-sm leading-relaxed text-gray-600">
+          <h2 className="text-base font-semibold text-ink">{step.title}</h2>
+          <div id={`${ids}-body`} className="mt-1 space-y-2 text-sm leading-relaxed text-ink/75">
             {step.body}
           </div>
           {step.task && (
             <div
               className={`mt-3 flex items-start gap-2 rounded-lg border px-3 py-2 text-sm ${
-                done ? 'border-green-200 bg-green-50 text-green-800' : 'border-blue-100 bg-blue-50 text-blue-900'
+                done ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-200' : 'border-pop-blue/20 bg-pop-blue/10 text-ink'
               }`}
             >
               {done ? <Check size={16} className="mt-0.5 flex-shrink-0" /> : <MousePointerClick size={16} className="mt-0.5 flex-shrink-0" />}
@@ -224,15 +224,15 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
             </div>
           )}
         </div>
-        <div className="mt-3 flex items-center gap-2 border-t border-gray-100 px-4 py-2.5">
+        <div className="mt-3 flex items-center gap-2 border-t border-ink/10 px-4 py-2.5">
           <div className="flex gap-1" aria-hidden="true">
             {steps.map((s, i) => (
-              <span key={s.id} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-blue-600' : i < index ? 'w-1.5 bg-blue-300' : 'w-1.5 bg-gray-200'}`} />
+              <span key={s.id} className={`h-1.5 rounded-full ${i === index ? 'w-4 bg-pop-yellow' : i < index ? 'w-1.5 bg-pop-blue/50' : 'w-1.5 bg-ink/10'}`} />
             ))}
           </div>
           <div className="ml-auto flex items-center gap-1.5">
             {index > 0 && (
-              <button type="button" onClick={() => go(index - 1, true)} className="whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-gray-600 hover:bg-gray-100">
+              <button type="button" onClick={() => go(index - 1, true)} className="whitespace-nowrap rounded-md px-2.5 py-1.5 text-sm text-ink/75 hover:bg-ink/10">
                 Back
               </button>
             )}
@@ -240,7 +240,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
               <button
                 type="button"
                 onClick={step.action.run}
-                className="whitespace-nowrap rounded-md border border-gray-300 px-2.5 py-1.5 text-sm text-gray-700 hover:bg-gray-50"
+                className="whitespace-nowrap rounded-md border border-ink/30 px-2.5 py-1.5 text-sm text-ink/85 hover:bg-ink/5"
               >
                 {step.action.label}
               </button>
@@ -249,7 +249,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
               ref={primaryRef}
               type="button"
               onClick={() => go(index + 1, true)}
-              className="whitespace-nowrap rounded-md bg-blue-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-blue-700"
+              className="whitespace-nowrap rounded-md bg-pop-yellow px-3 py-1.5 text-sm font-semibold text-on-accent border-bw-1 border-ink shadow-brutal-sm hover:bg-pop-yellow/85"
             >
               {last ? 'Finish' : 'Next'}
             </button>

@@ -8,7 +8,7 @@ interface HelpMenuItemsProps {
   onCheatSheet: () => void;
 }
 
-const linkClass = 'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100';
+const linkClass = 'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-ink/85 hover:bg-ink/10';
 
 export default function HelpMenuItems({ tourLabel, onTour, onCheatSheet }: HelpMenuItemsProps) {
   return (
@@ -19,11 +19,11 @@ export default function HelpMenuItems({ tourLabel, onTour, onCheatSheet }: HelpM
       <MenuItem icon={<FileCode size={14} />} onSelect={onCheatSheet}>
         Syntax cheat-sheet
       </MenuItem>
-      <div className="my-1 border-t border-gray-100" />
+      <div className="my-1 border-t border-ink/10" />
       <a role="menuitem" href={LANGUAGE_URL} target="_blank" rel="noopener noreferrer" className={linkClass}>
         <BookOpenText size={14} />
         Language reference
-        <ExternalLink size={12} className="ml-auto text-gray-400" />
+        <ExternalLink size={12} className="ml-auto text-muted" />
       </a>
       <a role="menuitem" href={MODEL_URL} className={linkClass}>
         <Gauge size={14} />
