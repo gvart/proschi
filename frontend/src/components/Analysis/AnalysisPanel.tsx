@@ -145,8 +145,10 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
 
         <p className="flex items-start gap-2 text-xs text-gray-400">
           <Info size={14} className="mt-px flex-shrink-0" />
-          The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing model;
-          override them with <code>capacity {'{ … }'}</code>.
+          <span>
+            The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing
+            model; override them with <code>capacity {'{ … }'}</code>.
+          </span>
         </p>
       </div>
     </div>
