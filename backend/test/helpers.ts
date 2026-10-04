@@ -21,6 +21,21 @@ export function call(path: string, init: Omit<RequestInit, 'body'> & { token?: s
   return (exports as unknown as { default: Fetcher }).default.fetch(new Request(`${ORIGIN}${path}`, { ...rest, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
 }
 
+/**
+ * The local rate limiters count in fixed windows aligned to the wall clock
+ * (miniflare's RateLimiterObject: epoch = floor(now / period)), so a burst
+ * that straddles a minute boundary starts counting again halfway. Tests that
+ * expect a 429 call this first: it waits for the next minute when fewer than
+ * `needMs` are left in this one.
+ */
+export async function withinOneWindow(needMs = 5000, periodMs = 60_000): Promise<void> {
+  const left = periodMs - (Date.now() % periodMs);
+  if (left < needMs) await new Promise((resolve) => setTimeout(resolve, left + 50));
+}
+
+/** Timeout for a test that calls withinOneWindow. */
+export const WINDOW_TIMEOUT = 20_000;
+
 let users = 0;
 
 /** A user with a session, created straight in the database; returns its id and session token. */

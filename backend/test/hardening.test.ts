@@ -8,7 +8,7 @@ import type { Env } from '../src/env';
 import worker from '../src/index';
 import { normalizeForCheck, rejectName, wordsForCheck } from '../src/moderation';
 import { findProblem, problemIds } from '../src/verify';
-import { call, ORIGIN, resetDatabase, signedInUser } from './helpers';
+import { call, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 const ID = 'url-shortener';
 const problem = findProblem(ID)!;
@@ -95,12 +95,13 @@ describe('sign-in without a usable SESSION_SECRET', () => {
   });
 
   it('limits sign-in attempts per IP', async () => {
-    const headers = { 'CF-Connecting-IP': '203.0.113.7' };
+    const headers = { 'CF-Connecting-IP': `test-${crypto.randomUUID()}` };
+    await withinOneWindow();
     const statuses: number[] = [];
     for (let i = 0; i < 21; i++) statuses.push((await call('/auth/github/start?return=/', { headers, redirect: 'manual' })).status);
     expect(statuses.slice(0, 20).every((s) => s === 302)).toBe(true);
     expect(statuses[20]).toBe(429);
-  });
+  }, WINDOW_TIMEOUT);
 });
 
 describe('sessions', () => {
@@ -209,12 +210,13 @@ describe('progress import', () => {
     expect((await importItems(token, tooMany)).status).toBe(413);
     expect((await importItems(token, [{ problemId: ID, source: 'x'.repeat(600 * 1024), solved: false }])).status).toBe(413);
 
+    await withinOneWindow();
     const statuses: number[] = [];
     for (let i = 0; i < 4; i++) statuses.push((await importItems(token, [{ problemId: ID, source: 'x', solved: false }])).status);
     expect(statuses).toEqual([200, 200, 200, 429]);
     const limited = await importItems(token, []);
     expect(limited.headers.get('Retry-After')).toBe('60');
-  });
+  }, WINDOW_TIMEOUT);
 });
 
 describe('data export', () => {
