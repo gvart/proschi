@@ -921,7 +921,7 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
   }
 
   return (
-    <ul className="max-h-36 overflow-y-auto border-t border-gray-200 bg-gray-50 text-xs">
+    <ul data-testid="diagnostics" className="max-h-36 overflow-y-auto border-t border-gray-200 bg-gray-50 text-xs">
       {diagnostics.map((d, i) => (
         <li key={i}>
           <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-gray-100">
