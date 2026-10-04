@@ -19,7 +19,7 @@ interface LiveExampleProps {
  */
 export default function LiveExample({ source, siteRoot }: LiveExampleProps) {
   const diagram = useMemo(() => parse(source).diagram, [source]);
-  const { nodes, edges } = useDiagramLayout(diagram);
+  const { nodes, edges, settled } = useDiagramLayout(diagram);
   const scenarios = useMemo(
     () =>
       diagram.useCases.flatMap((u) =>
@@ -92,7 +92,7 @@ export default function LiveExample({ source, siteRoot }: LiveExampleProps) {
             autoPlay
           />
         ) : (
-          <DiagramCanvas nodes={nodes} edges={edges} compact />
+          <DiagramCanvas nodes={nodes} edges={edges} fitKey={String(settled)} compact />
         )}
       </div>
     </div>

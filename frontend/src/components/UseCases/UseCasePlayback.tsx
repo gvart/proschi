@@ -353,6 +353,8 @@ function UseCasePlayerContent({
           edgeTypes={edgeTypes}
           fitView
           fitViewOptions={FIT_VIEW_OPTIONS}
+          // Small panes (the landing demo on a phone) need to zoom out past React Flow's default 0.5 to fit.
+          minZoom={0.1}
           proOptions={{ hideAttribution: true }}
           nodesDraggable={false}
           nodesConnectable={false}

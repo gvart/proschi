@@ -9,9 +9,11 @@ import { settleNodes } from './settle';
  * the nodes to `apply`, which must be stable. While nothing laid out is shown
  * yet (ELK is still loading), a provisional grid comes first and then glides
  * into ELK's layout. Returns a counter that changes once that has happened, so
- * the view can fit the final layout.
+ * the view can fit the final layout. With `everyLayout` it changes after every
+ * new layout instead: for read-only canvases, which should re-fit whenever the
+ * layout moves (edges added between the same nodes reshape it too).
  */
-export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void): number {
+export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, { everyLayout = false } = {}): number {
   const shown = useRef<{ nodes: Node[]; provisional: boolean }>({ nodes: [], provisional: false });
   const [settled, setSettled] = useState(0);
   useEffect(() => {
@@ -34,7 +36,11 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void):
     layoutDiagram(diagram)
       .then((laidOut) => {
         if (cancelled) return;
-        if (!from) return show(laidOut, false);
+        if (!from) {
+          show(laidOut, false);
+          if (everyLayout) setSettled((n) => n + 1);
+          return;
+        }
         cancelSettle = settleNodes(from, laidOut, (nodes) => {
           show(nodes, nodes !== laidOut);
           if (nodes === laidOut) setSettled((n) => n + 1);
@@ -45,15 +51,18 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void):
       cancelled = true;
       cancelSettle();
     };
-  }, [diagram, apply]);
+  }, [diagram, apply, everyLayout]);
   return settled;
 }
 
-/** React Flow nodes and edges of a diagram, laid out again whenever it changes; `settled` as in useAutoLayout. */
+/**
+ * React Flow nodes and edges of a diagram, laid out again whenever it changes, for read-only canvases;
+ * `settled` changes after every layout (useAutoLayout's `everyLayout`), so a fit key built on it re-fits.
+ */
 export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge[]; settled: number } {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   useEffect(() => setEdges(toFlowEdges(diagram)), [diagram]);
-  const settled = useAutoLayout(diagram, setNodes);
+  const settled = useAutoLayout(diagram, setNodes, { everyLayout: true });
   return { nodes, edges, settled };
 }
