@@ -267,8 +267,8 @@ DOM): `analyze(diagram, options?) → Analysis`. It runs in milliseconds, so the
 editor re-runs it on every change.
 
 This section describes the model as the code implements it today, §7's
-refinements included. [How the simulation works](https://proschi.app/model/)
-(`frontend/model/index.html`) states every rule with its default numbers,
+refinements included. [How the simulation works](https://proschi.app/docs/model/)
+(`frontend/src/docs/model.html`) states every rule with its default numbers,
 worked examples and limits; a test recomputes each number on that page from
 the code.
 

@@ -3,48 +3,26 @@ import { NodeResizer } from '@reactflow/node-resizer';
 import type { NodeProps } from 'reactflow';
 import { FolderOpen } from 'lucide-react';
 import type { ComponentMetadata } from '../../types/canvas';
+import { CANVAS_ACCENT } from '../../utils/canvasColors';
+import './canvas.css';
 
+/** A dashed frame around its members; explicit colours in the data still win. */
 function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
-  const backgroundColor = data.backgroundColor || '#f0f9ff';
-  const borderColor = data.borderColor || '#3b82f6';
-  const borderStyle = data.borderStyle || 'dashed';
+  const custom = {
+    ...(data.backgroundColor ? { backgroundColor: data.backgroundColor } : {}),
+    ...(data.borderColor ? { borderColor: data.borderColor } : {}),
+    ...(data.borderStyle ? { borderStyle: data.borderStyle } : {}),
+  };
 
   return (
     <div className="relative w-full h-full">
-      <NodeResizer
-        isVisible={selected}
-        minWidth={300}
-        minHeight={200}
-      />
-      <div
-        className={`
-          rounded-lg p-4 transition-all duration-200
-          ${selected ? 'shadow-lg' : 'shadow-md'}
-        `}
-        style={{
-          width: '100%',
-          height: '100%',
-          minWidth: 300,
-          minHeight: 200,
-          backgroundColor,
-          border: `2px ${borderStyle} ${borderColor}`,
-        }}
-      >
-        <div className="flex items-center gap-2 mb-2">
-          <FolderOpen className="w-5 h-5" style={{ color: borderColor }} />
-          <div
-            className="font-semibold text-lg"
-            style={{ color: borderColor }}
-          >
-            {data.name}
-          </div>
+      <NodeResizer color={CANVAS_ACCENT} isVisible={selected} minWidth={300} minHeight={200} />
+      <div className="pc-group" style={custom}>
+        <div className="pc-group__name" style={data.borderColor ? { color: data.borderColor } : undefined}>
+          <FolderOpen size={14} aria-hidden="true" />
+          {data.name}
         </div>
-
-        {data.description && (
-          <div className="text-sm text-gray-600 mt-1">
-            {data.description}
-          </div>
-        )}
+        {data.description && <div className="pc-group__desc">{data.description}</div>}
       </div>
     </div>
   );

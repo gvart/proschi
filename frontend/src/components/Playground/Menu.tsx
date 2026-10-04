@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { toolButton } from './ui';
 
 interface MenuProps {
   trigger: ReactNode;
@@ -33,14 +34,14 @@ export default function Menu({ trigger, label, align = 'left', children }: MenuP
         aria-label={label}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+        className={`${toolButton} aria-expanded:border-ink aria-expanded:bg-surface aria-expanded:shadow-brutal-sm`}
       >
         {trigger}
       </button>
       {open && (
         <div
           role="menu"
-          className={`absolute z-50 mt-1 min-w-[16rem] max-w-[calc(100vw-2rem)] rounded-lg border border-gray-200 bg-white py-1 shadow-lg ${align === 'right' ? 'right-0' : 'left-0'}`}
+          className={`absolute z-50 mt-2 min-w-[16rem] max-w-[calc(100vw-2rem)] rounded-brutal border-bw-2 border-ink bg-surface text-ink py-1.5 shadow-brutal-md ${align === 'right' ? 'right-0 origin-top-right' : 'left-0 origin-top-left'} motion-safe:animate-[ps-pop_var(--d-spring)_var(--e-spring)]`}
         >
           {children(() => setOpen(false))}
         </div>
@@ -66,7 +67,7 @@ export function MenuItem({
       role="menuitem"
       onClick={onSelect}
       disabled={disabled}
-      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-gray-700 hover:bg-gray-100 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent"
+      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm font-medium text-ink hover:bg-pop-yellow hover:text-on-accent focus-visible:bg-pop-yellow focus-visible:text-on-accent focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink"
     >
       {icon}
       {children}

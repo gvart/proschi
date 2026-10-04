@@ -6,19 +6,19 @@ import { ARROWS, CHEAT_SECTIONS } from './cheatsheet';
 import { LANGUAGE_URL, MODEL_URL } from './links';
 
 const TOKEN_CLASS: Record<TokenClass, string> = {
-  keyword: 'text-purple-700',
-  string: 'text-red-800',
-  tech: 'text-green-700',
-  team: 'text-blue-700',
-  arrow: 'font-semibold text-gray-900',
-  comment: 'text-gray-400',
-  status: 'text-amber-700',
-  number: 'text-amber-700',
+  keyword: 'text-purple-700 dark:text-purple-300',
+  string: 'text-red-800 dark:text-red-200',
+  tech: 'text-green-700 dark:text-green-300',
+  team: 'text-pop-blue',
+  arrow: 'font-semibold text-ink',
+  comment: 'text-muted',
+  status: 'text-amber-700 dark:text-amber-300',
+  number: 'text-amber-700 dark:text-amber-300',
 };
 
 function Snippet({ code }: { code: string }) {
   return (
-    <pre className="overflow-x-auto rounded-md border border-gray-200 bg-gray-50 px-3 py-2 font-mono text-xs leading-relaxed text-gray-800">
+    <pre className="overflow-x-auto rounded-md border border-ink/15 bg-paper px-3 py-2 font-mono text-xs leading-relaxed text-ink">
       <code>
         {highlightLines(code.split('\n')).map((segments, i) => (
           <Fragment key={i}>
@@ -43,7 +43,7 @@ function Snippet({ code }: { code: string }) {
 function Note({ text }: { text: string }): ReactNode {
   return text.split(/(`[^`]+`)/).map((part, i) =>
     part.startsWith('`') ? (
-      <code key={i} className="rounded bg-gray-100 px-1 font-mono text-[0.75rem] text-gray-800">
+      <code key={i} className="rounded bg-ink/5 px-1 font-mono text-[0.75rem] text-ink">
         {part.slice(1, -1)}
       </code>
     ) : (
@@ -75,10 +75,10 @@ export default function CheatSheet({ onClose }: { onClose: () => void }) {
       role="dialog"
       aria-modal="false"
       aria-labelledby={titleId}
-      className="fixed z-40 inset-x-0 bottom-0 max-h-[78dvh] rounded-t-2xl md:inset-x-auto md:bottom-auto md:right-3 md:top-14 md:max-h-[calc(100dvh-4.5rem)] md:w-[26rem] md:rounded-xl flex flex-col border border-gray-200 bg-white shadow-2xl"
+      className="fixed z-40 inset-x-0 bottom-0 max-h-[78dvh] rounded-t-2xl md:inset-x-auto md:bottom-auto md:right-3 md:top-14 md:max-h-[calc(100dvh-4.5rem)] md:w-[26rem] md:rounded-xl flex flex-col border border-ink/15 bg-surface shadow-2xl"
     >
-      <div className="flex items-center gap-2 border-b border-gray-200 px-4 py-2.5">
-        <h2 id={titleId} className="text-base font-semibold text-gray-900">
+      <div className="flex items-center gap-2 border-b border-ink/15 px-4 py-2.5">
+        <h2 id={titleId} className="text-base font-semibold text-ink">
           Syntax cheat-sheet
         </h2>
         <button
@@ -86,19 +86,19 @@ export default function CheatSheet({ onClose }: { onClose: () => void }) {
           type="button"
           onClick={onClose}
           aria-label="Close cheat-sheet"
-          className="ml-auto rounded-md p-1.5 text-gray-500 hover:bg-gray-100 hover:text-gray-800"
+          className="ml-auto rounded-md p-1.5 text-muted hover:bg-ink/10 hover:text-ink"
         >
           <X size={16} />
         </button>
       </div>
-      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4 text-sm text-gray-600">
+      <div className="flex-1 min-h-0 overflow-y-auto px-4 py-3 space-y-4 text-sm text-ink/75">
         <div>
-          <h3 className="font-medium text-gray-900">Arrows in use cases</h3>
+          <h3 className="font-medium text-ink">Arrows in use cases</h3>
           <dl className="mt-1.5 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1">
             {ARROWS.map(({ arrow, meaning }) => (
               <Fragment key={arrow}>
                 <dt>
-                  <code className="font-mono text-xs font-semibold text-gray-900">{`a ${arrow} b`}</code>
+                  <code className="font-mono text-xs font-semibold text-ink">{`a ${arrow} b`}</code>
                 </dt>
                 <dd>{meaning}</dd>
               </Fragment>
@@ -107,13 +107,13 @@ export default function CheatSheet({ onClose }: { onClose: () => void }) {
         </div>
         {CHEAT_SECTIONS.map((section) => (
           <div key={section.id} className="space-y-1.5">
-            <h3 className="flex items-baseline gap-2 font-medium text-gray-900">
+            <h3 className="flex items-baseline gap-2 font-medium text-ink">
               {section.title}
               <a
                 href={`${LANGUAGE_URL}${section.ref}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-normal text-blue-700 hover:underline"
+                className="text-xs font-normal text-pop-blue hover:underline"
                 aria-label={`${section.title} in the language reference`}
               >
                 reference
@@ -130,11 +130,11 @@ export default function CheatSheet({ onClose }: { onClose: () => void }) {
           <code className="font-mono">capacity</code>, <code className="font-mono">entity</code> and <code className="font-mono">decision</code>{' '}
           blocks.
         </p>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-gray-100 pt-3 text-sm">
-          <a href={LANGUAGE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-blue-700 hover:underline">
+        <div className="flex flex-wrap gap-x-4 gap-y-1 border-t border-ink/10 pt-3 text-sm">
+          <a href={LANGUAGE_URL} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-pop-blue hover:underline">
             Language reference <ExternalLink size={12} />
           </a>
-          <a href={MODEL_URL} className="text-blue-700 hover:underline">
+          <a href={MODEL_URL} className="text-pop-blue hover:underline">
             How the simulation works
           </a>
         </div>

@@ -29,6 +29,8 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
+| `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
+| `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
 
 ## Conventions
 
@@ -36,7 +38,8 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 - Every test fails on an uncaught page error or a `console.error` in any of
   its pages (`fixtures.ts`). Known-benign messages go in
   `ALLOWED_CONSOLE_ERRORS` with a comment saying why.
-- External requests (Google Fonts) are stubbed; the suite runs offline.
+- A request to any other host fails the test: the site loads nothing from
+  third parties (fonts are self-hosted), so the suite runs offline.
 - Select by role, label or text. Add a `data-testid` only where those are not
   enough (today: the editor's diagnostics list).
 - No fixed sleeps: wait for a condition (`expect(...)`, `expect.poll`).

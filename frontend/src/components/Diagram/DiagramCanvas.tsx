@@ -4,7 +4,7 @@ import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
-import { useFitOnChange } from './useFitOnChange';
+import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 
 /**
  * A read-only canvas of a parsed diagram, for pages that show a design without
@@ -20,10 +20,14 @@ interface DiagramCanvasProps {
   compact?: boolean;
   /** Changes when the canvas becomes visible again, so it can re-fit. */
   fitKey?: string;
+  /** No pan or zoom by hand, so touch and wheel scroll the page (an embedded preview). */
+  still?: boolean;
+  /** Glide to each new fit over this many ms instead of jumping. */
+  fitDuration?: number;
 }
 
-function Canvas({ nodes, edges, compact, fitKey }: DiagramCanvasProps) {
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey ?? ''}`);
+function Canvas({ nodes, edges, compact, fitKey, still, fitDuration }: DiagramCanvasProps) {
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey ?? ''}`, { duration: fitDuration });
 
   return (
     <ReactFlow
@@ -34,14 +38,18 @@ function Canvas({ nodes, edges, compact, fitKey }: DiagramCanvasProps) {
       nodesConnectable={false}
       elementsSelectable={false}
       deleteKeyCode={null}
-      zoomOnScroll={!compact}
-      preventScrolling={!compact}
+      zoomOnScroll={!compact && !still}
+      zoomOnPinch={!still}
+      zoomOnDoubleClick={!still}
+      panOnDrag={!still}
+      preventScrolling={!compact && !still}
       fitView
+      fitViewOptions={FIT_VIEW_OPTIONS}
       minZoom={0.1}
       proOptions={{ hideAttribution: true }}
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-      {!compact && <Controls showInteractive={false} />}
+      {!compact && !still && <Controls showInteractive={false} />}
     </ReactFlow>
   );
 }

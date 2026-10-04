@@ -20,7 +20,7 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
   const saturated = nodes.filter((n) => n.saturated).length;
 
   return (
-    <div className="h-full overflow-y-auto bg-white">
+    <div className="h-full overflow-y-auto bg-surface">
       <div className="max-w-4xl mx-auto px-4 py-4 space-y-6 text-sm">
         <ModelLink />
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
@@ -37,8 +37,8 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
         {analysis.warnings.length > 0 && (
           <ul className="space-y-1">
             {analysis.warnings.map((w) => (
-              <li key={w} className="flex items-start gap-2 rounded-md bg-amber-50 px-3 py-1.5 text-amber-900">
-                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-amber-600" />
+              <li key={w} className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 text-amber-900 dark:text-amber-100">
+                <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
                 {w}
               </li>
             ))}
@@ -46,10 +46,10 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
         )}
 
         <section>
-          <h2 className="mb-2 font-semibold text-gray-900">Nodes</h2>
+          <h2 className="mb-2 font-semibold text-ink">Nodes</h2>
           <div className="overflow-x-auto">
             <table className="w-full text-left tabular-nums">
-              <thead className="text-xs uppercase tracking-wide text-gray-400">
+              <thead className="text-xs uppercase tracking-wide text-muted">
                 <tr>
                   <th className="py-1 pr-3 font-medium">Node</th>
                   <th className="py-1 pr-3 font-medium">Load / capacity</th>
@@ -59,7 +59,7 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
                   <th className="py-1 font-medium text-right">Cost</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-ink/10">
                 {nodes.map((n) => {
                   const node = byId.get(n.id);
                   return (
@@ -70,42 +70,42 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
                           className="text-left hover:underline"
                           title={node?.loc.file ? `Declared in ${node.loc.file}` : 'Go to the declaration'}
                         >
-                          <span className="font-medium text-gray-900">{n.id}</span>
-                          {n.replicas > 1 && <span className="ml-1 text-gray-500">×{n.replicas}</span>}
-                          <span className="block text-xs text-gray-400">
+                          <span className="font-medium text-ink">{n.id}</span>
+                          {n.replicas > 1 && <span className="ml-1 text-muted">×{n.replicas}</span>}
+                          <span className="block text-xs text-muted">
                             {node && !node.implicit ? node.techStack : n.kind} · {n.kind}
                             {n.durable ? ' · durable' : ''}
                             {n.consistency ? ` · ${n.consistency}` : ''}
                           </span>
                         </button>
                       </td>
-                      <td className="py-1.5 pr-3 text-gray-700 whitespace-nowrap">
+                      <td className="py-1.5 pr-3 text-ink/85 whitespace-nowrap">
                         {splitsReadsAndWrites(n) ? (
                           <>
                             <span className="block" title="Reads: load / capacity">
-                              <span className="text-xs text-gray-400">R </span>
-                              {formatRps(n.readLoadRps)} <span className="text-gray-400">/ {formatRps(n.readCapacityRps)}</span>
+                              <span className="text-xs text-muted">R </span>
+                              {formatRps(n.readLoadRps)} <span className="text-muted">/ {formatRps(n.readCapacityRps)}</span>
                             </span>
                             <span className="block" title={n.writeScaling === 'shards' ? 'Writes: load / capacity (one primary per shard)' : 'Writes: load / capacity'}>
-                              <span className="text-xs text-gray-400">W </span>
-                              {formatRps(n.writeLoadRps)} <span className="text-gray-400">/ {formatRps(n.writeCapacityRps)}</span>
+                              <span className="text-xs text-muted">W </span>
+                              {formatRps(n.writeLoadRps)} <span className="text-muted">/ {formatRps(n.writeCapacityRps)}</span>
                             </span>
                           </>
                         ) : (
                           <>
-                            {formatRps(n.loadRps)} <span className="text-gray-400">/ {formatRps(n.capacityRps)}</span>
+                            {formatRps(n.loadRps)} <span className="text-muted">/ {formatRps(n.capacityRps)}</span>
                           </>
                         )}
                       </td>
                       <td className="py-1.5 pr-3">
                         <UtilizationBar node={n} />
                       </td>
-                      <td className="py-1.5 pr-3 text-right text-gray-700 whitespace-nowrap">{formatMs(n.latencyMs)}</td>
-                      <td className="py-1.5 pr-3 text-right text-gray-700">{formatAvailability(n.availability)}</td>
-                      <td className="py-1.5 text-right text-gray-700">
+                      <td className="py-1.5 pr-3 text-right text-ink/85 whitespace-nowrap">{formatMs(n.latencyMs)}</td>
+                      <td className="py-1.5 pr-3 text-right text-ink/85">{formatAvailability(n.availability)}</td>
+                      <td className="py-1.5 text-right text-ink/85">
                         {formatUsd(n.costUsd).replace('/month', '')}
                         {n.egressUsd > 0 && (
-                          <span className="block text-xs text-gray-400" title={`${formatGb(n.egressGbPerMonth)} a month sent to clients and third parties`}>
+                          <span className="block text-xs text-muted" title={`${formatGb(n.egressGbPerMonth)} a month sent to clients and third parties`}>
                             {formatUsd(n.egressUsd).replace('/month', '')} egress
                           </span>
                         )}
@@ -119,22 +119,22 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
         </section>
 
         <section>
-          <h2 className="mb-1 font-semibold text-gray-900">Use cases</h2>
-          <p className="mb-2 text-xs text-gray-500">
+          <h2 className="mb-1 font-semibold text-ink">Use cases</h2>
+          <p className="mb-2 text-xs text-muted">
             Percentiles are over all requests, the scenarios mixed by their shares: with 10% cache misses, p99 is close to the miss path's
             p90.
           </p>
           <div className="space-y-3">
             {analysis.useCases.map((u) => (
-              <div key={u.id} className="rounded-md border border-gray-200">
-                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2 bg-gray-50 border-b border-gray-200">
-                  <span className="font-medium text-gray-900">{u.name}</span>
-                  <span className="text-gray-500 tabular-nums">{u.rps > 0 ? formatRps(u.rps) : 'no traffic'}</span>
-                  <span className="text-gray-500 tabular-nums">availability {formatAvailability(u.availability)}</span>
+              <div key={u.id} className="rounded-md border border-ink/15">
+                <div className="flex flex-wrap items-baseline gap-x-4 gap-y-1 px-3 py-2 bg-paper border-b border-ink/15">
+                  <span className="font-medium text-ink">{u.name}</span>
+                  <span className="text-muted tabular-nums">{u.rps > 0 ? formatRps(u.rps) : 'no traffic'}</span>
+                  <span className="text-muted tabular-nums">availability {formatAvailability(u.availability)}</span>
                   <span className="ml-auto flex gap-3 tabular-nums">
                     {PERCENTILES.map((p) => (
-                      <span key={p} className="text-gray-700">
-                        <span className="text-xs text-gray-400">{p} </span>
+                      <span key={p} className="text-ink/85">
+                        <span className="text-xs text-muted">{p} </span>
                         {formatMs(u.percentiles[p])}
                       </span>
                     ))}
@@ -142,9 +142,9 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
                 </div>
                 {u.scenarios.length > 1 && (
                   <table className="w-full text-left tabular-nums text-xs">
-                    <tbody className="divide-y divide-gray-100">
+                    <tbody className="divide-y divide-ink/10">
                       {u.scenarios.map((s) => (
-                        <tr key={s.id} className={s.share > 0 ? 'text-gray-700' : 'text-gray-400'}>
+                        <tr key={s.id} className={s.share > 0 ? 'text-ink/85' : 'text-muted'}>
                           <td className="px-3 py-1">{s.name}</td>
                           <td className="px-3 py-1 text-right">{formatPercent(s.share)} of traffic</td>
                           <td className="px-3 py-1 text-right">mean {formatMs(s.meanMs)}</td>
@@ -161,9 +161,9 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
 
         {analysis.singlePointsOfFailure.length > 0 && (
           <section>
-            <h2 className="mb-2 font-semibold text-gray-900">Single points of failure</h2>
-            <p className="flex items-start gap-2 text-gray-700">
-              <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-amber-600" />
+            <h2 className="mb-2 font-semibold text-ink">Single points of failure</h2>
+            <p className="flex items-start gap-2 text-ink/85">
+              <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
               <span>
                 {analysis.singlePointsOfFailure.join(', ')}: one replica, and a use case cannot do without it. Add <code>x2</code> to the declaration or a
                 fallback scenario that calls it with <code>-x</code> and still completes.
@@ -172,7 +172,7 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
           </section>
         )}
 
-        <p className="flex items-start gap-2 text-xs text-gray-400">
+        <p className="flex items-start gap-2 text-xs text-muted">
           <Info size={14} className="mt-px flex-shrink-0" />
           <span>
             The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing
@@ -186,12 +186,12 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
 }
 
 function Stat({ label, value, tone, note }: { label: string; value: string; tone?: 'good' | 'warn' | 'bad'; note?: string }) {
-  const color = tone === 'bad' ? 'text-red-700' : tone === 'warn' ? 'text-amber-700' : tone === 'good' ? 'text-green-700' : 'text-gray-900';
+  const color = tone === 'bad' ? 'text-red-700 dark:text-red-300' : tone === 'warn' ? 'text-amber-700 dark:text-amber-300' : tone === 'good' ? 'text-green-700 dark:text-green-300' : 'text-ink';
   return (
-    <div className="rounded-md border border-gray-200 px-3 py-2">
-      <div className="text-xs text-gray-500">{label}</div>
+    <div className="rounded-md border border-ink/15 px-3 py-2">
+      <div className="text-xs text-muted">{label}</div>
       <div className={`text-lg font-semibold tabular-nums ${color}`}>{value}</div>
-      {note && <div className="text-xs text-gray-500 tabular-nums">{note}</div>}
+      {note && <div className="text-xs text-muted tabular-nums">{note}</div>}
     </div>
   );
 }
@@ -212,15 +212,15 @@ function formatGb(gb: number): string {
 /** Red when saturated, amber above 70%, green otherwise. */
 function UtilizationBar({ node }: { node: NodeAnalysis }) {
   const color = node.saturated ? 'bg-red-500' : node.utilization > HOT ? 'bg-amber-500' : 'bg-green-500';
-  const text = node.saturated ? 'text-red-700 font-medium' : node.utilization > HOT ? 'text-amber-700' : 'text-gray-600';
+  const text = node.saturated ? 'text-red-700 dark:text-red-300 font-medium' : node.utilization > HOT ? 'text-amber-700 dark:text-amber-300' : 'text-ink/75';
   return (
     <div className="flex flex-wrap items-center gap-x-2" title={node.saturated ? 'Saturated: more load than capacity' : undefined}>
-      <div className="h-2 w-24 rounded-full bg-gray-100 overflow-hidden" role="meter" aria-valuenow={Math.round(node.utilization * 100)} aria-valuemin={0} aria-valuemax={100}>
+      <div className="h-2 w-24 rounded-full bg-ink/5 overflow-hidden" role="meter" aria-valuenow={Math.round(node.utilization * 100)} aria-valuemin={0} aria-valuemax={100}>
         <div className={`h-full ${color}`} style={{ width: `${Math.min(100, node.utilization * 100)}%` }} />
       </div>
       <span className={`text-xs ${text}`}>{formatPercent(node.utilization)}</span>
       {splitsReadsAndWrites(node) && (
-        <span className="text-xs text-gray-400 whitespace-nowrap" title="Read and write utilisation">
+        <span className="text-xs text-muted whitespace-nowrap" title="Read and write utilisation">
           R {formatPercent(node.readUtilization)} · W {formatPercent(node.writeUtilization)}
         </span>
       )}
@@ -230,11 +230,11 @@ function UtilizationBar({ node }: { node: NodeAnalysis }) {
 
 function EmptyState() {
   return (
-    <div className="h-full overflow-y-auto bg-white">
-      <div className="max-w-lg mx-auto px-6 py-10 text-sm text-gray-600 space-y-3">
-        <h2 className="text-base font-semibold text-gray-900">No traffic yet</h2>
+    <div className="h-full overflow-y-auto bg-surface">
+      <div className="max-w-lg mx-auto px-6 py-10 text-sm text-ink/75 space-y-3">
+        <h2 className="text-base font-semibold text-ink">No traffic yet</h2>
         <p>Say how many requests each use case gets, and Proschi estimates load, latency, availability and cost for every node:</p>
-        <pre className="rounded-md bg-gray-50 border border-gray-200 px-3 py-2 text-xs text-gray-800 overflow-x-auto">
+        <pre className="rounded-md bg-paper border border-ink/15 px-3 py-2 text-xs text-ink overflow-x-auto">
           {`traffic {
   "Redirect" 10k rps  mix "Cache hit" 90%, "Cache miss" 10%
   "Shorten"  100 rps

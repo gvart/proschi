@@ -1,0 +1,48 @@
+/* Base styles for the static pages (landing, model): the tokens, the shared
+   components and a small reset in place of Tailwind's preflight. */
+
+@import './tokens.css';
+@import './components.css';
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  /* Anchored headings clear the sticky header. */
+  scroll-padding-top: 96px;
+}
+
+body {
+  margin: 0;
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  font: 400 var(--fs-16) / var(--lh-body) var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: clip;
+}
+
+:focus-visible {
+  outline: 3px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+}
+
+::selection {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+}

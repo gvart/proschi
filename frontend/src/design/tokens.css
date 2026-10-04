@@ -1,0 +1,173 @@
+/* Design tokens: the one place colours, type, shape and motion are defined.
+   Imported by every page (src/index.css for the React pages, site.css for the
+   static ones); tailwind.config.js maps its theme onto the same variables.
+   Colours are RGB channels so both CSS and Tailwind can add an alpha:
+   rgb(var(--c-ink) / 0.5). */
+
+@import '@fontsource-variable/bricolage-grotesque';
+@import '@fontsource-variable/archivo/wdth.css';
+@import '@fontsource-variable/jetbrains-mono';
+
+/* .ps-light keeps a part of a page light whatever the theme (the editor and
+   practice work areas, until they have dark styles of their own); a header
+   inside it still follows the theme. */
+:root,
+.ps-light {
+  color-scheme: light;
+  --c-paper: 255 248 231;
+  --c-surface: 255 255 255;
+  --c-ink: 17 17 17;
+  --c-muted: 91 91 91;
+  --c-shadow: 17 17 17;
+  --c-yellow: 255 210 63;
+  --c-pink: 255 93 162;
+  --c-blue: 61 90 254;
+  --c-pass: 0 184 148;
+  --c-fail: 255 59 48;
+  --c-lilac: 182 156 255;
+  /* Text on the accent fills above: dark in both themes. */
+  --c-on-accent: 17 17 17;
+  /* The footer's dark slab and its text. */
+  --c-slab: 17 17 17;
+  --c-on-slab: 255 248 231;
+  /* Hard offset shadows (no blur), here so they pick up each theme's shadow colour. */
+  --sh-sm: 3px 3px 0 rgb(var(--c-shadow));
+  --sh-md: 6px 6px 0 rgb(var(--c-shadow));
+  --sh-lg: 10px 10px 0 rgb(var(--c-shadow));
+}
+
+.ps-light {
+  color: rgb(var(--c-ink));
+}
+
+:root {
+  --font-display: 'Bricolage Grotesque Variable', 'Archivo Variable', system-ui, sans-serif;
+  --font-sans: 'Archivo Variable', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono Variable', ui-monospace, 'SFMono-Regular', Menlo, Consolas, monospace;
+
+  --fs-12: 0.75rem;
+  --fs-14: 0.875rem;
+  --fs-16: 1rem;
+  --fs-18: 1.125rem;
+  --fs-20: 1.25rem;
+  --fs-h3: 1.5rem;
+  --fs-h2: clamp(2rem, 4vw, 3rem);
+  --fs-h1: clamp(2.75rem, 7vw, 5.5rem);
+  --lh-display: 1.05;
+  --lh-body: 1.55;
+  --ls-display: -0.02em;
+
+  /* Borders and radii. */
+  --bw-1: 2px;
+  --bw-2: 3px;
+  --bw-3: 4px;
+  --r-0: 0;
+  --r-sm: 4px;
+  --r-md: 10px;
+  --r-pill: 999px;
+
+  /* Motion. --e-spring overshoots and settles like a spring; it needs about --d-spring to play out. */
+  --d-1: 120ms;
+  --d-2: 220ms;
+  --d-3: 420ms;
+  --d-4: 700ms;
+  --d-spring: 640ms;
+  --e-out: cubic-bezier(0.2, 0.9, 0.1, 1);
+  --e-snap: cubic-bezier(0.5, -0.4, 0.3, 1.4);
+  --e-spring: cubic-bezier(0.3, 1.5, 0.5, 1);
+}
+
+@supports (transition-timing-function: linear(0, 1)) {
+  :root {
+    /* A sampled spring (stiffness 400, damping 18): src/design/motion.ts has the same integrator. */
+    --e-spring: linear(0, 0.17, 0.5, 0.82, 1.06, 1.18, 1.2, 1.15, 1.09, 1.02, 0.98, 0.96, 0.96, 0.97, 0.99, 1, 1.01, 1.01, 1.01, 1.01, 1, 1, 1);
+  }
+}
+
+/* Dark: set by public/theme-init.js from the saved choice or the system
+   setting; the media query covers pages without JavaScript. Keep both blocks
+   in step. The header shows the theme even inside .ps-light. Shadows turn
+   deep lilac: black would vanish on the dark paper. */
+:root[data-theme='dark'],
+:root[data-theme='dark'] .ps-light .ps-header {
+  color-scheme: dark;
+  --c-paper: 20 19 24;
+  --c-surface: 30 29 36;
+  --c-ink: 244 239 227;
+  --c-muted: 169 165 180;
+  --c-shadow: 96 84 150;
+  --c-yellow: 255 210 63;
+  --c-pink: 255 122 180;
+  --c-blue: 140 155 255;
+  --c-pass: 46 230 182;
+  --c-fail: 255 107 97;
+  --c-lilac: 182 156 255;
+  --c-slab: 10 10 12;
+  --c-on-slab: 244 239 227;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']),
+  :root:not([data-theme='light']) .ps-light .ps-header {
+    color-scheme: dark;
+    --c-paper: 20 19 24;
+    --c-surface: 30 29 36;
+    --c-ink: 244 239 227;
+    --c-muted: 169 165 180;
+    --c-shadow: 96 84 150;
+    --c-yellow: 255 210 63;
+    --c-pink: 255 122 180;
+    --c-blue: 140 155 255;
+    --c-pass: 46 230 182;
+    --c-fail: 255 107 97;
+    --c-lilac: 182 156 255;
+    --c-slab: 10 10 12;
+    --c-on-slab: 244 239 227;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --d-1: 0.01ms;
+    --d-2: 0.01ms;
+    --d-3: 0.01ms;
+    --d-4: 0.01ms;
+    --d-spring: 0.01ms;
+  }
+}
+
+/* Cross-document view transitions: the header and wordmark stay put while the
+   page under them slides in. Browsers without them navigate normally. */
+@media (prefers-reduced-motion: no-preference) {
+  @view-transition {
+    navigation: auto;
+  }
+  ::view-transition-old(page-main) {
+    animation: var(--d-2) var(--e-out) both ps-vt-out;
+  }
+  ::view-transition-new(page-main) {
+    animation: var(--d-3) var(--e-out) both ps-vt-in;
+  }
+}
+.ps-header {
+  view-transition-name: site-header;
+}
+.ps-header .ps-wordmark {
+  view-transition-name: site-logo;
+}
+/* A view-transition-name makes a stacking context: a fixed overlay inside
+   <main> stays under the sticky header, so overlays belong outside it. */
+main {
+  view-transition-name: page-main;
+}
+@keyframes ps-vt-out {
+  to {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+}
+@keyframes ps-vt-in {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}

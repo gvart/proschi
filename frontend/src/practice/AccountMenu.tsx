@@ -7,7 +7,7 @@ import type { Account } from './useAccount';
 export default function AccountMenu({ account }: { account: Account }) {
   const { state } = account;
   if (state.status === 'off' || state.status === 'loading') return null;
-  const message = state.message && <p className="px-3 py-1.5 text-xs text-amber-800 bg-amber-50 border-b border-amber-100">{state.message}</p>;
+  const message = state.message && <p className="px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-100 dark:border-amber-900">{state.message}</p>;
 
   if (state.status === 'signed-out') {
     if (state.providers.length === 0 && !state.message) return null;
@@ -25,7 +25,7 @@ export default function AccountMenu({ account }: { account: Account }) {
         {() => (
           <>
             {message}
-            <p className="px-3 py-2 text-xs text-gray-500">
+            <p className="px-3 py-2 text-xs text-muted">
               Keep your progress across devices, compare your designs with other solvers and join the leaderboard. Your designs are stored on the server;
               no email address is.
             </p>
@@ -57,13 +57,13 @@ export default function AccountMenu({ account }: { account: Account }) {
       {(close) => (
         <>
           {message}
-          <p className="px-3 py-2 text-xs text-gray-500">
-            Signed in as <strong className="text-gray-800">{user.displayName}</strong>
+          <p className="px-3 py-2 text-xs text-muted">
+            Signed in as <strong className="text-ink">{user.displayName}</strong>
             {user.providers?.length ? ` with ${user.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(', ')}` : ''}
           </p>
           <MenuItem
             onSelect={() => void account.update({ publicProfile: !user.publicProfile })}
-            icon={<Check size={14} className={user.publicProfile ? 'text-green-600' : 'invisible'} />}
+            icon={<Check size={14} className={user.publicProfile ? 'text-green-600 dark:text-green-400' : 'invisible'} />}
           >
             Show me on the leaderboard
           </MenuItem>
@@ -127,7 +127,7 @@ export default function AccountMenu({ account }: { account: Account }) {
               close();
               if (window.confirm('Delete your account and the progress stored on the server? Progress in this browser stays.')) void account.remove();
             }}
-            icon={<Trash2 size={14} className="text-red-600" />}
+            icon={<Trash2 size={14} className="text-red-600 dark:text-red-400" />}
           >
             Delete account
           </MenuItem>

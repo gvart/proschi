@@ -14,11 +14,16 @@ import { sourceOf, statusOf, withRun, withSource, type Progress } from './progre
 import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
+import Header from '../design/Header';
 import { startMode, type StartMode } from '../onboarding/seen';
 import type { Account } from './useAccount';
 import AccountMenu from './AccountMenu';
 import CommunityStats from './CommunityStats';
 import { useProblemStats } from './useCommunity';
+import { useZenMode } from '../components/Playground/useZenMode';
+import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
+import EditorZone from '../components/Playground/EditorZone';
+import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 
@@ -48,6 +53,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const [pane, setPane] = useState<Pane>('statement');
   const editorRef = useRef<CodeEditorHandle>(null);
+  const zen = useZenMode();
   const status = statusOf(progress, problem.id);
   // Someone who has worked on problems before is not a first-time visitor.
   const [tour, setTour] = useState<StartMode>(() => startMode('practice', { returning: Object.keys(progress).length > 0 }));
@@ -105,21 +111,23 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const show = (p: Pane) => `${pane === p ? 'flex' : 'hidden'} md:flex`;
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-gray-50">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 bg-white border-b border-gray-200">
-        <a href="#/" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-blue-700">
+    <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
+      <ZenCollapse zen={zen.zen}>
+      <Header base="../" current="practice" compact>
+        <a href="#/" className={toolButton}>
           <ArrowLeft size={16} />
           <span className="hidden sm:inline">Problems</span>
         </a>
-        <h1 className="flex items-center gap-2 min-w-0 font-semibold text-gray-900">
+        <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
           <span className="truncate">{problem.title}</span>
         </h1>
         <DifficultyBadge difficulty={problem.difficulty} />
-        <button onClick={reset} className="ml-auto inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100" title="Start over from the starter code">
+        <button onClick={reset} className={`ml-auto ${toolButton}`} title="Start over from the starter code">
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
         </button>
+        <ZenButton zen={zen} className={iconButton} />
         <AccountMenu account={account} />
         <HelpMenu
           tourLabel="Take the practice tour"
@@ -128,9 +136,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             setTour('tour');
           }}
         />
-      </header>
+      </Header>
 
-      <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
+      {/* The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target. */}
+      <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill md:hidden bg-surface">
         {PANES.map(({ id, label, icon: Icon }) => (
           <button
             key={id}
@@ -138,34 +147,37 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             data-tour={`tab-${id}`}
             aria-selected={pane === id}
             onClick={() => setPane(id)}
-            className={`flex-1 inline-flex items-center justify-center gap-1 py-2.5 text-sm font-medium border-b-2 ${pane === id ? 'border-blue-600 text-blue-700' : 'border-transparent text-gray-500'}`}
+            className="ps-tab"
           >
             <Icon size={15} />
             {label}
           </button>
         ))}
       </div>
+      </ZenCollapse>
 
       <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <aside data-tour="statement" className={`${show('statement')} flex-1 md:flex-none min-h-0 md:w-[32%] md:max-w-[560px] flex-col overflow-y-auto border-gray-200 md:border-r bg-white`}>
+        <aside data-tour="statement" className={`${show('statement')} flex-1 md:flex-none min-h-0 md:w-[32%] md:max-w-[560px] flex-col overflow-y-auto md:border-r-bw-2 border-ink bg-surface`}>
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
         </aside>
 
         <div className={`${pane === 'statement' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 min-w-0 flex-col`}>
           <div className={`${pane === 'tests' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 flex-col lg:flex-row`}>
-            <section data-tour="practice-code" className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col bg-white lg:border-r border-gray-200`}>
-              <div className="px-3 py-1.5 text-xs text-gray-500 border-b border-gray-100">
-                solution.proschi · imports <code>{PROBLEM_FILE}</code>
-              </div>
+            <EditorZone data-tour="practice-code" className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col lg:border-r-bw-2`}>
+              <ZenCollapse zen={zen.zen}>
+                <div className="px-3 py-1.5 text-xs font-mono text-muted border-b border-ink/15">
+                  solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
+                </div>
+              </ZenCollapse>
               <div className="flex-1 min-h-0">
                 <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
               </div>
-            </section>
-            <section className={`${show('diagram')} flex-1 min-h-0 min-w-0 flex-col border-t lg:border-t-0 border-gray-200`}>
-              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} />
+            </EditorZone>
+            <section className={`${show('diagram')} flex-1 min-h-0 min-w-0 flex-col border-t-bw-2 lg:border-t-0 border-ink`}>
+              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} zen={zen.zen} />
             </section>
           </div>
-          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col border-t border-gray-200`}>
+          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col md:border-t-bw-2 border-ink`}>
             <TestPanel
               run={run?.result}
               stale={!!run && run.source !== source}
@@ -175,7 +187,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               community={
                 run && !run.result.blocked && (community || serverNote) ? (
                   <>
-                    {serverNote && <p className="m-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800">{serverNote}</p>}
+                    {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
                     {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
                   </>
                 ) : undefined
@@ -185,6 +197,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         </div>
       </div>
 
+      <ZenStatus zen={zen} />
       {tour === 'tour' && (
         <Suspense fallback={null}>
           <PracticeTour key={tourRun} setPane={setPane} runs={runs} runTests={runNow} onClose={() => setTour(null)} />
@@ -206,17 +219,17 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
     <div className="px-4 py-4 space-y-5">
       <Markdown source={problem.statement} />
 
-      <details className="rounded-md border border-gray-200">
-        <summary className="cursor-pointer px-3 py-2 text-sm font-medium text-gray-700">
-          Given: <code>{PROBLEM_FILE}</code> <span className="font-normal text-gray-400">(read-only)</span>
+      <details className="rounded border-bw-1 border-ink bg-paper">
+        <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink">
+          <span className={eyebrow}>Given</span> <code className="font-mono">{PROBLEM_FILE}</code> <span className="font-normal text-muted">(read-only)</span>
         </summary>
-        <pre className="overflow-x-auto border-t border-gray-200 bg-gray-50 p-3 font-mono text-xs">{problem.given}</pre>
+        <pre className="overflow-x-auto border-t-bw-1 border-ink bg-surface p-3 font-mono text-xs">{problem.given}</pre>
       </details>
 
       {problem.hints.length > 0 && (
         <div className="space-y-2">
           {problem.hints.slice(0, hints).map((hint, i) => (
-            <p key={i} className="flex gap-2 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
+            <p key={i} className="flex gap-2 rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink shadow-brutal-sm">
               <Lightbulb size={16} className="mt-0.5 flex-shrink-0" />
               <span>
                 <strong>Hint {i + 1}.</strong> {hint}
@@ -224,7 +237,7 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
             </p>
           ))}
           {hints < problem.hints.length && (
-            <button onClick={() => setHints((n) => n + 1)} className="inline-flex items-center gap-1.5 text-sm text-amber-800 hover:underline">
+            <button onClick={() => setHints((n) => n + 1)} className={toolButton}>
               <Lightbulb size={14} />
               {hints === 0 ? 'Show a hint' : 'Show another hint'} ({hints} / {problem.hints.length})
             </button>
@@ -234,20 +247,20 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
 
       <div>
         {showSolution ? (
-          <div className="rounded-md border border-gray-200">
-            <div className="flex items-center gap-2 px-3 py-2 border-b border-gray-200 text-sm font-medium text-gray-700">
+          <div className="rounded border-bw-1 border-ink bg-paper">
+            <div className="flex items-center gap-2 px-3 py-2 border-b-bw-1 border-ink text-sm font-semibold text-ink">
               Reference solution
               <button
                 onClick={() => window.confirm('Replace your code with the reference solution?') && onUseSolution()}
-                className="ml-auto text-xs font-normal text-blue-700 hover:underline"
+                className="ml-auto text-xs font-semibold text-pop-blue underline-offset-2 hover:underline"
               >
                 Load into the editor
               </button>
             </div>
-            <pre className="overflow-x-auto bg-gray-50 p-3 font-mono text-xs">{problem.solution}</pre>
+            <pre className="overflow-x-auto bg-surface p-3 font-mono text-xs">{problem.solution}</pre>
           </div>
         ) : (
-          <button onClick={revealSolution} className="inline-flex items-center gap-1.5 text-sm text-gray-600 hover:text-gray-900">
+          <button onClick={revealSolution} className={toolButton}>
             <Eye size={14} />
             Show reference solution
           </button>
@@ -264,10 +277,12 @@ interface DiagramPaneProps {
   fitKey: string;
   engine: Engine;
   onSelect: (loc: SourceLoc) => void;
+  /** Zen mode folds the tab bar away. */
+  zen: boolean;
 }
 
 /** The design as a diagram, one scenario played step by step, or its capacity analysis. */
-function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: DiagramPaneProps) {
+function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen }: DiagramPaneProps) {
   const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
   const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
@@ -283,13 +298,15 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: Diagra
 
   return (
     <div className="h-full w-full flex flex-col">
-      <div className="flex items-center gap-1 px-2 py-1.5 bg-white border-b border-gray-200">
+      <ZenCollapse zen={zen}>
+      <div className={`flex items-center gap-1 px-2 py-1.5 ${subBar}`}>
         {(['diagram', 'playback', 'analysis'] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
             disabled={(t === 'playback' && !current) || (t === 'analysis' && !engine.available)}
-            className={`rounded-md px-2.5 py-1 text-sm capitalize disabled:opacity-40 ${tab === t ? 'bg-gray-100 font-medium text-gray-900' : 'text-gray-600 hover:bg-gray-50'}`}
+            aria-pressed={tab === t}
+            className={`rounded px-2.5 py-1 text-sm font-semibold capitalize border-bw-1 disabled:opacity-40 ${tab === t ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`}
           >
             {t}
           </button>
@@ -299,7 +316,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: Diagra
             aria-label="Scenario"
             value={current.key}
             onChange={(e) => setSelected(e.target.value)}
-            className="ml-auto min-w-0 max-w-[60%] text-sm border border-gray-300 rounded-md px-2 py-1 bg-white"
+            className={`ml-auto min-w-0 max-w-[60%] ${field} !py-1`}
           >
             {options.map((o) => (
               <option key={o.key} value={o.key}>
@@ -309,6 +326,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: Diagra
           </select>
         )}
       </div>
+      </ZenCollapse>
       <div className="flex-1 min-h-0 relative">
         {tab === 'playback' && played ? (
           <UseCasePlayer key={played.id} useCase={played} nodes={nodes} edges={edges} onBack={() => setTab('diagram')} showHeader={false} />
@@ -318,7 +336,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect }: Diagra
           <DiagramCanvas nodes={nodes} edges={edges} fitKey={fitKey} />
         )}
         {nodes.length === 0 && tab === 'diagram' && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-gray-400 pointer-events-none">Your design appears here as you type.</p>
+          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">Your design appears here as you type.</p>
         )}
       </div>
     </div>

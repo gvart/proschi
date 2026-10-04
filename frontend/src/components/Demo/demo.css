@@ -1,0 +1,30 @@
+/* What the live demo's React parts need on a page without Tailwind's
+   preflight (the landing page): the canvas nodes and player use Tailwind
+   utilities, which assume its border reset. Loaded with the demo, lazily.
+   The demo's frame (window bar, panes, captions) is styled by the page. */
+
+:where(.demo__canvas) *,
+:where(.demo__canvas) ::before,
+:where(.demo__canvas) ::after {
+  box-sizing: border-box;
+  border: 0 solid rgb(var(--c-ink) / 0.15);
+}
+
+@tailwind components;
+@tailwind utilities;
+
+/* The block caret the tour types behind. */
+.demo-caret {
+  display: inline-block;
+  width: 0.6em;
+  height: 1.15em;
+  margin-left: 1px;
+  vertical-align: text-bottom;
+  background: #ffd23f;
+  animation: demo-blink 1s steps(1) infinite;
+}
+@keyframes demo-blink {
+  50% {
+    opacity: 0;
+  }
+}

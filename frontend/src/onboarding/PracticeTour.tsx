@@ -78,7 +78,7 @@ export default function PracticeTour({ setPane, runs, runTests, onClose }: Pract
             </p>
             <p>
               Stuck? Hints are under the problem.{' '}
-              <a href={MODEL_URL} className="text-blue-700 underline-offset-2 hover:underline">
+              <a href={MODEL_URL} className="text-pop-blue underline-offset-2 hover:underline">
                 How the simulation works
               </a>
             </p>

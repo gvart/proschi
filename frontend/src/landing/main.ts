@@ -1,18 +1,17 @@
-import './landing.css';
+import '../design/site.css';
+import '../design/widgets.css';
+import './home.css';
+import { enhance } from '../design/enhance';
+import { prefersReducedMotion } from '../design/motion';
 import { highlightElement } from './highlight';
-import { HERO_USE_CASE, editorLink, exampleLink } from './links';
-import { responsiveLayout } from './diagramLayout';
-import { initPlayer } from './player';
+import { exampleLink } from './links';
 import { practiceListHtml } from './practiceList';
+import { initStory } from './story';
 import practiceProblems from 'virtual:practice-listings';
 
-const heroCode = document.querySelector<HTMLElement>('#hero-source code');
-const heroSource = heroCode?.textContent ?? '';
+// Everything here is plain DOM and small; React and the editor load only with the demo, below.
 
-document.querySelectorAll<HTMLElement>('pre[data-proschi] code').forEach((code) => {
-  if (code !== heroCode) highlightElement(code);
-});
-const heroLines = heroCode ? highlightElement(heroCode) : [];
+document.querySelectorAll<HTMLElement>('pre[data-proschi] code').forEach((code) => highlightElement(code));
 
 // Example links carry the whole document in the URL fragment, like share links.
 document.querySelectorAll<HTMLAnchorElement>('a[data-example]').forEach((a) => {
@@ -20,37 +19,38 @@ document.querySelectorAll<HTMLAnchorElement>('a[data-example]').forEach((a) => {
   if (href) a.href = href;
 });
 
-const heroLink = editorLink(heroSource, { useCase: HERO_USE_CASE.id, step: 1 });
-const heroOpen = document.querySelector<HTMLAnchorElement>('#hero-open');
-if (heroOpen && heroSource) heroOpen.href = heroLink;
-
-const shareSample = document.querySelector<HTMLElement>('#share-sample');
-if (shareSample && heroSource) {
-  const code = heroLink.slice(heroLink.indexOf('#code=') + '#code='.length, heroLink.indexOf('&'));
-  shareSample.textContent = `${code.slice(0, 32)}…`;
-}
-
 // The practice list comes from the problem folders, so it never falls behind them.
 const practiceList = document.querySelector<HTMLElement>('#practice-list');
 if (practiceList) practiceList.innerHTML = practiceListHtml(practiceProblems);
 
-const player = document.querySelector<HTMLElement>('#player');
-const svg = document.querySelector<SVGSVGElement>('#hero-diagram');
-const packet = document.querySelector<SVGCircleElement>('#packet');
-const failMark = document.querySelector<SVGPathElement>('#fail-mark');
-const scenarios = document.querySelector<HTMLElement>('#player-scenarios');
-const toggle = document.querySelector<HTMLButtonElement>('#player-toggle');
-const next = document.querySelector<HTMLButtonElement>('#player-next');
-const status = document.querySelector<HTMLElement>('#player-status');
-const payload = document.querySelector<HTMLElement>('#player-payload');
+enhance();
+initStory(document);
 
-if (svg) responsiveLayout(svg, () => {
-  packet?.classList.remove('is-visible');
-  failMark?.classList.remove('is-visible');
-});
-
-if (player && svg && packet && failMark && scenarios && heroCode && toggle && next && status && payload) {
-  player.hidden = false;
-  const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  initPlayer({ svg, packet, failMark, code: heroCode, scenarios, toggle, next, status, payload }, heroLines, reduced);
+/**
+ * The hero's live demo: the poster in #live-demo is real markup (the code and
+ * a diagram outline), so the page is complete at first paint; the island with
+ * React, CodeMirror and the layout engine loads once the browser is idle and
+ * the demo is near the screen.
+ */
+function loadDemo(host: HTMLElement) {
+  const start = () =>
+    import('./LandingDemo')
+      .then(({ mountDemo }) => mountDemo(host, { still: prefersReducedMotion() }))
+      .catch((error) => console.warn('The live demo did not load; the poster stays.', error));
+  const whenIdle = (fn: () => void) =>
+    'requestIdleCallback' in window ? window.requestIdleCallback(fn, { timeout: 1200 }) : setTimeout(fn, 200);
+  if (typeof IntersectionObserver === 'undefined') return whenIdle(start);
+  const io = new IntersectionObserver(
+    (entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      io.disconnect();
+      // After the first paint, so the poster shows before the island's work starts.
+      requestAnimationFrame(() => whenIdle(start));
+    },
+    { rootMargin: '300px 0px' },
+  );
+  io.observe(host);
 }
+
+const demo = document.querySelector<HTMLElement>('#live-demo');
+if (demo) loadDemo(demo);

@@ -34,7 +34,7 @@ const q = (selector: string) => () => {
   return null;
 };
 
-const Code = ({ children }: { children: string }) => <code className="rounded bg-gray-100 px-1 py-0.5 font-mono text-[0.8125rem] text-gray-800">{children}</code>;
+const Code = ({ children }: { children: string }) => <code className="rounded bg-ink/5 px-1 py-0.5 font-mono text-[0.8125rem] text-ink">{children}</code>;
 
 /** The editor's first-run tour: text → diagram, edit, play, analysis/tests, share. */
 export default function EditorTour(props: EditorTourProps) {
