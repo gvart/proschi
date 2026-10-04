@@ -16,13 +16,15 @@ computed ahead of time.
 
 - **Suggest**: the search box sends \`GET /suggest?q=<prefix>\` and gets the
   top ten completions of the prefix. Model it with two scenarios:
-  - \`"Edge hit"\`: the prefix is popular and the CDN answers from its cache
-    (suggestions may be up to 5 minutes old).
+  - \`"Edge hit"\`: the prefix is popular and the CDN (a real CDN, not a load
+    balancer) answers from its cache (suggestions may be up to 5 minutes old).
   - \`"Edge miss"\`: the CDN passes the request on and the top ten are read
     from the precomputed suggestion index, kept in memory.
 - **Search**: the user submits a query and gets results from the search
-  cluster. Every query is appended to a query log for the index to learn from.
-- **Rebuild index**: every 15 minutes the scheduler starts a rebuild, which
+  cluster. Every query is appended to a query log for the index to learn from;
+  logging must never slow a search down, so the API does not wait for the log.
+- **Rebuild index**: every 15 minutes the scheduler starts a rebuild (its
+  first step is sent by \`scheduler\`), which
   reads the recent queries from the query log, counts them per prefix and
   writes the new top ten of every prefix into the suggestion index.
 
@@ -77,20 +79,25 @@ test "Suggestions never touch the search cluster" {
   "Suggest" never calls any database
 }
 
-test "Suggestions are served from caches" {
+test "Suggestions are served by the CDN, then the cache" {
   "Suggest" has scenario "Edge hit"
   "Suggest" has scenario "Edge miss"
+  "Suggest" starts at user
+  in "Suggest" user calls any cdn
+  "Suggest" calls any cdn before any cache
   "Suggest" scenario "Edge hit" never calls any service
   "Suggest" scenario "Edge miss" calls any cache
 }
 
-test "Searches feed the query log" {
+test "Searches feed the query log without waiting for it" {
   "Search" calls search
   "Search" calls any queue
+  "Search" never waits for any queue
   "Search" responds 200
 }
 
 test "The index is rebuilt offline from the query log" {
+  "Rebuild index" starts at scheduler
   "Rebuild index" calls any queue before any cache
   "Rebuild index" never calls search
 }
@@ -193,6 +200,7 @@ usecase "Rebuild index" "Recompute the top ten of every prefix from recent queri
     'The search cluster handles 9k rps and suggestions come at 100k rps. What could answer a prefix without searching at all?',
     'The top ten of a prefix changes slowly: compute it ahead of time from the query log and keep it in an in-memory store keyed by prefix.',
     'Most keystrokes are for a few popular prefixes. A CDN can answer those for a few minutes without reaching your servers, which is what makes the budget work.',
+    'A search answers from the search cluster and appends the query to the log with ->>: Kafka is never on the path of the response. The rebuild starts with a step sent by the scheduler.',
     'Size the Suggest Service for the edge misses only (20k rps) and keep it near 50% busy: its queueing delay decides the p99.',
   ],
 };

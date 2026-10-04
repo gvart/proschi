@@ -19,7 +19,7 @@ driver.
   two scenarios:
   - \`"Matched"\`: a free driver is within 3 km. The trip is created and
     stored, the rider gets \`201\` with the trip and the driver, and the
-    driver receives the ride offer.
+    driver receives the ride offer through a queue.
   - \`"No driver nearby"\`: nobody is free within 3 km; the rider gets
     \`404\` and no trip is created.
 
@@ -39,8 +39,15 @@ tests in \`problem.proschi\` refer to them.
 - Ride requests available **99.9%** of the time.
 - A trip is never lost once the rider was told about it, and it lives in a
   database (it is billed and audited later).
-- Location updates must not reach the database: a relational database takes
-  about 5k writes per second per node.
+- Location updates are writes (\`GEOADD\`), and they must not reach the
+  database: a relational database takes about 5k writes per second on its
+  primary, and read replicas add no write capacity; only shards do, at the
+  price of a whole cluster each.
+- The trip is the driver's lock: it is stored in a strongly consistent
+  database (a relational one, not an eventually consistent NoSQL table), so
+  two riders racing for one driver cannot both win.
+- The ride offer goes to the driver through a queue; the rider never waits
+  for it.
 - Losing any single machine, including a node of the store that holds the
   driver locations, must not stop matching.
 - At most **$10,000 / month**.
@@ -69,8 +76,9 @@ requirements {
   cost <= 10000 usd/month
 }
 
-test "Location updates never touch the database" {
-  "Update location" calls any cache
+test "Location updates are writes to the live map, never the database" {
+  "Update location" starts at driver
+  "Update location" writes any cache before responding
   "Update location" never calls any database
 }
 
@@ -81,9 +89,15 @@ test "Matching searches the live map first" {
   "Request ride" scenario "No driver nearby" responds 404
 }
 
-test "Trips are stored before the rider hears back" {
+test "Trips are stored strongly before the rider hears back" {
   "Request ride" scenario "Matched" writes any database before responding
+  "Request ride" scenario "Matched" writes any strong store before responding
   "Request ride" scenario "Matched" responds 201
+}
+
+test "The driver's offer never holds up the rider" {
+  "Request ride" scenario "Matched" calls any queue
+  "Request ride" never waits for any queue
 }
 `,
   starter: `import "problem.proschi"
@@ -141,13 +155,16 @@ entity Trip in trips "One ride from request to drop-off" {
 
 decision "Driver locations live in Redis, not the database" {
   because "100k updates per second of which only the latest matters: GEOADD overwrites in ~1 ms, and GEOSEARCH answers 'nearest within 3 km' from the same index"
-  rejected "UPDATE a drivers table" "About 30 PostgreSQL nodes for writes nobody needs to keep, over budget on its own"
+  rejected "UPDATE a drivers table" "Every write goes to one PostgreSQL primary (5k writes per second); read replicas do not help, and 20+ shards with a replica each cost over $16k a month for positions nobody needs to keep"
 }
 decision "Three Live Map nodes" {
   because "One node takes 100k operations per second; with three, the two left after a failure still carry the ~102k rps"
   rejected "Two nodes" "Losing one leaves a single node saturated, and matching stops"
 }
-decision "The trip row is the driver's lock" because "A unique index on the driver's active trip makes two riders racing for one driver fail cleanly in the database"
+decision "The trip row is the driver's lock" {
+  because "A unique index on the driver's active trip makes two riders racing for one driver fail cleanly in a strongly consistent database"
+  rejected "Trips in DynamoDB" "Eventually consistent reads could show a driver as free after another rider got them"
+}
 
 usecase "Update location" "A driver's app reports where it is" {
   driver   -> lb      : location {"lat": 52.52, "lng": 13.40, "heading": 90}
@@ -181,7 +198,7 @@ usecase "Request ride" "Match a rider with the nearest free driver" {
 `,
   hints: [
     'Only the latest position of a driver matters, and there are 100k of them per second. Which kind of store overwrites a key in a millisecond and can search by distance?',
-    'Request ride searches that store first, and writes the trip to a durable database only once a driver is found, before answering 201.',
+    'Request ride searches that store first, and writes the trip to a strongly consistent, durable database only once a driver is found, before answering 201. The offer to the driver goes through a queue with ->>, so the rider never waits for it.',
     'Survive a node failure means the nodes that are left must carry the whole load. 100k updates per second on a store that takes 100k per node needs more than two nodes.',
     'The servers that take location updates dominate the cost: keep them just under 70% busy: enough headroom for the p99, no more.',
   ],
