@@ -23,6 +23,12 @@ export interface Problem {
   /** Reference solution; CI checks it passes every test. */
   solution: string;
   hints: string[];
+  /**
+   * Bumped when a change to the problem can change whether a design solves it,
+   * or its cost or p99; absent means 1. The server's global stats count only
+   * solves of the current version.
+   */
+  version?: number;
   /** Plausible wrong designs from wrong/*.proschi, each failing the tests it names. */
   wrong?: WrongDesign[];
 }

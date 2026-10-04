@@ -51,6 +51,7 @@ Design a service that turns long URLs into short codes …
 | `tags` | yes | A list of strings, used by the list's tag filter |
 | `order` | no | A number: the position within its difficulty |
 | `hints` | yes | A list, from a nudge to nearly the answer; the page reveals them one at a time |
+| `version` | no | A whole number, 1 when absent. Bump it when a change to the given, the tests or the requirements can change whether a design solves the problem, or its cost or p99: proschi.app's global stats then count only solves of the new version, and a signed-in user's next run starts their stats for the problem over |
 
 The list is sorted by difficulty (easy first), then `order` (problems without
 one come after those with one), then title.
