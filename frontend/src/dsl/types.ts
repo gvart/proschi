@@ -218,8 +218,10 @@ export interface CapacityOverride {
   consistency?: 'strong' | 'eventual';
   /** Network bandwidth per replica in megabytes per second (§7.3). */
   bandwidthMBps?: number;
-  /** Egress price in USD per GB (§7.3). */
+  /** Internet egress price in USD per GB (§7.3). */
   egressUsdPerGb?: number;
+  /** `timeout <duration>`: what a failed call (`-x`) to this node costs; 1 000 ms by default. */
+  timeoutMs?: number;
   loc: SourceLoc;
 }
 

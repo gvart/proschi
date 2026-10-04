@@ -118,7 +118,7 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, latency, availability, cost, durable or volatile, consistency, bandwidth or egress';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout';
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -992,12 +992,13 @@ class Parser {
         if (rps === undefined) return;
         override.rps = rps;
         i++;
-      } else if (isWord(t, 'latency') || isWord(t, 'availability') || isWord(t, 'cost')) {
+      } else if (isWord(t, 'latency') || isWord(t, 'availability') || isWord(t, 'cost') || isWord(t, 'timeout')) {
         part = t.value;
-        const unit = part === 'latency' ? 'ms' : part === 'availability' ? '%' : 'usd/month';
+        const unit = part === 'latency' || part === 'timeout' ? 'ms' : part === 'availability' ? '%' : 'usd/month';
         const value = this.quantityOf(tokens[i + 1], unit, t, line);
         if (value === undefined) return;
         if (part === 'latency') override.latencyMs = value;
+        else if (part === 'timeout') override.timeoutMs = value;
         else if (part === 'availability') override.availability = value;
         else override.costUsd = value;
         i += 2;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../dsl/parser';
 import type { Diagram } from '../dsl/types';
-import { analyze } from './analyze';
+import { analyze, hopLatency, hopModel, mixtureQuantile, pathQuantile, type PathModel } from './analyze';
 import { selectNodes } from './flow';
 import { runTests, type TestResult } from './tests';
 import { diagramOf } from './testDiagram';
@@ -191,9 +191,10 @@ traffic {
     // 10 rps × 200 writes
     expect(node(a, 'feeds')).toMatchObject({ writeLoadRps: 2000, readLoadRps: 0 });
     expect(node(a, 'feeds').utilization).toBeCloseTo(0.02);
-    const api = 10 / (1 - 10 / 4000);
+    // api: two replicas (M/M/2) at 0.25%; feeds: one Redis at 2%.
+    const api = hopLatency(10, 10 / 4000, 2);
     const feeds = 1 / (1 - 0.02);
-    expect(a.useCases[0].scenarios[0].meanMs).toBeCloseTo(api + feeds);
+    expect(a.useCases[0].scenarios[0].meanMs).toBeCloseTo(api + feeds, 10);
   });
 });
 
@@ -222,9 +223,46 @@ usecase "Upload" {
     const d = doc(`${src}requirements {\n  p50 "Upload" < 100ms\n}`);
     const a = analyze(d);
     const [p50] = runTests(d, a);
-    expect(p50.message).toBe('p50 of Upload is 290 ms with no traffic (limit 100 ms)');
+    // Transfer (250 ms) and the fixed halves of api and blobs (5 + 15) add once; their tails (5 + 15) at ln 2.
+    expect(p50.message).toBe(`p50 of Upload is ${Math.round(250 + 20 + 20 * Math.LN2)} ms with no traffic (limit 100 ms)`);
     expect(p50.hint).toContain(`Payloads add transfer time too (client -> api : POST /upload at line ${lineOf(src, '~2MB')})`);
     expect(a.totalEgressUsd).toBe(0);
+  });
+});
+
+describe('§7.3 bandwidth', () => {
+  const src = (replicas: number) => `client [Actor]
+api [REST API] x${replicas}
+blobs [AWS S3]
+usecase "Upload" {
+  client -> api : ~1MB PUT /files/1
+  api -> blobs : ~1MB PUT file
+  api --> client : 201
+}
+traffic {
+  "Upload" 100 rps
+}
+`;
+
+  it('saturates a node you run whose payloads exceed its bandwidth; storage scales out', () => {
+    // 100 MB/s in from clients and 100 MB/s out to storage: 200 MB/s on one 200 MB/s replica.
+    const one = analyze(doc(src(1)));
+    expect(node(one, 'api')).toMatchObject({ bandwidthLoadMBps: 200, bandwidthCapacityMBps: 200, bandwidthUtilization: 1, saturated: true });
+    expect(node(one, 'api').requestUtilization).toBeCloseTo(0.05);
+    expect(node(one, 'api').utilization).toBe(1);
+    expect(one.warnings).toContain("'api' is saturated: bandwidth 200 MB/s of 200 MB/s, 100%. Add replicas or take load off it.");
+    // Object storage and clients have no bandwidth limit.
+    expect(node(one, 'blobs')).toMatchObject({ bandwidthUtilization: 0, saturated: false });
+    expect(node(one, 'client').bandwidthUtilization).toBe(0);
+    const four = analyze(doc(src(4)));
+    expect(node(four, 'api')).toMatchObject({ bandwidthUtilization: 0.25, utilization: 0.25, saturated: false });
+  });
+
+  it('names the bandwidth in the latency failure and the hint', () => {
+    const [p99] = runTests(doc(`${src(1)}requirements {\n  p99 "Upload" < 1s\n}`));
+    expect(p99.message).toBe('p99 of Upload: api is saturated (bandwidth 200 MB/s of 200 MB/s, 100%) (limit 1000 ms)');
+    expect(p99.hint).toContain('Send the bytes around it');
+    expect(p99.hint).toContain('x2 keeps its bandwidth under 70%');
   });
 });
 
@@ -247,24 +285,43 @@ traffic {
 }
 `;
 
-  it('charges data leaving a CDN and storage: rps × share × size × 2 592 000 s × price', () => {
+  it('charges data sent to clients: rps × share × size × 2 592 000 s × price; the origin fetch is internal', () => {
     const a = analyze(doc(src));
     // cdn: 100 rps × 1 MB × 2 592 000 s = 259 200 GB × $0.02 = $5 184
     expect(node(a, 'cdn').egressGbPerMonth).toBeCloseTo(259_200);
     expect(node(a, 'cdn').egressUsd).toBeCloseTo(5184);
     expect(node(a, 'cdn').costUsd).toBeCloseTo(100 + 5184);
-    // blobs: 10 rps (misses) → 25 920 GB × $0.09 = $2 332.80
-    expect(node(a, 'blobs').egressGbPerMonth).toBeCloseTo(25_920);
-    expect(node(a, 'blobs').egressUsd).toBeCloseTo(2332.8);
-    expect(node(a, 'blobs').costUsd).toBeCloseTo(50 + 2332.8);
+    // blobs only answers the CDN, inside the system: no egress.
+    expect(node(a, 'blobs')).toMatchObject({ egressGbPerMonth: 0, egressUsd: 0, costUsd: 50 });
     expect(node(a, 'client').egressUsd).toBe(0);
-    expect(a.totalEgressUsd).toBeCloseTo(5184 + 2332.8);
-    expect(a.totalCostUsd).toBeCloseTo(150 + 5184 + 2332.8);
+    expect(a.totalEgressUsd).toBeCloseTo(5184);
+    expect(a.totalCostUsd).toBeCloseTo(150 + 5184);
+  });
+
+  it('charges a service that answers clients the internet rate, and nothing for storage to that service', () => {
+    const a = analyze(
+      doc(`client [Actor]
+api [REST API] x2
+blobs [AWS S3]
+usecase "Get" {
+  client -> api : ~1MB GET /files/1
+  api -> blobs : ~1MB GET file
+  api --> client : 200
+}
+traffic {
+  "Get" 10 rps
+}
+`),
+    );
+    // api: 10 rps × 1 MB × 2 592 000 s = 25 920 GB × $0.09 = $2 332.80
+    expect(node(a, 'api').egressGbPerMonth).toBeCloseTo(25_920);
+    expect(node(a, 'api').egressUsd).toBeCloseTo(2332.8);
+    expect(node(a, 'blobs').egressUsd).toBe(0);
   });
 
   it('takes an egress price override', () => {
-    const a = analyze(doc(`${src}capacity {\n  blobs egress 0.05 usd/GB\n}`));
-    expect(node(a, 'blobs').egressUsd).toBeCloseTo(25_920 * 0.05);
+    const a = analyze(doc(`${src}capacity {\n  cdn egress 0.01 usd/GB\n}`));
+    expect(node(a, 'cdn').egressUsd).toBeCloseTo(259_200 * 0.01);
   });
 
   it('counts the transfer to the client at the client bandwidth', () => {
@@ -279,7 +336,7 @@ traffic {
   it('reports egress in the cost check', () => {
     const d = doc(`${src}requirements {\n  cost <= 1000 usd/month\n}`);
     const [cost] = runTests(d);
-    expect(cost.message).toBe('Total cost is $7,667/month, $7,517/month of it egress (limit $1,000/month)');
+    expect(cost.message).toBe('Total cost is $5,334/month, $5,184/month of it egress (limit $1,000/month)');
     expect(cost.hint).toContain('cdn $5,284/month ($5,184 of it egress)');
     expect(cost.hint).toContain('Most of it is egress: serve repeated downloads from a CDN');
   });
@@ -520,13 +577,23 @@ requirements {
 
   it('measures the scenario itself, whatever its share', () => {
     const results = runTests(doc(src));
-    const api = 10 / (1 - 100 / 2000);
-    const cache = 1 / (1 - 100 / 100_000);
-    const db = 5 / (1 - 0.5 / 20_000);
-    const missP99 = 3 * (api + cache + db);
-    const hitP99 = 3 * (api + cache);
-    // 0.5% misses are below the 1% tail: the use case p99 is the hit path.
-    expect(results[0]).toMatchObject({ passed: true, message: `p99 of Get is ${(Math.round(hitP99 * 10) / 10).toFixed(1)} ms (limit 50 ms)` });
+    const item = (h: { fixedMs: number; tailMs: number }) => [{ fixedMs: h.fixedMs, tailMs: h.tailMs }];
+    const api = hopModel(10, 100 / 2000);
+    const cache = hopModel(1, 100 / 100_000);
+    const db = hopModel(5, 0.5 / 20_000);
+    const hit: PathModel = { parts: [item(api), item(cache)] };
+    const miss: PathModel = { parts: [item(api), item(cache), item(db)] };
+    const missP99 = pathQuantile(miss, 0.99);
+    // The use case p99 is the mixture's: 0.5% misses pull it a little above the hit path's own.
+    const p99 = mixtureQuantile(
+      [
+        { share: 0.995, path: hit },
+        { share: 0.005, path: miss },
+      ],
+      0.99,
+    );
+    expect(p99).toBeGreaterThan(pathQuantile(hit, 0.99));
+    expect(results[0]).toMatchObject({ passed: true, message: `p99 of Get is ${(Math.round(p99 * 10) / 10).toFixed(1)} ms (limit 50 ms)` });
     expect(results[1]).toMatchObject({ name: 'p99 of Get scenario Miss < 40 ms', passed: false, message: `p99 of "Get" scenario "Miss" is ${(Math.round(missP99 * 10) / 10).toFixed(1)} ms (limit 40 ms)` });
     expect(results[1].hint).toContain('slowest hop is api (REST API)');
     expect(results[2].passed).toBe(true);

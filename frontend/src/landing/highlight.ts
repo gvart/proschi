@@ -23,7 +23,7 @@ const CLASSES: TokenClass[] = ['string', 'tech', 'team', 'arrow', 'keyword', 'co
  * numbers.
  */
 const SECTION_TOKEN =
-  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|((?:^|\s)#.*$)|(\b\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?)|(\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b|[<>]=?)/g;
+  /("(?:[^"\\]|\\.)*")|(\[[A-Za-z][^\]"]*\])|((?:^|\s)#.*$)|(\b\d+(?:\.\d+)?(?:[A-Za-z]+(?:\/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd\/month|usd\/GB|MB\/s|GB\/s)\b| %)?)|(\b(?:traffic|requirements|capacity|entity|decision|test|mix|durable|volatile|survive|because|rejected|calls|before|after|never|every|waits|for|starts|at|or|responds|writes|reads|responding|handles|failure|path|replicas|any|strong|eventual|store|in|scenario|latency|availability|cost|shards|consistency|bandwidth|egress|timeout|no|from|to|has|of|node|key|index|unique|optional|p50|p90|p95|p99|p999)\b|[<>]=?)/g;
 
 const SECTION_CLASSES: TokenClass[] = ['string', 'tech', 'comment', 'number', 'keyword'];
 

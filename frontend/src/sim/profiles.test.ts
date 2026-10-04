@@ -60,8 +60,8 @@ describe('kindOf', () => {
 
 describe('profileOf', () => {
   const loc = { line: 1, col: 1, length: 1 };
-  /** Fields every profile of a non-store has unless the table says otherwise. */
-  const plain = { writeScaling: 'replicas', shards: 1, egressUsdPerGb: 0 } as const;
+  /** Fields every profile of a non-store has unless the table says otherwise; nodes you run pay internet egress. */
+  const plain = { writeScaling: 'replicas', shards: 1, egressUsdPerGb: 0.09 } as const;
 
   it('uses the kind defaults from the design table', () => {
     expect(profileOf(node('service', 'REST API'))).toEqual({
@@ -96,7 +96,7 @@ describe('profileOf', () => {
         durable: true,
         consistency: 'strong',
         bandwidthMBps: 100,
-        egressUsdPerGb: 0,
+        egressUsdPerGb: 0.09,
       });
     }
   });
@@ -123,12 +123,24 @@ describe('profileOf', () => {
     expect(profileOf(node('serverless', 'AWS API Gateway'))).toMatchObject({ kind: 'gateway', rps: 10_000, latencyMs: 10, availability: 0.9995, costUsd: 100 });
     expect(profileOf(node('cdn', 'AWS Route53'))).toMatchObject({ kind: 'dns', rps: Infinity, latencyMs: 0, availability: 1 });
     expect(profileOf(node('cdn', 'Rectangle'))).toMatchObject({ kind: 'edge', rps: 100_000, latencyMs: 2, costUsd: 50 });
+    // The generic edge profile is reachable from the catalog: a WAF sits in front of everything.
+    expect(profileOf(node('cdn', 'WAF'))).toMatchObject({ kind: 'edge', rps: 100_000, latencyMs: 2, costUsd: 50 });
+    expect(profileOf(node('cdn', 'AWS WAF')).kind).toBe('edge');
   });
 
-  it('has bandwidth and egress prices per §7.3', () => {
+  it('has bandwidth and egress prices per §7.3: internet egress for what you run, a CDN rate, nothing for clients and third parties', () => {
     expect(profileOf(node('storage', 'AWS S3'))).toMatchObject({ bandwidthMBps: 100, egressUsdPerGb: 0.09 });
-    expect(profileOf(node('serverless', 'AWS Lambda'))).toMatchObject({ bandwidthMBps: 100, egressUsdPerGb: 0 });
-    expect(profileOf(node('cache', 'Redis'))).toMatchObject({ bandwidthMBps: 100, egressUsdPerGb: 0 });
+    expect(profileOf(node('serverless', 'AWS Lambda'))).toMatchObject({ bandwidthMBps: 100, egressUsdPerGb: 0.09 });
+    expect(profileOf(node('service', 'REST API'))).toMatchObject({ bandwidthMBps: 200, egressUsdPerGb: 0.09 });
+    expect(profileOf(node('cdn', 'AWS CloudFront'))).toMatchObject({ bandwidthMBps: 1000, egressUsdPerGb: 0.02 });
+    expect(profileOf(node('shape', 'Actor')).egressUsdPerGb).toBe(0);
+    expect(profileOf(node('external', 'Stripe')).egressUsdPerGb).toBe(0);
+    expect(profileOf(node('cdn', 'AWS Route53')).egressUsdPerGb).toBe(0);
+  });
+
+  it('takes a timeout override for failed calls to the node, and none by default', () => {
+    expect(profileOf(node('service', 'REST API')).timeoutMs).toBeUndefined();
+    expect(profileOf(node('service', 'REST API'), { node: 'n', timeoutMs: 250, loc }).timeoutMs).toBe(250);
   });
 
   it('gives data stores a consistency (§7.4), and nothing else one', () => {

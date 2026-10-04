@@ -4,15 +4,17 @@ import { accessIn } from './access';
 import {
   DEFAULT_TIMEOUT_MS,
   DEPLOYED,
+  FAILOVER_SHARE,
   HOT,
   PERCENTILE_KEYS,
   analyze,
   components,
   mainScenarioIndex,
+  mainWrites,
   profilesOf,
   replicasOf,
   resolveTraffic,
-  usageOf,
+  bandwidthBound,
   usageText,
   writeBound,
   type Analysis,
@@ -88,9 +90,9 @@ interface Run {
   isWrite: (step: DiagramStep) => boolean;
 }
 
-export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)): TestResult[] {
+function makeRun(diagram: Diagram, analysis: Analysis): Run {
   const access = accessIn(diagram);
-  const run: Run = {
+  return {
     diagram,
     analysis,
     nodes: new Map(analysis.nodes.map((n) => [n.id, n])),
@@ -99,6 +101,10 @@ export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === 'write',
   };
+}
+
+export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)): TestResult[] {
+  const run = makeRun(diagram, analysis);
   const results: TestResult[] = (diagram.requirements ?? []).map((r, i) => {
     const { passed, message, hint } = requirement(run, r);
     return { id: `req:${i + 1}`, name: requirementName(r), category: CATEGORY[r.kind], passed, message, hint, loc: r.loc };
@@ -209,7 +215,8 @@ function latency(run: Run, u: DiagramUseCase, q: Percentile, maxMs: number): Che
   const value = `${key} of ${u.name} is ${formatMs(ms)}${result.rps > 0 ? '' : ' with no traffic'}`;
   const message = `${value} (limit ${formatMs(maxMs)})`;
   if (ms < maxMs) return { ...pass(message), value };
-  const index = Math.max(0, result.scenarios.findIndex((s) => s.percentiles[key] === ms));
+  // The scenario that contributes most of the requests slower than the percentile.
+  const index = Math.min(result.tailScenario[key] ?? 0, u.scenarios.length - 1);
   const lead = u.scenarios.length > 1 ? `The "${u.scenarios[index].name}" path (${formatPercent(result.scenarios[index].share)} of traffic) sets ${key}. ` : '';
   return { ...fail(message, lead + latencyHint(run, u, u.scenarios[index])), value };
 }
@@ -231,6 +238,10 @@ function scenarioLatency(run: Run, useCase: string, scenario: string, q: Percent
 
 function saturationHint(run: Run, n: NodeAnalysis): string {
   const label = nodeLabel(run.diagram, n.id);
+  if (bandwidthBound(n)) {
+    const replicas = Math.ceil((n.bandwidthUtilization * n.replicas) / HOT);
+    return `${label} moves more payload bytes than its network carries. Send the bytes around it (clients upload to and download from object storage or a CDN directly, with presigned URLs), or add replicas: x${replicas} keeps its bandwidth under ${formatPercent(HOT)}`;
+  }
   if (writeBound(n)) {
     const perShard = n.writeCapacityRps / n.shards;
     const shards = Math.ceil(n.writeLoadRps / (perShard * HOT));
@@ -247,11 +258,12 @@ function saturationHint(run: Run, n: NodeAnalysis): string {
 /** Names the slowest hop of the scenario and the lever for it. */
 function latencyHint(run: Run, u: DiagramUseCase, scenario: DiagramScenario): string {
   const hops = criticalPath(u, scenario).flat();
-  const cost = (h: (typeof hops)[number]) => (h.failed ? DEFAULT_TIMEOUT_MS : (run.nodes.get(h.target)?.latencyMs ?? 0));
+  const timeout = (id: string) => run.profiles.get(id)?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const cost = (h: (typeof hops)[number]) => (h.failed ? timeout(h.target) : (run.nodes.get(h.target)?.latencyMs ?? 0));
   const slowest = hops.reduce<(typeof hops)[number] | undefined>((best, h) => (!best || cost(h) > cost(best) ? h : best), undefined);
   if (!slowest) return 'Shorten the synchronous path of the request.';
   const label = nodeLabel(run.diagram, slowest.target);
-  if (slowest.failed) return `It waits ${formatMs(DEFAULT_TIMEOUT_MS)} for the failed call to ${label}; give that path a smaller share of traffic or avoid the call.`;
+  if (slowest.failed) return `It waits ${formatMs(timeout(slowest.target))} for the failed call to ${label}; give that path a smaller share of traffic, avoid the call, or time out sooner (capacity { ${slowest.target} timeout 200ms }).`;
   const sized = hops.find((h) => (h.step.sizeBytes ?? 0) > 0);
   const node = run.nodes.get(slowest.target);
   if (node && node.utilization > HOT) return `${label} runs at ${formatPercent(node.utilization)} and queues requests; add replicas to it.`;
@@ -264,17 +276,22 @@ function availability(run: Run, u: DiagramUseCase, minPercent: number): Check & 
   const value = `availability of ${u.name} is ${formatAvailability(result.availability)}`;
   const message = `${value} (limit ${minPercent}%)`;
   if (result.availability * 100 >= minPercent - 1e-9) return { ...pass(message), value };
-  // The weakest node on the main path that has no fallback.
+  // The weakest node on the main path that has no fallback; a write to a single-primary store needs its primary.
   const shares = run.shares.get(u.id) ?? [];
   const main = u.scenarios.length ? pathNodes(u, u.scenarios[mainScenarioIndex(shares)]) : [];
+  const writes = mainWrites(u, shares, run.isWrite);
+  const effective = (n: NodeAnalysis) => (writes.has(n.id) ? n.writeAvailability : n.availability);
   const weakest = main
     .filter((id) => fallbacksFor(u, id).length === 0)
     .map((id) => run.nodes.get(id))
-    .filter((n): n is NodeAnalysis => !!n && n.availability < 1)
-    .sort((a, b) => a.availability - b.availability)[0];
-  const hint = weakest
-    ? `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(weakest.availability)}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`
-    : 'Add replicas to the nodes on the main path, or fallback scenarios that complete without them';
+    .filter((n): n is NodeAnalysis => !!n && effective(n) < 1)
+    .sort((a, b) => effective(a) - effective(b))[0];
+  const primaryBound = weakest && writes.has(weakest.id) && weakest.writeAvailability < weakest.availability;
+  const hint = !weakest
+    ? 'Add replicas to the nodes on the main path, or fallback scenarios that complete without them'
+    : primaryBound
+      ? `The weakest link is writing to ${nodeLabel(run.diagram, weakest.id)}: writes need its primary, ${formatAvailability(weakest.writeAvailability)} with failover${weakest.replicas < 2 ? ' (none without a second replica; add one)' : ` (a replica takes over, but about ${formatPercent(FAILOVER_SHARE)} of each outage is lost)`}. Move the writes to a partitioned store, or add a fallback scenario that calls it with -x and still completes`
+      : `The weakest link is ${nodeLabel(run.diagram, weakest.id)} at ${formatAvailability(effective(weakest))}: add a replica (x${weakest.replicas + 1}) or a fallback scenario that calls it with -x and still completes`;
   return { ...fail(message, hint), value };
 }
 
@@ -337,6 +354,18 @@ function durable(run: Run, name: string): Check {
   return writesCheck(run, u, u.scenarios, (id) => !!run.nodes.get(id)?.durable, 'a durable store');
 }
 
+/**
+ * `survive any node failure` / `survive failure of X` (§2.5): every selected
+ * node you run loses one instance. With replicas, the design is analysed
+ * again with one fewer: that node must not saturate, and every latency
+ * requirement that held must still hold. Load spreads evenly over shards and
+ * a key cannot move to another shard, so losing one replica of a sharded
+ * store makes its shard the bottleneck: the per-shard numbers are what count.
+ * A single-primary store that loses its primary promotes a replica, so its
+ * write capacity stays and one replica's reads go (the same as losing a
+ * replica). With one instance, every use case that needs the node must have
+ * a fallback scenario for it.
+ */
 function survive(run: Run, target: Selector | 'any'): Check {
   const all = components(run.diagram);
   const selected = target === 'any' ? all.filter((n) => DEPLOYED(run.nodes.get(n.id)!.kind)) : selectNodes(run.diagram, target);
@@ -344,20 +373,37 @@ function survive(run: Run, target: Selector | 'any'): Check {
   if (selected.length === 0) {
     return target === 'any' ? pass('No nodes to lose') : fail(`No node matches ${what}`, 'Use a node id, [Tech] or any <kind>');
   }
+  // Latency requirements that hold now; losing an instance must not break them.
+  const latencies = (run.diagram.requirements ?? []).filter((r): r is Extract<Requirement, { kind: 'latency' }> => r.kind === 'latency' && requirement(run, r).passed);
   const failures: Check[] = [];
   for (const node of selected) {
     const n = run.nodes.get(node.id)!;
     const label = nodeLabel(run.diagram, node.id);
     const replicas = replicasOf(node);
     if (replicas >= 2) {
-      const left = usageOf(run.profiles.get(node.id)!, replicas - 1, n.readLoadRps, n.writeLoadRps);
+      const degraded = makeRun(run.diagram, analyze(run.diagram, { replicas: new Map([[node.id, replicas - 1]]) }));
+      const left = degraded.nodes.get(node.id)!;
+      const lost = n.shards > 1 ? `one of the ${replicas} replicas of a ${node.id} shard` : `one of ${replicas} ${node.id} replicas`;
       if (left.saturated) {
+        const leaves = bandwidthBound(left)
+          ? `leaves ${usageText(left)}`
+          : n.shards > 1
+            ? `leaves that shard ${formatRps(left.capacityRps / n.shards)} for ${formatRps(n.loadRps / n.shards)}`
+            : `leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)}`;
         failures.push(
           fail(
-            `Losing one of ${replicas} ${node.id} replicas leaves ${formatRps(left.capacityRps)} for ${formatRps(n.loadRps)} (${formatPercent(left.utilization)})`,
-            writeBound(left)
-              ? saturationHint(run, { ...n, ...left })
-              : `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`,
+            `Losing ${lost} ${leaves}${bandwidthBound(left) ? '' : ` (${formatPercent(left.utilization)})`}`,
+            writeBound(left) ? saturationHint(run, { ...n, ...left }) : `Add a replica to ${label} (x${replicas + 1}) so the rest carry the load`,
+          ),
+        );
+        continue;
+      }
+      const broken = latencies.map((r) => requirement(degraded, r)).find((c) => !c.passed);
+      if (broken) {
+        failures.push(
+          fail(
+            `Losing ${lost} breaks a latency limit: ${broken.message}`,
+            `Add a replica to ${label} (x${replicas + 1}) so the rest keep it under ${formatPercent(HOT)}, or take load off it`,
           ),
         );
       }

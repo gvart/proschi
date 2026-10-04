@@ -1,7 +1,7 @@
 import { componentCatalog } from '../catalog/componentCatalog';
 import { parse } from '../dsl/parser';
 import type { DiagramNode, Percentile } from '../dsl/types';
-import { DEFAULT_TIMEOUT_MS, HOT, PERCENTILE_FACTORS, analyze, hopLatency, replicatedAvailability, type Analysis, type NodeAnalysis } from '../sim/analyze';
+import { DEFAULT_TIMEOUT_MS, HOT, analyze, hopLatency, hopModel, hopQuantile, replicatedAvailability, type Analysis, type NodeAnalysis } from '../sim/analyze';
 import { formatAvailability, formatMs, formatPercent, formatRps } from '../sim/format';
 import { profileOf, type Profile } from '../sim/profiles';
 import { runTests, type TestResult } from '../sim/tests';
@@ -77,12 +77,10 @@ function constant(name: string): string {
   const factor = /^f(\d+)$/.exec(name);
   if (factor) {
     const q = (factor[1] === '999' ? 99.9 : Number(factor[1])) as Percentile;
-    const f = PERCENTILE_FACTORS[q];
-    if (f === undefined) throw new Error(`Unknown percentile in a pin: ${name}`);
-    return `${f.toFixed(1)}×`;
+    if (![50, 90, 95, 99, 99.9].includes(q)) throw new Error(`Unknown percentile in a pin: ${name}`);
+    return `${hopQuantile(hopModel(1, 0), q / 100).toFixed(2)}×`;
   }
   if (name === 'sixServices') return formatAvailability(replicatedAvailability(profileOf(profileNode('REST API')).availability, 6));
-  if (name === 'timeoutP99') return formatMs(DEFAULT_TIMEOUT_MS * PERCENTILE_FACTORS[99]);
   throw new Error(`Unknown constant in a pin: ${name}`);
 }
 
