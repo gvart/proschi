@@ -10,7 +10,7 @@
       "binding": "DB",
       "database_name": "proschi",
       // `npx wrangler d1 create proschi` prints this id; it is not a secret.
-      "database_id": "00000000-0000-0000-0000-000000000000",
+      "database_id": "aa25969d-1e0d-489d-8a1d-427b4176c224",
       "migrations_dir": "migrations"
     }
   ],

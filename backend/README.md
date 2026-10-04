@@ -59,7 +59,7 @@ Once, with a Cloudflare account:
 cd backend
 npm ci
 npx wrangler login
-npx wrangler d1 create proschi   # put the printed database_id in wrangler.jsonc
+npx wrangler d1 create proschi   # for a new deployment: put the printed database_id in wrangler.jsonc
 ```
 
 Create the OAuth apps. Callback URL: `https://<worker>.workers.dev/auth/<provider>/callback`.
