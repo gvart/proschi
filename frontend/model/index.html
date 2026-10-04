@@ -5,7 +5,7 @@
     <!-- Enforced in builds; inert under `npm run dev` (see .env.production). frame-ancestors cannot be set from a meta tag. -->
     <meta
       http-equiv="%VITE_CSP_HTTP_EQUIV%"
-      content="default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; font-src https://fonts.gstatic.com; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+      content="default-src 'self'; script-src 'self'; style-src 'self'; font-src 'self'; img-src 'self' data:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
     />
     <meta name="referrer" content="strict-origin-when-cross-origin" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -14,39 +14,17 @@
       name="description"
       content="What Proschi's simulation models (load, reads and writes, replicas and shards, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
     />
-    <meta name="color-scheme" content="light" />
-    <meta name="theme-color" content="#f4f1ea" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#FFF8E7" />
+    <!-- Applies the saved or system theme before first paint. -->
+    <script src="../theme-init.js"></script>
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <link rel="canonical" href="https://proschi.app/model/" />
-
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      rel="stylesheet"
-      href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&display=swap"
-    />
   </head>
   <body>
     <a class="skip" href="#main">Skip to content</a>
 
-    <header class="masthead">
-      <div class="wrap masthead__inner">
-        <a class="wordmark" href="../" aria-label="Proschi home">
-          <svg class="wordmark__mark" viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="1.5" y="3.5" width="8" height="6" />
-            <rect x="14.5" y="14.5" width="8" height="6" />
-            <path d="M9.5 6.5h4v11h1" />
-          </svg>
-          <span>Proschi</span>
-        </a>
-        <nav class="masthead__nav" aria-label="Main">
-          <a class="navlink hide-sm" href="https://github.com/gvart/proschi/blob/main/docs/LANGUAGE.md">Language</a>
-          <a class="navlink" href="../practice/">Practice</a>
-          <a class="navlink hide-sm" href="https://github.com/gvart/proschi">GitHub</a>
-          <a class="btn btn--small" href="../app/">Open the editor</a>
-        </nav>
-      </div>
-    </header>
+    <!--shell:header-->
 
     <main id="main">
       <section class="hero" aria-labelledby="hero-title">
@@ -977,25 +955,14 @@ db "Seats DB" [PostgreSQL] x4</code></pre>
           </ol>
 
           <div class="closing">
-            <a class="btn" href="../practice/">Start practising</a>
-            <a class="btn btn--ghost" href="../app/">Open the editor</a>
+            <a class="ps-btn ps-btn--primary" href="../practice/">Start practising</a>
+            <a class="ps-btn ps-btn--secondary" href="../app/">Open the editor</a>
           </div>
         </div>
       </section>
     </main>
 
-    <footer class="footer">
-      <div class="wrap footer__inner">
-        <p><strong>Proschi</strong> is free and open source software, released under the MIT license.</p>
-        <ul class="footer__links">
-          <li><a href="../">Home</a></li>
-          <li><a href="../app/">Editor</a></li>
-          <li><a href="../practice/">Practice</a></li>
-          <li><a href="https://github.com/gvart/proschi/tree/main/frontend/src/sim">Simulation source</a></li>
-          <li><a href="https://github.com/gvart/proschi">GitHub</a></li>
-        </ul>
-      </div>
-    </footer>
+    <!--shell:footer-->
 
     <script type="module" src="../src/model/main.ts"></script>
   </body>

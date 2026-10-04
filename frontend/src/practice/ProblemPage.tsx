@@ -14,6 +14,7 @@ import { sourceOf, statusOf, withRun, withSource, type Progress } from './progre
 import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
+import Header from '../design/Header';
 import { startMode, type StartMode } from '../onboarding/seen';
 import type { Account } from './useAccount';
 import AccountMenu from './AccountMenu';
@@ -105,18 +106,18 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const show = (p: Pane) => `${pane === p ? 'flex' : 'hidden'} md:flex`;
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-gray-50">
-      <header className="flex flex-wrap items-center gap-x-3 gap-y-1 px-3 sm:px-4 py-2 bg-white border-b border-gray-200">
-        <a href="#/" className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-blue-700">
+    <div className="ps-light h-[100dvh] flex flex-col bg-gray-50">
+      <Header base="../" current="practice" compact>
+        <a href="#/" className="inline-flex items-center gap-1 text-sm px-2 py-1.5 rounded-md text-ink hover:bg-ink/10">
           <ArrowLeft size={16} />
           <span className="hidden sm:inline">Problems</span>
         </a>
-        <h1 className="flex items-center gap-2 min-w-0 font-semibold text-gray-900">
+        <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
           <span className="truncate">{problem.title}</span>
         </h1>
         <DifficultyBadge difficulty={problem.difficulty} />
-        <button onClick={reset} className="ml-auto inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-gray-700 hover:bg-gray-100" title="Start over from the starter code">
+        <button onClick={reset} className="ml-auto inline-flex items-center gap-1.5 text-sm px-2.5 py-1.5 rounded-md text-ink hover:bg-ink/10" title="Start over from the starter code">
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
         </button>
@@ -128,7 +129,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             setTour('tour');
           }}
         />
-      </header>
+      </Header>
 
       <div role="tablist" aria-label="View" className="md:hidden flex bg-white border-b border-gray-200">
         {PANES.map(({ id, label, icon: Icon }) => (

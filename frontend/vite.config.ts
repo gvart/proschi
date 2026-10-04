@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
+import { siteShell } from './plugins/siteShell'
 
 // `ANALYZE=1 npx vite build` also writes dist/stats.html, a treemap of every chunk.
 async function analyzer(): Promise<PluginOption> {
@@ -25,11 +26,18 @@ function manualChunks(id: string): string | undefined {
 
 // https://vite.dev/config/
 export default defineConfig(async () => ({
-  plugins: [react(), practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))), await analyzer()],
+  plugins: [
+    react(),
+    practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
+    siteShell(),
+    await analyzer(),
+  ],
   // Relative asset paths so the build works under any sub-path,
   // e.g. https://<user>.github.io/proschi/ on GitHub Pages.
   base: './',
   build: {
+    // Fonts stay files: the static pages' CSP allows fonts from 'self' only, not data: URLs.
+    assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
     rollupOptions: {
       // Four pages: the landing page at the root, the editor under app/,
       // system design practice under practice/, and how the simulation

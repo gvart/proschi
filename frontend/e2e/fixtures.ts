@@ -3,8 +3,8 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
 /**
  * Shared fixtures: every test fails on an uncaught page error or a console
  * error in any page of its browser context, unless the message matches
- * ALLOWED_CONSOLE_ERRORS below. External requests are stubbed so the suite
- * runs offline and never depends on third-party uptime.
+ * ALLOWED_CONSOLE_ERRORS below, or on a request to another host: the site
+ * loads nothing from third parties, so the suite runs offline.
  */
 
 /** Known-benign console errors. Each entry needs a comment saying why it is harmless. */
@@ -46,10 +46,14 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
         const { url, lineNumber } = msg.location();
         errors.push(`console.error: ${text}${url ? ` (${url}:${lineNumber})` : ''}`);
       });
-      // The landing page loads IBM Plex from Google Fonts; serve an empty
-      // stylesheet so tests are offline and deterministic.
-      await context.route(/^https:\/\/fonts\.(googleapis|gstatic)\.com\//, (route) =>
-        route.fulfill({ status: 200, contentType: 'text/css', body: '' }),
+      // Every page, fonts included, is served by the site itself: a request
+      // anywhere else is a bug (and would make the suite depend on the network).
+      await context.route(
+        (url) => url.hostname !== '127.0.0.1' && url.hostname !== 'localhost',
+        (route) => {
+          errors.push(`external request: ${route.request().url()}`);
+          return route.abort();
+        },
       );
       await use(errors);
       expect(errors, 'page errors / console errors').toEqual([]);

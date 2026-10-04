@@ -21,7 +21,6 @@ import {
   ChevronDown,
   Download,
   FilePlus,
-  GraduationCap,
   Image,
   LayoutGrid,
   Link,
@@ -72,6 +71,7 @@ import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDi
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import HelpMenu from '../../onboarding/HelpMenu';
+import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
 import type { CoverBand } from '../../onboarding/Tour';
 import type { FitInset } from '../Diagram/useFitOnChange';
@@ -380,13 +380,9 @@ export default function Playground() {
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-gray-50">
-      <header className="flex flex-wrap items-center gap-x-2 gap-y-1.5 px-3 sm:px-4 py-2 bg-white border-b border-gray-200">
+    <div className="ps-light h-[100dvh] flex flex-col bg-gray-50">
+      <Header base="../" current="editor" compact>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
-          <a href="../" title="About Proschi" className="text-lg font-bold text-gray-900 mr-1 hover:text-blue-700">
-            Proschi
-          </a>
-
           <Menu
             label="Diagrams"
             trigger={
@@ -526,21 +522,11 @@ export default function Playground() {
           }}
         />
 
-        <div className="flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
-          <a
-            href="../practice/"
-            aria-label="Practice"
-            title="System design practice problems"
-            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
-          >
-            <GraduationCap size={16} />
-            <span className="hidden lg:inline">Practice</span>
-          </a>
-
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"
-            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-gray-700 hover:bg-gray-100"
+            className="inline-flex items-center gap-1.5 text-sm px-2.5 py-2 sm:py-1.5 rounded-md text-ink hover:bg-ink/10"
           >
             <BookOpen size={16} />
             <span className="hidden sm:inline">Examples</span>
@@ -555,7 +541,7 @@ export default function Playground() {
               setInitialStep(undefined);
             }}
             disabled={diagram.useCases.length === 0}
-            className="flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] text-sm border border-gray-300 rounded-md px-2 py-2 sm:py-1.5 bg-white disabled:text-gray-400"
+            className="flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] text-sm border border-ink/40 rounded-md px-2 py-2 sm:py-1.5 bg-surface text-ink disabled:text-muted"
           >
             {diagram.useCases.length === 0 && <option value="">No use cases</option>}
             {useCaseGroups.map((group) =>
@@ -575,7 +561,7 @@ export default function Playground() {
             <button
               onClick={stopPlaying}
               aria-label="Back to diagram"
-              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-ink/40 text-ink hover:bg-ink/10"
             >
               <LayoutGrid size={16} />
               <span className="hidden sm:inline">Diagram</span>
@@ -587,7 +573,7 @@ export default function Playground() {
               data-tour="play"
               aria-label="Play"
               title={canPlay ? 'Play this use case' : 'Add a usecase with steps to play it'}
-              className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="inline-flex items-center gap-1.5 text-sm font-semibold px-3 py-2 sm:py-1.5 rounded-md border-bw-1 border-ink bg-pop-yellow text-on-accent shadow-brutal-sm transition-[transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px active:translate-x-[3px] active:translate-y-[3px] active:shadow-none disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
             >
               <Play size={16} />
               <span className="hidden sm:inline">Play</span>
@@ -599,13 +585,13 @@ export default function Playground() {
             data-tour="share"
             aria-label={copied ? 'Copied' : 'Share'}
             title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
-            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-gray-300 text-gray-700 hover:bg-gray-50"
+            className="inline-flex items-center gap-1.5 text-sm px-3 py-2 sm:py-1.5 rounded-md border border-ink/40 text-ink hover:bg-ink/10"
           >
-            {copied ? <Check size={16} className="text-green-600" /> : <Link size={16} />}
+            {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
             <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
           </button>
         </div>
-      </header>
+      </Header>
       {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
 
       <div role="tablist" aria-label="View" data-tour="panes" className="md:hidden flex bg-white border-b border-gray-200">
