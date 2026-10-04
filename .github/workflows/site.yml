@@ -30,9 +30,11 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - name: Diagnostic (temporary)
         run: |
-          echo "DEPLOY_CLOUDFLARE=[${{ vars.DEPLOY_CLOUDFLARE }}]"
-          echo "variable names: ${{ join(fromJSON(toJSON(vars)).*, ',') != '' && 'see below' || 'none' }}"
-          echo '${{ toJSON(vars) }}' | sed -E 's/: ".*"/: <set>/'
+          echo "vars: ${{ toJSON(vars) != '{}' && 'some' || 'none' }}"
+          echo "secret CLOUDFLARE_API_TOKEN set: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}"
+          echo "secret CLOUDFLARE_ACCOUNT_ID set: ${{ secrets.CLOUDFLARE_ACCOUNT_ID != '' }}"
+          echo "secret DEPLOY_CLOUDFLARE set: ${{ secrets.DEPLOY_CLOUDFLARE != '' }}"
+          exit 1
       - run: npm ci
       - run: npm run lint
       - run: npm test
