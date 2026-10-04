@@ -482,7 +482,7 @@ holds unless stated here. Types are in `frontend/src/dsl/types.ts` (marked
 
 | Assertion | Holds when |
 |---|---|
-| `U [scenario S] never waits for X` | no synchronous (`->`) call to a node matching X happens before U's entry response, in any scenario (or S). Async sends (`->>`) and calls after the response are fine. Fails if X is never called at all? No: passes vacuously, combine with `calls X` when needed. |
+| `U [scenario S] never waits for X` | no synchronous (`->`) call to a node matching X happens before U's entry response, in any scenario (or S). Async sends (`->>`) and calls after the response are fine. It passes when X is never called; add `calls X` to require the call. |
 | `U [scenario S] calls Y after X` | in every scenario that calls both, the **last** call to Y comes after the **first** call to X; and some scenario calls both. (Unlike `before`, which compares first calls; this expresses "book the ledger after the gateway" even when the same database was read earlier.) |
 | `[in U] X calls Y` | some step is **sent by** a node matching X to a node matching Y (in U, or in any use case) |
 | `[in U] X never calls Y` | no step is sent by X to Y. E.g. `any service never calls blobs`: bytes never pass through a server. |
