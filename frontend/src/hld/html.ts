@@ -1,5 +1,10 @@
 import { buildSequence, findScenario, sequenceMessages } from '../dsl/sequence';
 import {
+  LOAD_HEADINGS,
+  accessText,
+  egressText,
+  replicasText,
+  totalCostText,
   formatMs,
   formatPercent,
   formatRps,
@@ -118,12 +123,20 @@ function renderSection(doc: HldDocument, s: HldSection, figures: HldFigures): st
         out.push(
           '<h3>Load per component</h3>',
           table(
-            ['Component', 'Load', 'Capacity', 'Utilisation', 'Replicas', 'Cost / month'],
-            s.load.map((n) => [e(n.name), e(formatRps(n.loadRps)), e(formatRps(n.capacityRps)), `<span class="${n.saturated ? 'fail' : n.utilization > 0.7 ? 'warn' : ''}">${e(formatPercent(n.utilization))}${n.saturated ? ' saturated' : ''}</span>`, e(n.replicas), e(formatUsd(n.costUsd))]),
+            LOAD_HEADINGS,
+            s.load.map((n) => [
+              e(n.name),
+              e(accessText(n, 'read')),
+              e(accessText(n, 'write')),
+              `<span class="${n.saturated ? 'fail' : n.utilization > 0.7 ? 'warn' : ''}">${e(formatPercent(n.utilization))}${n.saturated ? ' saturated' : ''}</span>`,
+              e(replicasText(n)),
+              e(egressText(n)),
+              e(formatUsd(n.costUsd)),
+            ]),
           ),
         );
       }
-      if (s.totalCostUsd !== undefined) out.push(`<p><strong>Total cost:</strong> ${e(formatUsd(s.totalCostUsd))} / month</p>`);
+      if (s.totalCostUsd !== undefined) out.push(`<p><strong>Total cost:</strong> ${e(totalCostText(s.totalCostUsd, s.totalEgressUsd))}</p>`);
       break;
     case 'components':
       out.push(

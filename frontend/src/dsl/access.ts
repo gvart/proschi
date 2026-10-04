@@ -12,7 +12,7 @@ export const WRITE_METHODS: readonly string[] = ['POST', 'PUT', 'PATCH', 'DELETE
 /**
  * First words of a label (compared case-insensitively) that make a step
  * without an HTTP method a write. Any other word reads: GET, SELECT, QUERY,
- * SCAN, FETCH, LOOKUP, GEOSEARCH, …
+ * SCAN, FETCH, LOOKUP, GEOSEARCH, GETITEM, MGET, an event name, …
  */
 export const WRITE_VERBS: readonly string[] = [
   'INSERT',
@@ -36,6 +36,30 @@ export const WRITE_VERBS: readonly string[] = [
   'PRODUCE',
   'CHARGE',
   'CREATE',
+  // DynamoDB and Redis commands that store data
+  'PUTITEM',
+  'UPDATEITEM',
+  'DELETEITEM',
+  'BATCHWRITEITEM',
+  'INCRBY',
+  'HINCRBY',
+  'SADD',
+  'XADD',
+  'MSET',
+  // Plain words for storing something
+  'SAVE',
+  'STORE',
+  'UPLOAD',
+  'COMMIT',
+  'RECORD',
+  'MARK',
+  // Claiming a resource changes state: a seat, a driver, stock
+  'RESERVE',
+  'HOLD',
+  'BOOK',
+  // Handing something on: a write at the receiver (a queue, a provider), like SEND and PUBLISH
+  'EMIT',
+  'NOTIFY',
 ];
 
 /**

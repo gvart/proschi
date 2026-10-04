@@ -15,6 +15,7 @@ import {
   simulate,
   type Diagnostic,
   type Diagram,
+  type NodeAnalysis,
   type ParseResult,
   type SimAnalysis,
   type TestResult,
@@ -27,8 +28,9 @@ export const SIM_USAGE = `  proschi test [--format text|github|json] <file|dir>.
 export const SIM_HELP = `test    Runs the requirements and test blocks of each file (imports are
         followed) against the simulation. Exits with 1 if any fails or a file
         has errors.
-analyze Prints the capacity table: load, utilisation, latency, availability
-        and cost per node; latency percentiles per use case and scenario.`;
+analyze Prints the capacity table: reads and writes (load of capacity and
+        utilisation), latency, availability, egress and cost per node; latency
+        percentiles per use case and scenario.`;
 
 /** Reads a file with its imports; tests may substitute their own. */
 export type Loader = (file: string) => ParseResult;
@@ -159,6 +161,22 @@ function table(rows: string[][], left = 1): string[] {
   return rows.map((r) => r.map((cell, c) => (c < left ? cell.padEnd(widths[c]) : cell.padStart(widths[c]))).join('  ').trimEnd());
 }
 
+/** `1k/20k rps 5%`: load of capacity and utilisation for reads or writes; `-` without load. */
+function accessCell(load: number, capacity: number, utilization: number): string {
+  return load > 0 ? `${formatRps(load).replace(' rps', '')}/${formatRps(capacity)} ${formatPercent(utilization)}` : '-';
+}
+
+/** `2.6 TB`, `260 GB` */
+function formatGb(gb: number): string {
+  const n = (x: number, digits: number) => Number(x.toFixed(digits)).toLocaleString('en-US');
+  return gb >= 1000 ? `${n(gb / 1000, 1)} TB` : `${n(gb, gb < 10 ? 1 : 0)} GB`;
+}
+
+/** `$233,280 (2,592 TB)`: what leaves the node per month; `-` when nothing does. */
+function egressCell(n: NodeAnalysis): string {
+  return n.egressGbPerMonth > 0 ? `${formatUsd(n.egressUsd).replace('/month', '')} (${formatGb(n.egressGbPerMonth)})` : '-';
+}
+
 /** The capacity table of `proschi analyze`. */
 export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: string): string {
   const lines = [diagram.title ? `${diagram.title} (${file})` : file, ''];
@@ -167,16 +185,17 @@ export function capacityReport(diagram: Diagram, analysis: SimAnalysis, file: st
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
   lines.push(
     ...table([
-      ['Node', 'Kind', 'Replicas', 'Load', 'Capacity', 'Util', 'Latency', 'Availability', 'Cost/month'],
+      ['Node', 'Kind', 'Replicas', 'Reads', 'Writes', 'Util', 'Latency', 'Availability', 'Egress/month', 'Cost/month'],
       ...nodes.map((n) => [
         n.id,
         n.kind,
-        String(n.replicas),
-        formatRps(n.loadRps),
-        formatRps(n.capacityRps),
+        n.shards > 1 ? `${n.replicas}x${n.shards} shards` : String(n.replicas),
+        accessCell(n.readLoadRps, n.readCapacityRps, n.readUtilization),
+        accessCell(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization),
         `${formatPercent(n.utilization)}${n.saturated ? ' SATURATED' : n.utilization > HOT ? ' hot' : ''}`,
         formatMs(n.latencyMs),
         formatAvailability(n.availability),
+        egressCell(n),
         formatUsd(n.costUsd).replace('/month', ''),
       ]),
     ], 2),
@@ -225,8 +244,14 @@ export function nodeSimulation(diagram: Diagram, nodeId: string): string | undef
   const n = simulate(diagram).nodes.find((x) => x.id === nodeId);
   if (!n || n.kind === 'client' || n.kind === 'other') return undefined;
   const state = n.saturated ? ' — **saturated**' : n.utilization > HOT ? ' — hot' : '';
+  const split =
+    n.readLoadRps > 0 && n.writeLoadRps > 0
+      ? [`Reads ${formatRps(n.readLoadRps)} of ${formatRps(n.readCapacityRps)} (${formatPercent(n.readUtilization)}) · writes ${formatRps(n.writeLoadRps)} of ${formatRps(n.writeCapacityRps)} (${formatPercent(n.writeUtilization)})`]
+      : [];
+  const egress = n.egressGbPerMonth > 0 ? ` (${formatUsd(n.egressUsd).replace('/month', '')} of it egress, ${formatGb(n.egressGbPerMonth)})` : '';
   return [
     `Load ${formatRps(n.loadRps)} of ${formatRps(n.capacityRps)} (${formatPercent(n.utilization)} utilised${state})`,
-    `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}`,
+    ...split,
+    `Latency ${formatMs(n.latencyMs)} per call · availability ${formatAvailability(n.availability)} · ${formatUsd(n.costUsd)}${n.replicas > 1 ? ` for ${n.replicas} replicas` : ''}${egress}`,
   ].join('  \n');
 }
