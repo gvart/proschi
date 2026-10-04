@@ -31,12 +31,14 @@ export default defineConfig(async () => ({
   base: './',
   build: {
     rollupOptions: {
-      // Three pages: the landing page at the root, the editor under app/,
-      // system design practice under practice/.
+      // Four pages: the landing page at the root, the editor under app/,
+      // system design practice under practice/, and how the simulation
+      // works under model/.
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
         practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
+        model: fileURLToPath(new URL('./model/index.html', import.meta.url)),
       },
       output: { manualChunks },
     },

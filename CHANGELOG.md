@@ -9,6 +9,18 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Added
+- A "How the simulation works" page at `/proschi/model/`: every rule the
+  simulation uses (load from traffic, reads and writes, replicas, shards and
+  single-primary writes, queueing, percentiles, fan-out and payloads,
+  availability, cost, failures, kinds and consistency) with its default
+  numbers, worked examples, the simplifications and omissions that make its
+  numbers optimistic or pessimistic, how to calibrate `capacity` with your own
+  measurements, and what a practice verdict means. A test recomputes every
+  number on the page from the simulation code. Linked from the landing page,
+  the editor's Analysis and Tests tabs and the practice test panel
+  ("How is this calculated?").
+
 ## [0.6.0] - 2026-10-04
 
 ### Security
