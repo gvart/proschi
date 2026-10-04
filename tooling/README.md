@@ -13,6 +13,8 @@ proschi fmt docs/                   # format files in place (--check: only repor
 proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
 proschi test docs/                  # run requirements and tests (exit 1 on a failure)
 proschi analyze shortener.proschi   # load, latency, availability and cost per node
+proschi problem check               # validate practice problem folders (see docs/PRACTICE.md)
+proschi problem new seat-map        # scaffold a practice problem
 proschi-language-server --stdio     # for any editor with an LSP client
 ```
 
@@ -32,6 +34,13 @@ against a capacity model of its `traffic { … }` (`--format text|github|json`);
 server reports failing requirements and tests as warnings and adds load to
 node hovers. The model and its default numbers:
 [Simulation and tests](https://github.com/gvart/proschi/blob/main/docs/EDITORS.md#simulation-and-tests).
+
+`problem check [--format text|github|json] [dir]` validates the practice
+problems, one folder each (front matter, given, starter, reference solution
+and the `wrong/` designs that must fail), with the same rules as the practice
+page's test suite; `problem new <id> [--dir <dir>]` scaffolds one. Inside the
+repository both default to `frontend/src/practice/problems`. The format and
+the rules: [docs/PRACTICE.md](https://github.com/gvart/proschi/blob/main/docs/PRACTICE.md).
 
 ## Rendering
 
