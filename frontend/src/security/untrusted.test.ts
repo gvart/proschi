@@ -28,7 +28,10 @@ describe('bounded lz-string decompression', () => {
   });
 });
 
-describe('share link decoding', () => {
+// Building the 2 MB links takes about 3 s of lz-string compression, near
+// vitest's 5 s default, so a busy machine timed these out. The bound that
+// matters, rejecting such a link quickly, is asserted inside the test.
+describe('share link decoding', { timeout: 30_000 }, () => {
   it('refuses a link that expands past 2 MB with a friendly error, quickly', () => {
     const hash = encodeShareHash('a'.repeat(MAX_SHARE_CHARS + 1));
     const start = performance.now();
