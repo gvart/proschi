@@ -65,11 +65,11 @@ every run. **Workers Paid ($5/month)** raises the cap to 30 s.
    - Create an API token: My Profile → API Tokens → Create Token, using the
      "Edit Cloudflare Workers" template, with **D1: Edit** added.
    - Note the Account ID on the dashboard home.
-2. **GitHub repo → Settings → Secrets and variables → Actions.**
-   - Secrets: `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
-   - Variable: `DEPLOY_CLOUDFLARE` = `true`.
+2. **GitHub repo → Settings → Secrets and variables → Actions → Secrets:**
+   `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID`.
 
-   The next push to `main` (or Actions → Site → Run workflow) then:
+   With both set, the next push to `main` (or Actions → Site → Run workflow)
+   then:
    - builds the site with `VITE_ACCOUNTS=true`;
    - applies `migrations/` to D1;
    - deploys the Worker on proschi.app (Cloudflare creates the DNS record and

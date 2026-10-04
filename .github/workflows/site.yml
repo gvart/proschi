@@ -16,7 +16,26 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Whether to deploy to Cloudflare: when the CLOUDFLARE_API_TOKEN and
+  # CLOUDFLARE_ACCOUNT_ID secrets are set (backend/README.md). Until then
+  # GitHub Pages keeps serving the site. A plain output, so later jobs and
+  # the log can use it (an expression on secrets would be masked).
+  config:
+    runs-on: ubuntu-latest
+    outputs:
+      cloudflare: ${{ steps.check.outputs.cloudflare }}
+    steps:
+      - id: check
+        env:
+          TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          ACCOUNT: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          if [ -n "$TOKEN" ] && [ -n "$ACCOUNT" ]; then cloudflare=true; else cloudflare=false; fi
+          echo "Deploy to Cloudflare: $cloudflare"
+          echo "cloudflare=$cloudflare" >> "$GITHUB_OUTPUT"
+
   build:
+    needs: config
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -34,7 +53,7 @@ jobs:
       - run: npm run build
       # Until the site is on Cloudflare, GitHub Pages serves it, without accounts.
       - uses: actions/upload-pages-artifact@v5
-        if: github.event_name != 'pull_request' && vars.DEPLOY_CLOUDFLARE != 'true'
+        if: github.event_name != 'pull_request' && needs.config.outputs.cloudflare != 'true'
         with:
           path: frontend/dist
 
@@ -84,12 +103,11 @@ jobs:
       - run: npm test
 
   # proschi.app: builds the site with accounts, migrates D1 and deploys the
-  # Worker that serves both (backend/README.md). Needs the repository variable
-  # DEPLOY_CLOUDFLARE = true and the secrets CLOUDFLARE_API_TOKEN and
-  # CLOUDFLARE_ACCOUNT_ID. A broken UI or API must not reach it.
+  # Worker that serves both (backend/README.md), once the Cloudflare secrets
+  # are set. A broken UI or API must not reach it.
   cloudflare:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && vars.DEPLOY_CLOUDFLARE == 'true'
-    needs: [build, e2e, backend]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
+    needs: [config, build, e2e, backend]
     runs-on: ubuntu-latest
     environment:
       name: production
@@ -117,8 +135,8 @@ jobs:
   # Cloudflare; after that, pages-redirect/, which sends every old URL (with
   # its #code= share fragment) to the same path on proschi.app.
   pages:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !cancelled() && (needs.cloudflare.result == 'success' || (needs.cloudflare.result == 'skipped' && vars.DEPLOY_CLOUDFLARE != 'true' && needs.build.result == 'success' && needs.e2e.result == 'success'))
-    needs: [build, e2e, cloudflare]
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !cancelled() && (needs.cloudflare.result == 'success' || (needs.cloudflare.result == 'skipped' && needs.config.outputs.cloudflare != 'true' && needs.build.result == 'success' && needs.e2e.result == 'success'))
+    needs: [config, build, e2e, cloudflare]
     runs-on: ubuntu-latest
     permissions:
       pages: write
@@ -128,9 +146,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v7
-        if: vars.DEPLOY_CLOUDFLARE == 'true'
+        if: needs.config.outputs.cloudflare == 'true'
       - uses: actions/upload-pages-artifact@v5
-        if: vars.DEPLOY_CLOUDFLARE == 'true'
+        if: needs.config.outputs.cloudflare == 'true'
         with:
           path: pages-redirect
       - id: deployment
