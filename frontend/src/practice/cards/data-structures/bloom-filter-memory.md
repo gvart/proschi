@@ -19,3 +19,5 @@ A Bloom filter for 100 million keys with a 1% false-positive rate needs about
 **120 MB**. Storing the keys themselves (say 20 bytes each) would take 2 GB.
 Each tenfold drop in the false-positive rate costs about 4.8 more bits per
 key.
+
+Numbers: [Numbers to know](../docs/numbers/#powers-of-two-and-ten).

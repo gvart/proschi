@@ -32,6 +32,12 @@
       "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, on the command line and in CI: checking, formatting, OpenAPI, rendering and tests."
     },
     {
+      "slug": "numbers",
+      "title": "Numbers to know",
+      "source": "NUMBERS.md",
+      "description": "Numbers every engineer should know for system design: latency, throughput, conversions, availability nines, object sizes, cloud costs and a worked estimate."
+    },
+    {
       "slug": "practice-authoring",
       "title": "Writing practice problems",
       "source": "PRACTICE.md",
@@ -84,6 +90,7 @@
       "title": "Practice",
       "items": [
         { "href": "practice/", "label": "Solving problems" },
+        { "page": "numbers" },
         { "page": "practice-authoring", "label": "Writing problems" },
         { "page": "cards-authoring", "label": "Writing cards" }
       ]

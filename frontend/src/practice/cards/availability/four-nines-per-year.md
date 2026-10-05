@@ -18,3 +18,5 @@ a year?
 A year has 365 × 24 × 60 = 525,600 minutes. 0.01% of that is 525,600 ×
 0.0001 ≈ **53 minutes a year**, or about 4.3 minutes a month. Each extra nine
 divides the allowed downtime by ten.
+
+Numbers: [Numbers to know](../docs/numbers/#availability-nines).

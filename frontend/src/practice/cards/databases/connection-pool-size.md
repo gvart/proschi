@@ -18,3 +18,5 @@ for 5 ms. On average, how many connections are busy?
 Little's law: busy = rate × time held. 2,000/s × 0.005 s = **10
 connections**. A pool a few times that absorbs bursts; a pool of 500 adds
 nothing but load on the database.
+
+Numbers: [Numbers to know](../docs/numbers/#connections).
