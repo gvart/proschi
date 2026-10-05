@@ -9,6 +9,8 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-05
+
 ### Changed
 - The site moves to <https://proschi.app/>, served by a Cloudflare Worker
   (`backend/`) together with its API. The old address,
@@ -296,7 +298,8 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...HEAD
+[0.8.0]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...tooling-v0.8.0
 [0.7.0]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...tooling-v0.7.0
 [0.6.0]: https://github.com/gvart/proschi/compare/tooling-v0.5.0...tooling-v0.6.0
 [0.5.0]: https://github.com/gvart/proschi/compare/tooling-v0.4.0...tooling-v0.5.0
