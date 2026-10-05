@@ -137,6 +137,69 @@
   color: rgb(var(--c-on-accent));
 }
 
+/* ---------- simulation overlay (sim/overlay.ts): heat, replicas, load ---------- */
+
+.pc-node[data-stack='1'] {
+  box-shadow:
+    4px 4px 0 -2px rgb(var(--c-surface)),
+    4px 4px 0 0 rgb(var(--c-ink));
+}
+.pc-node[data-stack='2'] {
+  box-shadow:
+    4px 4px 0 -2px rgb(var(--c-surface)),
+    4px 4px 0 0 rgb(var(--c-ink)),
+    8px 8px 0 -2px rgb(var(--c-surface)),
+    8px 8px 0 0 rgb(var(--c-ink));
+}
+.pc-node[data-load='over'] {
+  border-color: rgb(var(--c-fail));
+  animation: pc-shake 0.5s var(--e-out) infinite;
+}
+.pc-node[data-load='down'] {
+  border-style: dashed;
+  color: rgb(var(--c-muted));
+}
+.pc-node__load {
+  margin-top: 6px;
+}
+.pc-node__stats {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: rgb(var(--c-ink) / 0.8);
+}
+.pc-node__bar {
+  margin-top: 3px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgb(var(--c-ink) / 0.12);
+  overflow: hidden;
+}
+.pc-node__bar > div {
+  height: 100%;
+  background: rgb(var(--c-ink) / 0.7);
+  transition: width var(--d-2) var(--e-out);
+}
+.pc-node__bar > div[data-over] {
+  background: rgb(var(--c-fail));
+}
+@keyframes pc-shake {
+  0%,
+  100% {
+    translate: 0 0;
+  }
+  25% {
+    translate: -2px 0;
+  }
+  75% {
+    translate: 2px 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-node[data-load='over'] {
+    animation: none;
+  }
+}
+
 /* ---------- group and note ---------- */
 
 .pc-group {

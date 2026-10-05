@@ -158,6 +158,19 @@ test.describe('editor', () => {
     await expect(nav.getByRole('link')).toHaveCount(await sections.count());
   });
 
+  test('Overlay: load shows how busy each node is at the traffic block\'s rates', async ({ page }) => {
+    // The default example has no traffic block, so there is nothing to overlay.
+    await expect(page.getByRole('button', { name: /load$/ })).toBeHidden();
+    await openExample(page, /URL shortener HLD/);
+    const toggle = page.getByRole('button', { name: 'Overlay: load' });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.pc-node[data-load]').first()).toBeVisible();
+    await expect(page.locator('.pc-node__stats').filter({ hasText: /\d+%/ }).first()).toBeVisible();
+    await toggle.click();
+    await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
+  });
+
   test('Analysis and Tests tabs render for the URL shortener', async ({ page }) => {
     await openExample(page, /URL shortener HLD/);
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');

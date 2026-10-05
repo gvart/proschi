@@ -37,16 +37,7 @@ export const ICON: Record<NodeRole, LucideIcon> = {
   external: Cloud,
 };
 
-/** Fill for a utilisation: calm paper, then yellow, pink, red. */
-export function heat(u: number | undefined, down = false): string {
-  if (down) return 'rgb(var(--c-muted) / 0.35)';
-  if (u === undefined || u < 0.4) return 'rgb(var(--c-surface))';
-  if (u < 0.7) return 'rgb(var(--c-yellow) / 0.45)';
-  if (u < 0.9) return 'rgb(var(--c-yellow))';
-  if (u < 1) return 'rgb(var(--c-pink))';
-  return 'rgb(var(--c-fail))';
-}
-
+export { heat } from '../../utils/heat';
 
 export const usd = (n: number) => `${n < 0 ? '−' : ''}$${Math.abs(Math.round(n)).toLocaleString('en-US')}`;
 export const rps = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10_000 ? 0 : 1)}k` : `${Math.round(n)}`);

@@ -10,6 +10,11 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Overlay: load** on the editor's canvas, for documents with a `traffic`
+  block: each node heats up from paper to yellow, pink and red with how busy
+  it is, shows its replicas (stacked), shards and load, shakes past 100%,
+  and requests flow along the connections as dots (hollow for async work).
+  The Arcade will draw its board the same way.
 - **Build diagrams without typing.** The editor's canvas has an **Add
   component** palette (search the catalog, click to add or drag onto the
   canvas) and a settings panel for the selected node or connection: name,
