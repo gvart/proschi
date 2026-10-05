@@ -7,16 +7,7 @@ import type { Progress } from './progress';
  * Problems the roadmap lists before their folders are merged. Empty this list
  * once they exist: the test below fails while a pending id is a real problem.
  */
-const PENDING = [
-  'discord-messages',
-  'notion-sharding',
-  'cdn-tiered-cache',
-  'github-repo-replication',
-  'push-gateway',
-  'flash-sale',
-  'metrics-ingest',
-  'trending-topics',
-];
+const PENDING: string[] = [];
 
 const stages = (...lists: string[][]): RoadmapStage[] => lists.map((problems, i) => ({ id: `s${i}`, title: `Stage ${i}`, why: 'Because.', problems }));
 const solved = (...ids: string[]): Progress => Object.fromEntries(ids.map((id) => [id, { status: 'solved' as const }]));

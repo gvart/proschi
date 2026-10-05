@@ -71,7 +71,7 @@ describe('proschi problem check', () => {
   it('passes the repository problems', () => {
     const r = capture(['check', repoProblems]);
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^17 problems, \d+ wrong designs: no violations$/m);
+    expect(r.out).toMatch(/^25 problems, \d+ wrong designs: no violations$/m);
     expect(capture(['check'], __dirname).out).toBe(r.out);
   });
 
