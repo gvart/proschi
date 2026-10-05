@@ -39,14 +39,42 @@ export function withSecurityHeaders(response: Response, ctx: Ctx): Response {
   return out;
 }
 
+/** `__Host-`: only this exact host, Secure, Path=/. */
+export const SESSION_COOKIE = '__Host-proschi_session';
+
+export function readCookie(request: Request, name: string): string | undefined {
+  for (const part of (request.headers.get('Cookie') ?? '').split(';')) {
+    const [key, ...rest] = part.trim().split('=');
+    if (key === name) return rest.join('=');
+  }
+  return undefined;
+}
+
+/**
+ * The token of an `Authorization: Bearer <token>` header; '' when the header
+ * uses the Bearer scheme but the token is malformed, undefined without one.
+ */
+export function bearerToken(request: Request): string | undefined {
+  const header = request.headers.get('Authorization');
+  if (header === null || !/^bearer(\s|$)/i.test(header)) return undefined;
+  return /^bearer +([A-Za-z0-9._~+/-]{1,512}=*) *$/i.exec(header)?.[1] ?? '';
+}
+
 /**
  * Requests that change something must come from this site. The session
  * cookie is SameSite=Lax, which already keeps it off cross-site POSTs; this
  * also refuses any request whose Origin (sent by browsers on every POST,
  * PATCH and DELETE) is another site.
+ *
+ * A request with `Authorization: Bearer` and no session cookie (a native
+ * app's, backend/README.md "Mobile apps") is let through whatever its
+ * Origin: the token is no ambient credential, a page on another site can only
+ * send one it already holds, and the browser would not let it read the
+ * answer (no CORS). With the session cookie present the check always applies.
  */
 export function assertSameOrigin(request: Request): void {
   if (request.method === 'GET' || request.method === 'HEAD') return;
+  if (bearerToken(request) !== undefined && readCookie(request, SESSION_COOKIE) === undefined) return;
   const origin = request.headers.get('Origin');
   if (origin !== null && origin !== new URL(request.url).origin) throw new HttpError(403, 'Cross-site request refused');
 }

@@ -9,6 +9,8 @@ One Cloudflare Worker serves <https://proschi.app/>:
 
 Site and API share one origin, so there is no CORS. The session is an
 HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
+Native apps sign in through the system browser and send bearer tokens
+instead ([Mobile apps](#mobile-apps)).
 
 ## What the API does
 
@@ -64,17 +66,20 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /auth/providers` | `{providers: ["github", "google"]}`: those with credentials |
 | `GET /auth/<provider>/start?return=<path>` | Redirects to the provider; `return` must be a path on this site. `&link=1`, signed in: adds the provider to the account |
 | `GET /auth/<provider>/callback` | Sets the session cookie (30 days) and redirects to the path; on failure adds `?login_error=cancelled\|failed`. Linking keeps the session and adds `?linked=<provider>` or `?login_error=identity_in_use\|provider_linked` |
+| `GET /auth/<provider>/start?client=app&redirect_uri=<uri>&code_challenge=<S256>&code_challenge_method=S256[&state=]` | A native app's sign-in: the callback sets no cookie and redirects to `redirect_uri?code=<one-time code>[&state=]` (or `?error=access_denied\|server_error`). `redirect_uri` must be listed in `APP_REDIRECT_URIS` ([Mobile apps](#mobile-apps)) |
+| `POST /auth/token {grant_type, …}` | `authorization_code` with `code` and `code_verifier`, or `refresh_token` with `refresh_token`: `{access_token, token_type: "Bearer", expires_in, refresh_token}` |
+| `POST /auth/revoke {token}` | Ends the app sign-in an access or refresh token belongs to; 200 whether or not the token was known |
 | `POST /auth/logout` | Ends the session |
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions, its progress, its card reviews and its achievements |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json` (no session token hashes) |
+| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews and its achievements |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
 | `POST /api/me/achievements/seen {ids?}` | Marks earned badges as seen (those listed, or all); answers `{seen}`, how many |
-| `POST /api/me/sessions/revoke-all` | Ends every session of the user |
+| `POST /api/me/sessions/revoke-all` | Ends every session of the user: cookies, apps' tokens and unused app sign-in codes |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
@@ -85,7 +90,7 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports, 60 card review and activity requests and 120 achievement requests per user; 20 sign-in steps, 120 stats
+changes or exports, 3 imports, 60 card review and activity requests and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
 requests and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)
@@ -147,13 +152,97 @@ never call the endpoint: they use the rule reviewer
 (`frontend/src/review/reviewer.ts`).
 
 The server refuses POST, PATCH and DELETE requests whose `Origin` is another
-site. Every API response has a request id (`X-Request-Id`, the caller's if it
+site, unless they carry `Authorization: Bearer` and no session cookie (an
+app's: the token is no ambient credential). Every API response has a request id (`X-Request-Id`, the caller's if it
 sent a well-formed one) and headers that keep it from being framed, sniffed
 or loaded by other sites. Each request is one JSON log line in Workers Logs:
 request id, method, path (never the query), status, time and user id.
 
 Sign-in fails closed: without a `SESSION_SECRET` of at least 32 characters no
 provider is offered and `/auth/<provider>/…` answers 503.
+
+## Mobile apps
+
+A native app (React Native, Swift, Kotlin) signs in with the same GitHub and
+Google sign-in, in the system browser (`ASWebAuthenticationSession`, Custom
+Tabs, `expo-auth-session`), and then calls every `/api` endpoint with
+`Authorization: Bearer <access token>`. It is OAuth 2's authorization code
+flow with PKCE (RFC 7636), Proschi acting as the authorization server; the
+site keeps its cookie.
+
+1. **Allow the app's redirect URI.** Set the var `APP_REDIRECT_URIS` in
+   `wrangler.jsonc` (`vars`, and again under `env.staging`; a deploy
+   replaces vars set in the dashboard) to the URIs apps may be sent back to,
+   separated by commas, e.g. `proschi://auth`. Matching is exact; empty (the
+   default) turns app sign-in off. The providers need no change: they still
+   return to `/auth/<provider>/callback`. Prefer a claimed HTTPS link
+   (Universal Link / App Link) over a custom scheme where you can: another
+   app can register the same scheme, though PKCE keeps a code it catches
+   useless to it.
+2. **Start.** The app makes a `code_verifier` (43–128 random characters of
+   `A–Z a–z 0–9 - . _ ~`), its challenge `BASE64URL(SHA-256(verifier))`, and
+   a random `state`, then opens in the system browser:
+
+   ```text
+   GET /auth/github/start?client=app&redirect_uri=proschi%3A%2F%2Fauth
+       &code_challenge=E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM
+       &code_challenge_method=S256&state=af0ifjsldkj
+   ```
+
+   A `redirect_uri` that is not listed, a missing or non-S256 challenge, or
+   `link=1` is a 400 and redirects nowhere.
+3. **Come back.** After the provider, the callback sets no cookie but
+   redirects to `proschi://auth?code=<one-time code>&state=af0ifjsldkj`, or
+   `?error=access_denied` (cancelled) / `?error=server_error`. The app checks
+   `state`. The code works once and for 60 seconds, and is stored only as
+   its hash, with the challenge.
+4. **Exchange the code** (JSON or form-encoded; `redirect_uri` optional, and
+   must match when sent):
+
+   ```http
+   POST /auth/token
+   Content-Type: application/json
+
+   {"grant_type": "authorization_code", "code": "<code>", "code_verifier": "<verifier>"}
+   ```
+
+   ```json
+   {"access_token": "…", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "…"}
+   ```
+
+   A wrong verifier, an expired or used code is `400 {"error":
+   "invalid_grant", "error_description"}` (RFC 6749 errors); a wrong verifier
+   uses the code up too.
+5. **Call the API** with `Authorization: Bearer <access_token>`, e.g. `GET
+   /api/me`. An expired or revoked access token is a 401 with
+   `WWW-Authenticate: Bearer error="invalid_token"`.
+6. **Refresh** before or after the hour is up:
+
+   ```http
+   POST /auth/token
+   Content-Type: application/json
+
+   {"grant_type": "refresh_token", "refresh_token": "<refresh_token>"}
+   ```
+
+   The answer has the same shape, with **both tokens new**: keep the new
+   refresh token, the old one and the old access token stop working. A
+   refresh token lasts 60 days from when it was issued, so an app used at
+   least every 60 days stays signed in. Presenting a refresh token that was
+   already rotated means a copy exists: the whole sign-in (every token
+   descended from it) is revoked, and the app must sign in again. So send a
+   refresh once, and don't retry it with the same token in parallel.
+7. **Sign out**: `POST /auth/revoke {"token": "<refresh or access token>"}`
+   ends that sign-in, both tokens. `POST /api/me/sessions/revoke-all` (from
+   the app or the site) and `DELETE /api/me` end every session, app tokens
+   included.
+
+Codes and tokens are random 32-byte values stored only as their SHA-256
+(`app_auth_codes`, and `sessions` with `kind` `app_access` or `app_refresh`,
+`migrations/0006_app_tokens.sql`); the PKCE check is constant-time. A
+bearer request uses only its token, never a cookie sent along. Token and
+revoke requests count against the per-IP sign-in limit, and none of them is
+logged beyond its path.
 
 ## Cost
 
