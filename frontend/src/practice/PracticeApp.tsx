@@ -1,10 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import problems from 'virtual:practice-listings';
+import { guides as guideMinutes, lessons } from 'virtual:practice-lessons';
 import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
 import { ROADMAP, roadmapAccess, roadmapFor } from './roadmap';
+import { findGuide, GUIDES } from './guide/guides';
 import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
@@ -19,13 +21,20 @@ import Header from '../design/Header';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
+// A roadmap article, e.g. "How to approach a system design interview".
+const GuideRoute = lazy(() => import('./GuideRoute'));
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
 
+/** The roadmap's "Read first" article. */
+const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].id] };
+
 /**
- * `#/` is the list, `#/<problem id>` a problem, `#/roadmap` the roadmap and
- * `#/roadmap/<problem id>` a problem opened from it; hash routes work under any sub-path.
+ * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
+ * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
+ * opened from it and `#/roadmap/<guide id>` an article of the roadmap; hash
+ * routes work under any sub-path.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -84,18 +93,23 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const leaderboard = useLeaderboard();
 
   // Starting the roadmap takes an account: signed out, `#/roadmap/<id>` shows the roadmap (sign-in comes back to the same address).
+  // Guides and lessons are open to everyone.
   const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
-  const onRoadmap = route === 'roadmap' || (fromRoadmap && access !== 'open');
-  const problemId = fromRoadmap ? route.slice('roadmap/'.length) : route;
-  const problem = problemId && !onRoadmap ? problems.find((p) => p.id === problemId) : undefined;
+  const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
+  const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
+  const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
+  const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
+  const problem = problemId && !onRoadmap && !guide ? problems.find((p) => p.id === problemId) : undefined;
   useEffect(() => {
     document.title = problem
       ? `${problem.title} · Proschi practice`
-      : onRoadmap
-        ? 'Interview prep roadmap · Proschi practice'
-        : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, onRoadmap]);
+      : guide
+        ? `${guide.title} · Proschi practice`
+        : onRoadmap
+          ? 'Interview prep roadmap · Proschi practice'
+          : 'System design practice problems with automatic tests · Proschi';
+  }, [problem, guide, onRoadmap]);
 
   if (problem) {
     return (
@@ -108,8 +122,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           engine={engine}
           account={account}
           {...(fromRoadmap
-            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} /> }
-            : {})}
+            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: 'unread' as const }
+            : lessonRoute
+              ? { openLesson: 'always' as const }
+              : {})}
         />
       </Suspense>
     );
@@ -135,10 +151,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && !onRoadmap && (
+        {route && !onRoadmap && !guide && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
-        {onRoadmap ? (
+        {guide ? (
+          <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
+            <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
+          </Suspense>
+        ) : onRoadmap ? (
           <Roadmap
             stages={roadmap}
             problems={problems}
@@ -146,6 +166,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             access={access}
             providers={account.state.status === 'signed-out' ? account.state.providers : []}
             onSignIn={account.signIn}
+            lessons={lessons}
+            guide={firstGuide}
           />
         ) : (
           <ProblemList problems={problems} progress={progress} stats={stats}>

@@ -34,6 +34,11 @@ export interface Problem {
    * solves of the current version.
    */
   version?: number;
+  /**
+   * The lesson from lesson.md (Markdown): the concepts behind the problem,
+   * read before trying it (lesson.ts has the required sections).
+   */
+  lesson?: string;
   /** Plausible wrong designs from wrong/*.proschi, each failing the tests it names. */
   wrong?: WrongDesign[];
 }

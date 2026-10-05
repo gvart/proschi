@@ -9,6 +9,7 @@ import { DIFFICULTIES, type Problem, type WrongDesign } from './types';
  *   <id>/given.proschi
  *   <id>/starter.proschi
  *   <id>/solution.proschi
+ *   <id>/lesson.md           optional: the lesson shown before the problem
  *   <id>/wrong/<name>.proschi
  */
 
@@ -16,9 +17,18 @@ export const PROBLEM_MD = 'problem.md';
 export const GIVEN = 'given.proschi';
 export const STARTER = 'starter.proschi';
 export const SOLUTION = 'solution.proschi';
+export const LESSON_MD = 'lesson.md';
 export const WRONG_DIR = 'wrong';
 const REQUIRED = [PROBLEM_MD, GIVEN, STARTER, SOLUTION];
+const OPTIONAL = [LESSON_MD];
 const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+
+/**
+ * Names a problem folder cannot have: `problem` is the template of the static
+ * problem pages (practice/problem/), `roadmap` and `approach` are practice
+ * routes and pages of their own (practice/#/roadmap, practice/approach/).
+ */
+export const RESERVED_IDS = ['problem', 'roadmap', 'approach'];
 const EXPECT_FAIL = /^#\s*expect-fail:\s*(.*?)\s*$/;
 
 /** What is wrong with one problem folder; `file` is relative to the folder. */
@@ -108,11 +118,12 @@ export function problemFromFiles(id: string, files: Record<string, string>): Pro
     throw new ProblemFolderError(id, message);
   };
   if (!ID.test(id)) fail('The folder name is the problem id and must be lowercase words joined by "-", e.g. url-shortener');
+  if (RESERVED_IDS.includes(id)) fail(`"${id}" is taken by a practice page; reserved ids: ${RESERVED_IDS.join(', ')}`);
   for (const name of REQUIRED) if (files[name] === undefined) fail(`Missing ${name}`);
   for (const name of Object.keys(files)) {
     const wrong = name.startsWith(`${WRONG_DIR}/`) ? name.slice(WRONG_DIR.length + 1) : undefined;
-    if (!REQUIRED.includes(name) && !(wrong && /^[a-z0-9][a-z0-9-]*\.proschi$/.test(wrong))) {
-      fail(`Unexpected file ${name}: a problem folder holds ${REQUIRED.join(', ')} and ${WRONG_DIR}/<name>.proschi (lowercase, digits and "-")`);
+    if (!REQUIRED.includes(name) && !OPTIONAL.includes(name) && !(wrong && /^[a-z0-9][a-z0-9-]*\.proschi$/.test(wrong))) {
+      fail(`Unexpected file ${name}: a problem folder holds ${REQUIRED.join(', ')}, optionally ${OPTIONAL.join(', ')}, and ${WRONG_DIR}/<name>.proschi (lowercase, digits and "-")`);
     }
   }
   const meta = readProblemMd(id, files[PROBLEM_MD]);
@@ -126,6 +137,7 @@ export function problemFromFiles(id: string, files: Record<string, string>): Pro
     given: files[GIVEN],
     starter: files[STARTER],
     solution: files[SOLUTION],
+    ...(files[LESSON_MD] !== undefined ? { lesson: files[LESSON_MD] } : {}),
     ...(wrong.length ? { wrong } : {}),
   };
 }

@@ -81,3 +81,22 @@ export function withRun(progress: Progress, problem: Problem, solved: boolean): 
   const entry = progress[problem.id] ?? { status: 'todo' };
   return { ...progress, [problem.id]: { ...entry, status: solved || entry.status === 'solved' ? 'solved' : 'attempted' } };
 }
+
+/** Lessons read in this browser, `{ [problem id]: true }`: a problem opened from the roadmap shows its lesson first until it is read. */
+export const LESSONS_KEY = 'proschi.lessons';
+
+function readLessons(): Record<string, unknown> {
+  const read = loadJson<unknown>(LESSONS_KEY, {});
+  return read && typeof read === 'object' && !Array.isArray(read) ? (read as Record<string, unknown>) : {};
+}
+
+export function lessonRead(id: string): boolean {
+  const read = readLessons();
+  return Object.prototype.hasOwnProperty.call(read, id) && read[id] === true;
+}
+
+/** Remembers that the lesson of `id` was read; storage errors are ignored (services/storage.ts). */
+export function markLessonRead(id: string): void {
+  if (!isSafeKey(id)) return;
+  saveJson(LESSONS_KEY, { ...readLessons(), [id]: true });
+}

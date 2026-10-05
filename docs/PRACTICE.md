@@ -15,14 +15,16 @@ frontend/src/practice/problems/<id>/
   given.proschi         the problem as Proschi, read-only for the solver
   starter.proschi       starts with: import "problem.proschi"
   solution.proschi      the reference solution; starts with the same import
+  lesson.md             optional: the lesson shown before the problem
   wrong/<name>.proschi  optional: plausible wrong designs that must fail
 ```
 
 The folder name is the problem id and its URLs: `practice/#/url-shortener` in
 the practice app, and `practice/url-shortener/`, a static page with the title,
-summary and statement (not the hints) that search engines index and the
-sitemap lists. Lowercase letters and digits, words joined by `-`; `problem` is
-taken by that page's template. Other files are an error,
+summary, statement and lesson (not the hints) that search engines index and
+the sitemap lists. Lowercase letters and digits, words joined by `-`; `problem`
+is taken by that page's template, and `roadmap` and `approach` by practice
+pages of their own (`RESERVED_IDS` in `problemFiles.ts`). Other files are an error,
 so a typo like `solutoin.proschi` is caught. Wrong design names follow the same
 rule (`wrong/miss-never-fills-cache.proschi`).
 
@@ -73,9 +75,68 @@ The **statement** is everything after the closing `---` (surrounding blank
 lines are dropped). It says what to build: a short context, then
 `## Functional requirements` (name every use case in bold, e.g.
 `**Redirect**`, and the scenario names the tests refer to), `## Scale`,
-`## Constraints` and `## What is given`. The renderer understands headings,
-paragraphs, bullet and numbered lists (one level of nesting), fenced code,
-`inline code`, **bold**, *italics* and links; HTML is shown as text.
+`## Constraints` and `## What is given`. The renderer
+(`frontend/src/practice/markdown.ts`) understands headings, paragraphs, bullet
+and numbered lists (one level of nesting), fenced code (```` ```proschi ````
+blocks, also ```` ```proschi fragment ````, are highlighted), GFM pipe tables
+(they scroll in their own box on phones), `>` blockquotes (shown as a
+callout), `inline code`, **bold**, *italics* and links; HTML is shown as
+text. Headings get ids from their text, GitHub style
+(`## What you'll learn` is `what-youll-learn`).
+
+## `lesson.md`
+
+The lesson teaches the ideas behind the problem before the solver tries it:
+each roadmap step is *Learn → Challenge → Review*. A problem opened from the
+roadmap (`practice/#/roadmap/<id>`) shows its lesson first, with a table of
+contents and a **Start the challenge** button; once that was pressed the
+browser remembers it and later visits open the problem. From the list the
+lesson is a tab next to the statement, and `practice/#/<id>/lesson` opens on
+it. Lessons need no sign-in. The static page `practice/<id>/` shows the
+lesson under the statement as an article with heading anchors, and the
+roadmap shows each step's reading time (about 200 words a minute).
+
+It is plain Markdown, no front matter, with these level-2 headings in this
+order (other `##` sections may sit between them, and `###` subsections are
+welcome, especially under Concepts):
+
+```markdown
+## What you'll learn
+## The problem, explained
+## Back-of-the-envelope
+## Concepts
+## Designing it step by step
+## Common mistakes
+## In the interview
+## Further reading
+```
+
+`proschi problem check` and the tests report a missing or out-of-order
+heading, an empty lesson, and any link that is not `http://` or `https://`
+(no relative links: the same text is shown in the app and on the static
+page). Every problem needs a lesson; `LESSONS_PENDING` in
+`frontend/src/practice/lesson.test.ts` lists the ones still being written,
+and the test fails once a listed problem has one, so remove its id then.
+
+Writing a good lesson (1,500 to 2,500 words; `url-shortener/lesson.md` is an
+example):
+
+- **Write original prose.** Explain in your own words; never copy text from
+  books, courses or other sites. Quote nothing longer than a phrase.
+- **Cite your sources** under *Further reading*: links to freely available
+  material (the [System Design Primer](https://github.com/donnemartin/system-design-primer),
+  official documentation, engineering blogs, papers), and books by author,
+  title and chapter title, without links to copies.
+- **Teach the why.** Do the estimation with numbers from the statement, and
+  for every concept say what problem it solves and what it costs.
+- **Explain why each wrong design fails**, under *Common mistakes*: the
+  shortcut, what breaks, and which requirement or test catches it (the
+  `wrong/` designs are a good list).
+- **Do not paste the reference solution.** Describe the design step by step
+  and its trade-offs; a ```` ```proschi fragment ```` may illustrate a
+  pattern on a different example, but the solver writes the design.
+- Prefer short paragraphs, tables for numbers and a `>` callout for the one
+  sentence to remember.
 
 ## The Proschi files
 
@@ -132,6 +193,8 @@ defined once in `frontend/src/practice/validate.ts`:
 - The folder has the four files and nothing unexpected; the front matter has
   valid fields; the statement is not empty and has a
   `## Functional requirements` section.
+- **lesson.md**, when there is one: the eight sections in order, not empty,
+  links to http(s) addresses only.
 - Every use case in the given's `traffic` is named in bold in the statement
   and defined (`usecase "…"`) by the solution.
 - **given**: no `import`, parses without errors, in canonical format
@@ -218,7 +281,12 @@ do not match.
 ## The interview prep roadmap
 
 `practice/#/roadmap` is a guided path through the problems, in stages from
-foundations to large systems. On the roadmap a problem opens only once every
+foundations to large systems. Each step is the problem's lesson, then the
+problem; above the stages, a "Read first" article,
+`frontend/src/practice/guide/approach.md`, explains how to approach a system
+design interview (`practice/#/roadmap/approach`, readable without signing in,
+and the static page `practice/approach/`). Guides are listed in
+`frontend/src/practice/guide/guides.ts`; their ids are reserved. On the roadmap a problem opens only once every
 problem before it is solved (with the same progress as the list, in the
 browser or synced when signed in); the problem list itself stays open. A
 problem opened from the roadmap (`practice/#/roadmap/<id>`) shows its stage
@@ -252,6 +320,7 @@ To change the path, edit that list:
    template is a small complete problem that already passes the check.
 2. **Write `problem.md`**: title, summary, difficulty, tags, hints and the
    statement; name every use case in bold and spell out the scenario names.
+   Then write [`lesson.md`](#lessonmd).
 3. **Write `given.proschi`**: the fixed nodes, the traffic, the requirements,
    any capacity the problem needs, and the tests that encode the key insight.
 4. **Write the solution and the starter**, then calibrate (above) and replace

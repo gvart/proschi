@@ -1,11 +1,12 @@
+import { join } from 'node:path'
 import type { Plugin } from 'vite'
 import { readSite, SITE_ORIGIN, type SiteConfig } from './docsSite'
-import { problemUrl, readProblems } from './practicePages'
+import { guideUrl, problemUrl, readGuides, readProblems } from './practicePages'
 
-/** The pages search engines should know about: the landing page, the editor, practice, every problem's page and every docs page. */
-export function sitemapUrls(site: SiteConfig, problemIds: string[]): string[] {
+/** The pages search engines should know about: the landing page, the editor, practice, every problem's page, the roadmap's guides and every docs page. */
+export function sitemapUrls(site: SiteConfig, problemIds: string[], guideIds: string[] = []): string[] {
   const docs = site.pages.map((p) => `${SITE_ORIGIN}docs/${p.slug ? `${p.slug}/` : ''}`)
-  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...problemIds.map(problemUrl), ...docs]
+  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...problemIds.map(problemUrl), ...guideIds.map(guideUrl), ...docs]
 }
 
 export function sitemapXml(urls: string[]): string {
@@ -23,7 +24,7 @@ export function sitemap(docsDir: string, problemsDir: string): Plugin {
     name: 'proschi-sitemap',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(sitemapUrls(readSite(docsDir), readProblems(problemsDir).map((p) => p.id))) })
+      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(sitemapUrls(readSite(docsDir), readProblems(problemsDir).map((p) => p.id), readGuides(join(problemsDir, '..', 'guide')).map((g) => g.id))) })
     },
   }
 }
