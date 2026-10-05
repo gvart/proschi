@@ -214,6 +214,28 @@ the statement must spell out the exact names (`"Cache hit"`, `"Cache miss"`)
 and the solver must use them. The test messages name what is missing when they
 do not match.
 
+## The interview prep roadmap
+
+`practice/#/roadmap` is a guided path through the problems, in stages from
+foundations to large systems. On the roadmap a problem opens only once every
+problem before it is solved (with the same progress as the list, in the
+browser or synced when signed in); the problem list itself stays open. A
+problem opened from the roadmap (`practice/#/roadmap/<id>`) shows its stage
+and, once solved, a link to the next one.
+
+The stages are plain data in `frontend/src/practice/roadmap.ts` (`ROADMAP`):
+each has an `id`, a `title`, a sentence or two on what it teaches and why it
+comes at that point (`why`), and its problem ids in the order they are solved.
+To change the path, edit that list:
+
+- Every problem must appear in the roadmap exactly once, so **a new problem
+  needs a place in a stage**; `npm test` fails otherwise.
+- An id that is not a problem fails the tests too, unless it is in `PENDING`
+  in `roadmap.test.ts` (problems being added in parallel). The page skips ids
+  that do not exist and stages left empty.
+- Earlier stages are prerequisites of later ones: put a problem after the
+  ideas it builds on, easier problems first within a stage.
+
 ## Adding a problem in 5 steps
 
 1. **Scaffold** it: `proschi problem new seat-map` (inside the repository it
@@ -227,4 +249,5 @@ do not match.
    the example wrong design with the shortcuts your limits must reject.
 5. **Check** it: `proschi problem check` (or `npm test` in `frontend/`), then
    open `practice/#/seat-map` in `npm run dev` to read it as a solver would.
-   The landing page and the practice list pick the folder up by themselves.
+   The landing page and the practice list pick the folder up by themselves;
+   add its id to a stage of [the roadmap](#the-interview-prep-roadmap).

@@ -29,6 +29,7 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
+| `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
 | `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
 
