@@ -1,0 +1,41 @@
+title "Tiered CDN Cache" "Edge data centers fill their caches from an upper tier near the origin, not from the origin"
+
+visitor "Visitor"    [Actor]
+owner   "Site Owner" [Actor]
+origin  "Origin"     [Service] x4 @customer "The customer's web servers in one cloud region: slow, and paid for by every byte they send"
+
+capacity {
+  origin 1k rps latency 50ms cost 500 usd/month
+}
+
+traffic {
+  "Fetch asset" 50k rps mix "Edge hit" 90%, "Upper-tier hit" 6%, "Upper-tier miss" 4%
+  "Purge"       50 rps
+}
+
+requirements {
+  p99 "Fetch asset" < 150ms
+  availability "Fetch asset" >= 99.99%
+  survive any node failure
+  cost <= 3500 usd/month
+}
+
+test "Edge misses go to the upper tier, not the origin" {
+  "Fetch asset" starts at visitor
+  "Fetch asset" calls edge before upper
+  "Fetch asset" calls upper before origin
+  "Fetch asset" scenario "Edge hit" never calls upper or origin
+  "Fetch asset" scenario "Upper-tier hit" never calls origin
+}
+
+test "Only the upper tier talks to the origin" {
+  no path from visitor to origin
+  no path from edge to origin
+  in "Fetch asset" upper calls origin
+}
+
+test "A purge clears the upper tier before the edge" {
+  "Purge" starts at owner
+  "Purge" calls upper before edge
+  "Purge" never calls origin
+}

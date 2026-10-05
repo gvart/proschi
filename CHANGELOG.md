@@ -16,6 +16,8 @@ deployed from `main` and ships with the same changes.
   path on proschi.app.
 
 ### Added
+- Two practice problems based on published systems: *Tiered CDN Cache*
+  (Cloudflare's Tiered Cache) and *Replicated Git Storage* (GitHub's Spokes).
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the
