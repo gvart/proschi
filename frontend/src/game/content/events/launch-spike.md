@@ -1,5 +1,6 @@
 ---
 title: Launch day
+icon: rocket
 category: spike
 topic: estimation
 learn: [servers-for-peak-load, qps-from-daily-users]

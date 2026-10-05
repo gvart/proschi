@@ -1,6 +1,7 @@
 import type { GameStats } from '../../learn/achievements';
 import { ascensionRules, MAX_ASCENSION } from './rules';
-import type { GameContent, Loadout, ScenarioDef } from './types';
+import type { IconName } from './icons';
+import type { CardDef, GameContent, Loadout, ScenarioDef } from './types';
 
 /**
  * Progress between runs (docs/GAME.md, "Progression"): Blueprints earned by
@@ -69,6 +70,9 @@ export interface ShopItem {
   level?: number;
   maxLevel?: number;
   blocked?: string;
+  /** For cards and perks: their icon, and a card's rarity. */
+  icon?: IconName;
+  rarity?: CardDef['rarity'];
 }
 
 export function shop(content: GameContent, meta: Meta): ShopItem[] {
@@ -80,10 +84,10 @@ export function shop(content: GameContent, meta: Meta): ShopItem[] {
     items.push({ kind: 'component', id: c.id, name: c.name, cost: c.unlock, owned: has.has(c.id), ...(missing ? { blocked: `Unlock ${content.components.find((x) => x.id === missing)?.name ?? missing} first` } : {}) });
   }
   for (const f of content.features) items.push({ kind: 'feature', id: f.id, name: f.name, cost: f.unlock, owned: has.has(f.id) });
-  for (const c of content.cards) if (c.unlock > 0) items.push({ kind: 'card', id: c.id, name: c.name, cost: c.unlock, owned: has.has(c.id) });
+  for (const c of content.cards) if (c.unlock > 0) items.push({ kind: 'card', id: c.id, name: c.name, cost: c.unlock, owned: has.has(c.id), icon: c.icon, rarity: c.rarity });
   for (const p of content.perks) {
     const level = meta.perks[p.id] ?? 0;
-    items.push({ kind: 'perk', id: p.id, name: p.name, cost: p.costs[level] ?? 0, owned: level >= p.costs.length, level, maxLevel: p.costs.length });
+    items.push({ kind: 'perk', id: p.id, name: p.name, cost: p.costs[level] ?? 0, owned: level >= p.costs.length, level, maxLevel: p.costs.length, icon: p.icon });
   }
   return items;
 }

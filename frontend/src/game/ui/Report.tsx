@@ -50,6 +50,7 @@ export default function Report(props: {
     }
   })();
   const mistakes = topMistakes(s.history);
+  const events = new Map(content.events.map((e) => [e.id, e]));
   const related = game.scenario.related;
 
   return (
@@ -95,7 +96,7 @@ export default function Report(props: {
 
       <section className="rounded-brutal border-bw-1 border-ink bg-surface p-3">
         <p className={eyebrow}>Revenue and cost per wave</p>
-        <Timeline history={s.history} />
+        <Timeline history={s.history} events={events} />
       </section>
 
       {mistakes.length > 0 && (
@@ -106,7 +107,7 @@ export default function Report(props: {
               <p className="text-xs text-muted">
                 −{m.trust} Trust, wave{m.waves.length > 1 ? 's' : ''} {m.waves.join(', ')}
               </p>
-              <BreachCard breach={m.breach} />
+              <BreachCard breach={m.breach} during={[...new Set(m.waves.flatMap((w) => s.history[w - 1]?.events.map((e) => e.id) ?? []))].map((id) => events.get(id)).filter((d) => d !== undefined)} />
             </div>
           ))}
         </section>

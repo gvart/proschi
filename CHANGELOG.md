@@ -23,6 +23,12 @@ deployed from `main` and ships with the same changes.
   stays the source of truth, touching only the part of the line it changes.
   `proschi parse` output gains `blocks`: where each section block starts and
   ends.
+- **Scale or Fail**: every perk, tech card and incident has its own icon, on
+  a tile coloured by the card's rarity or the event's kind (incident or
+  spike): in the draft, your hand, the shop, your equipped perks, the
+  forecast, the debrief, breach callouts and the end-of-run timeline. Content
+  names it with an `icon` field, and `proschi game check` rejects an unknown
+  icon or one used twice among the perks, the cards or the events.
 - **Scale or Fail** is playable: the Arcade tab of Interview prep
   (`practice/#/arcade`). Pick a scenario and build its system by tapping or
   dragging components onto the board (they wire themselves sensibly; tap a

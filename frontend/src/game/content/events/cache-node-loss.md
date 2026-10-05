@@ -1,5 +1,6 @@
 ---
 title: Cache node lost
+icon: server-crash
 category: incident
 topic: caching
 learn: [cold-cache-restart, graceful-degradation]

@@ -8,6 +8,8 @@ import { gameContent } from '../content';
 import { maxAscension, scenarioOpen, shop, type ShopItem } from '../engine/meta';
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
 import type { Action, RunSetup } from '../engine/types';
+import { IconTile } from './gameIcons';
+import { PERK_TILE, RARITY_TILE } from './visual';
 import { Modal } from './Panels';
 import RunScreen from './RunScreen';
 import { loadRun, loadSettings, saveRun, saveSettings, type Settings } from './store';
@@ -90,6 +92,7 @@ export default function ArcadeRoute({ account }: { account: Account }) {
   const meta = arcade.meta;
   const daily = content.scenarios.find((s) => s.id === arcade.daily.scenario);
   const signedOut = account.state.status === 'signed-out' ? account.state : undefined;
+  const equippedPerks = meta.equipped.map((id) => content.perks.find((p) => p.id === id)).filter((p) => p !== undefined);
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -101,7 +104,17 @@ export default function ArcadeRoute({ account }: { account: Account }) {
             Build the system, then keep it up while traffic grows, new use cases arrive and things break. Every number comes from Proschi’s simulation, and every failure tells you why.
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {equippedPerks.length > 0 && (
+            <ul className="flex items-center gap-1" aria-label="Equipped perks">
+              {equippedPerks.map((p) => (
+                <li key={p.id} title={p.name}>
+                  <IconTile name={p.icon} tone={PERK_TILE} size="lg" className="shadow-brutal-sm" />
+                  <span className="sr-only">{p.name}</span>
+                </li>
+              ))}
+            </ul>
+          )}
           <span className="inline-flex items-center gap-1 rounded-brutal border-bw-1 border-ink bg-surface px-2.5 py-1.5 font-display font-extrabold shadow-brutal-sm" title="Blueprints: earned by runs, spent in the shop">
             <Gem size={15} aria-hidden="true" className="text-pop-blue" /> {meta.blueprints}
           </span>
@@ -278,7 +291,8 @@ function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]
           const equipped = props.equipped.includes(i.id);
           return (
             <li key={i.id} className="rounded border-bw-1 border-ink bg-surface p-2 flex items-center justify-between gap-2">
-              <div className="min-w-0">
+              {i.icon && <IconTile name={i.icon} tone={i.rarity ? RARITY_TILE[i.rarity] : PERK_TILE} size="lg" />}
+              <div className="min-w-0 flex-1">
                 <p className="font-semibold">
                   {i.name}
                   {i.maxLevel && i.maxLevel > 1 ? <span className="ml-1 text-xs text-muted">level {i.level}/{i.maxLevel}</span> : null}

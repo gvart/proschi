@@ -1,5 +1,6 @@
 ---
 title: Viral post
+icon: trending-up
 category: spike
 topic: estimation
 learn: [servers-for-peak-load, load-shedding]

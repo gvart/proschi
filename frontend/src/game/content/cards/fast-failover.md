@@ -1,5 +1,6 @@
 ---
 name: Fast failover
+icon: refresh-ccw
 rarity: uncommon
 topic: replication
 learn: [failover-timeout, promoting-a-lagging-follower]

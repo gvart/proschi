@@ -1,5 +1,6 @@
 ---
 name: Reserved instances
+icon: calendar-clock
 rarity: uncommon
 topic: estimation
 learn: [servers-for-peak-load]

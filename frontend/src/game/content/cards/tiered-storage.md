@@ -1,5 +1,6 @@
 ---
 name: Tiered storage
+icon: layers
 rarity: legendary
 topic: storage
 learn: [storage-classes, egress-bill]

@@ -1,5 +1,6 @@
 ---
 title: Noisy neighbour
+icon: volume-2
 category: incident
 topic: resilience
 learn: [bulkheads, hedged-requests]

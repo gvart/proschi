@@ -1,5 +1,6 @@
 ---
 name: Autoscaler
+icon: chevrons-up
 rarity: rare
 topic: resilience
 learn: [scale-on-message-age, servers-for-peak-load]

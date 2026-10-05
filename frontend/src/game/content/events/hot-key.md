@@ -1,5 +1,6 @@
 ---
 title: Hot key
+icon: flame
 category: incident
 topic: caching
 learn: [hot-key-replicas, hot-partition-key, heavy-hitters-structure]

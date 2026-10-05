@@ -1,5 +1,6 @@
 ---
 name: Write batching
+icon: package
 rarity: uncommon
 topic: queues
 learn: [queue-load-levelling, pre-aggregate-counts]

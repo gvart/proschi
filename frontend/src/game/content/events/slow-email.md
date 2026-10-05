@@ -1,5 +1,6 @@
 ---
 title: Slow email provider
+icon: mail-warning
 category: incident
 topic: resilience
 learn: [timeouts-on-every-call, queue-load-levelling, beat-your-dependency]

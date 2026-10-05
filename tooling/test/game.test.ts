@@ -45,12 +45,29 @@ describe('proschi game check', () => {
   });
 
   it('reports an id missing from ids.lock, and lock adds it', () => {
-    const dir = copy((d) => writeFileSync(join(d, 'cards/new-card.md'), readFileSync(join(d, 'cards/gzip.md'), 'utf8').replace('name: Compression', 'name: New card')));
+    const dir = copy((d) => writeFileSync(join(d, 'cards/new-card.md'), readFileSync(join(d, 'cards/gzip.md'), 'utf8').replace('name: Compression', 'name: New card').replace('icon: file-archive', 'icon: lightbulb')));
     expect(capture(['check', dir]).out).toContain("'card:new-card' is not in ids.lock");
     const lock = capture(['lock', dir]);
     expect(lock.code).toBe(0);
     expect(lock.out).toContain('card:new-card');
     expect(capture(['lock', dir]).out).toContain('already lists every id');
+    expect(capture(['check', dir]).code).toBe(0);
+  });
+
+  it('reports an icon used twice within a category, and an unknown icon', () => {
+    const dir = copy((d) => {
+      const edit = (file: string, from: string, to: string) => writeFileSync(join(d, file), readFileSync(join(d, file), 'utf8').replace(from, to));
+      edit('cards/gzip.md', 'icon: file-archive', 'icon: cable');
+      edit('events/ddos.md', 'icon: bot', 'icon: not-an-icon');
+    });
+    const { code, out } = capture(['check', dir]);
+    expect(code).toBe(1);
+    expect(out).toContain("'gzip': icon 'cable' is already used by the card 'connection-pooling'");
+    expect(out).toContain("'ddos': unknown icon 'not-an-icon'");
+  });
+
+  it('allows the same icon in two categories', () => {
+    const dir = copy((d) => writeFileSync(join(d, 'cards/gzip.md'), readFileSync(join(d, 'cards/gzip.md'), 'utf8').replace('icon: file-archive', 'icon: piggy-bank')));
     expect(capture(['check', dir]).code).toBe(0);
   });
 });

@@ -1,5 +1,6 @@
 ---
 name: Cache-Control rules
+icon: route
 rarity: common
 topic: caching
 learn: [cdn-cache-control, fingerprinted-assets]
