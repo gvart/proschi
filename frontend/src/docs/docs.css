@@ -978,8 +978,14 @@
 }
 .doc-html .figure {
   display: grid;
+  /* One shrinkable column: the formula and table scroll inside it instead of widening the page. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 12px;
   min-width: 0;
+}
+.doc-html .mini-scroll {
+  min-width: 0;
+  overflow-x: auto;
 }
 .doc-html .mini {
   width: 100%;

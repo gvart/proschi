@@ -2,7 +2,7 @@
 // `siteHref` prefixes them with the page's way back to it ('./' or '../'),
 // so the links work under any sub-path, like the rest of the build.
 
-export type SitePage = 'home' | 'editor' | 'practice' | 'docs';
+export type SitePage = 'home' | 'editor' | 'practice' | 'roadmap' | 'docs';
 
 export interface SiteLink {
   label: string;
@@ -10,13 +10,19 @@ export interface SiteLink {
   href: string;
   /** The page this link is "you are here" for. */
   page?: SitePage;
+  /** Marked out in the header, for what the site wants found first. */
+  accent?: boolean;
 }
 
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
+/** The interview prep roadmap: a route of the practice page (src/practice/roadmap.ts). */
+export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
+
 /** The header's links; the editor is its call to action instead. */
 export const NAV: SiteLink[] = [
   { label: 'Docs', href: 'docs/', page: 'docs' },
   { label: 'Practice', href: 'practice/', page: 'practice' },
+  { label: 'Interview prep', href: INTERVIEW_PREP_HREF, page: 'roadmap', accent: true },
   { label: 'GitHub', href: GITHUB_URL },
 ];
 
@@ -28,6 +34,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     links: [
       { label: 'Editor', href: 'app/' },
       { label: 'Practice', href: 'practice/' },
+      { label: 'Interview prep', href: INTERVIEW_PREP_HREF },
     ],
   },
   {

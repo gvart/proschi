@@ -32,7 +32,7 @@ export function ArrowIcon() {
 function NavLink({ link, base, current, className }: { link: SiteLink; base: string; current?: SitePage; className: string }) {
   const external = isExternal(link.href);
   return (
-    <a className={className} href={siteHref(base, link.href)} aria-current={link.page && link.page === current ? 'page' : undefined}>
+    <a className={link.accent ? `${className} ${className}--accent` : className} href={siteHref(base, link.href)} aria-current={link.page && link.page === current ? 'page' : undefined}>
       {link.label}
       {external && (
         <svg className="ps-icon ps-icon--ext" viewBox="0 0 24 24" aria-hidden="true">
@@ -45,7 +45,7 @@ function NavLink({ link, base, current, className }: { link: SiteLink; base: str
 
 /**
  * The site header, the same on every page: static pages get it rendered at
- * build time (plugins/siteShell.ts), React pages mount it. Below 900px (1200px
+ * build time (plugins/siteShell.ts), React pages mount it. Below 1040px (1200px
  * when compact) the links fold into a menu.
  */
 export default function Header({ base, current, compact = false, children, actions }: HeaderProps) {

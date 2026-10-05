@@ -142,7 +142,7 @@ write capacity = writes × shards              single-primary
         <pre class="formula" tabindex="0"><code>C      = Erlang C(c, ρ)              ρ capped at 0.95
 hop(n) = base + C × base ÷ (c (1 − ρ))
        = base ÷ (1 − ρ)                 for c = 1</code></pre>
-        <table class="mini">
+        <div class="mini-scroll" tabindex="0"><table class="mini">
           <caption class="visually-hidden">Slowdown over the idle latency by utilisation</caption>
           <thead><tr><th scope="col">ρ</th><th scope="col">10%</th><th scope="col">50%</th><th scope="col">70%</th><th scope="col">90%</th><th scope="col">≥ 95%</th></tr></thead>
           <tbody>
@@ -163,7 +163,7 @@ hop(n) = base + C × base ÷ (c (1 − ρ))
               <td data-pin="const|slowdown@4@95">5.46×</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </li>
 
@@ -202,7 +202,7 @@ p_q(s) = Σ over the parts of the critical path of
              fixed + tail × ln(1 ÷ (1 − q))
 
 p_q(U) = the t with Σ share(s) × P(s ≤ t) = q</code></pre>
-        <table class="mini">
+        <div class="mini-scroll" tabindex="0"><table class="mini">
           <caption class="visually-hidden">Percentiles of an idle hop over its mean</caption>
           <thead><tr><th scope="col">idle hop</th><th scope="col">p50</th><th scope="col">p90</th><th scope="col">p95</th><th scope="col">p99</th><th scope="col">p999</th></tr></thead>
           <tbody>
@@ -215,7 +215,7 @@ p_q(U) = the t with Σ share(s) × P(s ≤ t) = q</code></pre>
               <td data-pin="const|f999">3.95×</td>
             </tr>
           </tbody>
-        </table>
+        </table></div>
       </div>
     </li>
 

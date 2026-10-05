@@ -11,6 +11,8 @@ import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
 import { APP_PATH, editorLink, exampleLink } from './links';
 import { listingsFrom, practiceListHtml } from './practiceList';
+import { fillPrepPlaceholders, prepStagesHtml } from './prep';
+import { ROADMAP, roadmapFor } from '../practice/roadmap';
 import prebuiltListings from 'virtual:practice-listings';
 import { DEMO_SCRIPT, DEMO_SOURCE, DEMO_USE_CASE, sourceAt } from '../components/Demo/demoScript';
 
@@ -187,7 +189,8 @@ describe('practice section', () => {
   it('has a container the list is rendered into, and a static link to the practice page', () => {
     expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list"><\/ul>/);
     expect(landingHtml).toMatch(/<noscript>[\s\S]*href="\.\/practice\/"[\s\S]*<\/noscript>/);
-    expect(landingHtml).not.toMatch(/href="\.\/practice\/#\//);
+    // Problems link to their static pages (practice/<id>/); only the roadmap is a hash route.
+    expect(landingHtml).not.toMatch(/href="\.\/practice\/#\/(?!roadmap")/);
   });
 
   it('lists every practice problem from its folder, in catalog order', () => {
@@ -216,5 +219,43 @@ describe('practice section', () => {
 
   it('leaves out folders whose problem.md cannot be read', () => {
     expect(listingsFrom({ 'bad/problem.md': 'no front matter', ...Object.fromEntries(Object.entries(files).slice(0, 1).map(([k, v]) => [k.replace('../practice/problems/', ''), v])) })).toHaveLength(1);
+  });
+});
+
+describe('interview prep section', () => {
+  const stages = roadmapFor(ROADMAP, prebuiltListings.map((p) => p.id));
+  const built = fillPrepPlaceholders(landingHtml, stages);
+  const section = built.slice(built.indexOf('<section class="prep"'), built.indexOf('</section>', built.indexOf('<section class="prep"')));
+
+  it('comes right after the hero, with the hero linking to it', () => {
+    expect(landingHtml.indexOf('<section class="prep"')).toBeGreaterThan(landingHtml.indexOf('<section class="hero"'));
+    expect(landingHtml.indexOf('<section class="prep"')).toBeLessThan(landingHtml.indexOf('<section class="story'));
+    expect(landingHtml).toMatch(/<a class="hero__prep" href="#interview-prep">/);
+    expect(landingHtml).toContain('id="interview-prep"');
+  });
+
+  it('lists every roadmap stage from src/practice/roadmap.ts, in order, with its problem count', () => {
+    const titles = [...section.matchAll(/<span class="prep__stage-title">([^<]+)<\/span>/g)].map((m) => decodeEntities(m[1]));
+    expect(titles).toEqual(ROADMAP.map((s) => s.title));
+    const counts = [...section.matchAll(/<span class="prep__stage-count">(\d+) problems?<\/span>/g)].map((m) => Number(m[1]));
+    expect(counts).toEqual(stages.map((s) => s.problems.length));
+  });
+
+  it('states the counts of the roadmap, and leaves no placeholder behind', () => {
+    const total = stages.reduce((n, s) => n + s.problems.length, 0);
+    expect(section).toContain(`${total} system design problems in ${stages.length} stages`);
+    expect(built).not.toContain('<!--roadmap:');
+    expect(() => fillPrepPlaceholders('<!--roadmap:nope-->', stages)).toThrow(/unknown placeholder/);
+  });
+
+  it('starts the roadmap, and says what it takes without promising a price', () => {
+    expect(section).toMatch(/<a class="ps-btn ps-btn--primary ps-btn--lg"[^>]* href="\.\/practice\/#\/roadmap">Start interview prep/);
+    expect(section).toContain('Sign in to start; browse the stages and lessons any time.');
+    expect(section).not.toMatch(/\bfree\b/i);
+  });
+
+  it('escapes stage titles', () => {
+    expect(prepStagesHtml([{ id: 'a', title: 'A <b> & "c"', problems: ['x'] }])).toContain('<span class="prep__stage-title">A &lt;b&gt; &amp; &quot;c&quot;</span>');
+    expect(prepStagesHtml([{ id: 'a', title: 'A', problems: ['x'] }])).toContain('1 problem<');
   });
 });
