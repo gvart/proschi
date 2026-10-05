@@ -1,0 +1,45 @@
+# expect-fail: Messages go to the one push server that holds the connection
+# expect-fail: A connection registers its push server in the registry
+# expect-fail: p99 of Connect < 60 ms
+# No registry: every message goes to all 14 push servers and the one holding the connection delivers it.
+import "problem.proschi"
+
+lb         "Load Balancer"     [AWS Load Balancer] x2 @edge "Layer 4, with a long idle timeout for persistent connections"
+push       "Zuul Push Servers" [Java]              x14 @edge "Netty servers holding the WebSocket and SSE connections; each knows its own connections in memory"
+kafka      "Push Queue"        [Kafka]             x3 @edge "Messages from every sender, partitioned by customer"
+processors "Message Processor" [Java]              x16 @edge "Hand every message to every push server"
+
+device     -> lb         : WebSocket / SSE
+lb         -> push       : TCP
+push       -> device     : push frames
+senders    -> kafka      : push library
+kafka      -> processors : consume
+processors -> push       : deliver
+
+usecase "Connect" "A device opens its push connection" {
+  device -> lb     : GET /push (Upgrade: websocket)
+  lb     -> push   : GET /push (Upgrade: websocket)
+  push  --> lb     : 101 Switching Protocols
+  lb    --> device : 101 Switching Protocols
+}
+
+usecase "Send" "A backend service pushes a message to a customer" {
+  senders -> kafka   : PRODUCE push-messages {"customer": "cust-81", "type": "new-recommendations"}
+  kafka  --> senders : ack
+}
+
+usecase "Deliver" "A message processor delivers a queued message" {
+  kafka -> processors : PushMessage cust-81
+
+  alt "Online" when "the customer has a connection open" {
+    processors -> push       : x14 deliver to cust-81 if connected here
+    push       -> device     : message frame
+    push      --> processors : delivered by one server
+  } alt "Offline" when "no device of the customer is connected" {
+    processors -> push       : x14 deliver to cust-81 if connected here
+    push      --> processors : not connected anywhere
+  } alt "Stale route" when "a push server is down" {
+    processors -x push : x14 deliver to cust-81 if connected here
+  }
+  processors --> kafka : commit offset
+}

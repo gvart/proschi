@@ -1,0 +1,44 @@
+# expect-fail: The throttle keeps the crowd out of checkout
+# expect-fail: p99 of Checkout scenario Order placed < 150 ms
+# No throttle: every buyer goes into checkout, and more app servers take them, but the shop's database cannot.
+import "problem.proschi"
+
+edge "Edge (OpenResty)" [nginx]         x3 @edge "nginx with Lua: page cache and routing to the pod"
+app  "Shopify Core"     [Ruby on Rails] x10 @core "Renders storefront pages on a miss and runs checkout"
+
+buyer -> edge : HTTPS
+edge  -> app  : HTTP
+app   -> pod  : SQL
+
+usecase "View product" "A buyer opens the product page" {
+  buyer -> edge : GET /products/lip-kit
+
+  alt "Page cache hit" when "the edge has the page" {
+    edge --> buyer : 200 page
+  } alt "Page cache miss" when "the page expired or was never cached" {
+    edge  -> app   : GET /products/lip-kit
+    app   -> pod   : SELECT product, variants
+    pod  --> app   : rows
+    app  --> edge  : 200 page
+    edge --> buyer : 200 page
+  }
+}
+
+usecase "Checkout" "A buyer checks out one unit" {
+  buyer -> edge : POST /checkout {"variant": 42, "quantity": 1}
+  edge  -> app  : POST /checkout
+
+  alt "Order placed" when "a unit is left" {
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 1 row
+    app   -> pod   : INSERT order, COMMIT
+    pod  --> app   : order 1001
+    app  --> edge  : 201 {"order": 1001}
+    edge --> buyer : 201 {"order": 1001}
+  } alt "Sold out" when "the last unit is gone" {
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 0 rows
+    app  --> edge  : 409 {"error": "sold out"}
+    edge --> buyer : 409 {"error": "sold out"}
+  }
+}

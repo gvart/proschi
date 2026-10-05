@@ -1,0 +1,47 @@
+title "Push Gateway" "Pushes messages from backend services to millions of connected devices"
+
+device  "Device"           [Actor]    "A TV, phone, game console or browser running the Netflix app"
+senders "Backend Services" [REST API] x4 @backend "Recommendations, notifications and the like; they push messages to a customer's devices"
+
+traffic {
+  "Connect" 5.5k rps
+  "Send"    20k rps
+  "Deliver" 20k rps mix "Online" 60%, "Offline" 38%, "Stale route" 2%
+}
+
+requirements {
+  p99 "Connect" < 60ms
+  p99 "Send" < 30ms
+  p99 "Deliver" scenario "Online" < 100ms
+  availability "Connect" >= 99.9%
+  availability "Send" >= 99.99%
+  durable "Send"
+  survive any node failure
+  cost <= 5000 usd/month
+}
+
+test "Senders hand messages to Kafka and never call push servers" {
+  "Send" starts at senders
+  "Send" writes any queue before responding
+  "Send" never waits for push or registry
+  no path from senders to push
+}
+
+test "A connection registers its push server in the registry" {
+  "Connect" starts at device
+  "Connect" writes registry before responding
+  "Connect" responds 101
+  no path from device to registry
+}
+
+test "Messages go to the one push server that holds the connection" {
+  "Deliver" starts at any queue
+  "Deliver" calls registry before push
+  "Deliver" scenario "Online" calls device
+  "Deliver" scenario "Offline" never calls push
+  in "Deliver" push calls device
+}
+
+test "A stale registry entry drops the message instead of failing" {
+  "Deliver" handles failure of push
+}

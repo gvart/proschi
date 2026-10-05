@@ -81,6 +81,9 @@ deployed from `main` and ships with the same changes.
   reads in front of a hot ScyllaDB partition) and Notion Sharding (medium:
   Postgres sharded by workspace id behind PgBouncer), based on Discord's and
   Notion's engineering posts.
+- Two more practice problems based on published systems: Push Gateway
+  (Netflix's Zuul Push, medium) and Flash Sale (Shopify's edge cache,
+  checkout throttle and inventory in the shop's database, hard).
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,
