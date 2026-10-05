@@ -10,10 +10,11 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
-- Practice cards, the content for the coming daily review: one Markdown file
+- 258 practice cards for daily review, from estimation and networking to
+  consistency, streaming and probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
-  multiple-choice, estimate or fill-in-the-gap cards in 15 topics, starting
-  with a 32-card sample deck. `proschi cards check` validates them (fields,
+  multiple-choice, estimate or fill-in-the-gap cards in 15 topics, with a
+  32-card sample deck. `proschi cards check` validates them (fields,
   ids that are never deleted or reused, topics, related problems, phone-sized
   text and near-duplicate cards) and `proschi cards lock` records new ids.
   How to write them: `docs/CARDS.md`.
