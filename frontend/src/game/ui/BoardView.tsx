@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { roleOf } from '../engine/board';
-import { heat, ICON } from './visual';
+import { heat, ICON, shortName } from './visual';
 import { USERS } from '../engine/compile';
 import { TIERS } from '../engine/rules';
 import type { FlowTick, NodeTick } from '../engine/run';
@@ -24,6 +24,8 @@ export interface BoardViewProps {
   components: ReadonlyMap<string, ComponentDef>;
   scenario: ScenarioDef;
   wide: boolean;
+  /** A phone: shorter rows and short names. */
+  compact?: boolean;
   /** The last tick (or load test): heat, flows, who is down. */
   tick?: { nodes: NodeTick[]; flows: FlowTick[] };
   /** Draw particles (a wave is running and motion is allowed). */
@@ -51,7 +53,7 @@ export interface BoardViewProps {
 }
 
 export default function BoardView(props: BoardViewProps) {
-  const { board, components, scenario, wide, tick, animate, speed, selected, wiringFrom, validTargets, placingRow, fresh, shake } = props;
+  const { board, components, scenario, wide, compact, tick, animate, speed, selected, wiringFrom, validTargets, placingRow, fresh, shake } = props;
   const box = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(640);
   useEffect(() => {
@@ -62,7 +64,7 @@ export default function BoardView(props: BoardViewProps) {
     return () => ro.disconnect();
   }, []);
 
-  const layout = useMemo(() => layoutBoard(board, components, scenario, width, wide), [board, components, scenario, width, wide]);
+  const layout = useMemo(() => layoutBoard(board, components, scenario, width, wide, compact), [board, components, scenario, width, wide, compact]);
   const nodeTicks = useMemo(() => new Map((tick?.nodes ?? []).map((n) => [n.id, n])), [tick]);
   const flowOf = useMemo(() => new Map((tick?.flows ?? []).map((f) => [`${f.from}>${f.to}`, f])), [tick]);
 
@@ -217,7 +219,7 @@ export default function BoardView(props: BoardViewProps) {
               />
               <Icon x={p.x - p.w / 2 + 7} y={p.y - 17} width={16} height={16} color="rgb(var(--c-ink))" aria-hidden="true" />
               <text x={p.x - p.w / 2 + 28} y={p.y - 4} fontSize={11.5} fontWeight={700} fill="rgb(var(--c-ink))">
-                {fit(name, Math.floor((p.w - 32) / 6.6))}
+                {fit(p.w < 100 ? shortName(name) : name, Math.floor((p.w - 32) / 6.6))}
               </text>
               {!fixed && (
                 <text x={p.x - p.w / 2 + 28} y={p.y + 11} fontSize={10.5} fontFamily="var(--font-mono)" fill="rgb(var(--c-ink) / 0.75)">

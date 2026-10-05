@@ -50,16 +50,16 @@ export function rowOf(node: BoardNode, components: ReadonlyMap<string, Component
   return components.get(node.component)?.lane ?? 'compute';
 }
 
-export function layoutBoard(board: Board, components: ReadonlyMap<string, ComponentDef>, scenario: ScenarioDef, width = 640, wide = false): Layout {
+export function layoutBoard(board: Board, components: ReadonlyMap<string, ComponentDef>, scenario: ScenarioDef, width = 640, wide = false, compact = false): Layout {
   const slots = wide ? WIDE_SLOTS : SLOTS;
-  const rowHeight = 80;
+  const rowHeight = compact ? 66 : 80;
   const top = 18;
   const byRow = new Map<Row, BoardNode[]>(ROWS.map((r) => [r, []]));
   for (const n of board.nodes) byRow.get(rowOf(n, components, scenario))!.push(n);
   const rows = ROWS.filter((r) => r !== 'external' || byRow.get(r)!.length > 0).map((row, i) => ({ row, y: top + rowHeight * i + rowHeight / 2 }));
   const yOf = new Map(rows.map((r) => [r.row, r.y]));
   const w = Math.min(124, width / slots - 14);
-  const h = 54;
+  const h = compact ? 46 : 54;
   const nodes = new Map<string, Placed>();
   for (const { row, y } of rows) {
     const list = byRow.get(row)!;

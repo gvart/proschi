@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { useRef, useState, type ReactNode } from 'react';
 import { AlertTriangle, ArrowRight, BookOpen, Coins, Flame, Heart, Lock, Minus, Plus, RotateCcw, Sparkles, Trash2, X, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import { promptOf, type Card } from '../../learn/cards';
@@ -44,9 +44,31 @@ export function LearnLinks({ ids, max = 3 }: { ids: readonly string[]; max?: num
 
 // ---- Heads-up display ----
 
-export function Hud(props: { wave: number; waves: number; endless: boolean; cash: number; monthly?: number; trust: number; maxTrust: number; score: number; streak: number; streakStep: number; tick?: number }) {
+export function Hud(props: { wave: number; waves: number; endless: boolean; cash: number; monthly?: number; trust: number; maxTrust: number; score: number; streak: number; streakStep: number; tick?: number; compact?: boolean }) {
   const mult = Math.min(STREAK_MAX, 1 + props.streakStep * props.streak);
   const trustShare = Math.max(0, Math.min(1, props.trust / props.maxTrust));
+  if (props.compact) {
+    // One line for the phone's dock: wave, cash, Trust, score, streak.
+    return (
+      <div className="flex items-center justify-between gap-2 text-sm font-semibold sf-count" role="status" aria-label="Run status">
+        <span>
+          W{props.wave + 1}
+          <span className="text-muted">/{props.endless ? '∞' : props.waves}</span>
+          {props.tick !== undefined && <span className="text-xs text-muted"> ·{Math.min(props.tick + 1, TICKS)}</span>}
+        </span>
+        <span className={props.cash < 0 ? 'text-fail' : ''}>
+          {usd(props.cash)}
+          {props.monthly !== undefined && <span className="text-xs font-normal text-muted"> −{usd(props.monthly)}</span>}
+        </span>
+        <span className="inline-flex items-center gap-1" aria-label={`Trust ${props.trust}`}>
+          <Heart size={13} aria-hidden="true" className={trustShare < 0.3 ? 'text-fail' : 'text-pass'} />
+          {props.trust}
+        </span>
+        <span>{props.score.toLocaleString('en-US')}</span>
+        <span className={props.streak > 0 ? 'text-pop-pink' : 'text-muted'}>×{mult.toFixed(1)}</span>
+      </div>
+    );
+  }
   return (
     <div className={`${panel} grid grid-cols-2 sm:grid-cols-5 gap-x-4 gap-y-2 px-3 py-2 text-sm`} role="status" aria-label="Run status">
       <div>
@@ -89,8 +111,9 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
 
 // ---- Forecast ----
 
-export function ForecastPanel({ forecast, scenario, events, act }: { forecast: Forecast; scenario: ScenarioDef; events: Map<string, EventDef>; act?: string }) {
+export function ForecastPanel({ forecast, scenario, events, act, collapsible }: { forecast: Forecast; scenario: ScenarioDef; events: Map<string, EventDef>; act?: string; collapsible?: boolean }) {
   const max = Math.max(...forecast.multipliers);
+  const [open, setOpen] = useState(true);
   return (
     <section className={`${panel} p-3`} aria-label="Forecast">
       {forecast.boss && (
@@ -102,13 +125,18 @@ export function ForecastPanel({ forecast, scenario, events, act }: { forecast: F
           Wave {forecast.wave + 1}
           {forecast.name ? `: ${forecast.name}` : ''}
         </h3>
+        {collapsible && (
+          <button type="button" className="text-sm font-semibold underline" aria-expanded={open} onClick={() => setOpen(!open)}>
+            {open ? 'Hide' : 'Show'}
+          </button>
+        )}
         <svg viewBox={`0 0 ${forecast.multipliers.length * 10} 24`} className="h-6 w-24" aria-label={`Traffic curve: ${forecast.curve}`}>
           {forecast.multipliers.map((m, i) => (
             <rect key={i} x={i * 10 + 1} y={24 - (m / max) * 22} width={8} height={(m / max) * 22} fill={i === forecast.peakTick ? 'rgb(var(--c-pink))' : 'rgb(var(--c-ink) / 0.6)'} />
           ))}
         </svg>
       </div>
-      {act && <p className="mt-1 text-sm text-muted">{act}</p>}
+      {open && act && <p className="mt-1 text-sm text-muted">{act}</p>}
       <p className="mt-2 text-sm">
         Peak:{' '}
         {forecast.peak.map((p, i) => (
@@ -119,7 +147,7 @@ export function ForecastPanel({ forecast, scenario, events, act }: { forecast: F
         ))}
         {forecast.global > 0 && <span> · {Math.round(forecast.global * 100)}% of users far away</span>}
       </p>
-      {forecast.requirements.length > 0 && (
+      {open && forecast.requirements.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Requirements">
           {forecast.requirements.map((r) => (
             <li key={r} className="rounded border-bw-1 border-ink/40 bg-paper px-1.5 py-0.5 font-mono text-xs">
@@ -133,7 +161,7 @@ export function ForecastPanel({ forecast, scenario, events, act }: { forecast: F
           ))}
         </ul>
       )}
-      {forecast.events.length > 0 && (
+      {open && forecast.events.length > 0 && (
         <ul className="mt-2 space-y-1 text-sm">
           {forecast.events.map((e) => (
             <li key={e.id} className="flex items-start gap-1.5">
@@ -159,9 +187,10 @@ export interface PaletteItem {
   full: boolean;
 }
 
-export function Palette({ items, placing, onPick, onDragStart }: { items: PaletteItem[]; placing?: string; onPick: (id: string) => void; onDragStart: (id: string, e: React.PointerEvent) => void }) {
+export function Palette({ items, placing, onPick, onDragStart, onPointerEnd }: { items: PaletteItem[]; placing?: string; onPick: (id: string) => void; onDragStart: (id: string, e: React.PointerEvent) => void; onPointerEnd?: () => void }) {
+  const start = useRef<{ x: number; y: number }>(undefined);
   return (
-    <div className="flex gap-2 overflow-x-auto pb-1" role="toolbar" aria-label="Components">
+    <div className="flex gap-2 overflow-x-auto pb-1 [touch-action:pan-x] [scrollbar-width:thin]" role="toolbar" aria-label="Components">
       {items.map(({ def, available, full }) => {
         const Icon = ICON[def.role];
         return (
@@ -172,7 +201,17 @@ export function Palette({ items, placing, onPick, onDragStart }: { items: Palett
             aria-pressed={placing === def.id}
             title={available ? `${def.summary} (e.g. ${def.examples})` : `Unlock for ${def.unlock} Blueprints in the shop`}
             onClick={() => onPick(def.id)}
-            onPointerDown={(e) => available && !full && onDragStart(def.id, e)}
+            onPointerDown={(e) => {
+              start.current = { x: e.clientX, y: e.clientY };
+              if (available && !full) onDragStart(def.id, e);
+            }}
+            onPointerMove={(e) => {
+              // A swipe along the palette scrolls it: no drag.
+              if (start.current && Math.abs(e.clientX - start.current.x) > 8) onPointerEnd?.();
+            }}
+            onPointerUp={onPointerEnd}
+            onPointerCancel={onPointerEnd}
+            onContextMenu={(e) => e.preventDefault()}
             className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-brutal border-bw-1 px-2.5 py-2 text-sm font-semibold transition-[transform,box-shadow] duration-d1 ${
               placing === def.id ? 'border-ink bg-pop-yellow text-on-accent shadow-brutal-sm -translate-y-0.5' : available ? 'border-ink bg-surface hover:shadow-brutal-sm' : 'border-ink/30 bg-paper text-muted'
             } disabled:cursor-not-allowed`}
@@ -206,6 +245,8 @@ export interface InspectorProps {
   onRemove: () => void;
   onClose: () => void;
   oncall?: { left: number; cost: number; onPage: () => void };
+  /** The phone's bottom sheet: the essentials first, the reading behind a tap. */
+  compact?: boolean;
 }
 
 export function Inspector(p: InspectorProps) {
@@ -249,8 +290,8 @@ export function Inspector(p: InspectorProps) {
           <X size={16} aria-hidden="true" />
         </button>
       </div>
-      {c && <p className="text-sm">{c.summary}</p>}
-      {c && <p className="text-xs text-muted">{c.tradeoff}</p>}
+      {c && !p.compact && <p className="text-sm">{c.summary}</p>}
+      {c && !p.compact && <p className="text-xs text-muted">{c.tradeoff}</p>}
       {p.stats && !fixed && (
         <dl className="grid grid-cols-3 gap-2 text-xs">
           <div>
@@ -355,7 +396,17 @@ export function Inspector(p: InspectorProps) {
           </button>
         )}
       </div>
-      {c && <LearnLinks ids={c.learn} max={2} />}
+      {c &&
+        (p.compact ? (
+          <details className="text-sm">
+            <summary className="cursor-pointer font-semibold">What it is for</summary>
+            <p className="mt-1">{c.summary}</p>
+            <p className="mt-1 text-xs text-muted">{c.tradeoff}</p>
+            <LearnLinks ids={c.learn} max={2} />
+          </details>
+        ) : (
+          <LearnLinks ids={c.learn} max={2} />
+        ))}
     </section>
   );
 }

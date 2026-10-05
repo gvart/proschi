@@ -75,13 +75,24 @@ test('the shop sells unlocks for Blueprints', async ({ page }) => {
 test.describe('on a phone', () => {
   test.use({ viewport: { width: 360, height: 740 }, isMobile: true, hasTouch: true });
 
-  test('the Arcade and a run fit the screen', async ({ page }) => {
+  test('the Arcade and a run fit the screen, with the controls in a thumb dock', async ({ page }) => {
     await startShortly(page);
     const sideways = () => page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
     expect(await sideways()).toBeLessThanOrEqual(0);
+    // The dock: status, palette and Deploy are on screen without scrolling.
+    await expect(page.getByRole('button', { name: 'Deploy wave 1' })).toBeInViewport();
+    await expect(page.getByRole('status', { name: 'Run status' })).toBeInViewport();
     await page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: 'Load Balancer' }).tap();
     await board(page).getByRole('button', { name: /Place it in the edge row/ }).tap();
+    // Tapping a node opens its settings as a sheet, with the node still in view above it.
+    await page.getByRole('region', { name: 'Load Balancer settings' }).getByRole('button', { name: 'Close' }).tap();
+    await board(page).getByRole('button', { name: /^SQL Database/ }).tap();
+    const sheet = page.getByRole('region', { name: 'SQL Database settings' });
+    await expect(sheet.getByRole('button', { name: 'More replicas' })).toBeInViewport();
+    await expect(board(page).getByRole('button', { name: /^SQL Database/ })).toBeInViewport();
+    await sheet.getByRole('button', { name: 'Close' }).tap();
     await page.getByRole('button', { name: 'Deploy wave 1' }).tap();
+    await expect(page.getByRole('button', { name: 'Skip' })).toBeInViewport();
     await page.getByRole('button', { name: 'Skip' }).tap();
     await expect(page.getByRole('dialog', { name: /Wave 1/ })).toBeVisible();
     expect(await sideways()).toBeLessThanOrEqual(0);

@@ -68,3 +68,18 @@ export function topMistakes(history: WaveSummary[], n = 3): { breach: Breach; tr
     .slice(0, n)
     .map((e) => ({ breach: e.breach, trust: e.trust, waves: [...e.waves] }));
 }
+
+const SHORT: Record<string, string> = {
+  'Load Balancer': 'LB',
+  'App Server': 'App',
+  'SQL Database': 'SQL',
+  'NoSQL Database': 'NoSQL',
+  'Object Storage': 'Storage',
+  'Firewall (WAF)': 'WAF',
+  'API Gateway': 'Gateway',
+  'Search Index': 'Search',
+  'Data Warehouse': 'Warehouse',
+};
+
+/** A name that fits a phone's node: "LB", "SQL", or the first word of a provider ("Payment"). */
+export const shortName = (name: string): string => SHORT[name] ?? name.split(' ')[0];
