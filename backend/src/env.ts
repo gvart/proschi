@@ -19,6 +19,12 @@ export interface Env {
   GITHUB_CLIENT_SECRET?: string;
   GOOGLE_CLIENT_ID?: string;
   GOOGLE_CLIENT_SECRET?: string;
+  /**
+   * Where native apps may be sent back to after signing in (the
+   * `redirect_uri` of /auth/<provider>/start?client=app): exact URIs,
+   * separated by commas or whitespace. Empty or unset, app sign-in is off.
+   */
+  APP_REDIRECT_URIS?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

@@ -236,8 +236,8 @@ describe('data export', () => {
       user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, createdAt: 0 },
       identities: [{ provider: 'github', subject: id }],
       sessions: [
-        { createdAt: 0, expiresAt: 4_000_000_000 },
-        { createdAt: expect.any(Number), expiresAt: expect.any(Number) },
+        { kind: 'web', createdAt: 0, expiresAt: 4_000_000_000 },
+        { kind: 'web', createdAt: expect.any(Number), expiresAt: expect.any(Number) },
       ],
       progress: [
         {
