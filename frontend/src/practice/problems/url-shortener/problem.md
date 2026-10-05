@@ -1,11 +1,11 @@
 ---
 title: URL Shortener
-summary: Cache-first redirects with a fallback when Redis is down.
+summary: Cache-first redirects that survive losing any single machine.
 difficulty: easy
 tags: [caching, read-heavy, durability]
 hints:
   - Redirects outnumber shortening 100 to 1. What can answer a redirect without touching the database?
-  - "On a miss, read the database, then SET the code in the cache (->> is fine), so the next visitor hits. p99 is taken over all redirects, hits and misses mixed by their share: the 10% of misses decide it."
+  - "On a miss, read the database, then SET the code in the cache (->> is fine), so the next visitor hits. p99 is taken over all redirects, hits and misses mixed by their share: the 5% of misses decide it."
   - "One instance of anything is a single point of failure: use x2 or more on every component."
   - A REST API handles about 2k rps per replica in the simulation; size the API so it stays well below 70% busy.
 ---
