@@ -58,6 +58,17 @@ deployed from `main` and ships with the same changes.
   in the browser. Find it from the daily review page or the progress strip
   on the practice list. `proschi achievements check` validates the badges'
   definitions.
+- Sign-in for native apps, ready for a future mobile app: an app signs in
+  with GitHub or Google in the system browser
+  (`/auth/<provider>/start?client=app`, OAuth 2 with PKCE, back to an
+  allow-listed `APP_REDIRECT_URIS` address with a one-time code), exchanges
+  the code at `POST /auth/token` for an hour-long access token and a 60-day
+  refresh token that rotates on every use (a reused one signs that app out),
+  and calls every `/api` endpoint with `Authorization: Bearer`.
+  `POST /auth/revoke` signs an app out; "Sign out everywhere" and deleting
+  the account include apps, and "Download my data" lists each session with
+  its kind. The site keeps its cookie as before. How it works:
+  `backend/README.md`, "Mobile apps".
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach
