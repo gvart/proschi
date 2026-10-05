@@ -56,6 +56,14 @@ Without signing in, nothing about you reaches the server.
 - Sessions: a hash of each session's cookie, with when it started and when
   it expires. A session lasts 30 days and renews while you use it; expired
   ones are deleted daily.
+- If you sign in to a Proschi app on a phone: a hash of each of its tokens
+  (an access token that lasts an hour and a refresh token that lasts 60
+  days), with whether it is the site's cookie or which app token it is, when
+  it was issued, when it expires and, for a refresh token, when it was
+  exchanged for new ones. Rotated refresh tokens are kept until they expire,
+  to notice a stolen copy being used. During sign-in a hash of a one-time
+  code, which the app exchanges for its tokens within 60 seconds, is kept
+  with the app's address to return to. Expired ones are deleted daily.
 - Practice progress, per problem: how many times you ran the tests, your
   latest design, when you first ran and last ran it, when you solved it and
   in how many runs and on which local date, the cost and p99 of your best
@@ -89,6 +97,8 @@ permissions beyond your public profile, and Google for `openid profile` only.
 **Cookies**: `__Host-proschi_session` keeps you signed in (HttpOnly, sent
 only to proschi.app). `proschi_oauth` lives for ten minutes during sign-in to
 tie the provider's answer to your browser. Neither is used for anything else.
+An app sends its access token with each request instead of a cookie; when
+it signs in through your browser, no session cookie is set there.
 
 **Logs**: each request to the server is logged with a request id, its
 method, path (never the query), status, duration and, when signed in, your
@@ -107,12 +117,14 @@ never shown.
 
 In the account menu on the practice page:
 
-- **Download my data** saves everything stored about you as JSON.
-- **Delete account** removes your account, sessions, progress, card
+- **Download my data** saves everything stored about you as JSON, every
+  session with its kind (the site or an app) but never the token hashes.
+- **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results and badges from the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
-- **Sign out everywhere** ends every session, on every device.
+- **Sign out everywhere** ends every session, on every device, signed-in
+  apps included.
 
 The server is the open source [backend](../backend/README.md), so all of
 this can be checked in the code. Questions go to

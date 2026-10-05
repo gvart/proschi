@@ -16,3 +16,5 @@ How much disk does that need?
 
 50 MB/s × 86,400 s = 4,320,000 MB ≈ 4.32 TB a day. × 7 days ≈ 30.2 TB.
 × 3 replicas ≈ **91 TB**, before compression and free-space headroom.
+
+Numbers: [Numbers to know](../docs/numbers/#seconds-in-a-day-month-and-year).

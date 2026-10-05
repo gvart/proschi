@@ -1,6 +1,7 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import { getActivity } from './activity';
 import { getAchievements, markAchievementsSeen } from './achievements';
+import { revoke, token } from './apptokens';
 import { getCardState, postCardReviews } from './cards';
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
@@ -20,6 +21,10 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   GET    /auth/providers                  sign-in providers on offer
  *   GET    /auth/<provider>/start?return=   → the provider's sign-in page (&link=1: add it to the signed-in account)
  *   GET    /auth/<provider>/callback        → the return path, signed in (session cookie)
+ *   GET    /auth/<provider>/start?client=app&redirect_uri=&code_challenge=&code_challenge_method=S256[&state=]
+ *                                           a native app's sign-in: the callback → redirect_uri?code=
+ *   POST   /auth/token {grant_type, code, code_verifier | refresh_token}   an app's bearer tokens
+ *   POST   /auth/revoke {token}             ends an app's sign-in
  *   POST   /auth/logout
  *   GET    /api/health                      the Worker and D1 answer
  *   GET    /api/me                          account and progress
@@ -56,6 +61,8 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
     return parts[2] === 'start' ? startLogin(request, ctx, parts[1]) : finishLogin(request, ctx, parts[1]);
   }
   if (is('POST', 'auth', 'logout')) return logout(request, ctx);
+  if (is('POST', 'auth', 'token')) return token(request, ctx);
+  if (is('POST', 'auth', 'revoke')) return revoke(request, ctx);
   if (is('GET', 'api', 'health')) return health(ctx);
   if (is('GET', 'api', 'me')) return getMe(request, ctx);
   if (is('PATCH', 'api', 'me')) return updateMe(request, ctx);

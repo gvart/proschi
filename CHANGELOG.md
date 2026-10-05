@@ -71,6 +71,23 @@ deployed from `main` and ships with the same changes.
   answer also counts as a review toward your daily goal. Three new badges:
   a first challenge, a perfect score and a 7-day challenge streak. Find it
   on the practice list, the daily review page or in the footer.
+- Sign-in for native apps, ready for a future mobile app: an app signs in
+  with GitHub or Google in the system browser
+  (`/auth/<provider>/start?client=app`, OAuth 2 with PKCE, back to an
+  allow-listed `APP_REDIRECT_URIS` address with a one-time code), exchanges
+  the code at `POST /auth/token` for an hour-long access token and a 60-day
+  refresh token that rotates on every use (a reused one signs that app out),
+  and calls every `/api` endpoint with `Authorization: Bearer`.
+  `POST /auth/revoke` signs an app out; "Sign out everywhere" and deleting
+  the account include apps, and "Download my data" lists each session with
+  its kind. The site keeps its cookie as before. How it works:
+  `backend/README.md`, "Mobile apps".
+- "Numbers to know" in the docs (`docs/numbers/`): a cheat sheet of the
+  round numbers system design runs on (latency, throughput and connections
+  per server, disk and network speeds, time and size conversions,
+  availability nines, object sizes and approximate cloud prices) with a
+  fully worked estimate, and how Proschi's simulation defaults compare.
+  Every estimate card and the interview guide link to the section they use.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

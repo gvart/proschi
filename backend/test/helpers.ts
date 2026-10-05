@@ -9,14 +9,17 @@ export const ORIGIN = 'https://proschi.test';
  * A request to the Worker, as a page on the site sends it; `token` is the
  * session cookie. Each comes from a new IP unless `CF-Connecting-IP` is
  * given, so the per-IP rate limits only add up where a test wants them to.
+ * With `bearer` it is a native app's instead: `Authorization: Bearer`, and no
+ * Origin unless given.
  */
-export function call(path: string, init: Omit<RequestInit, 'body'> & { token?: string; body?: unknown } = {}): Promise<Response> {
-  const { token, body, ...rest } = init;
+export function call(path: string, init: Omit<RequestInit, 'body'> & { token?: string; bearer?: string; body?: unknown } = {}): Promise<Response> {
+  const { token, bearer, body, ...rest } = init;
   const headers = new Headers(rest.headers);
   const method = (rest.method ?? 'GET').toUpperCase();
-  if (method !== 'GET' && method !== 'HEAD' && !headers.has('Origin')) headers.set('Origin', ORIGIN);
+  if (method !== 'GET' && method !== 'HEAD' && !headers.has('Origin') && bearer === undefined) headers.set('Origin', ORIGIN);
   if (!headers.has('CF-Connecting-IP')) headers.set('CF-Connecting-IP', `test-${crypto.randomUUID()}`);
   if (token) headers.append('Cookie', `${SESSION_COOKIE}=${token}`);
+  if (bearer !== undefined) headers.set('Authorization', `Bearer ${bearer}`);
   if (body !== undefined) headers.set('Content-Type', 'application/json');
   return (exports as unknown as { default: Fetcher }).default.fetch(new Request(`${ORIGIN}${path}`, { ...rest, headers, body: body === undefined ? undefined : JSON.stringify(body) }));
 }
@@ -51,6 +54,6 @@ export async function signedInUser(name = `user${++users}`, publicProfile = fals
 }
 
 export async function resetDatabase(): Promise<void> {
-  await env.DB.batch(['challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
+  await env.DB.batch(['challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'app_auth_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
   await clearStatsCache();
 }

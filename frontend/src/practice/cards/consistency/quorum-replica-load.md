@@ -19,3 +19,5 @@ operations per second do the replicas handle in total?
 Writes: 10,000 × 3 = 30,000. Reads: 30,000 × 2 = 60,000. Total =
 **90,000 operations/s**, more than twice the 40,000 the clients send. Size
 the replicas for that multiplied load.
+
+Numbers: [Numbers to know](../docs/numbers/#servers-and-data-stores).
