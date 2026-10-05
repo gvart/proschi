@@ -1,0 +1,54 @@
+import "problem.proschi"
+
+db "Block Store" [PostgreSQL] x2 @data "480 logical shards (one schema each), 15 per physical database; a primary and a replica each"
+
+capacity {
+  db shards 32
+}
+
+web       -> pgbouncer : SQL to the workspace's shard
+pgbouncer -> db        : pooled connections
+
+entity Block in db "Everything in Notion is a block: a page, a paragraph, a to-do" {
+  id          uuid key
+  space_id    uuid index
+  parent_id   uuid index
+  type        string
+  properties  json
+  last_edited time
+}
+entity Comment in db "Lives on the same shard as the blocks it is about" {
+  id        uuid key
+  space_id  uuid index
+  parent_id uuid index
+  text      string
+}
+
+decision "Partition by workspace id" {
+  because "Every block, comment and discussion belongs to one workspace, and nearly every query asks about one workspace: loading a page or saving an edit touches one shard"
+  rejected "Partition by block id" "A page's blocks land on every shard, so loading one page asks all of them"
+  rejected "Partition by user id" "A workspace is shared by many users; their pages would be scattered"
+}
+decision "480 logical shards on 32 databases" {
+  because "The application maps workspace to one of 480 schemas, and schemas to databases; 480 divides evenly into 32, 48, 96 or 120 databases, so adding capacity later moves whole schemas without re-hashing a row"
+  rejected "One database per logical shard" "480 machines to run while most would sit idle"
+}
+decision "Shards, not read replicas" {
+  because "Writes go to one primary per shard: 100k edits a second need about 30 primaries at 5k each, and read replicas add none"
+  rejected "A bigger monolith with more replicas" "Every edit still lands on one primary, whose writes saturate long before its reads"
+}
+decision "Route in the application, pool in PgBouncer" because "The API computes the shard from the workspace id; PgBouncer keeps the number of Postgres connections bounded as the API fleet grows"
+
+usecase "Load page" "A user opens a page; its blocks are read from the workspace's shard" {
+  web        -> pgbouncer : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  pgbouncer  -> db        : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  db        --> pgbouncer : 120 rows
+  pgbouncer --> web       : 120 rows
+}
+
+usecase "Edit block" "A user types into a block; the change is saved to the workspace's shard" {
+  web        -> pgbouncer : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  pgbouncer  -> db        : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  db        --> pgbouncer : UPDATE 1
+  pgbouncer --> web       : UPDATE 1
+}

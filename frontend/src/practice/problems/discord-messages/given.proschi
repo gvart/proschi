@@ -1,0 +1,52 @@
+title "Discord Messages" "Serves trillions of messages from ScyllaDB without letting one busy channel melt its partition"
+
+api      "Discord API"            [Actor]    "The API monolith; every message read and write starts here"
+messages "Messages Cluster"       [ScyllaDB] x3 @data "Every message, partitioned by (channel_id, bucket): 24 shards of 3 replicas, 72 nodes"
+hot      "Busy Channel Partition" [ScyllaDB] x3 @data "The 3 replicas of the cluster that own the busy channel's current bucket"
+
+capacity {
+  messages shards 24
+  hot      10k rps cost 0 usd/month
+}
+
+traffic {
+  "Send message"      5k rps
+  "Read messages"     15k rps
+  "Read busy channel" 40k rps mix "Joined in-flight read" 99%, "First read" 1%
+}
+
+requirements {
+  p99 "Send message" < 60ms
+  p99 "Read messages" < 60ms
+  p99 "Read busy channel" < 60ms
+  availability >= 99.99%
+  durable "Send message"
+  survive any node failure
+  cost <= 42000 usd/month
+}
+
+test "Every query goes through the data services" {
+  "Send message" starts at api
+  "Read messages" starts at api
+  "Read busy channel" starts at api
+  "Send message" calls data before messages
+  "Read messages" calls data before messages
+  "Read busy channel" calls data before hot
+  no path from api to any database
+}
+
+test "Concurrent reads of one channel share one query" {
+  "Read busy channel" scenario "Joined in-flight read" never calls any database
+  "Read busy channel" scenario "First read" calls hot
+  "Read busy channel" never calls messages
+}
+
+test "No message cache to keep in sync" {
+  "Send message" never calls any cache
+  "Read messages" never calls any cache
+  "Read busy channel" never calls any cache
+}
+
+test "A message is stored before the sender hears back" {
+  "Send message" writes messages before responding
+}

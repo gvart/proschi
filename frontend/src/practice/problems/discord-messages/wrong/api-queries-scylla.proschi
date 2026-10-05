@@ -1,0 +1,26 @@
+# expect-fail: Every query goes through the data services
+# The API monolith queries ScyllaDB itself: every client that opens the busy channel sends its own read to the same three replicas.
+import "problem.proschi"
+
+api -> messages : CQL
+api -> hot      : CQL
+
+usecase "Send message" "A user posts a message to a channel" {
+  api       -> messages : x3 INSERT INTO messages (channel_id, bucket, message_id) at QUORUM
+  messages --> api      : ok
+}
+
+usecase "Read messages" "A user opens an ordinary channel and loads its latest messages" {
+  api       -> messages : x2 SELECT FROM messages WHERE channel_id = 2210 AND bucket = 1912 LIMIT 50 at QUORUM
+  messages --> api      : 50 rows
+}
+
+usecase "Read busy channel" "Everyone in a huge server opens the channel that was just pinged" {
+  alt "Joined in-flight read" when "another API process is reading the same channel" {
+    api  -> hot : x2 SELECT FROM messages WHERE channel_id = 1046 AND bucket = 1912 LIMIT 50 at QUORUM
+    hot --> api : 50 rows
+  } alt "First read" when "no other reader" {
+    api  -> hot : x2 SELECT FROM messages WHERE channel_id = 1046 AND bucket = 1912 LIMIT 50 at QUORUM
+    hot --> api : 50 rows
+  }
+}

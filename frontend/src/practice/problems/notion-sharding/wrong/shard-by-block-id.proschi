@@ -1,0 +1,26 @@
+# expect-fail: p99 of Load page < 70 ms
+# 32 shards keyed by block id: edits spread nicely, but a page's blocks are on every shard, so loading one asks all 32.
+import "problem.proschi"
+
+db "Block Store" [PostgreSQL] x2 @data "32 shards, partitioned by hash of the block id"
+
+capacity {
+  db shards 32
+}
+
+web       -> pgbouncer : SQL to every shard
+pgbouncer -> db        : pooled connections
+
+usecase "Load page" "A user opens a page; its blocks are spread over every shard" {
+  web        -> pgbouncer : SELECT blocks WHERE parent_id = $1
+  pgbouncer  -> db        : x32 SELECT blocks WHERE parent_id = $1
+  db        --> pgbouncer : 120 rows from 32 shards
+  pgbouncer --> web       : 120 rows
+}
+
+usecase "Edit block" "A user types into a block" {
+  web        -> pgbouncer : UPDATE block SET properties WHERE id = $1
+  pgbouncer  -> db        : UPDATE block SET properties WHERE id = $1
+  db        --> pgbouncer : UPDATE 1
+  pgbouncer --> web       : UPDATE 1
+}
