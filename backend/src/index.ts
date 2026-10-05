@@ -3,6 +3,7 @@ import { getActivity } from './activity';
 import { getAchievements, markAchievementsSeen } from './achievements';
 import { revoke, token } from './apptokens';
 import { getCardState, postCardReviews } from './cards';
+import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun, postGameSubmit, postGameSync } from './game';
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
@@ -49,6 +50,13 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/challenge/today/start {day?}            records when the first card was shown (once per user and day)
  *   POST   /api/challenge/today/attempt {answers, day?}   grades, scores and keeps your first attempt of the day
  *   GET    /api/challenge/leaderboard?day=  the day's top 20 who opted in, with their public ids (+ your rank, signed in)
+ *   GET    /api/game/me                     Scale or Fail: your progress, best scores and today's daily run
+ *   POST   /api/game/runs {mode, scenario?, ascension?}   starts a ranked run: {runId, setup} (the server picks the seed)
+ *   POST   /api/game/runs/<id>/submit {actions}   replays the run and keeps its score (once)
+ *   POST   /api/game/buy {id}               spends Blueprints on an unlock or a perk level
+ *   POST   /api/game/equip {perks}          the perks to take into runs
+ *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
+ *   GET    /api/game/leaderboard?scenario=&ascension= | ?day=   top 20 who opted in (+ your rank, signed in)
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
  */
 
@@ -88,6 +96,13 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'challenge', 'today', 'start')) return postChallengeStart(request, ctx);
   if (is('POST', 'api', 'challenge', 'today', 'attempt')) return postChallengeAttempt(request, ctx);
   if (is('GET', 'api', 'challenge', 'leaderboard')) return getChallengeLeaderboard(request, ctx);
+  if (is('GET', 'api', 'game', 'me')) return getGameMe(request, ctx);
+  if (is('POST', 'api', 'game', 'runs')) return postGameRun(request, ctx);
+  if (is('POST', 'api', 'game', 'runs', '*', 'submit')) return postGameSubmit(request, ctx, parts[3]);
+  if (is('POST', 'api', 'game', 'buy')) return postGameBuy(request, ctx);
+  if (is('POST', 'api', 'game', 'equip')) return postGameEquip(request, ctx);
+  if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
+  if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
   return errorResponse(404, 'Not found');
 }

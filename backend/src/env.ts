@@ -10,6 +10,8 @@ export interface Env {
   REVIEW_LIMITER: RateLimit;
   CARD_LIMITER: RateLimit;
   CHALLENGE_LIMITER: RateLimit;
+  /** Game runs started, submitted or imported, and purchases, per user. */
+  GAME_LIMITER: RateLimit;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */

@@ -45,7 +45,8 @@
     { "name": "IMPORT_LIMITER", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } },
     { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
     { "name": "CARD_LIMITER", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
-    { "name": "CHALLENGE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } }
+    { "name": "CHALLENGE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } },
+    { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -77,7 +78,8 @@
         { "name": "IMPORT_LIMITER", "namespace_id": "2005", "simple": { "limit": 3, "period": 60 } },
         { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } },
         { "name": "CARD_LIMITER", "namespace_id": "2007", "simple": { "limit": 60, "period": 60 } },
-        { "name": "CHALLENGE_LIMITER", "namespace_id": "2008", "simple": { "limit": 10, "period": 60 } }
+        { "name": "CHALLENGE_LIMITER", "namespace_id": "2008", "simple": { "limit": 10, "period": 60 } },
+        { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } }
       ]
     }
   }
