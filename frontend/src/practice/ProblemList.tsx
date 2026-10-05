@@ -4,6 +4,7 @@ import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { field } from '../components/Playground/ui';
 import RoadmapCard from './RoadmapCard';
 import ReviewCard from './ReviewCard';
+import ContributeCard from './ContributeCard';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -142,6 +143,7 @@ export default function ProblemList({ problems, progress, stats, streak, summary
         })}
         {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">No problem matches these filters.</li>}
       </ul>
+      <ContributeCard />
       {children}
     </main>
   );
