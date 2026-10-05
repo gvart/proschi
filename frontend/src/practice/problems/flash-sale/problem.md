@@ -14,7 +14,7 @@ hints:
 When a celebrity launches a product on Shopify, a crowd that is waiting for
 the moment hits one shop at once: tens of thousands of requests a second,
 most of them for the same page, then a rush on checkout for a stock that is
-gone in minutes. In early sales, the writes of checkout took down not just
+gone in minutes. In early sales, checkout writes took down not just
 the shop but whole segments of the platform with it.
 
 Shopify's answer was to shape the load before it reaches the database. The

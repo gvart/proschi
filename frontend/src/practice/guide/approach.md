@@ -9,7 +9,7 @@ this plan.
 ## The four steps
 
 Most good interviews follow the same arc. Keep an eye on the clock: the
-times below are for a 45-minute slot and stretch proportionally for longer
+times below are for a 45-minute slot; stretch them in proportion for longer
 ones.
 
 | Step | Time | What you produce |
@@ -39,7 +39,7 @@ judgement, not of weakness.
 - **Scale**: requests per second for each use case, the read-to-write ratio,
   the number of users, the size of the data.
 - **Latency**: how fast each use case must answer, ideally as a percentile
-  ("p99 under 200 ms").
+  ("p99 under 200 ms": 99% of requests answer within 200 ms).
 - **Availability**: how much downtime is acceptable (see the nines below).
 - **Consistency and durability**: may a reader see slightly stale data? May
   any write ever be lost? Money and inventory usually answer "no"; likes and
@@ -74,9 +74,10 @@ pressure from your numbers. Typical deep dives:
 - **The data model**: entities, keys, indexes, and how the data is
   partitioned once it no longer fits one machine.
 - **The hot path**: what makes the most frequent use case fast. Usually a
-  cache, a precomputed result or a CDN.
+  cache, a precomputed result or a CDN (a network of caches near users).
 - **Failures**: what happens when each component dies, and what the user
-  sees. Retries, timeouts, fallbacks, idempotency.
+  sees. Retries, timeouts, fallbacks, idempotency (a
+  retried request has the same effect as a single one).
 - **Contention**: what happens when many requests want the same row, seat or
   counter at once.
 
@@ -139,8 +140,8 @@ calls hurt.
 | Round trip between continents | ~100–150 ms |
 
 The lesson: memory is thousands of times faster than a network round trip,
-and a network round trip inside one data centre is a hundred times faster than
-one across an ocean. Designs that keep the hot path in memory and in one
+and a network round trip inside one data centre is hundreds of times faster
+than one across an ocean. Designs that keep the hot path in memory and in one
 region are fast; designs that cross regions on every request are not.
 
 ### Availability in nines

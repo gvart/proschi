@@ -1,12 +1,12 @@
 # File Storage: keep the bytes off your servers
 
-A small Dropbox sounds like a CRUD app with big rows. It is not. The moment files range from a 10 KB note to a 2 GB video, the design question changes from "where do I store this?" to "which machines should the bytes travel through, and who pays for them on the way out?" This lesson builds the answer: pre-signed URLs for uploads, bucket events to finish them, and a CDN for downloads.
+A small Dropbox sounds like a CRUD app (create, read, update, delete) with big rows. It is not. The moment files range from a 10 KB note to a 2 GB video, the design question changes from "where do I store this?" to "which machines should the bytes travel through, and who pays for them on the way out?" This lesson builds the answer: pre-signed URLs for uploads, bucket events to finish them, and a CDN for downloads.
 
 ## What you'll learn
 
 - How pre-signed URLs let clients upload straight into object storage while your API keeps control.
 - Why the bucket, not the client, should tell you an upload finished, and how event notifications plus a queue do it.
-- How to estimate bandwidth and egress, and why egress usually dominates the bill of a file service.
+- How to estimate bandwidth and egress (data sent out of your system), and why egress usually dominates the bill of a file service.
 - When a CDN helps (cost, offload) and when it barely changes latency.
 - How to split metadata (a database) from content (object storage).
 
@@ -58,7 +58,7 @@ Three things jump out.
 
 **Storage grows fast.** About half a petabyte of new files a month. Proschi's cost model has no storage-at-rest price, but in an interview you should mention lifecycle rules (move cold files to cheaper storage classes) and deduplication.
 
-**How the model sees each piece.** A load balancer takes 100k rps per replica, a service 2k, PostgreSQL 20k reads but 5k writes on its single primary, a queue 50k, a function 10k, storage 5k. With 2.2k API requests a second, a couple of service replicas would be busy; divide by your target utilisation and check survival with one replica fewer. Metadata writes are far below one primary's capacity, so no sharding is needed. Object storage and CDNs "scale out behind one name": the model never saturates them on bandwidth, which matches how they behave in reality.
+**How the model sees each piece.** A load balancer takes 100k rps per replica, a service 2k, PostgreSQL 20k reads but 5k writes on its single primary, a queue 50k, a function 10k, storage 5k. With 2.2k API requests a second, about two service replicas would be fully busy. Divide by your target utilisation, and check that one replica fewer still survives. Metadata writes are far below one primary's capacity, so no sharding is needed. Object storage and CDNs "scale out behind one name": the model never saturates them on bandwidth, which matches how they behave in reality.
 
 **Availability.** A write to a single-primary database with two replicas is modelled at 99.995% (failover costs 10% of the primary's downtime). That is the weakest link for Start upload, still well above 99.9%.
 
@@ -68,9 +68,9 @@ Three things jump out.
 
 *Object storage* (S3, GCS, Azure Blob) stores immutable blobs under keys. It is cheap per byte, extremely durable, and scales request rates and bandwidth for you. What it is not: a database you can query, or a file system with cheap renames.
 
-A *pre-signed URL* is a URL that carries a signature computed with your credentials, for one operation (say, `PUT` to one key) that expires after a few minutes. Your API decides who may upload what, signs the URL locally (no network call), and hands it to the client. The client then talks to the bucket directly. Your servers never see the bytes, so they need neither the bandwidth nor the long-lived connections a 2 GB upload would hold.
+A *pre-signed URL* is a URL that carries a signature made with your credentials. It allows one operation (say, a `PUT` to one key) and expires after a few minutes. Your API decides who may upload what, signs the URL locally (no network call), and hands it to the client. The client then talks to the bucket directly. Your servers never see the bytes, so they need neither the bandwidth nor the long-lived connections a 2 GB upload would hold.
 
-Trade-offs: you lose the chance to inspect bytes inline (virus scanning, transcoding happen later, on an event); URLs can leak until they expire, so keep expiry short and scope each URL to one key; and the client needs a separate step to tell anyone the upload happened, which is the next concept.
+Trade-offs: you cannot inspect the bytes on the way in, so virus scanning and transcoding happen later, on an event. URLs can leak until they expire, so keep expiry short and scope each URL to one key. And something must tell your system that the upload happened, which is the next concept.
 
 When *not* to use it: tiny payloads that are really part of an API call (an avatar crop, a 2 KB JSON), where an extra round trip costs more than proxying.
 
@@ -162,7 +162,7 @@ Then sketch the four use cases. List files: user → load balancer → API → d
 
 **Proxying the upload through the API** (`wrong/upload-through-api`). The most common instinct: the client sends bytes to your API, which forwards them to the bucket. In the real world, each 2 GB upload pins an API connection for minutes and your API fleet scales with bandwidth instead of requests. In the model, the extra hops (load balancer, API, and a second transfer between API and bucket) push the upload's p99 over 220 ms. It fails *File bytes never pass through your servers* and `p99 of Upload < 220 ms`.
 
-**The client marks its own upload complete** (`wrong/client-marks-upload-complete`). After the `PUT`, the client calls `POST /files/{id}/complete`. Works in the demo, then leaves orphaned pending files every time a phone loses signal at the wrong moment. It fails *Uploads are finished without the client*, because the user calls the load balancer during Upload.
+**The client marks its own upload complete** (`wrong/client-marks-upload-complete`). After the `PUT`, the client calls `POST /files/{id}/complete`. It works in the demo, then leaves orphaned pending files every time a phone loses signal at the wrong moment. It fails *Uploads are finished without the client*, because the user calls the load balancer during Upload.
 
 **Downloading straight from the bucket** (`wrong/download-from-bucket`). Signed bucket URLs are simple and correct, but every byte leaves at $0.09/GB. The model puts the bill around $119k a month, far over $45k. It fails *Downloads are served by the CDN* and `cost ≤ $45,000/month`.
 

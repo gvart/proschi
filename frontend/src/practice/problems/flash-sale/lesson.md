@@ -17,11 +17,15 @@ There are two use cases:
 - **View product**: a buyer opens the product page. Either the edge has a cached copy (`"Page cache hit"`) or the app renders it from the database (`"Page cache miss"`).
 - **Checkout**: a buyer tries to buy one unit. Three outcomes. `"Queued"`: checkout is at capacity, so the buyer gets `429` and a queue page that polls again in a few seconds; once admitted, a signed cookie lets them skip the queue. `"Order placed"`: a unit was left, it is taken from the stock, the order is stored, `201`. `"Sold out"`: admitted, but too late, `409`.
 
-The non-functional requirements: never sell a unit twice, never record a sale without its order; the order is durable before `201`; buyers who wait never reach the app or the database; p99 under 50 ms for the page and 150 ms for a placed order; 99.99% availability for pages and 99.95% for checkout; survive any machine; at most $2,000 a month, the database included.
+The non-functional requirements: never sell a unit twice, and never record a sale without its order. The order is durable before `201`. Buyers who wait never reach the app or the database. p99 is under 50 ms for the page and 150 ms for a placed order. Pages are available 99.99% of the time and checkout 99.95%. The sale survives losing any machine, and costs at most $2,000 a month, the database included.
 
 The given fixes the **pod**: the shop's MySQL shard, a primary and a replica. Its write capacity is lowered to **2k writes a second**, because every checkout hammers the same few inventory rows and a real database spends its time waiting on row locks. The simulation does not model lock waits, so the problem expresses them as lower capacity. Because the problem sets the pod's capacity, you also cannot add shards to it: a shop lives on one pod, and you do not move it in the middle of a sale. The only way out is to send less load.
 
-The tests say the same in checks: page-cache hits never call a service or database and the edge is called before any service; the `"Queued"` scenario exists, never calls a service or database, and answers `429`; checkout never calls an eventual store, `"Order placed"` writes the pod before answering `201`, and `"Sold out"` asks the pod and answers `409`.
+The tests check the same rules:
+
+- Page-cache hits never call a service or database, and the edge is called before any service.
+- The `"Queued"` scenario exists, never calls a service or database, and answers `429`.
+- Checkout never calls an eventually consistent store (a cache or Redis), `"Order placed"` writes the pod before answering `201`, and `"Sold out"` asks the pod and answers `409`.
 
 This is the sibling of the Ticket Booking problem with one big difference: buyers do not pick a specific seat. Everybody wants the same thing, which turns a set of rows into one hot counter and a crowd into the main enemy.
 
@@ -39,7 +43,7 @@ This is the sibling of the Ticket Booking problem with one big difference: buyer
 
 **The edge.** Everything arrives here: 80k + 10k = 90k rps. A load balancer in the simulation takes 100k rps per replica, so even a small fleet sits around 30%. Answering from the edge is nearly free compared with any other tier.
 
-**The app.** It sees only page misses plus admitted checkouts: 4k + 500 = 4.5k rps. At about 2k rps per replica that is 2.25 replicas at 100% load; with ~70% headroom and room to lose one, you land at a handful. Compare that with rendering every page in the app: 80k ÷ 2k = 40 replicas at 100%, well over 50 with headroom, at $100 each. That alone breaks the $2,000 budget.
+**The app.** It sees only page misses plus admitted checkouts: 4k + 500 = 4.5k rps. At about 2k rps per replica that is 2.25 replicas at 100% load; with a ~70% utilisation target and room to lose one, you land at a handful. Compare that with rendering every page in the app: 80k ÷ 2k = 40 replicas at 100%, well over 50 with headroom, at $100 each. That alone breaks the $2,000 budget.
 
 **Where the time goes.** A page-cache hit is one edge hop of about 2 ms; its p99 is a few milliseconds. A placed order is edge → app → two pod writes → back: roughly 2 + 10 + 2 × ~8 ms of mean latency, and the model's p99 for such a path is a few times its mean, so it fits under 150 ms only if neither the app nor the pod is close to saturation.
 
@@ -100,7 +104,7 @@ WHERE variant_id = 42 AND available > 0;
 
 The condition `available > 0` is checked and applied atomically, so two buyers cannot both take the last unit. Doing the decrement and the order insert in the **same transaction** means a crash can never leave a unit taken without its order or an order without its unit.
 
-The tempting alternative is a Redis counter: `DECR stock:42` is atomic and blindingly fast. But it creates **two sources of truth**. Redis says a unit is sold, then the process crashes before MySQL stores the order, and the unit is gone with no order. Or Redis loses the last few decrements in a failover and sells more than you have. Shopify's own 2026 write-up on inventory reservations describes replacing Redis with MySQL for reservations, keeping them next to the orders, for exactly this kind of disagreement.
+The tempting alternative is a Redis counter: `DECR stock:42` is atomic and very fast. But it creates **two sources of truth**. Redis says a unit is sold, then the process crashes before MySQL stores the order, and the unit is gone with no order. Or Redis loses the last few decrements in a failover and sells more than you have. Shopify's own 2026 write-up on inventory reservations describes replacing Redis with MySQL for reservations, keeping them next to the orders, for exactly this kind of disagreement.
 
 The price of keeping it in the database is the **hot row**: every checkout locks the same inventory row, so the database's effective write rate for this sale drops far below its usual capacity. That is why the problem's pod takes only 2k writes a second, and why admission control is what makes the database approach viable.
 
