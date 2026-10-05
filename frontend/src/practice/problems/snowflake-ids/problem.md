@@ -3,6 +3,7 @@ title: Snowflake IDs
 summary: Unique, time-ordered ids at 20k a second with no central counter.
 difficulty: easy
 tags: [id-generation, coordination, availability, real-world]
+company: Twitter
 hints:
   - "A counter in a database or a cache means a round trip and one shared bottleneck for every id. What could a generator put in an id that is already unique to it?"
   - "Snowflake packs the time in milliseconds, a worker id and a per-millisecond sequence into 64 bits. Only the worker id needs coordinating, and only once: when the process starts."

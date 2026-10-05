@@ -1,12 +1,13 @@
 /** Bindings and settings of the Worker (wrangler.jsonc, secrets in .dev.vars). */
 export interface Env {
   DB: D1Database;
-  /** Rate limits (wrangler.jsonc `ratelimits`): test runs and data uploads per user, sign-ins and stats per IP. */
+  /** Rate limits (wrangler.jsonc `ratelimits`): test runs and data uploads per user, sign-ins, stats and design reviews per IP. */
   RUN_LIMITER: RateLimit;
   AUTH_LIMITER: RateLimit;
   PROFILE_LIMITER: RateLimit;
   STATS_LIMITER: RateLimit;
   IMPORT_LIMITER: RateLimit;
+  REVIEW_LIMITER: RateLimit;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */

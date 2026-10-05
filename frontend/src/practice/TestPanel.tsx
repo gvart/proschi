@@ -1,5 +1,5 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
-import { useEffect, useRef, type ReactNode } from 'react';
+import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, Sparkles, XCircle } from 'lucide-react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { celebrate } from '../design/celebrate';
 import { primaryButton, subBar } from '../components/Playground/ui';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -16,10 +16,22 @@ interface TestPanelProps {
   onSelect: (loc: SourceLoc) => void;
   /** How others did on this problem (CommunityStats), shown under the verdict. */
   community?: ReactNode;
+  /** The AI review (src/review/ReviewPanel.tsx), shown in a view of its own next to the tests. */
+  review?: ReactNode;
 }
 
+const viewButton = (on: boolean) =>
+  `inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
+
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review }: TestPanelProps) {
+  const [view, setView] = useState<'tests' | 'review'>('tests');
+  // A new run brings the tests back into view.
+  const [shownRun, setShownRun] = useState(run);
+  if (run !== shownRun) {
+    setShownRun(run);
+    setView('tests');
+  }
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
   // The first solve on this page gets a little burst (skipped under reduced motion).
   const solvedRef = useRef<HTMLDivElement>(null);
@@ -33,8 +45,23 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
   return (
     <div className="h-full flex flex-col bg-surface">
       <div className={`flex items-center gap-2 px-3 py-2 ${subBar}`}>
-        <FlaskConical size={16} className="text-muted" />
-        <span className="text-sm font-bold text-ink">Tests</span>
+        {review ? (
+          <>
+            <button onClick={() => setView('tests')} aria-pressed={view === 'tests'} className={viewButton(view === 'tests')}>
+              <FlaskConical size={14} />
+              Tests
+            </button>
+            <button onClick={() => setView('review')} aria-pressed={view === 'review'} className={viewButton(view === 'review')}>
+              <Sparkles size={14} />
+              AI review
+            </button>
+          </>
+        ) : (
+          <>
+            <FlaskConical size={16} className="text-muted" />
+            <span className="text-sm font-bold text-ink">Tests</span>
+          </>
+        )}
         {run && !run.blocked && (
           <span className={`text-sm tabular-nums ${run.solved ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'text-ink/75'}`}>
             {run.passed} / {run.results.length} passed{stale ? ' · edited since' : ''}
@@ -50,7 +77,9 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
         </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto text-sm">
+      {/* Kept mounted, so switching views keeps the review. */}
+      {review && <div className={`flex-1 min-h-0 overflow-y-auto ${view === 'review' ? '' : 'hidden'}`}>{review}</div>}
+      <div className={`flex-1 min-h-0 overflow-y-auto text-sm ${review && view === 'review' ? 'hidden' : ''}`}>
         {!run && <p className="px-3 py-4 text-muted">Run the tests to check your design against the problem’s requirements.</p>}
 
         {run?.blocked === 'no-engine' && (

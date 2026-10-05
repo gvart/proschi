@@ -16,6 +16,21 @@ deployed from `main` and ships with the same changes.
   path on proschi.app.
 
 ### Added
+- Practice problems based on a published system name its company: an
+  optional `company` field in problem.md (docs/PRACTICE.md), set on Snowflake
+  IDs (Twitter), Shopping Cart (Amazon), Job Queue (Slack), View Counting
+  (Reddit) and Social Graph Cache (Meta). The problem list shows it as a
+  badge and filters by it, and the problem page and its static page show the
+  badge. It says where the design comes from, not that the company asks the
+  problem in interviews.
+- An "AI review" view next to the tests on the practice page, with a "Review
+  my design" button. It is a placeholder for now: it says the review is
+  coming soon and gives no feedback. The request it will send (the design,
+  its parsed model, test results, and cost, p99 and availability from the
+  simulation) and the review it expects are defined in
+  `frontend/src/review/`, and the Worker has a stub `POST /api/review` that
+  validates the request and answers 501 (backend/README.md). Builds with
+  `VITE_AI_REVIEW=true` call it.
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the

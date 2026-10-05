@@ -49,9 +49,9 @@ export function expectFailLines(source: string): string[] {
   return names;
 }
 
-const FIELDS = ['title', 'summary', 'difficulty', 'tags', 'order', 'hints', 'version'];
+const FIELDS = ['title', 'summary', 'difficulty', 'tags', 'company', 'order', 'hints', 'version'];
 
-export type ProblemMeta = Pick<Problem, 'title' | 'summary' | 'difficulty' | 'tags' | 'order' | 'statement' | 'hints' | 'version'>;
+export type ProblemMeta = Pick<Problem, 'title' | 'summary' | 'difficulty' | 'tags' | 'company' | 'order' | 'statement' | 'hints' | 'version'>;
 
 /** Reads problem.md of folder `id`: the front matter fields and the statement. Throws ProblemFolderError. */
 export function readProblemMd(id: string, text: string): ProblemMeta {
@@ -79,6 +79,7 @@ export function readProblemMd(id: string, text: string): ProblemMeta {
   };
   const difficulty = str('difficulty') as Problem['difficulty'];
   if (!DIFFICULTIES.includes(difficulty)) fail(`'difficulty' must be one of ${DIFFICULTIES.join(', ')}`);
+  const company = data.company === undefined ? undefined : str('company');
   const order = data.order;
   if (order !== undefined && typeof order !== 'number') fail("'order' must be a number");
   const version = data.version;
@@ -89,6 +90,7 @@ export function readProblemMd(id: string, text: string): ProblemMeta {
     summary: str('summary'),
     difficulty,
     tags: list('tags'),
+    ...(company !== undefined ? { company } : {}),
     ...(typeof order === 'number' ? { order } : {}),
     statement: body,
     hints: list('hints'),

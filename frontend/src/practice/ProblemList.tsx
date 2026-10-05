@@ -1,6 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { Search } from 'lucide-react';
-import { DifficultyBadge, StatusIcon } from './Badges';
+import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { field } from '../components/Playground/ui';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
@@ -23,15 +23,19 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState<'' | Problem['difficulty']>('');
   const [tag, setTag] = useState('');
+  const [company, setCompany] = useState('');
   const [status, setStatus] = useState<'' | Status>('');
   const tags = useMemo(() => [...new Set(problems.flatMap((p) => p.tags))].sort(), [problems]);
+  // Only companies some problem names (problem.md `company`).
+  const companies = useMemo(() => [...new Set(problems.flatMap((p) => (p.company ? [p.company] : [])))].sort((a, b) => a.localeCompare(b, 'en')), [problems]);
 
   const shown = problems.filter(
     (p) =>
       (!difficulty || p.difficulty === difficulty) &&
       (!tag || p.tags.includes(tag)) &&
+      (!company || p.company === company) &&
       (!status || statusOf(progress, p.id) === status) &&
-      (!query || `${p.title} ${p.tags.join(' ')}`.toLowerCase().includes(query.toLowerCase())),
+      (!query || `${p.title} ${p.tags.join(' ')} ${p.company ?? ''}`.toLowerCase().includes(query.toLowerCase())),
   );
   const solved = problems.filter((p) => statusOf(progress, p.id) === 'solved').length;
   const select = field;
@@ -76,6 +80,16 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
             </option>
           ))}
         </select>
+        {companies.length > 0 && (
+          <select aria-label="Company" value={company} onChange={(e) => setCompany(e.target.value)} className={select} title="The company whose published system a problem is based on">
+            <option value="">All companies</option>
+            {companies.map((c) => (
+              <option key={c} value={c}>
+                {c}
+              </option>
+            ))}
+          </select>
+        )}
         <select aria-label="Status" value={status} onChange={(e) => setStatus(e.target.value as Status | '')} className={select}>
           <option value="">Any status</option>
           {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
@@ -99,6 +113,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
                 <span className="flex-1 min-w-0">
                   <span className="block font-display text-lg font-bold leading-tight text-ink">{p.title}</span>
                   <span className="mt-1 flex flex-wrap gap-1">
+                    {p.company && <CompanyBadge company={p.company} />}
                     {p.tags.map((t) => (
                       <span key={t} className="rounded border border-ink/25 px-1.5 py-0.5 font-mono text-[11px] text-ink/75">
                         {t}

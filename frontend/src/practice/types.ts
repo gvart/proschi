@@ -12,6 +12,11 @@ export interface Problem {
   difficulty: 'easy' | 'medium' | 'hard';
   /** caching, queues, consistency, … */
   tags: string[];
+  /**
+   * The company whose published system the problem is based on (its "Based
+   * on" section), e.g. Twitter. Says nothing about that company's interviews.
+   */
+  company?: string;
   /** Position within its difficulty, before the title decides; absent sorts after any number. */
   order?: number;
   /** Markdown. */

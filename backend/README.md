@@ -56,10 +56,52 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
 | `GET /api/leaderboard` | Top 50 who opted in, by problems solved |
+| `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports and 3 imports per user; 20 sign-in steps and 120 stats
-requests per IP.
+changes or exports and 3 imports per user; 20 sign-in steps, 120 stats
+requests and 10 design reviews per IP.
+
+### Design review (`POST /api/review`)
+
+A placeholder for an LLM review of a design, for whoever wires the model in.
+The contract is one file, `frontend/src/review/contract.ts`: the page builds
+the request from it (`src/review/request.ts`) and the Worker validates with it
+(`src/review.ts`), so the two cannot drift.
+
+- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, no sign-in
+  needed:
+  - `source`: the design as written (at most 64 KiB; for a practice problem,
+    the solver's file, which starts with `import "problem.proschi"`);
+  - `model`: the parsed design, summarised: `nodes` (`id`, `name`, `tech`,
+    `kind?`, `replicas?`, `given?` for the problem's own read-only nodes),
+    `edges` (`source`, `target`, `label?`), `useCases`, `decisions` (titles)
+    and the parser's `diagnostics` (`severity`, `message`, `line?`);
+  - `problem?`: `{id, version, title}` of the practice problem;
+  - `tests?`: `{passed, total, solved, blocked?, results: [{id, name,
+    category, passed, message}]}` of this source;
+  - `metrics?`: the simulation's `costUsd` (monthly), `worstP99Ms`,
+    `minAvailability`, per use case `{name, rps, p99Ms, availability}`,
+    `singlePointsOfFailure`, `saturated` node ids and `warnings`.
+
+  Lists hold at most 500 items. Unknown fields are refused.
+- **Answers today**: 400 `{error}` naming what is wrong with the body, 413 for
+  a source or body that is too long, 429 past the per-IP limit, and otherwise
+  501 `{error: "not_implemented"}`. The page reads the 501 as "AI review is
+  coming soon".
+- **Answer once implemented**: 200 with a `DesignReview`: `{summary,
+  strengths: string[], issues: [{severity: "info" | "minor" | "major" |
+  "critical", title, detail, nodeId?}], suggestions: string[]}`. `nodeId`
+  must be a node of `model.nodes`; the page links it to the node's line.
+  Check the model's output with `parseDesignReview` from the contract before
+  sending it.
+
+The `TODO(ai-review)` in `src/review.ts` marks where the call goes. It will
+need an API key: add it to `Env` (`src/env.ts`) as an optional secret, set
+with `npx wrangler secret put`, and keep answering 501 while it is unset.
+Don't log the request's source. Pages built without `VITE_AI_REVIEW=true`
+never call the endpoint: they show "coming soon" from a placeholder reviewer
+(`frontend/src/review/reviewer.ts`).
 
 The server refuses POST, PATCH and DELETE requests whose `Origin` is another
 site. Every API response has a request id (`X-Request-Id`, the caller's if it
@@ -176,7 +218,7 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1005 in production and 2001–2005 in staging.
+1001–1006 in production and 2001–2006 in staging.
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.

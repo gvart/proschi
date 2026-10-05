@@ -77,6 +77,8 @@ describe('proschi problem check', () => {
 
   it.each([
     ['bad front matter', (f: string) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: easy: very')), /echo\/problem\.md:4: Ambiguous value/],
+    ['an empty company', (f: string) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: easy\ncompany: ""')), /echo\/problem\.md: 'company' must be a non-empty string/],
+    ['an unknown field', (f: string) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: easy\ncompanies: [Twitter]')), /echo\/problem\.md: Unknown front matter field 'companies'/],
     ['an unknown difficulty', (f: string) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: trivial')), /echo\/problem\.md: 'difficulty' must be one of/],
     ['a missing file', (f: string) => rmSync(join(f, 'starter.proschi')), /echo: Missing starter\.proschi/],
     ['an unexpected file', (f: string) => writeFileSync(join(f, 'notes.txt'), ''), /echo: Unexpected file notes\.txt/],
@@ -99,6 +101,13 @@ describe('proschi problem check', () => {
     expect(r.out).toMatch(message);
     expect(r.out).toMatch(/✗ echo/);
     expect(r.out).toMatch(/1 problem, \d wrong designs?: \d+ violation\(s\) in 1 problem$/);
+  });
+
+  it('accepts a company', () => {
+    const dir = problemsWith((f) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: easy\ncompany: Twitter')));
+    const r = capture(['check', dir]);
+    expect(r.code).toBe(0);
+    expect(r.out).toMatch(/no violations$/m);
   });
 
   it('writes GitHub annotations and JSON', () => {

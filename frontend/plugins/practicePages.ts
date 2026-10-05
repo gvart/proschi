@@ -19,7 +19,7 @@ import { SITE_ORIGIN } from './docsSite'
  * template.
  */
 
-export type PageProblem = Pick<ProblemMeta, 'title' | 'summary' | 'difficulty' | 'tags' | 'order' | 'statement'> & { id: string }
+export type PageProblem = Pick<ProblemMeta, 'title' | 'summary' | 'difficulty' | 'tags' | 'company' | 'order' | 'statement'> & { id: string }
 
 const TEMPLATE = 'practice/problem/index.html'
 const PLACEHOLDER = /<!--problem:(head|page)-->/g
@@ -158,6 +158,13 @@ export function headHtml(p: PageProblem): string {
   ].join('\n    ')
 }
 
+/** Whose published system the problem is based on (problem.md `company`); not a claim about that company's interviews. */
+export function companyHtml(p: Pick<PageProblem, 'company'>): string {
+  if (!p.company) return ''
+  const company = escapeHtml(p.company)
+  return `<span class="ps-badge ps-badge--blue" title="Based on a system ${company} published"><span class="sr-only">Based on a system published by </span>${company}</span> `
+}
+
 const DIFFICULTY_BADGE: Record<string, string> = { easy: 'ps-badge--pass', medium: 'ps-badge--yellow', hard: 'ps-badge--pink' }
 
 export function pageHtml(p: PageProblem, all: PageProblem[]): string {
@@ -174,7 +181,7 @@ export function pageHtml(p: PageProblem, all: PageProblem[]): string {
 <header class="doc-hero">
 <p class="kicker">System design practice</p>
 <h1>${escapeHtml(p.title)}</h1>
-<p class="problem-page__meta"><span class="ps-badge ${DIFFICULTY_BADGE[p.difficulty] ?? ''}">${escapeHtml(p.difficulty)}</span> ${p.tags.map((t) => `<span class="ps-badge">${escapeHtml(t)}</span>`).join(' ')}</p>
+<p class="problem-page__meta"><span class="ps-badge ${DIFFICULTY_BADGE[p.difficulty] ?? ''}">${escapeHtml(p.difficulty)}</span> ${companyHtml(p)}${p.tags.map((t) => `<span class="ps-badge">${escapeHtml(t)}</span>`).join(' ')}</p>
 <p class="lede">${inlineHtml(parseInline(p.summary))}</p>
 <p class="problem-page__cta"><a class="ps-btn ps-btn--primary ps-btn--lg" href="${solve}">Solve it in your browser <span class="ps-btn__trail" aria-hidden="true">→</span></a></p>
 </header>
