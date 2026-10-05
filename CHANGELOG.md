@@ -23,6 +23,10 @@ deployed from `main` and ships with the same changes.
   solved, with your progress, the current stage and a Continue button; a
   problem opened from the roadmap links to the next one after a solve. The
   problem list stays open.
+- Two practice problems based on published systems: *Metrics Ingest*
+  (hard, Uber's M3: aggregate before storage, quorum writes to M3DB) and
+  *Trending Topics* (medium, Twitter's trends: count in the stream, rank
+  ahead of time, serve from a cache).
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the

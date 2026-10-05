@@ -1,0 +1,55 @@
+import "problem.proschi"
+
+aggregators "M3 Aggregator" [Go] x16 @ingest "Rolls datapoints up in memory by the rules, sharded by series id, and flushes once per resolution"
+query       "M3 Query"      [Go] x3 @query "Runs PromQL and M3QL queries against M3DB"
+
+collectors  -> aggregators : batches of datapoints
+aggregators -> m3db        : quorum writes
+grafana     -> query       : PromQL over HTTP
+query       -> m3db        : fetch series
+
+entity Series in m3db "One aggregated time series in one namespace (resolution and retention)" {
+  seriesId   string key
+  namespace  string key
+  tags       json
+  blockStart time   key
+  datapoints bytes
+}
+
+decision "Aggregate before storage" {
+  because "Rollup rules drop the tags no one queries (the host, the instance) and downsample to the stored resolutions, so 25 datapoints in leave as one: the storage cluster takes 1.6M datapoints a second instead of 40M"
+  rejected "Store every raw datapoint" "Twenty-five times the writes, three times over for replication: the cluster would need many times its shards"
+}
+decision "Aggregate in memory, off the collectors' path" {
+  because "A collector's batch is answered as soon as an aggregator has added it to its open windows; storage latency and storage failures never slow the hosts down"
+  rejected "Write through to M3DB on every batch" "Every collector would wait for a quorum write, and M3DB would take the raw volume again"
+}
+decision "Replication factor 3, majority writes" {
+  because "A write succeeds once two of the three replicas of its shard acknowledge it, so a replica that is down or restarting costs nothing but its own catch-up"
+  rejected "Wait for all three replicas" "One slow or dead replica would fail or stall every flush to its shard"
+  rejected "One replica" "Losing a disk loses the shard's history"
+}
+decision "A query tier in front of M3DB" because "Dashboards and alerts speak PromQL; the query tier finds the shards that hold the series, reads them and computes the result, so clients never know the cluster's layout"
+
+usecase "Emit metrics" "A host sends a batch of datapoints" {
+  collectors   -> aggregators : POST /write batch of 2,000 datapoints
+  aggregators --> collectors  : 200
+}
+
+usecase "Flush aggregates" "At a resolution boundary, an aggregator writes the closed windows to M3DB" {
+  alt "All replicas up" when "every replica of the shard answers" {
+    aggregators -> m3db        : x3 WRITE 2,000 aggregated datapoints
+    m3db       --> aggregators : majority acked
+  } alt "Replica down" when "one replica of the shard is down" {
+    aggregators -> m3db        : x2 WRITE 2,000 aggregated datapoints
+    aggregators -x m3db        : WRITE to the third replica
+    m3db       --> aggregators : majority acked
+  }
+}
+
+usecase "Query" "A dashboard panel or an alert reads a series" {
+  grafana -> query   : GET /api/v1/query_range?query=rate(http_requests_total[1m])
+  query   -> m3db    : x2 FETCH series blocks
+  m3db   --> query   : datapoints
+  query  --> grafana : 200 {"resultType": "matrix"}
+}

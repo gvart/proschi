@@ -1,0 +1,9 @@
+import "problem.proschi"
+
+# Add the components, connections and the four use cases.
+usecase "Post tweet" {
+  user        -> tweets     : POST /tweets json {"text": "Watching the #WorldCup final"}
+  tweets      -> tweetstore : INSERT tweet
+  tweetstore --> tweets     : ok
+  tweets     --> user       : 201
+}

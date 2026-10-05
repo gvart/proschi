@@ -1,0 +1,64 @@
+# expect-fail: Tweets are counted in the stream, in memory
+# expect-fail: survive any node failure
+# expect-fail: p99 of Get trends < 50 ms
+# A sorted set per location in Redis, bumped for every term of every tweet: a dozen writes per tweet on a shared store.
+import "problem.proschi"
+
+firehose "Firehose"       [Kafka]             x3 @trends "Every new tweet as an event, partitioned by term after extraction"
+detector "Trend Detector" [Java]              x16 @trends "Summingbird on Storm: counts terms per location in sliding windows, in memory"
+cache    "Trends Cache"   [Redis]             x2 @trends "The ranked trends list of every location"
+trendsdb "Trends Store"   [MySQL]             x2 @trends "The last published list per location, to refill the cache"
+lb       "Load Balancer"  [AWS Load Balancer] x2 @platform
+api      "Trends API"     [REST API]          x24 @trends "Serves a location's trends list"
+
+tweets   -> firehose : produce
+firehose -> detector : consume
+detector -> cache    : SET
+detector -> trendsdb : SQL
+user     -> lb       : HTTPS
+lb       -> api      : HTTPS
+api      -> cache    : RESP
+api      -> trendsdb : SQL
+
+usecase "Post tweet" "A user posts a tweet" {
+  user        -> tweets     : POST /tweets json {"text": "Watching the #WorldCup final"}
+  tweets      -> tweetstore : INSERT tweet
+  tweetstore --> tweets     : ok
+  tweets     ->> firehose   : PRODUCE TweetCreated
+  tweets     --> user       : 201 {"id": 1541815603606036480}
+}
+
+usecase "Count tweet" "The detector adds a tweet's terms to its windows" {
+  firehose  -> detector : TweetCreated 1541815603606036480
+  detector  -> cache    : x12 ZINCRBY counts:23424977:5m worldcup
+  cache    --> detector : 1
+  detector --> firehose : commit offset
+}
+
+usecase "Publish trends" "Every five seconds, a location's trends are ranked and published" {
+  detector  -> cache    : ZREVRANGE counts:23424977:5m 0 49
+  cache    --> detector : top 50
+  detector  -> cache    : SET trends:23424977 top 50
+  cache    --> detector : ok
+  detector  -> trendsdb : UPSERT trend_lists 23424977
+  trendsdb --> detector : ok
+}
+
+usecase "Get trends" "A user opens a location's trends" {
+  user -> lb  : GET /trends/23424977
+  lb   -> api : GET /trends/23424977
+
+  alt "Cache hit" when "the location's list is in Redis" {
+    api    -> cache : GET trends:23424977
+    cache --> api   : top 50
+  } alt "Cache miss" when "Redis lost the list" {
+    api       -> cache    : GET trends:23424977
+    cache    --> api      : nil
+    api       -> trendsdb : SELECT trends FROM trend_lists
+    trendsdb --> api      : top 50
+    api       -> cache    : SET trends:23424977 top 50
+    cache    --> api      : ok
+  }
+  api --> lb   : 200 {"trends": ["#WorldCup", "Messi"]}
+  lb  --> user : 200 {"trends": ["#WorldCup", "Messi"]}
+}

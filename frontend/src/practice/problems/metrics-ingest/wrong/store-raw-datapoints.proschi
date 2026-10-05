@@ -1,0 +1,36 @@
+# expect-fail: Ingest never waits for storage
+# expect-fail: p99 of Emit metrics < 40 ms
+# expect-fail: Only aggregates reach storage
+# Every host writes its raw datapoints straight into M3DB and downsampling happens later: the cluster takes the full volume.
+import "problem.proschi"
+
+ingesters "Ingesters" [Go] x4 @ingest "Compact older blocks into coarser resolutions"
+query     "M3 Query"  [Go] x3 @query "Runs PromQL and M3QL queries against M3DB"
+
+collectors -> m3db  : raw writes
+ingesters  -> m3db  : quorum writes
+grafana    -> query : PromQL over HTTP
+query      -> m3db  : fetch series
+
+usecase "Emit metrics" "A host sends a batch of datapoints" {
+  collectors -> m3db       : x3 WRITE 2,000 raw datapoints
+  m3db      --> collectors : majority acked
+}
+
+usecase "Flush aggregates" "At a resolution boundary, an ingester writes the downsampled blocks to M3DB" {
+  alt "All replicas up" when "every replica of the shard answers" {
+    ingesters -> m3db      : x3 WRITE 2,000 aggregated datapoints
+    m3db     --> ingesters : majority acked
+  } alt "Replica down" when "one replica of the shard is down" {
+    ingesters -> m3db      : x2 WRITE 2,000 aggregated datapoints
+    ingesters -x m3db      : WRITE to the third replica
+    m3db     --> ingesters : majority acked
+  }
+}
+
+usecase "Query" "A dashboard panel or an alert reads a series" {
+  grafana -> query   : GET /api/v1/query_range?query=rate(http_requests_total[1m])
+  query   -> m3db    : x2 FETCH series blocks
+  m3db   --> query   : datapoints
+  query  --> grafana : 200 {"resultType": "matrix"}
+}
