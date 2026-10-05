@@ -1,0 +1,132 @@
+{
+  "start": {
+    "cash": 3500,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        { "id": "users", "component": "users", "replicas": 1 },
+        { "id": "push", "component": "push", "replicas": 1 },
+        { "id": "mail", "component": "mail", "replicas": 1 },
+        { "id": "api", "component": "app", "replicas": 1 },
+        { "id": "db", "component": "sql", "replicas": 1 }
+      ],
+      "edges": [["users", "api"], ["api", "db"], ["api", "push"]]
+    }
+  },
+  "grants": ["queue", "worker"],
+  "externals": [
+    { "id": "push", "name": "Push provider", "tech": "Push Service", "rps": 30000, "latencyMs": 60 },
+    { "id": "mail", "name": "Email provider", "tech": "Email Service", "rps": 3000, "latencyMs": 250 }
+  ],
+  "useCases": {
+    "send": {
+      "name": "Send notification",
+      "method": "POST",
+      "path": "/notifications",
+      "status": 202,
+      "value": 1500,
+      "steps": [
+        { "op": "write", "to": "db", "entity": "Notification" },
+        { "op": "call", "to": "push", "entity": "notification", "async": true },
+        { "op": "write", "to": "db", "entity": "Delivery", "async": true }
+      ]
+    },
+    "inbox": {
+      "name": "Read inbox",
+      "method": "GET",
+      "path": "/inbox",
+      "status": 200,
+      "value": 400,
+      "steps": [{ "op": "read", "to": "db", "entity": "Notification", "x": 3 }],
+      "cache": 0.7
+    },
+    "broadcast": {
+      "name": "Broadcast",
+      "method": "POST",
+      "path": "/campaigns",
+      "status": 202,
+      "value": 40000,
+      "steps": [
+        { "op": "write", "to": "db", "entity": "Campaign" },
+        { "op": "call", "to": "push", "entity": "notification", "async": true, "x": 40 }
+      ]
+    },
+    "digest": {
+      "name": "Email digest",
+      "method": "POST",
+      "path": "/digests",
+      "status": 202,
+      "value": 3000,
+      "optional": true,
+      "steps": [
+        { "op": "read", "to": "db", "entity": "Notification", "x": 5 },
+        { "op": "call", "to": "mail", "entity": "digest", "async": true }
+      ]
+    },
+    "prefs": {
+      "name": "Update preferences",
+      "method": "PUT",
+      "path": "/preferences",
+      "status": 200,
+      "value": 2000,
+      "optional": true,
+      "steps": [{ "op": "write", "to": "db", "entity": "Preference" }]
+    }
+  },
+  "waves": [
+    { "name": "Launch", "traffic": { "send": 80, "inbox": 150 }, "curve": "day", "requirements": ["p99 \"Send notification\" < 300ms", "durable \"Send notification\""] },
+    { "traffic": { "send": 130, "inbox": 250 }, "curve": "day", "contract": true },
+    { "traffic": { "send": 220, "inbox": 400 }, "curve": "ramp", "requirements": ["p99 \"Send notification\" < 100ms"], "freshness": [{ "useCase": "send", "maxMinutes": 5 }], "debrief": "async" },
+    { "name": "Breaking news", "boss": true, "traffic": { "send": 350, "inbox": 600 }, "curve": "spike", "events": ["slow-provider"] },
+    { "name": "Growth", "traffic": { "send": 550, "inbox": 900, "broadcast": 2 }, "curve": "day", "contract": true, "freshness": [{ "useCase": "broadcast", "maxMinutes": 15 }], "requirements": ["availability \"Send notification\" >= 99.5%"] },
+    { "traffic": { "send": 850, "inbox": 1300, "broadcast": 3 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
+    { "traffic": { "send": 1300, "inbox": 1900, "broadcast": 5 }, "curve": "day", "freshness": [{ "useCase": "send", "maxMinutes": 2 }], "debrief": "backlog" },
+    { "name": "Election night", "boss": true, "traffic": { "send": 1900, "inbox": 2800, "broadcast": 7 }, "curve": "ramp", "events": ["queue-surge", "db-failover"], "contract": true },
+    { "name": "Scale", "traffic": { "send": 2800, "inbox": 4000, "broadcast": 10 }, "curve": "day", "requirements": ["p99 \"Read inbox\" < 80ms"] },
+    { "traffic": { "send": 4000, "inbox": 5800, "broadcast": 14 }, "curve": "double-peak", "requirements": ["availability \"Send notification\" >= 99.9%"] },
+    { "traffic": { "send": 5500, "inbox": 8000, "broadcast": 18 }, "curve": "day", "events": ["slow-provider"] },
+    { "name": "New Year's Eve", "boss": true, "traffic": { "send": 7500, "inbox": 11000, "broadcast": 25 }, "curve": "spike", "events": ["queue-surge", "az-outage"] }
+  ],
+  "eventPool": [
+    { "id": "slow-provider", "weight": 3 },
+    { "id": "noisy-neighbor", "weight": 2 },
+    { "id": "db-failover", "weight": 2 },
+    { "id": "queue-surge", "weight": 2 },
+    { "id": "viral-spike", "weight": 1 },
+    { "id": "cache-stampede", "weight": 1 }
+  ],
+  "contracts": [
+    {
+      "id": "digest",
+      "name": "Email digests",
+      "text": "A daily email of what you missed. The email provider is slow and takes 3 000 a second at most.",
+      "useCase": "digest",
+      "rps": 40,
+      "growth": 1.5,
+      "freshness": [{ "useCase": "digest", "maxMinutes": 60 }]
+    },
+    {
+      "id": "prefs",
+      "name": "Preferences",
+      "text": "Let users mute topics. Small writes, p99 under 150 ms.",
+      "useCase": "prefs",
+      "rps": 30,
+      "growth": 1.5,
+      "requirements": ["p99 \"Update preferences\" < 150ms"]
+    },
+    {
+      "id": "sla",
+      "name": "Enterprise SLA",
+      "text": "Revenue ×1.25 from now on, if sends stay at 99.95% availability.",
+      "revenue": 1.25,
+      "requirements": ["availability \"Send notification\" >= 99.95%"]
+    },
+    {
+      "id": "seed",
+      "name": "Seed extension",
+      "text": "$2 000 now.",
+      "cash": 2000
+    }
+  ],
+  "unlock": { "scenario": "snapshots", "wave": 6 }
+}

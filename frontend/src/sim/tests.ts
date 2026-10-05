@@ -18,6 +18,7 @@ import {
   usageText,
   writeBound,
   type Analysis,
+  type AnalyzeOptions,
   type NodeAnalysis,
   type ScenarioAnalysis,
   type UseCaseAnalysis,
@@ -88,9 +89,11 @@ interface Run {
   shares: Map<string, number[]>;
   profiles: Map<string, Profile>;
   isWrite: (step: DiagramStep) => boolean;
+  /** What the analysis was made with; `survive` re-analyses with the same options. */
+  options: AnalyzeOptions;
 }
 
-function makeRun(diagram: Diagram, analysis: Analysis): Run {
+function makeRun(diagram: Diagram, analysis: Analysis, options: AnalyzeOptions = {}): Run {
   const access = accessIn(diagram);
   return {
     diagram,
@@ -100,11 +103,13 @@ function makeRun(diagram: Diagram, analysis: Analysis): Run {
     shares: new Map([...resolveTraffic(diagram)].map(([id, t]) => [id, t.shares])),
     profiles: profilesOf(diagram),
     isWrite: (step) => access(step) === 'write',
+    options,
   };
 }
 
-export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram)): TestResult[] {
-  const run = makeRun(diagram, analysis);
+/** `options` must be the ones `analysis` was made with (by default none): `survive` re-analyses with them. */
+export function runTests(diagram: Diagram, analysis: Analysis = analyze(diagram), options: AnalyzeOptions = {}): TestResult[] {
+  const run = makeRun(diagram, analysis, options);
   const results: TestResult[] = (diagram.requirements ?? []).map((r, i) => {
     const { passed, message, hint } = requirement(run, r);
     return { id: `req:${i + 1}`, name: requirementName(r), category: CATEGORY[r.kind], passed, message, hint, loc: r.loc };
@@ -381,7 +386,8 @@ function survive(run: Run, target: Selector | 'any'): Check {
     const label = nodeLabel(run.diagram, node.id);
     const replicas = replicasOf(node);
     if (replicas >= 2) {
-      const degraded = makeRun(run.diagram, analyze(run.diagram, { replicas: new Map([[node.id, replicas - 1]]) }));
+      const degradedOptions = { ...run.options, replicas: new Map([...(run.options.replicas ?? []), [node.id, replicas - 1]]) };
+      const degraded = makeRun(run.diagram, analyze(run.diagram, degradedOptions), degradedOptions);
       const left = degraded.nodes.get(node.id)!;
       const lost = n.shards > 1 ? `one of the ${replicas} replicas of a ${node.id} shard` : `one of ${replicas} ${node.id} replicas`;
       if (left.saturated) {

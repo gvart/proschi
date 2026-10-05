@@ -1,0 +1,134 @@
+{
+  "start": {
+    "cash": 3000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        { "id": "users", "component": "users", "replicas": 1 },
+        { "id": "api", "component": "app", "replicas": 1 },
+        { "id": "db", "component": "sql", "replicas": 1 },
+        { "id": "store", "component": "storage", "replicas": 1 }
+      ],
+      "edges": [["users", "api"], ["api", "db"], ["api", "store"]]
+    }
+  },
+  "grants": ["storage"],
+  "externals": [],
+  "useCases": {
+    "view": {
+      "name": "View photo",
+      "method": "GET",
+      "path": "/p/k7Q2.jpg",
+      "status": 200,
+      "value": 2500,
+      "size": "20KB",
+      "steps": [
+        { "op": "read", "to": "db", "entity": "Photo" },
+        { "op": "read", "to": "blob", "entity": "Photo", "size": "20KB" }
+      ],
+      "cache": 0.85,
+      "edge": 0.9
+    },
+    "upload": {
+      "name": "Upload photo",
+      "method": "POST",
+      "path": "/photos",
+      "status": 201,
+      "value": 10000,
+      "size": "2MB",
+      "steps": [
+        { "op": "write", "to": "blob", "entity": "Photo", "size": "2MB" },
+        { "op": "write", "to": "db", "entity": "Photo" },
+        { "op": "write", "to": "blob", "entity": "Thumbnail", "size": "20KB", "async": true }
+      ]
+    },
+    "feed": {
+      "name": "Home feed",
+      "method": "GET",
+      "path": "/feed",
+      "status": 200,
+      "value": 4000,
+      "size": "8KB",
+      "steps": [{ "op": "read", "to": "db", "entity": "Photo", "x": 20 }],
+      "cache": 0.8
+    },
+    "search": {
+      "name": "Search photos",
+      "method": "GET",
+      "path": "/search",
+      "status": 200,
+      "value": 6000,
+      "optional": true,
+      "size": "4KB",
+      "steps": [{ "op": "read", "to": "search", "entity": "Photo" }]
+    },
+    "comment": {
+      "name": "Comment",
+      "method": "POST",
+      "path": "/p/k7Q2/comments",
+      "status": 201,
+      "value": 8000,
+      "optional": true,
+      "steps": [
+        { "op": "write", "to": "db", "entity": "Comment" },
+        { "op": "write", "to": "db", "entity": "Notification", "async": true, "x": 3 }
+      ]
+    }
+  },
+  "waves": [
+    { "name": "Beta", "traffic": { "view": 50, "upload": 2 }, "curve": "day", "requirements": ["p99 \"View photo\" < 300ms", "durable \"Upload photo\""] },
+    { "traffic": { "view": 90, "upload": 4 }, "curve": "day", "contract": true },
+    { "traffic": { "view": 150, "upload": 6 }, "curve": "ramp", "requirements": ["availability \"View photo\" >= 99.5%"] },
+    { "name": "Featured on the App Store", "boss": true, "traffic": { "view": 220, "upload": 10 }, "curve": "spike" },
+    { "name": "Growth", "traffic": { "view": 330, "upload": 15, "feed": 40 }, "curve": "day", "contract": true, "freshness": [{ "useCase": "upload", "maxMinutes": 15 }], "requirements": ["p99 \"Home feed\" < 250ms"] },
+    { "traffic": { "view": 500, "upload": 22, "feed": 60 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
+    { "traffic": { "view": 750, "upload": 32, "feed": 90 }, "curve": "day", "requirements": ["cost <= 4000 usd/month"], "debrief": "egress" },
+    { "name": "Holiday weekend", "boss": true, "traffic": { "view": 1100, "upload": 50, "feed": 130 }, "curve": "ramp", "events": ["az-outage", "write-surge"], "contract": true },
+    { "name": "Scale", "traffic": { "view": 1600, "upload": 70, "feed": 190 }, "curve": "day", "global": 0.35, "requirements": ["p90 \"View photo\" < 80ms", "p99 \"View photo\" < 300ms"] },
+    { "traffic": { "view": 2300, "upload": 100, "feed": 270 }, "curve": "double-peak", "requirements": ["availability \"Upload photo\" >= 99.9%", "cost <= 12000 usd/month"] },
+    { "traffic": { "view": 3300, "upload": 140, "feed": 380 }, "curve": "day" },
+    { "name": "Celebrity joins", "boss": true, "traffic": { "view": 4500, "upload": 190, "feed": 520 }, "curve": "spike", "events": ["hot-key", "cache-stampede"] }
+  ],
+  "eventPool": [
+    { "id": "noisy-neighbor", "weight": 3 },
+    { "id": "viral-spike", "weight": 2 },
+    { "id": "db-failover", "weight": 2 },
+    { "id": "cache-node-loss", "weight": 1 },
+    { "id": "write-surge", "weight": 2 },
+    { "id": "ddos", "weight": 1 }
+  ],
+  "contracts": [
+    {
+      "id": "search",
+      "name": "Photo search",
+      "text": "Find photos by caption and tag. Needs a search index; p99 under 300 ms.",
+      "useCase": "search",
+      "rps": 20,
+      "growth": 1.5,
+      "requirements": ["p99 \"Search photos\" < 300ms"]
+    },
+    {
+      "id": "comments",
+      "name": "Comments",
+      "text": "Comments, with a notification to three followers each. Notifications may lag 30 minutes.",
+      "useCase": "comment",
+      "rps": 15,
+      "growth": 1.5,
+      "freshness": [{ "useCase": "comment", "maxMinutes": 30 }]
+    },
+    {
+      "id": "pro-plan",
+      "name": "Pro plan",
+      "text": "Revenue ×1.25 from now on, if uploads stay at 99.95% availability.",
+      "revenue": 1.25,
+      "requirements": ["availability \"Upload photo\" >= 99.95%"]
+    },
+    {
+      "id": "grant",
+      "name": "Cloud credits",
+      "text": "$2 000 in credits, today.",
+      "cash": 2000
+    }
+  ],
+  "unlock": { "scenario": "shortly", "wave": 6 }
+}

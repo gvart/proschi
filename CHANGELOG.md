@@ -10,6 +10,23 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- The engine and content of **Scale or Fail**, a system design roguelite for
+  the Interview prep page: pick a scenario (a URL shortener, a photo app, a
+  notification service, a flash sale), place and wire components, and keep
+  the system up for twelve waves of growing traffic, new use cases, stricter
+  requirements and incidents (zone outages, cache stampedes, failovers, hot
+  keys, bot floods). Every tick runs Proschi's simulation on the board, so
+  every failure comes with the bottleneck and the fix. Runs are seeded and
+  replayable, so the server can check a score. Scenarios, tech cards and
+  incidents are plain files in `frontend/src/game/content/`
+  ([docs/GAME.md](docs/GAME.md)); `proschi game check` validates them and
+  plays every scenario's reference and wrong runs, `proschi game lock`
+  records new ids, and `proschi game sim` prints a run wave by wave for
+  balancing.
+- `analyze()` takes the percentiles to compute, and `runTests()` the options
+  the analysis was made with (so `survive` re-analyses the same way). A
+  latency quantile without parallel steps is computed in closed form, which
+  makes analysing a design several times faster.
 - `CONTRIBUTING.md`: how to set up, the checks before a pull request, and
   step-by-step guides to adding a practice problem and a review card. The
   practice list ends with "Have a system design problem in mind? Contribute

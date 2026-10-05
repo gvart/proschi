@@ -15,6 +15,7 @@ instead.
 - [Checks before a pull request](#checks-before-a-pull-request)
 - [Adding a new problem](#adding-a-new-problem)
 - [Adding a new card](#adding-a-new-card)
+- [Adding a game scenario](#adding-a-game-scenario)
 - [Reporting issues and suggesting problems](#reporting-issues-and-suggesting-problems)
 - [Code style and conventions](#code-style-and-conventions)
 
@@ -82,6 +83,7 @@ npm run build
 node dist/cli.cjs problem check ../frontend/src/practice/problems
 node dist/cli.cjs cards check ../frontend/src/practice/cards
 node dist/cli.cjs achievements check
+node dist/cli.cjs game check
 ```
 
 `npx playwright test` needs a browser once: `npx playwright install chromium`.
@@ -315,6 +317,47 @@ types, the length limits and how to write a good card.
 
 Have a card idea or found a wrong answer, but don't want to write the file?
 [Suggest a card](https://github.com/gvart/proschi/issues/new?template=card-idea.md).
+
+## Adding a game scenario
+
+Scale or Fail, the system design game, is made of plain files too: a
+scenario is a folder in `frontend/src/game/content/scenarios/<id>/`, and tech
+cards, incidents and components are one file each next to it. You don't
+write code: you write use cases ("a redirect reads the database, and is
+cacheable"), twelve waves of traffic and requirements, and a scripted run
+that proves the scenario can be cleared. [docs/GAME.md](docs/GAME.md) is the
+full reference; this is the checklist.
+
+1. **Pick one lesson per wave.** A good scenario has a main bottleneck that
+   the existing ones don't (reads, bytes, a backlog, writes, fan-out) and
+   breaks last wave's design every two or three waves.
+
+2. **Copy the closest scenario** and edit `scenario.md` (title, briefing,
+   act intros, debriefs, interview translation) and `scenario.json` (start
+   board, use cases, waves, events, contracts).
+
+3. **Write the runs.** `reference.json` plays a good design wave by wave and
+   must clear all twelve waves; each `wrong/<name>.json` plays a tempting
+   design that must lose by a wave. Tune with:
+
+   ```sh
+   cd tooling && npm run build
+   node dist/cli.cjs game sim <id>
+   ```
+
+4. **Lock and check.**
+
+   ```sh
+   node dist/cli.cjs game lock
+   node dist/cli.cjs game check
+   ```
+
+5. **Never delete or rename an id** (a scenario, card, event, component or
+   perk): players' progress and replays refer to them. Bump a scenario's
+   `version` when a change can change a score; it starts a new leaderboard
+   season.
+
+6. **Changelog and pull request**, as for problems and cards.
 
 ## Reporting issues and suggesting problems
 

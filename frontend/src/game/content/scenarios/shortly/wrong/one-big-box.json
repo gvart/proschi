@@ -1,0 +1,15 @@
+{
+  "seed": "wrong",
+  "note": "Scaling up one app server with no load balancer and no replicas: fast enough for a while, but every node is a single point of failure.",
+  "loadout": { "unlocked": ["cache", "cdn", "tiers"], "perks": {} },
+  "plays": [
+    {},
+    { "set": { "api": { "tier": 1 } } },
+    {},
+    { "set": { "api": { "tier": 2 } } },
+    {},
+    {},
+    { "add": [{ "id": "cache", "component": "cache", "replicas": 1 }], "wire": [["api", "cache"]] }
+  ],
+  "expect": { "failsBy": 8 }
+}

@@ -1,0 +1,113 @@
+{
+  "seed": "wrong",
+  "note": "Serving every image from object storage through the app servers: the egress bill and the bandwidth of the app servers grow with every view.",
+  "loadout": {
+    "unlocked": [
+      "cache",
+      "cdn",
+      "storage",
+      "tiers"
+    ],
+    "perks": {}
+  },
+  "plays": [
+    {},
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 2
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ]
+    },
+    {},
+    {
+      "set": {
+        "api": {
+          "replicas": 3
+        },
+        "db": {
+          "replicas": 2
+        }
+      }
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "store": {
+          "replicas": 2
+        },
+        "api": {
+          "replicas": 4
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 10
+  }
+}

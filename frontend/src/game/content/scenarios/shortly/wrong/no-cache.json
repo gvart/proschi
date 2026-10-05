@@ -1,0 +1,20 @@
+{
+  "seed": "wrong",
+  "note": "Scaling app servers and database replicas, but never caching: every redirect reads the database, and the latency targets and the hot key win.",
+  "loadout": { "unlocked": ["cache", "cdn", "tiers"], "perks": {} },
+  "plays": [
+    {},
+    { "add": [{ "id": "lb", "component": "lb", "replicas": 2 }], "set": { "api": { "replicas": 2 } }, "unwire": [["users", "api"]], "wire": [["users", "lb"], ["lb", "api"]] },
+    {},
+    { "set": { "api": { "replicas": 4 }, "db": { "replicas": 2 } } },
+    {},
+    { "set": { "api": { "replicas": 5 } } },
+    { "set": { "api": { "replicas": 6 } } },
+    { "set": { "api": { "replicas": 8 } } },
+    { "set": { "api": { "replicas": 10 }, "db": { "replicas": 3 } } },
+    { "set": { "api": { "replicas": 12 }, "db": { "replicas": 4 } } },
+    { "set": { "api": { "tier": 1 }, "db": { "replicas": 5 } } },
+    { "set": { "api": { "tier": 2 }, "db": { "replicas": 6 } } }
+  ],
+  "expect": { "failsBy": 11 }
+}

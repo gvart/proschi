@@ -1,0 +1,264 @@
+{
+  "seed": "reference",
+  "loadout": {
+    "unlocked": [
+      "cache",
+      "cdn",
+      "queue",
+      "worker",
+      "waf",
+      "gateway",
+      "storage",
+      "nosql",
+      "search",
+      "tiers",
+      "shards"
+    ],
+    "perks": {}
+  },
+  "plays": [
+    {
+      "pick": [
+        "async-io",
+        "connection-pooling"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 2
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ],
+      "pick": [
+        "connection-pooling",
+        "circuit-breaker",
+        "covering-index"
+      ],
+      "contract": "sponsor"
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ],
+      "set": {
+        "db": {
+          "replicas": 2
+        }
+      },
+      "pick": [
+        "connection-pooling",
+        "fast-failover",
+        "covering-index"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "waf",
+          "component": "waf",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "waf"
+        ],
+        [
+          "waf",
+          "lb"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 3
+        }
+      },
+      "pick": [
+        "connection-pooling",
+        "fast-failover"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "api",
+          "mail"
+        ]
+      ],
+      "wire": [
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "mail"
+        ]
+      ],
+      "pick": [
+        "connection-pooling",
+        "fast-failover"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 3
+        }
+      },
+      "pick": [
+        "connection-pooling",
+        "fast-failover"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "db": {
+          "shards": 2
+        }
+      },
+      "pick": [
+        "connection-pooling",
+        "fast-failover"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        },
+        "db": {
+          "shards": 3
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      }
+    },
+    {
+      "add": [
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "waf",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "waf",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 9
+        },
+        "db": {
+          "shards": 4
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12
+        },
+        "db": {
+          "shards": 5
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12,
+          "tier": 1
+        },
+        "db": {
+          "shards": 8,
+          "replicas": 3
+        },
+        "waf": {
+          "replicas": 3
+        }
+      }
+    }
+  ],
+  "expect": {
+    "cleared": true
+  },
+  "note": "Cache and CDN for browsing, a WAF for the bots, receipts through a queue, and seats on a sharded SQL database so every hold is strongly consistent."
+}
