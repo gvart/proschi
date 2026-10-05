@@ -16,3 +16,5 @@ media). How much storage do five years of posts need, before replication?
 
 100M × 300 B = 30 GB a day. × 365 ≈ 11 TB a year. × 5 ≈ **55 TB**. With three
 replicas that is about 165 TB, which still fits a modest cluster.
+
+Numbers: [Numbers to know](../docs/numbers/#sizes).

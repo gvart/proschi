@@ -123,6 +123,11 @@ what it counts, `tolerance` a factor from 1.1 to 10. Use a tighter tolerance
 for numbers people should know closely (99.9% is 43 minutes a month: 1.5).
 `## Solution`, the worked calculation, is required.
 
+Take the round numbers from [Numbers to know](NUMBERS.md), and end the
+solution (or `## Why`) with a pointer to the section it draws on:
+`Numbers: [Numbers to know](../docs/numbers/#latency).` The link is relative
+to the practice page, where cards are shown.
+
 ### Cloze
 
 Text with 1–3 gaps written `{{answer}}`. List other accepted answers after

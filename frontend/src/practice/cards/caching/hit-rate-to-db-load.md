@@ -18,3 +18,5 @@ per second reach the database?
 Misses are 100% − 95% = 5%. 100,000 × 0.05 = **5,000 reads/s**. If the hit
 rate drops to 90%, misses double to 10,000/s: the database is sized by the
 miss rate, so a small drop in hit rate can overload it.
+
+Numbers: [Numbers to know](../docs/numbers/#servers-and-data-stores).

@@ -21,3 +21,5 @@ still leaves enough.
 
 Running servers near 100% makes queues, and so latency, grow sharply; a
 target utilization of 50–70% leaves room for spikes and failures.
+
+Numbers: [Numbers to know](../docs/numbers/#servers-and-data-stores).
