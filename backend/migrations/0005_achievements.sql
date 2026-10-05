@@ -1,7 +1,7 @@
 -- Achievements (frontend/src/practice/achievements.json): the badges each user
 -- has earned. GET /api/me/achievements evaluates the rules and adds a row the
 -- first time one is met; rows are never removed, so a badge stays earned.
--- Times are Unix seconds. (0004 is the daily goal's, on its own branch.)
+-- Times are Unix seconds.
 CREATE TABLE achievements (
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   -- The `id` in achievements.json, which never changes.
