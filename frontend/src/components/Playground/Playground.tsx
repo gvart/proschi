@@ -65,6 +65,7 @@ import TextNode from '../Canvas/TextNode';
 import PaneLoading from '../PaneLoading';
 import ViewTabs, { type View } from '../Analysis/ViewTabs';
 import { useSimulation } from '../Analysis/useSimulation';
+import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
@@ -86,6 +87,7 @@ const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) 
 const HldView = lazy(() => import('../Hld/HldView'));
 const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
 const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
+const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
@@ -650,7 +652,12 @@ export default function Playground() {
                   showHeader={false}
                 />
               ) : view === 'analysis' ? (
-                <AnalysisPanel diagram={diagram} analysis={simulation.analysis} onSelect={selectDiagnostic} />
+                <AnalysisPanel
+                  diagram={diagram}
+                  analysis={simulation.analysis}
+                  onSelect={selectDiagnostic}
+                  review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
+                />
               ) : view === 'tests' ? (
                 <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
               ) : view === 'hld' ? (

@@ -65,9 +65,13 @@ requests and 10 design reviews per IP.
 ### Design review (`POST /api/review`)
 
 A placeholder for an LLM review of a design, for whoever wires the model in.
-The contract is one file, `frontend/src/review/contract.ts`: the page builds
-the request from it (`src/review/request.ts`) and the Worker validates with it
-(`src/review.ts`), so the two cannot drift.
+Until then the page reviews designs itself: a rule reviewer
+(`frontend/src/review/rules.ts`) reads the same request and answers with the
+same `DesignReview`, so the LLM can replace it behind the `DesignReviewer`
+interface without touching the page. The contract is one file,
+`frontend/src/review/contract.ts`: the page builds the request from it
+(`src/review/request.ts`) and the Worker validates with it (`src/review.ts`),
+so the two cannot drift.
 
 - **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, no sign-in
   needed:
@@ -79,19 +83,32 @@ the request from it (`src/review/request.ts`) and the Worker validates with it
     and the parser's `diagnostics` (`severity`, `message`, `line?`);
   - `problem?`: `{id, version, title}` of the practice problem;
   - `tests?`: `{passed, total, solved, blocked?, results: [{id, name,
-    category, passed, message}]}` of this source;
+    category, passed, message, hint?}]}` of this source (`hint`: how to fix
+    a failed one);
   - `metrics?`: the simulation's `costUsd` (monthly), `worstP99Ms`,
     `minAvailability`, per use case `{name, rps, p99Ms, availability}`,
-    `singlePointsOfFailure`, `saturated` node ids and `warnings`.
+    `singlePointsOfFailure`, `saturated` node ids and `warnings`. Optional
+    details say why: `costLimit` `{maxUsd, testId?}`; `nodes` (`id`, `kind`,
+    `replicas`, `shards`, `loadRps`, `utilization`, `writeBound?`,
+    `bandwidthBound?`, `latencyMs`, `availability`, `costUsd`,
+    `instanceCostUsd`, `durable`, `loadBy` `[{useCase, rps}]`, `usedBy`); and
+    per use case `latency` `[{percentile, ms, limitMs, tailScenario?,
+    testId?}]`, `availabilityLimit` `{min, testId?}`, `durableTestId`,
+    `entryWrite`, `dependencies` `[{nodeId, fallback, availability}]`,
+    `writes` `[{nodeId, timing: "sync" | "async" | "after"}]` and `scenarios`
+    `[{name, share, success, path: [{from, to, ms, transferMs?, async?,
+    failed?}]}]` (the synchronous critical path). `testId` is the
+    `tests.results` id of the same requirement.
 
   Lists hold at most 500 items. Unknown fields are refused.
 - **Answers today**: 400 `{error}` naming what is wrong with the body, 413 for
   a source or body that is too long, 429 past the per-IP limit, and otherwise
-  501 `{error: "not_implemented"}`. The page reads the 501 as "AI review is
-  coming soon".
+  501 `{error: "not_implemented"}`. The page reads the 501 (and a 404, a 503
+  or no answer) as "no AI reviewer here" and shows the rule review instead.
 - **Answer once implemented**: 200 with a `DesignReview`: `{summary,
   strengths: string[], issues: [{severity: "info" | "minor" | "major" |
-  "critical", title, detail, nodeId?}], suggestions: string[]}`. `nodeId`
+  "critical", title, detail, nodeId?}], suggestions: string[]}`, the shape the
+  rule reviewer gives too (it adds `by: "rules"`). `nodeId`
   must be a node of `model.nodes`; the page links it to the node's line.
   Check the model's output with `parseDesignReview` from the contract before
   sending it.
@@ -100,7 +117,7 @@ The `TODO(ai-review)` in `src/review.ts` marks where the call goes. It will
 need an API key: add it to `Env` (`src/env.ts`) as an optional secret, set
 with `npx wrangler secret put`, and keep answering 501 while it is unset.
 Don't log the request's source. Pages built without `VITE_AI_REVIEW=true`
-never call the endpoint: they show "coming soon" from a placeholder reviewer
+never call the endpoint: they use the rule reviewer
 (`frontend/src/review/reviewer.ts`).
 
 The server refuses POST, PATCH and DELETE requests whose `Origin` is another

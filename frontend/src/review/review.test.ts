@@ -4,7 +4,7 @@ import { findProblem } from '../practice/catalog';
 import { MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
 import { practiceReviewInput } from './practice';
 import { buildReviewRequest } from './request';
-import { apiReviewer, defaultReviewer, placeholderReviewer, ReviewUnavailableError } from './reviewer';
+import { apiReviewer, defaultReviewer, ReviewUnavailableError, ruleReviewer, withFallback } from './reviewer';
 
 const shortener = findProblem('url-shortener')!;
 
@@ -21,6 +21,20 @@ describe('review request', () => {
     expect(request.model.diagnostics).toEqual([]);
     expect(request.tests).toMatchObject({ solved: true });
     expect(request.tests!.passed).toBe(request.tests!.total);
+    // What a reviewer needs to say why: load by use case, requirements, paths, dependencies and writes.
+    const cache = request.metrics!.nodes!.find((n) => n.kind === 'cache')!;
+    expect(cache.loadBy.map((l) => l.useCase)).toEqual(['Redirect']);
+    expect(cache.usedBy).toEqual(['Redirect']);
+    const redirect = request.metrics!.useCases.find((u) => u.name === 'Redirect')!;
+    expect(redirect.latency).toEqual([expect.objectContaining({ percentile: 'p99', limitMs: 50, testId: expect.stringMatching(/^req:/) })]);
+    expect(redirect.availabilityLimit?.min).toBeCloseTo(0.999, 9);
+    expect(redirect.scenarios!.map((s) => s.name)).toEqual(['Cache hit', 'Cache miss']);
+    expect(redirect.scenarios![1].path.some((h) => h.async && h.to === 'cache')).toBe(true);
+    expect(redirect.dependencies!.find((d) => d.nodeId === 'cache')).toMatchObject({ fallback: false });
+    const shorten = request.metrics!.useCases.find((u) => u.name === 'Shorten')!;
+    expect(shorten).toMatchObject({ entryWrite: true, durableTestId: expect.stringMatching(/^req:/) });
+    expect(shorten.writes).toContainEqual({ nodeId: 'db', timing: 'sync' });
+    expect(request.metrics!.costLimit).toMatchObject({ maxUsd: 3000 });
     expect(request.metrics!.costUsd).toBeGreaterThan(0);
     expect(request.metrics!.worstP99Ms).toBeGreaterThan(0);
     expect(request.metrics!.minAvailability).toBeGreaterThan(0.99);
@@ -81,10 +95,31 @@ describe('design review answers', () => {
 describe('reviewers', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('use the placeholder unless built with VITE_AI_REVIEW=true, and the placeholder gives no feedback', async () => {
-    expect(defaultReviewer).toBe(placeholderReviewer);
-    expect(placeholderReviewer.available).toBe(false);
-    await expect(placeholderReviewer.review(buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine)))).rejects.toBeInstanceOf(ReviewUnavailableError);
+  it('use the rule reviewer unless built with VITE_AI_REVIEW=true', async () => {
+    expect(defaultReviewer).toBe(ruleReviewer);
+    expect(ruleReviewer).toMatchObject({ available: true, ai: false });
+    const review = await ruleReviewer.review(buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine)));
+    expect(review.by).toBe('rules');
+    expect(review.issues.length).toBeGreaterThan(0);
+  });
+
+  it('fall back to the rules when the API has no review to give, and not when it fails', async () => {
+    const request = buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine));
+    const reviewer = withFallback(apiReviewer, ruleReviewer);
+    expect(reviewer).toMatchObject({ available: true, ai: true });
+    const answer = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+
+    vi.stubGlobal('fetch', answer(501, { error: 'not_implemented' }));
+    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
+    vi.stubGlobal('fetch', answer(404, { error: 'Not found' }));
+    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
+    vi.stubGlobal('fetch', vi.fn(async () => Promise.reject(new TypeError('Failed to fetch'))));
+    await expect(reviewer.review(request)).resolves.toMatchObject({ by: 'rules' });
+
+    vi.stubGlobal('fetch', answer(429, { error: 'Too many reviews; wait a minute' }));
+    await expect(reviewer.review(request)).rejects.toThrow('Too many reviews');
+    vi.stubGlobal('fetch', answer(200, { summary: 'ok', strengths: [], issues: [], suggestions: [] }));
+    await expect(reviewer.review(request)).resolves.toEqual({ summary: 'ok', strengths: [], issues: [], suggestions: [] });
   });
 
   it('read the stub endpoint’s 501 as not available yet, and other failures as errors', async () => {
