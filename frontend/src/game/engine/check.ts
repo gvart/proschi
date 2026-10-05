@@ -380,7 +380,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
       if ('cleared' in run.expect) {
         if (!st.cleared) {
           const last = st.history[st.history.length - 1];
-          v(path, `Must clear all ${WAVES} waves, but ended in wave ${st.history.length} (${st.outcome}): ${last?.worst?.message ?? 'no breach'}`);
+          v(path, `Must clear all ${s.waves.length} waves, but ended in wave ${st.history.length} (${st.outcome}): ${last?.worst?.message ?? 'no breach'}`);
         }
       } else {
         if ('failsBy' in run.expect) {

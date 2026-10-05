@@ -6,7 +6,7 @@ import { flowsOf } from '../../sim/overlay';
 import { profileOf, type Profile } from '../../sim/profiles';
 import { runTests, type TestResult } from '../../sim/tests';
 import { boardKey, boardProblems, cloneBoard } from './board';
-import { BOTS, compile, USERS, WAN, WAN_MS, type Compiled, type Situation } from './compile';
+import { BACKFILL_PREFIX, BOTS, compile, USERS, WAN, WAN_MS, type Compiled, type Situation } from './compile';
 import { computeMods, targets, type Mods } from './mods';
 import { shuffled, stream, weighted } from './rng';
 import {
@@ -328,7 +328,7 @@ export interface MigrationState {
 
 const phaseIndex = (p: MigrationPhase) => MIGRATION_PHASES.indexOf(p);
 /** The background job's use case key while a migration backfills. */
-export const backfillKey = (id: string) => `backfill_${id}`;
+export const backfillKey = (id: string) => `${BACKFILL_PREFIX}${id}`;
 export const LEARN_IDS: readonly string[] = [...new Set(Object.values(BREACH_LEARN).flat())];
 
 export class Game {
