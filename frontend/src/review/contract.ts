@@ -4,9 +4,9 @@
  * Worker validates request bodies with the same definition the page builds
  * them from (backend/src/review.ts imports this file).
  *
- * The review is a placeholder until an LLM is wired in: the page uses
- * PlaceholderReviewer (./reviewer.ts) unless built with VITE_AI_REVIEW=true,
- * and the endpoint answers 501 `{error: "not_implemented"}`.
+ * Until an LLM is wired in, the page reviews designs itself with rules over
+ * the same request (./rules.ts, ./reviewer.ts); builds with VITE_AI_REVIEW=true
+ * call the endpoint, which answers 501 `{error: "not_implemented"}` for now.
  */
 
 /** One node of the design, as the review sees it. */
@@ -49,6 +49,8 @@ export interface ReviewTestResult {
   passed: boolean;
   /** What was measured, e.g. "p99 of Redirect is 41 ms (limit 50 ms)". */
   message: string;
+  /** How to fix it, when it failed. */
+  hint?: string;
 }
 
 export interface ReviewTests {
@@ -60,6 +62,104 @@ export interface ReviewTests {
   results: ReviewTestResult[];
 }
 
+/** One node under the design's traffic (NodeAnalysis in frontend/src/sim/analyze.ts). */
+export interface ReviewNodeMetrics {
+  id: string;
+  kind: string;
+  replicas: number;
+  /** Partitions; 1 when the node is not sharded. */
+  shards: number;
+  loadRps: number;
+  /** How busy it is, 0..1+ (1 is saturated): the larger of request and bandwidth utilisation. */
+  utilization: number;
+  /** Writes are what fills it, and replicas do not add write capacity (a single-primary store). */
+  writeBound?: boolean;
+  /** Payload bytes, not requests, are what fills it. */
+  bandwidthBound?: boolean;
+  /** Mean hop latency under the current load, ms. */
+  latencyMs: number;
+  /** With its replicas, 0..1. */
+  availability: number;
+  /** Per month, egress included. */
+  costUsd: number;
+  /** The instances alone (costUsd without egress). */
+  instanceCostUsd: number;
+  durable: boolean;
+  /** Use cases whose steps send it requests, with the rps each sends (fan-out included), busiest first. */
+  loadBy: { useCase: string; rps: number }[];
+  /** Use cases whose steps name it, as sender or target, whatever their traffic. */
+  usedBy: string[];
+}
+
+/** One request on a scenario's synchronous critical path. */
+export interface ReviewHop {
+  from: string;
+  to: string;
+  /** Mean latency of the hop, payload transfer included (or the timeout of a failed call), ms. */
+  ms: number;
+  /** The part of `ms` that moves the payload. */
+  transferMs?: number;
+  /** `->>`: only the send counts. */
+  async?: boolean;
+  /** `-x`: costs a timeout. */
+  failed?: boolean;
+}
+
+/** A use case's scenario with its traffic share and its critical path. */
+export interface ReviewScenario {
+  name: string;
+  /** 0..1 */
+  share: number;
+  success: boolean;
+  path: ReviewHop[];
+}
+
+/** A latency requirement on a use case, and what was measured. */
+export interface ReviewLatency {
+  /** `p99`, `p95`, … */
+  percentile: string;
+  ms: number;
+  limitMs: number;
+  /** The scenario that contributes most of the requests slower than the percentile. */
+  tailScenario?: string;
+  /** The test it is (`req:<n>`), so a review can tell it is the same failure. */
+  testId?: string;
+}
+
+/** A node a use case needs on a success path. */
+export interface ReviewDependency {
+  nodeId: string;
+  /** A success scenario calls it with `-x` and still completes. */
+  fallback: boolean;
+  /** What the use case gets from it, 0..1 (a write to a single-primary store needs its primary). */
+  availability: number;
+}
+
+/** A write the main success scenario makes, and when. */
+export interface ReviewWrite {
+  nodeId: string;
+  /** `sync`: acknowledged before the entry request is answered; `async`: sent with `->>`; `after`: after the answer. */
+  timing: 'sync' | 'async' | 'after';
+}
+
+export interface ReviewUseCaseMetrics {
+  name: string;
+  rps: number;
+  p99Ms: number;
+  availability: number;
+  // The rest is optional, so an older page's request stays valid.
+  latency?: ReviewLatency[];
+  /** `availability … >= x%`, as 0..1. */
+  availabilityLimit?: { min: number; testId?: string };
+  /** `durable "…"`: the test that checks it. */
+  durableTestId?: string;
+  /** The entry request is a write (POST, PUT, …). */
+  entryWrite?: boolean;
+  dependencies?: ReviewDependency[];
+  writes?: ReviewWrite[];
+  scenarios?: ReviewScenario[];
+}
+
 /** The simulation's headline numbers (frontend/src/sim/analyze.ts). */
 export interface ReviewMetrics {
   /** Monthly cost of the whole design, USD. */
@@ -68,12 +168,15 @@ export interface ReviewMetrics {
   worstP99Ms?: number;
   /** Lowest availability over the use cases, 0–1. */
   minAvailability?: number;
-  useCases: { name: string; rps: number; p99Ms: number; availability: number }[];
+  useCases: ReviewUseCaseMetrics[];
   /** Node ids whose loss takes a use case down. */
   singlePointsOfFailure: string[];
   /** Node ids at or past their capacity. */
   saturated: string[];
   warnings: string[];
+  /** `cost <= …`, and the test that checks it. */
+  costLimit?: { maxUsd: number; testId?: string };
+  nodes?: ReviewNodeMetrics[];
 }
 
 /** What the page sends to `POST /api/review`. */
@@ -100,12 +203,14 @@ export interface DesignReviewIssue {
   nodeId?: string;
 }
 
-/** What `POST /api/review` answers with, once implemented. */
+/** What `POST /api/review` answers with, once implemented, and what the rule reviewer gives. */
 export interface DesignReview {
   summary: string;
   strengths: string[];
   issues: DesignReviewIssue[];
   suggestions: string[];
+  /** Who wrote it: `rules` for the page's own reviewer (./rules.ts); absent for the API's. */
+  by?: 'rules';
 }
 
 // ---------- limits ----------
@@ -148,8 +253,8 @@ function testsProblem(t: unknown): string | undefined {
   if (!isObj(t)) return 'tests must be an object';
   if (!isNum(t.passed) || !isNum(t.total) || typeof t.solved !== 'boolean') return 'tests needs passed, total and solved';
   if (!optional(t.blocked, (b) => b === 'no-engine' || b === 'errors')) return 'tests.blocked must be "no-engine" or "errors"';
-  const result = (r: unknown) => isObj(r) && isStr(r.id) && isStr(r.name) && isStr(r.category) && typeof r.passed === 'boolean' && isStr(r.message);
-  if (!listOf(t.results, result)) return 'tests.results must be a list of {id, name, category, passed, message}';
+  const result = (r: unknown) => isObj(r) && isStr(r.id) && isStr(r.name) && isStr(r.category) && typeof r.passed === 'boolean' && isStr(r.message) && optional(r.hint, isStr);
+  if (!listOf(t.results, result)) return 'tests.results must be a list of {id, name, category, passed, message, hint?}';
   return undefined;
 }
 
@@ -157,12 +262,47 @@ function metricsProblem(m: unknown): string | undefined {
   if (!isObj(m)) return 'metrics must be an object';
   if (!isNum(m.costUsd)) return 'metrics.costUsd must be a number';
   if (!optional(m.worstP99Ms, isNum) || !optional(m.minAvailability, isNum)) return 'metrics.worstP99Ms and metrics.minAvailability must be numbers';
-  const useCase = (u: unknown) => isObj(u) && isStr(u.name) && isNum(u.rps) && isNum(u.p99Ms) && isNum(u.availability);
-  if (!listOf(m.useCases, useCase)) return 'metrics.useCases must be a list of {name, rps, p99Ms, availability}';
+  if (!listOf(m.useCases, isUseCaseMetrics)) return 'metrics.useCases must be a list of {name, rps, p99Ms, availability, …}';
   for (const key of ['singlePointsOfFailure', 'saturated', 'warnings'] as const) {
     if (!listOf(m[key], (s) => isStr(s))) return `metrics.${key} must be a list of strings`;
   }
+  if (!optional(m.costLimit, (c) => isObj(c) && isNum(c.maxUsd) && optional(c.testId, isStr))) return 'metrics.costLimit must be {maxUsd, testId?}';
+  if (!optional(m.nodes, (n) => listOf(n, isNodeMetrics))) return 'metrics.nodes must be a list of node metrics';
   return undefined;
+}
+
+const isBool = (v: unknown): v is boolean => typeof v === 'boolean';
+
+function isNodeMetrics(n: unknown): boolean {
+  return (
+    isObj(n) &&
+    isStr(n.id) &&
+    isStr(n.kind) &&
+    [n.replicas, n.shards, n.loadRps, n.utilization, n.latencyMs, n.availability, n.costUsd, n.instanceCostUsd].every(isNum) &&
+    optional(n.writeBound, isBool) &&
+    optional(n.bandwidthBound, isBool) &&
+    isBool(n.durable) &&
+    listOf(n.loadBy, (l) => isObj(l) && isStr(l.useCase) && isNum(l.rps)) &&
+    listOf(n.usedBy, (u) => isStr(u))
+  );
+}
+
+function isUseCaseMetrics(u: unknown): boolean {
+  if (!(isObj(u) && isStr(u.name) && isNum(u.rps) && isNum(u.p99Ms) && isNum(u.availability))) return false;
+  const latency = (l: unknown) => isObj(l) && isStr(l.percentile) && isNum(l.ms) && isNum(l.limitMs) && optional(l.tailScenario, isStr) && optional(l.testId, isStr);
+  const dependency = (d: unknown) => isObj(d) && isStr(d.nodeId) && isBool(d.fallback) && isNum(d.availability);
+  const write = (w: unknown) => isObj(w) && isStr(w.nodeId) && (w.timing === 'sync' || w.timing === 'async' || w.timing === 'after');
+  const hop = (h: unknown) => isObj(h) && isStr(h.from) && isStr(h.to) && isNum(h.ms) && optional(h.transferMs, isNum) && optional(h.async, isBool) && optional(h.failed, isBool);
+  const scenario = (s: unknown) => isObj(s) && isStr(s.name) && isNum(s.share) && isBool(s.success) && listOf(s.path, hop);
+  return (
+    optional(u.latency, (l) => listOf(l, latency)) &&
+    optional(u.availabilityLimit, (a) => isObj(a) && isNum(a.min) && optional(a.testId, isStr)) &&
+    optional(u.durableTestId, isStr) &&
+    optional(u.entryWrite, isBool) &&
+    optional(u.dependencies, (d) => listOf(d, dependency)) &&
+    optional(u.writes, (w) => listOf(w, write)) &&
+    optional(u.scenarios, (s) => listOf(s, scenario))
+  );
 }
 
 /**

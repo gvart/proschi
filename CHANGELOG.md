@@ -9,6 +9,15 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Added
+- A design review on the practice page (the "Review" view next to the tests,
+  formerly the "AI review" placeholder) and in the editor's Analysis view.
+  Worked out on the page from the simulation and the tests, it lists findings
+  by severity (saturated nodes, single points of failure, latency,
+  availability and cost against the requirements, failing tests, …), what
+  the design does well and up to three next steps. An AI reviewer will come
+  later behind the same interface.
+
 ## [0.8.0] - 2026-10-05
 
 ### Changed

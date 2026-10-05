@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, FlaskConical, PartyPopper, Play, Sparkles, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { celebrate } from '../design/celebrate';
 import { primaryButton, subBar } from '../components/Playground/ui';
@@ -16,7 +16,7 @@ interface TestPanelProps {
   onSelect: (loc: SourceLoc) => void;
   /** How others did on this problem (CommunityStats), shown under the verdict. */
   community?: ReactNode;
-  /** The AI review (src/review/ReviewPanel.tsx), shown in a view of its own next to the tests. */
+  /** The design review (src/review/ReviewPanel.tsx), shown in a view of its own next to the tests. */
   review?: ReactNode;
 }
 
@@ -52,8 +52,8 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
               Tests
             </button>
             <button onClick={() => setView('review')} aria-pressed={view === 'review'} className={viewButton(view === 'review')}>
-              <Sparkles size={14} />
-              AI review
+              <ClipboardCheck size={14} />
+              Review
             </button>
           </>
         ) : (
