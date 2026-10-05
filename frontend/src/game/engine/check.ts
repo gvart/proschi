@@ -5,7 +5,7 @@ import { boardProblems, cloneBoard } from './board';
 import { USERS } from './compile';
 import { readContent, type ContentError } from './content';
 import { isIconName } from './icons';
-import { Game, GameError, LEARN_IDS, parseRequirements, type Outcome } from './run';
+import { Game, GameError, LEARN_IDS, parseRequirements, type BreachKind, type Outcome } from './run';
 import { MAX_ASCENSION, WAVES } from './rules';
 import { LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type RunSetup, type ScenarioDef } from './types';
 
@@ -56,6 +56,10 @@ export interface Play {
   pick?: string | string[] | null;
   /** A contract id to sign if offered, else none. */
   contract?: string | null;
+  /** Migration steps before deploying, in order. */
+  migrate?: { id: string; to: 'next' | 'rollback' | 'big-bang' }[];
+  /** Legacy use cases to stop serving before deploying. */
+  sunset?: string[];
 }
 
 export interface ScriptedRun {
@@ -64,8 +68,12 @@ export interface ScriptedRun {
   loadout?: Loadout;
   /** One per wave, from the first; waves past the list keep the board and skip every choice. */
   plays: Play[];
-  /** reference.json: `cleared`. wrong/*.json: `fails-by` with the last wave (1-based) it may reach. */
-  expect: { cleared: true } | { failsBy: number };
+  /**
+   * reference.json: `cleared`. wrong/*.json: `failsBy`, the last wave
+   * (1-based) it may reach, and/or `shows`, breach kinds its history must
+   * contain: the mistake it is about, even when the run survives it.
+   */
+  expect: { cleared: true } | { failsBy: number; shows?: BreachKind[] } | { shows: BreachKind[] };
   /** What the run shows a contributor, one line. */
   note?: string;
 }
@@ -104,6 +112,8 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
       break;
     }
     const play = run.plays[w] ?? {};
+    for (const m of play.migrate ?? []) game.apply({ t: 'migrate', id: m.id, to: m.to });
+    for (const key of play.sunset ?? []) game.apply({ t: 'sunset', useCase: key });
     const board = applyPlay(s.board, play);
     if (play.loadtest) game.apply({ t: 'loadtest', board });
     game.apply({ t: 'deploy', board });
@@ -227,8 +237,31 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     for (const name of ['Briefing', 'Interview translation']) if (!s.sections[name]) v(mf, `Needs a "## ${name}" section`);
     learn(mf, s.cards);
     for (const p of s.related) if (!ctx.problems.has(p)) v(mf, `Practice problem '${p}' does not exist`);
-    if (s.waves.length !== WAVES) v(jf, `A scenario has ${WAVES} waves, not ${s.waves.length}`);
-    for (const b of [3, 7, 11]) if (s.waves[b] && !s.waves[b].boss) v(jf, `Wave ${b + 1} ends an act: make it a boss ("boss": true)`);
+    if (s.mode === 'scale') {
+      if (s.waves.length !== WAVES) v(jf, `A scenario has ${WAVES} waves, not ${s.waves.length}`);
+      for (const b of [3, 7, 11]) if (s.waves[b] && !s.waves[b].boss) v(jf, `Wave ${b + 1} ends an act: make it a boss ("boss": true)`);
+    } else {
+      if (s.waves.length < 4 || s.waves.length > WAVES) v(jf, `A ${s.mode} scenario has 4 to ${WAVES} waves, not ${s.waves.length}`);
+      const ticketIds = new Set<string>();
+      s.waves.forEach((w, i) => {
+        if (!w.ticket) v(jf, `Wave ${i + 1}: a ${s.mode} scenario gives every wave a ticket`);
+        else if (ticketIds.has(w.ticket.id)) v(jf, `Wave ${i + 1}: ticket '${w.ticket.id}' is used twice`);
+        else ticketIds.add(w.ticket.id);
+      });
+    }
+    const migrationIds = new Set<string>();
+    for (const m of s.migrations) {
+      if (migrationIds.has(m.id)) v(jf, `Two migrations are called '${m.id}'`);
+      migrationIds.add(m.id);
+      if (!(STORES as readonly string[]).includes(m.store)) v(jf, `Migration '${m.id}': store '${m.store}'? Stores are ${STORES.join(', ')}`);
+      for (const key of [...m.needs, ...m.writers, ...m.oldReaders]) if (!s.useCases[key]) v(jf, `Migration '${m.id}' names unknown use case '${key}'`);
+      for (const key of m.writers) if (s.useCases[key] && !s.useCases[key].steps.some((st) => st.op === 'write' && st.to === m.store)) v(jf, `Migration '${m.id}': '${key}' does not write ${m.store}`);
+    }
+    for (const [key, uc] of Object.entries(s.useCases)) {
+      if (!uc.legacy) continue;
+      if (!(uc.legacy.upkeep > 0)) v(jf, `Use case '${key}': a legacy version needs a positive "upkeep"`);
+      if (!s.useCases[uc.legacy.replacedBy] || uc.legacy.replacedBy === key) v(jf, `Use case '${key}': "replacedBy" names the use case of the new version`);
+    }
     if (s.unlock && !content.scenarios.some((x) => x.id === s.unlock!.scenario)) v(jf, `Unlocks after unknown scenario '${s.unlock.scenario}'`);
 
     const names = new Set<string>();
@@ -312,7 +345,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     for (const path of Object.keys(files).filter((p) => p.startsWith(`${dir}/wrong/`) && p.endsWith('.json')).sort()) scripted.push([path, files[path]]);
     if (!scripted[0][1]) v(`${dir}/reference.json`, 'Missing: a run that clears every wave (docs/GAME.md, "Reference runs")');
     if (scripted.length < 2) v(`${dir}/wrong`, 'Add at least one wrong run: a plausible design that must fail');
-    scripted.push([`${dir}/do nothing`, JSON.stringify({ seed: 'idle', plays: [], expect: { failsBy: 8 } })]);
+    scripted.push([`${dir}/do nothing`, JSON.stringify({ seed: 'idle', plays: [], expect: { failsBy: Math.min(8, s.waves.length - 1) } })]);
     for (const [path, text] of scripted) {
       if (!text) continue;
       let run: ScriptedRun;
@@ -344,8 +377,13 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
           v(path, `Must clear all ${WAVES} waves, but ended in wave ${st.history.length} (${st.outcome}): ${last?.worst?.message ?? 'no breach'}`);
         }
       } else {
-        const by = run.expect.failsBy;
-        if (st.cleared || st.history.length > by) v(path, `Must fail by wave ${by}, but ${st.cleared ? 'cleared the scenario' : `reached wave ${st.history.length}`}`);
+        if ('failsBy' in run.expect) {
+          const by = run.expect.failsBy;
+          if (st.cleared || st.history.length > by) v(path, `Must fail by wave ${by}, but ${st.cleared ? 'cleared the scenario' : `reached wave ${st.history.length}`}`);
+        }
+        const kinds = new Set(st.history.flatMap((h) => h.breaches.map((b) => b.kind)));
+        for (const k of run.expect.shows ?? []) if (!kinds.has(k)) v(path, `Must show a '${k}' breach, but it never happened`);
+        if (!('failsBy' in run.expect) && !run.expect.shows?.length) v(path, 'A wrong run expects "failsBy", "shows", or both');
       }
     }
   }

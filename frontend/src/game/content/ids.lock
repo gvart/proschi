@@ -60,6 +60,7 @@ perk:second-pager
 perk:seed-round
 perk:starter-card
 scenario:drop
+scenario:pawprint
 scenario:ping
 scenario:shortly
 scenario:snapshots

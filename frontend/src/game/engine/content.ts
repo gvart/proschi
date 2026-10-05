@@ -1,6 +1,6 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from '../../practice/frontMatter';
 import type { IconName } from './icons';
-import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, RARITIES, ROLES, type Board, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
+import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type MigrationDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
 
 /**
  * Reads the game's content folder (docs/GAME.md) from a map of files keyed
@@ -85,6 +85,9 @@ class Fields {
     const v = this.string(key);
     if (!values.includes(v as T)) this.fail(`"${key}: ${v}" must be one of ${values.join(', ')}`);
     return v as T;
+  }
+  optionalOneOf<T extends string>(key: string, values: readonly T[]): T | undefined {
+    return this.data[key] === undefined ? undefined : this.oneOf(key, values);
   }
   known(allowed: readonly string[]) {
     for (const k of Object.keys(this.data)) if (!allowed.includes(k)) this.fail(`Unknown field "${k}:"; the fields are ${allowed.join(', ')}`);
@@ -185,7 +188,7 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
   const jsonFile = `scenarios/${id}/scenario.json`;
   const mdFile = `scenarios/${id}/scenario.md`;
   const { fields: f, sections } = readMarkdown(mdFile, markdown);
-  f.known(['title', 'summary', 'difficulty', 'tags', 'related', 'cards', 'order', 'version']);
+  f.known(['title', 'summary', 'difficulty', 'tags', 'related', 'cards', 'order', 'version', 'mode']);
   const data = json<Omit<ScenarioDef, 'id' | 'title' | 'summary' | 'difficulty' | 'tags' | 'related' | 'cards' | 'order' | 'version' | 'sections' | 'grants'> & { grants?: unknown[] }>(jsonFile, jsonText);
   const need = (cond: unknown, message: string) => {
     if (!cond) throw new ContentError(jsonFile, message);
@@ -198,6 +201,20 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
   for (const [i, w] of data.waves.entries()) {
     need(w && typeof w.traffic === 'object', `Wave ${i + 1} needs "traffic"`);
     need(w.curve === undefined || w.curve in CURVES, `Wave ${i + 1}: unknown curve "${w.curve}"; use ${Object.keys(CURVES).join(', ')}`);
+    if (w.ticket !== undefined) {
+      const t = w.ticket;
+      need(t && typeof t.id === 'string' && typeof t.title === 'string', `Wave ${i + 1}: a ticket needs an id and a title`);
+      need((TICKET_SENDERS as readonly string[]).includes(t.from), `Wave ${i + 1}: ticket "from" is one of ${TICKET_SENDERS.join(', ')}`);
+      need((TICKET_KINDS as readonly string[]).includes(t.kind), `Wave ${i + 1}: ticket "kind" is one of ${TICKET_KINDS.join(', ')}`);
+      need(sections[`Ticket: ${t.id}`] !== undefined, `Wave ${i + 1}: scenario.md needs a "## Ticket: ${t.id}" section`);
+    }
+  }
+  const migrations = (data.migrations ?? []) as MigrationDef[];
+  need(Array.isArray(migrations), '"migrations" is a list');
+  for (const m of migrations) {
+    need(m && typeof m.id === 'string' && typeof m.name === 'string' && typeof m.entity === 'string' && typeof m.store === 'string', 'A migration needs an id, a name, an entity and a store');
+    need(['needs', 'writers', 'oldReaders'].every((k) => Array.isArray(m[k as 'needs'])), `Migration '${m.id}' needs "needs", "writers" and "oldReaders" lists`);
+    need(typeof m.backfillRps === 'number' && m.backfillRps > 0, `Migration '${m.id}' needs a positive "backfillRps"`);
   }
   return {
     id,
@@ -218,6 +235,8 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
     contracts: (data.contracts ?? []) as ContractDef[],
     ...(data.unlock ? { unlock: data.unlock } : {}),
     grants: Array.isArray(data.grants) ? data.grants.filter((g): g is string => typeof g === 'string') : [],
+    mode: f.optionalOneOf('mode', GAME_MODES) ?? 'scale',
+    migrations,
   };
 }
 

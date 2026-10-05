@@ -83,6 +83,32 @@ cleared. Unlocks and perks count on the leaderboard; each scenario and
 difficulty has its own board, and there is a daily run with the same seed for
 everyone.
 
+## Design-first modes
+
+Scale or Fail is the arcade mode. The others put the design first: no card
+draft, no rerolls, no boss names. Each wave a **ticket** lands in the inbox,
+from the product manager, the CTO, a customer, legal, finance or marketing,
+and asks for something real: a feature, a launch, an SLA, a law. The cash,
+Trust and score rules are the same, and so are the leaderboards.
+
+**Chaotic Startup** (Pawprint) is about change. Besides scaling, it has:
+
+- **API versions.** A breaking change ships as a new use case (v2) next to the
+  old one. Old clients keep calling v1, with traffic falling wave by wave.
+  Once v2 is live, v1 costs its `upkeep` every wave until you **sunset** it,
+  and sunsetting it while it still has traffic gives those clients 410 Gone
+  (a `compat` breach, every tick).
+- **Migrations.** A schema change goes expand → dual-write → backfill →
+  cutover → contract, one phase a wave (each is a deploy), and can be rolled
+  back until the contract. Dual writes double the writers' writes on the
+  store; the backfill adds a background job; the use cases that need the new
+  shape are served from the cutover; and the contract drops the old shape,
+  which breaks any use case still reading it (`compat`). **All at once** jumps
+  to the end: the store's writes lock for two ticks (a `migration` breach).
+
+The other design-first modes (On-call, Legacy rescue, Cost crunch) use the
+same tickets and rules.
+
 ## How the game uses the simulation
 
 The board is a graph of components and wires, but the simulation reads
@@ -153,11 +179,13 @@ keys, one-line lists, quote values with `: ` in them):
 | `cards` | Review card ids the report suggests. |
 | `order` | Position in the picker. |
 | `version` | Bump it when a change can change a score: it starts a new leaderboard season for the scenario. |
+| `mode` | `scale` (the default), `startup`, `incident`, `legacy` or `cost`. Every mode but `scale` has no card draft and gives every wave a ticket, and may have 4 to 12 waves. |
 
 Sections: `## Briefing` (required), `## Act 1` to `## Act 3` (shown at the
 start of each act), `## Debrief: <id>` (shown after a wave whose `debrief`
-names it), and `## Interview translation` (required): the design in the
-words you would use in an interview.
+names it), `## Ticket: <id>` (the text of a wave's ticket), and
+`## Interview translation` (required): the design in the words you would use
+in an interview.
 
 ### scenario.json
 
@@ -333,6 +361,35 @@ read it) and mapped to their components in
 `frontend/src/game/ui/gameIcons.tsx`. To use a new icon, add its name to
 both; the frontend tests fail if the two lists differ.
 
+### Tickets, versions and migrations
+
+A wave's **ticket**: `"ticket": {"id": "multi-pet", "from": "pm", "kind": "schema", "title": "Multi-pet bookings"}`.
+`from` is `pm`, `cto`, `customer`, `legal`, `finance`, `sre` or `marketing`;
+`kind` picks its icon (`feature`, `scale`, `compliance`, `mobile`, `region`,
+`api-version`, `schema`, `data-move`, `deprecation`, `security`, `cost`,
+`incident`, `reliability`, `analytics`, `performance`). Its text is the
+`## Ticket: <id>` section.
+
+An old **API version** is a use case with `"legacy": {"upkeep": 400, "replacedBy": "book-v2"}`.
+
+A **migration**, in `"migrations"`:
+
+```json
+{
+  "id": "pets",
+  "name": "the multi-pet migration",
+  "entity": "Booking",
+  "store": "db",
+  "needs": ["book-v2"],
+  "writers": ["book", "book-v2"],
+  "oldReaders": ["book"],
+  "backfillRps": 900
+}
+```
+
+`needs` are served only from the cutover, `writers` write twice from the dual
+write to the contract, and `oldReaders` break once the old shape is dropped.
+
 ## Reference and wrong runs
 
 Every scenario ships with scripted runs, like a problem's reference solution
@@ -360,15 +417,19 @@ and wrong designs. A run is a seed, an optional loadout and ascension, and a
 
 A play changes the board deployed last wave (`add`, `remove`, `set`, `wire`,
 `unwire`), may `loadtest`, page the `oncall` (`[{"tick": 3, "node": "api"}]`),
-`reroll`, `pick` the first card on offer from a list, and sign a `contract`.
+`reroll`, `pick` the first card on offer from a list, sign a `contract`,
+`migrate` (`[{"id": "pets", "to": "next"}]`; `to` is `next`, `rollback` or
+`big-bang`) and `sunset` legacy use cases (`["book"]`).
 Waves past the list keep the board and skip every choice.
 
 - `reference.json` must clear all twelve waves (`"expect": {"cleared": true}`).
 - Each `wrong/<name>.json` is a plausible design that must lose by a wave
   (`"expect": {"failsBy": 8}`): no cache, no CDN, a provider called inline.
-  Add a `note` saying what it shows.
+  It may also name the breaches it must show (`"shows": ["compat"]`), or
+  only those, for a mistake the run survives. Add a `note` saying what it
+  shows.
 - The check also plays "do nothing" (the start board, every wave), which must
-  lose by wave 8.
+  lose by wave 8 (or the wave before the last, in a shorter scenario).
 
 ## Balancing
 

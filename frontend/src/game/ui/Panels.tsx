@@ -172,7 +172,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible }: 
               <span>
                 <strong>{e.title}</strong>
                 {e.from !== undefined ? ` at tick ${e.from}${e.duration > 1 ? `–${e.from + e.duration - 1}` : ''}` : ''}: {e.telegraph}
-                {def?.counters.length ? <span className="text-muted"> (counters: {def.counters.join(', ')})</span> : null}
+                {def?.counters.length && scenario.mode === 'scale' ? <span className="text-muted"> (counters: {def.counters.join(', ')})</span> : null}
               </span>
             </li>
             );
@@ -447,6 +447,8 @@ const BREACH_TITLE: Record<Breach['kind'], string> = {
   unroutable: 'No route',
   freshness: 'Background work fell behind',
   consistency: 'Inconsistent reads',
+  compat: 'Broke old clients',
+  migration: 'Risky migration',
 };
 
 export function WaveResult({ summary, scenario, events, onContinue }: { summary: WaveSummary; scenario: ScenarioDef; events: Map<string, EventDef>; onContinue: () => void }) {

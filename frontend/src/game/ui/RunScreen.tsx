@@ -18,6 +18,7 @@ const CodeEditor = lazy(() => import('../../components/Playground/CodeEditor'));
 import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } from './layout';
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
+import { ChangesPanel, TicketCard } from './Modes';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
 import type { Arcade, RunResult } from './useArcade';
@@ -147,7 +148,7 @@ export default function RunScreen(props: RunScreenProps) {
     setPlacing(undefined);
     setWiring(false);
     const w = game.waveDef();
-    setStamp(`Wave ${s.wave + 1}${w.name ? ` · ${w.name}` : ''}`);
+    setStamp(`Wave ${s.wave + 1}${w.name ? ` · ${w.name}` : w.ticket ? ' · new ticket' : ''}`);
     if (w.boss) {
       play('boss');
       buzz(80);
@@ -655,7 +656,22 @@ export default function RunScreen(props: RunScreenProps) {
       {top}
       {!narrow && hud}
       {stampEl}
+      {planning && forecast.ticket && <TicketCard ticket={forecast.ticket} key={`ticket-${s.wave}`} />}
       {planning && <ForecastPanel forecast={forecast} scenario={game.scenario} events={events} act={act} collapsible={narrow} key={`forecast-${s.wave}`} />}
+      {planning && (
+        <ChangesPanel
+          game={game}
+          planning={planning}
+          onMigrate={(id, to) => {
+            apply({ t: 'migrate', id, to });
+            setPreview(undefined);
+          }}
+          onSunset={(useCase) => {
+            apply({ t: 'sunset', useCase });
+            setPreview(undefined);
+          }}
+        />
+      )}
 
       {narrow ? (
         <>

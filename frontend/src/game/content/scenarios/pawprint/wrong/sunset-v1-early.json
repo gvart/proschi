@@ -1,0 +1,202 @@
+{
+  "seed": "reference",
+  "plays": [
+    {},
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "db": {
+          "replicas": 2
+        }
+      },
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 8
+        },
+        "lb": {
+          "replicas": 2
+        },
+        "cache": {
+          "replicas": 2
+        }
+      }
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "add": [
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "mail"
+        ]
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      },
+      "sunset": [
+        "book"
+      ]
+    },
+    {
+      "set": {
+        "db": {
+          "replicas": 3
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 11
+        }
+      }
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "add": [
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 9,
+    "shows": [
+      "compat"
+    ]
+  },
+  "note": "Turns v1 off the day v2 ships: half the phones still run the old app, and their bookings get 410 Gone."
+}

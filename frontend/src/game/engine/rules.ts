@@ -47,6 +47,10 @@ export const TRUST_PENALTY = {
   unroutableOptional: 3,
   freshness: 2,
   consistency: 5,
+  /** Clients of a version you no longer serve, or readers of a shape you dropped. */
+  compat: 6,
+  /** A migration that locked writes or lost rows. */
+  migration: 6,
 } as const;
 export const TRUST_CLEAN_WAVE = 5;
 export const TRUST_BOSS = 15;

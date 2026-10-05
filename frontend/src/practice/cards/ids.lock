@@ -78,6 +78,7 @@ error-budget
 etag-lost-update
 event-time
 evolving-mobile-apis
+expand-contract-migration
 fail-open-or-closed
 failover-timeout
 fanout-write-amplification
@@ -151,6 +152,7 @@ object-vs-block-storage
 odd-cluster-size
 offset-commit-timing
 oltp-vs-olap
+online-backfill
 online-resharding
 partitions-for-throughput
 per-key-ordering
