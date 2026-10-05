@@ -3,9 +3,9 @@ name: Tooling
 on:
   push:
     branches: [main]
-    paths: ['tooling/**', 'frontend/src/dsl/**', 'frontend/src/catalog/**', 'frontend/src/types/**', 'frontend/src/hld/**', 'frontend/src/sim/**', 'frontend/src/utils/**', 'frontend/src/practice/**', 'frontend/index.html', '.github/workflows/tooling.yml']
+    paths: ['tooling/**', 'frontend/src/dsl/**', 'frontend/src/catalog/**', 'frontend/src/types/**', 'frontend/src/hld/**', 'frontend/src/sim/**', 'frontend/src/utils/**', 'frontend/src/practice/**', 'frontend/src/learn/**', 'frontend/index.html', '.github/workflows/tooling.yml']
   pull_request:
-    paths: ['tooling/**', 'frontend/src/dsl/**', 'frontend/src/catalog/**', 'frontend/src/types/**', 'frontend/src/hld/**', 'frontend/src/sim/**', 'frontend/src/utils/**', 'frontend/src/practice/**', 'frontend/index.html', '.github/workflows/tooling.yml']
+    paths: ['tooling/**', 'frontend/src/dsl/**', 'frontend/src/catalog/**', 'frontend/src/types/**', 'frontend/src/hld/**', 'frontend/src/sim/**', 'frontend/src/utils/**', 'frontend/src/practice/**', 'frontend/src/learn/**', 'frontend/index.html', '.github/workflows/tooling.yml']
   workflow_dispatch:
 
 permissions:
@@ -31,6 +31,8 @@ jobs:
         run: |
           npm run build
           node dist/cli.cjs problem check ../frontend/src/practice/problems
+      - name: Check the practice cards
+        run: node dist/cli.cjs cards check --format github ../frontend/src/practice/cards
       - run: npm run package:vscode
       - run: npm pack --pack-destination dist
       - uses: actions/upload-artifact@v7
