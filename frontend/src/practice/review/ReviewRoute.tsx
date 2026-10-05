@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Flame, Layers, LogIn, PartyPopper, RotateCcw, Target } from 'lucide-react';
+import { ArrowRight, Flame, Layers, LogIn, PartyPopper, Radar, RotateCcw, Target } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { nextState, type Rating } from '../../learn/fsrs';
@@ -13,6 +13,7 @@ import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
 import { accountStore, localStore, memoryStore, signedOutError, type CardStore } from './store';
 import ReviewSession, { type SessionResult } from './ReviewSession';
+import { notifyActivity } from '../skills/activity';
 
 /**
  * Daily review (`#/review`, `#/review/<topic>`): today's due and new cards,
@@ -112,13 +113,13 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
 
   // Unsent reviews go out when the page is hidden (a phone locking, a tab switch); what fails stays in the outbox for next time.
   const waiting = useRef(0);
-  const flush = useCallback(() => {
-    if (!store || store.kind !== 'account') return;
+  const flush = useCallback((): Promise<unknown> => {
+    if (!store || store.kind !== 'account') return Promise.resolve();
     waiting.current = 0;
-    void store.flush().catch(() => undefined);
+    return store.flush().catch(() => undefined);
   }, [store]);
   useEffect(() => {
-    const onHide = () => document.visibilityState === 'hidden' && flush();
+    const onHide = () => document.visibilityState === 'hidden' && void flush();
     document.addEventListener('visibilitychange', onHide);
     return () => document.removeEventListener('visibilitychange', onHide);
   }, [flush]);
@@ -135,7 +136,7 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
       statesRef.current = { ...statesRef.current, [card.id]: after };
       setStates(statesRef.current);
       setToday((t) => ({ reviews: t.reviews + 1, new: t.new + (isNew(card, before) ? 1 : 0) }));
-      if (++waiting.current >= FLUSH_AT) flush();
+      if (++waiting.current >= FLUSH_AT) void flush();
     },
     [store, flush],
   );
@@ -159,10 +160,11 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
   }
 
   const end = (results: SessionResult[]) => {
-    // The streak again once the server has the session's reviews (this browser's log has them already).
-    if (store?.kind === 'account') void store.flush().catch(() => undefined).then(activity.refresh);
-    else activity.refresh();
-    waiting.current = 0;
+    // The streak and new badges again once the server has the session's reviews (this browser's log has them already).
+    void flush().then(() => {
+      activity.refresh();
+      if (results.length) notifyActivity();
+    });
     setView(results.length ? { kind: 'summary', results, streak: streakChange(results) } : { kind: 'home' });
   };
 
@@ -189,9 +191,15 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
 
   return (
     <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
-      <a href={topic ? '#/review' : '#/'} className={`-ml-2.5 ${toolButton}`}>
-        {topic ? 'All topics' : 'All problems'}
-      </a>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <a href={topic ? '#/review' : '#/'} className={`-ml-2.5 ${toolButton}`}>
+          {topic ? 'All topics' : 'All problems'}
+        </a>
+        <a href="#/progress" className={toolButton}>
+          <Radar size={14} aria-hidden="true" />
+          Skill map and badges
+        </a>
+      </div>
       <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">{topic ? `Review: ${topic.title}` : 'Daily review'}</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         {topic

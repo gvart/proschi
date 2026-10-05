@@ -2,6 +2,7 @@ import { useEffect, useRef, type ReactNode } from 'react';
 import { CalendarCheck, Flame, LogIn, Snowflake, X } from 'lucide-react';
 import { GOAL_CHOICES, type DailyGoal, type Streak, type WeeklyRecap } from '../learn/streak';
 import { celebrate } from '../design/celebrate';
+import { announceCelebration } from './celebrating';
 import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
@@ -189,6 +190,8 @@ function recapLine(recap: WeeklyRecap): string {
 export function Celebration({ label, tone = 'bg-pass/25', className = '', children }: { label: string; tone?: string; className?: string; children: ReactNode }) {
   const ref = useRef<HTMLElement>(null);
   useEffect(() => {
+    // Pop-ups such as the new-badge toast wait for this moment to pass.
+    announceCelebration();
     if (ref.current) void celebrate(ref.current, { count: 24 });
   }, []);
   return (

@@ -20,6 +20,9 @@ import HelpMenu from '../onboarding/HelpMenu';
 import { requestTour } from '../onboarding/seen';
 import Footer from '../design/Footer';
 import Header from '../design/Header';
+import { useAchievements } from './skills/useAchievements';
+import AchievementToast from './skills/AchievementToast';
+import ProgressStrip from './skills/ProgressStrip';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -27,6 +30,8 @@ const ProblemRoute = lazy(() => import('./ProblemRoute'));
 const GuideRoute = lazy(() => import('./GuideRoute'));
 // Daily review, with every card (virtual:practice-cards).
 const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
+// The skill map and badges, with the cards' topics.
+const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
@@ -37,9 +42,9 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
 /**
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
- * opened from it, `#/roadmap/<guide id>` an article of the roadmap, and
- * `#/review` daily review (`#/review/<topic>` one topic of it); hash routes
- * work under any sub-path.
+ * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
+ * `#/review` daily review (`#/review/<topic>` one topic of it), and
+ * `#/progress` the skill map and badges; hash routes work under any sub-path.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -104,9 +109,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
+  const onProgress = route === 'progress';
   const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
   const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
-  const problem = problemId && !onRoadmap && !guide && !onReview ? problems.find((p) => p.id === problemId) : undefined;
+  const problem = problemId && !onRoadmap && !guide && !onReview && !onProgress ? problems.find((p) => p.id === problemId) : undefined;
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
@@ -115,9 +121,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   ) : activity.state.status === 'sign-in' ? (
     <StreakInvite account={account} compact />
   ) : undefined;
+  const achievements = useAchievements(account.state, progress);
+  const { refresh: refreshAchievements } = achievements;
+  // A new page checks for new badges (signed in, at most every few seconds).
+  useEffect(() => refreshAchievements(), [route, refreshAchievements]);
+  const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
-    // The review page names itself (its topic).
-    if (onReview) return;
+    // The review and progress pages name themselves.
+    if (onReview || onProgress) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -125,7 +136,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview]);
+  }, [problem, guide, onRoadmap, onReview, onProgress]);
 
   if (problem) {
     return (
@@ -167,10 +178,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && !onRoadmap && !guide && !onReview && (
+        {route && !onRoadmap && !guide && !onReview && !onProgress && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
-        {onReview ? (
+        {onProgress ? (
+          <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
+            <ProgressRoute account={account} achievements={achievements} />
+          </Suspense>
+        ) : onReview ? (
           <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
             <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
           </Suspense>
@@ -190,12 +205,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             guide={firstGuide}
           />
         ) : (
-          <ProblemList problems={problems} progress={progress} stats={stats} streak={streak}>
+          <ProblemList problems={problems} progress={progress} stats={stats} streak={streak} summary={<ProgressStrip state={achievements.state} />}>
             {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
           </ProblemList>
         )}
       </div>
       <Footer base="../" />
+      {/* New badges are celebrated here, never over a problem's editor: a solve's badge shows on the way back. */}
+      <AchievementToast unseen={unseen} onSeen={achievements.markSeen} />
     </div>
   );
 }

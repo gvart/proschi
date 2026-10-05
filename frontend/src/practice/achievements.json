@@ -1,0 +1,42 @@
+[
+  { "id": "first-card", "title": "First card", "description": "Review your first practice card.", "icon": "layers", "rule": { "kind": "reviews", "min": 1 } },
+  { "id": "reviews-100", "title": "Hundred club", "description": "Review 100 cards.", "icon": "layers", "tier": "bronze", "rule": { "kind": "reviews", "min": 100 } },
+  { "id": "reviews-500", "title": "Card shark", "description": "Review 500 cards.", "icon": "layers", "tier": "silver", "rule": { "kind": "reviews", "min": 500 } },
+  { "id": "reviews-2000", "title": "Spaced out", "description": "Review 2,000 cards.", "icon": "layers", "tier": "gold", "rule": { "kind": "reviews", "min": 2000 } },
+
+  { "id": "mastered-5", "title": "It sticks", "description": "Master 5 cards: each remembered well enough to come back in 3 weeks or more.", "icon": "brain", "tier": "bronze", "rule": { "kind": "mastered", "min": 5 } },
+  { "id": "mastered-15", "title": "Long memory", "description": "Master 15 cards.", "icon": "brain", "tier": "silver", "rule": { "kind": "mastered", "min": 15 } },
+  { "id": "mastered-30", "title": "Walking reference", "description": "Master 30 cards.", "icon": "brain", "tier": "gold", "rule": { "kind": "mastered", "min": 30 } },
+
+  { "id": "streak-3", "title": "Warming up", "description": "Meet your daily goal 3 days in a row.", "icon": "flame", "tier": "bronze", "rule": { "kind": "streak", "min": 3 } },
+  { "id": "streak-7", "title": "Week on fire", "description": "Meet your daily goal 7 days in a row.", "icon": "flame", "tier": "silver", "rule": { "kind": "streak", "min": 7 } },
+  { "id": "streak-30", "title": "Habit formed", "description": "Meet your daily goal 30 days in a row.", "icon": "flame", "tier": "gold", "rule": { "kind": "streak", "min": 30 } },
+
+  { "id": "first-solve", "title": "First design", "description": "Solve your first practice problem.", "icon": "trophy", "rule": { "kind": "solved", "min": 1 } },
+  { "id": "solved-5", "title": "Getting the hang", "description": "Solve 5 practice problems.", "icon": "trophy", "tier": "bronze", "rule": { "kind": "solved", "min": 5 } },
+  { "id": "solved-15", "title": "Seasoned designer", "description": "Solve 15 practice problems.", "icon": "trophy", "tier": "silver", "rule": { "kind": "solved", "min": 15 } },
+  { "id": "solved-25", "title": "Architect", "description": "Solve 25 practice problems.", "icon": "trophy", "tier": "gold", "rule": { "kind": "solved", "min": 25 } },
+  { "id": "hard-1", "title": "Into the deep", "description": "Solve a hard problem.", "icon": "shield", "tier": "bronze", "rule": { "kind": "solved", "min": 1, "difficulty": "hard" } },
+  { "id": "hard-5", "title": "Hard mode", "description": "Solve 5 hard problems.", "icon": "shield", "tier": "silver", "rule": { "kind": "solved", "min": 5, "difficulty": "hard" } },
+  { "id": "caching-3", "title": "Cache hit", "description": "Solve 3 problems tagged caching.", "icon": "database", "tier": "bronze", "rule": { "kind": "solved", "min": 3, "tag": "caching" } },
+  { "id": "all-queues", "title": "Queue master", "description": "Solve every problem tagged queues.", "icon": "radio", "tier": "silver", "rule": { "kind": "all-solved", "tag": "queues" } },
+  { "id": "all-consistency", "title": "Strongly consistent", "description": "Solve every problem tagged consistency.", "icon": "shield", "tier": "silver", "rule": { "kind": "all-solved", "tag": "consistency" } },
+  { "id": "all-real-world", "title": "Real world", "description": "Solve every problem modelled on a system a company published.", "icon": "star", "tier": "gold", "rule": { "kind": "all-solved", "tag": "real-world" } },
+
+  { "id": "first-run-1", "title": "Clean run", "description": "Solve a problem on your first test run.", "icon": "zap", "tier": "bronze", "rule": { "kind": "first-run", "min": 1 } },
+  { "id": "first-run-5", "title": "Measure twice", "description": "Solve 5 problems on the first test run.", "icon": "zap", "tier": "silver", "rule": { "kind": "first-run", "min": 5 } },
+
+  { "id": "under-reference-1", "title": "Penny pincher", "description": "Solve a problem for less a month than its reference solution.", "icon": "coins", "tier": "bronze", "rule": { "kind": "under-reference", "min": 1 } },
+  { "id": "under-reference-5", "title": "Budget architect", "description": "Beat the reference solution's monthly cost on 5 problems.", "icon": "coins", "tier": "gold", "rule": { "kind": "under-reference", "min": 5 } },
+
+  { "id": "estimate-streak-3", "title": "Good guess", "description": "Answer 3 estimate cards right in a row.", "icon": "calculator", "tier": "bronze", "rule": { "kind": "estimate-streak", "min": 3 } },
+  { "id": "estimate-streak-10", "title": "Back of the envelope", "description": "Answer 10 estimate cards right in a row.", "icon": "calculator", "tier": "silver", "rule": { "kind": "estimate-streak", "min": 10 } },
+
+  { "id": "mastery-estimation", "title": "Number sense", "description": "Reach 80% mastery of estimation.", "icon": "target", "tier": "gold", "rule": { "kind": "mastery", "topic": "estimation", "min": 0.8 } },
+  { "id": "mastery-caching", "title": "Cache whisperer", "description": "Reach 80% mastery of caching.", "icon": "target", "tier": "gold", "rule": { "kind": "mastery", "topic": "caching", "min": 0.8 } },
+  { "id": "mastery-sharding", "title": "Shard sense", "description": "Reach 80% mastery of sharding.", "icon": "target", "tier": "gold", "rule": { "kind": "mastery", "topic": "sharding", "min": 0.8 } },
+
+  { "id": "stage-foundations", "title": "Foundations laid", "description": "Finish the roadmap's Foundations stage.", "icon": "map", "tier": "bronze", "rule": { "kind": "stage", "stage": "foundations" } },
+  { "id": "stage-consistency", "title": "Exactly once", "description": "Finish the roadmap's Consistency and contention stage.", "icon": "map", "tier": "silver", "rule": { "kind": "stage", "stage": "consistency" } },
+  { "id": "stage-scale", "title": "At scale", "description": "Finish the roadmap's last stage: geo, media and hot spots.", "icon": "map", "tier": "gold", "rule": { "kind": "stage", "stage": "scale" } }
+]

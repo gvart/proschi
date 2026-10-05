@@ -1,8 +1,8 @@
-import { cardFromFile, type Card } from '../../frontend/src/learn/cards';
+import { cardFromFile, readTopics, type Card, type Topic } from '../../frontend/src/learn/cards';
 import { DAY, isRating, replay, type CardState, type Rating } from '../../frontend/src/learn/fsrs';
 import { daysBetween, isDay, MAX_BATCH } from '../../frontend/src/learn/review';
 import { requireUser } from './auth';
-import { cardFiles } from './cards.gen';
+import { cardFiles, tagsJson } from './cards.gen';
 import type { Ctx } from './context';
 import { now } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
@@ -24,12 +24,23 @@ const MAX_DURATION_MS = 3_600_000;
 const REVIEW_ID = /^[A-Za-z0-9-]{8,64}$/;
 
 let cards: Map<string, Card> | undefined;
+let topics: Topic[] | undefined;
 
-/** A card the site ships (with its version and topics), by id; the cards are read once per isolate. */
-
-export function findCard(id: string): Card | undefined {
+/** Every card the site ships, by id; read once per isolate. */
+export function allCards(): Map<string, Card> {
   cards ??= new Map(Object.entries(cardFiles).map(([file, text]) => [file.slice(file.indexOf('/') + 1, -3), cardFromFile(file, text)]));
-  return cards.get(id);
+  return cards;
+}
+
+/** A card the site ships (with its version and topics), by id. */
+export function findCard(id: string): Card | undefined {
+  return allCards().get(id);
+}
+
+/** The card topics (tags.json), in order. */
+export function cardTopics(): Topic[] {
+  topics ??= readTopics(tagsJson);
+  return topics;
 }
 
 interface StateRow {
