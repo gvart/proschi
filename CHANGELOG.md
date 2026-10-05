@@ -10,6 +10,11 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **On-call**, a design-first Arcade mode, and its scenario **Dinnerbell**:
+  five pages for a food-delivery app (a TV-ad spike, a dead database primary,
+  a bot flood, a cold cache, a lost zone), each with its alert and logs. Name
+  the root cause before you act (every answer explains why it is right or
+  wrong), then fix it on the board.
 - **Chaotic Startup**, a design-first Arcade mode, and its first scenario,
   **Pawprint**: a pet-sitter startup where a ticket lands every wave (a
   feature, a customer complaint, a lawyer, a launch). Ship booking API v2 next

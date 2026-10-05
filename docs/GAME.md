@@ -106,8 +106,14 @@ Trust and score rules are the same, and so are the leaderboards.
   which breaks any use case still reading it (`compat`). **All at once** jumps
   to the end: the store's writes lock for two ticks (a `migration` breach).
 
-The other design-first modes (On-call, Legacy rescue, Cost crunch) use the
-same tickets and rules.
+**On-call** (Dinnerbell) is about incidents. Each wave's ticket is a page with
+its alert and logs, the incident really happens, and before deploying you
+**name the root cause** from a few plausible ones: right gives Trust back and
+points, wrong costs Trust, and every answer explains why. Then you fix it on
+the board, and the next page tests whether the fix holds.
+
+The other design-first modes (Legacy rescue, Cost crunch) use the same
+tickets and rules.
 
 ## How the game uses the simulation
 
@@ -389,6 +395,10 @@ A **migration**, in `"migrations"`:
 
 `needs` are served only from the cutover, `writers` write twice from the dual
 write to the contract, and `oldReaders` break once the old shape is dropped.
+
+An on-call wave's **diagnosis**: a `question` and `options`, each with an
+`id`, `text` and `why`, exactly one of them `"correct": true`. A play picks
+one with `"diagnose": "<id>"` (the first option when it says nothing).
 
 ## Reference and wrong runs
 

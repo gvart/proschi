@@ -1,0 +1,19 @@
+{
+  "seed": "reference",
+  "plays": [
+    { "diagnose": "spike", "set": { "api": { "replicas": 6 } } },
+    { "diagnose": "no-replica", "set": { "db": { "replicas": 2 } } },
+    {
+      "diagnose": "bots",
+      "add": [{ "id": "waf", "component": "waf", "replicas": 2 }],
+      "unwire": [["users", "lb"]],
+      "wire": [["users", "waf"], ["waf", "lb"]]
+    },
+    { "diagnose": "stampede", "set": { "db": { "replicas": 3 } } },
+    {
+      "diagnose": "single",
+      "set": { "lb": { "replicas": 2 }, "cache": { "replicas": 2 }, "queue": { "replicas": 2 }, "worker": { "replicas": 2 }, "waf": { "replicas": 3 }, "api": { "replicas": 6 } }
+    }
+  ],
+  "expect": { "cleared": true }
+}

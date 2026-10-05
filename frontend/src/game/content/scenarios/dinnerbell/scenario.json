@@ -1,0 +1,356 @@
+{
+  "start": {
+    "cash": 6000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        {
+          "id": "users",
+          "component": "users",
+          "replicas": 1
+        },
+        {
+          "id": "push",
+          "component": "push",
+          "replicas": 1
+        },
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        },
+        {
+          "id": "api",
+          "component": "app",
+          "replicas": 3
+        },
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 1
+        },
+        {
+          "id": "db",
+          "component": "sql",
+          "replicas": 1
+        },
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 1
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ],
+        [
+          "api",
+          "cache"
+        ],
+        [
+          "api",
+          "db"
+        ],
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "push"
+        ]
+      ]
+    }
+  },
+  "grants": [
+    "cache",
+    "queue",
+    "worker",
+    "waf"
+  ],
+  "externals": [
+    {
+      "id": "push",
+      "name": "Push provider",
+      "tech": "Push Service",
+      "rps": 30000,
+      "latencyMs": 60
+    }
+  ],
+  "useCases": {
+    "menu": {
+      "name": "Browse menus",
+      "method": "GET",
+      "path": "/restaurants/42/menu",
+      "status": 200,
+      "value": 500,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Menu",
+          "x": 4
+        }
+      ],
+      "cache": 0.85
+    },
+    "order": {
+      "name": "Place order",
+      "method": "POST",
+      "path": "/orders",
+      "status": 201,
+      "value": 8000,
+      "steps": [
+        {
+          "op": "write",
+          "to": "db",
+          "entity": "Order"
+        },
+        {
+          "op": "call",
+          "to": "push",
+          "async": true
+        }
+      ]
+    },
+    "track": {
+      "name": "Track order",
+      "method": "GET",
+      "path": "/orders/981/status",
+      "status": 200,
+      "value": 300,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Order"
+        }
+      ]
+    }
+  },
+  "waves": [
+    {
+      "ticket": {
+        "id": "tv-ad",
+        "from": "sre",
+        "kind": "incident",
+        "title": "PAGE: menus timing out, Friday 19:02"
+      },
+      "diagnosis": {
+        "question": "What is the root cause?",
+        "options": [
+          {
+            "id": "db-slow",
+            "text": "A slow query is locking the database",
+            "why": "The database is at 41% and its slow-query log is empty: it is waiting on the app servers, not the other way round."
+          },
+          {
+            "id": "spike",
+            "text": "Twice the usual traffic, and the app servers are full",
+            "correct": true,
+            "why": "Requests doubled at 19:00, exactly when the ad aired, and every app server is at 100% CPU. Add app servers until the peak fits."
+          },
+          {
+            "id": "bad-deploy",
+            "text": "This afternoon's deploy has a bug",
+            "why": "The deploy went out at 14:10 and error rates were flat for five hours. Rolling back would cost time and change nothing."
+          }
+        ]
+      },
+      "traffic": {
+        "menu": 1600,
+        "order": 60,
+        "track": 250
+      },
+      "curve": "day",
+      "events": [
+        "viral-spike"
+      ],
+      "requirements": [
+        "p99 \"Browse menus\" < 300ms",
+        "availability \"Place order\" >= 99.5%"
+      ],
+      "freshness": [
+        {
+          "useCase": "order",
+          "maxMinutes": 10
+        }
+      ]
+    },
+    {
+      "ticket": {
+        "id": "primary-down",
+        "from": "sre",
+        "kind": "incident",
+        "title": "PAGE: orders failing, database unreachable"
+      },
+      "diagnosis": {
+        "question": "Orders fail and menus still load. Why?",
+        "options": [
+          {
+            "id": "cache",
+            "text": "The cache is serving stale data",
+            "why": "Menus come from the cache and still work; orders do not touch the cache at all."
+          },
+          {
+            "id": "network",
+            "text": "A network partition between the zones",
+            "why": "Every app server reaches the cache and the queue fine; only the database host is gone."
+          },
+          {
+            "id": "no-replica",
+            "text": "The database primary died, and there is no replica to promote",
+            "correct": true,
+            "why": "One database box is a single point of failure: when it goes, every write goes with it. Run a replica so a failover takes seconds, not a restore."
+          }
+        ]
+      },
+      "traffic": {
+        "menu": 1900,
+        "order": 70,
+        "track": 300
+      },
+      "curve": "day",
+      "events": [
+        "db-failover"
+      ],
+      "requirements": [
+        "availability \"Place order\" >= 99.9%"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "bots",
+        "from": "sre",
+        "kind": "security",
+        "title": "PAGE: menus slow, traffic up 3x, conversion flat"
+      },
+      "diagnosis": {
+        "question": "Traffic tripled but orders did not. What is it?",
+        "options": [
+          {
+            "id": "launch",
+            "text": "A marketing launch nobody told us about",
+            "why": "Real users order: a launch would raise orders with menus. Orders are flat."
+          },
+          {
+            "id": "bots",
+            "text": "Bots scraping menus with random ids",
+            "correct": true,
+            "why": "Requests come from a few thousand IPs, hit random restaurant ids (so the cache misses) and never order. Stop them at the edge with a firewall before they reach the app servers."
+          },
+          {
+            "id": "retries",
+            "text": "Mobile apps retrying in a loop",
+            "why": "The retries would be for orders and come from our own app's user agent; these requests do not."
+          }
+        ]
+      },
+      "traffic": {
+        "menu": 2200,
+        "order": 80,
+        "track": 320
+      },
+      "curve": "day",
+      "events": [
+        "ddos"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "cold-cache",
+        "from": "sre",
+        "kind": "incident",
+        "title": "PAGE: database CPU 100% after the cache upgrade"
+      },
+      "diagnosis": {
+        "question": "The cache was upgraded at 18:55 and the database caught fire at 18:56. Why?",
+        "options": [
+          {
+            "id": "bigger",
+            "text": "The new cache version is slower",
+            "why": "Cache latency is 1 ms as before. It is not slow; it is empty."
+          },
+          {
+            "id": "index",
+            "text": "A missing index on the menus table",
+            "why": "The same queries ran fine yesterday at the same traffic. Nothing changed in the database."
+          },
+          {
+            "id": "stampede",
+            "text": "The cache restarted empty, and every miss goes to the database at once",
+            "correct": true,
+            "why": "A cold cache sends almost every read to the database until it warms up. Keep enough read capacity behind the cache (replicas) to survive a cold start, and warm caches before a restart."
+          }
+        ]
+      },
+      "traffic": {
+        "menu": 3000,
+        "order": 90,
+        "track": 350
+      },
+      "curve": "day",
+      "events": [
+        "cache-stampede"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "zone",
+        "from": "sre",
+        "kind": "reliability",
+        "title": "PAGE: eu-west-1b is down"
+      },
+      "diagnosis": {
+        "question": "One of three zones is gone. What do you check first?",
+        "options": [
+          {
+            "id": "failover-region",
+            "text": "Fail everything over to another region",
+            "why": "A region failover takes hours and loses recent writes. Two zones are still up: the question is what ran only in the dead one."
+          },
+          {
+            "id": "single",
+            "text": "What ran as a single instance: it was in that zone, and it is gone",
+            "correct": true,
+            "why": "A zone takes a third of every component's replicas, and all of anything you ran once. Two or three of everything, spread over zones, turns a zone outage into lost capacity instead of an outage."
+          },
+          {
+            "id": "dns",
+            "text": "DNS: clients still resolve to the dead zone",
+            "why": "The load balancer's health checks already stopped sending traffic there; DNS points at the load balancer."
+          }
+        ]
+      },
+      "traffic": {
+        "menu": 3300,
+        "order": 100,
+        "track": 400
+      },
+      "curve": "day",
+      "events": [
+        "az-outage"
+      ],
+      "requirements": [
+        "survive any node failure"
+      ]
+    }
+  ],
+  "eventPool": [],
+  "contracts": []
+}
