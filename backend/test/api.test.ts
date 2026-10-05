@@ -169,8 +169,8 @@ describe('stats', () => {
 
     const board = await stats('/api/leaderboard');
     expect(board.entries).toEqual([
-      { rank: 1, displayName: 'First', solved: 1, lastSolvedAt: expect.any(Number) },
-      { rank: 1, displayName: 'Second', solved: 1, lastSolvedAt: expect.any(Number) },
+      { rank: 1, id: first.id, displayName: 'First', solved: 1, lastSolvedAt: expect.any(Number) },
+      { rank: 1, id: second.id, displayName: 'Second', solved: 1, lastSolvedAt: expect.any(Number) },
     ]);
     expect(board.problems).toBeGreaterThan(5);
   });

@@ -1,35 +1,32 @@
 import { useEffect } from 'react';
-import { ArrowRight, Dumbbell, Layers, Lock, LogIn, RotateCcw } from 'lucide-react';
+import { ArrowRight, Dumbbell, Lock, LogIn, RotateCcw } from 'lucide-react';
 import deck from 'virtual:practice-cards';
-import type { AchievementStatus, AchievementsAnswer, Tier } from '../../learn/achievements';
+import type { AchievementsAnswer } from '../../learn/achievements';
 import { percent } from '../../learn/mastery';
 import PaneLoading from '../../components/PaneLoading';
-import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
+import { eyebrow, primaryButton } from '../../components/Playground/ui';
 import { ACHIEVEMENTS } from '../achievementList';
 import { PROVIDER_LABEL } from '../account';
 import type { Account } from '../useAccount';
-import AchievementIcon from './AchievementIcon';
+import BadgeGrid from '../profile/BadgeGrid';
+import { profileBadge, type ProfileBadge } from '../profile/profile';
 import SkillRadar, { type RadarPoint } from './SkillRadar';
 import type { Achievements } from './useAchievements';
 
 /**
  * The progress page (`#/progress`): the skill map (each topic's mastery as a
  * radar, with a table for screen readers), the "interview ready" score with
- * the weakest topics to train, and every badge, earned or locked with its
- * progress. Signed out, a locked preview with a sign-in invitation.
+ * the weakest topics to train, and every badge as a compact grid (BadgeGrid),
+ * earned or locked with its progress. Signed out, a locked preview with a
+ * sign-in invitation. A tab of the interview prep hub.
  *
  * Loaded lazily with the cards, for the topics' names.
  */
 
-const TIER_LABEL: Record<Tier, string> = { bronze: 'Bronze', silver: 'Silver', gold: 'Gold' };
-
 const card = 'rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md';
 
-/** "3 May 2026", in the reader's language. */
-const dateOf = (t: number) => new Date(t * 1000).toLocaleDateString(undefined, { day: 'numeric', month: 'short', year: 'numeric' });
-
 /** The badges with no progress: what a signed-out reader sees. */
-const preview: AchievementStatus[] = ACHIEVEMENTS.map((a) => ({ ...a, current: 0, target: 1, earned: false, unseen: false }));
+const preview: ProfileBadge[] = ACHIEVEMENTS.map((a) => ({ ...a, earned: false }));
 
 export default function ProgressRoute({ account, achievements }: { account: Account; achievements: Achievements }) {
   const { state, refresh } = achievements;
@@ -48,20 +45,10 @@ export default function ProgressRoute({ account, achievements }: { account: Acco
   const points: RadarPoint[] = deck.topics
     .filter((t) => deck.cards.some((c) => !c.retired && c.tags.includes(t.id)))
     .map((t) => ({ id: t.id, label: t.title, value: mastery.get(t.id) ?? 0 }));
-  const list = answer?.achievements ?? preview;
-  const earned = list.filter((a) => a.earned);
+  const badges: ProfileBadge[] = answer ? answer.achievements.map(profileBadge) : preview;
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <a href="#/" className={`-ml-2.5 ${toolButton}`}>
-          All problems
-        </a>
-        <a href="#/review" className={toolButton}>
-          <Layers size={14} aria-hidden="true" />
-          Daily review
-        </a>
-      </div>
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
       <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Your progress</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         How well you know each topic, from the cards you review and the problems you solve, and the badges you have earned on the way.
@@ -146,21 +133,9 @@ export default function ProgressRoute({ account, achievements }: { account: Acco
         </section>
       </div>
 
-      <section aria-labelledby="badges" className="mt-8">
-        <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="badges" className="font-display text-xl font-bold text-ink">
-            Badges
-          </h2>
-          <p className="text-sm tabular-nums text-muted">
-            {earned.length} of {list.length} earned
-          </p>
-        </div>
-        <ul className="mt-3 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {list.map((a) => (
-            <Badge key={a.id} a={a} locked={!answer} />
-          ))}
-        </ul>
-      </section>
+      <div className="mt-8">
+        <BadgeGrid badges={badges} />
+      </div>
     </main>
   );
 }
@@ -174,52 +149,6 @@ function Stat({ label, value, unit }: { label: string; value: number; unit?: str
         {unit && <span className="ml-1 text-sm font-semibold text-muted">{unit}</span>}
       </dd>
     </div>
-  );
-}
-
-/** One badge: in colour with the date once earned; grey with a progress bar while locked. */
-function Badge({ a, locked }: { a: AchievementStatus; locked: boolean }) {
-  const share = a.target > 0 ? Math.min(1, a.current / a.target) : 0;
-  return (
-    <li
-      className={`flex items-start gap-3 rounded-brutal border-bw-2 p-3 ${a.earned ? 'border-ink bg-surface shadow-brutal-sm' : 'border-ink/30 bg-paper'}`}
-      data-achievement={a.id}
-      data-earned={a.earned ? 'true' : 'false'}
-    >
-      <AchievementIcon icon={a.icon} tier={a.tier} earned={a.earned} />
-      <div className="min-w-0 flex-1">
-        <p className={`flex flex-wrap items-baseline gap-x-2 font-display text-base font-bold leading-tight ${a.earned ? 'text-ink' : 'text-ink/70'}`}>
-          {a.title}
-          {a.tier && <span className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{TIER_LABEL[a.tier]}</span>}
-        </p>
-        <p className={`mt-0.5 text-sm ${a.earned ? 'text-ink/80' : 'text-muted'}`}>{a.description}</p>
-        {a.earned ? (
-          <p className="mt-1 text-xs font-semibold text-green-700 dark:text-green-400">Earned{a.earnedAt ? ` ${dateOf(a.earnedAt)}` : ''}</p>
-        ) : locked ? (
-          <p className="mt-1 flex items-center gap-1 text-xs text-muted">
-            <Lock size={12} aria-hidden="true" />
-            Locked
-          </p>
-        ) : (
-          <div className="mt-1.5 flex items-center gap-2">
-            <div
-              role="progressbar"
-              aria-label={`${a.title}: progress`}
-              aria-valuemin={0}
-              aria-valuemax={a.target}
-              aria-valuenow={a.current}
-              className="h-2 flex-1 overflow-hidden rounded-full border-bw-1 border-ink/40 bg-surface"
-            >
-              <div className="h-full bg-ink/45" style={{ width: `${share * 100}%` }} />
-            </div>
-            <span className="text-xs tabular-nums text-muted">
-              {a.current}/{a.target}
-              {a.rule.kind === 'mastery' && '%'}
-            </span>
-          </div>
-        )}
-      </div>
-    </li>
   );
 }
 

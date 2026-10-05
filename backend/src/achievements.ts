@@ -5,13 +5,15 @@ import {
   longestStreak,
   type Achievement,
   type AchievementContext,
+  type AchievementStatus,
+  type AchievementsAnswer,
   type EarnedRecord,
   type SolvedProblem,
 } from '../../frontend/src/learn/achievements';
 import type { CardState, Rating } from '../../frontend/src/learn/fsrs';
 import type { ProblemInfo } from '../../frontend/src/learn/mastery';
 import { daysBetween, isDay } from '../../frontend/src/learn/review';
-import { addDays, goalFor } from '../../frontend/src/learn/streak';
+import { addDays, goalFor, type DayActivity } from '../../frontend/src/learn/streak';
 import { ROADMAP } from '../../frontend/src/practice/roadmapStages';
 import raw from '../../frontend/src/practice/achievements.json';
 import { loadActivity } from './activity';
@@ -68,7 +70,7 @@ interface SolveRow {
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-const utcDay = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
+export const utcDay = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
 
 /**
  * The day the streak is counted up to: the client's local date when it sends
@@ -81,19 +83,25 @@ function streakDay(day: string | null, t: number): string {
   return Math.abs(daysBetween(utcDay(t), day)) <= 1 ? day : addDays(utcDay(t), 1);
 }
 
+/** A user's badges and skill map, as evaluated now (evaluate). */
+export interface Evaluation {
+  statuses: AchievementStatus[];
+  /** Badges met for the first time: not stored yet. */
+  newly: string[];
+  /** The badges stored as earned, by id. */
+  earned: Record<string, EarnedRecord>;
+  answer: AchievementsAnswer;
+  /** The daily activity the longest streak was counted from (loadActivity up to `today`). */
+  activity: DayActivity[];
+}
+
 /**
- * GET /api/me/achievements?day=YYYY-MM-DD: every badge with its progress (`current` of
- * `target`), whether it is earned (and when) and whether a client has shown
- * it yet (`unseen`); the skill map (each topic's mastery, the readiness score
- * and the three weakest topics); and the counts behind them. Badges met for
- * the first time are stored now.
+ * Builds a user's stats snapshot from the database and evaluates every badge
+ * on it, with the streak counted up to `today`. Stores nothing: the caller
+ * decides whether badges met for the first time (`newly`) are kept (GET
+ * /api/me/achievements) or not (a public profile, read by someone else).
  */
-export async function getAchievements(request: Request, ctx: Ctx): Promise<Response> {
-  const { DB } = ctx.env;
-  const user = await requireUser(request, ctx);
-  await rateLimit(ctx.env.STATS_LIMITER, `achievements:${user.id}`, 'Too many requests; wait a minute');
-  const t = now();
-  const today = streakDay(new URL(request.url).searchParams.get('day'), t);
+export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: number }, today: string, t: number): Promise<Evaluation> {
   const cards = allCards();
   const estimates = [...cards.values()].filter((c) => c.type === 'estimate').map((c) => c.id);
 
@@ -147,6 +155,23 @@ export async function getAchievements(request: Request, ctx: Ctx): Promise<Respo
     solvedProblems,
   });
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, catalog(), earned, t);
+  return { statuses, newly, earned, answer: achievementsAnswer(statuses, skills, snapshot), activity };
+}
+
+/**
+ * GET /api/me/achievements?day=YYYY-MM-DD: every badge with its progress (`current` of
+ * `target`), whether it is earned (and when) and whether a client has shown
+ * it yet (`unseen`); the skill map (each topic's mastery, the readiness score
+ * and the three weakest topics); and the counts behind them. Badges met for
+ * the first time are stored now.
+ */
+export async function getAchievements(request: Request, ctx: Ctx): Promise<Response> {
+  const { DB } = ctx.env;
+  const user = await requireUser(request, ctx);
+  await rateLimit(ctx.env.STATS_LIMITER, `achievements:${user.id}`, 'Too many requests; wait a minute');
+  const t = now();
+  const today = streakDay(new URL(request.url).searchParams.get('day'), t);
+  const { newly, answer } = await evaluate(DB, user, today, t);
   if (newly.length) {
     // Two requests at once both insert; the first row (and its time) stays.
     await DB.prepare(
@@ -155,7 +180,7 @@ export async function getAchievements(request: Request, ctx: Ctx): Promise<Respo
       .bind(user.id, t, JSON.stringify(newly))
       .run();
   }
-  return json(achievementsAnswer(statuses, skills, snapshot), 200, NO_STORE);
+  return json(answer, 200, NO_STORE);
 }
 
 /**

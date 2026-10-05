@@ -10,7 +10,7 @@ const challenges = (scope: Locator) => scope.getByRole('link', { name: /^(?!Read
 test.describe('interview prep roadmap', () => {
   test('opens one problem at a time and unlocks the next after a solve', async ({ page }) => {
     await page.goto('practice/');
-    await page.getByRole('main').getByRole('link', { name: 'Start interview prep' }).click();
+    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(page).toHaveTitle('Interview prep roadmap · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
@@ -59,7 +59,7 @@ test.describe('interview prep roadmap', () => {
     await expect(foundations.getByRole('listitem').filter({ hasText: 'Always-writable Shopping Cart' })).toContainText('Solve Pastebin first');
 
     // The problem list is not gated.
-    await page.getByRole('link', { name: 'All problems' }).click();
+    await page.getByRole('link', { name: 'Practice', exact: true }).first().click();
     await page.getByRole('main').getByRole('list').first().getByRole('link', { name: /Always-writable Shopping Cart/ }).click();
     await expect(page).toHaveURL(/#\/shopping-cart$/);
     await expect(page.getByRole('region', { name: 'Roadmap' })).toHaveCount(0);

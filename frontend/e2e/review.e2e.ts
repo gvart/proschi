@@ -21,8 +21,10 @@ async function expectType(c: Locator, type: string, text: RegExp | string): Prom
 
 test.describe('daily review', () => {
   test('a session with every card type, kept in the browser', async ({ page }) => {
+    // Practice links to interview prep, whose tabs lead to daily review.
     await page.goto('practice/');
-    await page.getByRole('main').getByRole('link', { name: 'Start daily review' }).click();
+    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await page.getByRole('navigation', { name: 'Interview prep' }).getByRole('link', { name: 'Daily review' }).click();
     await expect(page).toHaveURL(/#\/review$/);
     await expect(page).toHaveTitle('Daily review · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Daily review' })).toBeVisible();

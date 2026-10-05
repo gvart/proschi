@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Flame, Layers, LogIn, PartyPopper, Radar, RotateCcw, Target } from 'lucide-react';
+import { ArrowRight, Flame, Layers, LogIn, PartyPopper, RotateCcw, Target } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { nextState, type Rating } from '../../learn/fsrs';
@@ -190,16 +190,13 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
   }
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <a href={topic ? '#/review' : '#/'} className={`-ml-2.5 ${toolButton}`}>
-          {topic ? 'All topics' : 'All problems'}
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
+      {/* The interview prep hub's tabs lead to the roadmap and the skill map; a topic leads back to every topic. */}
+      {topic && (
+        <a href="#/review" className={`-ml-2.5 ${toolButton}`}>
+          All topics
         </a>
-        <a href="#/progress" className={toolButton}>
-          <Radar size={14} aria-hidden="true" />
-          Skill map and badges
-        </a>
-      </div>
+      )}
       <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">{topic ? `Review: ${topic.title}` : 'Daily review'}</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         {topic
@@ -211,9 +208,9 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
 
       {signedOut && <SignInInvite account={account} sample={stats.total} />}
 
-      {ready && summary && view.kind === 'home' && (
-        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
-          <StreakWidget streak={summary.streak} goal={ready.goal} />
+      {/* The streak itself is at the top of the interview prep hub. */}
+      {ready && view.kind === 'home' && (
+        <div className="mt-6">
           <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />
         </div>
       )}

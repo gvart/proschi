@@ -1,7 +1,7 @@
 import { Trophy } from 'lucide-react';
 import type { Leaderboard } from '../services/api';
 
-/** Users who opted in, by problems solved. */
+/** Users who opted in, by problems solved; each row opens their public profile (`#/u/<id>`). */
 export default function LeaderboardPanel({ leaderboard }: { leaderboard: Leaderboard }) {
   return (
     <section aria-labelledby="leaderboard" className="mt-8">
@@ -14,12 +14,18 @@ export default function LeaderboardPanel({ leaderboard }: { leaderboard: Leaderb
       ) : (
         <ol className="mt-3 divide-y divide-ink/15 rounded-lg border border-ink/15 bg-surface text-sm">
           {leaderboard.entries.map((e) => (
-            <li key={`${e.rank}-${e.displayName}-${e.lastSolvedAt}`} className="flex items-center gap-3 px-4 py-2">
-              <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
-              <span className="flex-1 min-w-0 truncate text-ink">{e.displayName}</span>
-              <span className="tabular-nums text-ink/75">
-                {e.solved} / {leaderboard.problems}
-              </span>
+            <li key={e.id}>
+              <a
+                href={`#/u/${encodeURIComponent(e.id)}`}
+                aria-label={`${e.displayName}: rank ${e.rank}, ${e.solved} of ${leaderboard.problems} solved. See their profile`}
+                className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+              >
+                <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
+                <span className="flex-1 min-w-0 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>
+                <span className="tabular-nums text-ink/75">
+                  {e.solved} / {leaderboard.problems}
+                </span>
+              </a>
             </li>
           ))}
         </ol>

@@ -195,25 +195,29 @@ export async function getProblemStats(request: Request, ctx: Ctx, problemId: str
   return json({ ...stats, you }, 200, { 'Cache-Control': 'no-store' });
 }
 
-/** GET /api/leaderboard: users who chose to appear, by problems solved, then by who got there first. */
+/**
+ * GET /api/leaderboard: users who chose to appear, by problems solved, then
+ * by who got there first. Each entry has the user's id, the public id of their
+ * profile (GET /api/users/<id>/profile): only users who opted in are listed.
+ */
 export async function getLeaderboard(ctx: Ctx): Promise<Response> {
   const { env } = ctx;
   await rateLimit(env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   const body = await cached(ctx, 'leaderboard', async () => {
     const { results } = await env.DB.prepare(
-      `SELECT u.display_name AS name, COUNT(*) AS solved, MAX(p.solved_at) AS last
+      `SELECT u.id AS id, u.display_name AS name, COUNT(*) AS solved, MAX(p.solved_at) AS last
        FROM users u JOIN progress p ON p.user_id = u.id ${CURRENT}
        WHERE u.public_profile = 1 AND p.solved_at IS NOT NULL
        GROUP BY u.id ORDER BY solved DESC, last ASC LIMIT 50`,
     )
       .bind(JSON.stringify(currentVersions()), SIM_VERSION)
-      .all<{ name: string; solved: number; last: number }>();
+      .all<{ id: string; name: string; solved: number; last: number }>();
     let rank = 0;
     return {
       problems: problemIds().length,
       entries: results.map((r, i) => {
         if (i === 0 || results[i - 1].solved !== r.solved) rank = i + 1;
-        return { rank, displayName: r.name, solved: r.solved, lastSolvedAt: r.last };
+        return { rank, id: r.id, displayName: r.name, solved: r.solved, lastSolvedAt: r.last };
       }),
     };
   });

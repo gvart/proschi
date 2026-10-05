@@ -22,7 +22,9 @@ import Footer from '../design/Footer';
 import Header from '../design/Header';
 import { useAchievements } from './skills/useAchievements';
 import AchievementToast from './skills/AchievementToast';
-import ProgressStrip from './skills/ProgressStrip';
+import PrepHub from './prep/PrepHub';
+import { prepTabOf } from './prep/tabs';
+import { profileIdOf } from './profile/profile';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -32,6 +34,9 @@ const GuideRoute = lazy(() => import('./GuideRoute'));
 const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
 // The skill map and badges, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
+// The account page and public profiles, with the cards' topics.
+const AccountRoute = lazy(() => import('./profile/AccountRoute'));
+const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
@@ -43,8 +48,11 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
- * `#/review` daily review (`#/review/<topic>` one topic of it), and
- * `#/progress` the skill map and badges; hash routes work under any sub-path.
+ * `#/review` daily review (`#/review/<topic>` one topic of it),
+ * `#/progress` the skill map and badges, `#/me` the account page and
+ * `#/u/<user id>` a public profile; hash routes work under any sub-path.
+ * The roadmap, review and progress pages are the interview prep hub's tabs
+ * (prep/tabs.ts); the list is Practice.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -110,25 +118,32 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
+  const onMe = route === 'me';
+  const profileId = profileIdOf(route);
+  const onProfile = onMe || profileId !== undefined;
+  /** A page other than the list or a problem. */
+  const onPage = onRoadmap || !!guide || onReview || onProgress || onProfile;
   const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
   const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
-  const problem = problemId && !onRoadmap && !guide && !onReview && !onProgress ? problems.find((p) => p.id === problemId) : undefined;
+  const problem = problemId && !onPage ? problems.find((p) => p.id === problemId) : undefined;
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
   const streak = ready ? (
-    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} compact />
+    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} />
   ) : activity.state.status === 'sign-in' ? (
     <StreakInvite account={account} compact />
   ) : undefined;
   const achievements = useAchievements(account.state, progress);
+  // The interview prep hub's tab: the roadmap (with its guides), daily review or the skill map.
+  const prepTab = onRoadmap || guide || onReview || onProgress ? prepTabOf(route) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
-    // The review and progress pages name themselves.
-    if (onReview || onProgress) return;
+    // The review, progress and profile pages name themselves.
+    if (onReview || onProgress || onProfile) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -136,7 +151,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview, onProgress]);
+  }, [problem, guide, onRoadmap, onReview, onProgress, onProfile]);
 
   if (problem) {
     return (
@@ -162,7 +177,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     <div className="min-h-[100dvh] flex flex-col bg-paper">
       <Header
         base="../"
-        current={onRoadmap ? 'roadmap' : 'practice'}
+        current={prepTab ? 'roadmap' : onProfile ? undefined : 'practice'}
         actions={
           <>
             <AccountMenu account={account} />
@@ -178,34 +193,46 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && !onRoadmap && !guide && !onReview && !onProgress && (
+        {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
-        {onProgress ? (
-          <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
-            <ProgressRoute account={account} achievements={achievements} />
+        {prepTab ? (
+          <PrepHub tab={prepTab} streak={streak}>
+            {onProgress ? (
+              <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
+                <ProgressRoute account={account} achievements={achievements} />
+              </Suspense>
+            ) : onReview ? (
+              <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
+                <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
+              </Suspense>
+            ) : guide ? (
+              <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
+                <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
+              </Suspense>
+            ) : (
+              <Roadmap
+                stages={roadmap}
+                problems={problems}
+                progress={progress}
+                access={access}
+                providers={account.state.status === 'signed-out' ? account.state.providers : []}
+                onSignIn={account.signIn}
+                lessons={lessons}
+                guide={firstGuide}
+              />
+            )}
+          </PrepHub>
+        ) : onMe ? (
+          <Suspense fallback={<PaneLoading label="Loading your profile…" />}>
+            <AccountRoute account={account} activity={activity} achievements={achievements} progress={progress} />
           </Suspense>
-        ) : onReview ? (
-          <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
-            <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
+        ) : profileId !== undefined ? (
+          <Suspense fallback={<PaneLoading label="Loading the profile…" />}>
+            <PublicProfileRoute id={profileId} />
           </Suspense>
-        ) : guide ? (
-          <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
-            <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
-          </Suspense>
-        ) : onRoadmap ? (
-          <Roadmap
-            stages={roadmap}
-            problems={problems}
-            progress={progress}
-            access={access}
-            providers={account.state.status === 'signed-out' ? account.state.providers : []}
-            onSignIn={account.signIn}
-            lessons={lessons}
-            guide={firstGuide}
-          />
         ) : (
-          <ProblemList problems={problems} progress={progress} stats={stats} streak={streak} summary={<ProgressStrip state={achievements.state} />}>
+          <ProblemList problems={problems} progress={progress} stats={stats}>
             {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
           </ProblemList>
         )}

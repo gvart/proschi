@@ -16,6 +16,23 @@ deployed from `main` and ships with the same changes.
   it", with a link to suggest an idea instead, and the footer links to the
   guide. New issue templates suggest a problem or a card without writing
   code.
+- Interview prep is a hub (`practice/#/roadmap`, "Interview prep" in the
+  header) with tabs for the roadmap, daily review and your progress, and your
+  streak and today's goal at the top. The old addresses (`#/review`,
+  `#/review/<topic>`, `#/progress`, `#/roadmap/<id>`) open inside it. The
+  Practice list is now just the problems, with one small link to interview
+  prep.
+- Your profile page (`practice/#/me`, "Your profile" in the account menu):
+  your streak, freezes and daily goal, problems solved by difficulty, cards
+  reviewed and mastered, the interview-ready score, the skill map, every
+  badge and the problems you solved, and the public profile setting. Badges
+  are a compact grid of small medals, here and on the progress page; tap one
+  for what it is and how far along you are.
+- Public profiles (`practice/#/u/<id>`), linked from the leaderboard, for
+  users who opt in: name, month joined, problems solved, streaks, readiness,
+  topic mastery and badges, never designs or review history
+  (`GET /api/users/<id>/profile`; docs/PRIVACY.md lists exactly what is
+  shown).
 - 258 practice cards for daily review, from estimation and networking to
   consistency, streaming and probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,

@@ -72,7 +72,7 @@ instead ([Mobile apps](#mobile-apps)).
 | `POST /auth/logout` | Ends the session |
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
-| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
+| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
 | `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews and its achievements |
 | `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
@@ -84,7 +84,8 @@ instead ([Mobile apps](#mobile-apps)).
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
-| `GET /api/leaderboard` | Top 50 who opted in, by problems solved |
+| `GET /api/leaderboard` | Top 50 who opted in, by problems solved: `{problems, entries: [{rank, id, displayName, solved, lastSolvedAt}]}`; `id` is the user's public id, for their profile |
+| `GET /api/users/<id>/profile` | A public profile, only of a user who opted in (`public_profile = 1`); otherwise 404, the same as an unknown id. `{id, displayName, memberSince, solved: [{id, difficulty}], streak: {current, longest}, readiness, topics: [{topic, mastery}], badges: [{id, earnedAt}]}`: shares in whole percent from 0 to 1, times at the start of a UTC day. Never designs, the daily goal, review counts or logs, sign-ins or sessions (docs/PRIVACY.md). Rate limited per IP (`STATS_LIMITER`), not cached, and stores nothing |
 | `GET /api/cards/state?day=YYYY-MM-DD` | `{states: {<card id>: {version, due, stability, difficulty, reps, lapses, lastReview}}, today?: {reviews, new}}`: the user's card states; with `day` (the client's local date), that day's reviews and new cards |
 | `POST /api/cards/reviews {reviews: [{id, cardId, version, rating, reviewedAt, durationMs, day}]}` | Up to 200 reviews (`rating` 1 again to 4 easy, `reviewedAt` Unix seconds). Idempotent by `id`. Answers `{accepted, skipped: [{id, cardId, reason}], states}`: reviews of unknown cards or versions, dated in the future or far from `day`, are skipped; `states` are the reviewed cards' new states |
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |

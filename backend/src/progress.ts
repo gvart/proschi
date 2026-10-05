@@ -57,15 +57,22 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
-  const [rows, identities] = await DB.batch([
+  const [rows, identities, account] = await DB.batch([
     DB.prepare(
       'SELECT problem_id, runs, source, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms FROM progress WHERE user_id = ? ORDER BY problem_id',
     ).bind(user.id),
     DB.prepare('SELECT provider FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
+    // When the account was made: "member since" on the account page.
+    DB.prepare('SELECT created_at FROM users WHERE id = ?').bind(user.id),
   ]);
   const progress: Record<string, ProgressEntry> = {};
   for (const row of rows.results as unknown as ProgressRow[]) progress[row.problem_id] = entryOf(row);
-  return json({ user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider) }, progress }, 200, NO_STORE);
+  const createdAt = (account.results[0] as { created_at: number } | undefined)?.created_at;
+  return json(
+    { user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) }, progress },
+    200,
+    NO_STORE,
+  );
 }
 
 /** PATCH /api/me {displayName?, publicProfile?, dailyGoal?} */
