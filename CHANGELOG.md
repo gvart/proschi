@@ -9,39 +9,6 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
-### Added
-- A design review on the practice page (the "Review" view next to the tests,
-  formerly the "AI review" placeholder) and in the editor's Analysis view.
-  Worked out on the page from the simulation and the tests, it lists findings
-  by severity (saturated nodes, single points of failure, latency,
-  availability and cost against the requirements, failing tests, …), what
-  the design does well and up to three next steps. An AI reviewer will come
-  later behind the same interface.
-- Lessons in practice: each roadmap step is now "Learn → Challenge →
-  Review". A problem's optional `lesson.md` (docs/PRACTICE.md) explains the
-  concepts behind it in eight fixed sections; a problem opened from the
-  roadmap shows its lesson first with a table of contents and a "Start the
-  challenge" button, remembers once it was read, and keeps it a tab away. The
-  roadmap shows each step's reading time and opens with a "Read first"
-  guide, *How to approach a system design interview*
-  (`practice/#/roadmap/approach`, and `practice/approach/`). Lessons and the
-  guide need no sign-in, and are part of the static problem pages and the
-  sitemap. Statements and lessons understand tables, blockquotes and
-  highlighted ```` ```proschi ```` blocks, and `proschi problem check`
-  validates lessons.
-- A lesson for every one of the 25 problems: the problem explained,
-  back-of-the-envelope numbers, the concepts it needs, a step-by-step design,
-  why each wrong design fails, what interviewers ask, and further reading
-  (engineering posts and papers, the System Design Primer, awesome-scalability
-  and the *System Design Interview* chapters by title).
-
-### Changed
-- Interview prep is easier to find: a section right under the landing page's
-  hero with the roadmap's stages, an "Interview prep" link in the header, and
-  a roadmap card with your progress at the top of the practice list. Pages no
-  longer scroll sideways on phones (the landing page's "How it works" cards,
-  the simulation docs' formulas and tables, the problem pages' big button).
-
 ## [0.8.0] - 2026-10-05
 
 ### Changed
@@ -49,6 +16,11 @@ deployed from `main` and ships with the same changes.
   (`backend/`) together with its API. The old address,
   `gvart.github.io/proschi/`, redirects every page and share link to the same
   path on proschi.app.
+- Interview prep is easier to find: a section right under the landing page's
+  hero with the roadmap's stages, an "Interview prep" link in the header, and
+  a roadmap card with your progress at the top of the practice list. Pages no
+  longer scroll sideways on phones (the landing page's "How it works" cards,
+  the simulation docs' formulas and tables, the problem pages' big button).
 
 ### Added
 - An interview prep roadmap in practice (`practice/#/roadmap`): the problems
@@ -130,6 +102,30 @@ deployed from `main` and ships with the same changes.
   Push Gateway (Netflix, medium), Flash Sale (Shopify, hard), Metrics Ingest
   (Uber, hard) and Trending Topics (Twitter, medium). Twenty-five problems in
   all.
+- A design review on the practice page (the "Review" view next to the tests,
+  formerly the "AI review" placeholder) and in the editor's Analysis view.
+  Worked out on the page from the simulation and the tests, it lists findings
+  by severity (saturated nodes, single points of failure, latency,
+  availability and cost against the requirements, failing tests, …), what
+  the design does well and up to three next steps. An AI reviewer will come
+  later behind the same interface.
+- Lessons in practice: each roadmap step is now "Learn → Challenge →
+  Review". A problem's optional `lesson.md` (docs/PRACTICE.md) explains the
+  concepts behind it in eight fixed sections; a problem opened from the
+  roadmap shows its lesson first with a table of contents and a "Start the
+  challenge" button, remembers once it was read, and keeps it a tab away. The
+  roadmap shows each step's reading time and opens with a "Read first"
+  guide, *How to approach a system design interview*
+  (`practice/#/roadmap/approach`, and `practice/approach/`). Lessons and the
+  guide need no sign-in, and are part of the static problem pages and the
+  sitemap. Statements and lessons understand tables, blockquotes and
+  highlighted ```` ```proschi ```` blocks, and `proschi problem check`
+  validates lessons.
+- A lesson for every one of the 25 problems: the problem explained,
+  back-of-the-envelope numbers, the concepts it needs, a step-by-step design,
+  why each wrong design fails, what interviewers ask, and further reading
+  (engineering posts and papers, the System Design Primer, awesome-scalability
+  and the *System Design Interview* chapters by title).
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,
