@@ -33,8 +33,8 @@ tests in `problem.proschi` refer to them.
 
 - p99 of a redirect under **50 ms**, of shortening under **200 ms**.
 - Redirects available **99.9%** of the time.
-- A short code is never lost once it was returned to the visitor: it is
-  written (`INSERT`, `PutItem`, …) to a database before the answer.
+- A short code is never lost once it has been returned to the visitor: it
+  is written (`INSERT`, `PutItem`, …) to a database before the answer.
 - Losing any single machine must not take the service down.
 - At most **$3,000 / month**.
 

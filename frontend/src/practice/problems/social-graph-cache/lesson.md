@@ -9,7 +9,7 @@
 
 ## The problem, explained
 
-Facebook's social graph is made of **objects** (people, posts, check-ins) and **associations**, typed edges between them (Alice *likes* post 7, Bob is *friends with* Alice). Every page view reads dozens of them; writes are rare in comparison. For years the web servers read MySQL directly and used memcache as a **look-aside cache**: each web server checked memcache, read MySQL on a miss, filled the cache, and deleted keys after writes. TAO replaced that with a graph-aware cache service that owns the path to the database.
+Facebook's social graph is made of **objects** (people, posts, check-ins) and **associations**, typed edges between them (Alice *likes* post 7, Bob is *friends with* Alice). Every page view reads dozens of them, and writes are rare in comparison. For years the web servers read MySQL directly and used memcache as a **look-aside cache**: each web server checked memcache, read MySQL on a miss, filled the cache, and deleted keys after writes. TAO replaced that with a graph-aware cache service that owns the path to the database.
 
 TAO has two cache tiers. **Followers** take every request from the web tier and can be added freely. Each shard of the data has one **leader**, the only server that reads or writes that shard in MySQL. A follower's miss and every write go to the leader; after a write commits, the leader tells the other followers asynchronously.
 
@@ -18,7 +18,7 @@ Two use cases for one region's slice:
 - **Read**: a web server reads an object or association list. Scenarios: `"Follower hit"`, answered by the follower, and `"Follower miss"`, where the follower asks the leader, which reads MySQL.
 - **Write**: a web server adds an association. It goes through a follower to the leader, which commits to MySQL before answering; the other followers are updated after the commit, without the writer waiting.
 
-Requirements: 1M reads and 2k writes per second; p99 under 25 ms for reads and 60 ms for writes; reads available 99.99%; durable writes; survival of any single machine, a MySQL replica included; $6,000 a month, MySQL included.
+Requirements: 1M reads and 2k writes per second. The p99 (the latency that 99% of requests beat) is under 25 ms for reads and 60 ms for writes. Reads are available 99.99% of the time, and writes are durable. The design survives the loss of any single machine, a MySQL replica included, and costs at most $6,000 a month, MySQL included.
 
 **What is given.** The `web` tier (the client) and `db`, the MySQL fleet: a primary and a replica per shard, sharded by object ID. You choose the shard count with `capacity { db shards N }` and add both cache tiers.
 
@@ -60,7 +60,7 @@ In a **look-aside** (cache-aside) design the application talks to both the cache
 
 At Facebook's scale three problems appear:
 
-- **Stale sets.** A reader misses, reads the old value from the database, gets delayed; meanwhile a writer updates the database and deletes the key; then the delayed reader fills the cache with the old value. The cache is now wrong until it expires.
+- **Stale sets.** A reader misses, reads the old value from the database, and is delayed. Meanwhile a writer updates the database and deletes the key. Then the delayed reader fills the cache with the old value. The cache is now wrong until the entry expires.
 - **Thundering herds.** When a hot key is deleted, thousands of web servers miss at once and all hit the database.
 - **Every web server talks to the database.** Each one needs connections and knowledge of the schema, and every cache server's miss is a database query.
 
@@ -72,7 +72,7 @@ In a **read-through** cache, clients ask only the cache, and the cache loads mis
 
 TAO adds a twist: two tiers, and exactly **one leader per shard**. Because one process mediates all reads and writes for a shard, it can serialise them: a miss and a concurrent write for the same key are seen in order by the same server, so stale sets are avoided. Concurrent misses for the same key from many followers arrive at one leader, which can answer them all from one database read.
 
-The trade-off is a hop: a miss now crosses follower and leader before the database. The leader tier is also a potential bottleneck and single point of failure per shard, so leaders need replicas and failover. Do not use this design for small systems or write-heavy workloads; a leader per shard serialising writes adds latency for little gain when the cache hit rate is low.
+The trade-off is a hop: a miss now crosses follower and leader before the database. The leader tier is also a potential bottleneck and single point of failure per shard, so leaders need replicas and failover. Do not use this design for small systems or write-heavy workloads: when the cache hit rate is low, a leader per shard that serialises writes adds latency for little gain.
 
 ```proschi
 title "Read-through tiers"
@@ -185,7 +185,7 @@ Expected follow-ups:
 - **What happens when a leader fails?** Followers keep serving hits; the shard's misses and writes must be rerouted (to another leader replica, or around the leader) until it recovers. The TAO paper describes how it handles leader, follower and database failures.
 - **How do you handle a hot object?** It lands on one shard's leader and every follower. Followers absorb its reads; for extreme cases, cache it in the web tier or replicate it to extra followers.
 - **Can invalidations arrive out of order?** Yes. Attach a version to each cached value and ignore updates older than what the follower holds.
-- **Why keep MySQL at all?** It is durable, well understood, and good at the simple point lookups and range scans that the graph API issues; the cache takes care of the read rate.
+- **Why keep MySQL at all?** It is durable, well understood, and good at the simple point lookups and range scans that the graph API issues. The cache takes care of the read rate.
 
 ## Further reading
 

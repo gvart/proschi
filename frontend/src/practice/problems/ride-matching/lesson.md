@@ -15,9 +15,17 @@ This is the dispatch core of a ride-hailing app like Uber or Lyft. Two kinds of 
 - **Drivers** keep the app open while they are online. Every 4 seconds, the phone reports its position (`lat`, `lng`, heading). That is the **Update location** use case. Only the newest position matters; nobody needs the history for matching.
 - **Riders** ask for a ride from a pickup point. That is **Request ride**, with two outcomes. `"Matched"`: a free driver is within 3 km, so a trip is created and stored, the rider gets `201` with the trip and driver, and the driver gets the offer through a queue. `"No driver nearby"`: nobody is free within 3 km, the rider gets `404`, and no trip is created.
 
-The non-functional requirements: p99 of a location update under 50 ms and of a ride request under 300 ms; ride requests available 99.9% of the time; a trip is never lost once the rider was told about it and it lives in a database (it is billed later); the trip is the driver's "lock", so it must live in a strongly consistent store; the offer goes through a queue; losing any machine, including a node of the location store, must not stop matching; at most $10,000 a month.
+The non-functional requirements:
 
-The given file declares only the two actors and the traffic: **100k location updates a second** and **2k ride requests a second**, 5% of which find nobody. Everything else is yours.
+- The p99 (the latency that 99% of requests beat) of a location update is under 50 ms, and of a ride request under 300 ms.
+- Ride requests are available 99.9% of the time.
+- A trip is never lost once the rider was told about it, and it lives in a database (it is billed later).
+- The trip is the driver's "lock", so it must live in a strongly consistent store.
+- The offer goes through a queue.
+- Losing any machine, including a node of the location store, must not stop matching.
+- The design costs at most $10,000 a month.
+
+The given file declares the two actors, the requirements, the tests and the traffic: **100k location updates a second** and **2k ride requests a second**, 5% of which find nobody. Everything else is yours.
 
 The tests encode four ideas:
 
@@ -28,7 +36,7 @@ The tests encode four ideas:
 
 ## Back-of-the-envelope
 
-The location rate comes from fleet size and update interval: 400k drivers ÷ 4 s = **100k writes a second**. Ride requests are 2k a second; that is 50 times fewer, and that asymmetry is the whole problem.
+The location rate comes from fleet size and update interval: 400k drivers ÷ 4 s = **100k writes a second**. Ride requests are 2k a second, 50 times fewer. That asymmetry is the whole problem.
 
 | Flow | Rate | Kind of operation |
 |---|---|---|
@@ -37,15 +45,15 @@ The location rate comes from fleet size and update interval: 400k drivers ÷ 4 s
 | Trips created (95% of requests) | 1.9k rps | durable, strongly consistent insert |
 | Offers to drivers | 1.9k rps | async message |
 
-**Could a relational database take the locations?** The simulation's PostgreSQL takes 5k writes a second on its one primary, and read replicas do not add write capacity. 100k ÷ 5k = 20 shards at 100% utilisation, closer to 30 if you want headroom. Each shard is a full replica set, at least two replicas at $400 each. Even at the bare minimum of 20-odd shards that is well over $16k a month, for data that is stale four seconds after it is written.
+**Could a relational database take the locations?** The simulation's PostgreSQL takes 5k writes a second on its one primary, and read replicas do not add write capacity. 100k ÷ 5k = 20 shards at 100% utilisation, closer to 30 if you want headroom. Each shard is a full replica set: at least two replicas at $400 each. Even the bare minimum of 20 shards costs $16k a month, for data that is stale four seconds after it is written.
 
-**An in-memory geo store.** Redis takes about 100k operations a second per node in the model. 100k updates + 2k searches ≈ 102k on the store. Two nodes run at about 50% each, but "survive any node failure" re-runs the analysis with one node fewer: one node then sees 102k against 100k, saturated. You need a third node so the two survivors stay below 100%. That is the general rule: **capacity after a failure = (n − 1) × per-node capacity must exceed the load**.
+**An in-memory geo store.** Redis takes about 100k operations a second per node in the model. 100k updates + 2k searches ≈ 102k on the store. Two nodes run at about 50% each. But "survive any node failure" re-runs the analysis with one node fewer, and then one node sees 102k against 100k: saturated. You need a third node so the two survivors stay below 100%. That is the general rule: **capacity after a failure = (n − 1) × per-node capacity must exceed the load**.
 
-**The connection tier dominates the bill.** Every update passes through whatever accepts driver connections. A service replica takes about 2k rps in the model, so 100k ÷ 2k = 50 replicas at 100%. At 70% you need about 72, and you want to stay below 70% with one lost, too. At $100 a replica that is most of the $10k budget, which is why the hint says to keep these servers "just under 70% busy: enough headroom for the p99, no more". The model's queueing grows steeply past that point, while every extra replica is $100.
+**The connection tier dominates the bill.** Every update passes through whatever accepts driver connections. A service replica takes about 2k rps in the model, so 100k ÷ 2k = 50 replicas at 100%. At 70% you need about 72, and you want to stay below 70% with one lost, too. At $100 a replica, that is most of the $10k budget. This is why the hint says to keep these servers "just under 70% busy: enough headroom for the p99, no more". Past that point the model's queueing delay grows steeply, and below it every extra replica costs $100 for nothing.
 
 **Trips.** 1.9k inserts a second against one PostgreSQL primary (5k) is under 40%. A single primary with a replica for failover is enough; no sharding needed for this part.
 
-**Latency.** A location update is load balancer → gateway → one `GEOADD`: a few milliseconds of mean, a p99 in the tens, comfortably under 50 ms if the gateways are not overloaded. A matched ride is load balancer → matching service → `GEOSEARCH` → `INSERT` → enqueue, and the response. The async enqueue counts its own hop but not what the consumer does later.
+**Latency.** A location update is load balancer → gateway → one `GEOADD`. That is about ten milliseconds on average and a p99 in the tens, comfortably under 50 ms if the gateways are not overloaded. A matched ride is load balancer → matching service → `GEOSEARCH` → `INSERT` → enqueue, and the response. The async enqueue counts its own hop, but not what the consumer does later.
 
 ## Concepts
 
@@ -53,12 +61,12 @@ The location rate comes from fleet size and update interval: 400k drivers ÷ 4 s
 
 A database index on `lat` and `lng` separately does not answer "drivers within 3 km": a B-tree can range-scan one dimension, not a circle. Geospatial indexes map two-dimensional space onto something an ordinary index can handle.
 
-- **Geohash** interleaves the bits of latitude and longitude into a string. Points that share a prefix are in the same rectangular cell, so "nearby" becomes "same prefix", plus the neighbouring cells to handle edges. Redis's `GEO` commands store points in a sorted set keyed by a 52-bit geohash, and `GEOSEARCH … BYRADIUS 3 km ASC` returns members within a radius, nearest first.
+- **Geohash** interleaves the bits of latitude and longitude into a string. Points that share a prefix are in the same rectangular cell, so "nearby" becomes "same prefix", plus the neighbouring cells to handle edges. Redis's `GEO` commands store points in a sorted set whose score is a 52-bit geohash, and `GEOSEARCH … BYRADIUS 3 km ASC` returns members within a radius, nearest first.
 - **Quadtrees** split a square into four recursively until each leaf holds few points. They adapt to density: Manhattan gets tiny cells, the desert huge ones.
 - **S2** (Google) projects the sphere onto a cube and numbers cells along a space-filling curve, giving each cell a 64-bit id at many resolutions. Uber's early dispatch system used S2 cells to shard supply and demand.
 - **H3** (Uber, open source) uses hexagons. A hexagon's neighbours are all the same distance from its centre, which makes "rings" of nearby cells and smoothing across cells simpler than with squares.
 
-Trade-offs: geohash and S2 are simple and fit any key-value store; quadtrees adapt to density but need rebalancing as drivers move; H3 is best for analytics and pricing over areas. For an interview, name one, explain cells plus neighbours, and move on.
+Trade-offs: geohash and S2 are simple and fit any key-value store. Quadtrees adapt to density but need rebalancing as drivers move. H3 is best for analytics and pricing over areas. For an interview, name one, explain cells plus neighbours, and move on.
 
 ### Ephemeral state versus the record
 
@@ -86,7 +94,7 @@ app -> record : SQL
 
 ### Asynchronous hand-off with a queue
 
-The offer must reach the driver's phone, which is connected to some gateway node. Calling the gateway synchronously from the matching service would make the rider wait for the push and fail the request whenever that gateway is busy. Instead, the matching service **publishes** an event (`RideOffered d7`) to a queue and answers the rider; a consumer delivers the offer to the driver's connection.
+The offer must reach the driver's phone, which is connected to some gateway node. If the matching service called the gateway synchronously, the rider would wait for the push, and the request would fail whenever that gateway is busy. Instead, the matching service **publishes** an event (`RideOffered d7`) to a queue and answers the rider. A consumer then delivers the offer to the driver's connection.
 
 In Proschi, `->>` is an asynchronous send: the hop counts once for the sender, but nothing after it delays the response.
 
@@ -134,7 +142,7 @@ When not to use it: when the caller needs the result. Here the rider needs the t
 
 **Locations in the database** (`wrong/locations-in-database`). The starter does this, and it feels natural: drivers are rows, so update the row. 100k writes a second land on a PostgreSQL primary built for 5k, which saturates and drags down both use cases that touch it. Caught by **"Location updates are writes to the live map, never the database"** and **p99 of Update location < 50 ms**.
 
-**Locations in a heavily sharded database** (`wrong/locations-in-sharded-database`). The fix for the previous one if you only look at utilisation: 22 shards. It works, at roughly twice the budget, for data nobody needs to keep. Caught by the same flow test and **cost ≤ $10,000/month**.
+**Locations in a heavily sharded database** (`wrong/locations-in-sharded-database`). The fix for the previous one if you only look at utilisation: 22 shards. The writes now fit, but at 93% busy the database still breaks both p99 limits, and the design costs about $26k a month, more than 2.5 times the budget, for data nobody needs to keep. Caught by the same flow test and **cost ≤ $10,000/month**.
 
 **The ride request waits for the offer queue** (`wrong/request-waits-for-offer-queue`). A synchronous publish with an ack. It adds latency and couples the rider's success to the queue and, in real systems, often to the downstream push. Caught by **"The driver's offer never holds up the rider"**.
 
@@ -149,7 +157,7 @@ Classic mistakes beyond the tests:
 
 ## In the interview
 
-Start with the asymmetry: "100k tiny writes a second where only the latest value matters, against 2k searches and 2k precious inserts." Then say that the design separates the two kinds of state, and justify each store by its numbers.
+Start with the asymmetry: "100k tiny writes a second where only the latest value matters, against 2k searches and 1.9k precious inserts." Then say that the design separates the two kinds of state, and justify each store by its numbers.
 
 Likely follow-ups:
 

@@ -12,7 +12,7 @@
 
 Discord stores every message ever sent, trillions of them, in a wide-column database (Cassandra, later ScyllaDB). Messages are **partitioned by channel and a time bucket**: all of one channel's messages from a 10-day window sit together in one partition, and each partition is copied to three nodes. That makes the common read, "open a channel and show the latest 50 messages", one cheap query on one partition.
 
-It works until someone in a huge server pings `@everyone`. Hundreds of thousands of people open the same channel within seconds. Every read targets the same partition, and therefore the same three replicas. That is a **hot partition**: a small part of the cluster takes a huge share of the load, while the other 69 nodes are bored. Because reads run at quorum, those nodes slow down for every query they serve, not only for the busy channel.
+It works until someone in a huge server pings `@everyone`. Hundreds of thousands of people open the same channel within seconds. Every read targets the same partition, and therefore the same three replicas. That is a **hot partition**: a small part of the cluster takes a huge share of the load, while the other 69 nodes sit mostly idle. Because reads run at quorum (each read waits for a majority of the replicas), those nodes slow down for every query they serve, not only for the busy channel.
 
 The three use cases:
 
@@ -20,9 +20,14 @@ The three use cases:
 - **Read messages**: open an ordinary channel and load its latest 50 messages.
 - **Read busy channel**: everyone opens the channel that was just pinged; reads hit the `hot` partition. Two scenarios: `"Joined in-flight read"` (a query for the same channel is already running, and this request gets its result) and `"First read"` (no query in flight, so this one reads the partition and shares the result).
 
-The given declares `api` (the Discord API monolith, treated as the client), `messages` (24 shards of 3 replicas, 72 nodes, fixed) and `hot`, the three replicas that own the busy channel's partition, drawn as a separate node because the simulation spreads load evenly and cannot see one hot key on its own. `hot` takes 10k reads a second per replica and costs nothing extra (its nodes are already paid for in the cluster).
+The given declares `api` (the Discord API monolith, treated as the client), `messages` (24 shards of 3 replicas, 72 nodes, fixed) and `hot`, the three replicas that own the busy channel's partition. `hot` is drawn as a separate node because the simulation spreads load evenly and cannot see one hot key on its own. It takes 10k reads a second per replica and costs nothing extra (its nodes are already paid for in the cluster).
 
-Requirements: p99 of every use case under 60 ms; 99.99% availability; messages durable before the answer; survive any node failure; at most $42,000 a month, the 72 database nodes included. The tests require that every query goes through a node called `data` and that there is no path from the API to any database; that a joined read never calls a database, the first read calls `hot`, and the busy channel never touches `messages`; that no use case calls a cache; and that a send writes `messages` before responding.
+Requirements: p99 of every use case under 60 ms; 99.99% availability; messages durable before the answer; survive any node failure; at most $42,000 a month, the 72 database nodes included. The tests check four things:
+
+- Every query goes through a node called `data`, and there is no path from the API to any database.
+- A joined read never calls a database, the first read calls `hot`, and the busy channel never touches `messages`.
+- No use case calls a cache.
+- A send writes `messages` before responding.
 
 ## Back-of-the-envelope
 
@@ -149,7 +154,7 @@ Likely follow-ups:
 - *What if a message is sent while a coalesced read is in flight?* Joiners get the result of a query that started a few milliseconds earlier. The new message arrives over the real-time gateway anyway; the history read is not the delivery channel.
 - *How does consistent hashing help when instances change?* Only the channels on the affected part of the ring move, so most in-flight groups and routing stay put.
 - *Why ScyllaDB over Cassandra?* Same data model and query language, written in C++ without a garbage-collected runtime, so fewer latency spikes; Discord reported far lower and steadier p99s after the move.
-- *Would you ever add a cache?* For immutable or rarely changing data (old buckets of archived channels, perhaps), or with change-data-capture-driven invalidation if burst coalescing is not enough. Not as the first move.
+- *Would you ever add a cache?* For immutable or rarely changing data (old buckets of archived channels, perhaps), or with invalidation driven by change data capture (a stream of every database change) if coalescing bursts is not enough. Not as the first move.
 
 ## Further reading
 

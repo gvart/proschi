@@ -9,7 +9,7 @@ Polling keeps an app fresh but wastes requests, because almost every answer is "
 
 ## The problem, explained
 
-Every Netflix app opens a WebSocket or Server-Sent Events (SSE) connection and keeps it open. A WebSocket starts as an HTTP request with an `Upgrade` header; the server answers `101 Switching Protocols` and from then on either side can send frames at will. SSE is the one-way, server-to-client cousin over plain HTTP.
+Every Netflix app opens a WebSocket or Server-Sent Events (SSE) connection and keeps it open. A WebSocket starts as an HTTP request with an `Upgrade` header. The server answers `101 Switching Protocols`, and from then on either side can send frames at any time. SSE is the one-way version: the server streams events to the client over plain HTTP.
 
 On the other side, many backend services want to tell a customer's devices "you have new data". They should not care which push server holds the socket, nor wait for the message to arrive.
 
@@ -19,7 +19,14 @@ The functional requirements boil down to three use cases:
 - **Send**: a backend service hands over a message with a one-line library call and gets an acknowledgement as soon as the message is safely accepted.
 - **Deliver**: a message processor takes the message from the queue, looks the customer up in the registry and hands it to exactly that push server, which writes it down the socket. Three outcomes: `"Online"` (delivered), `"Offline"` (no record, drop it) and `"Stale route"` (the record points at a server that died; the call fails, drop it).
 
-The non-functional side: Send p99 under 30 ms and 99.99% available, Connect p99 under 60 ms and 99.9% available, the Online delivery path under 100 ms at p99, an accepted message written durably before the sender hears back, no single machine whose loss stops connecting or pushing, and a budget of $5,000 a month including the senders.
+The non-functional side:
+
+- Send: p99 under 30 ms, 99.99% available.
+- Connect: p99 under 60 ms, 99.9% available.
+- The Online delivery path: under 100 ms at p99.
+- An accepted message is written durably before the sender hears back.
+- Losing any single machine must not stop connecting or pushing.
+- A budget of $5,000 a month, including the senders.
 
 The given file fixes the two ends: the `device` actor and the `senders` (four replicas of a backend service). Everything in between is yours. Its tests encode the key ideas:
 
@@ -33,7 +40,7 @@ The tests refer to nodes by id, so the push servers must be called `push` and th
 
 Start from the two numbers the statement gives: 10 million concurrent connections, and a connection lifetime of at most about 30 minutes.
 
-**Connects per second.** If every connection is replaced at least every 1,800 seconds, and reconnects are spread out randomly, the steady-state connect rate is 10,000,000 / 1,800 ≈ 5,600 per second. The statement rounds to 5.5k. Notice that the reconnect rate, not the number of open sockets, is what turns into requests. Netflix's Zuul wiki gives a registry TTL of 1,800 seconds and a "dither" window that randomises each client's lifetime, which is exactly what keeps this rate smooth instead of spiky.
+**Connects per second.** If every connection is replaced at least every 1,800 seconds, and reconnects are spread out randomly, the steady-state connect rate is 10,000,000 / 1,800 ≈ 5,600 per second. The statement uses 5.5k. Notice that the reconnect rate, not the number of open sockets, is what turns into requests. Netflix's Zuul wiki gives a registry TTL of 1,800 seconds and a "dither" window that randomises each client's lifetime. That window is what keeps this rate smooth instead of spiky.
 
 **Messages.** 20k messages a second, split by the mix:
 
@@ -63,7 +70,7 @@ The push servers do not see offline messages (the processor drops them) and, in 
 
 **Memory, roughly.** A registry record is a customer id, a server id and an expiry, call it 100 bytes with overhead. Ten million of them is about 1 GB: comfortably in memory for a sharded cache.
 
-**How this shows up in the simulation.** Utilisation is load over capacity; above 70% a node is hot, at 100% it is saturated and every latency limit of a use case that touches it fails. Latency grows with utilisation (an M/M/c queue), so a pool at 60% adds little. A single replica of anything is a single point of failure. Cost is a flat price per replica (service $100, cache $150, queue $200, load balancer $50), and $400 of the budget is already the senders.
+**How this shows up in the simulation.** Utilisation is load divided by capacity. Above 70% a node is hot. At 100% it is saturated, and every latency limit of a use case that touches it fails. Latency grows with utilisation (an M/M/c queue), so a pool at 60% adds little. A single replica of anything is a single point of failure. Cost is a flat price per replica (service $100, cache $150, queue $200, load balancer $50), and $400 of the budget is already the senders.
 
 One caveat: the model counts requests, not open sockets. It cannot see that one server holds hundreds of thousands of idle connections, nor the reconnect storm when it dies. Size by requests here; raise sockets and herds in the interview.
 
@@ -117,7 +124,7 @@ usecase "Route message" {
 
 If senders called push servers directly, every sender would need registry access, would wait for the whole delivery, and would need retry logic for dead servers. A burst from one service would land on the push fleet unfiltered.
 
-Putting a durable queue (Kafka at Netflix) in between changes all of that. The sender's job ends at "the queue has it", which is one fast, highly available write. Message processors consume at their own pace, do the registry lookup and the delivery, and absorb bursts as consumer lag instead of as failed requests. Partitioning the queue by customer keeps one customer's messages in order.
+Putting a durable queue (Kafka at Netflix) in between changes all of that. The sender's job ends at "the queue has it", which is one fast, highly available write. Message processors consume at their own pace and do the registry lookup and the delivery. A burst becomes consumer lag (messages waiting in the queue) instead of failed requests. Partitioning the queue by customer keeps one customer's messages in order.
 
 The cost is a little latency and one more system to run. When not to use it: a single sender that needs synchronous confirmation of delivery gains nothing from the extra hop.
 
@@ -146,7 +153,7 @@ usecase "Consume" {
 
 Push messages at Netflix are hints ("there are new recommendations"), not the data itself. If the device is offline, the app fetches fresh data when it next connects, so there is nothing to store and redeliver. That choice is what separates this problem from **Chat**, where every message must be stored and delivered later.
 
-Best effort still has to fail cleanly. A registry record can outlive its server: the server crashed, its connections are gone, and the TTL has not fired yet. The processor calls that server, the call fails, and the right behaviour is to drop the message and move on, not to retry forever or crash. In Proschi you express "this node is down in this scenario" with a failed call, `-x`. The model charges a failed call a fixed 1,000 ms timeout, which is why the latency requirement here is only on the `"Online"` scenario: a stale route is slow by nature, and that is acceptable for 2% of best-effort traffic.
+Best effort still has to fail cleanly. A registry record can outlive its server: the server crashed, its connections are gone, and the TTL has not fired yet. The processor calls that server and the call fails. The right behaviour is to drop the message and move on, not to retry forever or crash. In Proschi you express "this node is down in this scenario" with a failed call, `-x`. The model charges a failed call a fixed 1,000 ms timeout, which is why the latency requirement here is only on the `"Online"` scenario: a stale route is slow by nature, and that is acceptable for 2% of best-effort traffic.
 
 When best effort is wrong: anything the user would notice missing (a chat message, a payment receipt). Then you need a store-and-forward inbox plus the push as a doorbell.
 
@@ -189,7 +196,7 @@ Resist the shortcut of letting senders call push servers. It fails three constra
 
 **Step 3: deep dive.** Three questions are worth the time.
 
-*Which store for the registry?* Work the numbers from the envelope: 5.5k writes and 20k reads a second, with expiry. A single PostgreSQL primary is already over its write capacity, and rows do not expire. A partitioned NoSQL store like DynamoDB or Cassandra would work, but at Proschi's price per replica a few of them cost far more than an in-memory cache. Redis with `SET … EX` gives you expiry for free and has capacity to spare; replicate it so losing one node changes nothing.
+*Which store for the registry?* Work the numbers from the envelope: 5.5k writes and 20k reads a second, with expiry. A single PostgreSQL primary is already over its write capacity, and rows do not expire. A partitioned NoSQL store like DynamoDB or Cassandra would work, but at Proschi's price per replica, a few of them cost far more than an in-memory cache. Redis with `SET … EX` gives you expiry for free and has capacity to spare; replicate it so losing one node changes nothing.
 
 *Why not broadcast?* It needs no registry, but with N servers each message becomes N deliveries, N − 1 of them wasted.
 
@@ -199,16 +206,16 @@ Resist the shortcut of letting senders call push servers. It fails three constra
 
 ## Common mistakes
 
-**Broadcast to every server** (`wrong/broadcast-to-every-server`). With no registry, each message goes `x14` to the whole fleet. In the real world that multiplies network traffic and CPU by the fleet size and grows worse every time you scale out, which is exactly backwards. In Proschi the push servers jump to roughly ten times their capacity and saturate, so the Connect p99 fails; the flow tests also fail because Connect no longer writes a registry and Deliver never reads one.
+**Broadcast to every server** (`wrong/broadcast-to-every-server`). With no registry, each message goes `x14` to the whole fleet. In the real world that multiplies network traffic and CPU by the fleet size, and it gets worse every time you scale out, which is exactly backwards. In Proschi the push servers jump to roughly ten times their capacity and saturate, so the Connect p99 fails (and the Online p99 and `survive any node failure` with it); the flow tests also fail because Connect no longer writes a registry and Deliver never reads one.
 
-**The registry in PostgreSQL** (`wrong/registry-in-postgres`). Every connect is a write, and one primary takes about 5k writes a second; 5.5k connects is over the line. Read replicas only add read capacity. On top of that, rows do not expire, so dead routes pile up until a cleanup job finds them. The simulation saturates the database, which fails `p99 of Connect < 60 ms` and `survive any node failure`.
+**The registry in PostgreSQL** (`wrong/registry-in-postgres`). Every connect is a write, and one primary takes about 5k writes a second; 5.5k connects is over the line. Read replicas only add read capacity. On top of that, rows do not expire, so dead routes pile up until a cleanup job finds them. The simulation saturates the database, which fails `p99 of Connect < 60 ms` and `survive any node failure` (and the Online p99, since every delivery reads the registry).
 
-**Senders call a push API** (`wrong/senders-call-push-api`). No queue: the sender's request does the lookup and the delivery before it answers. Every sender now waits for the slowest push server, a burst from one service hits the fleet directly, and nothing is stored before the acknowledgement. This fails the test "Senders hand messages to Kafka and never call push servers", the Send p99, and `Send is durable`.
+**Senders call a push API** (`wrong/senders-call-push-api`). No queue: the sender's request does the lookup and the delivery before it answers. Every sender now waits for the slowest push server, a burst from one service hits the fleet directly, and nothing is stored before the acknowledgement. This fails the test "Senders hand messages to Kafka and never call push servers", the Send p99 and `Send is durable`. With no **Deliver** use case left, the delivery tests fail too.
 
 **Classic mistakes worth naming too:**
 
 - *No TTL on registry records.* Every crash leaves garbage that routes messages into the void forever.
-- *An HTTP load balancer with default idle timeouts.* Connections drop every few seconds and the "connect" rate explodes.
+- *An HTTP load balancer with default idle timeouts.* Quiet connections drop after about a minute (60 seconds is a common default), and the connect rate explodes.
 - *Treating stale routes as errors to retry.* Retrying a dead server only delays the next message; drop and let the TTL clean up.
 
 ## In the interview
@@ -223,6 +230,7 @@ Likely follow-ups and short answers:
 - *How do you deliver to a customer with three devices?* Store a set of server ids per customer (or a record per device) and fan out to each.
 - *Do you guarantee delivery?* No, it is best effort by design; the app refreshes on reconnect. For guaranteed messages, add an inbox store and use push only as a doorbell.
 - *Why Kafka rather than direct calls?* Fast durable acknowledgement for senders, burst absorption, per-customer ordering by partition, and senders that know nothing about the fleet.
+
 ## Further reading
 
 - [Scaling Push Messaging for Millions of Devices @Netflix](https://www.infoq.com/presentations/neflix-push-messaging-scale/), Susheel Aroskar, QCon New York 2018: the original talk on Zuul Push, the registry and the Kafka-based message flow.

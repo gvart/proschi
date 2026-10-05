@@ -73,9 +73,9 @@ All of them answer the same question, "may this client make another request righ
 
 - **Fixed window counter.** One counter per client per minute (key like `rate:client-42:202610051437`). Increment on each call; reject when it passes 100; let the key expire after the minute. Tiny and simple. The flaw: a client can send 100 at the end of one minute and 100 at the start of the next, 200 in about a second.
 - **Sliding window log.** Keep the timestamp of every request in the last minute; count them on each call. Exact, but memory grows with the limit (100 timestamps per client here, far more for high limits).
-- **Sliding window counter.** Keep the current and previous minute's counts, and estimate the last 60 seconds as *current + previous × (fraction of the previous window still inside the last 60 s)*. Nearly as smooth as the log with two numbers of memory. Cloudflare described using this approach at the edge.
+- **Sliding window counter.** Keep the current and previous minute's counts, and estimate the last 60 seconds as *current + previous × (fraction of the previous window still inside the last 60 s)*. Nearly as smooth as the log, with only two numbers of memory. Cloudflare described using this approach at the edge.
 - **Token bucket.** Each client has a bucket of up to *B* tokens, refilled at *r* per second; a request takes a token or is rejected. It allows short bursts up to *B* while enforcing the average rate. Stripe has written about using token buckets in Redis for its API limits.
-- **Leaky bucket.** Requests join a fixed-size queue drained at a constant rate. It smooths output perfectly but adds waiting instead of rejecting, which suits traffic shaping more than API limits.
+- **Leaky bucket.** Requests join a fixed-size queue drained at a constant rate. It smooths the output perfectly, but requests wait in the queue (and are rejected only when it is full). That suits traffic shaping more than API limits.
 
 **Trade-offs in one line each:** fixed window is cheapest but bursty at edges; the log is exact but memory-hungry; the sliding counter is the usual compromise; token bucket is the most flexible for APIs.
 
@@ -106,7 +106,7 @@ usecase "Check" {
 
 **What it is.** The limiter runs on several machines behind the entry point, and requests from one client land on any of them. If each limiter kept its own in-memory counts, a client spread across *n* replicas could make *n* times its limit. So the counters live in one shared, fast store, typically Redis.
 
-**Why atomic.** Consider "read the counter, decide, then increment". Two requests from the same client arrive at two limiters at the same instant; both read 99, both allow, both increment to 101. Under a burst, dozens can slip through that gap. `INCR` does the read and the write in one atomic step and returns the new value, so every caller sees a distinct number and the decision is made on that number. More complex algorithms (token bucket, sliding window) get the same guarantee by running as a Lua script inside Redis, which executes without interruption.
+**Why atomic.** Consider "read the counter, decide, then increment". Two requests from the same client arrive at two limiters at the same instant. Both read 99, both allow, and both increment, ending at 101. Under a burst, dozens can slip through that gap. `INCR` does the read and the write in one atomic step and returns the new value, so every caller sees a distinct number and the decision is made on that number. More complex algorithms (token bucket, sliding window) get the same guarantee by running as a Lua script inside Redis, which executes without interruption.
 
 **Trade-offs.** Every call now makes a round trip to the store, about a millisecond inside a data centre. The store becomes a dependency of every request, which raises the question below.
 
@@ -127,11 +127,11 @@ limits -> counts : INCR
 
 ### Placement, no bypass, and failing open
 
-**Where it goes.** The limiter must sit on the only path to the protected service: in an API gateway, as middleware in the service, or as a separate service the gateway asks. Here the gateway asks a limiter service, which keeps the policy (who gets what limit) in one place. If any route reaches the Orders API without passing the check (an old load balancer, a "temporary" direct connection), the noisy clients will find it.
+**Where it goes.** The limiter must sit on the only path to the protected service. It can live in an API gateway, as middleware in the service, or as a separate service the gateway asks. Here the gateway asks a limiter service, which keeps the policy (who gets what limit) in one place. If any route reaches the Orders API without passing the check (an old load balancer, a "temporary" direct connection), the noisy clients will find it.
 
 **What to return.** `429 Too Many Requests`, ideally with a `Retry-After` header and headers telling the client its limit and what's left. Well-behaved clients back off; badly behaved ones are at least rejected cheaply.
 
-**Fail open or closed?** If the counter store is down, a limiter can reject everything (fail closed: safe for the backend, an outage for everyone) or allow everything (fail open: the API stays up, unprotected for a while). For a limiter whose job is fairness, failing open is the common choice; for one that protects something fragile or expensive, closed may be right. Either way, decide on purpose.
+**Fail open or closed?** If the counter store is down, a limiter can reject everything (fail closed: safe for the backend, but an outage for everyone) or allow everything (fail open: the API stays up, but unprotected for a while). For a limiter whose job is fairness, failing open is the common choice. For one that protects something fragile or expensive, failing closed may be right. Either way, decide on purpose.
 
 A fail-open path, drawn as a fallback scenario:
 
@@ -173,7 +173,7 @@ Ask what is being limited and by what key: per user, per API key, per IP? (Per c
 
 ### Step 2: High-level design
 
-The starter connects the client straight to `orders`. The first move is to put an entry point in front and remove that direct path; the client now talks only to the gateway. The gateway asks a limiter for every call; the limiter increments the client's counter in Redis and returns allow or deny. On allow, the gateway forwards to `orders`; on deny, it answers `429` itself.
+The starter connects the client straight to `orders`. The first move is to put an entry point in front and remove that direct path, so the client talks only to the gateway. The gateway asks a limiter about every call. The limiter increments the client's counter in Redis and returns allow or deny. On allow, the gateway forwards the call to `orders`; on deny, it answers `429` itself.
 
 Draw the use case with the check *before* the `alt`, because every call is counted, and then two scenarios: `"Allowed"` goes on to `orders`, `"Limited"` stops at the gateway.
 
@@ -195,13 +195,13 @@ Draw the use case with the check *before* the `alt`, because every call is count
 
 **The client can bypass the limiter** (`wrong/client-bypasses-limiter`). The design is otherwise perfect, but there's still a `client -> orders` connection. In production, this is the forgotten internal hostname or an old route that skips the gateway; abusive clients find it quickly, and your limiter protects nothing. Caught by **Rejected calls never reach the Orders API** (`no path from client to orders`).
 
-**Incrementing after the decision** (`wrong/increment-after-decision`). The limiter `GET`s the counter, decides, and increments afterwards, asynchronously, and only for allowed calls. Two things go wrong. Concurrent requests read the same value and all pass (the race described above), so bursts exceed the limit. And rejected calls aren't counted, so a client hammering the API is never "more over" its limit than at the first rejection. Caught by **Every call is counted before it is let through**.
+**Incrementing after the decision** (`wrong/increment-after-decision`). The limiter `GET`s the counter, decides, and increments afterwards, asynchronously, and only for allowed calls. Two things go wrong. Concurrent requests read the same value and all pass (the race described above), so bursts exceed the limit. And rejected calls aren't counted, so the counter never shows how hard a client is really hammering the API. Caught by **Every call is counted before it is let through**.
 
-**Counters in each limiter's memory.** Fast and simple, but a client spread over five replicas gets five times its limit, and a restart resets everyone's count. The tests require the check to go to a cache, and **Limits are checked before the Orders API** fails without one.
+**Counters in each limiter's memory.** Fast and simple, but a client spread over five replicas gets five times its limit, and a restart resets everyone's count. The tests require the check to go to a cache: without one, **Limits are checked before the Orders API** and **Every call is counted before it is let through** fail.
 
 **Calling Orders in the Limited scenario.** For example, forwarding the request and filtering the answer. The point is that the backend never does the work. Caught by **Rejected calls never reach the Orders API**.
 
-**One limiter or one Redis.** A single limiter replica falls short of 99.9% on its own and is a single point of failure, and a single Redis is too. Caught by `survive any node failure` and the availability requirement.
+**One limiter or one Redis.** A single limiter replica falls short of 99.9% on its own and is a single point of failure. So is a single Redis. Caught by `survive any node failure` and the availability requirement.
 
 **Too few limiter replicas.** Three can carry 5k rps on paper, but at that utilisation queueing pushes up p99, and losing one saturates the rest. Caught by the p99 limit or `survive any node failure`.
 
@@ -216,7 +216,7 @@ Follow-up questions:
 - **"What happens if Redis is down?"** Fail open with an alert (the usual choice for fairness limits), or fail closed when the backend is fragile. Run Redis with a replica so this is rare.
 - **"How does the client know when to retry?"** `429` with `Retry-After`, plus headers for the limit and remaining calls.
 - **"How would you limit across regions?"** Enforce per region with a share of the global limit, or sync counts asynchronously and accept a little overshoot.
-- **"Rate limiting vs load shedding?"** Rate limiting is per client fairness; load shedding protects the service as a whole when it's near capacity, regardless of who's sending.
+- **"Rate limiting vs load shedding?"** Rate limiting is per-client fairness. Load shedding protects the service as a whole when it's near capacity, no matter who is sending.
 
 ## Further reading
 

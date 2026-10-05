@@ -9,7 +9,7 @@
 
 ## The problem, explained
 
-A CDN is a network of data centers that cache your content near visitors. When a data center does not have an asset, it fetches it from the **origin**, your own web servers. With hundreds of data centers each caching on its own, the origin sees the first request for a popular asset hundreds of times, and pays the cloud for every byte.
+A CDN is a network of data centers that cache your content near visitors. When a data center does not have an asset, it fetches it from the **origin**, your own web servers. With hundreds of data centers each caching on its own, the origin sees the first request for a popular asset hundreds of times, and its owner pays the cloud for every byte it sends.
 
 Cloudflare's Tiered Cache turns that flat network into a hierarchy. Data centers near visitors are the **lower tier** (the edge). On a miss they ask an **upper tier**: a few data centers close to the origin. Only the upper tier talks to the origin. You are designing the CDN side for one customer's site.
 
@@ -24,7 +24,7 @@ Non-functional requirements: 50k requests per second, p99 under 150 ms, 99.99% a
 
 **What the tests check**: an edge miss asks the upper tier, and only an upper-tier miss reaches the origin; there is no path at all from the visitor or the edge to the origin; and a purge clears the upper tier before the edge and never touches the origin. The requirements add latency, availability, failure survival and cost.
 
-The problem statement is honest about the model's simplifications: each tier is one node whose replicas stand for its data centers, hit rates are the given mix rather than an outcome of the topology, and traffic between your own nodes is free, so the origin's egress bill shows up as load on the origin instead.
+The statement lists the model's simplifications: each tier is one node whose replicas stand for its data centers, hit rates are the given mix rather than an outcome of the topology, and traffic between your own nodes is free, so the origin's egress bill (what the cloud charges for data sent out) shows up as load on the origin instead.
 
 ## Back-of-the-envelope
 
@@ -59,7 +59,7 @@ A **cache hierarchy** puts caches in layers: small caches near users, fewer bigg
 
 Why it works: miss rates multiply. If the edge misses 10% and the upper tier misses 40% of what reaches it, the origin sees 10% × 40% = 4%. The upper tier also has a much better hit rate than any single edge, because it aggregates the misses of all edges: an asset requested once in Tokyo and once in Paris is two edge misses but only one upper-tier miss.
 
-Trade-offs: an upper-tier hit adds a hop (often a long one, since the upper tier sits near the origin, not the visitor), so tiering slightly slows misses to make the origin's life much easier. It also concentrates load on a few data centers, so the upper tier must be redundant. Do not bother when there is one cache location, when content is uncacheable (personalised pages), or when the origin is itself a scalable store such as S3 that does not care about load.
+Trade-offs: an upper-tier hit adds a hop (often a long one, since the upper tier sits near the origin, not the visitor), so tiering slightly slows misses to make the origin's life much easier. It also concentrates load on a few data centers, so the upper tier must be redundant. Skip tiering when there is one cache location, when content is uncacheable (personalised pages), or when the origin is itself a scalable store such as S3 that does not care about load.
 
 ```proschi
 title "Two cache tiers"
@@ -93,7 +93,7 @@ usecase "Get" {
 
 ### Failover without stampedes
 
-When a cache layer fails, the tempting fallback is "go straight to the source". That is safe for a tiny cache and dangerous for a big one. The cache existed because the source cannot take the full load; the moment the cache disappears, the source receives everything it was shielded from, at once. This is a **thundering herd**: many clients missing on the same thing simultaneously.
+When a cache layer fails, the tempting fallback is "go straight to the source". That is safe for a tiny cache and dangerous for a big one. The cache existed because the source cannot take the full load; the moment the cache disappears, the source receives everything it was shielded from, at once. This is a **thundering herd**: many clients missing on the same thing at the same time.
 
 The right failover keeps the shape of the hierarchy: give the tier a **second member of the same tier** (a fallback upper-tier data center in another location) rather than a path that skips the tier. Cloudflare's later work on Smart Tiered Cache describes exactly this: a primary and a fallback upper tier for each origin. The origin can then also lock its firewall to the upper tier's addresses, which is why the tests forbid any path from the edge or the visitor to it.
 
@@ -105,7 +105,7 @@ Purging means deleting cached copies after the source changes. In a hierarchy, t
 
 The rule is **purge from the source outward**: the tier closest to the origin first, then the tiers that fill from it. Once the upper tier is clear, any edge miss falls through to the origin and gets the new asset. A purge never needs the origin itself, which already has the new version.
 
-The fan-out is large: one purge must reach every edge data center. In Proschi an `x300` prefix on a step means it happens 300 times per request; load counts all 300 calls while latency counts the step once, as if they ran in parallel. Alternatives to purging are **versioned URLs** (`app.3f9a.js`, never purged, just replaced) and short TTLs. Versioned URLs are the better default for static assets; purges are for content whose URL cannot change.
+The fan-out is large: one purge must reach every edge data center. In Proschi an `x300` prefix on a step means it happens 300 times per request; load counts all 300 calls while latency counts the step once, as if they ran in parallel. Alternatives to purging are **versioned URLs** (`app.3f9a.js`, never purged, just replaced) and short TTLs (time to live: how long a cached copy stays valid). Versioned URLs are the better default for static assets; purges are for content whose URL cannot change.
 
 ## Designing it step by step
 
@@ -137,7 +137,7 @@ Summarise: two tiers, so 96% of requests never reach the origin; a redundant upp
 
 ## Common mistakes
 
-**Every edge fills from the origin** (`wrong/every-edge-fills-from-origin.proschi`). The flat CDN: no upper tier, edges go straight to the origin. In the real world this is the default setup of most CDNs, and it works until the origin is small relative to the edge footprint; then cold caches after a deploy or a purge hammer it. Here it fails three ways: "Edge misses go to the upper tier, not the origin", "Only the upper tier talks to the origin", and p99, because 5k rps saturates a 4k-rps origin.
+**Every edge fills from the origin** (`wrong/every-edge-fills-from-origin.proschi`). The flat CDN: no upper tier, edges go straight to the origin. In the real world this is the default setup of most CDNs, and it works while the origin is big enough for the number of edges. When it is not, cold caches after a deploy or a purge overload it. Here it fails three ways: "Edge misses go to the upper tier, not the origin", "Only the upper tier talks to the origin", and p99, because 5k rps saturates a 4k-rps origin.
 
 **One upper-tier data center** (`wrong/single-upper-tier.proschi`). Everything flows correctly, but the upper tier has a single replica and no fallback. When it fails, no edge miss can be filled. It fails `survive any node failure`. In production the same mistake looks like a single "shield POP" that becomes a global outage for cache misses when it goes down.
 
@@ -145,7 +145,7 @@ Summarise: two tiers, so 96% of requests never reach the origin; a redundant upp
 
 **Purging the edge first** (`wrong/purge-edge-first.proschi`). Same design, purge order reversed. Between the two purges an edge can refill the stale copy from the upper tier, and the stale asset survives the purge. It fails "A purge clears the upper tier before the edge".
 
-**A load balancer as the edge.** A load balancer distributes requests but caches nothing; every request reaches whatever is behind it. Use a CDN tech such as `[Cloudflare]` for both tiers.
+**A load balancer as the edge.** A load balancer distributes requests but caches nothing; every request reaches whatever is behind it. Use a CDN technology such as `[Cloudflare]` for both tiers.
 
 ## In the interview
 

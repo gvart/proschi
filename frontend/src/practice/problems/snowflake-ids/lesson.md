@@ -8,7 +8,7 @@
 
 ## The problem, explained
 
-In 2010 Twitter was moving tweets from MySQL to Cassandra. MySQL had handed out ids with auto-increment; Cassandra has no such thing, and shouldn't, since any node in a distributed database can take a write. Twitter needed a new source of ids with four properties:
+In 2010 Twitter was moving tweets from MySQL to Cassandra. MySQL had handed out ids with auto-increment. Cassandra has no such thing, and it shouldn't: any node in a distributed database can take a write. Twitter needed a new source of ids with four properties:
 
 - **Unique** across every machine that makes them.
 - **64 bits**, so they fit in a long integer everywhere (128-bit UUIDs were too big for their systems).
@@ -26,7 +26,7 @@ The non-functional requirements:
 
 - **Scale**: 20k ids per second at peak. Generators start about once a minute across the fleet.
 - **No shared counter**: making an id never calls a database, a cache or ZooKeeper.
-- **Latency**: p99 of Get ID under 40 ms (looser than Twitter's 2 ms because the simulation's services are slower).
+- **Latency**: p99 of Get ID (the time 99% of requests beat) under 40 ms. That is looser than Twitter's 2 ms because the simulation's services are slower.
 - **Availability**: Get ID up 99.99% of the time.
 - **Fault tolerance**: losing any single machine doesn't stop id generation.
 - **Budget**: $4,000 a month, including the existing ZooKeeper cluster.
@@ -50,7 +50,7 @@ The tests, in plain words:
 | Ids per worker per second, theoretical | 4,096 × 1,000 | ≈ 4 million |
 | Generator starts | 1 per minute | ≈ 0.017 per second |
 
-Two takeaways. First, the bit budget is comfortable: 70 years of timestamps, a thousand generators, and a per-worker ceiling far above any realistic load. Second, the startup traffic to ZooKeeper is negligible; it's the per-id traffic that would hurt if you sent it anywhere shared.
+Two takeaways. First, the bit budget is comfortable: 70 years of timestamps, a thousand generators, and a per-worker ceiling far above any realistic load. Second, the startup traffic to ZooKeeper is tiny. It's the per-id traffic that would hurt if you sent it anywhere shared.
 
 Now compare what a shared counter would face, using the simulation's per-replica defaults:
 
@@ -60,9 +60,9 @@ Now compare what a shared counter would face, using the simulation's per-replica
 | Counter in Redis | one counter key | 100,000 ops/s | 20%, but a round trip and a dependency per id |
 | Snowflake | nowhere: made in memory | — | — |
 
-The MySQL design is saturated four times over: replicas don't help, because all writes go through one primary. Redis survives the load but still puts a shared component in the path of every tweet.
+The MySQL design gets four times the writes it can take. Replicas don't help, because all writes go through one primary. Redis survives the load but still puts a shared component in the path of every tweet.
 
-The generators themselves are services. In the simulation a `[gRPC]` service handles about 2,000 rps per replica, so 20,000 rps needs **at least 10 replicas just to reach 100%**, which is saturation, not a design. Size the fleet so it stays well below 70% busy, and remember that `survive any node failure` removes one replica and re-checks that nothing saturates and p99 still holds. (Real Snowflake processes are far faster, Twitter asked for 10k ids per second each; the model's services are deliberately generic.)
+The generators themselves are services. In the simulation a `[gRPC]` service handles about 2,000 rps per replica, so 20,000 rps needs **at least 10 replicas just to reach 100%**, which is saturation, not a design. Size the fleet so it stays well below 70% busy, and remember that `survive any node failure` removes one replica and re-checks that nothing saturates and p99 still holds. (Real Snowflake processes are far faster: Twitter asked for 10k ids per second each. The model's services are deliberately generic.)
 
 Other numbers that show up in the Analysis tab:
 
@@ -87,7 +87,7 @@ Other numbers that show up in the Analysis tab:
 
 **Why it's unique without coordination.** Two ids from different workers differ in the worker field. Two ids from the same worker differ in the timestamp, or, within one millisecond, in the sequence. If a worker uses up all 4,096 sequence values in one millisecond, it waits for the next millisecond. Nothing in that logic needs another machine.
 
-**Why it sorts by time.** The timestamp is in the high bits, so comparing ids compares times first. Ids from different workers in the same millisecond are ordered by worker id, not by real order: that's what *roughly* (or *k-sorted*) means. Ids are sorted to within the clock skew between machines.
+**Why it sorts by time.** The timestamp is in the high bits, so comparing ids compares times first. Ids from different workers in the same millisecond are ordered by worker id, not by the real order of events. That's what *roughly* (or *k-sorted*) means: ids are sorted to within the clock skew between machines.
 
 **Trade-offs.** It depends on clocks. If NTP steps a clock backwards, a worker could repeat timestamps; the original Snowflake refuses to make ids until the clock passes the last timestamp it used. Ids also leak information: anyone can read the creation time from an id, and roughly how busy a worker is.
 
@@ -111,7 +111,7 @@ usecase "New id" {
 
 **What it is.** The only thing two generators must never share is the worker id. So the coordination happens once, when a process starts: it claims a worker id from a coordination service and keeps it for its lifetime. Every id after that is made in memory.
 
-**Why ZooKeeper.** ZooKeeper is a small, strongly consistent store built for exactly this kind of agreement. A process can create an **ephemeral** node (one that disappears automatically when the process's session ends) under a path like `/snowflake/workers/`. While the process lives, its claim lives; if it dies, the claim is released and the worker id can be reused. A **sequential** node gets a unique, increasing suffix, which is a convenient way to hand out numbers; in practice you'd map it into the 0–1,023 range, or try to create `/workers/<n>` for the lowest free `n`.
+**Why ZooKeeper.** ZooKeeper is a small, strongly consistent store built for exactly this kind of agreement. A process can create an **ephemeral** node (one that disappears automatically when the process's session ends) under a path like `/snowflake/workers/`. While the process lives, its claim lives; if it dies, the claim is released and the worker id can be reused. A **sequential** node gets a unique, increasing suffix, which is a convenient way to hand out numbers. In practice you'd map it into the 0–1,023 range, or try to create `/workers/<n>` for the lowest free `n`.
 
 **Trade-offs.** If ZooKeeper is down, *new* generators can't start, but running ones keep serving ids. That's the point: the coordination system is off the hot path, so its outages and its latency don't touch tweets. The risk is a process that loses its ZooKeeper session but keeps running: it must stop serving ids, or another process could claim the same worker id.
 

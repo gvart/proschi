@@ -49,8 +49,8 @@ creator's upload and `~4MB` on every segment download (`~4MB GET
 /hls/…`). They add transfer time, and bytes sent to viewers cost
 **egress**: $0.09 per GB from storage or anything else you run, $0.02 per GB
 from a CDN.
-Copies inside the region (the transcoder reading the original, a CDN filling
-from storage aside) are left without a size here.
+Leave copies inside the region (the transcoder reading the original, a CDN
+filling from storage) without a size.
 
 ## Constraints
 

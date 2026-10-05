@@ -18,11 +18,11 @@ Two use cases:
 - **Push**: a developer pushes and gets `200` once the update is committed on at least two of three replicas. Scenarios: `"All replicas commit"` and `"One replica down"`, in which the push still succeeds on the other two. After the commit, the new checksums are recorded in `routes` before the developer hears back.
 - **Fetch**: a developer fetches or clones. The proxy looks up which replicas are current, reads one, and returns a packfile (Git's compressed bundle of objects).
 
-Requirements: p99 under 100 ms for Push and 75 ms for Fetch, 99.99% availability for both, durable pushes, survival of any single machine (a file server included), and $6,800 a month, `routes` included.
+Requirements: p99 (the latency that 99% of requests beat) under 100 ms for Push and 75 ms for Fetch, 99.99% availability for both, durable pushes, survival of any single machine (a file server included), and $6,800 a month, `routes` included.
 
 **What is given.** `dev`, the developer client, and `routes`, a MySQL table of which servers hold each repository and each replica's checksum, with four replicas. It is given because metadata of this kind usually already exists in a company's main database; the design is about the file servers.
 
-**What the tests check**: the node `fs` has at least three replicas, and neither the developer nor anything but the proxy reaches `fs` or `routes`; a push writes `fs` and then `routes` before responding, handles the failure of `fs`, and the `"One replica down"` scenario still answers 2xx; a fetch reads `routes` before `fs`.
+**What the tests check**: the node `fs` has at least three replicas, and only the proxy reaches `fs` or `routes`. A push writes `fs` and then `routes` before responding, handles the failure of `fs`, and still answers 2xx in the `"One replica down"` scenario. A fetch reads `routes` before `fs`.
 
 The model simplifies: an `x3` write stands for three replicas each taking the update, a node's replicas share its load evenly, and replication lag, repair and "closest replica" choice are not modelled.
 
@@ -43,27 +43,27 @@ The traffic is one slice of the fleet: 1k pushes and 20k fetches per second, and
 
 A few observations.
 
-**Fetches dominate.** Twenty fetches for every push. Anything that multiplies read cost (reading every replica, reading `routes` many times) multiplies the biggest number in the table.
+**Fetches dominate.** There are twenty fetches for every push. Anything that multiplies read cost (reading every replica, reading `routes` many times) multiplies the biggest number in the table.
 
 **A push costs six calls.** The commit protocol talks to every replica twice, a prepare and a commit. In the simulation, `PREPARE` counts as a read and `COMMIT` as a write, since only write verbs (INSERT, UPDATE, COMMIT, ...) count as writes.
 
-**Sizing the file servers.** The file servers here are a generic NoSQL kind: 20k reads and 20k writes per replica, with reads and writes sharing the same machine (utilisation is the sum of both shares). One set of three takes 26k of 60k, about 43%. That looks fine, until you remove a server: the same load on two servers is 65%, and the push path, which visits `fs` twice, queues enough to cross 100 ms. Adding sets (shards of three) spreads repositories over more servers.
+**Sizing the file servers.** The file servers here are a generic NoSQL kind: 20k reads and 20k writes per replica. Reads and writes share the same machine, so utilisation is the sum of both shares. One set of three takes 26k of 60k, about 43%. That looks fine until you remove a server: the same load on two servers is 65%. The push path visits `fs` twice, so it queues enough to cross 100 ms. Adding sets (shards of three) spreads repositories over more servers.
 
 **Proxy.** At 2k rps per replica, 21k needs 11 replicas just to keep up; the p99 decides how many more.
 
 **Cost.** `routes` costs $1,600 (4 × $400). Each file server replica costs $500, a proxy replica $100. The budget leaves about $5,200 for proxy and file servers.
 
-**The failure scenario and p99.** In `"One replica down"` the proxy's call to the dead server fails with `-x`, which the simulation charges as a 1,000 ms timeout. Because only 0.1% of pushes take that path, it sits beyond p99 and shows up at p99.9. That is realistic: a down replica costs a few slow pushes until the proxy marks it bad.
+**The failure scenario and p99.** In `"One replica down"` the proxy's call to the dead server fails with `-x`, which the simulation charges as a 1,000 ms timeout. Only 0.1% of pushes take that path, so it sits beyond p99 and shows up at p99.9. That is realistic: a down replica costs a few slow pushes until the proxy marks it bad.
 
-**Availability.** A push writes `routes`, a single-primary MySQL store; with replicas, failover keeps writes available 99.995% of the time in the model. Three file server replicas make `fs` itself effectively always up.
+**Availability.** A push writes `routes`, a single-primary MySQL store. With replicas, failover keeps its writes available 99.995% of the time in the model. Three file server replicas make `fs` itself effectively always up.
 
 ## Concepts
 
 ### Disk replication versus application-level replication
 
-**Block-level replication** (DRBD, RAID 1 across machines) copies bytes on disk without knowing what they mean. It is simple and works for any software, but the standby cannot serve traffic: its filesystem is not mounted while the primary writes to it. Failover means detecting the failure, promoting the standby, mounting, and restarting services. During that time the data is offline.
+**Block-level replication** (DRBD, RAID 1 across machines) copies bytes on disk without knowing what they mean. It is simple and works for any software. But the standby cannot serve traffic: its filesystem is not mounted while the primary writes to it. Failover means detecting the failure, promoting the standby, mounting, and restarting services. During that time the data is offline.
 
-**Application-level replication** copies meaningful operations. Git is ideal for it: a repository is a set of immutable objects plus a few references (branch names pointing at commits), and Git already knows how to copy objects between repositories. If three servers each hold a full repository and agree on the references, all three can serve reads at any time, and any one can die without a failover.
+**Application-level replication** copies meaningful operations. Git is ideal for it: a repository is a set of immutable objects plus a few references (branch names pointing at commits), and Git already knows how to copy objects between repositories. If three servers each hold a full repository and agree on the references, all three can serve reads at any time. Any one of them can die without a failover.
 
 Trade-offs: you have to build the replication logic (coordination, repair of a replica that fell behind, placement of replicas), and it only works for data whose semantics you control. Do not reach for it when an off-the-shelf replicated store (a database with built-in replication) already fits.
 
@@ -71,11 +71,11 @@ Trade-offs: you have to build the replication logic (coordination, repair of a r
 
 With N copies, a **write quorum** W means a write succeeds once W copies have it; a **read quorum** R means a read consults R copies. When `R + W > N`, every read overlaps at least one copy with the latest write. Dynamo-style stores use this rule directly.
 
-Spokes uses `N = 3, W = 2`: a push succeeds on any two servers, so it survives one failure, and it is never acknowledged on fewer than two, so one disk failure cannot lose it. Reads use `R = 1`, which would break the overlap rule, except that Spokes does not pick a replica blindly: it consults the checksums in `routes`, which say exactly which replicas have the latest state. That metadata lookup replaces the extra read.
+Spokes uses `N = 3, W = 2`. A push succeeds on any two servers, so it survives one failure. It is never acknowledged on fewer than two, so one disk failure cannot lose it. Reads use `R = 1`, which breaks the overlap rule (1 + 2 is not more than 3). But Spokes does not pick a replica blindly: it checks the checksums in `routes`, which say exactly which replicas have the latest state. That metadata lookup replaces the extra read.
 
 To make the two-of-three commit atomic, the proxy runs a **commit protocol**: first ask every replica whether it can apply the update (a vote), then tell them to commit or roll back. GitHub describes it as a three-phase commit. The point for the interview: never acknowledge before a quorum has durably applied the update.
 
-When not to use quorums: when one primary with synchronous standbys is simpler and enough, or when the data cannot tolerate the coordination latency of a round of votes.
+When not to use quorums: when one primary with synchronous standbys is simpler and good enough, or when you cannot afford the extra latency of a round of votes.
 
 ```proschi
 title "Quorum write"
@@ -105,7 +105,7 @@ usecase "Write" {
 
 Reading "any replica" is safe only if you know which replicas are current. A replica may have missed a push while it was down, or may still be catching up. Spokes keeps a checksum per replica, computed over the repository's references; equal checksums mean equal state. After every commit the proxy records the new checksums, and before every read it asks which replicas match.
 
-This is a general pattern: a small, strongly consistent metadata store (here MySQL) guarding a large, replicated data store. It gives **read-your-writes**: a developer who just pushed and then fetches will be sent to a replica that has the push. The trade-off is one more lookup per read, which is why the lookup must be cheap and the metadata store well replicated.
+This is a general pattern: a small, strongly consistent metadata store (here MySQL) guards a large, replicated data store. It gives **read-your-writes** (you always see your own latest write): a developer who just pushed and then fetches will be sent to a replica that has the push. The trade-off is one more lookup per read, which is why the lookup must be cheap and the metadata store well replicated.
 
 ## Designing it step by step
 
@@ -123,11 +123,11 @@ Name the alternatives and why they lose. The old active/standby pair: the standb
 
 ### 3. Deep dive
 
-**Write the failure scenario explicitly.** The `"One replica down"` branch is where you prove the quorum: one `-x` call to the dead server, the prepare and commit sent to the other two (`x2`), and still `200`. Shared steps after the `alt` (the `routes` update and the response) apply to both branches.
+**Write the failure scenario explicitly.** The `"One replica down"` branch is where you prove the quorum. It has one `-x` call to the dead server, the prepare and commit sent to the other two (`x2`), and still a `200`. Shared steps after the `alt` (the `routes` update and the response) apply to both branches.
 
 **Size the file servers from the fan-out.** Count every call: a fetch is one read, a push is three prepares and three commits. Then remove one server from a set of three and check the push p99. If it breaks 100 ms, add another set with `capacity { fs shards N }` rather than more replicas per set, because the problem fixes three copies per repository.
 
-**Size the proxy.** 21k requests at 2k each, then add headroom until the latency limits hold with one proxy replica gone. Most of the budget after `routes` goes to file servers, so do not overprovision the proxy.
+**Size the proxy.** Start from 21k requests at 2k per replica, then add headroom until the latency limits hold with one proxy replica gone. Most of the budget after `routes` goes to file servers, so do not overprovision the proxy.
 
 **Budget check.** Replicas times shards times $500 for the file servers, plus proxy replicas at $100, plus $1,600 for `routes`.
 
@@ -143,7 +143,7 @@ Summarise: three Git-level replicas per repository, a two-of-three commit for pu
 
 **Read any replica blindly** (`wrong/read-any-replica-blindly.proschi`). Fetches go to the nearest replica without checking `routes`. A replica that missed a push serves old references: a developer pushes, fetches, and does not see their own commit. It fails "A fetch reads one replica that is up to date", which checks that the fetch consults `routes` before `fs`.
 
-**Read every replica and compare** (`wrong/read-every-replica.proschi`). Correct answers, triple cost: an `x3` fetch turns 20k fetches into 60k reads. It passes with every server up but fails `survive any node failure`, because a set that loses a server can no longer carry the tripled reads within the latency limits.
+**Read every replica and compare** (`wrong/read-every-replica.proschi`). The answers are correct, but the cost triples: an `x3` fetch turns 20k fetches into 60k reads. It passes with every server up but fails `survive any node failure`: a set that loses a server can no longer carry the tripled reads within the latency limits.
 
 ## In the interview
 

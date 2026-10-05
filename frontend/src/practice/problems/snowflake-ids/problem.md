@@ -11,7 +11,7 @@ hints:
   - A gRPC service takes about 2k rps per replica in the simulation; size the generators for 20k rps at well under 70% busy, and keep them under 100% with one replica lost.
 ---
 
-In 2010 Twitter moved tweets from MySQL to Cassandra, which has no
+In 2010 Twitter was moving tweets from MySQL to Cassandra, which has no
 auto-increment. They needed a service that hands out ids that are unique,
 fit in 64 bits, and are *roughly sortable*: two tweets posted at about the
 same time get ids close to each other, because that is how Twitter and its

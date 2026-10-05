@@ -19,7 +19,7 @@ One-to-one chat is a favourite interview problem because it mixes three ideas th
 - **Send message**: the sender sends over their WebSocket and gets an ack with the message id. Two scenarios: `"Online"` (the recipient has a connection open and gets the message over it within a second) and `"Offline"` (the recipient gets a push notification and fetches the message when they open the app).
 - **Load history**: a user opens a conversation and gets the last 50 messages, `200`, on any device.
 
-**Non-functional requirements.** p99 under 100 ms from send to ack, and under 200 ms for history. Sending available 99.95%. A message is never lost once the sender saw the ack. The ack never waits for delivery, neither for the push provider nor for the recipient's connection; presence is looked up first, then the message is delivered, both after the ack. Any single machine can fail. At most $4,000 a month.
+**Non-functional requirements.** p99 (the latency that 99% of requests beat) under 100 ms from send to ack, and under 200 ms for history. Sending available 99.95%. A message is never lost once the sender saw the ack. The ack never waits for delivery: neither for the push provider nor for the recipient's connection. After the ack, the service looks up presence first and then delivers the message. Any single machine can fail. At most $4,000 a month.
 
 **What is given, and why.** `given.proschi` declares the `sender`, the `recipient` and the external `push` provider, with a capacity of 10k notifications a second and roughly 200 ms per call. Everything between them is yours to design.
 
@@ -49,7 +49,7 @@ The storage line is an upper bound (the peak rate held all day) with an assumed 
 
 **Gateways do two jobs.** A gateway receives the sender's message *and* delivers messages to the users connected to it. Every online delivery passes through a gateway a second time. In Proschi, a service replica handles 2k requests a second, so 17k rps needs 8.5 replicas at 100%. Divide by a 70% target and check that one replica fewer still stays under 100%.
 
-**The store must take 10k writes a second.** A relational database in the model is single-primary: 5k writes a second per shard, whatever the replica count. 10k writes would saturate it unless you shard it. A partitioned store like Cassandra takes 20k writes per replica, on every replica, so two replicas are lightly loaded. Real chat systems (Discord is the famous write-up) chose wide-column stores for exactly this append-heavy, partition-by-conversation pattern.
+**The store must take 10k writes a second.** A relational database in the model is single-primary: 5k writes a second per shard, whatever the replica count. 10k writes would saturate it unless you shard it. A partitioned store like Cassandra accepts writes on every replica, 20k a second each, so two replicas are lightly loaded. Real chat systems (Discord is the famous write-up) chose wide-column stores for exactly this append-heavy, partition-by-conversation pattern.
 
 **Latency.** The ack path is load balancer → gateway → message store → ack: a 2 ms hop, a 10 ms gateway, a 5 ms write, plus queueing and tails. That fits 100 ms easily. Adding the push provider (about 200 ms) before the ack would not.
 
@@ -135,7 +135,7 @@ usecase "Goal scored" {
 
 ## Designing it step by step
 
-**1. Scope.** Ask: one-to-one only, or groups (one-to-one here)? Delivery guarantees (never lose after ack; at-least-once delivery with client dedup is fine)? Ordering (per conversation, by time)? Multi-device (history must work on any device)? Read receipts, typing indicators, media (out of scope, but name them)? Confirm the numbers: 10k sends a second, 70% of recipients online, 2k history loads a second.
+**1. Scope.** Ask: one-to-one only, or groups (one-to-one here)? Delivery guarantees (never lose after ack; at-least-once delivery, where a message may arrive twice but never zero times, with deduplication on the client is fine)? Ordering (per conversation, by time)? Multi-device (history must work on any device)? Read receipts, typing indicators, media (out of scope, but name them)? Confirm the numbers: 10k sends a second, 70% of recipients online, 2k history loads a second.
 
 **2. High-level design.** Draw three paths.
 

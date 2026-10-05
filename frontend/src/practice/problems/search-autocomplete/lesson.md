@@ -9,7 +9,7 @@
 
 ## The problem, explained
 
-You are building the suggestion box of a shop's search bar. The user types `i`, `ip`, `iph`, `ipho`, and after each keystroke the box shows the ten most popular completions: *iphone 15*, *iphone case*, *iphone charger*. Because every keystroke is a request, suggestions are by far the most frequent call in the whole system, and they must feel instant: if the list arrives after the user typed the next letter, it is useless.
+You are building the suggestion box of a shop's search bar. The user types `i`, `ip`, `iph`, `ipho`, and after each keystroke the box shows the ten most popular completions: *iphone 15*, *iphone case*, *iphone charger*. Every keystroke is a request, so suggestions are by far the most frequent call in the whole system. They must also feel instant: if the list arrives after the user has typed the next letter, it is useless.
 
 There are three use cases:
 
@@ -17,14 +17,14 @@ There are three use cases:
 - **Search**: the user submits a full query and gets results from the existing search cluster. Every query is also appended to a query log, because tomorrow's suggestions are learned from today's searches. Logging must never slow a search down.
 - **Rebuild index**: every 15 minutes a scheduler starts a batch job that reads recent queries from the log, counts them per prefix and writes the new top ten of every prefix into the suggestion store.
 
-The non-functional requirements are what make it interesting: 100k suggestion requests per second at peak, p99 under 50 ms, 99.95% availability, survival of any single machine failure, and a hard budget of $5,500 a month.
+The non-functional requirements are what make it interesting: 100k suggestion requests per second at peak, a p99 under 50 ms (99% of requests must finish within 50 ms), 99.95% availability, survival of any single machine failure, and a hard budget of $5,500 a month.
 
 **What is given.** `given.proschi` fixes the `user`, the existing `search` cluster (three Elasticsearch nodes, about 9k rps in the simulation, sized for searches, not keystrokes) and the `scheduler` (an EventBridge rule) that kicks off the rebuild. They are the reality you design around.
 
 **What the tests check**, in plain words:
 
 - Suggestions never touch the search cluster or any database. That is the core insight: a prefix lookup must not be a search.
-- Suggestions go to a real CDN first and only then to a cache, the hit scenario never reaches a service, and the miss scenario reads the cache.
+- Suggestions go to a real CDN first and only then to a cache. The hit scenario never reaches a service, and the miss scenario reads the cache.
 - A search calls the search cluster and writes to a queue, but never waits for the queue before answering.
 - The rebuild starts at the scheduler, reads the queue before writing the cache, and never queries the search cluster.
 
@@ -45,13 +45,13 @@ Start with the traffic and follow it through the design.
 | Search cluster capacity | 3 nodes × 3k rps | 9k rps |
 | Search nodes needed to serve keystrokes there | 100k ÷ 3k | 34+ nodes, before any headroom |
 
-**The search cluster is out.** Serving keystrokes from Elasticsearch would need over 30 search nodes at 100% utilisation, and at $400 a node that alone is several times the budget.
+**The search cluster is out.** Serving keystrokes from Elasticsearch would need over 30 search nodes at 100% utilisation. At $400 a node, that alone is about $13,600 a month, more than twice the budget.
 
 **The data fits in memory.** A Redis replica takes about 100k operations a second in the simulation; the 20k edge misses use a fifth of one. You want two replicas for failure, not for load.
 
 **The servers behind the CDN are sized for 20k rps, not 100k.** A service replica handles about 2k rps, so the Suggest Service needs at least 10 replicas just to avoid saturation, and more to keep queueing small.
 
-**How the simulation sees it.** Utilisation is load ÷ (replicas × per-replica capacity). Latency is base latency plus M/M/c queueing delay: a pool at 50% barely queues, at 90% it roughly triples. An idle hop's p99 is about 2.8× its mean. The miss path, CDN (5 ms) + load balancer (2 ms) + service (10 ms) + Redis (1 ms), is about 18 ms of base latency, so its own p99 is already near 50 ms. The use case's p99 mixes 80% hits with 20% misses, which pulls it well below that, but only if the service is not queueing. Keep it about half busy, as the hints suggest.
+**How the simulation sees it.** Utilisation is load ÷ (replicas × per-replica capacity). Latency is base latency plus M/M/c queueing delay: a pool at 50% barely queues, at 90% it roughly triples. An idle hop's p99 is about 2.8× its mean. The miss path is CDN (5 ms) + load balancer (2 ms) + service (10 ms) + Redis (1 ms): about 18 ms of base latency, so its own p99 is already near 50 ms. The use case's p99 mixes 80% hits with 20% misses, which pulls it well below that, but only if the service is not queueing. Keep the service about half busy, as the hints suggest.
 
 **Budget.** The search cluster ($1,200) and scheduler ($200) leave about $4,100. Services cost $100 per replica, Redis $150, a CDN replica $100, Kafka $200. Without the CDN, 100k rps at a sane utilisation needs about 100 service replicas: $10,000 for one tier.
 
@@ -63,7 +63,7 @@ Start with the traffic and follow it through the design.
 
 A **trie** (prefix tree) stores strings by their characters: the root has a child per first letter, each child a child per second letter, and so on. Every node represents a prefix, so finding all strings that start with `ipho` means walking four edges and then visiting the subtree below.
 
-Visiting the subtree is the problem. Under `i` there may be millions of queries; collecting them and sorting by popularity on every keystroke is far too slow. The classic fix is to **store the answer at each node**: each trie node keeps its own top k completions, ranked by frequency. A lookup becomes "walk to the node, return its list", and if you flatten the trie into a key-value map (`top10:ipho -> [...]`), it becomes a single `GET`.
+Visiting the subtree is the problem. Under `i` there may be millions of queries, and collecting and sorting them by popularity on every keystroke is far too slow. The classic fix is to **store the answer at each node**: each trie node keeps its own top k completions, ranked by frequency. A lookup becomes "walk to the node, return its list", and if you flatten the trie into a key-value map (`top10:ipho -> [...]`), it becomes a single `GET`.
 
 Why it works: the ranking changes slowly. The most searched completions of `ipho` this hour look a lot like last hour's, so you can afford to recompute them in a batch and serve them read-only. The trade-off is **freshness**: a query that suddenly trends will not appear until the next rebuild. You also spend memory storing k completions per prefix, which is why real systems cap prefix length and drop rare prefixes.
 
@@ -172,7 +172,7 @@ What wins is to **precompute and cache twice**: the precomputed lists live in me
 
 **Sizing the miss path.** Only 20% of keystrokes reach your servers. Size the load balancer, the Suggest Service and Redis for 20k rps, then check two things: that no node goes above roughly 70% (the simulation paints it amber), and that removing one replica of each does not saturate it. For the service, aim lower than 70%: the p99 budget is tight because the miss path already has four hops, and queueing at the busiest node is what pushes it over. Compute `replicas = load ÷ (2k × target utilisation)` and try it in the editor. If p99 is just over 50 ms, the service is queueing; add replicas there, not elsewhere.
 
-**Why the edge hit never touches a service.** The test "Edge hit never calls any service" encodes the whole point of the CDN. If your hit scenario still goes to an API (for example, an API that checks a cache), you have built a cache, not an edge, and you pay for the servers anyway.
+**Why the edge hit never touches a service.** The check `"Suggest" scenario "Edge hit" never calls any service` (in the test "Suggestions are served by the CDN, then the cache") encodes the whole point of the CDN. If your hit scenario still goes to an API (for example, an API that checks a cache), you have built a cache, not an edge, and you pay for the servers anyway.
 
 **Search and rebuild.** The Search API takes 2k rps, so a few replicas suffice, and the log write is `->>`, so a slow broker never slows a search. The builder reads the log and writes the store; it never queries the search cluster, which is busy serving searches.
 
@@ -184,13 +184,13 @@ Summarise: precompute the top ten per prefix every 15 minutes, serve it from Red
 
 ## Common mistakes
 
-**Suggestions without a CDN** (`wrong/suggestions-without-cdn.proschi`). Every keystroke goes through the load balancer to the Suggest Service, which then needs about 100 replicas to keep up. In the real world this is the most common autocomplete design on whiteboards, and it is not wrong so much as expensive: you pay to serve the same few thousand answers millions of times. It fails the flow test "Suggestions are served by the CDN, then the cache" and the cost requirement.
+**Suggestions without a CDN** (`wrong/suggestions-without-cdn.proschi`). Every keystroke goes through the load balancer to the Suggest Service, which then needs about 100 replicas to keep up ($10,000, for a total of about $13,000 a month). In the real world this is the most common autocomplete design on whiteboards, and it is not wrong so much as expensive: you pay to serve the same few thousand answers millions of times. It fails the flow test "Suggestions are served by the CDN, then the cache" and the cost requirement.
 
 **The search waits for the query log** (`wrong/search-waits-for-query-log.proschi`). The API sends the query to Kafka with `->` and waits for an acknowledgement before answering. In production that means every Kafka hiccup, rebalance or slow disk becomes search latency, and a broker outage becomes a search outage, all for data no user is waiting for. It fails "Searches feed the query log without waiting for it".
 
 **The rebuild triggered by the Search API** (`wrong/rebuild-from-search-api.proschi`). Here the API starts a rebuild instead of the scheduler. Triggering heavy batch work from user requests couples the two: a traffic spike becomes a rebuild storm, and quiet hours mean no rebuilds at all. Rebuilds belong on a schedule. It fails "The index is rebuilt offline from the query log", whose first check is that the rebuild starts at the scheduler.
 
-**Prefix queries on the search cluster** (the starter design). Covered above: the cluster is sized for 2k searches, not 100k keystrokes, and it fails "Suggestions never touch the search cluster".
+**Prefix queries on the search cluster** (the starter design). Covered above: the cluster is sized for 2k searches a second (about 9k at most), not 100k keystrokes, and the design fails "Suggestions never touch the search cluster".
 
 **A load balancer instead of a CDN.** Load balancers spread requests; they do not cache them. An `[AWS Load Balancer]` in the CDN's place fails the flow test, and the servers behind it still see every keystroke.
 

@@ -49,7 +49,7 @@ tests in `problem.proschi` refer to them.
 - A popular paste (`"Cached"`) loads in under **30 ms** at p99: only an
   edge close to the reader is that fast.
 - Reads available **99.9%** of the time.
-- A paste is never lost once its id was returned.
+- A paste is never lost once its id has been returned.
 - Losing any single machine must not take the service down.
 - At most **$6,000 / month**, egress included.
 

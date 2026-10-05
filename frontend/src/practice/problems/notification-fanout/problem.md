@@ -17,8 +17,9 @@ an external email, SMS or push provider.
 
 ## Functional requirements
 
-- **Notify**: the Order Service hands an event (`OrderShipped`, …) for a
-  user over and gets an answer as soon as the event is safely accepted.
+- **Notify**: the Order Service hands over an event for a user
+  (`OrderShipped`, …) and gets an answer as soon as the event is safely
+  accepted.
 - **Deliver**: a queue hands an accepted event to a worker (the use case
   starts with a step sent by the queue). The user's preferences decide the
   channel; each event becomes at most one notification. Model five
@@ -37,8 +38,9 @@ tests in `problem.proschi` refer to them.
 
 - **1,500 events per second** at peak (evening delivery rounds), each one
   handed over once and delivered once.
-- 55% of users prefer email, 30% push, 10% SMS; 4% opted out. The SMS
-  provider times out on about 1% of all events.
+- 55% of events go to users who prefer email, 30% push and 11% SMS; 4%
+  are opted out. The SMS provider times out on about 1% of all events
+  (one SMS in eleven), so 10% go out through it and 1% fail over.
 - Providers are slow and flaky: about **200 ms** per call when they work,
   and they have outages.
 

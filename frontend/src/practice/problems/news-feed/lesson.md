@@ -1,6 +1,6 @@
 # News Feed: build the feed before anyone asks for it
 
-A home timeline looks like a query: "the 50 newest posts by people I follow, sorted by time". Run that query on every app open, for millions of users, and you have built a machine that joins a social graph with a posts table ten thousand times a second. This lesson turns the query inside out. Instead of assembling a feed when it is read, you deliver each post into its readers' feeds when it is written, through a queue, into a cache.
+A home timeline looks like a query: "the 50 newest posts by people I follow, sorted by time". Run that query every time someone opens the app, for millions of users, and you join a social graph with a posts table ten thousand times a second. This lesson turns the query inside out. Instead of building a feed when it is read, you deliver each post into its readers' feeds when it is written: through a queue, into a cache.
 
 ## What you'll learn
 
@@ -19,9 +19,9 @@ A home timeline looks like a query: "the 50 newest posts by people I follow, sor
 - **Publish post**: a user posts up to 500 characters and gets `201` with the post id. The post shows up in all followers' feeds within a few seconds.
 - **Read feed**: a user gets the 50 newest posts of the people they follow, `200`.
 
-**Non-functional requirements.** p99 under 50 ms for reading and under 90 ms for publishing. Reading available 99.9%. A post is never lost after `201`, and no feed shows a post that was not stored. Publishing never waits for the social graph or the feeds. Reading never touches a database or the social graph. Any single machine can fail. At most $4,000 a month, including the social graph.
+**Non-functional requirements.** p99 (the latency 99% of requests beat) under 50 ms for reading and under 90 ms for publishing. Reading available 99.9%. A post is never lost after `201`, and no feed shows a post that was not stored. Publishing never waits for the social graph or the feeds. Reading never touches a database or the social graph. Any single machine can fail. At most $4,000 a month, including the social graph.
 
-**What is given, and why.** `given.proschi` declares the `user` and an existing `graph` service (four replicas) that knows who follows whom. Its capacity is overridden to 50 ms per call, because listing up to 5,000 follower ids is slow. That number is the reason the design looks the way it does.
+**What is given, and why.** `given.proschi` declares the `user` and an existing `graph` service (four replicas) that knows who follows whom. A `capacity` line sets its latency to 50 ms per call, because listing up to 5,000 follower ids is slow. That number is the reason the design looks the way it does.
 
 **What the tests check.**
 
@@ -44,17 +44,17 @@ A home timeline looks like a query: "the 50 newest posts by people I follow, sor
 | All feeds (20M users) | 20M × 4 KB | about 80 GB raw, several times that with Redis overhead |
 | Posts per day, upper bound | 500/s × 86,400 s × ~1 KB | about 43 GB/day |
 
-**The ratio flips.** Requests are 20:1 reads to writes, but on the feed cache the fan-out makes it 10:1 *writes* to reads. Whoever sizes the cache by "it's read-heavy" will be surprised. In Proschi, writing the feed step as `x200 ZADD …` tells the model to count 200 cache writes per post; its latency is counted once, as if the writes were batched or pipelined.
+**The ratio flips.** Requests are 20:1 reads to writes, but on the feed cache the fan-out makes it 10:1 *writes* to reads. If you size the cache as "read-heavy", you will be surprised. In Proschi, writing the feed step as `x200 ZADD …` tells the model to count 200 cache writes per post; its latency is counted once, as if the writes were batched or pipelined.
 
-**Sizing the feed cache.** A Redis replica in the model takes 100k operations a second, and caches serve writes on every replica. So 110k ops/s on two replicas is 55% busy, which looks fine, until `survive any node failure` re-runs the analysis with one replica fewer: 110k on one replica is 110%, saturated. Count replicas for the *degraded* case, not just the healthy one.
+**Sizing the feed cache.** A Redis replica in the model takes 100k operations a second, and in the model caches serve writes on every replica. So 110k ops/s on two replicas is 55% busy. That looks fine until `survive any node failure` re-runs the analysis with one replica fewer: 110k on one replica is 110%, saturated. Count replicas for the *degraded* case, not just the healthy one.
 
 **Sizing the Feed API.** 10.5k requests a second at 2k per service replica is 5.25 replicas at 100%. Divide by a 70% target and check it with one replica lost.
 
-**Latency.** Read feed is load balancer → API → feed cache → post cache: four short hops, a 1 ms cache twice. Publish post is load balancer → API → posts database → queue, then `201`. Everything after the `201` (the graph's 50 ms, the 200 writes) is asynchronous and does not count toward publish latency. If you put the graph call before the `201`, the 50 ms hop with its tail alone threatens the 90 ms limit.
+**Latency.** Read feed is load balancer → API → feed cache → post cache: four short hops, two of them to a 1 ms cache. Publish post is load balancer → API → posts database → queue, then `201`. Everything after the `201` (the graph's 50 ms, the 200 writes) is asynchronous and does not count toward publish latency. If you put the graph call before the `201`, that 50 ms hop and its tail alone threaten the 90 ms limit.
 
-**Database choice.** 500 inserts a second fits on one PostgreSQL primary (5k writes/s), so this is not forced. A partitioned store like Cassandra is a natural fit for append-only posts keyed by author, and grows without a resharding project. Either way, the database is off the read path.
+**Database choice.** 500 inserts a second fits on one PostgreSQL primary (5k writes/s), so this is not forced. A partitioned store like Cassandra fits append-only posts keyed by author well, and it grows without a resharding project. Either way, the database is off the read path.
 
-**Cost.** Graph $400, service replicas $100, a Redis replica $150, a Kafka broker $200, a Cassandra replica $500, a load balancer $50. The budget fits a careful design, and punishes an extra replica on every tier.
+**Cost.** Graph $400, service replicas $100, a Redis replica $150, a Kafka broker $200, a Cassandra replica $500, a load balancer $50. The budget fits a careful design, but not an extra replica on every tier.
 
 ## Concepts
 
@@ -62,12 +62,12 @@ A home timeline looks like a query: "the 50 newest posts by people I follow, sor
 
 There are two ways to produce a timeline:
 
-- **Fan-out on read (pull).** Store each post once. On read, ask the graph who the user follows, fetch recent posts for each, merge and sort. Writes are cheap; reads are expensive and slow, and they hit the graph and the database on every app open.
+- **Fan-out on read (pull).** Store each post once. On read, ask the graph who the user follows, fetch recent posts for each, merge and sort. Writes are cheap. Reads are expensive and slow, and they hit the graph and the database every time the app opens.
 - **Fan-out on write (push).** On publish, look up the author's followers and insert the post id into each follower's precomputed feed. Reads become one lookup. Writes are amplified by the follower count.
 
 Pick by the ratio of reads to writes, weighted by the cost of each. Here reads are 20 times more frequent, the read latency budget is tight (50 ms), and follower counts are bounded at 5,000, so push wins clearly. Twitter's timeline service has long been described this way: a fan-out step inserts tweet ids into Redis-backed timelines of each follower.
 
-When *not* to push: when some authors have millions of followers. One post becomes millions of writes and takes minutes to land. The fix is a hybrid: push for ordinary accounts, pull for the few huge ones, and merge the two at read time. The "Feeding Frenzy" paper formalises this choice per producer/consumer pair, based on how often one posts and the other reads.
+When *not* to push: when some authors have millions of followers. One post becomes millions of writes and takes minutes to land. The fix is a hybrid: push for ordinary accounts, pull for the few huge ones, and merge the two at read time. The "Feeding Frenzy" paper makes this choice for each producer/consumer pair, based on how often one posts and the other reads.
 
 ```proschi
 title "Push into inboxes"
@@ -103,15 +103,15 @@ Two ordering rules make push safe.
 
 **Store first.** Write the post to durable storage before anything else references it. A feed must never point at a post that does not exist. If the fan-out fails halfway, it can be retried from the stored post; if the store failed, the user saw an error and nothing leaked into feeds.
 
-**Fan out behind a queue.** After the post is stored, put a `PostCreated` event on a durable queue and answer `201`. A fan-out worker consumes the event, calls the graph, and writes the feeds. This keeps the author's latency independent of follower count and graph speed, and gives you retries for free: if the worker dies, the event is consumed again. Since that can happen, feed inserts should be idempotent; a sorted-set insert keyed by post id is, because adding the same member twice changes nothing.
+**Fan out behind a queue.** After the post is stored, put a `PostCreated` event on a durable queue and answer `201`. A fan-out worker consumes the event, calls the graph, and writes the feeds. Now the author's latency does not depend on the follower count or the graph's speed. You also get retries for free: if the worker dies, the event is consumed again. Because that can happen, feed inserts should be *idempotent* (safe to repeat). A sorted-set insert keyed by post id is, because adding the same member twice changes nothing.
 
-The trade-off is *eventual consistency*: a follower may open the app a second before the post lands in their feed. The requirement ("within a few seconds") explicitly allows it. The author's own feed is a different story; clients usually show their own post immediately.
+The trade-off is *eventual consistency*: a follower may open the app a second before the post lands in their feed. The requirement ("within a few seconds") allows it. The author's own feed is a different story: clients usually show the author's own post immediately.
 
 ### Caching ids and objects separately
 
 Store feeds as lists of post *ids* (a Redis sorted set per user, scored by time, trimmed to the newest 500), and store the posts themselves in a separate cache keyed by id. A read is then two cache calls: fetch 50 ids, then fetch those 50 posts in one batched get.
 
-Why split them? A post is written once into the post cache but referenced by 200 feeds; copying the full text into every feed would multiply memory by 200, and an edit or deletion would need 200 updates. Ids are tiny and immutable.
+Why split them? A post is written once into the post cache but referenced by 200 feeds. Copying the full text into every feed would multiply memory by 200, and an edit or deletion would need 200 updates. Ids are tiny and immutable.
 
 ```proschi
 title "Ids, then objects"
@@ -146,7 +146,7 @@ Trimming matters too: a feed only needs its newest 500 ids, so memory per user i
 - *Publish*: load balancer → API → posts database (store) → queue (event) → `201`. Then, asynchronously: queue → fan-out worker → graph (followers) → post cache (the post) → feed cache (200 inserts).
 - *Read*: load balancer → API → feed cache (50 ids) → post cache (50 posts) → `200`.
 
-Say why not fan-out on read: every read would call a 50 ms graph and merge posts from up to 5,000 accounts out of the database; the test *Reading the feed never queries a database* rules it out, and so would the 50 ms p99.
+Say why not fan-out on read: every read would call a 50 ms graph and merge posts from up to 5,000 accounts out of the database. The test *Reading the feed never queries a database* rules it out, and so would the 50 ms p99.
 
 **3. Deep dive.**
 
@@ -159,9 +159,9 @@ Say why not fan-out on read: every read would call a 50 ms graph and merge posts
 
 ## Common mistakes
 
-**Fanning out inside the request** (`wrong/fan-out-in-request`). The API stores the post, queues the event, then also calls the graph and writes the 200 feeds before answering. The queue is decoration: the author waits for the 50 ms graph and the fan-out, and an author with 5,000 followers waits much longer. In the model the publish p99 climbs past 200 ms. It fails *Fan-out runs behind a queue*, and the p99 limit for Publish post as well.
+**Fanning out inside the request** (`wrong/fan-out-in-request`). The API stores the post, queues the event, then also calls the graph and writes the 200 feeds before answering. The queue is decoration: the author waits for the 50 ms graph and the fan-out, and an author with 5,000 followers would wait much longer. In the model the publish p99 climbs past 200 ms. It fails *Fan-out runs behind a queue*, and the p99 limit for Publish post as well.
 
-**Two feed cache nodes** (`wrong/two-feed-cache-nodes`). Healthy, two Redis replicas handle 110k ops/s at about 55%. Lose one and the survivor needs 110% of its capacity. In production that is the moment feeds stop updating, or worse, the cache falls over and takes reads with it. It fails `survive any node failure`.
+**Two feed cache nodes** (`wrong/two-feed-cache-nodes`). When both are up, two Redis replicas handle 110k ops/s at about 55%. Lose one and the survivor needs 110% of its capacity. In production, that is the moment feeds stop updating. Or worse, the cache falls over and takes reads with it. It fails `survive any node failure`.
 
 **Other classic mistakes.**
 

@@ -9,20 +9,20 @@
 
 ## The problem, explained
 
-Notion stores everything as **blocks**: a page is a block, and so is every paragraph, heading and to-do inside it. Until 2021 all blocks lived in one PostgreSQL database. It grew past 20 billion rows, `VACUUM` (Postgres's background cleanup of dead row versions) could not keep up, and the database was approaching **transaction ID wraparound**, a point at which Postgres stops accepting writes to protect data. A bigger machine would only buy months, so Notion split the data across many databases.
+Notion stores everything as **blocks**: a page is a block, and so is every paragraph, heading and to-do inside it. Until 2021 all blocks lived in one PostgreSQL database. It grew past 20 billion rows, and `VACUUM` (Postgres's background cleanup of dead row versions) could not keep up. The database was also approaching **transaction ID wraparound**: at that point Postgres stops accepting writes to protect the data. A bigger machine would only buy months, so Notion split the data across many databases.
 
 Two use cases:
 
 - **Load page**: a user opens a page, and the API reads its blocks.
 - **Edit block**: a user types into a block, and the change is written to Postgres before the API answers.
 
-The scale is an assumption for the exercise (Notion does not publish request rates): 200k page loads and 100k block edits per second at peak. Both use cases need p99 under 70 ms and 99.95% availability; losing any single machine must not break a latency limit; the budget is $30,000 a month, PgBouncer included.
+The scale is an assumption for the exercise (Notion does not publish request rates): 200k page loads and 100k block edits per second at peak. Both use cases need a p99 under 70 ms and 99.95% availability. Losing any single machine must not break a latency limit. The budget is $30,000 a month, PgBouncer included.
 
-**What is given.** `given.proschi` declares `web`, the API servers, as the client: they decide which shard a query goes to. It also declares `pgbouncer`, ten PgBouncer instances. PgBouncer is a connection pooler: Postgres spends a process per connection, so thousands of API processes connecting directly would exhaust it. The pooler multiplexes them over a small number of real connections. You add the Postgres fleet as one node, choose its shard count with `capacity { db shards N }` (the only capacity line a solver may write), and write both use cases.
+**What is given.** `given.proschi` declares `web`, the API servers, as the client: they decide which shard a query goes to. It also declares `pgbouncer`, ten PgBouncer instances. PgBouncer is a connection pooler. Postgres runs one process per connection, so thousands of API processes connecting directly would exhaust it. The pooler shares a small number of real connections among all of them. You add the Postgres fleet as one node, choose its shard count with `capacity { db shards N }` (the only capacity line a solver may write), and write both use cases.
 
 **What the tests check**: both use cases start at `web` and go through `pgbouncer` before Postgres; there is no path from `web` to any database; page loads read Postgres and edits write Postgres before responding. The requirements add p99, availability, durability, failure survival and cost.
 
-The model leaves some things out, and the statement says so: the partition key itself is invisible to the simulation; what it sees is the effect, a query that needs every shard is written as a fan-out (`x32`) and loads every shard. Load is spread evenly over shards, connection limits are not simulated, and the migration is out of scope.
+The model leaves some things out, and the statement says so. The simulation cannot see the partition key itself, only its effect: a query that needs every shard is written as a fan-out (`x32`) and loads every shard. Load is spread evenly over the shards, connection limits are not simulated, and the migration is out of scope.
 
 ## Back-of-the-envelope
 
@@ -39,9 +39,9 @@ The simulation's numbers for a PostgreSQL replica are 20k reads and 5k writes pe
 | PgBouncer load | 300k ÷ (10 × 50k) | 60% |
 | Monolith with 4 replicas: write utilisation | 100k ÷ 5k | 2,000% |
 
-The table answers the first question immediately. This is a write problem: 100k writes need at least 20 primaries just to not saturate, and adding replicas to a single database does not help at all, because replicas add zero write capacity.
+The table answers the first question right away. This is a write problem: 100k writes need at least 20 primaries just to avoid saturation. Adding replicas to a single database does not help at all, because replicas add zero write capacity.
 
-**How many shards, then?** Twenty primaries at 100% is not a design. The simulation queues each shard's writes on its one primary (one server, so the classic `1 ÷ (1 − ρ)` slowdown): at 50% busy a hop takes twice its base latency, at 70% over three times. The p99 limit is 70 ms, and an idle hop's p99 is about 2.8 times its mean, so you need the primaries comfortably below 70% busy. Write utilisation per shard is `100k ÷ (5k × shards)`: 20 shards give 100%, 25 give 80%. Keep going until the p99 holds, then check the budget.
+**How many shards, then?** Twenty primaries at 100% is not a design. The simulation queues each shard's writes on its one primary (one server, so the classic `1 ÷ (1 − ρ)` slowdown): at 50% busy a hop takes twice its base latency, at 70% over three times. The p99 limit is 70 ms, and an idle hop's p99 is about 2.8 times its mean, so the primaries must stay well below 70% busy. Write utilisation per shard is `100k ÷ (5k × shards)`: 20 shards give 100%, 25 give 80%. Keep going until the p99 holds, then check the budget.
 
 **Cost.** Each replica of each shard costs $400 a month, PgBouncer $100 per instance. So `shards × replicas × $400 + $1,000 ≤ $30,000`, which caps `shards × replicas` at 72. Two replicas per shard (a primary and a standby for failover) fits a shard count in the 30s; three replicas per shard cuts the affordable shard count to 24, too few for the write rate.
 
@@ -95,13 +95,13 @@ When not to shard by tenant: when one tenant can outgrow a shard (a single huge 
 
 Re-sharding is the expensive part of sharding: moving rows between databases while serving traffic. Notion's trick was to create many more **logical shards** than physical databases: 480 Postgres schemas, 15 per database. The application maps workspace → logical shard (fixed forever) and logical shard → database (a small table). Growing the fleet means moving whole schemas to new machines; no row is ever re-hashed. 480 was chosen because it divides evenly into many fleet sizes, and Notion later did exactly that, going from 32 to 96 databases.
 
-**Routing** happens in the application: the API computes the shard from the workspace ID and sends the query to the matching database through PgBouncer. Other designs put routing in a proxy (Vitess for MySQL, Citus for Postgres); the trade-off is operational simplicity versus another moving part on the hot path.
+**Routing** happens in the application: the API computes the shard from the workspace ID and sends the query to the matching database through PgBouncer. Other designs put routing in a separate layer, such as Vitess for MySQL or the Citus coordinator for Postgres. The trade-off: that layer hides sharding from the application, but it is another moving part on the hot path.
 
 ## Designing it step by step
 
 ### 1. Scope the problem
 
-Ask: what is the read and write rate? (200k and 100k per second.) What do the main queries filter on? (Workspace and parent block.) Must the data stay in Postgres? (Yes.) Is there a connection limit to worry about? (Yes, which is why PgBouncer exists.) Point out that a 2:1 read:write ratio is unusually write-heavy; that already tells you replicas will not be enough.
+Ask: what is the read and write rate? (200k and 100k per second.) What do the main queries filter on? (Workspace and parent block.) Must the data stay in Postgres? (Yes.) Is there a connection limit to worry about? (Yes, which is why PgBouncer exists.) Point out that a 2:1 read:write ratio is unusually write-heavy. That alone tells you replicas will not be enough.
 
 ### 2. High-level design
 
@@ -117,7 +117,7 @@ Then the key: partition by workspace ID, so each request names its shard and tou
 
 **Reads.** With two replicas per shard, read capacity is far above 200k rps; reads are not the constraint, writes are. Notice that the simulation reports the busier of the two sides for a single-primary store.
 
-**PgBouncer.** Ten instances at 50k rps each carry 300k requests at 60%. It is given; your job is to route every query through it. The test `no path from web to any database` enforces that.
+**PgBouncer.** Ten instances at 50k rps each carry 300k requests at 60%. It is given; your job is to route every query through it. The test "Queries go through PgBouncer" enforces that, including its line `no path from web to any database`.
 
 **Failure.** Losing a primary promotes the standby; losing a standby costs read capacity on one shard. Run the analysis and confirm no latency limit breaks with an instance missing.
 
@@ -127,15 +127,15 @@ Summarise: shard by workspace ID across enough primaries to keep writes around t
 
 ## Common mistakes
 
-**One big database** (`wrong/one-big-database.proschi`). Keep the monolith and add replicas: four replicas, one primary. Every one of the 100k edits still lands on that primary, which takes 5k. In real life this is the "just buy a bigger box" plan, and Notion's story is what happens at its end: maintenance falls behind and wraparound looms. Here it fails the p99 of both use cases, because the saturated database is on both paths.
+**One big database** (`wrong/one-big-database.proschi`). Keep the monolith and add replicas: four replicas, one primary. Every one of the 100k edits still lands on that primary, which takes 5k. In real life this is the "just buy a bigger box" plan, and Notion's story is what happens at its end: maintenance falls behind and wraparound looms. Here it fails the p99 of both use cases, because the saturated database is on both paths (and `survive any node failure` too).
 
-**Replicas instead of shards** (`wrong/replicas-instead-of-shards.proschi`). Four shards with eight replicas each: lots of read capacity, only four primaries. 100k writes on 20k of write capacity saturates. It fails the p99 of Edit block. The lesson: count primaries, not machines.
+**Replicas instead of shards** (`wrong/replicas-instead-of-shards.proschi`). Four shards with eight replicas each: lots of read capacity, only four primaries. 100k writes on 20k of write capacity saturate the primaries. It fails the p99 of Edit block, and of Load page too, because pages are read from the same overloaded shards. The lesson: count primaries, not machines.
 
-**Shard by block ID** (`wrong/shard-by-block-id.proschi`). Writes spread perfectly, but a page's blocks live on every shard, so a page load becomes an `x32` fan-out: 200k page loads turn into 6.4 million shard reads a second. It fails the p99 of Load page. In production this is the classic scatter-gather trap: every page load waits for the slowest shard, and a single slow shard slows every page.
+**Shard by block ID** (`wrong/shard-by-block-id.proschi`). Writes spread perfectly, but a page's blocks live on every shard, so a page load becomes an `x32` fan-out: 200k page loads turn into 6.4 million shard reads a second. It fails the p99 of Load page, and of Edit block too, because edits wait behind those reads on the same shards. In production this is the classic scatter-gather trap: every page load waits for the slowest shard, and a single slow shard slows every page.
 
 **Direct connections** (`wrong/direct-connections.proschi`). The API servers connect to Postgres directly. With hundreds of API processes and dozens of databases, that is thousands of connections, each a Postgres backend process with its own memory. It fails "Queries go through PgBouncer".
 
-**Three replicas per shard.** Tempting for safety, but at a shard count that handles the writes, it breaks the $30,000 budget. One standby per shard is enough to survive a single failure.
+**Three replicas per shard.** Tempting for safety, but at a shard count that can handle the writes, it breaks the $30,000 budget. One standby per shard is enough to survive a single failure.
 
 ## In the interview
 

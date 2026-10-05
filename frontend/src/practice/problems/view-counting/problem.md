@@ -16,7 +16,7 @@ count sounds like a counter, but it is a count of **unique** viewers: a
 user who opens a post ten times is one view. Keeping a set of user ids per
 post would take megabytes for every popular post. Reddit's answer was a
 streaming pipeline that filters views and counts them with HyperLogLog, a
-sketch of at most 12 KB per post that is off by under 1%.
+sketch of at most 12 KB per post that is typically off by less than 1%.
 
 ## Functional requirements
 

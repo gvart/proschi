@@ -18,9 +18,14 @@ Four use cases:
 - **Publish trends**: every five seconds, the detector ranks each location's terms by unusual growth and writes the top fifty to a cache (for readers) and a small database (to refill the cache).
 - **Get trends**: a user opens a location's list. `"Cache hit"` is served from the cache; `"Cache miss"` reads the database and puts the list back.
 
-Limits: Post tweet p99 under 80 ms, Get trends p99 under 50 ms and 99.99% available, durable posts, no single machine failure may break a latency limit, and $11,000 a month including the existing Tweet Service and tweet store.
+Limits: Post tweet p99 under 80 ms; Get trends p99 under 50 ms and 99.99% available; durable posts; no single machine failure may break a latency limit; and $11,000 a month, including the existing Tweet Service and tweet store.
 
-The tests in the given file say: posting writes the tweet store before answering, calls a queue but never waits for it, and never calls a cache; counting starts at a queue and touches no cache or database; publishing writes a cache; and reading trends checks the cache before any database, never touches a database on a hit, and never touches the tweet store.
+The tests in the given file check four things:
+
+- Posting writes the tweet store before answering, calls a queue but never waits for it, and never calls a cache.
+- Counting starts at a queue and touches no cache or database.
+- Publishing writes a cache.
+- Reading trends checks the cache before any database, never touches a database on a hit, and never touches the tweet store.
 
 ## Back-of-the-envelope
 
@@ -43,17 +48,17 @@ Look at the first row. If each update were a network call to Redis (`ZINCRBY`), 
 
 **Ranking work.** Ranking happens 200 times a second (once per location every five seconds), not 30,000 times a second (once per reader). That 150× ratio is the whole argument for precomputing.
 
-**In Proschi's numbers.** The given Tweet Service runs at about 63% from posts alone; adding a synchronous Redis call to every post adds latency to a path that already uses most of its p99 budget. The given tweet store takes posts at about a third of its capacity; a `GROUP BY` per reader would add 30k reads a second and push it hot. With a fixed price per replica (services $100, Redis $150, MySQL $400, Kafka $200), the existing systems already eat a large share of the $11,000, so the new tiers must be lean.
+**In Proschi's numbers.** The given Tweet Service runs at about 63% from posts alone (20k ÷ 32k). A synchronous Redis call on every post adds latency to a path that already uses most of its p99 budget. The given tweet store takes posts at about a third of its capacity (20k ÷ 60k). A `GROUP BY` per reader would add 30k reads a second and push it hot. Each replica has a fixed price (services $100, Redis $150, MySQL $400, Kafka $200). The existing systems already take $3,100 of the $11,000, so the new tiers must be lean.
 
 ## Concepts
 
 ### Sliding windows and baselines, in memory
 
-"Trending now" means "in the last N minutes". A **tumbling** window is a fixed bucket (12:00 to 12:05). A **sliding** window covers the last N minutes at any moment. The standard implementation keeps a ring of small tumbling buckets (say one per minute) and sums the latest N; when time advances, the oldest bucket is dropped. This bounds memory and makes expiry a constant-time operation. Stream processors must also pick a clock: when the tweet was created (event time) or when it was processed. For trends, slightly late tweets matter little, so processing time with small buckets is usually fine.
+"Trending now" means "in the last N minutes". A **tumbling** window is a fixed bucket (12:00 to 12:05). A **sliding** window covers the last N minutes at any moment. The standard implementation keeps a ring of small tumbling buckets (say one per minute) and sums the latest N. When time moves on, the oldest bucket is dropped. This bounds memory and makes expiry a constant-time operation. Stream processors must also pick a clock: when the tweet was created (event time) or when it was processed (processing time). For trends, slightly late tweets matter little, so processing time with small buckets is usually fine.
 
-Windows also give you the baseline. If you ranked by raw count, "the" and "lol" would trend forever. A detector compares a term's current-window count with its own history (the same hour yesterday, or a long moving average) and ranks by how unusual the ratio is. That is product logic the simulation does not see, but it is why the windows and the ranking must live together, in the detector's memory, rather than in a shared store.
+Windows also give you the baseline. If you ranked by raw count, "the" and "lol" would trend forever. A detector compares a term's current-window count with its own history (the same hour yesterday, or a long moving average) and ranks by how unusual the ratio is. The simulation does not see this product logic. But it is why the windows and the ranking must live together, in the detector's memory, and not in a shared store.
 
-Trade-off: state in a process dies with the process, so you rebuild it by replaying the log. When not to do it: when the state is too large for the fleet's memory or must be queried by other services; then use a stream processor's managed state store or a real database. In Proschi, "counting in memory" is simply a consumer step that calls nothing else:
+Trade-off: state in a process dies with the process, so you rebuild it by replaying the log. When not to do it: when the state is too large for the fleet's memory, or other services must query it. Then use a stream processor's managed state store or a real database. In Proschi, "counting in memory" is simply a consumer step that calls nothing else:
 
 ```proschi
 title "Stateful stream consumer"
@@ -73,15 +78,15 @@ usecase "Count event" {
 
 You cannot keep an exact counter for every term ever tweeted in every location; the vocabulary is unbounded. A **count-min sketch** is a small 2D array of counters, `d` rows by `w` columns, with one hash function per row. To add a term, increment one cell per row. To estimate its count, take the minimum of its `d` cells. Collisions can only add, never subtract, so the estimate never undercounts, and with `w` and `d` chosen right the overcount is bounded with high probability (Cormode and Muthukrishnan, 2005).
 
-A sketch answers "how many times did X appear?" but cannot list the most frequent items. Pair it with a **min-heap of size k**: after each update, if the term's estimate beats the heap's smallest entry, swap it in. The heap holds the current **heavy hitters**.
+A sketch answers "how many times did X appear?" but cannot list the most frequent items. Pair it with a **min-heap of size k**: after each update, if the term is already in the heap, update its count; otherwise, if its estimate beats the heap's smallest entry, swap it in. The heap holds the current **heavy hitters**.
 
-Trade-offs: estimates are approximate and only overcount; you cannot delete from a basic sketch (use bucketed windows instead); and heavy hitters by volume are not trends on their own. When not to use it: small, bounded key spaces (a few thousand products) where an exact hash map is cheaper and simpler. In a Proschi diagram the sketch and heap are invisible: they are the in-memory consumer step shown above.
+Trade-offs: estimates are approximate and only overcount. You cannot delete from a basic sketch (use bucketed windows instead). And heavy hitters by volume are not trends on their own. When not to use it: small, bounded key spaces (a few thousand products) where an exact hash map is cheaper and simpler. In a Proschi diagram the sketch and heap are invisible: they are the in-memory consumer step shown above.
 
 ### Precompute and serve from a cache
 
 When many readers ask the same few questions, answer each question once and store the answer. Here there are only about 1,000 distinct questions ("trends for location X"), each refreshed every five seconds, and 30k readers a second. Writing the ranked list to a cache turns each read into one key lookup. A small database holds the last published list so a cold or failed cache can be refilled (cache-aside on the read path).
 
-When not to use it: when the question space is huge and each question is rarely repeated (arbitrary user-defined queries), precomputing wastes work; compute on demand and cache the popular ones.
+When not to use it: when there are a huge number of possible questions and each is rarely repeated (arbitrary user-defined queries). Then precomputing wastes work; compute on demand and cache the popular answers.
 
 ```proschi
 title "Precomputed answers"
@@ -128,7 +133,7 @@ usecase "Read" {
 
 **Step 2: high-level design.** Three paths.
 
-The write path stays almost unchanged: user → Tweet Service → tweet store → `201`, plus one asynchronous produce to the firehose. Use an async send so the post never waits for Kafka.
+The write path stays almost unchanged: user → Tweet Service → tweet store → `201`, plus one asynchronous produce to the firehose. Use an async send, so the post never waits for Kafka.
 
 The stream path: firehose → detector. The detector holds sliding-window sketches and top-k heaps per location in memory. Partition the work so each detector instance owns a slice of the key space, which keeps state local.
 
@@ -150,7 +155,7 @@ The read path: user → load balancer → trends API → cache, falling back to 
 
 **Counting while posting** (`wrong/count-while-posting`). The Tweet Service bumps a dozen Redis counters before answering. Every post now waits on Redis, and a spike of tweets is a spike of Redis writes. In Proschi the cache saturates (about 135% of capacity) and the post p99 breaks, failing "Posting a tweet never waits for counting" and `p99 of Post tweet < 80 ms`.
 
-**A counter per term in Redis** (`wrong/counter-per-term-in-redis`). Same increments, moved into the detector. The post is fine now, but the detector hammers the shared cache, which readers also use. Proschi fails "Tweets are counted in the stream, in memory", `survive any node failure`, and the Get trends p99 because the readers' cache is saturated.
+**A counter per term in Redis** (`wrong/counter-per-term-in-redis`). Same increments, moved into the detector. The post is fine now, but the detector hammers the shared cache, which readers also use. It fails "Tweets are counted in the stream, in memory", `survive any node failure`, and the Get trends p99, because the readers' cache is saturated.
 
 **Counting at read time** (`wrong/count-at-read-time`). Every trends request runs a `GROUP BY` over the last hour of tweets. The work grows with readers instead of with locations, and the tweet store (the source of truth for every tweet) becomes hot. It fails "Trends are ranked ahead of time and served from a cache" and cannot survive losing a store replica.
 
