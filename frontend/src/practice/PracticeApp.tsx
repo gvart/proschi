@@ -77,7 +77,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
 
   const problem = route ? problems.find((p) => p.id === route) : undefined;
   useEffect(() => {
-    document.title = problem ? `${problem.title} · Proschi practice` : 'Practice · Proschi';
+    document.title = problem ? `${problem.title} · Proschi practice` : 'System design practice problems with automatic tests · Proschi';
   }, [problem]);
 
   if (problem) {

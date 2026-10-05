@@ -18,7 +18,7 @@ export function practiceListHtml(problems: Pick<ProblemListing, 'id' | 'title' |
   return problems
     .map(
       (p) => `<li>
-  <a class="ps-card ps-card--interactive tile" href="./practice/#/${encodeURIComponent(p.id)}">
+  <a class="ps-card ps-card--interactive tile" href="./practice/${encodeURIComponent(p.id)}/">
     <span class="tile__name">${escapeHtml(p.title)}</span>
     <span class="ps-badge ${DIFFICULTY_BADGE[p.difficulty] ?? ''}">${escapeHtml(p.difficulty)}</span>
     <span class="tile__desc">${escapeHtml(p.summary)}</span>

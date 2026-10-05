@@ -33,6 +33,7 @@ await check('/api/stats', 200, (body) => (body.problems ? undefined : 'no proble
 await check('/api/me', 401);
 await check('/', 200, (body) => (body.includes('<title>Proschi') ? undefined : 'not the landing page'), STATIC_HEADERS);
 await check('/no-such-page/', 404, (body) => (body.includes('Page not found') ? undefined : 'not the 404 page'), STATIC_HEADERS);
+await check('/practice/url-shortener/', 200, (body) => (body.includes('application/ld+json') ? undefined : 'no structured data'), STATIC_HEADERS);
 await check('/sitemap.xml', 200, (body) => (body.includes('<urlset') ? undefined : 'not a sitemap'), STATIC_HEADERS);
 await check('/robots.txt', 200, (body) => (body.includes('Sitemap:') ? undefined : 'no Sitemap line'), STATIC_HEADERS);
 process.exit(failed ? 1 : 0);

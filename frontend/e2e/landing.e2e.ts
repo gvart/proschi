@@ -55,7 +55,7 @@ test.describe('landing page', () => {
   test('practice list shows 12 problems', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
     await expect(practice.getByRole('listitem')).toHaveCount(12);
-    await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/#/url-shortener');
+    await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
   });
 
   test('example links open the editor with that example', async ({ page }) => {

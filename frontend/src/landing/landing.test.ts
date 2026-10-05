@@ -193,7 +193,7 @@ describe('practice section', () => {
   it('lists every practice problem from its folder, in catalog order', () => {
     expect(listings.map((p) => [p.id, p.title, p.summary, p.difficulty])).toEqual(problems.map((p) => [p.id, p.title, p.summary, p.difficulty]));
     const html = practiceListHtml(listings);
-    const ids = [...html.matchAll(/href="\.\/practice\/#\/([^"]+)"/g)].map((m) => m[1]);
+    const ids = [...html.matchAll(/href="\.\/practice\/([^"/]+)\/"/g)].map((m) => m[1]);
     expect(ids).toEqual(problems.map((p) => p.id));
   });
 

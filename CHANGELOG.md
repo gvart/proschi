@@ -34,8 +34,17 @@ deployed from `main` and ships with the same changes.
 - The editor and practice show a "Something went wrong" screen, with a reload
   button and a link to file a GitHub issue (the error and the browser only,
   never your designs), when a page crashes, instead of a blank page.
-- `robots.txt` and a `sitemap.xml` of the landing page, editor, practice and
-  every docs page, generated from `docs/site.json` at build time.
+- `robots.txt` and a `sitemap.xml` of the landing page, editor, practice,
+  every problem's page and every docs page, generated at build time.
+- Every practice problem has a page of its own, `practice/<id>/`, that search
+  engines can index: the statement, difficulty and tags, a button that opens
+  it in practice, and links to the other problems. The landing page's
+  practice list links to these pages.
+- Search and link previews: the editor and practice pages have descriptions,
+  canonical URLs and Open Graph tags; docs pages get the preview image; the
+  landing page and problem pages carry schema.org data (the app; each
+  problem as a learning resource, with breadcrumbs). Page titles name what
+  people search for: architecture diagrams as code, system design practice.
 - Account controls in the practice account menu: link a second sign-in
   (GitHub and Google) to the same account and unlink one, sign out everywhere,
   and download everything the server stores about you as JSON. Sessions

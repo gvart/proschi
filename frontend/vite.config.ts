@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
+import { practicePages } from './plugins/practicePages'
 import { siteShell } from './plugins/siteShell'
 import { docsSite } from './plugins/docsSite'
 import { sitemap } from './plugins/sitemap'
@@ -31,13 +32,14 @@ export default defineConfig(async () => ({
   plugins: [
     react(),
     practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
+    practicePages(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
     // Before siteShell: the docs pages' layout goes in first, the header and footer around it.
     docsSite({
       docsDir: fileURLToPath(new URL('../docs', import.meta.url)),
       stubsDir: fileURLToPath(new URL('./docs', import.meta.url)),
     }),
     siteShell(),
-    sitemap(fileURLToPath(new URL('../docs', import.meta.url))),
+    sitemap(fileURLToPath(new URL('../docs', import.meta.url)), fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
     await analyzer(),
   ],
   // Relative asset paths so the build works under any sub-path,
@@ -48,7 +50,8 @@ export default defineConfig(async () => ({
     assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
     rollupOptions: {
       // The landing page at the root, the editor under app/, system design
-      // practice under practice/, model/, which forwards to the docs, and 404.html.
+      // practice under practice/ (and a page per problem), model/, which forwards to the
+      // docs, and 404.html.
       // docsSite adds the docs pages (docs/**/index.html).
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
@@ -56,6 +59,8 @@ export default defineConfig(async () => ({
         practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
         model: fileURLToPath(new URL('./model/index.html', import.meta.url)),
         notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
+        // The template of each problem's page, practice/<id>/ (plugins/practicePages.ts).
+        problemPage: fileURLToPath(new URL('./practice/problem/index.html', import.meta.url)),
       },
       output: { manualChunks },
     },
