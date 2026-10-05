@@ -1,10 +1,11 @@
 import type { Plugin } from 'vite'
 import { readSite, SITE_ORIGIN, type SiteConfig } from './docsSite'
+import { problemUrl, readProblems } from './practicePages'
 
-/** The pages search engines should know about: the landing page, the editor, practice and every docs page. */
-export function sitemapUrls(site: SiteConfig): string[] {
+/** The pages search engines should know about: the landing page, the editor, practice, every problem's page and every docs page. */
+export function sitemapUrls(site: SiteConfig, problemIds: string[]): string[] {
   const docs = site.pages.map((p) => `${SITE_ORIGIN}docs/${p.slug ? `${p.slug}/` : ''}`)
-  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...docs]
+  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...problemIds.map(problemUrl), ...docs]
 }
 
 export function sitemapXml(urls: string[]): string {
@@ -13,16 +14,16 @@ export function sitemapXml(urls: string[]): string {
 }
 
 /**
- * dist/sitemap.xml (public/robots.txt points to it), from docs/site.json, so
- * it never falls behind the docs. Practice problems are routes inside one
- * page (practice/#/<id>), which a sitemap cannot list.
+ * dist/sitemap.xml (public/robots.txt points to it), from docs/site.json and
+ * the problem folders, so it never falls behind them. Problems are listed by
+ * their static pages, practice/<id>/ (plugins/practicePages.ts).
  */
-export function sitemap(docsDir: string): Plugin {
+export function sitemap(docsDir: string, problemsDir: string): Plugin {
   return {
     name: 'proschi-sitemap',
     apply: 'build',
     generateBundle() {
-      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(sitemapUrls(readSite(docsDir))) })
+      this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(sitemapUrls(readSite(docsDir), readProblems(problemsDir).map((p) => p.id))) })
     },
   }
 }

@@ -14,6 +14,17 @@ test.describe('practice', () => {
     await expect(page.getByText('0 of 12 solved')).toBeVisible();
   });
 
+  test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
+    await page.goto('practice/url-shortener/');
+    await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');
+    await expect(page.getByRole('heading', { level: 1, name: 'URL Shortener' })).toBeVisible();
+    await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
+    await expect(page.getByRole('link', { name: 'Pastebin' })).toHaveAttribute('href', '../pastebin/');
+    await page.getByRole('link', { name: /Solve it in your browser/ }).click();
+    await expect(page).toHaveURL(/\/practice\/#\/url-shortener$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
+  });
+
   test('url-shortener: starter fails, reference solution solves it, progress persists', async ({ page }) => {
     await page.goto('practice/');
     await problemList(page).getByRole('link', { name: /URL shortener/i }).click();

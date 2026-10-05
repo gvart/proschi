@@ -18,8 +18,11 @@ frontend/src/practice/problems/<id>/
   wrong/<name>.proschi  optional: plausible wrong designs that must fail
 ```
 
-The folder name is the problem id and its URL (`practice/#/url-shortener`):
-lowercase letters and digits, words joined by `-`. Other files are an error,
+The folder name is the problem id and its URLs: `practice/#/url-shortener` in
+the practice app, and `practice/url-shortener/`, a static page with the title,
+summary and statement (not the hints) that search engines index and the
+sitemap lists. Lowercase letters and digits, words joined by `-`; `problem` is
+taken by that page's template. Other files are an error,
 so a typo like `solutoin.proschi` is caught. Wrong design names follow the same
 rule (`wrong/miss-never-fills-cache.proschi`).
 

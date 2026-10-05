@@ -6,12 +6,18 @@ import { sitemapUrls, sitemapXml } from './sitemap'
 const site = readSite(fileURLToPath(new URL('../../docs', import.meta.url)))
 
 describe('sitemap', () => {
-  it('lists the landing page, the editor, practice and every docs page, once each', () => {
-    const urls = sitemapUrls(site)
-    expect(urls.slice(0, 3)).toEqual(['https://proschi.app/', 'https://proschi.app/app/', 'https://proschi.app/practice/'])
+  it('lists the landing page, the editor, practice, every problem and every docs page, once each', () => {
+    const urls = sitemapUrls(site, ['url-shortener', 'pastebin'])
+    expect(urls.slice(0, 5)).toEqual([
+      'https://proschi.app/',
+      'https://proschi.app/app/',
+      'https://proschi.app/practice/',
+      'https://proschi.app/practice/url-shortener/',
+      'https://proschi.app/practice/pastebin/',
+    ])
     expect(urls).toContain('https://proschi.app/docs/')
     expect(urls).toContain('https://proschi.app/docs/quickstart/')
-    expect(urls).toHaveLength(3 + site.pages.length)
+    expect(urls).toHaveLength(5 + site.pages.length)
     expect(new Set(urls).size).toBe(urls.length)
   })
 

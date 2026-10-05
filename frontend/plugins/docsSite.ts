@@ -342,6 +342,8 @@ export function headHtml(page: DocPage): string {
     `<meta property="og:title" content="${escapeHtml(page.title)}" />`,
     `<meta property="og:description" content="${escapeHtml(page.description)}" />`,
     `<meta property="og:url" content="${url}" />`,
+    `<meta property="og:image" content="${SITE_ORIGIN}og.png" />`,
+    `<meta name="twitter:card" content="summary_large_image" />`,
   ].join('\n    ')
 }
 

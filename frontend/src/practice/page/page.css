@@ -1,0 +1,53 @@
+/* A problem's static page, practice/<id>/ (plugins/practicePages.ts). The hero and
+   the statement use the docs article styles (src/docs/docs.css). */
+
+.problem-page {
+  max-width: 860px;
+  padding-block: 32px 72px;
+}
+
+.problem-page__crumbs {
+  margin-bottom: 24px;
+  font-size: var(--fs-14);
+}
+
+.problem-page__crumbs a {
+  color: inherit;
+}
+
+.problem-page__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 20px 0 0;
+}
+
+.problem-page__cta {
+  margin: 28px 0 0;
+}
+
+.problem-page__more {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: var(--bw-3) solid rgb(var(--c-ink));
+}
+
+.problem-page__more h2 {
+  margin: 0 0 16px;
+  font: 800 var(--fs-h3) / 1.2 var(--font-display);
+}
+
+.problem-page__more ul {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.problem-page__more li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
