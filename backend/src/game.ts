@@ -1,3 +1,4 @@
+import type { GameStats } from '../../frontend/src/learn/achievements';
 import { challengeDay } from '../../frontend/src/learn/challenge';
 import { addDays } from '../../frontend/src/learn/streak';
 import { readContent } from '../../frontend/src/game/engine/content';
@@ -7,6 +8,7 @@ import {
   emptyMeta,
   equip,
   firstClear,
+  gameStats,
   loadoutAllowed,
   loadoutFor,
   maxAscension,
@@ -456,4 +458,9 @@ export function gameCacheKeys(): string[] {
     ...[-1, 0, 1].map((n) => `game/${dailyBoard(day(n))}`),
     ...gameContent().scenarios.flatMap((s) => Array.from({ length: MAX_ASCENSION + 1 }, (_, a) => `game/${scenarioBoard(s.id, a)}`)),
   ];
+}
+
+/** The game badges' and the skill map's view of a player's progress (GET /api/me/achievements). */
+export async function loadGameStats(DB: D1Database, userId: string): Promise<GameStats> {
+  return gameStats(await loadMeta(DB, userId), gameContent());
 }

@@ -1,18 +1,19 @@
 import type { ReactNode } from 'react';
-import { ArrowRight, GraduationCap, Layers, Map as MapIcon, Radar, Zap, type LucideIcon } from 'lucide-react';
+import { ArrowRight, Gamepad2, GraduationCap, Layers, Map as MapIcon, Radar, Zap, type LucideIcon } from 'lucide-react';
 import summary from 'virtual:practice-cards-summary';
 import { eyebrow } from '../../components/Playground/ui';
 import { PREP_TABS, type PrepTab } from './tabs';
 
 /**
  * Interview prep: the hub around the roadmap, daily review, the daily
- * challenge and the skill map. Its top holds the streak and today's goal
+ * challenge, the Arcade (Scale or Fail, the system design game) and the
+ * skill map. Its top holds the streak and today's goal
  * (compact) and the tabs, links to each section's own address, so
  * `#/review/<topic>` or `#/roadmap/<guide>` open inside it with their tab
  * marked. The tabs scroll sideways on a narrow phone rather than wrap.
  */
 
-const ICON: Record<PrepTab, LucideIcon> = { roadmap: MapIcon, review: Layers, challenge: Zap, progress: Radar };
+const ICON: Record<PrepTab, LucideIcon> = { roadmap: MapIcon, review: Layers, challenge: Zap, arcade: Gamepad2, progress: Radar };
 
 export default function PrepHub({ tab, streak, children }: { tab: PrepTab; streak?: ReactNode; children: ReactNode }) {
   return (
@@ -51,7 +52,7 @@ export function PrepBanner() {
     >
       <GraduationCap size={16} aria-hidden="true" className="flex-shrink-0" />
       <span className="min-w-0 flex-1">
-        Preparing for an interview? <strong>Interview prep</strong> has the roadmap, {summary.cards > 0 ? `${summary.cards} review cards` : 'review cards'}, a daily challenge and your skill map.
+        Preparing for an interview? <strong>Interview prep</strong> has the roadmap, {summary.cards > 0 ? `${summary.cards} review cards` : 'review cards'}, a daily challenge, a system design game and your skill map.
       </span>
       <ArrowRight size={14} aria-hidden="true" className="flex-shrink-0 transition-transform duration-d1 group-hover:translate-x-0.5" />
     </a>

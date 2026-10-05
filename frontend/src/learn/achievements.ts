@@ -57,7 +57,13 @@ export type Rule =
   /** Daily challenges with every card right. */
   | { kind: 'challenge-perfect'; min: number }
   /** The longest challenge streak: UTC days in a row with a completed daily challenge. */
-  | { kind: 'challenge-streak'; min: number };
+  | { kind: 'challenge-streak'; min: number }
+  /** Scale or Fail: the furthest wave reached in any scenario. */
+  | { kind: 'game-waves'; min: number }
+  /** Scale or Fail: scenarios cleared (all twelve waves). */
+  | { kind: 'game-clears'; min: number }
+  /** Scale or Fail: the highest ascension cleared in any scenario. */
+  | { kind: 'game-ascension'; min: number };
 
 export type RuleKind = Rule['kind'];
 
@@ -76,6 +82,9 @@ const RULE_FIELDS: Record<RuleKind, { required: string[]; optional: string[] }> 
   challenges: { required: ['min'], optional: [] },
   'challenge-perfect': { required: ['min'], optional: [] },
   'challenge-streak': { required: ['min'], optional: [] },
+  'game-waves': { required: ['min'], optional: [] },
+  'game-clears': { required: ['min'], optional: [] },
+  'game-ascension': { required: ['min'], optional: [] },
 };
 export const RULE_KINDS = Object.keys(RULE_FIELDS) as RuleKind[];
 
@@ -128,7 +137,23 @@ export interface StatsSnapshot {
   mastery: Record<string, number>;
   /** The daily challenge: completed, perfect, and the longest challenge streak. */
   challenges: ChallengeStats;
+  /** Scale or Fail. */
+  game: GameStats;
 }
+
+/** What the game badges and the skill map's game bonus look at (src/game/engine/meta.ts gameStats). */
+export interface GameStats {
+  /** The furthest wave reached in any scenario. */
+  reached: number;
+  /** Scenarios cleared. */
+  clears: number;
+  /** The highest ascension cleared, -1 for none. */
+  ascension: number;
+  /** Game lessons met per topic id. */
+  lessons: Record<string, number>;
+}
+
+export const NO_GAME: GameStats = { reached: 0, clears: 0, ascension: -1, lessons: {} };
 
 /** What rules about problems and stages need: the catalog. */
 export interface AchievementContext {
@@ -175,6 +200,12 @@ export function ruleProgress(rule: Rule, s: StatsSnapshot, context: AchievementC
       return count(s.challenges.perfect, rule.min);
     case 'challenge-streak':
       return count(s.challenges.longestStreak, rule.min);
+    case 'game-waves':
+      return count(s.game.reached, rule.min);
+    case 'game-clears':
+      return count(s.game.clears, rule.min);
+    case 'game-ascension':
+      return count(Math.max(0, s.game.ascension), rule.min);
     case 'stage': {
       const known = new Set(context.problems.map((p) => p.id));
       const ids = context.stages.find((st) => st.id === rule.stage)?.problems.filter((id) => known.has(id)) ?? [];
@@ -260,13 +291,16 @@ export interface SnapshotInput extends Omit<MasteryInput, 'solved'> {
   solvedProblems: readonly SolvedProblem[];
   /** The daily challenge's stats; none when absent. */
   challenges?: ChallengeStats;
+  /** Scale or Fail's; none when absent. */
+  game?: GameStats;
 }
 
 const NO_CHALLENGES: ChallengeStats = { completed: 0, perfect: 0, longestStreak: 0 };
 
 /** The snapshot, and the skill map computed on the way. */
 export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; skills: Skills } {
-  const map = skills({ ...input, solved: input.solvedProblems.map((p) => p.id) });
+  const game = input.game ?? NO_GAME;
+  const map = skills({ ...input, solved: input.solvedProblems.map((p) => p.id), gameLessons: game.lessons });
   return {
     snapshot: {
       reviews: input.reviews,
@@ -276,6 +310,7 @@ export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; 
       solved: [...input.solvedProblems],
       mastery: Object.fromEntries(map.topics.map((t) => [t.topic, t.mastery])),
       challenges: input.challenges ?? NO_CHALLENGES,
+      game,
     },
     skills: map,
   };
@@ -435,6 +470,8 @@ function checkRule(raw: unknown, context: AchievementCheckContext, retired = fal
   }
   if (rule.topic !== undefined && (typeof rule.topic !== 'string' || !context.topics.includes(rule.topic))) return `"topic" names "${String(rule.topic)}", which is not a topic in tags.json`;
   if (rule.stage !== undefined && (typeof rule.stage !== 'string' || !context.stages.includes(rule.stage))) return `"stage" names "${String(rule.stage)}", which is not a roadmap stage`;
+  if (kind === 'game-waves' && (rule.min as number) > 24) return '"min" of a game-waves rule is at most 24, the last wave of Endless';
+  if (kind === 'game-ascension' && (rule.min as number) > 10) return '"min" of a game-ascension rule is at most 10';
   if (kind === 'solved' || kind === 'first-run' || kind === 'under-reference') {
     const reachable = context.problems.filter((p) => (!rule.difficulty || p.difficulty === rule.difficulty) && (!rule.tag || p.tags.includes(rule.tag as string))).length;
     if ((rule.min as number) > reachable) return `"min" is ${String(rule.min)}, but only ${reachable} problem(s) can count towards it`;

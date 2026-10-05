@@ -10,6 +10,20 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Scale or Fail** is playable: the Arcade tab of Interview prep
+  (`practice/#/arcade`). Pick a scenario and build its system by tapping or
+  dragging components onto the board (they wire themselves sensibly; tap a
+  node to scale it out, size it up, shard it, rewire or remove it), read the
+  forecast, load test, deploy, and watch eight ticks of traffic flow as
+  particles while nodes heat up and break. Page the on-call mid-wave, then
+  read the debrief (what happened, why, what a senior engineer would do, and
+  the review cards that explain it), draft a tech card and take contracts.
+  Runs earn Blueprints for new components, rare cards and perks; scenarios
+  and difficulty levels open as you go; there is a daily run and, signed in,
+  leaderboards. The report shows your worst mistakes, the design in interview
+  words, and opens your final design in the editor. Optional sound. Four game
+  badges join the achievements, and game lessons add a small bonus to the
+  skill map's topics.
 - The engine and content of **Scale or Fail**, a system design roguelite for
   the Interview prep page: pick a scenario (a URL shortener, a photo app, a
   notification service, a flash sale), place and wire components, and keep

@@ -50,6 +50,12 @@
       "description": "How Proschi's practice cards are written: flip, choice, estimate and cloze cards, topics, ids that never change, and the check that catches duplicates."
     },
     {
+      "slug": "game-authoring",
+      "title": "Writing game scenarios",
+      "source": "GAME.md",
+      "description": "How Scale or Fail, Proschi's system design game, works on top of the simulation, and how to write its scenarios, tech cards and incidents, with reference runs that prove them."
+    },
+    {
       "slug": "privacy",
       "title": "Privacy",
       "source": "PRIVACY.md",
@@ -92,7 +98,9 @@
         { "href": "practice/", "label": "Solving problems" },
         { "page": "numbers" },
         { "page": "practice-authoring", "label": "Writing problems" },
-        { "page": "cards-authoring", "label": "Writing cards" }
+        { "page": "cards-authoring", "label": "Writing cards" },
+        { "href": "practice/#/arcade", "label": "Scale or Fail" },
+        { "page": "game-authoring", "label": "Writing for the game" }
       ]
     },
     {

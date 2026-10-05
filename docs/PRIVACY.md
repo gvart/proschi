@@ -22,6 +22,11 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points) |
 | `proschi.challenge.guest` | The daily challenge, signed out: the last one you played (answers, times, points and the card reviews it made), so it can be saved to your account when you sign in |
 | `proschi.challenge.progress` | The daily challenge you are in the middle of: the day, your answers so far and how long each took, so a reload carries on where you were; removed when you finish |
+| `proschi.game.meta` | Scale or Fail, signed out: your progress (Blueprints, unlocks, perks, the furthest wave and highest difficulty per scenario, what you have seen) |
+| `proschi.game.outbox` | Scale or Fail, signed out: your finished runs (their moves), purchases and equipped perks, sent to your account when you sign in and then removed |
+| `proschi.game.run` | Scale or Fail: the run you are in the middle of (its setup and your moves so far), so a reload carries on; removed when it ends |
+| `proschi.game.daily` | Scale or Fail, signed out: the day and score of the last daily run you played |
+| `proschi.game.settings` | Scale or Fail: sound on or off, and the run's speed |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
 | `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |

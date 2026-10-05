@@ -17,6 +17,13 @@ export const SIGNED_IN: Me = {
   progress: {},
 };
 
+/** GET /api/game/me for a player with no progress yet. */
+export const GAME_ME = {
+  meta: { v: 1, blueprints: 0, unlocked: [], perks: {}, equipped: [], scenarios: {}, seen: [], runs: 0 },
+  best: {},
+  daily: { day: new Date().toISOString().slice(0, 10), scenario: 'shortly' },
+};
+
 export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void> {
   const answers: [RegExp, unknown][] = [
     [/^\/api\/me$/, me],
@@ -27,6 +34,8 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/stats$/, { problems: {}, solvers: 0 }],
     [/^\/api\/stats\/[^/]+$/, { attempted: 0, solved: 0, medianRunsToSolve: null, costUsd: null, p99Ms: null, you: null }],
     [/^\/api\/leaderboard$/, { problems: 0, entries: [] }],
+    [/^\/api\/game\/me$/, GAME_ME],
+    [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),

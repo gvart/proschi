@@ -1,12 +1,12 @@
 /**
  * The interview prep hub's sections, in the order its tabs show them. Each is
  * a hash route of the practice page that keeps its own address, so old links
- * (`#/review`, `#/review/<topic>`, `#/challenge`, `#/progress`,
+ * (`#/review`, `#/review/<topic>`, `#/challenge`, `#/arcade`, `#/progress`,
  * `#/roadmap/<id>`) open
  * inside the hub. The problem list (`#/`) is Practice, outside it.
  */
 
-export type PrepTab = 'roadmap' | 'review' | 'challenge' | 'progress';
+export type PrepTab = 'roadmap' | 'review' | 'challenge' | 'arcade' | 'progress';
 
 export interface PrepTabLink {
   id: PrepTab;
@@ -18,6 +18,7 @@ export const PREP_TABS: PrepTabLink[] = [
   { id: 'roadmap', label: 'Roadmap', href: '#/roadmap' },
   { id: 'review', label: 'Daily review', href: '#/review' },
   { id: 'challenge', label: 'Challenge', href: '#/challenge' },
+  { id: 'arcade', label: 'Arcade', href: '#/arcade' },
   { id: 'progress', label: 'Progress', href: '#/progress' },
 ];
 
