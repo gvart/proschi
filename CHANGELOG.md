@@ -9,6 +9,15 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Fixed
+- The practice problems' statements and lessons, and the interview approach
+  guide, are clearer and more accurate: plainer English with shorter
+  sentences, jargon explained where it first appears, estimates that match
+  the problem files (for example the payments budget, Pastebin's egress
+  ratio, notification fan-out's SMS share and the ride-matching shard cost),
+  and "Common mistakes" sections that name every check each wrong design
+  fails.
+
 ## [0.8.0] - 2026-10-05
 
 ### Changed
