@@ -10,6 +10,7 @@ export const PROFILE = {
     { id: 'pastebin', difficulty: 'easy' },
   ],
   streak: { current: 4, longest: 12 },
+  challenge: { current: 2, longest: 6, best: 540 },
   readiness: 0.37,
   topics: [
     { topic: 'caching', mastery: 0.6 },

@@ -10,14 +10,18 @@ cd frontend
 npm ci
 npx playwright install --with-deps chromium   # once per machine
 npm run build
-npm run e2e          # or: npm run e2e:build (build, then test)
+npm run build:accounts   # the same site with sign-in, in dist-accounts/
+npm run e2e          # or: npm run e2e:build (both builds, then test)
 ```
 
 - `npx playwright test editor` runs one file; `--headed` / `--ui` to watch.
 - `npx playwright show-report` opens the HTML report; failures keep a trace
   (`npx playwright show-trace test-results/<test>/trace.zip`).
-- `E2E_PORT` changes the preview port (default 4173). A running preview on
-  that port is reused outside CI.
+- `E2E_PORT` changes the preview port (default 4173; the build with accounts
+  is served on the next port). A running preview on those ports is reused
+  outside CI.
+- `*.accounts.e2e.ts` run against the build with accounts (the `accounts`
+  project); `accounts.ts` mocks a signed-in API with `page.route`.
 - `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/path/to/chrome` uses an already installed
   Chromium instead of Playwright's own (for sandboxes without network).
 
@@ -31,6 +35,9 @@ npm run e2e          # or: npm run e2e:build (build, then test)
 | `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
 | `prep.e2e.ts` | The Practice list without prep widgets, the interview prep hub's tabs and streak, the account page with its compact badge grid, a public profile (API mocked) |
 | `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
+| `challenge.e2e.ts` | Daily challenge (no accounts): the hub's Challenge tab, play, score, share, one attempt, resume after a reload, confetti, the next card's focus and scroll on a phone |
+| `challenge.accounts.e2e.ts` | Signed in (API mocked): the challenge as the hub's tab, its leaderboard rows linking to public profiles, the challenge streak and best score on `#/me` and a public profile, every page at 320px and 360px |
+| `header.accounts.e2e.ts` | Signed in (API mocked): the header with the account and help menus fits a 320px and 390px phone on every practice page, and their panels open inside the screen; the desktop header keeps the account name and the editor button |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
 | `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
 

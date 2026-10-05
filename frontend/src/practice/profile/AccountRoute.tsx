@@ -1,7 +1,10 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { ExternalLink, LogIn, RotateCcw, UserRound } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import PaneLoading from '../../components/PaneLoading';
+import { challengeDay, challengeSummary, type ChallengeSummary } from '../../learn/challenge';
+import { api, type ChallengeToday } from '../../services/api';
+import { localResults } from '../challenge/store';
 import { eyebrow, primaryButton } from '../../components/Playground/ui';
 import { PROVIDER_LABEL } from '../account';
 import { summarize, type Activity } from '../activity';
@@ -15,15 +18,50 @@ import { ownProfile, PUBLIC_FIELDS } from './profile';
 /**
  * The account page (`#/me`): the learner's own profile (ProfileView) with
  * what only they see: streak freezes, card counts, the daily goal picker and
- * the public profile setting. Signed out, an invitation to sign in; in a
+ * the public profile setting. The daily challenge's streak and best score
+ * come from GET /api/challenge/today (signed in) or this browser's results. Signed out, an invitation to sign in; in a
  * build without accounts, this browser's progress.
  *
  * Loaded lazily with the cards, for the topics' names.
  */
 
+/**
+ * The learner's daily challenge stats: from the server signed in, from this
+ * browser's results in a build without accounts; null before a first
+ * challenge, undefined while unknown (or when the server cannot be reached).
+ */
+function useChallengeSummary(account: Account): ChallengeSummary | null | undefined {
+  const status = account.state.status;
+  const userId = account.state.status === 'signed-in' ? account.state.user.id : undefined;
+  const [fetched, setFetched] = useState<{ userId: string; summary: ChallengeSummary | null } | undefined>(undefined);
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    api<ChallengeToday>('/api/challenge/today').then(
+      (today) => {
+        if (cancelled) return;
+        const summary = today.streak && today.best != null ? { current: today.streak.current, longest: today.streak.longest, best: today.best } : null;
+        setFetched({ userId, summary });
+      },
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
+  if (status === 'off') {
+    return challengeSummary(
+      Object.values(localResults()).map((r) => ({ day: r.day, score: r.score })),
+      challengeDay(),
+    );
+  }
+  return fetched && fetched.userId === userId ? fetched.summary : undefined;
+}
+
 export default function AccountRoute({ account, activity, achievements, progress }: { account: Account; activity: Activity; achievements: Achievements; progress: Progress }) {
   const { state } = account;
   const { state: badges, refresh } = achievements;
+  const challenge = useChallengeSummary(account);
   useEffect(() => {
     document.title = 'Your profile · Proschi practice';
   }, []);
@@ -55,6 +93,7 @@ export default function AccountRoute({ account, activity, achievements, progress
     displayName: user?.displayName ?? 'Your profile',
     memberSince: user?.createdAt,
     streak: streak && { current: streak.current, longest: streak.longest, freezes: streak.freezes },
+    challenge,
     answer: badges.answer,
     progress,
     problems,

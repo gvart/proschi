@@ -11,7 +11,7 @@ import { Celebration, GoalPicker, StreakWidget, WeeklyRecapCard } from '../Strea
 import { PROVIDER_LABEL } from '../account';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
-import { accountStore, localStore, memoryStore, signedOutError, type CardStore } from './store';
+import { accountStore, localStore, memoryStore, pendingReviews, reviewId, signedOutError, type CardStore } from './store';
 import ReviewSession, { type SessionResult } from './ReviewSession';
 import { notifyActivity } from '../skills/activity';
 
@@ -34,16 +34,6 @@ import { notifyActivity } from '../skills/activity';
 const FLUSH_AT = 5;
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
-
-/** A random id for a review; randomUUID needs a secure context, which a local preview over http may not be. */
-function reviewId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
 
 /** "later today", "tomorrow", "in 5 days". */
 function dueIn(due: number, now: number): string {
@@ -87,16 +77,20 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
   // The weekly recap, once dismissed here (storage keeps it dismissed for the rest of the week).
   const [recapHidden, setRecapHidden] = useState(false);
 
+  const { refresh: refreshActivity } = activity;
   useEffect(() => {
     if (!store) return;
     let cancelled = false;
     setLoad({ status: 'loading' });
+    // Loading sends the outbox first: the streak, read meanwhile with those reviews counted from the outbox, is read again once they are sent.
+    const hadPending = !!userId && store.kind === 'account' && pendingReviews(userId).length > 0;
     store.load(localDay(new Date())).then(
       (loaded) => {
         if (cancelled) return;
         setStates(loaded.states);
         setToday(loaded.today);
         setLoad({ status: 'ready' });
+        if (hadPending) refreshActivity();
       },
       (e: unknown) => {
         if (cancelled) return;
@@ -109,7 +103,7 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
     return () => {
       cancelled = true;
     };
-  }, [store, attempt]);
+  }, [store, attempt, userId, refreshActivity]);
 
   // Unsent reviews go out when the page is hidden (a phone locking, a tab switch); what fails stays in the outbox for next time.
   const waiting = useRef(0);

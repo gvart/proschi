@@ -4,8 +4,11 @@ import type { Card, ChoiceCard, ClozeCard, EstimateCard, FlipCard, Topic } from 
 import { previewIntervals, RATINGS, type CardState, type Rating } from '../../learn/fsrs';
 import { formatFactor, formatNumber, gradeClozeAnswers, gradeEstimateAnswer, optionOrder, parseNumber } from '../../learn/grade';
 import { autoRating, formatInterval, type SessionItem } from '../../learn/review';
+import type { ChallengeAnswer } from '../../learn/challenge';
+import { TYPE_LABEL } from './labels';
 import Markdown, { InlineMarkdown } from '../Markdown';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
+import { prefersReducedMotion } from '../../design/motion';
 
 /** One answered card of a session, for the summary. */
 export interface SessionResult {
@@ -23,7 +26,6 @@ interface SessionProps {
   onQuit: (results: SessionResult[]) => void;
 }
 
-const TYPE_LABEL: Record<Card['type'], string> = { flip: 'Recall', choice: 'Pick one', estimate: 'Estimate', cloze: 'Fill the gaps' };
 
 /** A review session: one card at a time, each rated, then the summary. */
 export default function ReviewSession({ items, states, topics, onReview, onDone, onQuit }: SessionProps) {
@@ -75,6 +77,40 @@ export default function ReviewSession({ items, states, topics, onReview, onDone,
   );
 }
 
+/** The bottom edge of the sticky site header, the first visible pixel below it (0 without one). */
+function headerBottom(): number {
+  const header = document.querySelector('.ps-header');
+  return header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+}
+
+const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 'smooth');
+
+/**
+ * Brings a new card's top (topic, type and question) into view below the
+ * sticky header. On a phone the page is still scrolled down to the last
+ * card's buttons; a card that already starts in view stays where it is.
+ */
+function showCardTop(el: HTMLElement) {
+  const offset = headerBottom() + 12;
+  const top = el.getBoundingClientRect().top;
+  if (top >= offset && top <= window.innerHeight - 96) return;
+  el.style.scrollMarginTop = `${offset}px`;
+  el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+}
+
+/**
+ * Brings the start of a just-revealed answer into view when it opened below
+ * the fold, scrolling only as far as needed so the question above stays in
+ * sight: no jump away from what is being read.
+ */
+function showRevealed(el: HTMLElement) {
+  const top = el.getBoundingClientRect().top;
+  const limit = window.innerHeight - 96;
+  if (top <= limit) return;
+  const target = Math.max(headerBottom() + 12, window.innerHeight / 3);
+  window.scrollBy({ top: top - target, behavior: scrollBehavior() });
+}
+
 /** Keys typed into a field or on a button belong to it, not to the shortcuts. */
 function ownKey(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null;
@@ -105,6 +141,10 @@ interface CardViewProps {
   state?: CardState;
   position: string;
   onRate: (rating: Rating, durationMs: number) => void;
+  /** The order of a choice card's options (grade.ts optionOrder); the card's review count by default. */
+  round?: number;
+  /** Called once with the answer itself, as the daily challenge sends it (challenge.ts), when an auto-graded card is answered. */
+  onAnswer?: (answer: ChallengeAnswer) => void;
 }
 
 /** An auto-graded card's outcome once answered: right or wrong, and the explanation to show. */
@@ -115,14 +155,24 @@ interface Outcome {
   explanation?: ReactNode;
 }
 
-function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps) {
+/** One card: its question, the answer, and the rating (shared by daily review and the daily challenge). */
+export function CardView({ card, isNew, topic, state, position, onRate, round, onAnswer }: CardViewProps) {
   const shownAt = useRef(Date.now());
   const answeredAfter = useRef<number | undefined>(undefined);
   const box = useRef<HTMLElement>(null);
-  // The new card is announced to screen readers and takes keyboard focus from the last one's buttons.
-  useEffect(() => box.current?.focus({ preventScroll: true }), []);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // The new card's heading takes keyboard focus from the last card's buttons, so it is announced
+  // and the next Tab goes into this card; the card's top is scrolled into view below the header.
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+    if (box.current) showCardTop(box.current);
+  }, []);
   const answered = () => {
     answeredAfter.current ??= Date.now() - shownAt.current;
+  };
+  const answeredWith = (answer: ChallengeAnswer) => {
+    answered();
+    onAnswer?.(answer);
   };
   const rate = (rating: Rating) => onRate(rating, answeredAfter.current ?? Date.now() - shownAt.current);
 
@@ -132,25 +182,32 @@ function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps
       tabIndex={-1}
       aria-label={position}
       data-card-type={card.type}
+      data-card-id={card.id}
       className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md focus:outline-none"
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5">
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        data-card-heading=""
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5 focus:outline-none focus-visible:bg-pop-yellow/20"
+      >
+        <span className="sr-only">{position}: </span>
         <span className={eyebrow}>{topic}</span>
         <span className="text-muted" aria-hidden="true">
           ·
         </span>
         <span className={eyebrow}>{TYPE_LABEL[card.type]}</span>
         {isNew && <span className="ml-auto rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-[11px] font-bold text-on-accent">New</span>}
-      </div>
+      </h2>
       <div className="p-4 sm:p-5">
         {card.type === 'flip' ? (
           <FlipBody card={card} state={state} onShow={answered} onRate={rate} />
         ) : card.type === 'choice' ? (
-          <ChoiceBody card={card} round={state?.reps ?? 0} onAnswer={answered} onRate={rate} />
+          <ChoiceBody card={card} round={round ?? state?.reps ?? 0} onAnswer={answeredWith} onRate={rate} />
         ) : card.type === 'estimate' ? (
-          <EstimateBody card={card} onAnswer={answered} onRate={rate} />
+          <EstimateBody card={card} onAnswer={answeredWith} onRate={rate} />
         ) : (
-          <ClozeBody card={card} onAnswer={answered} onRate={rate} />
+          <ClozeBody card={card} onAnswer={answeredWith} onRate={rate} />
         )}
       </div>
     </article>
@@ -177,7 +234,11 @@ function Why({ card }: { card: Card }) {
 /** A focusable region for what is revealed after answering, so it is read out and keyboard focus lands there. */
 function Revealed({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => ref.current?.focus({ preventScroll: true }), []);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.focus({ preventScroll: true });
+    showRevealed(ref.current);
+  }, []);
   return (
     <div ref={ref} tabIndex={-1} role="region" aria-label={label} className="mt-4 border-t-bw-1 border-dashed border-ink/40 pt-4 focus:outline-none">
       {children}
@@ -254,12 +315,12 @@ function Graded({ outcome, onRate }: { outcome: Outcome; onRate: (r: Rating) => 
   );
 }
 
-function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round: number; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round: number; onAnswer: (answer: number) => void; onRate: (r: Rating) => void }) {
   const order = useMemo(() => optionOrder(card, round), [card, round]);
   const [picked, setPicked] = useState<number | undefined>(undefined);
   const pick = (i: number) => {
     if (picked !== undefined) return;
-    onAnswer();
+    onAnswer(i);
     setPicked(i);
   };
   useKeys(picked === undefined ? Object.fromEntries(order.map((option, n) => [String(n + 1), () => pick(option)])) : {});
@@ -279,6 +340,7 @@ function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round
                 type="button"
                 onClick={() => pick(i)}
                 disabled={picked !== undefined}
+                data-option={i}
                 className={`flex w-full min-h-[48px] items-start gap-3 rounded border-bw-1 border-ink px-3 py-2.5 text-left text-sm text-ink shadow-brutal-sm transition-[background-color] duration-d1 [overflow-wrap:anywhere] disabled:cursor-default ${tone}`}
               >
                 <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm border-bw-1 border-ink/40 font-mono text-[11px] text-muted" aria-hidden="true">
@@ -301,7 +363,7 @@ function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round
   );
 }
 
-function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer: (answer: number) => void; onRate: (r: Rating) => void }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [value, setValue] = useState<number | undefined>(undefined);
@@ -312,7 +374,7 @@ function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer
       setError('Enter a number above 0, for example 2300, 2,300, 2.3k or 1e6.');
       return;
     }
-    onAnswer();
+    onAnswer(parsed);
     setError(undefined);
     setValue(parsed);
   };
@@ -384,16 +446,16 @@ function clozeSource(card: ClozeCard, filled: boolean): string {
   return filled ? card.text.replace(/\{\{(\d+)\}\}/g, (_, n: string) => `**${card.blanks[Number(n)]?.[0] ?? ''}**`) : card.text.replace(/\{\{(\d+)\}\}/g, (_, n: string) => `**[ ${Number(n) + 1} ]**`);
 }
 
-function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: (answer: string[] | null) => void; onRate: (r: Rating) => void }) {
   const [typed, setTyped] = useState<string[]>(() => card.blanks.map(() => ''));
   const [result, setResult] = useState<{ correct: boolean; gaps: boolean[]; gaveUp: boolean } | undefined>(undefined);
   const check = (e: FormEvent) => {
     e.preventDefault();
-    onAnswer();
+    onAnswer(typed);
     setResult({ ...gradeClozeAnswers(card, typed), gaveUp: false });
   };
   const giveUp = () => {
-    onAnswer();
+    onAnswer(null);
     setResult({ correct: false, gaps: card.blanks.map(() => false), gaveUp: true });
   };
 
@@ -413,6 +475,7 @@ function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: () =
               autoCapitalize="off"
               enterKeyHint={i === card.blanks.length - 1 ? 'done' : 'next'}
               spellCheck={false}
+              maxLength={200}
               value={typed[i]}
               readOnly={!!result}
               onChange={(e) => setTyped(typed.map((t, j) => (j === i ? e.target.value : t)))}

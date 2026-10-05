@@ -17,11 +17,14 @@ export class ApiError extends Error {
   readonly status: number;
   /** Seconds to wait before retrying, from a 429's Retry-After. */
   readonly retryAfter?: number;
-  constructor(status: number, message: string, retryAfter?: number) {
+  /** The answer's JSON body, e.g. the attempt kept with a 409. */
+  readonly body?: unknown;
+  constructor(status: number, message: string, retryAfter?: number, body?: unknown) {
     super(message);
     this.name = 'ApiError';
     this.status = status;
     this.retryAfter = retryAfter;
+    this.body = body;
   }
 }
 
@@ -33,7 +36,7 @@ export async function api<T>(path: string, { method = 'GET', body }: { method?: 
   const data = (await response.json().catch(() => ({}))) as { error?: string };
   if (!response.ok) {
     const retryAfter = Number(response.headers.get('Retry-After') ?? NaN);
-    throw new ApiError(response.status, data.error ?? `${response.status} ${response.statusText}`, Number.isFinite(retryAfter) ? retryAfter : undefined);
+    throw new ApiError(response.status, data.error ?? `${response.status} ${response.statusText}`, Number.isFinite(retryAfter) ? retryAfter : undefined, data);
   }
   return data as T;
 }
@@ -139,6 +142,8 @@ export interface PublicProfile {
   memberSince: number;
   solved: { id: string; difficulty: 'easy' | 'medium' | 'hard' }[];
   streak: { current: number; longest: number };
+  /** The daily challenge streak (days) and best score; null before a first challenge. */
+  challenge: { current: number; longest: number; best: number } | null;
   readiness: number;
   topics: { topic: string; mastery: number }[];
   badges: { id: string; earnedAt: number }[];
@@ -155,6 +160,66 @@ export interface CardReviewsAnswer {
   accepted: number;
   skipped: { id: string; cardId: string; reason: string }[];
   states: Record<string, CardState>;
+}
+
+/** One card of a daily challenge attempt, graded by the server (src/learn/challenge.ts). */
+export interface ChallengeCardOutcome {
+  cardId: string;
+  answer: number | string[] | null;
+  ms: number;
+  correct: boolean;
+  points: number;
+  bonus: number;
+}
+
+/** A daily challenge attempt as the server keeps it, with its rank among the day's. */
+export interface ChallengeAttempt {
+  day: string;
+  score: number;
+  maxScore: number;
+  correct: number;
+  perfect: boolean;
+  totalMs: number;
+  results: ChallengeCardOutcome[];
+  rank: number;
+  players: number;
+  submittedAt: number;
+}
+
+export interface ChallengeStreakAnswer {
+  current: number;
+  longest: number;
+  todayDone: boolean;
+}
+
+/** GET /api/challenge/today: the day's cards; signed in, your attempt (null before playing) and challenge streak. */
+export interface ChallengeToday {
+  day: string;
+  cardIds: string[];
+  endsAt: number;
+  maxScore: number;
+  attempt?: ChallengeAttempt | null;
+  /** Signed in: when the first card was shown (POST /api/challenge/today/start), null before. */
+  startedAt?: number | null;
+  streak?: ChallengeStreakAnswer;
+  /** Signed in: the best score of any day, null before a first challenge. */
+  best?: number | null;
+}
+
+/** POST /api/challenge/today/attempt: the attempt kept and the challenge streak; a 409 (played already) carries them too. */
+export interface ChallengeAttemptAnswer {
+  attempt: ChallengeAttempt;
+  streak: ChallengeStreakAnswer;
+}
+
+/** GET /api/challenge/leaderboard?day=: the day's best who opted in, ranked among everyone; signed in, `you`. */
+export interface ChallengeLeaderboard {
+  day: string;
+  players: number;
+  maxScore: number;
+  /** `id`: the user's public id, for their profile (`#/u/<id>`), as on the main leaderboard. */
+  entries: { rank: number; id: string; displayName: string; score: number; correct: number }[];
+  you?: { rank: number; score: number; correct: number; players: number } | null;
 }
 
 /** GET /api/me/activity?day=: each day's activity over the last 400 days, the goal, the streak as of `day` and last week's recap. */

@@ -58,7 +58,7 @@ describe('public profiles', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     const body = (await response.json()) as PublicProfile;
-    expect(Object.keys(body).sort()).toEqual(['badges', 'displayName', 'id', 'memberSince', 'readiness', 'solved', 'streak', 'topics']);
+    expect(Object.keys(body).sort()).toEqual(['badges', 'challenge', 'displayName', 'id', 'memberSince', 'readiness', 'solved', 'streak', 'topics']);
     expect(body.id).toBe(user.id);
     expect(body.displayName).toBe('Ada');
     // Rounded to the day.
@@ -66,6 +66,8 @@ describe('public profiles', () => {
     expect(body.solved).toEqual([{ id: 'url-shortener', difficulty: 'easy' }]);
     // Two days of reviews and today's solve, at the user's goal of 5 cards.
     expect(body.streak).toEqual({ current: 3, longest: 3 });
+    // No daily challenge played yet.
+    expect(body.challenge).toBeNull();
     expect(body.badges).toEqual([{ id: 'first-solve', earnedAt: expect.any(Number) }]);
     expect(body.badges[0].earnedAt % DAY).toBe(0);
     expect(body.topics.length).toBeGreaterThan(5);
@@ -79,6 +81,31 @@ describe('public profiles', () => {
     }
     // Reading someone's profile stores no badge for them.
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM achievements WHERE user_id = ?').bind(user.id).first('n')).toBe(2);
+  });
+
+  it('shows the daily challenge streak and best score, never the answers', async () => {
+    const user = await activeUser(true);
+    const t = nowSeconds();
+    const attempt = (day: string, score: number) =>
+      env.DB.prepare(
+        `INSERT INTO challenge_attempts (user_id, day, started_at, score, correct, perfect, total_ms, results, submitted_at)
+         VALUES (?, ?, ?, ?, 0, 0, 5000, '[{"cardId":"secret-card","answer":3}]', ?)`,
+      ).bind(user.id, day, t, score, t);
+    await env.DB.batch([
+      attempt(addDays(today(), -5), 590),
+      attempt(addDays(today(), -4), 120),
+      attempt(addDays(today(), -3), 240),
+      attempt(addDays(today(), -1), 360),
+      attempt(today(), 480),
+      // Started, not sent: counts nowhere.
+      env.DB.prepare('INSERT INTO challenge_attempts (user_id, day, started_at) VALUES (?, ?, ?)').bind(user.id, addDays(today(), -2), t),
+    ]);
+    const body = (await (await profile(user.id)).json()) as PublicProfile;
+    expect(body.challenge).toEqual({ current: 2, longest: 3, best: 590 });
+    expect(JSON.stringify(body)).not.toContain('secret-card');
+    // The player's own GET /api/challenge/today has the best score too.
+    const own = (await (await call('/api/challenge/today', { token: user.token })).json()) as { best: number; streak: { current: number; longest: number } };
+    expect(own).toMatchObject({ best: 590, streak: { current: 2, longest: 3 } });
   });
 
   it('answers 404 for a private user, the same as for one that does not exist', async () => {

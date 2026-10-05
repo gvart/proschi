@@ -188,7 +188,7 @@ test.describe('no sideways scrolling on a phone', () => {
   });
 
   test('interview prep hub: every tab, the streak on top', async ({ page }) => {
-    for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/progress', 'practice/#/roadmap/approach']) {
+    for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/roadmap/approach']) {
       await visit(page, path);
       await expect(page.getByRole('navigation', { name: 'Interview prep' })).toBeVisible();
     }
@@ -246,8 +246,25 @@ test.describe('on the narrowest phone (320px)', () => {
   test.use({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
 
   test('interview prep hub, the account page and a public profile', async ({ page }) => {
-    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
+    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
     await mockProfile(page);
     await visit(page, `practice/#/u/${PROFILE.id}`);
   });
 });
+
+// The narrowest phones, and widths around the header's breakpoints (the
+// editor button shows from 480px): the header row never gets wider than the
+// screen. With the account menu as well: header.accounts.e2e.ts.
+for (const width of [320, 400, 470]) {
+  test.describe(`the header at ${width}px`, () => {
+    test.use({ viewport: { width, height: 740 }, isMobile: true, hasTouch: true });
+
+    test('fits on every kind of page', async ({ page }) => {
+      for (const path of ['./', 'practice/', 'practice/#/review', 'practice/#/url-shortener', 'app/', 'docs/']) {
+        await visit(page, path);
+        const burger = (await page.locator('.ps-header .ps-menu__button').boundingBox())!;
+        expect(burger.x + burger.width, `${path}: the menu button is off screen`).toBeLessThanOrEqual(width);
+      }
+    });
+  });
+}

@@ -1,0 +1,38 @@
+# Every achievement id ever published, sorted. Earned badges are stored by id,
+# so an id is never deleted or reused: retire a badge with "retired": true instead.
+# `proschi achievements lock` adds new achievements' ids (docs/CARDS.md).
+all-consistency
+all-queues
+all-real-world
+caching-3
+challenge-first
+challenge-perfect
+challenge-streak-7
+estimate-streak-10
+estimate-streak-3
+first-card
+first-run-1
+first-run-5
+first-solve
+hard-1
+hard-5
+mastered-15
+mastered-30
+mastered-5
+mastery-caching
+mastery-estimation
+mastery-sharding
+reviews-100
+reviews-2000
+reviews-500
+solved-15
+solved-25
+solved-5
+stage-consistency
+stage-foundations
+stage-scale
+streak-3
+streak-30
+streak-7
+under-reference-1
+under-reference-5

@@ -19,6 +19,9 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
 | `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak and its badges |
+| `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points) |
+| `proschi.challenge.guest` | The daily challenge, signed out: the last one you played (answers, times, points and the card reviews it made), so it can be saved to your account when you sign in |
+| `proschi.challenge.progress` | The daily challenge you are in the middle of: the day, your answers so far and how long each took, so a reload carries on where you were; removed when you finish |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
 | `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
@@ -77,6 +80,12 @@ Without signing in, nothing about you reaches the server.
 - Your daily goal (cards a day). The daily streak and the weekly recap are
   computed from your card reviews and solve dates; nothing more is stored
   for them.
+- The daily challenge, per day you play it: when you saw its first card,
+  your answers to its five cards,
+  how long each took, which were right, the points, the score and when you
+  sent it. Your rank is computed from everyone's scores each time it is
+  shown. A challenge played signed out stays in your browser until you sign
+  in, when it is saved to your account.
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
@@ -100,27 +109,32 @@ Cloudflare's retention period.
 
 **What others see**: practice statistics are aggregates over everyone, such
 as how many solved a problem and how your design's runs, cost and p99 compare.
-Your display name and number of solved problems appear on the leaderboard
-only if you opt in ("Show me on the leaderboard", in the account menu or on
-your profile page).
+Your display name and number of solved problems appear on the leaderboard,
+and your display name and daily challenge score on that day's challenge
+leaderboard, only if you opt in ("Show me on the leaderboard", in the account
+menu or on your profile page). Without it, your challenge score still counts
+toward the number of players and everyone's ranks, but your name is never
+shown.
 
 **Your public profile**: opting in also makes a public profile, linked from
-your name on the leaderboard, at an address with your user id. It shows
+your name on either leaderboard, at an address with your user id. It shows
 exactly this, and nothing more:
 
 - your display name, and the month you joined;
 - the problems you solved (which ones and their difficulty, never your
   designs);
 - your current and longest daily streak, in days;
+- your current and longest daily challenge streak, in days, and your best
+  daily challenge score;
 - your interview-ready score and your mastery of each topic, in whole
   percent;
 - the badges you earned, with the day each was earned.
 
 Your designs, your daily goal, your card reviews and when you made them, how
-many cards you reviewed, your test runs and their costs, your sign-in
-providers and your sessions are never on it. Turning the option off hides the
-profile at once: its address then answers "not found", the same as an
-address no user has, so nobody can tell whether you have an account.
+many cards you reviewed, your daily challenge answers, your test runs and
+their costs, your sign-in providers and your sessions are never on it. Turning the option off hides the profile at once:
+its address then answers "not found", the same as an address no user has, so
+nobody can tell whether you have an account.
 
 ## Your controls
 
@@ -129,7 +143,7 @@ In the account menu on the practice page:
 - **Download my data** saves everything stored about you as JSON, every
   session with its kind (the site or an app) but never the token hashes.
 - **Delete account** removes your account, sessions (apps' too), progress, card
-  reviews and badges from the server at once; the progress in your browser stays.
+  reviews, daily challenge results and badges from the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

@@ -9,11 +9,13 @@ import {
   achievementStatuses,
   buildSnapshot,
   checkAchievements,
+  liveAchievements,
   longestRightRun,
   longestStreak,
   masteredCount,
   ruleProgress,
   RULE_KINDS,
+  writeAchievementsLock,
   type Achievement,
   type AchievementContext,
   type Rule,
@@ -30,7 +32,7 @@ const problems: ProblemInfo[] = [
 ];
 const context: AchievementContext = { problems, stages: [{ id: 'one', problems: ['a', 'b', 'gone'] }] };
 
-const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {} };
+const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 } };
 const snap = (over: Partial<StatsSnapshot>): StatsSnapshot => ({ ...empty, ...over });
 const solved = (...ids: string[]) => ids.map((id) => ({ id, firstRun: false, underReference: false }));
 
@@ -54,6 +56,9 @@ describe('rules', () => {
     // Only the stage's problems this catalog has.
     [{ kind: 'stage', stage: 'one' }, snap({ solved: solved('a') }), 1, 2],
     [{ kind: 'stage', stage: 'nope' }, snap({ solved: solved('a') }), 0, 1],
+    [{ kind: 'challenges', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 1, 1],
+    [{ kind: 'challenge-perfect', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 0, 1],
+    [{ kind: 'challenge-streak', min: 7 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 2, 7],
   ])('%j on a snapshot is %d of %d', (rule, s, current, target) => {
     expect(ruleProgress(rule, s, context)).toEqual({ current, target });
   });
@@ -159,8 +164,12 @@ const ok = { id: 'ok', title: 'Ok', description: 'Fine.', icon: 'star', rule: { 
 describe('the achievements check', () => {
   it('passes the repository’s achievements.json against the real problems, topics and stages', () => {
     const topics = readTopics(Object.values(import.meta.glob<string>('../practice/cards/tags.json', { query: '?raw', import: 'default', eager: true }))[0]);
-    const check = checkAchievements(raw, { problems: listings, topics: topics.map((t) => t.id), stages: ROADMAP.map((s) => s.id) });
+    const lock = Object.values(import.meta.glob<string>('../practice/achievements.lock', { query: '?raw', import: 'default', eager: true }))[0];
+    expect(lock).toBeDefined();
+    const check = checkAchievements(raw, { problems: listings, topics: topics.map((t) => t.id), stages: ROADMAP.map((s) => s.id), lock });
     expect(check.violations).toEqual([]);
+    // The lock is as `proschi achievements lock` writes it.
+    expect(lock).toBe(writeAchievementsLock([], (raw as { id: string }[]).map((a) => a.id)));
     expect(check.achievements.length).toBeGreaterThanOrEqual(25);
     expect(check.achievements.length).toBeLessThanOrEqual(35);
     // Every rule kind is used.
@@ -190,6 +199,67 @@ describe('the achievements check', () => {
   ])('reports %s', (_name, input, message) => {
     const check = checkAchievements(input, checkContext);
     expect(check.violations.map((v) => v.message).join('\n')).toMatch(message);
+  });
+
+  describe('achievements.lock', () => {
+    const lock = writeAchievementsLock([], ['ok', 'old']);
+    const old = { ...ok, id: 'old', rule: { kind: 'reviews', min: 5 } };
+
+    it('passes when every id is locked and every locked id has an achievement', () => {
+      expect(checkAchievements([ok, old], { ...checkContext, lock }).violations).toEqual([]);
+    });
+
+    it('reports an achievement missing from the lock', () => {
+      const check = checkAchievements([ok, old, { ...ok, id: 'fresh', rule: { kind: 'reviews', min: 9 } }], { ...checkContext, lock });
+      expect(check.violations).toEqual([{ index: 2, id: 'fresh', message: expect.stringMatching(/^New achievement: add its id to achievements\.lock with `proschi achievements lock`/) }]);
+    });
+
+    it('reports a locked id with no achievement', () => {
+      const check = checkAchievements([ok], { ...checkContext, lock });
+      expect(check.violations).toEqual([{ id: 'old', inLock: true, message: expect.stringMatching(/lists "old", which has no achievement: never delete one, set "retired": true/) }]);
+    });
+
+    it('reports a lock out of order or with a repeated id', () => {
+      const messages = (text: string) => checkAchievements([ok, old], { ...checkContext, lock: text }).violations.map((v) => v.message);
+      expect(messages('old\nok\n')).toEqual([expect.stringMatching(/not sorted/)]);
+      expect(messages('ok\nok\nold\n')).toEqual([expect.stringMatching(/not sorted, or an id appears twice/)]);
+    });
+
+    it('is not checked without its text', () => {
+      expect(checkAchievements([ok], checkContext).violations).toEqual([]);
+    });
+
+    it('adds ids sorted and once', () => {
+      expect(writeAchievementsLock(['b', 'a'], ['c', 'a'])).toMatch(/^#[^]*\na\nb\nc\n$/);
+    });
+  });
+
+  describe('a retired achievement', () => {
+    const retired = { ...ok, id: 'old', retired: true, rule: { kind: 'all-solved', tag: 'gone' } };
+
+    it('stays in the file and the lock, need not name what exists, and its rule may be reused', () => {
+      const check = checkAchievements([ok, retired, { ...ok, id: 'again', rule: { kind: 'all-solved', tag: 'caching' } }, { ...retired, id: 'older', rule: ok.rule }], {
+        ...checkContext,
+        lock: writeAchievementsLock([], ['ok', 'old', 'again', 'older']),
+      });
+      expect(check.violations).toEqual([]);
+      expect(check.achievements.map((a) => a.id)).toEqual(['ok', 'old', 'again', 'older']);
+    });
+
+    it('still needs a rule of a known kind, and "retired" is only true', () => {
+      expect(checkAchievements([{ ...retired, rule: { kind: 'karma' } }], checkContext).violations[0].message).toMatch(/Unknown rule kind/);
+      expect(checkAchievements([{ ...ok, retired: false }], checkContext).violations[0].message).toMatch(/"retired" is true or left out/);
+    });
+
+    it('is neither evaluated nor shown, while what was earned stays stored', () => {
+      const defs = [ok, { ...ok, id: 'old', retired: true, rule: { kind: 'reviews', min: 1 } }] as Achievement[];
+      expect(liveAchievements(defs).map((a) => a.id)).toEqual(['ok']);
+      const earned = { old: { earnedAt: 1 } };
+      const { statuses, newly } = achievementStatuses(defs, snap({ reviews: 3 }), context, earned, 10);
+      expect(statuses.map((a) => a.id)).toEqual(['ok']);
+      expect(newly).toEqual(['ok']);
+      expect(earned).toEqual({ old: { earnedAt: 1 } });
+    });
   });
 
   it('keeps the entries that read well and names the bad ones', () => {

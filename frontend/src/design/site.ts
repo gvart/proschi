@@ -24,6 +24,8 @@ export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-id
 export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
 /** Daily review of the practice cards: a route of the practice page (src/practice/review/). */
 export const DAILY_REVIEW_HREF = 'practice/#/review';
+/** The daily challenge: a route of the practice page (src/practice/challenge/). */
+export const DAILY_CHALLENGE_HREF = 'practice/#/challenge';
 
 /** The header's links; the editor is its call to action instead. */
 export const NAV: SiteLink[] = [
@@ -43,6 +45,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       { label: 'Practice', href: 'practice/' },
       { label: 'Interview prep', href: INTERVIEW_PREP_HREF },
       { label: 'Daily review', href: DAILY_REVIEW_HREF },
+      { label: 'Daily challenge', href: DAILY_CHALLENGE_HREF },
     ],
   },
   {

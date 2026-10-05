@@ -30,6 +30,7 @@ test.describe('practice', () => {
 
   test('filters by the company whose published system a problem is based on', async ({ page }) => {
     await page.goto('practice/');
+    await page.getByRole('button', { name: 'Filters' }).click();
     const company = page.getByRole('combobox', { name: 'Company' });
     await expect(company.getByRole('option', { name: 'Twitter' })).toHaveCount(1);
     await company.selectOption('Twitter');
@@ -39,6 +40,50 @@ test.describe('practice', () => {
     for (const link of await links.all()) await expect(link.locator('[data-company="Twitter"]')).toHaveCount(1);
     await company.selectOption('');
     await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(1);
+  });
+
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 844 } });
+
+    test('the filters fold into one row, with removable chips', async ({ page }) => {
+      await page.goto('practice/');
+      const links = problemList(page).getByRole('link');
+      await expect(links.first()).toBeVisible();
+      const all = await links.count();
+      const search = page.getByRole('searchbox', { name: 'Search' });
+      const button = page.getByRole('button', { name: 'Filters' });
+      // Collapsed: the search and the button share one row, and no select shows.
+      await expect(button).toHaveAttribute('aria-expanded', 'false');
+      await expect(page.getByRole('combobox')).toHaveCount(0);
+      const [s, b] = [await search.boundingBox(), await button.boundingBox()];
+      expect(Math.abs(s!.y + s!.height / 2 - (b!.y + b!.height / 2))).toBeLessThan(4);
+
+      // Opening moves focus into the panel; Escape closes it and gives focus back.
+      await button.click();
+      await expect(button).toHaveAttribute('aria-expanded', 'true');
+      const panel = page.getByRole('group', { name: 'Filters', exact: true });
+      await expect(panel).toBeVisible();
+      await expect(panel).toHaveAttribute('id', (await button.getAttribute('aria-controls'))!);
+      await expect(page.getByRole('combobox', { name: 'Difficulty' })).toBeFocused();
+      await page.getByRole('combobox', { name: 'Difficulty' }).selectOption('easy');
+      await page.getByRole('combobox', { name: 'Status' }).selectOption('todo');
+      await page.keyboard.press('Escape');
+      await expect(panel).toBeHidden();
+      await expect(button).toBeFocused();
+      await expect(button).toHaveAccessibleName('Filters, 2 active');
+
+      // The active filters are chips: one removes one, Clear all the rest.
+      const chips = page.getByRole('group', { name: 'Active filters' });
+      await expect(chips.getByRole('button', { name: /^Remove filter/ })).toHaveCount(2);
+      await expect(button).toHaveText(/^Filters\s*·\s*2$/);
+      await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(1);
+      await chips.getByRole('button', { name: 'Remove filter Difficulty: Easy' }).click();
+      await expect(chips.getByRole('button', { name: /^Remove filter/ })).toHaveCount(1);
+      await expect(button).toHaveAccessibleName('Filters, 1 active');
+      await chips.getByRole('button', { name: 'Clear all' }).click();
+      await expect(chips).toHaveCount(0);
+      await expect(links).toHaveCount(all);
+    });
   });
 
   test('the review explains what the starter is missing, from the simulation and the tests', async ({ page }) => {

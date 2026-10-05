@@ -384,6 +384,7 @@
   display: flex;
   align-items: center;
   gap: 12px;
+  min-width: 0;
   max-width: 1200px;
   min-height: 72px;
   margin: 0 auto;
@@ -398,14 +399,40 @@
   display: flex;
   align-items: center;
   gap: 10px;
+  min-width: 0;
   margin-left: auto;
 }
 .ps-header__cta {
   display: none;
 }
-@media (min-width: 400px) {
+/*
+ * Phones: the bar never gets wider than the screen, whatever a page puts in
+ * it (practice adds its account and help menus). The editor button shows from
+ * 480px, from 640px beside a page's menus (the editor is in the menu below
+ * that), the gaps tighten and, beside a page's menus below 380px, the
+ * wordmark keeps its tile only.
+ */
+@media (min-width: 480px) {
   .ps-header__cta {
     display: inline-flex;
+  }
+}
+@media (max-width: 639px) {
+  .ps-header--actions .ps-header__cta {
+    display: none;
+  }
+}
+@media (max-width: 479px) {
+  .ps-header:not(.ps-header--compact) .ps-header__inner {
+    gap: 8px;
+  }
+  .ps-header__end {
+    gap: 4px;
+  }
+}
+@media (max-width: 379px) {
+  .ps-header--actions:not(.ps-header--compact) .ps-wordmark__text {
+    display: none;
   }
 }
 

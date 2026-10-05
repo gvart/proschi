@@ -115,3 +115,43 @@ export function roadmapAccess(account: AccountState): RoadmapAccess {
       return 'sign-in';
   }
 }
+
+/** A problem opened from the roadmap: `roadmap/<id>` (lesson first while unread) or `roadmap/<id>/lesson`. */
+export function roadmapTarget(route: string): { id: string; lesson: boolean } | undefined {
+  if (!route.startsWith('roadmap/')) return undefined;
+  const rest = route.slice('roadmap/'.length);
+  const lesson = rest.endsWith('/lesson');
+  const id = lesson ? rest.slice(0, -'/lesson'.length) : rest;
+  return id ? { id, lesson } : undefined;
+}
+
+/**
+ * Whether a roadmap step may be opened, lesson and challenge alike: `open`;
+ * `checking` while the account loads; `sign-in` signed out (the roadmap takes
+ * an account); or `order` while an earlier problem is unsolved (`next` is the
+ * one to solve). A problem that is not on the roadmap is only gated by the
+ * account. Lessons opened from the problem list (`#/<id>/lesson`) are not
+ * gated at all; only the roadmap's progression is.
+ */
+export type StepLock = { kind: 'open' } | { kind: 'checking' } | { kind: 'sign-in' } | { kind: 'order'; next: string };
+
+export function stepLock(state: RoadmapState, id: string, access: RoadmapAccess): StepLock {
+  if (access !== 'open') return { kind: access };
+  const step = state.steps.find((s) => s.id === id);
+  if (step?.locked && state.next) return { kind: 'order', next: state.next.id };
+  return { kind: 'open' };
+}
+
+/** What opens a locked step, e.g. "Solve URL Shortener first"; `title` names a problem by its id. */
+export function unlockHint(lock: StepLock, title: (id: string) => string): string | undefined {
+  switch (lock.kind) {
+    case 'order':
+      return `Solve ${title(lock.next)} first`;
+    case 'sign-in':
+      return 'Sign in to start the roadmap';
+    case 'checking':
+      return 'Checking your sign-in';
+    case 'open':
+      return undefined;
+  }
+}

@@ -142,6 +142,67 @@ test.describe('daily review', () => {
     await expect(page).toHaveURL(/#\/review$/);
   });
 
+  test.describe('on a phone', () => {
+    test.use({ viewport: { width: 390, height: 664 } });
+
+    /** Whether the card's heading is focused (or holds the focus) and wholly visible below the sticky header. */
+    const headingInView = (c: Locator) =>
+      c.getByRole('heading', { level: 2 }).evaluate((h) => {
+        const header = document.querySelector('.ps-header')!.getBoundingClientRect();
+        const r = h.getBoundingClientRect();
+        return { focused: h.contains(document.activeElement), top: r.top >= header.bottom - 1, bottom: r.bottom <= window.innerHeight };
+      });
+
+    test('the next card takes focus and shows its top below the header', async ({ page }) => {
+      await page.goto('practice/#/review');
+      await today(page).getByRole('button', { name: 'Start review · 10 cards' }).click();
+
+      // The first card answered at the bottom of the page...
+      let c = card(page, 1);
+      await c.getByLabel('Your estimate').fill('2.3k');
+      await c.getByRole('button', { name: 'Check' }).click();
+      await c.getByRole('button', { name: 'Too easy' }).click();
+      expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
+
+      // ...the next one is focused at its heading, with its topic, type and question in view.
+      c = card(page, 2);
+      await expect(c.getByRole('heading', { level: 2 })).toBeFocused();
+      await expect(c.getByRole('heading', { level: 2 })).toContainText('Pick one');
+      await expect.poll(() => headingInView(c)).toEqual({ focused: true, top: true, bottom: true });
+      await expect(c.getByText('Which load balancer')).toBeInViewport();
+
+      // Without motion, the same, at once.
+      await page.emulateMedia({ reducedMotion: 'reduce' });
+      await c.getByRole('button', { name: /layer 7 \(HTTP\)/ }).click();
+      await c.getByRole('button', { name: 'Next' }).click();
+      c = card(page, 3);
+      await expect.poll(() => headingInView(c)).toEqual({ focused: true, top: true, bottom: true });
+    });
+
+    test('showing an answer keeps the question in view', async ({ page }) => {
+      await page.goto('practice/#/review');
+      await today(page).getByRole('button', { name: 'Start review · 10 cards' }).click();
+      for (const n of [1, 2, 3]) {
+        const c = card(page, n);
+        await expect(c).toBeVisible();
+        if (n === 1) {
+          await c.getByLabel('Your estimate').fill('2.3k');
+          await c.getByRole('button', { name: 'Check' }).click();
+        } else {
+          await c.getByRole('listitem').first().getByRole('button').click();
+        }
+        await c.getByRole('button', { name: 'Next' }).click();
+      }
+      const c = card(page, 4);
+      await expect(c).toHaveAttribute('data-card-type', 'flip');
+      await c.getByRole('button', { name: 'Show answer' }).click();
+      const answer = c.getByRole('region', { name: 'Answer' });
+      await expect(answer).toBeFocused();
+      await expect(answer).toBeInViewport();
+      await expect(c.getByText(/cache-aside/).first()).toBeInViewport();
+    });
+  });
+
   test('an unknown topic says so', async ({ page }) => {
     await page.goto('practice/#/review/no-such-topic');
     await expect(page.getByText('No topic called “no-such-topic”. Pick one below.')).toBeVisible();

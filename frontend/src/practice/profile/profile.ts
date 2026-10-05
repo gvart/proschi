@@ -1,4 +1,5 @@
 import type { Achievement, AchievementsAnswer, AchievementStatus } from '../../learn/achievements';
+import type { ChallengeSummary } from '../../learn/challenge';
 import type { PublicProfile } from '../../services/api';
 import type { ProblemListing } from '../listing';
 import { statusOf, type Progress } from '../progress';
@@ -28,6 +29,8 @@ export interface ProfileModel {
   memberSince?: number;
   /** Days. `freezes` only on the learner's own page. */
   streak?: { current: number; longest: number; freezes?: number };
+  /** The daily challenge streak (days) and best score; absent before a first challenge. */
+  challenge?: ChallengeSummary;
   /** 0 to 1. */
   readiness: number;
   /** Each topic's mastery, 0 to 1. */
@@ -42,7 +45,7 @@ export interface ProfileModel {
 
 /** Exactly what a public profile shows (backend/src/profile.ts; docs/PRIVACY.md says the same), as the account page words it. */
 export const PUBLIC_FIELDS =
-  'your display name, the month you joined, the problems you solved (not your designs), your current and longest streak, your interview-ready score, your mastery of each topic, and the badges you earned with their dates';
+  'your display name, the month you joined, the problems you solved (not your designs), your current and longest streak, your daily challenge streak and best score, your interview-ready score, your mastery of each topic, and the badges you earned with their dates';
 
 /** A profile route's user id: `u/<id>` gives `<id>` (empty when missing); undefined for any other route. */
 export function profileIdOf(route: string): string | undefined {
@@ -79,6 +82,7 @@ export function ownProfile({
   displayName,
   memberSince,
   streak,
+  challenge,
   answer,
   progress,
   problems,
@@ -86,6 +90,7 @@ export function ownProfile({
   displayName: string;
   memberSince?: number;
   streak?: ProfileModel['streak'];
+  challenge?: ChallengeSummary | null;
   answer: AchievementsAnswer;
   progress: Progress;
   problems: readonly ProblemListing[];
@@ -94,6 +99,7 @@ export function ownProfile({
     displayName,
     memberSince,
     streak,
+    ...(challenge ? { challenge } : {}),
     readiness: answer.skills.readiness,
     topics: answer.skills.topics,
     badges: answer.achievements.map(profileBadge),
@@ -109,6 +115,7 @@ export function publicProfile(profile: PublicProfile, catalog: readonly Achievem
     displayName: profile.displayName,
     memberSince: profile.memberSince,
     streak: { current: profile.streak.current, longest: profile.streak.longest },
+    ...(profile.challenge ? { challenge: { current: profile.challenge.current, longest: profile.challenge.longest, best: profile.challenge.best } } : {}),
     readiness: profile.readiness,
     topics: profile.topics,
     badges: catalog.map((a) => (earned.has(a.id) ? { ...a, earned: true, earnedAt: earned.get(a.id) } : { ...a, earned: false })),

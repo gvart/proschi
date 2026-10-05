@@ -1,6 +1,7 @@
 import { DAY } from '../../frontend/src/learn/fsrs';
 import { addDays, computeStreak, goalFor } from '../../frontend/src/learn/streak';
 import { evaluate, utcDay } from './achievements';
+import { loadChallengeSummary } from './challenge';
 import type { Ctx } from './context';
 import { now } from './env';
 import { HttpError, json, rateLimit } from './http';
@@ -10,7 +11,8 @@ import { findProblem, problemIds } from './verify';
  * Public profiles: GET /api/users/<id>/profile, what a user who opted in
  * (`users.public_profile`, "Show me on the leaderboard") shows anyone who
  * follows their name from the leaderboard. Everything else stays private:
- * designs, sessions, sign-ins, the daily goal, review counts and logs.
+ * designs, sessions, sign-ins, the daily goal, review counts and logs, and
+ * the daily challenge's answers.
  * docs/PRIVACY.md lists the same fields.
  */
 
@@ -24,6 +26,8 @@ export interface PublicProfile {
   solved: { id: string; difficulty: string }[];
   /** Days: the current and the longest daily streak. */
   streak: { current: number; longest: number };
+  /** The daily challenge: the current and longest challenge streak (days) and the best score; null before a first challenge. */
+  challenge: { current: number; longest: number; best: number } | null;
   /** 0 to 1, rounded to whole percent. */
   readiness: number;
   /** Each topic's mastery, 0 to 1, rounded to whole percent. */
@@ -64,6 +68,7 @@ export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> 
   const goal = goalFor(user.daily_goal);
   const streaks = [computeStreak(activity, today, goal), computeStreak(activity, utcDay(t), goal)];
 
+  const challenge = await loadChallengeSummary(env.DB, user.id, t);
   const solved = new Set(
     (
       await env.DB.prepare('SELECT problem_id FROM progress WHERE user_id = ? AND solved_at IS NOT NULL').bind(user.id).all<{ problem_id: string }>()
@@ -81,6 +86,7 @@ export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> 
       current: Math.max(...streaks.map((s) => s.current)),
       longest: Math.max(answer.stats.longestStreak, ...streaks.map((s) => s.longest)),
     },
+    challenge,
     readiness: share(answer.skills.readiness),
     topics: answer.skills.topics.map((topic) => ({ topic: topic.topic, mastery: share(topic.mastery) })),
     // Only badges the user has been awarded (stored), of those that still exist.

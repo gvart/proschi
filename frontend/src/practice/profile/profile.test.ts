@@ -55,6 +55,7 @@ describe('profile models', () => {
       displayName: 'Ada',
       memberSince: 1_690_000_000,
       streak: { current: 2, longest: 3, freezes: 1 },
+      challenge: { current: 1, longest: 4, best: 600 },
       answer,
       progress: { chat: { status: 'solved' }, pastebin: { status: 'attempted' }, 'url-shortener': { status: 'solved' } } as never,
       problems,
@@ -64,6 +65,7 @@ describe('profile models', () => {
       { id: 'chat', title: 'Chat', difficulty: 'hard' },
     ]);
     expect(model.cards).toEqual({ reviewed: 12, mastered: 1 });
+    expect(model.challenge).toEqual({ current: 1, longest: 4, best: 600 });
     expect(model.readiness).toBe(0.42);
     expect(model.badges.map((b) => [b.id, b.earned])).toEqual([
       ['first-card', true],
@@ -81,6 +83,7 @@ describe('profile models', () => {
         { id: 'removed-problem', difficulty: 'easy' },
       ],
       streak: { current: 4, longest: 9 },
+      challenge: { current: 2, longest: 5, best: 540 },
       readiness: 0.3,
       topics: [{ topic: 'caching', mastery: 0.25 }],
       badges: [{ id: 'first-solve', earnedAt: 1_700_000_000 }],
@@ -92,6 +95,9 @@ describe('profile models', () => {
     // Only problems this build has.
     expect(model.solved).toEqual([{ id: 'chat', title: 'Chat', difficulty: 'hard' }]);
     expect(model.streak).toEqual({ current: 4, longest: 9 });
+    expect(model.challenge).toEqual({ current: 2, longest: 5, best: 540 });
     expect(model.cards).toBeUndefined();
+    // Before a first challenge, no challenge stats.
+    expect(publicProfile({ ...profile, challenge: null }, ACHIEVEMENTS, problems).challenge).toBeUndefined();
   });
 });

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, validateRoadmap, type RoadmapStage } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock, unlockHint, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 
 /**
@@ -101,4 +101,48 @@ describe('roadmapAccess', () => {
   });
 
   it('is open in a build without accounts', () => expect(roadmapAccess({ status: 'off' })).toBe('open'));
+});
+
+describe('roadmapTarget', () => {
+  it('reads a step and whether it opens on its lesson', () => {
+    expect(roadmapTarget('roadmap/pastebin')).toEqual({ id: 'pastebin', lesson: false });
+    expect(roadmapTarget('roadmap/pastebin/lesson')).toEqual({ id: 'pastebin', lesson: true });
+  });
+
+  it('is undefined off the roadmap', () => {
+    expect(roadmapTarget('roadmap')).toBeUndefined();
+    expect(roadmapTarget('roadmap/')).toBeUndefined();
+    expect(roadmapTarget('pastebin/lesson')).toBeUndefined();
+  });
+});
+
+describe('stepLock', () => {
+  const roadmap = stages(['a', 'b'], ['c']);
+  const title = (id: string) => id.toUpperCase();
+
+  it('locks a step, lesson and challenge alike, until every step before it is solved', () => {
+    const state = roadmapState(roadmap, solved('a'));
+    expect(stepLock(state, 'a', 'open')).toEqual({ kind: 'open' });
+    expect(stepLock(state, 'b', 'open')).toEqual({ kind: 'open' });
+    expect(stepLock(state, 'c', 'open')).toEqual({ kind: 'order', next: 'b' });
+    expect(unlockHint(stepLock(state, 'c', 'open'), title)).toBe('Solve B first');
+  });
+
+  it('keeps a step solved out of order open', () => {
+    expect(stepLock(roadmapState(roadmap, solved('c')), 'c', 'open')).toEqual({ kind: 'open' });
+  });
+
+  it('locks every step signed out, and waits while the account loads', () => {
+    const state = roadmapState(roadmap, solved('a'));
+    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
+    expect(unlockHint(stepLock(state, 'a', 'sign-in'), title)).toBe('Sign in to start the roadmap');
+    expect(stepLock(state, 'a', 'checking')).toEqual({ kind: 'checking' });
+  });
+
+  it('leaves a problem that is not on the roadmap to the account alone', () => {
+    const state = roadmapState(roadmap, {});
+    expect(stepLock(state, 'elsewhere', 'open')).toEqual({ kind: 'open' });
+    expect(stepLock(state, 'elsewhere', 'sign-in')).toEqual({ kind: 'sign-in' });
+    expect(unlockHint({ kind: 'open' }, title)).toBeUndefined();
+  });
 });

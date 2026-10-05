@@ -2,6 +2,7 @@ import {
   achievementsAnswer,
   achievementStatuses,
   buildSnapshot,
+  liveAchievements,
   longestStreak,
   type Achievement,
   type AchievementContext,
@@ -19,6 +20,7 @@ import raw from '../../frontend/src/practice/achievements.json';
 import { loadActivity } from './activity';
 import { requireUser } from './auth';
 import { allCards, cardTopics } from './cards';
+import { loadChallengeStats } from './challenge';
 import type { Ctx } from './context';
 import { now } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
@@ -33,8 +35,11 @@ import { findProblem, problemIds, referenceCost } from './verify';
  * /api/me/achievements/seen records that a client celebrated them.
  */
 
-/** Checked in CI (`proschi achievements check`, the frontend tests); read as it is. */
-const ACHIEVEMENTS = raw as unknown as Achievement[];
+/**
+ * Checked in CI (`proschi achievements check`, the frontend tests); read as it
+ * is. Retired badges are left out; their rows in the achievements table stay.
+ */
+const ACHIEVEMENTS = liveAchievements(raw as unknown as Achievement[]);
 
 let context: AchievementContext | undefined;
 
@@ -105,9 +110,11 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
   const cards = allCards();
   const estimates = [...cards.values()].filter((c) => c.type === 'estimate').map((c) => c.id);
 
-  const [activity, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
+  const [activity, challenges, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
     // The daily streak as GET /api/me/activity counts it (streak.ts): the user's goal, solves and freezes included.
     loadActivity(DB, user.id, today),
+    // The daily challenge's badges: attempts are kept by UTC day.
+    loadChallengeStats(DB, user.id, t),
     DB.batch([
       DB.prepare('SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ?').bind(user.id),
       DB.prepare('SELECT COUNT(*) AS n FROM card_reviews WHERE user_id = ?').bind(user.id),
@@ -153,6 +160,7 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
     reviews: (total.results[0] as { n: number }).n,
     longestStreak: longestStreak(activity, today, goalFor(user.dailyGoal)),
     solvedProblems,
+    challenges,
   });
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, catalog(), earned, t);
   return { statuses, newly, earned, answer: achievementsAnswer(statuses, skills, snapshot), activity };

@@ -5,7 +5,7 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapAccess, roadmapFor } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
@@ -32,6 +32,8 @@ const ProblemRoute = lazy(() => import('./ProblemRoute'));
 const GuideRoute = lazy(() => import('./GuideRoute'));
 // Daily review, with every card (virtual:practice-cards).
 const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
+// The daily challenge, with every card too.
+const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
 // The skill map and badges, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
 // The account page and public profiles, with the cards' topics.
@@ -48,11 +50,11 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
- * `#/review` daily review (`#/review/<topic>` one topic of it),
- * `#/progress` the skill map and badges, `#/me` the account page and
- * `#/u/<user id>` a public profile; hash routes work under any sub-path.
- * The roadmap, review and progress pages are the interview prep hub's tabs
- * (prep/tabs.ts); the list is Practice.
+ * `#/review` daily review (`#/review/<topic>` one topic of it), `#/challenge`
+ * the daily challenge, `#/progress` the skill map and badges, `#/me` the
+ * account page and `#/u/<user id>` a public profile; hash routes work under
+ * any sub-path. The roadmap, review, challenge and progress pages are the
+ * interview prep hub's tabs (prep/tabs.ts); the list is Practice.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -110,21 +112,25 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // Starting the roadmap takes an account: signed out, `#/roadmap/<id>` shows the roadmap (sign-in comes back to the same address).
-  // Guides and lessons are open to everyone.
+  // Starting the roadmap takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
+  // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
+  // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
   const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
-  const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
+  const target = guide ? undefined : roadmapTarget(route);
+  const lock = target ? stepLock(roadmapState(roadmap, progress), target.id, access) : undefined;
+  const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
+  const onChallenge = route === 'challenge';
   const onMe = route === 'me';
   const profileId = profileIdOf(route);
   const onProfile = onMe || profileId !== undefined;
   /** A page other than the list or a problem. */
-  const onPage = onRoadmap || !!guide || onReview || onProgress || onProfile;
-  const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
-  const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
+  const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onProfile;
+  const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
+  const problemId = fromRoadmap ? (target?.id ?? '') : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
   const problem = problemId && !onPage ? problems.find((p) => p.id === problemId) : undefined;
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
@@ -135,15 +141,15 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     <StreakInvite account={account} compact />
   ) : undefined;
   const achievements = useAchievements(account.state, progress);
-  // The interview prep hub's tab: the roadmap (with its guides), daily review or the skill map.
-  const prepTab = onRoadmap || guide || onReview || onProgress ? prepTabOf(route) : undefined;
+  // The interview prep hub's tab: the roadmap (with its guides), daily review, the challenge or the skill map.
+  const prepTab = onRoadmap || guide || onReview || onChallenge || onProgress ? prepTabOf(route) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
-    // The review, progress and profile pages name themselves.
-    if (onReview || onProgress || onProfile) return;
+    // The review, challenge, progress and profile pages name themselves.
+    if (onReview || onProgress || onChallenge || onProfile) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -151,7 +157,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview, onProgress, onProfile]);
+  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge, onProfile]);
 
   if (problem) {
     return (
@@ -164,7 +170,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           engine={engine}
           account={account}
           {...(fromRoadmap
-            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: 'unread' as const }
+            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
             : lessonRoute
               ? { openLesson: 'always' as const }
               : {})}
@@ -202,6 +208,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
                 <ProgressRoute account={account} achievements={achievements} />
               </Suspense>
+            ) : onChallenge ? (
+              <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>
+                <ChallengeRoute account={account} activity={activity} />
+              </Suspense>
             ) : onReview ? (
               <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
                 <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
@@ -220,6 +230,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 onSignIn={account.signIn}
                 lessons={lessons}
                 guide={firstGuide}
+                locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
               />
             )}
           </PrepHub>

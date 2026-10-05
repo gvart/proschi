@@ -54,6 +54,14 @@ instead ([Mobile apps](#mobile-apps)).
   `GET /api/me/activity`, so the page and an app agree. A badge met for the first time is stored with its time; a client
   marks it seen once it has celebrated it. "Cheaper than the reference" runs
   each problem's reference solution once per isolate for its cost.
+- **Daily challenge** (`frontend/src/learn/challenge.ts`, `docs/CARDS.md`):
+  five auto-graded cards a UTC day, the same for everyone, picked with the
+  page's own code. The Worker grades the answers itself (a client never
+  claims a score), checks they answer exactly that day's cards, keeps the
+  first attempt of a user and day only, and ranks it among the day's by
+  score, then by the total time. The day's leaderboard lists the top 20 of
+  those who opted in (`publicProfile`), ranked among everyone. The challenge
+  streak is computed from the days played.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
@@ -72,9 +80,9 @@ instead ([Mobile apps](#mobile-apps)).
 | `POST /auth/logout` | Ends the session |
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
-| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews and its achievements |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes |
+| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
+| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts and its achievements |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
@@ -85,14 +93,18 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
 | `GET /api/leaderboard` | Top 50 who opted in, by problems solved: `{problems, entries: [{rank, id, displayName, solved, lastSolvedAt}]}`; `id` is the user's public id, for their profile |
-| `GET /api/users/<id>/profile` | A public profile, only of a user who opted in (`public_profile = 1`); otherwise 404, the same as an unknown id. `{id, displayName, memberSince, solved: [{id, difficulty}], streak: {current, longest}, readiness, topics: [{topic, mastery}], badges: [{id, earnedAt}]}`: shares in whole percent from 0 to 1, times at the start of a UTC day. Never designs, the daily goal, review counts or logs, sign-ins or sessions (docs/PRIVACY.md). Rate limited per IP (`STATS_LIMITER`), not cached, and stores nothing |
+| `GET /api/users/<id>/profile` | A public profile, only of a user who opted in (`public_profile = 1`); otherwise 404, the same as an unknown id. `{id, displayName, memberSince, solved: [{id, difficulty}], streak: {current, longest}, challenge: {current, longest, best} | null, readiness, topics: [{topic, mastery}], badges: [{id, earnedAt}]}`: shares in whole percent from 0 to 1, times at the start of a UTC day. `challenge` is the daily challenge streak in days and the best score, null before a first challenge. Never designs, the daily goal, review counts or logs, challenge answers, sign-ins or sessions (docs/PRIVACY.md). Rate limited per IP (`STATS_LIMITER`), not cached, and stores nothing |
 | `GET /api/cards/state?day=YYYY-MM-DD` | `{states: {<card id>: {version, due, stability, difficulty, reps, lapses, lastReview}}, today?: {reviews, new}}`: the user's card states; with `day` (the client's local date), that day's reviews and new cards |
 | `POST /api/cards/reviews {reviews: [{id, cardId, version, rating, reviewedAt, durationMs, day}]}` | Up to 200 reviews (`rating` 1 again to 4 easy, `reviewedAt` Unix seconds). Idempotent by `id`. Answers `{accepted, skipped: [{id, cardId, reason}], states}`: reviews of unknown cards or versions, dated in the future or far from `day`, are skipped; `states` are the reviewed cards' new states |
+| `GET /api/challenge/today` | `{day, cardIds, endsAt, maxScore}`: the day's cards (UTC date) in the order to show them, and when the next challenge starts (Unix seconds); signed in, also `attempt` (null before playing), `streak: {current, longest, todayDone}` and `best`, the best score of any day (null before a first challenge) |
+| `POST /api/challenge/today/start {day?}` | Records when the challenge's first card was shown, once per user and day (a reload or another device keeps the first time); answers `{day, startedAt, submitted}`. `GET /api/challenge/today` then answers `startedAt` too |
+| `POST /api/challenge/today/attempt {answers: [{cardId, answer, ms}], day?}` | One answer per card of the day: a choice card's option index as written, an estimate's number, a cloze card's gaps (`string[]`), or `null` (gave up); `ms` from showing the card to answering. The server grades and scores them (100 per right answer plus up to 20 for answering within 10 s, fading to 0 at 60 s; 600 at most) and answers `{attempt: {day, score, maxScore, correct, perfect, totalMs, results: [{cardId, answer, ms, correct, points, bonus}], rank, players, submittedAt}, streak}`. 400 for answers that are not exactly the day's cards, 409 (with the `attempt` kept) for a second attempt or a challenge that is over; `day` may name yesterday's for 15 minutes after 00:00 UTC. After a start, answers whose `ms` add up to more than the time since it plus 2 minutes are refused (400); an attempt without a start (one played signed out, saved after signing in) is taken as it is |
+| `GET /api/challenge/leaderboard?day=YYYY-MM-DD` | `{day, players, maxScore, entries: [{rank, id, displayName, score, correct}]}`: the day's (default today, UTC) top 20 who opted in (`id` is the user's public id, for their profile), ranked among everyone who played; signed in, also `you: {rank, score, correct, players}` or null |
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports, 60 card review and activity requests and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
-requests and 10 design reviews per IP.
+changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
+requests (the daily challenge's cards and leaderboard included) and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)
 

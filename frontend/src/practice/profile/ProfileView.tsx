@@ -1,6 +1,7 @@
 import type { ReactNode } from 'react';
-import { Flame, Snowflake } from 'lucide-react';
+import { Flame, Snowflake, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
+import { MAX_SCORE } from '../../learn/challenge';
 import { percent } from '../../learn/mastery';
 import { eyebrow } from '../../components/Playground/ui';
 import { DifficultyBadge } from '../Badges';
@@ -12,7 +13,8 @@ import { solvedByDifficulty, type ProfileModel } from './profile';
 /**
  * A profile's layout, the same for the account page (`#/me`) and a public
  * profile (`#/u/<id>`): the name and when they joined, the streak, the
- * totals and the interview-ready score, the skill map, every badge as a
+ * totals (with the daily challenge's streak and best score, once played)
+ * and the interview-ready score, the skill map, every badge as a
  * compact grid and the problems solved. What only the learner sees (the
  * freezes, card counts, the daily goal and the visibility setting) shows when
  * the model or the slots have it.
@@ -68,6 +70,16 @@ export default function ProfileView({ model, kicker, note, goal, children }: Pro
         {model.streak?.freezes !== undefined && (
           <Stat label="Streak freezes" value={model.streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />
         )}
+        {model.challenge && (
+          <Stat
+            label="Challenge streak"
+            value={model.challenge.current}
+            unit={days(model.challenge.current)}
+            icon={<Zap size={16} aria-hidden="true" className={model.challenge.current > 0 ? 'fill-pop-yellow text-ink' : 'text-muted'} />}
+            detail={`Longest ${model.challenge.longest} ${days(model.challenge.longest)}`}
+          />
+        )}
+        {model.challenge && <Stat label="Best challenge" value={model.challenge.best} unit={`/ ${MAX_SCORE}`} testId="profile-challenge-best" />}
         <Stat label="Interview ready" value={readiness} unit="%" testId="profile-readiness" />
         <Stat label="Problems solved" value={model.solved.length} detail={DIFFICULTIES.map((d) => `${byDifficulty[d]} ${d}`).join(' · ')} />
         {model.cards && <Stat label="Cards reviewed" value={model.cards.reviewed} />}

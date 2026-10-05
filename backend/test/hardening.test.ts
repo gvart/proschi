@@ -258,6 +258,7 @@ describe('data export', () => {
       cardReviews: [],
       cardStates: [],
       achievements: [],
+      challengeAttempts: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

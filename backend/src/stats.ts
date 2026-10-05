@@ -15,7 +15,7 @@ import { currentVersions, findProblem, problemIds } from './verify';
 
 /** Public answers are cached by browsers and, shared by the Worker's isolates (the Cache API), here for this long. */
 const CACHE_SECONDS = 60;
-const PUBLIC_CACHE = { 'Cache-Control': `public, max-age=${CACHE_SECONDS}` };
+export const PUBLIC_CACHE = { 'Cache-Control': `public, max-age=${CACHE_SECONDS}` };
 
 /** The Cache API key of a shared answer; with the simulation version, so a deploy that changes it starts afresh. */
 export function cacheKey(key: string): string {
@@ -23,7 +23,7 @@ export function cacheKey(key: string): string {
 }
 
 /** `compute()`'s value, cached for CACHE_SECONDS in this data center. */
-async function cached<T>(ctx: Ctx, key: string, compute: () => Promise<T>): Promise<T> {
+export async function cached<T>(ctx: Ctx, key: string, compute: () => Promise<T>): Promise<T> {
   const url = cacheKey(key);
   const hit = await caches.default.match(url);
   if (hit) return (await hit.json()) as T;
@@ -34,7 +34,8 @@ async function cached<T>(ctx: Ctx, key: string, compute: () => Promise<T>): Prom
 
 /** Tests call this between cases. */
 export async function clearStatsCache(): Promise<void> {
-  const keys = ['stats', 'leaderboard', ...problemIds().map((id) => `problem/${id}`)];
+  const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
+  const keys = ['stats', 'leaderboard', ...problemIds().map((id) => `problem/${id}`), ...[-1, 0, 1].map((n) => `challenge/${day(n)}`)];
   await Promise.all(keys.map((key) => caches.default.delete(cacheKey(key))));
 }
 

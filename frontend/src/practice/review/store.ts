@@ -78,6 +78,14 @@ function readOutbox(): Record<string, CardReview[]> {
   return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([user, list]) => [user, readReviews(list)]));
 }
 
+/**
+ * Reviews the server has answered for in this page's life, by id, from any
+ * account store: its day counts include them even while the outbox still
+ * holds them (storage that could not drop them, another tab's copy).
+ */
+const answered = new Set<string>();
+export const sentReviews = (): ReadonlySet<string> => answered;
+
 /** The user's reviews waiting to be sent. */
 export function pendingReviews(userId: string): CardReview[] {
   const all = readOutbox();
@@ -115,7 +123,10 @@ export function accountStore(userId: string): CardStore {
         for (let batch = pending().slice(0, MAX_BATCH); batch.length; batch = pending().slice(0, MAX_BATCH)) {
           const answer = await api<CardReviewsAnswer>('/api/cards/reviews', { method: 'POST', body: { reviews: batch } });
           // Stored or skipped (an unknown card, a bad time): either way the server has answered for it.
-          for (const r of batch) sent.add(r.id);
+          for (const r of batch) {
+            sent.add(r.id);
+            answered.add(r.id);
+          }
           memory = memory.filter((r) => !sent.has(r.id));
           updateOutbox(userId, (list) => list.filter((r) => !sent.has(r.id)));
           Object.assign(states, answer.states);
@@ -141,6 +152,16 @@ export function accountStore(userId: string): CardStore {
     },
     flush,
   };
+}
+
+/** A random id for a review; randomUUID needs a secure context, which a local preview over http may not be. */
+export function reviewId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
 }
 
 /** Whether an error means the session is gone (sign in again) rather than the network. */
