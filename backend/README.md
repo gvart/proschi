@@ -44,6 +44,14 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
   card reviews, new cards and first solves, from the reviews' and solves'
   local dates. The Worker computes the streak, its freezes and last week's
   recap with the page's own code, so the page and an app show the same.
+- **Achievements and the skill map** (`frontend/src/learn/achievements.ts`
+  and `mastery.ts`, `docs/CARDS.md`): the badges of
+  `frontend/src/practice/achievements.json` are evaluated on read, from the
+  user's card states and reviews and their solves, and the longest daily
+  streak from the same activity and `computeStreak` as
+  `GET /api/me/activity`, so the page and an app agree. A badge met for the first time is stored with its time; a client
+  marks it seen once it has celebrated it. "Cheaper than the reference" runs
+  each problem's reference solution once per isolate for its cost.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
@@ -60,10 +68,12 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions, its progress and its card reviews |
+| `DELETE /api/me` | Deletes the account, its sessions, its progress, its card reviews and its achievements |
 | `GET /api/me/export` | Everything stored about the user, as `proschi-data.json` (no session token hashes) |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
+| `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
+| `POST /api/me/achievements/seen {ids?}` | Marks earned badges as seen (those listed, or all); answers `{seen}`, how many |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
@@ -75,7 +85,7 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports and 60 card review and activity requests per user; 20 sign-in steps, 120 stats
+changes or exports, 3 imports, 60 card review and activity requests and 120 achievement requests per user; 20 sign-in steps, 120 stats
 requests and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)

@@ -206,4 +206,54 @@ node dist/cli.cjs cards lock ../frontend/src/practice/cards
 node dist/cli.cjs cards check ../frontend/src/practice/cards
 ```
 
+## The skill map and achievements
+
+The practice page's progress page (`practice/#/progress`) scores each topic
+from 0 to 100% and shows the badges a learner has earned. Signed in, the
+server decides both (`GET /api/me/achievements`, backend/README.md); a copy
+of the site without accounts computes the same from the browser's data.
+
+**Mastery** of a topic (`frontend/src/learn/mastery.ts`) blends:
+
+- recall: the predicted chance of remembering each of the topic's cards now,
+  averaged over all of them, a card never reviewed counting 0 (weight 0.55);
+- coverage: the share of its cards reviewed (0.15);
+- problems: the related problems solved, those its cards name in `related`
+  and those tagged with the topic's id, three counting in full (0.30, left
+  out when nothing relates);
+- for `estimation` only, the share of the last 20 estimate cards answered
+  right (0.30).
+
+The weights of the parts that apply are scaled to add up to 1. "Interview
+ready" is the topics' mastery weighted by their number of cards, and the
+three weakest topics link to `#/review/<topic>`.
+
+**Achievements** are data, in `frontend/src/practice/achievements.json`:
+
+```json
+{ "id": "reviews-100", "title": "Hundred club", "description": "Review 100 cards.", "icon": "layers", "tier": "bronze", "rule": { "kind": "reviews", "min": 100 } }
+```
+
+`tier` (`bronze`, `silver` or `gold`) is optional; `icon` is one of the names
+in `ICONS` (`frontend/src/learn/achievements.ts`). The rule kinds:
+
+| `kind` | Fields | Earned when |
+|---|---|---|
+| `reviews` | `min` | that many card reviews, in all |
+| `mastered` | `min` | that many cards with a stability of 21 days or more |
+| `streak` | `min` | a daily streak (above) of that many days at its longest, freezes included |
+| `solved` | `min`, `difficulty?`, `tag?` | that many problems solved, of that difficulty or tag |
+| `all-solved` | `tag` | every problem with the tag solved |
+| `first-run` | `min` | that many problems solved on the first test run |
+| `under-reference` | `min` | that many solves cheaper a month than the reference solution |
+| `estimate-streak` | `min` | that many estimate cards right in a row |
+| `mastery` | `topic`, `min` (0–1) | the topic's mastery at `min` or more |
+| `stage` | `stage` | every problem of the roadmap stage solved |
+
+An id never changes: earned badges are stored by it. A badge once earned
+stays earned. `proschi achievements check` (CI runs it) checks the file:
+unique ids, known icons, tiers and kinds, each rule with exactly its fields,
+tags, topics and stages that exist, counts the problems can reach, and no
+two badges with the same rule.
+
 Suggestions for new cards or fixes are welcome as issues or pull requests.

@@ -14,9 +14,11 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.docs` | Your diagrams in the editor: their text, file names and which one is open |
 | `proschi.playground.source` | A diagram saved by an older version of the editor, read once to carry it over |
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
+| `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
+| `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
-| `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak |
+| `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak and its badges |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
 | `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
@@ -67,6 +69,10 @@ Without signing in, nothing about you reaches the server.
 - Your daily goal (cards a day). The daily streak and the weekly recap are
   computed from your card reviews and solve dates; nothing more is stored
   for them.
+- Achievements: which badges you earned, when, and when the page first
+  showed them to you. The skill map and the badges are computed from the
+  reviews and progress above each time you open them; nothing else is
+  collected for them.
 
 **What is not stored**: your email address, your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
@@ -92,8 +98,8 @@ only if you opt in.
 In the account menu on the practice page:
 
 - **Download my data** saves everything stored about you as JSON.
-- **Delete account** removes your account, sessions, progress and card
-  reviews from the server at once; the progress in your browser stays.
+- **Delete account** removes your account, sessions, progress, card
+  reviews and badges from the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device.

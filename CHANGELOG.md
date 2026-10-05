@@ -41,6 +41,22 @@ deployed from `main` and ships with the same changes.
   cards that train for it; a moment when you finish a roadmap stage; and a
   weekly recap of last week's cards, solves and goal days on the review page.
   With reduced motion set, there is no animation, just the summary.
+- A progress page on the practice page (`practice/#/progress`): a skill map
+  that scores how well you know each of the 15 topics, from the cards you
+  remember, how many of them you have seen, the related problems you solved
+  and, for estimation, how often your numbers land; an "interview ready"
+  score; and your three weakest topics, each with a "Train this topic"
+  button. Plus 32 badges in bronze, silver and gold for reviewing, streaks,
+  mastered cards, solving problems (hard ones, on the first run, or cheaper
+  than the reference solution), estimating and finishing roadmap stages,
+  each locked one with a progress bar; the streak badges count your daily
+  streak, so your goal, solves and freezes count. A new badge pops up once
+  when you earn it, after a session's summary has had its moment. Signed
+  in, your badges are kept in your account and included in "Download my
+  data"; on a copy of the site without accounts they are kept
+  in the browser. Find it from the daily review page or the progress strip
+  on the practice list. `proschi achievements check` validates the badges'
+  definitions.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

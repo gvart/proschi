@@ -40,3 +40,16 @@ export function verify(problem: Problem, source: string): Verdict {
   const run = runTests(parseSolution(problem, source), defaultEngine);
   return { solved: run.solved, passed: run.passed, total: run.results.length, ...run.metrics };
 }
+
+const referenceCosts = new Map<string, number | undefined>();
+
+/**
+ * The monthly cost of a problem's reference solution (solution.proschi), for
+ * the "cheaper than the reference" achievements. Measured with verify() the
+ * first time it is asked for in an isolate (a few milliseconds a problem) and
+ * kept.
+ */
+export function referenceCost(problem: Problem): number | undefined {
+  if (!referenceCosts.has(problem.id)) referenceCosts.set(problem.id, verify(problem, problem.solution).costUsd);
+  return referenceCosts.get(problem.id);
+}

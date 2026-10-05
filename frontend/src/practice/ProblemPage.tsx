@@ -17,6 +17,8 @@ import { lessonRead, markLessonRead, sourceOf, statusOf, withRun, withSource, ty
 import { PROBLEM_FILE, parseSolution, runTests, type DesignMetrics, type RunResult } from './workspace';
 import { localDay } from '../learn/streak';
 import { recordLocalSolve } from './activity';
+import { recordRunStats } from './runStats';
+import { notifyActivity } from './skills/activity';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
 import Header from '../design/Header';
@@ -138,6 +140,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     }
     if (!result.blocked) {
       onProgress((p) => withRun(p, problem, result.solved));
+      // For a build without accounts' achievements; the reference solution runs once, on the first solve.
+      recordRunStats(problem.id, result, () => runTests(parseSolution(problem, problem.solution), engine).metrics?.costUsd);
       void account.recordRun(problem.id, source, result.solved, day).then((record) => {
         const counted = record?.verdict?.solved ? record.progress.runsToSolve : undefined;
         if (counted !== undefined) setFirstSolve((f) => f && { ...f, runs: counted });
@@ -147,6 +151,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             : undefined,
         );
         setStatsRefresh((n) => n + 1);
+        if (result.solved) notifyActivity();
       });
     }
     setPane('tests');

@@ -33,6 +33,8 @@ jobs:
           node dist/cli.cjs problem check ../frontend/src/practice/problems
       - name: Check the practice cards
         run: node dist/cli.cjs cards check --format github ../frontend/src/practice/cards
+      - name: Check the practice achievements
+        run: node dist/cli.cjs achievements check --format github ../frontend/src/practice/achievements.json
       - run: npm run package:vscode
       - run: npm pack --pack-destination dist
       - uses: actions/upload-artifact@v7
