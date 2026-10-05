@@ -1,4 +1,4 @@
-A shopper taps "Pay". Their phone is on a train, the request takes a while, the app gives up and tries again. Meanwhile your server did receive the first request and the card processor did approve it. Without care, the shopper is now charged twice. This lesson is about the small set of rules that make a payment endpoint safe to retry: record first, key everything, order the writes, and treat "I don't know" as its own outcome.
+A shopper taps "Pay". Their phone is on a train, the request takes a while, and the app gives up and tries again. But your server did receive the first request, and the card processor did approve it. Without care, the shopper is now charged twice. This lesson is about the small set of rules that make a payment endpoint safe to retry: record first, key everything, order the writes, and treat "I don't know" as its own outcome.
 
 ## What you'll learn
 
@@ -16,9 +16,22 @@ Two use cases:
 - **Checkout** (`POST /payments`), in three scenarios. `"Charged"`: the key is new, the gateway approves, the money is booked in the ledger, the payment is marked succeeded with its response stored, and the shopper gets `201`. `"Replay"`: the key was seen before, so the shopper gets the stored result with a `2xx`, and nothing is charged or booked again. `"Gateway down"`: the charge fails or times out; the shopper gets `202` with the payment *pending*, and it is retried in the background.
 - **Retry charge**: a queue hands a pending payment to a worker, which charges again with the same key, books the ledger, marks the payment succeeded, and only then acknowledges the message.
 
-Constraints: insert the payment (a real write, not a lookup) into a strongly consistent, durable store keyed by the idempotency key **before** calling the gateway; never consult a cache for keys; book the ledger only after approval; mark succeeded only after booking. Checkout p99 under 1.5 s including the gateway, a replay under 100 ms, checkout 99.95% available (the gateway alone offers 99.9%), every checkout durable before the answer, retries driven by a queue, no single point of failure, and $2,500 a month including the finance team's three ledger replicas.
+The constraints on correctness:
 
-The given file declares the `shopper`, the external `gateway` (250 ms per call, up to 5k calls a second) and the `ledger` API. Its tests check, in words: a strong store is called before the gateway and no eventual store is ever called; a replay calls a strong store, never calls the gateway or ledger, and answers `2xx`; the gateway is called before the ledger and a charged checkout writes the ledger before answering `201`; a strong store is updated after the ledger, both in checkout and in the retry; a gateway failure is handled, answers `202`, calls a queue and never waits for the ledger; and the retry starts at a queue, reads a strong store before the gateway, and books the ledger before acknowledging.
+- Insert the payment (a real write, not a lookup) into a strongly consistent, durable store keyed by the idempotency key **before** calling the gateway.
+- Never consult a cache for keys.
+- Book the ledger only after approval, and mark the payment succeeded only after booking.
+
+The other requirements: checkout p99 under 1.5 s including the gateway, and a replay under 100 ms. Checkout must be 99.95% available (the gateway alone offers 99.9%), and every checkout must write durably before the answer. Retries are driven by a queue, there is no single point of failure, and the budget is $2,500 a month, including the finance team's three ledger replicas.
+
+The given file declares the `shopper`, the external `gateway` (250 ms per call, up to 5k calls a second) and the `ledger` API. Its tests check, in words:
+
+- A strong store is called before the gateway, and no eventual store is ever called.
+- A replay calls a strong store, never calls the gateway or the ledger, and answers `2xx`.
+- The gateway is called before the ledger, and a charged checkout writes the ledger before answering `201`.
+- A strong store is called after the ledger, both in checkout and in the retry.
+- A gateway failure is handled: it answers `202`, calls a queue and never waits for the ledger.
+- The retry starts at a queue, calls a strong store before the gateway, and books the ledger before acknowledging.
 
 ## Back-of-the-envelope
 
@@ -40,7 +53,7 @@ The retry worker handles the 5 a second that went pending.
 
 **Availability.** The gateway alone is 99.9%, below the 99.95% target. In Proschi a node that has a fallback scenario (a success path that calls it with `-x` and still completes) only takes the use case down when the fallback is down too: roughly 1 − (1 − 0.999) × (1 − A(fallback)). With a replicated queue on the fallback path, the gateway stops being the limit. Everything else needs two or more replicas.
 
-**Cost.** Services are $100 a replica, PostgreSQL $400, a queue $200, a load balancer $50; the ledger's three replicas ($300) are part of the budget. A lean design with two of everything fits comfortably; three of everything is still possible; anything fancier (a distributed SQL database, a cache layer) is where budgets break.
+**Cost.** Services are $100 a replica, PostgreSQL $400, a queue $200, a load balancer $50; the ledger's three replicas ($300) are part of the budget. A lean design with two of everything costs about $2,000 and fits. Three of everything costs about $2,850 and does not, so add a third replica only where the load needs it (an extra API replica is $100). Anything fancier (a distributed SQL database, a cache layer) is where budgets break.
 
 **Storage (illustrative).** 1k rows a second is 86.4 million payment rows a day. At around 500 bytes each, that is about 43 GB a day. Payments must be kept, but idempotency *keys* only need to live longer than any client could retry; old keys can be archived.
 
@@ -48,11 +61,11 @@ The retry worker handles the 5 a second that went pending.
 
 ### Idempotency keys under a unique constraint
 
-An operation is **idempotent** if doing it twice has the same effect as doing it once. `GET` and `PUT` are idempotent by definition; `POST /payments` is not. An idempotency key makes it so: the client generates a unique value per logical attempt (say a UUID per checkout) and sends it with every retry. The server stores the key with the outcome, and a request with a key it has seen returns the stored outcome instead of acting again.
+An operation is **idempotent** if doing it twice has the same effect as doing it once. `GET` and `PUT` are idempotent by definition; `POST /payments` is not. An idempotency key makes it so. The client generates a unique value per logical attempt (say, a UUID per checkout) and sends it with every retry. The server stores the key with the outcome, and a request with a key it has seen returns the stored outcome instead of acting again.
 
 Two details decide whether this works:
 
-- **Insert, do not check.** `SELECT` the key, then `INSERT` if missing, has a race: two retries arriving together both see nothing and both charge. `INSERT … ON CONFLICT DO NOTHING RETURNING …` on a primary key is atomic: exactly one request wins the insert, the other gets a conflict and reads the stored row.
+- **Insert, do not check.** "`SELECT` the key, then `INSERT` it if it is missing" has a race: two retries arriving together both see nothing and both charge. `INSERT … ON CONFLICT DO NOTHING RETURNING …` on a primary key is atomic: exactly one request wins the insert, the other gets a conflict and reads the stored row.
 - **Strong and durable storage.** A cache with asynchronous replication can lose a key on failover, and an evicting cache can forget it under memory pressure. Either way the next retry looks new and charges again. The key belongs in the same transactional store as the payment.
 
 Trade-offs: every request costs a write, keys need a retention policy, and clients must generate keys correctly (a new key per *checkout*, not per *retry*). When not to use it: naturally idempotent operations (set a value, delete by id) do not need keys.
@@ -92,11 +105,11 @@ Think of it as a small state machine (`pending` → `succeeded`, or `pending` �
 
 ### Ambiguous failures and queue-driven retries
 
-A timeout from the gateway does not mean "declined". It means "I don't know": the charge may have gone through. Answering `502` makes the shopper retry or abandon a payment that may have succeeded; retrying inline makes the shopper wait for a second timeout and ties checkout availability to the gateway.
+A timeout from the gateway does not mean "declined". It means "I don't know": the charge may have gone through. Answering `502` makes the shopper retry or abandon a payment that may have succeeded. Retrying inline makes the shopper wait for a second timeout, and it ties checkout availability to the gateway.
 
 The robust answer: keep the row pending, answer `202` with a pending status (the app can poll or be notified), and put a retry message on a queue. A worker picks it up, locks the row, charges again **with the same idempotency key** (the gateway deduplicates, so if the first charge happened, it returns that charge), books the ledger, marks the row succeeded, and only then acknowledges the message. If the worker crashes before the ack, the queue redelivers, and every step is idempotent, so redelivery is safe.
 
-One subtlety: writing the row and enqueueing the message are two systems. If you crash between them, the row stays pending with nothing queued. The **transactional outbox** pattern fixes that by writing the message to an outbox table in the same database transaction and relaying it to the queue afterwards; a periodic sweep of old pending rows is a cheaper safety net.
+One subtlety: writing the row and enqueueing the message are two systems. If you crash between them, the row stays pending with nothing queued. The **transactional outbox** pattern fixes that: write the message to an outbox table in the same database transaction, and relay it to the queue afterwards. A periodic sweep of old pending rows is a cheaper safety net.
 
 ```proschi
 title "Retry from a queue"
@@ -134,7 +147,7 @@ usecase "Retry job" {
 
 *The worker.* It starts at the queue, locks and reads the row, charges with the same key, books, marks succeeded, acks. That ordering is what the retry tests check.
 
-*Why not a scheduler that polls for pending rows?* It works and many systems have one as a safety net. But as the primary mechanism it adds polling load on the payments primary, adds latency up to the poll interval, and needs careful locking (`FOR UPDATE SKIP LOCKED`) to avoid two pollers taking the same row. A queue gives delivery, redelivery and backoff for free.
+*Why not a scheduler that polls for pending rows?* It works and many systems have one as a safety net. But as the main mechanism, it adds polling load on the payments primary and up to one poll interval of delay. It also needs careful locking (`FOR UPDATE SKIP LOCKED`) so that two pollers do not take the same row. A queue gives delivery, redelivery and backoff for free.
 
 *Sizing.* Two replicas of each component you run is the starting point for surviving a failure; check that the API and the worker stay well under 70%, that the primary's writes fit, and that the bill including the ledger stays under budget.
 
@@ -144,11 +157,11 @@ usecase "Retry job" {
 
 **Check, then insert** (`wrong/check-then-insert`). The API `SELECT`s the key and only inserts when it is missing. In production two concurrent retries both see no row and both charge. In Proschi the visible symptom is different but related: a replay only reads, so the checkout is no longer durable on every path, and `Checkout is durable` fails.
 
-**Idempotency keys in Redis** (`wrong/idempotency-keys-in-redis`). Fast and tempting (`SETNX`). But Redis replication is asynchronous and memory is evictable: a failover or eviction forgets keys, and the next retry charges again. The test "The payment is recorded in a strong store before the card is charged" fails, along with every test that needs a strong store.
+**Idempotency keys in Redis** (`wrong/idempotency-keys-in-redis`). Fast and tempting (`SETNX`). But Redis replication is asynchronous and memory is evictable: a failover or eviction forgets keys, and the next retry charges again. The test "The payment is recorded in a strong store before the card is charged" fails, along with every test that needs a strong store and `Checkout is durable`.
 
-**Replay asks the gateway** (`wrong/replay-asks-gateway`). Instead of returning the stored response, a replay looks the charge up at the gateway. It is correct-ish but slow (a 250 ms dependency on the fast path) and puts more load on the gateway exactly when clients are retrying. It fails `p99 of Checkout scenario Replay < 100 ms`.
+**Replay asks the gateway** (`wrong/replay-asks-gateway`). Instead of returning the stored response, a replay looks the charge up at the gateway. It is mostly correct but slow (a 250 ms dependency on the fast path), and it puts more load on the gateway exactly when clients are retrying. It fails `p99 of Checkout scenario Replay < 100 ms`, and also "A retry returns the stored result and charges nothing", because the replay calls the gateway.
 
-**A scheduler polls pending payments** (`wrong/scheduler-polls-pending`). Workers sweep the table instead of consuming a queue. As discussed, it works but trades delivery guarantees for polling load and lock contention. It fails "Pending charges are retried from a queue with the same key".
+**A scheduler polls pending payments** (`wrong/scheduler-polls-pending`). Workers sweep the table instead of consuming a queue. As discussed, it works, but it gives up the queue's delivery guarantees and adds polling load and lock contention. It fails "Pending charges are retried from a queue with the same key".
 
 **Succeeded before the ledger** (`wrong/succeeded-before-ledger`). The row is marked succeeded, then the ledger is booked. A crash in between leaves a payment that replays as succeeded with no money booked, and nothing will ever retry it. It fails "The payment is marked succeeded only once the money is booked".
 

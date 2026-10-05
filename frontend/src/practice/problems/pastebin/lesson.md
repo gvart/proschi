@@ -2,12 +2,12 @@
 
 - Why large blobs belong in **object storage** and only small, queryable rows belong in a **database**.
 - How a **CDN** (content delivery network) answers popular reads at the edge, and why it is the only way to meet a 30 ms target.
-- How **bandwidth and egress** turn into money, and why the same bytes cost four times more from your API than from a CDN.
+- How **bandwidth and egress** turn into money, and why the same bytes cost four and a half times more from your API than from a CDN.
 - How to handle **expiry** cheaply: check a small row before fetching a big body, and bound how long a cached copy can outlive its paste.
 
 ## The problem, explained
 
-Pastebin is the place developers dump a stack trace, a log or a config file to share it: paste the text, get a short link, drop the link in a chat. Everyone in the chat opens it within minutes, then almost nobody ever opens it again.
+Pastebin is where developers drop a stack trace, a log or a config file to share it. You paste the text, get a short link and post the link in a chat. Everyone in the chat opens it within minutes, then almost nobody opens it again.
 
 The two use cases:
 
@@ -22,7 +22,7 @@ The non-functional requirements:
 - **Scale**: 50 pastes created per second at peak; 5k reads per second, 90% of them for pastes read in the last few minutes, 1% for expired ones.
 - **Size**: 10 KB on average, up to 10 MB. Five years add up to about 80 TB.
 - **Latency**: p99 of a read under 100 ms and of a create under 300 ms, and a popular (`"Cached"`) paste under **30 ms** at p99.
-- **Availability** of reads 99.9%; no paste lost once its id was returned; survive the loss of any single machine.
+- **Availability** of reads 99.9%; no paste lost once its id has been returned; survive the loss of any single machine.
 - **Budget**: $6,000 a month, *egress included*. That last part is the twist of this problem.
 
 `given.proschi` declares only the `user` and holds the traffic mix, the requirements and the tests. The statement also asks you to put the payload size (`~10KB`) on every step that carries text, so the simulation can count transfer time and egress.
@@ -53,7 +53,7 @@ Three conclusions jump out.
 
 **The text and the metadata are different problems.** 80 TB of text is too much to keep comfortably in a database's rows, replicas and backups, while 320 GB of small rows a year is easy. Split them.
 
-**Egress dominates the bill.** Sending 130 TB a month from anything you run costs about $11,700, nearly twice the whole budget, before you've paid for a single server. From a CDN the same bytes cost about $2,600. The CDN isn't an optimisation here; it's the only way to fit the budget.
+**Egress dominates the bill.** *Egress* is data sent out of the cloud provider's network to readers, and it is billed per gigabyte. Sending 130 TB a month from anything you run costs about $11,700. That is nearly twice the whole budget, before you've paid for a single server. From a CDN the same bytes cost about $2,600. The CDN isn't an optimisation here; it's the only way to fit the budget.
 
 **Most reads never need the origin.** 90% of 5k rps is 4,500 rps the edge can answer. The *origin* (your API and what's behind it) sees only the remaining 10%:
 
@@ -67,7 +67,7 @@ Three conclusions jump out.
 How this shows up in Proschi:
 
 - **Transfer time.** A `~10KB` payload moves at the slower end's bandwidth: a client gets 10 MB/s in the model, so 10 KB costs the reader about 1 ms. Small, but real; a 10 MB paste would cost a full second.
-- **Latency.** Idle latencies: about 5 ms for a CDN, 10 ms for a service, 5 ms for a database and 30 ms for object storage. A `"Cached"` read is one hop plus transfer, so it is far below 30 ms at p99. A `"Not cached"` read goes CDN → API → database → storage in sequence, around 50 ms mean, and an idle hop's p99 is about 2.8× its mean, so that path alone is well over 100 ms at p99. Why can the design still pass the 100 ms read limit? Because p99 is computed over *all* reads: with 90% answered at the edge, the blended p99 sits near the origin path's p90, not its p99.
+- **Latency.** Idle latencies: about 5 ms for a CDN, 10 ms for a service, 5 ms for a database and 30 ms for object storage. A `"Cached"` read is one hop plus transfer, so it is far below 30 ms at p99. A `"Not cached"` read goes CDN → API → database → storage in sequence, about 50 ms on average. An idle hop's p99 is about 2.8× its mean, so that path alone is well over 100 ms at p99. Why can the design still pass the 100 ms read limit? Because p99 is computed over *all* reads. With 90% answered at the edge, the blended p99 sits near the origin path's p90, not its p99.
 - **Egress.** The simulation charges payloads sent to a client by the node that sends them: $0.09/GB from anything you run, $0.02/GB from a CDN. Copies inside your system (storage to API, CDN filling from the origin) are free. Watch the *Egress/month* column in the Analysis tab.
 - **Availability.** A read's availability is computed over its main scenario, the one with the largest share. Here that is `"Cached"`, so it mostly depends on the CDN, which is up 99.99% per replica.
 
@@ -77,9 +77,9 @@ How this shows up in Proschi:
 
 **What it is.** Object storage (Amazon S3, Google Cloud Storage, Azure Blob) stores *objects*: a key and a bag of bytes, from a few bytes to terabytes. You can `PUT`, `GET` and `DELETE` by key, and that's about it. A database stores rows you can index, filter and update.
 
-**Why it works.** Object storage is cheap per gigabyte, extremely durable (it keeps several copies across facilities), and scales out behind one name, so you never shard it yourself. A database is the opposite: great at small structured records and queries, expensive and slow to back up, replicate and restore when rows carry megabytes. Storing the text in S3 and a row like *(id, object key, size, created, expires)* in the database plays each to its strength.
+**Why it works.** Object storage is cheap per gigabyte, extremely durable (it keeps several copies across facilities), and scales out behind one name, so you never shard it yourself. A database is the opposite. It is great at small structured records and queries, but slow and expensive to back up, replicate and restore when rows carry megabytes. Storing the text in S3 and a row like *(id, object key, size, created, expires)* in the database plays each to its strength.
 
-**Trade-offs.** Two writes per create instead of one, so think about order: write the body first, then the row. If the process dies in between you get an orphaned object nobody can reach (harmless; a cleanup job can sweep it), rather than a row pointing at a missing body (a broken link). Object storage is also slower per request (tens of milliseconds) than a database read.
+**Trade-offs.** Two writes per create instead of one, so think about order: write the body first, then the row. If the process dies in between, you get an orphaned object nobody can reach (harmless; a cleanup job can sweep it), not a row pointing at a missing body (a broken link). Object storage is also slower per request (tens of milliseconds) than a database read.
 
 **When not to use it.** When the "blob" is tiny (a 200-byte tweet belongs in a row) or when you need to query inside it.
 
@@ -109,13 +109,13 @@ usecase "Upload" {
 
 **What it is.** A CDN is a network of caching servers (*edges*) close to users. In a *pull* CDN, the edge forwards a miss to your *origin*, caches the answer for as long as the origin's `Cache-Control: max-age` header allows, and answers every following request for that URL itself.
 
-**Why it works here.** Paste reads come in bursts on the same URL: a link posted in a busy chat is opened by everyone in the next few minutes. One origin fetch serves the whole burst. The edge is physically close to the reader, so it answers in a few milliseconds, and it never touches your servers, which is why the test forbids any service, database or storage call in `"Cached"`.
+**Why it works here.** Paste reads come in bursts on the same URL: a link posted in a busy chat is opened by everyone in the next few minutes. One origin fetch serves the whole burst. The edge is physically close to the reader, so it answers in a few milliseconds. It also never touches your servers, which is why the test forbids any service, database or storage call in `"Cached"`.
 
 **Trade-offs.** The edge serves whatever it cached until the lifetime runs out. Deleting or expiring a paste doesn't reach copies already at the edge unless you purge them. Short lifetimes keep that window small but send more misses to the origin.
 
 **When not to use it.** Personalised or private responses (unless you are careful with cache keys and auth), and content that is read once.
 
-**Egress, the hidden reason.** Cloud providers charge per gigabyte for data leaving their network (*egress*); traffic between your own services is cheap or free. At high read rates, egress can cost more than all your servers combined, as it does here. CDNs pay far lower per-GB prices and absorb repeated reads, so serving bytes from the edge is cheaper as well as faster. For tiny responses egress hardly matters: check the bytes before reaching for a CDN.
+**Egress, the hidden reason.** Cloud providers charge per gigabyte for data leaving their network (*egress*); traffic between your own services is cheap or free. At high read rates, egress can cost more than all your servers combined, as it does here. CDNs charge far lower per-GB prices and absorb repeated reads, so serving bytes from the edge is cheaper as well as faster. For tiny responses egress hardly matters: check the bytes before reaching for a CDN.
 
 ```proschi
 title "Pull CDN"
@@ -217,7 +217,7 @@ Recap: "Bodies in object storage, metadata in a relational database, a CDN in fr
 
 ## Common mistakes
 
-**Every read from object storage** (`wrong/every-read-from-object-storage`). The CDN is there, but every read, even a popular one, goes through the API, the database and S3. In practice the CDN does nothing and object storage carries the full read rate. Each read now waits for three hops including S3's ~30 ms, and the blended p99 jumps to roughly twice the limit. Caught by **p99 of Read paste < 100 ms** (and it also fails the 30 ms `"Cached"` limit and the CDN test).
+**Every read from object storage** (`wrong/every-read-from-object-storage`). The CDN is there, but every read, even a popular one, goes through the API, the database and S3. In practice the CDN does nothing and object storage carries the full read rate. Each read now waits for three hops, including S3's ~30 ms, and the blended p99 jumps to roughly twice the limit. Caught by **p99 of Read paste < 100 ms**. It also fails the 30 ms `"Cached"` limit, the CDN test and `survive any node failure` (one S3 replica cannot take all 5k reads).
 
 **A Redis cache instead of the CDN** (`wrong/redis-cache-instead-of-cdn`). A load balancer replaces the CDN and Redis sits behind the API. Popular reads still cross the load balancer and the API, so their p99 is more than twice the CDN's and misses 30 ms. Worse, the load balancer sends 130 TB a month to readers at the internet rate: the egress alone blows through the budget. Caught by **p99 of Read paste scenario Cached < 30 ms** and **Popular pastes are served by the CDN**; it fails the cost limit too.
 

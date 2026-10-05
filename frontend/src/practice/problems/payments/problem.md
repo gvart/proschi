@@ -54,7 +54,7 @@ Use these names exactly: the traffic, requirements and tests in
   idempotency key. A cache that can lag or forget keys is never consulted:
   it would let a retry charge twice. A crash at any point then leaves a
   trace to reconcile or retry.
-- Money is booked in the ledger only after the gateway approved the charge,
+- Money is booked in the ledger only after the gateway has approved the charge,
   and the payment is marked succeeded (with the response a retry gets back)
   only after the money is booked.
 - p99 of a checkout under **1.5 s**, the gateway included; a replay is

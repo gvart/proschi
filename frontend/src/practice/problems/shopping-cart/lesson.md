@@ -8,7 +8,7 @@
 
 ## The problem, explained
 
-This problem is modelled on a real system. In 2007 Amazon published the paper on **Dynamo**, the key-value store they built because some services, the shopping cart first among them, must stay writable no matter what is failing. Their argument was blunt: if "Add to cart" fails, the customer may leave and the sale is gone. A cart that is briefly out of date is a minor annoyance; a rejected add is lost revenue.
+This problem is modelled on a real system. In 2007 Amazon published the paper on **Dynamo**, the key-value store they built because some services, the shopping cart first among them, must stay writable no matter what is failing. Their argument was blunt: if "Add to cart" fails, the customer may leave and the sale is gone. A cart that is briefly out of date is a minor annoyance. A rejected add is lost revenue.
 
 Two use cases:
 
@@ -20,7 +20,7 @@ Two use cases:
 The non-functional requirements:
 
 - **Scale**: 500 adds and 1k cart views per second at peak. In Amazon's measurement, 99.94% of reads saw exactly one version.
-- **Latency**: the **99.9th percentile** (p99.9) of both use cases under 300 ms. That is the SLA the Dynamo paper uses as its example: Amazon measured the tail, not the average, because the slowest requests often belong to the most valuable customers (those with the longest histories).
+- **Latency**: the **99.9th percentile** (p99.9) of both use cases under 300 ms. That is the SLA (service level agreement) the Dynamo paper uses as its example. Amazon measured the tail, not the average, because the slowest requests often belong to the most valuable customers (those with the longest histories).
 - **Availability**: Add to cart works **99.999%** of the time ("five nines").
 - **Durability**: an add survives once the shopper hears `200`.
 - **Consistency**: carts live in an eventually consistent store, because a strongly consistent one must refuse writes it cannot coordinate.
@@ -55,14 +55,14 @@ Now look at availability per component, using the simulation's default numbers:
 | Leaderless NoSQL (`[DynamoDB]`) | 99.99% | 99.999999% | ≈ 100% |
 | Relational (`[PostgreSQL]`), **writes** | 99.95% | 99.995% | 99.995% |
 
-The last row is the key insight. In the model, as in real life, a relational database has **one primary per shard** that takes every write. Replicas serve reads and can be promoted when the primary dies, but writes wait out the promotion. The simulation keeps 10% of the primary's downtime for that, so writes reach 99.995% however many replicas you add: **below five nines, by design.** A leaderless store takes a write on any replica, so each replica you add multiplies its unavailability down.
+The last row is the key insight. In the model, as in real life, a relational database has **one primary per shard** that takes every write. Replicas serve reads and can be promoted when the primary dies, but writes wait out the promotion. The simulation keeps 10% of the primary's downtime for that, so writes reach 99.995% however many replicas you add: **below five nines, by design.** A leaderless store takes a write on any replica, so each replica you add cuts its unavailability by another factor.
 
 The path availability is the product of the nodes on it. Work it out for your design: with enough replicas of every node, Add to cart comes out far above 99.999%.
 
 Load and latency:
 
 - The store sees about 1,000 reads and 500 writes per second against 20,000 of each per replica, so it is nearly idle.
-- The service sees 1,500 rps against 2,000 per replica; one replica would already be 75% busy, and you need more than one anyway for availability.
+- The service sees 1,500 rps against 2,000 per replica. One replica would already be 75% busy, and you need more than one anyway for availability.
 - Latency: a load balancer (~2 ms), a service (~10 ms) and a store (~5 ms) add up to well under 300 ms even at p99.9, where an idle hop is about 4× its mean. The latency limit is there to catch saturated designs, not to make you optimise.
 - Cost: the leaderless store costs about $500 per replica per month, a service $100, a load balancer $50. Multiply out before you run.
 
@@ -177,7 +177,7 @@ The third is the one that fits the requirement, and the tests check that adds ne
 
 **The view.** Read every version. In `"One version"` there's nothing to do. In `"Divergent versions"`, merge (union of items), **write the merged cart back**, then answer. Writing back matters: without it, every future read sees the conflict again and the versions keep piling up.
 
-**Replication.** How many replicas of the store does five nines take? Use the table above and multiply the path, then do the same for the service and the load balancer. Remember that `survive any node failure` removes one replica of each node and re-checks saturation and latency, so a node with one replica fails it. The simulation's arithmetic is the floor; the real-world argument often asks for more. With quorum writes (W=2), a store with only two copies of a key can't take a quorum write while one of them is down, which is why Dynamo-style stores usually run N=3. Decide which argument you're making and say it out loud.
+**Replication.** How many replicas of the store does five nines take? Use the table above and multiply the path, then do the same for the service and the load balancer. Remember that `survive any node failure` removes one replica of each node and re-checks saturation and latency, so a node with one replica fails it. The simulation's arithmetic is the floor, and the real-world argument often asks for more. With quorum writes (W=2), a store with only two copies of a key can't take a quorum write while one of them is down, which is why Dynamo-style stores usually run N=3. Decide which argument you're making and say it out loud.
 
 **Cost.** The store is the expensive line. Price your replica counts against the $3,000 limit before running the analysis, and check that you're not paying for replicas that neither availability nor load needs.
 
@@ -199,7 +199,7 @@ The third is the one that fits the requirement, and the tests check that adds ne
 
 ## In the interview
 
-**How to present it.** Start from the business: "a rejected add is a lost sale, a stale cart is not." Derive AP from that, then pick the store. Show the availability arithmetic for primary-based vs leaderless writes, it's short and convincing. Then the conflict story: versions, merge by union, write back, and the deleted-item trade-off stated plainly. Interviewers love it when you name the cost of your choice before they do.
+**How to present it.** Start from the business: "a rejected add is a lost sale, a stale cart is not." Derive AP from that, then pick the store. Show the availability arithmetic for primary-based vs leaderless writes. It's short and convincing. Then the conflict story: versions, merge by union, write back, and the deleted-item trade-off stated plainly. Interviewers love it when you name the cost of your choice before they do.
 
 Follow-up questions:
 

@@ -22,7 +22,7 @@ Slack runs a lot of work in the background, and all of it went through one Redis
 - **Relay**: a relay service takes the next job from Kafka and pushes it into Redis. Two scenarios: `"Relayed"` (Redis accepts, the relay commits the Kafka offset) and `"Redis full"` (Redis refuses or is down; the job stays in Kafka for a retry).
 - **Run job**: workers take jobs from Redis exactly as before.
 
-**Non-functional requirements.** p99 of Enqueue under 50 ms, Enqueue available 99.99% of the time, the job written to a durable store before the web app hears back, any single machine can fail, and the whole thing costs at most $8,000 a month including the existing web app and workers.
+**Non-functional requirements.** p99 of Enqueue under 50 ms (99% of enqueues answer faster than that), Enqueue available 99.99% of the time, the job written to a durable store before the web app hears back, any single machine can fail, and the whole thing costs at most $8,000 a month including the existing web app and workers.
 
 **What is given.** `given.proschi` fixes the `web` app (four replicas) and the `workers` (eight replicas), because they already exist and the point of the exercise is *not* to rewrite them. It also fixes the traffic: 33k requests per second for each of the three use cases, with 0.1% of relays hitting a full Redis.
 
@@ -48,19 +48,19 @@ Start from the published numbers: 1.4 billion jobs on the busiest days, with a p
 | Relays that find Redis full | 0.1% × 33k | 33 per second |
 | Kafka disk per day (assume ~1 KB per job) | 1.4B × 1 KB | about 1.4 TB/day |
 
-The job size is an assumption, not a published number, but it tells you something important: a day of backlog is a few terabytes, which is trivial for disks and impossible for the RAM of a single Redis. That is the whole argument for a log in front.
+The job size is an assumption, not a published number. But it tells you something important: a day of backlog is more than a terabyte (a few terabytes once Kafka replicates it). That is easy for disks and impossible for the RAM of a single Redis. That is the whole argument for a log in front.
 
 **How many replicas?** The general formula is:
 
 > replicas needed = load ÷ (capacity per replica × target utilisation)
 
-In Proschi a generic service replica (`[Go]` is a service) handles 2k requests a second. At 100% you would need 33k ÷ 2k = 16.5 replicas just to keep up, which means you are already saturated. Real systems aim well below 100% because queueing delay explodes near the limit; the model shows a node as "hot" above 70%. So divide by 0.7, round up, and then check one more thing: `survive any node failure` re-runs the whole analysis with one replica fewer, and the tier must still stay under 100%. Do that arithmetic for both the gateway and the relay; they carry the same 33k rps.
+In Proschi a generic service replica (`[Go]` is a service) handles 2k requests a second. At 100% you would need 33k ÷ 2k = 16.5 replicas just to keep up, and that tier would be saturated. Real systems aim well below 100% because queueing delay explodes near the limit. The model shows a node as "hot" above 70%. So divide by 0.7, round up, and then check one more thing: `survive any node failure` re-runs the whole analysis with one replica fewer, and the tier must still stay under 100%. Do that arithmetic for both the gateway and the relay; they carry the same 33k rps.
 
-**What the simulation does with it.** Kafka is a queue node with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica and, unlike a relational database, takes writes on every replica. The services are the bottleneck, and the M/M/c queueing formula in the model means a big pool at 70% still answers in about its base 10 ms; a single replica at 70% would take more than three times that. Enqueue's p99 is the gateway hop plus the Kafka hop with their exponential tails, comfortably inside 50 ms when nothing is hot.
+**What the simulation does with it.** Kafka is a queue node with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica. Unlike a relational database, in the model it takes writes on every replica. The services are the bottleneck. The model uses the M/M/c queueing formula, so a big pool at 70% still answers in about its base 10 ms, while a single replica at 70% would take more than three times that. Enqueue's p99 is the gateway hop plus the Kafka hop with their exponential tails, comfortably inside 50 ms when nothing is hot.
 
 **Cost.** Each service replica costs $100 a month, a Kafka broker $200 and a Redis replica $150. The web app and workers already take $1,200 of the $8,000. Every gateway or relay replica you add costs $100, so throwing replicas at the problem runs out of budget quickly. That is deliberate: the budget forces you to size, not guess.
 
-**Availability.** The Enqueue path is gateway then Kafka. Each service replica is up 99.5% of the time, but a pool of many is up when any one is, so the pool is effectively always up in the model. The 99.99% target is easy once nothing on the path is a single replica; with one Kafka broker or one gateway it would not be.
+**Availability.** The Enqueue path is the gateway, then Kafka. Each service replica is up 99.5% of the time. But a pool of many replicas is up as long as any one of them is, so in the model the pool is effectively always up. The 99.99% target is easy once nothing on the path is a single replica; with one Kafka broker or one gateway it would not be.
 
 ## Concepts
 
@@ -73,7 +73,7 @@ A *queue* in the loose sense is anything that holds work between a producer and 
 
 The key property is *decoupling under failure*: when the consumer side is slow, the producer side keeps working. The backlog lives on disk until consumers catch up.
 
-The trade-offs: a log adds a hop and an operational system to run; consumers track their own position (the *offset*); and a log is a poor fit for per-message features such as delays, priorities or individually acknowledged retries, which is one reason Slack kept Redis behind it rather than pointing workers straight at Kafka.
+The trade-offs: a log adds a hop and one more system to operate, and consumers must track their own position (the *offset*). A log is also a poor fit for per-message features such as delays, priorities or retries acknowledged one message at a time. That is one reason Slack kept Redis behind it rather than pointing workers straight at Kafka.
 
 When *not* to use it: when the work is cheap and synchronous anyway, or when the volume is small enough that a managed queue with built-in retries (SQS, for example) does the whole job.
 
@@ -116,13 +116,13 @@ usecase "Move" {
 
 ### Back pressure belongs in the right place
 
-*Back pressure* is how a system tells producers to slow down when it is full. The System Design Primer describes the classic version: bound the queue and answer "busy, try later" when it is full. That is exactly what Redis did, and it was correct behaviour for Redis. The mistake was that the *web app* was the one receiving the "busy". The fix moves the pressure boundary: the relay is the only client that ever hits a full Redis, and its answer to "busy" is simply to wait, because the job is safe in Kafka.
+*Back pressure* is how a system tells producers to slow down when it is full. The System Design Primer describes the classic version: bound the queue and answer "busy, try later" when it is full. That is exactly what Redis did, and it was correct behaviour for Redis. The mistake was that the *web app* received the "busy". The fix moves the pressure boundary: the relay is the only client that ever hits a full Redis. Its answer to "busy" is simply to wait, because the job is safe in Kafka.
 
 A useful rule: put the component that can absorb a backlog between the component that must never stop (accepting work) and the component that can stop (running it).
 
 ### A stateless gateway in front of a broker
 
-Kafka clients keep long-lived connections to the brokers, learn which broker leads which partition, and batch messages. A PHP process lives for one request, so it would open a fresh connection every time and carry broker topology into the web app. A small stateless service (Slack's Kafkagate) holds the connections and exposes one HTTP endpoint. Stateless means any replica can serve any request, so you scale it by adding replicas and lose nothing when one dies.
+Kafka clients keep long-lived connections to the brokers, learn which broker leads which partition, and batch messages. A PHP process lives for one request. It would open a fresh connection every time, and the web app would need to know the broker topology. A small stateless service (Slack's Kafkagate) holds the connections and exposes one HTTP endpoint. Stateless means any replica can serve any request, so you scale it by adding replicas and lose nothing when one dies.
 
 The trade-off is one more hop and one more service to deploy. It pays off when clients are many, short-lived or lack a good broker client; it does not when a few long-running services can embed one.
 
@@ -160,7 +160,7 @@ An alternative you should mention and reject: point the workers at Kafka and dro
 
 - *The relay's two outcomes.* Model `"Relayed"` with a successful push and a commit, and `"Redis full"` with a failed push (`-x`) and no commit. The second scenario is what the model reads as a fallback for the cache: the use case completes even though Redis did not answer.
 - *Sizing.* Use the back-of-the-envelope formula for the gateway and the relay. Choose counts that keep each under 70% and still under 100% with one replica lost. Give Kafka and Redis at least two replicas each so neither is a single point of failure; Kafka with three is the conventional minimum for replicated partitions.
-- *Acknowledgement level.* Slack's gateway waits only for the partition leader's acknowledgement, not for all replicas. That lowers enqueue latency; the cost is that a job can be lost if the leader dies before it replicates. Say this out loud, it is a real durability trade-off. Proschi does not model replication acknowledgements, so it does not change the numbers here.
+- *Acknowledgement level.* Slack's gateway waits only for the partition leader's acknowledgement, not for all replicas. That lowers enqueue latency. The cost is that a job can be lost if the leader dies before the job is replicated. Say this out loud: it is a real durability trade-off. Proschi does not model replication acknowledgements, so it does not change the numbers here.
 
 **4. Wrap-up.** Check every requirement against your design: Enqueue p99 is two short hops; the path has no single replica; cost fits with room; every test's flow holds. Then name what you would do next: alert on consumer lag (how far the relay is behind Kafka), cap the relay's push rate so a recovering Redis is not flooded, and add a dead-letter topic for jobs that fail repeatedly.
 
@@ -172,7 +172,7 @@ An alternative you should mention and reject: point the workers at Kafka and dro
 
 **A relay that commits even when Redis refused** (`wrong/relay-ignores-full-redis`). The relay gets an out-of-memory error from Redis and commits the offset anyway. The job is now gone from Kafka's point of view and never made it into Redis: silent data loss, the worst kind. It fails *A full Redis leaves the job in Kafka*, because no scenario shows a failed call to the cache that the use case survives.
 
-**The web app talks to Kafka directly** (`wrong/web-produces-to-kafka`). It works on a whiteboard but in production every short-lived PHP request opens broker connections and must know the cluster layout. It fails *The web app enqueues through a stateless gateway*.
+**The web app talks to Kafka directly** (`wrong/web-produces-to-kafka`). It works on a whiteboard, but in production every short-lived PHP request opens broker connections and must know the cluster layout. It fails *The web app enqueues through a stateless gateway*.
 
 **Rewrite the workers to read Kafka** (`wrong/workers-read-kafka`). Tempting because it deletes a component, but it is a big-bang migration of every job type, and the problem says the workers stay as they are. It fails *Only the relay moves jobs from Kafka to Redis*.
 
@@ -188,7 +188,7 @@ Lead with the failure story, because it justifies the whole design: "Accepting w
 
 Questions you are likely to get, with short answers:
 
-- *What if Kafka is down?* Then enqueues fail, but Kafka is a replicated cluster designed for exactly this role, and far less likely to be "full" than RAM. You can add a small local spool on the gateway as a last resort.
+- *What if Kafka is down?* Then enqueues fail. But Kafka is a replicated cluster built for exactly this role, and its disks are far less likely to be "full" than RAM. You can add a small local spool on the gateway as a last resort.
 - *Can a job run twice?* Yes. A relay can push to Redis and crash before committing, and the next relay pushes again. Make jobs idempotent, for example with a job id that the worker checks before doing a side effect.
 - *How do you keep ordering?* Kafka orders within a partition. Choose a partition key (a team or channel id) when order matters for that key; across keys, do not promise order.
 - *Why not leader-and-all-replicas acknowledgements?* Higher latency on every enqueue. It is a dial: Slack chose leader-only acks. Mention you would revisit it for jobs where loss is unacceptable, such as billing.
