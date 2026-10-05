@@ -119,7 +119,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     <div className="min-h-[100dvh] flex flex-col bg-paper">
       <Header
         base="../"
-        current="practice"
+        current={onRoadmap ? 'roadmap' : 'practice'}
         actions={
           <>
             <AccountMenu account={account} />

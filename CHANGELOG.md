@@ -18,6 +18,13 @@ deployed from `main` and ships with the same changes.
   the design does well and up to three next steps. An AI reviewer will come
   later behind the same interface.
 
+### Changed
+- Interview prep is easier to find: a section right under the landing page's
+  hero with the roadmap's stages, an "Interview prep" link in the header, and
+  a roadmap card with your progress at the top of the practice list. Pages no
+  longer scroll sideways on phones (the landing page's "How it works" cards,
+  the simulation docs' formulas and tables, the problem pages' big button).
+
 ## [0.8.0] - 2026-10-05
 
 ### Changed

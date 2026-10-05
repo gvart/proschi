@@ -8,7 +8,7 @@ const progress = (page: Page) => page.getByRole('region', { name: 'Your progress
 test.describe('interview prep roadmap', () => {
   test('opens one problem at a time and unlocks the next after a solve', async ({ page }) => {
     await page.goto('practice/');
-    await page.getByRole('link', { name: 'Interview prep roadmap' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Start interview prep' }).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(page).toHaveTitle('Interview prep roadmap · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();

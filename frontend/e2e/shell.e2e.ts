@@ -13,7 +13,7 @@ test.describe('shared header and footer', () => {
     for (const path of PAGES) {
       await page.goto(path);
       const nav = page.getByRole('navigation', { name: 'Main' });
-      await expect(nav.getByRole('link')).toHaveText([/Docs/, 'Practice', /GitHub/]);
+      await expect(nav.getByRole('link')).toHaveText([/Docs/, 'Practice', 'Interview prep', /GitHub/]);
       await expect(page.getByRole('link', { name: 'Proschi home' }).first()).toBeVisible();
       await expect(toggle(page)).toBeVisible();
       const footer = page.getByRole('contentinfo');
@@ -62,7 +62,7 @@ test.describe('shared header on a phone', () => {
     await expect(page.locator('.ps-header .ps-nav')).toBeHidden();
     await menu.locator('summary').click();
     const links = menu.getByRole('navigation', { name: 'Main' }).getByRole('link');
-    await expect(links).toHaveText([/Docs/, 'Practice', /GitHub/, 'Editor']);
+    await expect(links).toHaveText([/Docs/, 'Practice', 'Interview prep', /GitHub/, 'Editor']);
     await page.keyboard.press('Escape');
     await expect(links.first()).toBeHidden();
     await expect(menu.locator('summary')).toBeFocused();
