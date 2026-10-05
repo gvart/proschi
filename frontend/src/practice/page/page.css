@@ -23,7 +23,25 @@
 }
 
 .problem-page__cta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
   margin: 28px 0 0;
+}
+
+/* The lesson under the statement (lesson.md), and a guide's article. */
+.problem-page__lesson {
+  margin-top: 56px;
+  padding-top: 28px;
+  border-top: var(--bw-3) solid rgb(var(--c-ink));
+}
+
+.problem-page__lesson > .kicker {
+  margin: 0 0 8px;
+}
+
+.problem-page .doc {
+  max-width: none;
 }
 
 .problem-page__more {
@@ -63,4 +81,13 @@
   clip: rect(0, 0, 0, 0);
   white-space: nowrap;
   border: 0;
+}
+
+/* Table column alignment from Markdown (`|:-:|`): classes, as the CSP allows no style attributes. */
+.problem-page :is(th, td).align-center {
+  text-align: center;
+}
+
+.problem-page :is(th, td).align-right {
+  text-align: right;
 }

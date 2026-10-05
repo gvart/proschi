@@ -21,6 +21,12 @@ describe('sitemap', () => {
     expect(new Set(urls).size).toBe(urls.length)
   })
 
+  it('lists the roadmap guides after the problems', () => {
+    const urls = sitemapUrls(site, ['url-shortener'], ['approach'])
+    expect(urls.slice(3, 5)).toEqual(['https://proschi.app/practice/url-shortener/', 'https://proschi.app/practice/approach/'])
+    expect(urls).toHaveLength(5 + site.pages.length)
+  })
+
   it('is a valid urlset', () => {
     const xml = sitemapXml(['https://proschi.app/'])
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www.sitemaps.org\/schemas\/sitemap\/0.9">/)

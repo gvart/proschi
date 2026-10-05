@@ -17,6 +17,18 @@ deployed from `main` and ships with the same changes.
   availability and cost against the requirements, failing tests, …), what
   the design does well and up to three next steps. An AI reviewer will come
   later behind the same interface.
+- Lessons in practice: each roadmap step is now "Learn → Challenge →
+  Review". A problem's optional `lesson.md` (docs/PRACTICE.md) explains the
+  concepts behind it in eight fixed sections; a problem opened from the
+  roadmap shows its lesson first with a table of contents and a "Start the
+  challenge" button, remembers once it was read, and keeps it a tab away. The
+  roadmap shows each step's reading time and opens with a "Read first"
+  guide, *How to approach a system design interview*
+  (`practice/#/roadmap/approach`, and `practice/approach/`). Lessons and the
+  guide need no sign-in, and are part of the static problem pages and the
+  sitemap. Statements and lessons understand tables, blockquotes and
+  highlighted ```` ```proschi ```` blocks, and `proschi problem check`
+  validates lessons.
 
 ### Changed
 - Interview prep is easier to find: a section right under the landing page's

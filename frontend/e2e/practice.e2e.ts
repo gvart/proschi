@@ -110,7 +110,7 @@ test.describe('practice on a phone', () => {
   test('shows the tabbed layout', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
-    await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
+    await expect(tabs.getByRole('tab')).toHaveText(['Lesson', 'Problem', 'Code', 'Diagram', 'Tests']);
     await expect(tabs.getByRole('tab', { name: 'Problem' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('button', { name: 'Show reference solution' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);

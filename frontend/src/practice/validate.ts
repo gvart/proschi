@@ -2,7 +2,8 @@ import { format } from '../dsl/format';
 import { parse } from '../dsl/parser';
 import type { Diagnostic } from '../dsl/types';
 import { defaultEngine, type Engine } from '../hld/engine';
-import { GIVEN, PROBLEM_MD, SOLUTION, STARTER, WRONG_DIR, expectFailLines } from './problemFiles';
+import { lessonIssues } from './lesson';
+import { GIVEN, LESSON_MD, PROBLEM_MD, SOLUTION, STARTER, WRONG_DIR, expectFailLines } from './problemFiles';
 import type { Problem } from './types';
 import { PROBLEM_FILE, parseSolution, runTests } from './workspace';
 
@@ -73,6 +74,9 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
     if (!problem.statement.includes(`**${name}**`)) add(PROBLEM_MD, `The statement must name the use case **${name}** in bold`);
     if (!problem.solution.includes(`usecase "${name}"`)) add(SOLUTION, `The solution must define usecase "${name}" from the traffic`);
   }
+
+  // lesson.md, when there is one: the required sections in order, links to the web only.
+  if (problem.lesson !== undefined) for (const issue of lessonIssues(problem.lesson)) add(LESSON_MD, issue.message, issue.line);
 
   // given.proschi: standalone, error-free, canonical.
   const importLine = problem.given.split('\n').findIndex((l) => /^\s*import /.test(l));
