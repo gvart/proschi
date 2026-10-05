@@ -1,5 +1,6 @@
 ---
 name: On-call runbook
+icon: book-open
 rarity: rare
 topic: availability
 learn: [rto-and-rpo, deep-health-checks]

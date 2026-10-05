@@ -1,5 +1,6 @@
 ---
 name: Hot-key replication
+icon: copy
 rarity: uncommon
 topic: caching
 learn: [hot-key-replicas, heavy-hitters-structure]

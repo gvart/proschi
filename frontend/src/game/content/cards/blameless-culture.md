@@ -1,5 +1,6 @@
 ---
 name: Blameless postmortems
+icon: handshake
 rarity: rare
 topic: availability
 learn: [error-budget]

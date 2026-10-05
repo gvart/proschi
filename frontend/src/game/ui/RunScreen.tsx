@@ -9,6 +9,8 @@ import { Game, GameError, type TickResult } from '../engine/run';
 import { LOADTEST_COST, ONCALL_COST, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
 import BoardView from './BoardView';
+import { IconTile } from './gameIcons';
+import { RARITY_TILE } from './visual';
 import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } from './layout';
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
@@ -444,7 +446,7 @@ export default function RunScreen(props: RunScreenProps) {
     <>
       {callout && !planning && (
         <div className="sf-stamp" role="alert">
-          <BreachCard breach={callout} />
+          <BreachCard breach={callout} during={last?.events.map((id) => events.get(id)).filter((d) => d !== undefined)} />
         </div>
       )}
       {message && planning && (
@@ -508,7 +510,8 @@ export default function RunScreen(props: RunScreenProps) {
         {s.hand.map((id) => {
           const c = content.cards.find((x) => x.id === id);
           return (
-            <li key={id} className="rounded border-bw-1 border-ink/40 bg-surface px-1.5 py-0.5 text-xs text-ink" title={c?.text}>
+            <li key={id} className="inline-flex items-center gap-1 rounded border-bw-1 border-ink/40 bg-surface py-0.5 pl-0.5 pr-1.5 text-xs text-ink" title={c?.text}>
+              {c && <IconTile name={c.icon} tone={RARITY_TILE[c.rarity]} size="sm" />}
               {c?.name ?? id}
             </li>
           );

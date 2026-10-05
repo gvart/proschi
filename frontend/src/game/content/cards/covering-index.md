@@ -1,5 +1,6 @@
 ---
 name: Covering index
+icon: list-ordered
 rarity: common
 topic: databases
 learn: [covering-index, composite-index-prefix]

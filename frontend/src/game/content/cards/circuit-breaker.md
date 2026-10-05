@@ -1,5 +1,6 @@
 ---
 name: Circuit breaker
+icon: unplug
 rarity: uncommon
 topic: resilience
 learn: [circuit-breaker, timeouts-on-every-call]

@@ -1,5 +1,6 @@
 ---
 name: Hire an SRE
+icon: user-plus
 rarity: uncommon
 topic: availability
 learn: [error-budget, safe-deploys]

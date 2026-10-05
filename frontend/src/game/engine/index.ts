@@ -4,6 +4,7 @@
  */
 export * from './types';
 export * from './rules';
+export { GAME_ICONS, isIconName, type IconName } from './icons';
 export { Game, GameError, mergeRequirements, parseRequirements, type Breach, type BreachKind, type EventInstance, type FlowTick, type Forecast, type NodeTick, type Outcome, type RunState, type TickResult, type UseCaseTick, type WaveSummary } from './run';
 export { boardProblems, canWire, cloneBoard, laneOf, nextId, roleOf, type NodeRole } from './board';
 export { compile, USERS, WAN, type Compiled } from './compile';

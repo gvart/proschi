@@ -1,5 +1,6 @@
 ---
 name: Request coalescing
+icon: merge
 rarity: uncommon
 topic: caching
 learn: [cache-stampede, early-recomputation]

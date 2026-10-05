@@ -1,5 +1,6 @@
 ---
 title: Slow provider
+icon: hourglass
 category: incident
 topic: resilience
 learn: [timeouts-on-every-call, queue-load-levelling, beat-your-dependency]

@@ -1,5 +1,6 @@
 ---
 name: CDN contract
+icon: file-signature
 rarity: common
 topic: networking
 learn: [egress-bill, cdn-cache-control]

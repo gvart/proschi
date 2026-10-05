@@ -1,5 +1,6 @@
 ---
 title: Database primary dies
+icon: database-zap
 category: incident
 topic: replication
 learn: [failover-timeout, async-failover-loss]

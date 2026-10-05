@@ -1,5 +1,6 @@
 ---
 name: Load testing rig
+icon: gauge
 rarity: rare
 topic: estimation
 learn: [littles-law-concurrency, servers-for-peak-load]

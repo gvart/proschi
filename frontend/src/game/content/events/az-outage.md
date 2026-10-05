@@ -1,5 +1,6 @@
 ---
 title: Availability zone outage
+icon: cloud-off
 category: incident
 topic: availability
 learn: [surviving-a-zone, correlated-failures]

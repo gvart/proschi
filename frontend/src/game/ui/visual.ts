@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import type { NodeRole } from '../engine/board';
 import type { Breach, WaveSummary } from '../engine/run';
+import type { CardDef, EventDef } from '../engine/types';
 
 /** How the board and the panels show things: icons, heat colours, money and rates. */
 
@@ -83,3 +84,16 @@ const SHORT: Record<string, string> = {
 
 /** A name that fits a phone's node: "LB", "SQL", or the first word of a provider ("Payment"). */
 export const shortName = (name: string): string => SHORT[name] ?? name.split(' ')[0];
+
+/** Tile colours: cards by rarity, events by category, perks in one colour. */
+export const RARITY_TILE: Record<CardDef['rarity'], string> = {
+  common: 'bg-paper text-ink',
+  uncommon: 'bg-pop-blue/40 text-ink',
+  rare: 'bg-pop-lilac text-on-accent',
+  legendary: 'bg-pop-yellow text-on-accent',
+};
+export const CATEGORY_TILE: Record<EventDef['category'], string> = {
+  incident: 'bg-fail/15 text-fail',
+  spike: 'bg-pop-pink/30 text-ink',
+};
+export const PERK_TILE = 'bg-pop-blue/20 text-ink';
