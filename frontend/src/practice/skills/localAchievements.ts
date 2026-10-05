@@ -17,6 +17,8 @@ import { isSafeKey } from '../../playground/sanitize';
 import { loadJson, saveJson } from '../../services/storage';
 import { ACHIEVEMENTS } from '../achievementList';
 import { localActivity, localGoal } from '../activity';
+import { localChallengeStats } from '../challenge/store';
+import { challengeDay } from '../../learn/challenge';
 import { loadProgress, type Progress } from '../progress';
 import { ROADMAP, roadmapFor } from '../roadmap';
 import { CARDS_LOG_KEY, readReviews } from '../review/store';
@@ -88,6 +90,8 @@ export function localAchievements(now: number, progress: Progress = loadProgress
     // The daily streak as the streak widget counts it: this browser's reviews and solve days, its goal, freezes included.
     longestStreak: longestStreak(localActivity(), localDay(new Date(now * 1000)), localGoal()),
     solvedProblems,
+    // The daily challenge's results kept in this browser, by UTC day.
+    challenges: localChallengeStats(challengeDay(new Date(now * 1000))),
   });
   const earned = loadEarned();
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, context, earned, now);

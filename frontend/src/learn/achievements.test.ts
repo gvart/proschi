@@ -32,7 +32,7 @@ const problems: ProblemInfo[] = [
 ];
 const context: AchievementContext = { problems, stages: [{ id: 'one', problems: ['a', 'b', 'gone'] }] };
 
-const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {} };
+const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 } };
 const snap = (over: Partial<StatsSnapshot>): StatsSnapshot => ({ ...empty, ...over });
 const solved = (...ids: string[]) => ids.map((id) => ({ id, firstRun: false, underReference: false }));
 
@@ -56,6 +56,9 @@ describe('rules', () => {
     // Only the stage's problems this catalog has.
     [{ kind: 'stage', stage: 'one' }, snap({ solved: solved('a') }), 1, 2],
     [{ kind: 'stage', stage: 'nope' }, snap({ solved: solved('a') }), 0, 1],
+    [{ kind: 'challenges', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 1, 1],
+    [{ kind: 'challenge-perfect', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 0, 1],
+    [{ kind: 'challenge-streak', min: 7 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 2, 7],
   ])('%j on a snapshot is %d of %d', (rule, s, current, target) => {
     expect(ruleProgress(rule, s, context)).toEqual({ current, target });
   });

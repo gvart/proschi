@@ -62,15 +62,15 @@ export function formatNumber(value: number): string {
   return value.toLocaleString('en-US', { maximumSignificantDigits: Math.min(21, Math.max(3, String(Math.round(value)).length)) });
 }
 
-/** FNV-1a: a 32-bit hash of a string, to seed the shuffle. */
-function hash(text: string): number {
+/** FNV-1a: a 32-bit hash of a string, to seed a shuffle (optionOrder, the daily challenge's pick). */
+export function hashText(text: string): number {
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) h = Math.imul(h ^ text.charCodeAt(i), 0x01000193);
   return h >>> 0;
 }
 
-/** mulberry32: a small seeded generator of numbers in [0, 1). */
-function random(seed: number): () => number {
+/** mulberry32: a small seeded generator of numbers in [0, 1); the same seed gives the same numbers on every platform. */
+export function seededRandom(seed: number): () => number {
   let a = seed;
   return () => {
     a = (a + 0x6d2b79f5) >>> 0;
@@ -89,7 +89,7 @@ function random(seed: number): () => number {
  */
 export function optionOrder(card: Pick<ChoiceCard, 'id' | 'options'>, round = 0): number[] {
   const order = card.options.map((_, i) => i);
-  const next = random(hash(`${card.id}#${round}`));
+  const next = seededRandom(hashText(`${card.id}#${round}`));
   for (let i = order.length - 1; i > 0; i--) {
     const j = Math.floor(next() * (i + 1));
     [order[i], order[j]] = [order[j], order[i]];

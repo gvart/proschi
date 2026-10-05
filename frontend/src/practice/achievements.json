@@ -38,5 +38,9 @@
 
   { "id": "stage-foundations", "title": "Foundations laid", "description": "Finish the roadmap's Foundations stage.", "icon": "map", "tier": "bronze", "rule": { "kind": "stage", "stage": "foundations" } },
   { "id": "stage-consistency", "title": "Exactly once", "description": "Finish the roadmap's Consistency and contention stage.", "icon": "map", "tier": "silver", "rule": { "kind": "stage", "stage": "consistency" } },
-  { "id": "stage-scale", "title": "At scale", "description": "Finish the roadmap's last stage: geo, media and hot spots.", "icon": "map", "tier": "gold", "rule": { "kind": "stage", "stage": "scale" } }
+  { "id": "stage-scale", "title": "At scale", "description": "Finish the roadmap's last stage: geo, media and hot spots.", "icon": "map", "tier": "gold", "rule": { "kind": "stage", "stage": "scale" } },
+
+  { "id": "challenge-first", "title": "Challenger", "description": "Complete your first daily challenge.", "icon": "zap", "rule": { "kind": "challenges", "min": 1 } },
+  { "id": "challenge-perfect", "title": "Flawless", "description": "Answer all five cards of a daily challenge right.", "icon": "star", "tier": "silver", "rule": { "kind": "challenge-perfect", "min": 1 } },
+  { "id": "challenge-streak-7", "title": "Daily devotee", "description": "Complete the daily challenge 7 days in a row.", "icon": "flame", "tier": "gold", "rule": { "kind": "challenge-streak", "min": 7 } }
 ]

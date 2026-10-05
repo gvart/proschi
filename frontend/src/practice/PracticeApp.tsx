@@ -30,6 +30,8 @@ const ProblemRoute = lazy(() => import('./ProblemRoute'));
 const GuideRoute = lazy(() => import('./GuideRoute'));
 // Daily review, with every card (virtual:practice-cards).
 const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
+// The daily challenge, with every card too.
+const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
 // The skill map and badges, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
 
@@ -43,8 +45,9 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
- * `#/review` daily review (`#/review/<topic>` one topic of it), and
- * `#/progress` the skill map and badges; hash routes work under any sub-path.
+ * `#/review` daily review (`#/review/<topic>` one topic of it), `#/challenge`
+ * the daily challenge, and `#/progress` the skill map and badges; hash routes
+ * work under any sub-path.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -113,9 +116,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
+  const onChallenge = route === 'challenge';
   const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
   const problemId = fromRoadmap ? (target?.id ?? '') : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
-  const problem = problemId && !onRoadmap && !guide && !onReview && !onProgress ? problems.find((p) => p.id === problemId) : undefined;
+  const problem = problemId && !onRoadmap && !guide && !onReview && !onProgress && !onChallenge ? problems.find((p) => p.id === problemId) : undefined;
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
@@ -130,8 +134,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
-    // The review and progress pages name themselves.
-    if (onReview || onProgress) return;
+    // The review, challenge and progress pages name themselves.
+    if (onReview || onProgress || onChallenge) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -139,7 +143,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview, onProgress]);
+  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge]);
 
   if (problem) {
     return (
@@ -181,12 +185,16 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && !onRoadmap && !guide && !onReview && !onProgress && (
+        {route && !onRoadmap && !guide && !onReview && !onProgress && !onChallenge && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
         {onProgress ? (
           <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
             <ProgressRoute account={account} achievements={achievements} />
+          </Suspense>
+        ) : onChallenge ? (
+          <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>
+            <ChallengeRoute account={account} activity={activity} />
           </Suspense>
         ) : onReview ? (
           <Suspense fallback={<PaneLoading label="Loading your cards…" />}>

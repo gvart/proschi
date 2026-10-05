@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import RoadmapCard from './RoadmapCard';
 import ReviewCard from './ReviewCard';
+import ChallengeCard from './ChallengeCard';
 import ContributeCard from './ContributeCard';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
@@ -57,6 +58,7 @@ export default function ProblemList({ problems, progress, stats, streak, summary
 
       <RoadmapCard problems={problems} progress={progress} />
       <ReviewCard>{streak}</ReviewCard>
+      <ChallengeCard />
       {summary}
 
       <ProblemFilters query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} tags={tags} companies={companies} />
