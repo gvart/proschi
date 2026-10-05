@@ -17,7 +17,8 @@ import {
 } from 'lucide-react';
 import type { NodeRole } from '../engine/board';
 import type { Breach, WaveSummary } from '../engine/run';
-import type { CardDef, EventDef } from '../engine/types';
+import type { CardDef, EventDef, GameMode, TicketKind, TicketSender } from '../engine/types';
+import type { IconName } from '../engine/icons';
 
 /** How the board and the panels show things: icons, heat colours, money and rates. */
 
@@ -88,3 +89,35 @@ export const CATEGORY_TILE: Record<EventDef['category'], string> = {
   spike: 'bg-pop-pink/30 text-ink',
 };
 export const PERK_TILE = 'bg-pop-blue/20 text-ink';
+
+/** Each ticket kind's icon, so an inbox reads at a glance. */
+export const TICKET_ICON: Record<TicketKind, IconName> = {
+  feature: 'lightbulb',
+  scale: 'maximize-2',
+  compliance: 'scale',
+  mobile: 'smartphone',
+  region: 'earth',
+  'api-version': 'git-branch',
+  schema: 'database-backup',
+  'data-move': 'arrow-right-left',
+  deprecation: 'archive',
+  security: 'shield-check',
+  cost: 'receipt',
+  incident: 'siren',
+  reliability: 'life-buoy',
+  analytics: 'bar-chart-3',
+  performance: 'zap',
+};
+
+export const SENDER_LABEL: Record<TicketSender, string> = {
+  pm: 'Product',
+  cto: 'CTO',
+  customer: 'Customer',
+  legal: 'Legal',
+  finance: 'Finance',
+  sre: 'SRE',
+  marketing: 'Marketing',
+};
+
+export const MODE_ICON: Record<GameMode, IconName> = { scale: 'activity', startup: 'rocket', incident: 'siren', legacy: 'building-2', cost: 'scissors' };
+export const MODE_LABEL: Record<GameMode, string> = { scale: 'Scale or Fail', startup: 'Chaotic Startup', incident: 'On-call', legacy: 'Legacy rescue', cost: 'Cost crunch' };

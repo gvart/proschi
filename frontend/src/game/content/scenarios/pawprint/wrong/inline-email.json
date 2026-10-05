@@ -1,0 +1,176 @@
+{
+  "seed": "reference",
+  "plays": [
+    {},
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "db": {
+          "replicas": 2
+        }
+      },
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 8
+        },
+        "lb": {
+          "replicas": 2
+        },
+        "cache": {
+          "replicas": 2
+        }
+      }
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ]
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      }
+    },
+    {
+      "set": {
+        "db": {
+          "replicas": 3
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 11
+        }
+      }
+    },
+    {
+      "migrate": [
+        {
+          "id": "pets",
+          "to": "next"
+        }
+      ],
+      "sunset": [
+        "book"
+      ],
+      "add": [
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 8,
+    "shows": [
+      "latency"
+    ]
+  },
+  "note": "Sends confirmation emails while the owner waits: bookings are only as fast as the email provider, and its slow day breaks them."
+}

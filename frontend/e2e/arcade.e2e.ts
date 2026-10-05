@@ -112,3 +112,32 @@ test.describe('on a phone', () => {
     expect(await sideways()).toBeLessThanOrEqual(0);
   });
 });
+
+test('Chaotic Startup: tickets instead of a draft, and a migration one phase a wave', async ({ page }) => {
+  await page.goto('practice/#/arcade');
+  const card = page.getByRole('listitem').filter({ hasText: 'Pawprint' });
+  await expect(card).toContainText('Chaotic Startup');
+  await card.getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('article', { name: 'Ticket: Bookings MVP' })).toContainText('Priya');
+  // A board that lasts a few waves, written as code.
+  await page.getByRole('tab', { name: 'Code' }).click();
+  await page.locator('.cm-content').click();
+  await page.keyboard.press('ControlOrMeta+a');
+  await page.keyboard.insertText(
+    'users "Users" [Actor]\nmail "Email provider" [Email Service]\nlb "Load Balancer" [Load Balancer] x2\napi "App Server" [Service] x6\ndb "SQL Database" [Database] x2\nusers -> lb\nlb -> api\napi -> db\napi -> mail\n',
+  );
+  await page.getByRole('tab', { name: 'Board' }).click();
+  await expect(page.getByRole('group', { name: 'Your architecture' }).getByRole('button', { name: /^App Server, 6 replicas/ })).toBeVisible();
+  for (let wave = 1; wave <= 3; wave++) {
+    await page.getByRole('button', { name: `Deploy wave ${wave}` }).click();
+    await page.getByRole('button', { name: 'Skip' }).click();
+    await page.getByRole('dialog', { name: new RegExp(`Wave ${wave}`) }).getByRole('button', { name: 'Continue' }).click();
+    // No card draft in the design-first modes: straight to the next ticket.
+    await expect(page.getByRole('dialog', { name: 'Pick a tech card' })).toBeHidden();
+  }
+  await expect(page.getByRole('article', { name: /Ticket: Multi-pet bookings/ })).toBeVisible();
+  const changes = page.getByRole('region', { name: 'Changes in flight' });
+  await changes.getByRole('button', { name: 'Next: Expand' }).click();
+  await expect(changes.getByRole('list', { name: /Expand$/ })).toBeVisible();
+  await expect(changes.getByRole('button', { name: 'Roll back' })).toBeDisabled();
+});

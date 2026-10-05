@@ -1,0 +1,398 @@
+{
+  "start": {
+    "cash": 4000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        {
+          "id": "users",
+          "component": "users",
+          "replicas": 1
+        },
+        {
+          "id": "mail",
+          "component": "mail",
+          "replicas": 1
+        },
+        {
+          "id": "api",
+          "component": "app",
+          "replicas": 1
+        },
+        {
+          "id": "db",
+          "component": "sql",
+          "replicas": 1
+        }
+      ],
+      "edges": [
+        [
+          "users",
+          "api"
+        ],
+        [
+          "api",
+          "db"
+        ],
+        [
+          "api",
+          "mail"
+        ]
+      ]
+    }
+  },
+  "grants": [
+    "cache",
+    "queue",
+    "worker"
+  ],
+  "externals": [
+    {
+      "id": "mail",
+      "name": "Email provider",
+      "tech": "Email Service",
+      "rps": 3000,
+      "latencyMs": 250
+    }
+  ],
+  "useCases": {
+    "search": {
+      "name": "Search sitters",
+      "method": "GET",
+      "path": "/sitters?near=10115",
+      "status": 200,
+      "value": 300,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Sitter",
+          "x": 2
+        }
+      ],
+      "cache": 0.85,
+      "edge": 0.5
+    },
+    "book": {
+      "name": "Book a sitter",
+      "method": "POST",
+      "path": "/v1/bookings",
+      "status": 201,
+      "value": 4000,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Sitter"
+        },
+        {
+          "op": "write",
+          "to": "db",
+          "entity": "Booking"
+        },
+        {
+          "op": "call",
+          "to": "mail",
+          "async": true
+        }
+      ],
+      "legacy": {
+        "upkeep": 400,
+        "replacedBy": "book-v2"
+      }
+    },
+    "book-v2": {
+      "name": "Book for several pets",
+      "method": "POST",
+      "path": "/v2/bookings",
+      "status": 201,
+      "value": 5000,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Sitter"
+        },
+        {
+          "op": "write",
+          "to": "db",
+          "entity": "Booking"
+        },
+        {
+          "op": "write",
+          "to": "db",
+          "entity": "BookingPet",
+          "x": 2
+        },
+        {
+          "op": "call",
+          "to": "mail",
+          "async": true
+        }
+      ]
+    },
+    "bookings": {
+      "name": "My bookings",
+      "method": "GET",
+      "path": "/me/bookings",
+      "status": 200,
+      "value": 400,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Booking"
+        }
+      ],
+      "cache": 0.5
+    }
+  },
+  "migrations": [
+    {
+      "id": "pets",
+      "name": "the multi-pet migration",
+      "entity": "Booking",
+      "store": "db",
+      "needs": [
+        "book-v2"
+      ],
+      "writers": [
+        "book",
+        "book-v2"
+      ],
+      "oldReaders": [
+        "book"
+      ],
+      "backfillRps": 900
+    }
+  ],
+  "waves": [
+    {
+      "ticket": {
+        "id": "mvp",
+        "from": "pm",
+        "kind": "feature",
+        "title": "Bookings MVP"
+      },
+      "traffic": {
+        "search": 150,
+        "book": 15
+      },
+      "curve": "day",
+      "requirements": [
+        "p99 \"Book a sitter\" < 1200ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "slow-search",
+        "from": "customer",
+        "kind": "performance",
+        "title": "Search is slow at lunchtime"
+      },
+      "traffic": {
+        "search": 700,
+        "book": 25
+      },
+      "curve": "double-peak",
+      "requirements": [
+        "p99 \"Search sitters\" < 200ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "mobile",
+        "from": "cto",
+        "kind": "mobile",
+        "title": "The mobile app ships Monday"
+      },
+      "traffic": {
+        "search": 1300,
+        "book": 40,
+        "bookings": 200
+      },
+      "curve": "spike",
+      "requirements": [
+        "availability \"Book a sitter\" >= 99.5%"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "multi-pet",
+        "from": "pm",
+        "kind": "schema",
+        "title": "Multi-pet bookings, live in three waves"
+      },
+      "traffic": {
+        "search": 1800,
+        "book": 55,
+        "bookings": 300
+      },
+      "curve": "day"
+    },
+    {
+      "ticket": {
+        "id": "newsletter",
+        "from": "marketing",
+        "kind": "scale",
+        "title": "The newsletter goes to 400 000 people"
+      },
+      "traffic": {
+        "search": 2400,
+        "book": 70,
+        "bookings": 400
+      },
+      "curve": "spike"
+    },
+    {
+      "ticket": {
+        "id": "confirmations",
+        "from": "legal",
+        "kind": "compliance",
+        "title": "Every booking gets a confirmation email"
+      },
+      "traffic": {
+        "search": 3000,
+        "book": 80,
+        "bookings": 500
+      },
+      "curve": "day",
+      "requirements": [
+        "p99 \"Book a sitter\" < 400ms"
+      ],
+      "freshness": [
+        {
+          "useCase": "book",
+          "maxMinutes": 15
+        }
+      ]
+    },
+    {
+      "ticket": {
+        "id": "v2-launch",
+        "from": "pm",
+        "kind": "api-version",
+        "title": "API v2 is live: several pets per booking"
+      },
+      "traffic": {
+        "search": 3800,
+        "book": 50,
+        "book-v2": 60,
+        "bookings": 600
+      },
+      "curve": "day",
+      "requirements": [
+        "p99 \"Book for several pets\" < 400ms"
+      ],
+      "freshness": [
+        {
+          "useCase": "book-v2",
+          "maxMinutes": 15
+        }
+      ],
+      "events": [
+        "slow-email"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "sla",
+        "from": "customer",
+        "kind": "reliability",
+        "title": "A kennel chain wants a 99.9% SLA"
+      },
+      "traffic": {
+        "search": 4800,
+        "book": 30,
+        "book-v2": 110,
+        "bookings": 800
+      },
+      "curve": "double-peak",
+      "requirements": [
+        "availability \"Book for several pets\" >= 99.9%",
+        "survive any node failure"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "growth",
+        "from": "cto",
+        "kind": "scale",
+        "title": "Search doubled in a month"
+      },
+      "traffic": {
+        "search": 7000,
+        "book": 15,
+        "book-v2": 160,
+        "bookings": 1100
+      },
+      "curve": "day",
+      "requirements": [
+        "p99 \"Search sitters\" < 120ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "two-apis",
+        "from": "finance",
+        "kind": "deprecation",
+        "title": "We pay for two booking APIs"
+      },
+      "traffic": {
+        "search": 8500,
+        "book": 4,
+        "book-v2": 200,
+        "bookings": 1300
+      },
+      "curve": "day"
+    },
+    {
+      "ticket": {
+        "id": "europe",
+        "from": "cto",
+        "kind": "region",
+        "title": "Owners in Europe"
+      },
+      "traffic": {
+        "search": 10000,
+        "book": 0,
+        "book-v2": 240,
+        "bookings": 1500
+      },
+      "curve": "double-peak",
+      "global": 0.3,
+      "requirements": [
+        "p99 \"Search sitters\" < 300ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "cleanup",
+        "from": "cto",
+        "kind": "schema",
+        "title": "Drop the old pet_id column"
+      },
+      "traffic": {
+        "search": 12000,
+        "book": 0,
+        "book-v2": 280,
+        "bookings": 1800
+      },
+      "curve": "ramp",
+      "events": [
+        "db-failover"
+      ]
+    }
+  ],
+  "eventPool": [
+    {
+      "id": "noisy-neighbor",
+      "weight": 3
+    },
+    {
+      "id": "viral-spike",
+      "weight": 2
+    }
+  ],
+  "contracts": []
+}

@@ -10,6 +10,14 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Chaotic Startup**, a design-first Arcade mode, and its first scenario,
+  **Pawprint**: a pet-sitter startup where a ticket lands every wave (a
+  feature, a customer complaint, a lawyer, a launch). Ship booking API v2 next
+  to v1 and sunset v1 only once its clients are gone; change the schema by
+  expand and contract, one phase a wave (expand, dual-write, backfill,
+  cutover, contract), with rollback, or all at once and watch writes lock.
+  No card draft: the design is the game. Two review cards join the deck:
+  expand-and-contract migrations and online backfills.
 - **Scale or Fail on the editor's canvas.** The Arcade's board is drawn with
   the editor's nodes, icons and connections, with the simulation overlay
   (heat, stacked replicas, load bars, request particles); drag from a node's

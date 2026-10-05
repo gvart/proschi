@@ -192,6 +192,57 @@ export interface UseCaseDef {
   strong?: boolean;
   /** Not required: contracts and extras; its failure costs less Trust. */
   optional?: boolean;
+  /**
+   * An old API version that clients still call: once the version that
+   * replaces it is live, it costs `upkeep` cash a wave until you sunset it,
+   * and sunsetting it while it still has traffic breaks those clients.
+   */
+  legacy?: { upkeep: number; replacedBy: string };
+}
+
+/** How a scenario plays (docs/GAME.md). `scale` is Scale or Fail; the others are design-first, with tickets and no card draft. */
+export const GAME_MODES = ['scale', 'startup', 'incident', 'legacy', 'cost'] as const;
+export type GameMode = (typeof GAME_MODES)[number];
+
+export const TICKET_SENDERS = ['pm', 'cto', 'customer', 'legal', 'finance', 'sre', 'marketing'] as const;
+export type TicketSender = (typeof TICKET_SENDERS)[number];
+export const TICKET_KINDS = ['feature', 'scale', 'compliance', 'mobile', 'region', 'api-version', 'schema', 'data-move', 'deprecation', 'security', 'cost', 'incident', 'reliability', 'analytics', 'performance'] as const;
+export type TicketKind = (typeof TICKET_KINDS)[number];
+
+/** What lands in the inbox at the start of a wave: who asks for what; the text is `## Ticket: <id>` in scenario.md. */
+export interface TicketDef {
+  id: string;
+  from: TicketSender;
+  kind: TicketKind;
+  title: string;
+}
+
+/**
+ * A schema change done as expand and contract, one phase per wave: `expand`
+ * (new columns, nullable), `dual-write` (writers write both shapes),
+ * `backfill` (a background job rewrites the old rows), `cutover` (reads use
+ * the new shape: the use cases that need it can be served) and `contract`
+ * (the old shape is dropped). A `big-bang` jumps straight to the end and
+ * locks the store's writes for two ticks.
+ */
+export const MIGRATION_PHASES = ['none', 'expand', 'dual-write', 'backfill', 'cutover', 'contract'] as const;
+export type MigrationPhase = (typeof MIGRATION_PHASES)[number];
+
+export interface MigrationDef {
+  id: string;
+  name: string;
+  /** The table or entity, for messages: "Booking". */
+  entity: string;
+  /** The store role it changes (`db`). */
+  store: string;
+  /** Use cases that cannot be served until the cutover: they need the new shape. */
+  needs: string[];
+  /** Use cases that write the entity: from dual-write until the contract, their writes go to both shapes. */
+  writers: string[];
+  /** Use cases that read the old shape: once it is dropped, they break unless sunset. */
+  oldReaders: string[];
+  /** Writes a second of the backfill job while it runs (one wave). */
+  backfillRps: number;
 }
 
 /** A traffic shape over a wave's 8 ticks. */
@@ -213,6 +264,8 @@ export interface Freshness {
 
 export interface WaveDef {
   name?: string;
+  /** The ticket of this wave (design-first modes). */
+  ticket?: TicketDef;
   boss?: boolean;
   /** Base rps per use case key; the curve multiplies it. */
   traffic: Record<string, number>;
@@ -282,6 +335,9 @@ export interface ScenarioDef {
   unlock?: { scenario: string; wave: number };
   /** Components this scenario lends for its runs, unlocked or not: the ones its lesson is about. */
   grants: string[];
+  /** How it plays; `scale` when absent. */
+  mode: GameMode;
+  migrations: MigrationDef[];
 }
 
 export interface GameContent {
@@ -347,6 +403,10 @@ export type Action =
   | { t: 'reroll' }
   /** Take one of the offered contracts (index), or none. */
   | { t: 'contract'; pick: number | null }
+  /** Planning: move a migration one phase on, back, or all the way at once. */
+  | { t: 'migrate'; id: string; to: 'next' | 'rollback' | 'big-bang' }
+  /** Planning: stop serving a legacy use case (an old API version). */
+  | { t: 'sunset'; useCase: string }
   /** After the last wave: keep going (Endless) or bank the score. */
   | { t: 'endless' }
   | { t: 'retire' };

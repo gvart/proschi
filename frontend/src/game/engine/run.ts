@@ -45,7 +45,12 @@ import {
 } from './rules';
 import {
   CURVES,
+  MIGRATION_PHASES,
   type Action,
+  type MigrationDef,
+  type MigrationPhase,
+  type TicketDef,
+  type UseCaseDef,
   type Board,
   type CardDef,
   type ComponentDef,
@@ -74,7 +79,7 @@ export class GameError extends Error {
   }
 }
 
-export type BreachKind = 'latency' | 'availability' | 'cost' | 'durability' | 'resilience' | 'drop' | 'unroutable' | 'freshness' | 'consistency';
+export type BreachKind = 'latency' | 'availability' | 'cost' | 'durability' | 'resilience' | 'drop' | 'unroutable' | 'freshness' | 'consistency' | 'compat' | 'migration';
 
 export interface Breach {
   kind: BreachKind;
@@ -208,6 +213,12 @@ export interface RunState {
   outcome?: Outcome;
   /** Every action applied, in order: with the setup, the whole run. */
   log: Action[];
+  /** Migrations by id (absent: not started). */
+  migrations: Record<string, MigrationState>;
+  /** Legacy use cases no longer served. */
+  sunset: string[];
+  /** Migrations done in one go this wave: the store's writes lock for two ticks. */
+  bigBang: string[];
 }
 
 /** What the forecast panel shows before planning. */
@@ -226,6 +237,8 @@ export interface Forecast {
   events: { id: string; title: string; telegraph: string; from?: number; duration: number }[];
   global: number;
   contract: boolean;
+  /** The wave's ticket, with its text. */
+  ticket?: TicketDef & { text: string };
 }
 
 const LOC: SourceLoc = { line: 0, col: 0, length: 0 };
@@ -297,7 +310,19 @@ const BREACH_LEARN: Record<BreachKind, string[]> = {
   unroutable: [],
   freshness: ['backlog-drain-time', 'workers-needed'],
   consistency: ['when-eventual-is-fine', 'read-your-writes'],
+  compat: ['breaking-change', 'evolving-mobile-apis'],
+  migration: ['expand-contract-migration', 'online-backfill'],
 };
+
+/** How far each migration is, and the wave of its last step. */
+export interface MigrationState {
+  phase: MigrationPhase;
+  wave: number;
+}
+
+const phaseIndex = (p: MigrationPhase) => MIGRATION_PHASES.indexOf(p);
+/** The background job's use case key while a migration backfills. */
+export const backfillKey = (id: string) => `backfill_${id}`;
 export const LEARN_IDS: readonly string[] = [...new Set(Object.values(BREACH_LEARN).flat())];
 
 export class Game {
@@ -308,6 +333,7 @@ export class Game {
   private readonly index: Index;
   private readonly rules: ReturnType<typeof ascensionRules>;
   private compiled = new Map<string, Compiled>();
+  private effectiveCache?: { key: string; value: ReturnType<Game['effective']> };
 
   constructor(content: GameContent, setup: RunSetup) {
     this.content = content;
@@ -352,6 +378,9 @@ export class Game {
       endless: false,
       cleared: false,
       log: [],
+      migrations: {},
+      sunset: [],
+      bigBang: [],
     };
     if (perks.some((p) => p.def.effect === 'starter-card')) {
       const commons = this.pool().filter((c) => c.rarity === 'common');
@@ -414,6 +443,7 @@ export class Game {
       }),
       global: this.state.global,
       contract: !!w.contract && this.state.wave < this.scenario.waves.length - 1,
+      ...(w.ticket ? { ticket: { ...w.ticket, text: this.scenario.sections[`Ticket: ${w.ticket.id}`] ?? '' } } : {}),
     };
   }
 
@@ -530,6 +560,37 @@ export class Game {
         this.nextWave();
         break;
       }
+      case 'migrate': {
+        this.expect('plan');
+        const def = this.scenario.migrations.find((m) => m.id === action.id);
+        if (!def) throw new GameError(`No migration '${action.id}'`);
+        const st = this.migrationOf(def.id);
+        if (st.wave === s.wave) throw new GameError(`${def.name}: one step a wave; each step is its own deploy`);
+        const at = phaseIndex(st.phase);
+        const done = phaseIndex('contract');
+        if (action.to === 'next') {
+          if (at >= done) throw new GameError(`${def.name} is done`);
+          s.migrations[def.id] = { phase: MIGRATION_PHASES[at + 1], wave: s.wave };
+        } else if (action.to === 'rollback') {
+          if (at <= 0) throw new GameError(`${def.name} has not started`);
+          if (at >= done) throw new GameError(`${def.name} dropped the old shape; there is nothing to roll back to`);
+          s.migrations[def.id] = { phase: MIGRATION_PHASES[at - 1], wave: s.wave };
+        } else if (action.to === 'big-bang') {
+          if (at >= phaseIndex('cutover')) throw new GameError(`${def.name} is already cut over`);
+          s.migrations[def.id] = { phase: 'contract', wave: s.wave };
+          s.bigBang.push(def.id);
+        } else throw new GameError('A migration moves next, rolls back, or goes all at once');
+        break;
+      }
+      case 'sunset': {
+        this.expect('plan');
+        const uc = this.scenario.useCases[action.useCase];
+        if (!uc?.legacy || !s.useCases.includes(action.useCase)) throw new GameError(`"${uc?.name ?? action.useCase}" is not a legacy version you serve`);
+        if (!s.useCases.includes(uc.legacy.replacedBy)) throw new GameError(`"${uc.name}" has no replacement yet: ship ${this.scenario.useCases[uc.legacy.replacedBy]?.name ?? uc.legacy.replacedBy} first`);
+        if (s.sunset.includes(action.useCase)) throw new GameError(`"${uc.name}" is already sunset`);
+        s.sunset.push(action.useCase);
+        break;
+      }
       case 'endless': {
         this.expect('cleared');
         s.endless = true;
@@ -583,6 +644,7 @@ export class Game {
     s.tick = 0;
     s.ticks = [];
     s.rerolls = 0;
+    s.bigBang = [];
     for (const key of Object.keys(w.traffic)) if (!s.useCases.includes(key)) s.useCases.push(key);
     const lines = (w.requirements ?? []).map((l) => this.harder(l));
     s.requirements = mergeRequirements(s.requirements, lines);
@@ -654,6 +716,7 @@ export class Game {
       s.phase = 'cleared';
       return;
     }
+    if (this.scenario.mode !== 'scale') return this.afterDraft();
     s.phase = 'draft';
     s.offer = this.drawOffer();
     if (s.offer.length === 0) this.afterDraft();
@@ -740,6 +803,74 @@ export class Game {
     s.score += s.trust * END_TRUST_POINTS + Math.max(0, Math.floor(s.cash / END_CASH_DIVISOR));
   }
 
+  // ---- Migrations and versions ----
+
+  /** A migration's state; one not started is at `none`. */
+  migrationOf(id: string): MigrationState {
+    return this.state.migrations[id] ?? { phase: 'none', wave: -1 };
+  }
+
+  /** The migration a use case waits for: it needs the new shape, and the cutover has not happened. */
+  blockedBy(key: string): MigrationDef | undefined {
+    return this.scenario.migrations.find((m) => m.needs.includes(key) && phaseIndex(this.migrationOf(m.id).phase) < phaseIndex('cutover'));
+  }
+
+  /** A use case still served that reads the old shape of a migration that dropped it. */
+  private readsDroppedShape(key: string): boolean {
+    return !this.state.sunset.includes(key) && this.scenario.migrations.some((m) => m.oldReaders.includes(key) && this.migrationOf(m.id).phase === 'contract');
+  }
+
+  /** Cash a wave for the legacy versions still served. */
+  upkeep(): number {
+    const s = this.state;
+    return s.useCases.reduce((a, k) => {
+      const legacy = this.scenario.useCases[k]?.legacy;
+      return a + (legacy && !s.sunset.includes(k) && s.useCases.includes(legacy.replacedBy) ? legacy.upkeep : 0);
+    }, 0);
+  }
+
+  /**
+   * The use cases as this wave runs them: writers write both shapes from the
+   * dual-write to the contract, a backfill adds its background job, and only
+   * the use cases neither sunset nor waiting for a migration are served.
+   */
+  private effective(): { useCases: Record<string, UseCaseDef>; served: string[]; jobs: { key: string; rps: number }[] } {
+    const s = this.state;
+    const key = JSON.stringify([s.useCases, s.migrations, s.sunset]);
+    if (this.effectiveCache?.key === key) return this.effectiveCache.value;
+    const useCases: Record<string, UseCaseDef> = { ...this.scenario.useCases };
+    const jobs: { key: string; rps: number }[] = [];
+    for (const m of this.scenario.migrations) {
+      const at = phaseIndex(this.migrationOf(m.id).phase);
+      if (at >= phaseIndex('dual-write') && at < phaseIndex('contract')) {
+        for (const w of m.writers) {
+          const uc = useCases[w];
+          if (uc) useCases[w] = { ...uc, steps: uc.steps.map((st) => (st.op === 'write' && st.to === m.store ? { ...st, x: (st.x ?? 1) * 2 } : st)) };
+        }
+      }
+      if (at === phaseIndex('backfill')) {
+        const job = backfillKey(m.id);
+        useCases[job] = {
+          name: `Backfill ${m.entity}`,
+          method: 'POST',
+          path: `/jobs/backfill-${m.id}`,
+          status: 200,
+          value: 0,
+          steps: [
+            { op: 'read', to: m.store, entity: m.entity },
+            { op: 'write', to: m.store, entity: m.entity },
+          ],
+          optional: true,
+        };
+        jobs.push({ key: job, rps: m.backfillRps });
+      }
+    }
+    const served = [...s.useCases.filter((k) => !s.sunset.includes(k) && !this.blockedBy(k)), ...jobs.map((j) => j.key)];
+    const value = { useCases, served, jobs };
+    this.effectiveCache = { key, value };
+    return value;
+  }
+
   // ---- Cards and contracts ----
 
   /** Cards that can be drafted: unlocked, not held. */
@@ -820,10 +951,11 @@ export class Game {
 
   private compileFor(board: Board, situation: Situation): Compiled {
     const mods = this.mods;
-    const key = `${boardKey(board)}|${JSON.stringify(situation)}|${this.state.useCases.join(',')}|${mods.payload}|${mods.writeShare}|${mods.presigned}`;
+    const eff = this.effective();
+    const key = `${boardKey(board)}|${JSON.stringify(situation)}|${this.effectiveCache!.key}|${mods.payload}|${mods.writeShare}|${mods.presigned}`;
     let c = this.compiled.get(key);
     if (!c) {
-      c = compile(this.scenario, board, this.index.components, this.state.useCases, situation, { payload: mods.payload, writeShare: mods.writeShare, presigned: mods.presigned });
+      c = compile({ ...this.scenario, useCases: eff.useCases }, board, this.index.components, eff.served, situation, { payload: mods.payload, writeShare: mods.writeShare, presigned: mods.presigned });
       if (this.compiled.size > 64) this.compiled.clear();
       this.compiled.set(key, c);
     }
@@ -909,6 +1041,10 @@ export class Game {
       else if (left !== n.replicas) replicas.set(n.id, left);
     }
 
+    // A migration done in one go: the ALTER holds the table's write lock for the first two ticks.
+    const bigBang = s.bigBang.map((id) => this.scenario.migrations.find((m) => m.id === id)!).filter(Boolean);
+    if (tick < 2) for (const m of bigBang) for (const n of board.nodes) if (comp(n.id)?.role === m.store) writesDown.add(n.id);
+
     const situation: Situation = {
       down: [...down].sort(),
       writesDown: [...writesDown].sort(),
@@ -928,11 +1064,13 @@ export class Game {
       return m;
     };
     for (const key of s.useCases) rps.set(key, this.baseRps(key) * multiplier * surgeOf(key) * (targetMult.get(key) ?? 1));
+    const eff = this.effective();
+    for (const j of eff.jobs) rps.set(j.key, j.rps);
     const legit = [...rps.values()].reduce((a, b) => a + b, 0);
     const traffic: TrafficEntry[] = [];
     const sharesOf = new Map<string, { name: string; share: number }[]>();
     for (const [key, route] of Object.entries(compiled.routes)) {
-      const uc = this.scenario.useCases[key];
+      const uc = eff.useCases[key];
       const hit = clamp((uc.cache ?? 0) + mods.cacheHit - this.rules.hitPenalty, 0, 0.98) * coldFactor;
       const edge = route.cdn ? clamp((uc.edge ?? 0) + mods.edgeHit - this.rules.hitPenalty, 0, 0.98) : 0;
       const far = s.global;
@@ -1035,9 +1173,43 @@ export class Game {
     const breaches: Breach[] = [];
     const learnOf = (id: string) => comp(id)?.learn ?? [];
     for (const key of s.useCases) {
-      const uc = this.scenario.useCases[key];
+      const uc = eff.useCases[key];
       const r = rps.get(key) ?? 0;
       const route = compiled.routes[key];
+      if (s.sunset.includes(key)) {
+        useCases.push({ key, name: uc.name, rps: r, served: 0, p99: 0, availability: 0, routed: false });
+        if (r > 0) {
+          breaches.push({
+            kind: 'compat',
+            message: `${Math.round(r)} rps of clients still call "${uc.name}", which you sunset: they get 410 Gone.`,
+            hint: 'Sunset a version only once its traffic is gone: watch it fall, and give its clients a deadline first.',
+            useCase: key,
+            trust: TRUST_PENALTY.compat,
+            learn: BREACH_LEARN.compat,
+          });
+        }
+        continue;
+      }
+      if (this.readsDroppedShape(key)) {
+        // Its requests error out; the compat breach below says why.
+        useCases.push({ key, name: uc.name, rps: r, served: 0, p99: 0, availability: 0, routed: false });
+        continue;
+      }
+      const waiting = this.blockedBy(key);
+      if (waiting) {
+        useCases.push({ key, name: uc.name, rps: r, served: 0, p99: 0, availability: 0, routed: false });
+        if (r > 0) {
+          breaches.push({
+            kind: 'unroutable',
+            message: `"${uc.name}" needs the new ${waiting.entity} shape: take ${waiting.name} to its cutover first.`,
+            hint: 'Expand, dual-write, backfill, then cut over: one step a wave.',
+            useCase: key,
+            trust: uc.optional ? TRUST_PENALTY.unroutableOptional : TRUST_PENALTY.unroutable,
+            learn: BREACH_LEARN.migration,
+          });
+        }
+        continue;
+      }
       if (!route) {
         useCases.push({ key, name: uc.name, rps: r, served: 0, p99: 0, availability: 0, routed: false });
         if (r > 0) {
@@ -1078,6 +1250,32 @@ export class Game {
             learn: BREACH_LEARN.consistency,
           });
         }
+      }
+    }
+    if (tick === 0) {
+      for (const m of bigBang) {
+        breaches.push({
+          kind: 'migration',
+          message: `${m.name} ran as one big change: ${m.entity} writes were locked for two ticks while it rewrote every row.`,
+          hint: 'Expand and contract: add the new shape, write both, backfill in batches, cut over, and only then drop the old one.',
+          trust: TRUST_PENALTY.migration,
+          learn: BREACH_LEARN.migration,
+        });
+      }
+    }
+    for (const m of this.scenario.migrations) {
+      if (this.migrationOf(m.id).phase !== 'contract') continue;
+      for (const key of m.oldReaders) {
+        const r = rps.get(key) ?? 0;
+        if (!s.useCases.includes(key) || s.sunset.includes(key) || r <= 0) continue;
+        breaches.push({
+          kind: 'compat',
+          message: `"${eff.useCases[key].name}" still reads the old ${m.entity} shape, which ${m.name} dropped: ${Math.round(r)} rps of errors.`,
+          hint: 'Contract only once nothing reads the old shape: move or sunset its last readers first.',
+          useCase: key,
+          trust: TRUST_PENALTY.compat,
+          learn: BREACH_LEARN.compat,
+        });
       }
     }
     const total = useCases.reduce((a, u) => a + u.rps, 0);
@@ -1136,9 +1334,9 @@ export class Game {
     for (const b of breaches) if (!b.learn.length) b.learn = active.flatMap((a) => a.def.learn);
     for (const a of active) for (const b of breaches) for (const l of a.def.learn) if (!b.learn.includes(l)) b.learn.push(l);
 
-    const revenue = useCases.reduce((a, u) => a + (this.scenario.useCases[u.key].value * u.rps * u.served) / 1000, 0) * s.revenueMultiplier / TICKS;
-    const cost = analysis.totalCostUsd / TICKS;
-    const severe = breaches.some((b) => ['availability', 'drop', 'unroutable', 'consistency', 'durability', 'resilience'].includes(b.kind));
+    const revenue = useCases.reduce((a, u) => a + (eff.useCases[u.key].value * u.rps * u.served) / 1000, 0) * s.revenueMultiplier / TICKS;
+    const cost = analysis.totalCostUsd / TICKS + this.upkeep() / TICKS;
+    const severe = breaches.some((b) => ['availability', 'drop', 'unroutable', 'consistency', 'durability', 'resilience', 'compat', 'migration'].includes(b.kind));
     const quality = breaches.length === 0 ? 1 : severe ? 0.4 : 0.6;
     const streak = breaches.length === 0 ? s.streak + 1 : 0;
     const streakMult = Math.min(STREAK_MAX, 1 + mods.streakStep * streak);

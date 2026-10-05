@@ -1,0 +1,168 @@
+{
+  "seed": "reference",
+  "plays": [
+    {},
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "db": {
+          "replicas": 2
+        }
+      },
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ]
+    },
+    {},
+    {
+      "set": {
+        "api": {
+          "replicas": 8
+        },
+        "lb": {
+          "replicas": 2
+        },
+        "cache": {
+          "replicas": 2
+        }
+      }
+    },
+    {
+      "add": [
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "mail"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      }
+    },
+    {
+      "set": {
+        "db": {
+          "replicas": 3
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 11
+        }
+      }
+    },
+    {
+      "add": [
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 8,
+    "shows": [
+      "unroutable"
+    ]
+  },
+  "note": "Never migrates the schema: API v2 has nowhere to write its pets, so every v2 booking fails from launch."
+}

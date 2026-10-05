@@ -9,7 +9,7 @@ import { maxAscension, scenarioOpen, shop, type ShopItem } from '../engine/meta'
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
 import type { Action, RunSetup } from '../engine/types';
 import { IconTile } from './gameIcons';
-import { PERK_TILE, RARITY_TILE } from './visual';
+import { MODE_ICON, MODE_LABEL, PERK_TILE, RARITY_TILE } from './visual';
 import { Modal } from './Panels';
 import RunScreen from './RunScreen';
 import { loadRun, loadSettings, saveRun, saveSettings, type Settings } from './store';
@@ -195,8 +195,9 @@ export default function ArcadeRoute({ account }: { account: Account }) {
             const reached = meta.scenarios[s.id];
             return (
               <li key={s.id} className={`rounded-brutal border-bw-2 border-ink p-4 ${open.open ? 'bg-surface shadow-brutal-sm' : 'bg-paper border-dashed'}`}>
-                <p className={eyebrow}>
-                  {s.difficulty} · {s.tags.slice(0, 3).join(', ')}
+                <p className={`${eyebrow} flex items-center gap-1.5`}>
+                  <IconTile name={MODE_ICON[s.mode]} tone={s.mode === 'scale' ? 'bg-paper' : 'bg-pop-yellow text-on-accent'} size="sm" />
+                  {MODE_LABEL[s.mode]} · {s.difficulty} · {s.tags.slice(0, 2).join(', ')}
                 </p>
                 <h4 className="mt-1 font-display text-xl font-extrabold flex items-center gap-1.5">
                   {!open.open && <Lock size={16} aria-hidden="true" />}
@@ -205,7 +206,7 @@ export default function ArcadeRoute({ account }: { account: Account }) {
                 <p className="mt-1 text-sm">{s.summary}</p>
                 {reached && (
                   <p className="mt-2 text-xs text-muted">
-                    Best wave {reached.reached}/12{reached.cleared >= 0 ? ` · cleared up to ascension ${reached.cleared}` : ''}
+                    Best wave {reached.reached}/{s.waves.length}{reached.cleared >= 0 ? ` · cleared up to ascension ${reached.cleared}` : ''}
                   </p>
                 )}
                 {open.open ? (
