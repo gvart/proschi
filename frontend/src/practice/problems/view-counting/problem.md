@@ -3,6 +3,7 @@ title: View Counting
 summary: "Reddit's view counter: Kafka, a filter, and HyperLogLogs in Redis."
 difficulty: medium
 tags: [streaming, queues, probabilistic, caching, real-world]
+company: Reddit
 hints:
   - The page view must not wait for counting. What is the least the request can do and still never lose the view?
   - "Two consumers read Kafka. The first (Nazar at Reddit) checks recent views in Redis and passes the views that count to a second topic; the second (Abacus) adds them to a per-post HyperLogLog in Redis with PFADD."

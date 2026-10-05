@@ -3,6 +3,7 @@ title: Always-writable Shopping Cart
 summary: "Amazon's Dynamo cart: never reject an add; merge versions on read."
 difficulty: easy
 tags: [availability, consistency, replication, real-world]
+company: Amazon
 hints:
   - "Which is worse for a shop: a cart that is briefly out of date, or an \"Add to cart\" that fails? The store you pick decides which one you get."
   - "A relational database has one primary per shard: while it fails over, writes wait. A leaderless store (DynamoDB, Cassandra) takes a write on any replica. With three replicas of everything, availability is far above 99.999%."

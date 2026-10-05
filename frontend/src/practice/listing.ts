@@ -8,7 +8,7 @@ import type { Problem } from './types';
  * so neither bundles the statements or the designs.
  */
 
-export type ProblemListing = Pick<Problem, 'id' | 'title' | 'summary' | 'difficulty' | 'tags' | 'order'>;
+export type ProblemListing = Pick<Problem, 'id' | 'title' | 'summary' | 'difficulty' | 'tags' | 'company' | 'order'>;
 
 /** problem.md files keyed `<id>/problem.md`, in list order; folders that cannot be read are left out (the practice tests report them). */
 export function listingsFrom(files: Record<string, string>): ProblemListing[] {
@@ -16,8 +16,8 @@ export function listingsFrom(files: Record<string, string>): ProblemListing[] {
   for (const [path, text] of Object.entries(files)) {
     const id = path.split('/')[0];
     try {
-      const { title, summary, difficulty, tags, order } = readProblemMd(id, text);
-      out.push({ id, title, summary, difficulty, tags, ...(order !== undefined ? { order } : {}) });
+      const { title, summary, difficulty, tags, company, order } = readProblemMd(id, text);
+      out.push({ id, title, summary, difficulty, tags, ...(company !== undefined ? { company } : {}), ...(order !== undefined ? { order } : {}) });
     } catch {
       // Reported by the practice tests.
     }

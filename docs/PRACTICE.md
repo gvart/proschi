@@ -52,6 +52,7 @@ Design a service that turns long URLs into short codes …
 | `summary` | yes | One line, shown on the landing page |
 | `difficulty` | yes | `easy`, `medium` or `hard` |
 | `tags` | yes | A list of strings, used by the list's tag filter |
+| `company` | no | A string, e.g. `Twitter`: the company whose published system the problem is based on, cited in a `## Based on` section of the statement. It says where the design comes from, never that the company asks the problem in its interviews. The list shows it as a badge and filters by it (only companies some problem names); the problem page and its static page show the badge |
 | `order` | no | A number: the position within its difficulty |
 | `hints` | yes | A list, from a nudge to nearly the answer; the page reveals them one at a time |
 | `version` | no | A whole number, 1 when absent. Bump it when a change to the given, the tests or the requirements can change whether a design solves the problem, or its cost or p99: proschi.app's global stats then count only solves of the new version, and a signed-in user's next run starts their stats for the problem over |

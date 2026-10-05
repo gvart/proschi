@@ -6,6 +6,7 @@ import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
+import { reviewDesign } from './review';
 import { getLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
@@ -28,6 +29,7 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   GET    /api/stats                       every problem's summary
  *   GET    /api/stats/<id>                  one problem's distributions (+ yours, signed in)
  *   GET    /api/leaderboard
+ *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -54,6 +56,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'stats')) return getStats(ctx);
   if (is('GET', 'api', 'stats', '*')) return getProblemStats(request, ctx, parts[2]);
   if (is('GET', 'api', 'leaderboard')) return getLeaderboard(ctx);
+  if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
   return errorResponse(404, 'Not found');
 }
 

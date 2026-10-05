@@ -23,12 +23,21 @@ deployed from `main` and ships with the same changes.
   solved, with your progress, the current stage and a Continue button; a
   problem opened from the roadmap links to the next one after a solve. The
   problem list stays open.
-- Two practice problems based on published systems: *Metrics Ingest*
-  (hard, Uber's M3: aggregate before storage, quorum writes to M3DB) and
-  *Trending Topics* (medium, Twitter's trends: count in the stream, rank
-  ahead of time, serve from a cache).
-- Two practice problems based on published systems: *Tiered CDN Cache*
-  (Cloudflare's Tiered Cache) and *Replicated Git Storage* (GitHub's Spokes).
+- Practice problems based on a published system name its company: an
+  optional `company` field in problem.md (docs/PRACTICE.md), set on Snowflake
+  IDs (Twitter), Shopping Cart (Amazon), Job Queue (Slack), View Counting
+  (Reddit) and Social Graph Cache (Meta). The problem list shows it as a
+  badge and filters by it, and the problem page and its static page show the
+  badge. It says where the design comes from, not that the company asks the
+  problem in interviews.
+- An "AI review" view next to the tests on the practice page, with a "Review
+  my design" button. It is a placeholder for now: it says the review is
+  coming soon and gives no feedback. The request it will send (the design,
+  its parsed model, test results, and cost, p99 and availability from the
+  simulation) and the review it expects are defined in
+  `frontend/src/review/`, and the Worker has a stub `POST /api/review` that
+  validates the request and answers 501 (backend/README.md). Builds with
+  `VITE_AI_REVIEW=true` call it.
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the
@@ -78,14 +87,13 @@ deployed from `main` and ships with the same changes.
   (Slack's Kafka in front of Redis, medium), View Counting (Reddit's
   HyperLogLog pipeline, medium) and Social Graph Cache (Facebook's TAO,
   hard). Their scale and limits come from the posts and papers where these
-  give numbers. Seventeen problems in all.
-- Practice problems Discord Messages (hard: Rust data services that coalesce
-  reads in front of a hot ScyllaDB partition) and Notion Sharding (medium:
-  Postgres sharded by workspace id behind PgBouncer), based on Discord's and
-  Notion's engineering posts.
-- Two more practice problems based on published systems: Push Gateway
-  (Netflix's Zuul Push, medium) and Flash Sale (Shopify's edge cache,
-  checkout throttle and inventory in the shop's database, hard).
+  give numbers.
+- Eight more problems based on published systems, each with its company:
+  Discord Messages (Discord, hard), Notion Sharding (Notion, medium), Tiered
+  CDN Cache (Cloudflare, medium), Replicated Git Storage (GitHub, medium),
+  Push Gateway (Netflix, medium), Flash Sale (Shopify, hard), Metrics Ingest
+  (Uber, hard) and Trending Topics (Twitter, medium). Twenty-five problems in
+  all.
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,

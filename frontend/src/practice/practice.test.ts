@@ -57,6 +57,19 @@ describe('problem catalog', () => {
     ]);
   });
 
+  it('names the company only of problems based on a published system', () => {
+    expect(Object.fromEntries(['snowflake-ids', 'shopping-cart', 'job-queue', 'view-counting', 'social-graph-cache'].map((id) => [id, findProblem(id)?.company]))).toEqual({
+      'snowflake-ids': 'Twitter',
+      'shopping-cart': 'Amazon',
+      'job-queue': 'Slack',
+      'view-counting': 'Reddit',
+      'social-graph-cache': 'Meta',
+    });
+    expect(findProblem('url-shortener')?.company).toBeUndefined();
+    // The company is where the design comes from, so the statement cites its sources.
+    for (const p of problems.filter((q) => q.company)) expect(p.statement, p.id).toMatch(/^## Based on$/m);
+  });
+
   // validate.ts is the definition `proschi problem check` uses too.
   it.each(problems.map((p) => [p.id, p] as const))('%s is a valid problem', (_id, p: Problem) => {
     expect(validateProblem(p, defaultEngine).violations).toEqual([]);

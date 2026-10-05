@@ -14,6 +14,32 @@ test.describe('practice', () => {
     await expect(page.getByText('0 of 25 solved')).toBeVisible();
   });
 
+  test('filters by the company whose published system a problem is based on', async ({ page }) => {
+    await page.goto('practice/');
+    const company = page.getByRole('combobox', { name: 'Company' });
+    await expect(company.getByRole('option', { name: 'Twitter' })).toHaveCount(1);
+    await company.selectOption('Twitter');
+    const links = problemList(page).getByRole('link');
+    await expect(links.filter({ hasText: 'Snowflake IDs' })).toHaveCount(1);
+    await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(0);
+    for (const link of await links.all()) await expect(link.locator('[data-company="Twitter"]')).toHaveCount(1);
+    await company.selectOption('');
+    await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(1);
+  });
+
+  test('the AI review is a placeholder that says it is coming soon', async ({ page }) => {
+    await page.goto('practice/#/snowflake-ids');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Snowflake IDs');
+    await expect(page.locator('header [data-company="Twitter"]')).toBeVisible();
+    await page.getByRole('button', { name: 'AI review' }).click();
+    await page.getByRole('button', { name: 'Review my design' }).click();
+    await expect(page.getByRole('status').filter({ hasText: 'AI review is coming soon.' })).toBeVisible();
+    // Running the tests brings them back into view.
+    await page.getByRole('button', { name: 'Run tests' }).click();
+    await expect(passedCount(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Review my design' })).toBeHidden();
+  });
+
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
     await page.goto('practice/url-shortener/');
     await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');

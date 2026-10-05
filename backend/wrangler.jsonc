@@ -39,7 +39,8 @@
     { "name": "AUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
     { "name": "PROFILE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
     { "name": "STATS_LIMITER", "namespace_id": "1004", "simple": { "limit": 120, "period": 60 } },
-    { "name": "IMPORT_LIMITER", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } }
+    { "name": "IMPORT_LIMITER", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } },
+    { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -68,7 +69,8 @@
         { "name": "AUTH_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } },
         { "name": "PROFILE_LIMITER", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
         { "name": "STATS_LIMITER", "namespace_id": "2004", "simple": { "limit": 120, "period": 60 } },
-        { "name": "IMPORT_LIMITER", "namespace_id": "2005", "simple": { "limit": 3, "period": 60 } }
+        { "name": "IMPORT_LIMITER", "namespace_id": "2005", "simple": { "limit": 3, "period": 60 } },
+        { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } }
       ]
     }
   }

@@ -9,7 +9,9 @@ import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
 import TestPanel from './TestPanel';
-import { DifficultyBadge, StatusIcon } from './Badges';
+import ReviewPanel from '../review/ReviewPanel';
+import { practiceReviewInput } from '../review/practice';
+import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { sourceOf, statusOf, withRun, withSource, type Progress } from './progress';
 import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
 import type { Problem } from './types';
@@ -127,6 +129,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           <span className="truncate">{problem.title}</span>
         </h1>
         <DifficultyBadge difficulty={problem.difficulty} />
+        {problem.company && (
+          <span className="hidden sm:inline-flex">
+            <CompanyBadge company={problem.company} />
+          </span>
+        )}
         <button onClick={reset} className={`ml-auto ${toolButton}`} title="Start over from the starter code">
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
@@ -189,6 +196,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               diagnostics={diagnostics}
               onRun={runNow}
               onSelect={goTo}
+              review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
               community={
                 run && !run.result.blocked && (community || serverNote) ? (
                   <>
@@ -222,6 +230,12 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
 
   return (
     <div className="px-4 py-4 space-y-5">
+      {/* The header shows it from sm up. */}
+      {problem.company && (
+        <p className="sm:hidden">
+          <CompanyBadge company={problem.company} />
+        </p>
+      )}
       <Markdown source={problem.statement} />
 
       <details className="rounded border-bw-1 border-ink bg-paper">
