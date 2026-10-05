@@ -1,6 +1,7 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
+import { mockProfile, PROFILE } from './profile';
 
 /**
  * Every page at phone width: nothing may stick out past the right edge, which
@@ -142,8 +143,8 @@ test.describe('no sideways scrolling on a phone', () => {
       }).flat();
       localStorage.setItem('proschi.cards', JSON.stringify(reviews));
     });
-    await visit(page, 'practice/');
-    await expect(page.getByRole('main').getByRole('group', { name: 'Daily streak' })).toContainText('14-day streak');
+    await visit(page, 'practice/#/roadmap');
+    await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('14-day streak');
     await visit(page, 'practice/#/review');
     await expect(page.getByRole('region', { name: 'Your week in review' })).toBeVisible();
     await expect(page.getByRole('radiogroup', { name: 'Daily goal' })).toBeVisible();
@@ -186,6 +187,24 @@ test.describe('no sideways scrolling on a phone', () => {
     await expectNoHorizontalOverflow(page, 'progress with a badge earned');
   });
 
+  test('interview prep hub: every tab, the streak on top', async ({ page }) => {
+    for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/roadmap/approach']) {
+      await visit(page, path);
+      await expect(page.getByRole('navigation', { name: 'Interview prep' })).toBeVisible();
+    }
+  });
+
+  test('account page and a public profile, with a badge open', async ({ page }) => {
+    await visit(page, 'practice/#/me');
+    await page.locator('[data-achievement="reviews-100"]').getByRole('button').click();
+    await expectNoHorizontalOverflow(page, '#/me with a badge open');
+    await mockProfile(page);
+    await visit(page, `practice/#/u/${PROFILE.id}`);
+    await expect(page.getByRole('note')).toContainText('This is a public profile');
+    await page.locator('[data-achievement="first-solve"]').getByRole('button').click();
+    await expectNoHorizontalOverflow(page, '#/u/<id> with a badge open');
+  });
+
   test('a problem, every tab', async ({ page }) => {
     await visit(page, 'practice/#/url-shortener');
     await eachTab(page, 'practice/#/url-shortener');
@@ -220,6 +239,16 @@ test.describe('no sideways scrolling on a phone', () => {
     );
     await visit(page, 'no-such-page/');
     await expect(page.getByRole('heading', { level: 1, name: 'This page does not exist.' })).toBeVisible();
+  });
+});
+
+test.describe('on the narrowest phone (320px)', () => {
+  test.use({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
+
+  test('interview prep hub, the account page and a public profile', async ({ page }) => {
+    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
+    await mockProfile(page);
+    await visit(page, `practice/#/u/${PROFILE.id}`);
   });
 });
 

@@ -111,9 +111,30 @@ Cloudflare's retention period.
 as how many solved a problem and how your design's runs, cost and p99 compare.
 Your display name and number of solved problems appear on the leaderboard,
 and your display name and daily challenge score on that day's challenge
-leaderboard, only if you opt in. Without it, your challenge score still
-counts toward the number of players and everyone's ranks, but your name is
-never shown.
+leaderboard, only if you opt in ("Show me on the leaderboard", in the account
+menu or on your profile page). Without it, your challenge score still counts
+toward the number of players and everyone's ranks, but your name is never
+shown.
+
+**Your public profile**: opting in also makes a public profile, linked from
+your name on either leaderboard, at an address with your user id. It shows
+exactly this, and nothing more:
+
+- your display name, and the month you joined;
+- the problems you solved (which ones and their difficulty, never your
+  designs);
+- your current and longest daily streak, in days;
+- your current and longest daily challenge streak, in days, and your best
+  daily challenge score;
+- your interview-ready score and your mastery of each topic, in whole
+  percent;
+- the badges you earned, with the day each was earned.
+
+Your designs, your daily goal, your card reviews and when you made them, how
+many cards you reviewed, your daily challenge answers, your test runs and
+their costs, your sign-in providers and your sessions are never on it. Turning the option off hides the profile at once:
+its address then answers "not found", the same as an address no user has, so
+nobody can tell whether you have an account.
 
 ## Your controls
 

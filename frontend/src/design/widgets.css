@@ -149,11 +149,17 @@
 .ps-tab:hover::after {
   transform: scaleX(0.3);
 }
-.ps-tab[aria-selected='true'] {
+.ps-tab[aria-selected='true'],
+.ps-tab[aria-current='page'] {
   color: rgb(var(--c-ink));
 }
-.ps-tab[aria-selected='true']::after {
+.ps-tab[aria-selected='true']::after,
+.ps-tab[aria-current='page']::after {
   transform: scaleX(1);
+}
+/* Tabs that are links (a hub's sections, each its own address). */
+a.ps-tab {
+  text-decoration: none;
 }
 .ps-tab:focus-visible {
   outline-offset: -3px;

@@ -1,9 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import RoadmapCard from './RoadmapCard';
-import ReviewCard from './ReviewCard';
-import ChallengeCard from './ChallengeCard';
 import ContributeCard from './ContributeCard';
+import { PrepBanner } from './prep/PrepHub';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
 import ProblemFilters from './ProblemFilters';
@@ -15,16 +13,12 @@ interface ProblemListProps {
   progress: Progress;
   /** Global solve rates, when the API is there. */
   stats?: StatsSummary;
-  /** In the daily review card: the streak, or the invitation to sign in for one. */
-  streak?: ReactNode;
-  /** Under the roadmap's and review's cards, e.g. the progress strip. */
-  summary?: ReactNode;
   /** After the list, e.g. the leaderboard. */
   children?: ReactNode;
 }
 
 /** Every problem with its difficulty, tags and status, filtered by those and by a search. */
-export default function ProblemList({ problems, progress, stats, streak, summary, children }: ProblemListProps) {
+export default function ProblemList({ problems, progress, stats, children }: ProblemListProps) {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const { difficulty, tag, company, status } = filters;
@@ -56,10 +50,7 @@ export default function ProblemList({ problems, progress, stats, streak, summary
         </p>
       </div>
 
-      <RoadmapCard problems={problems} progress={progress} />
-      <ReviewCard>{streak}</ReviewCard>
-      <ChallengeCard />
-      {summary}
+      <PrepBanner />
 
       <ProblemFilters query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} tags={tags} companies={companies} />
 

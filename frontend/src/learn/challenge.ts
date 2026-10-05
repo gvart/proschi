@@ -266,6 +266,24 @@ export function challengeStats(attempts: readonly { day: ChallengeDay; perfect: 
   };
 }
 
+/** A profile's challenge stats: the challenge streak (days) and the best score. */
+export interface ChallengeSummary {
+  current: number;
+  longest: number;
+  /** The best score of any day, 0 to MAX_SCORE. */
+  best: number;
+}
+
+/** A profile's challenge stats from each completed day's score, as of `today`; null before a first challenge. */
+export function challengeSummary(attempts: readonly { day: ChallengeDay; score: number }[], today: ChallengeDay): ChallengeSummary | null {
+  if (attempts.length === 0) return null;
+  const { current, longest } = challengeStreak(
+    attempts.map((a) => a.day),
+    today,
+  );
+  return { current, longest, best: Math.max(...attempts.map((a) => a.score)) };
+}
+
 /** "Proschi daily challenge 2026-10-06: 480/600 ✅✅❌✅✅ proschi.app/practice/#/challenge" */
 export function shareText(day: ChallengeDay, score: number, correct: readonly boolean[]): string {
   return `Proschi daily challenge ${day}: ${score}/${MAX_SCORE} ${correct.map((c) => (c ? '✅' : '❌')).join('')} ${CHALLENGE_LINK}`;

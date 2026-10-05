@@ -23,6 +23,8 @@ async function loadCards(request: APIRequestContext): Promise<Map<string, Bundle
   return new Map(bundle.cards.map((c) => [c.id, c]));
 }
 
+const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Interview prep' });
+
 const challengeCard = (page: Page, n: number) => page.getByRole('article', { name: `Challenge card ${n} of 5` });
 
 /** Answers the card on screen right or wrong, then moves on. */
@@ -70,9 +72,12 @@ test.describe('daily challenge', () => {
   test('play, score, share; only the first attempt counts and every answer is a review', async ({ page, context, request }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
     const cards = await loadCards(request);
+    // The problem list points to interview prep, whose Challenge tab it is.
     await page.goto('practice/');
-    await page.getByRole('main').getByRole('link', { name: 'Play today’s challenge' }).click();
+    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
     await expect(page).toHaveURL(/#\/challenge$/);
+    await expect(prepNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
     await expect(page).toHaveTitle('Daily challenge · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Daily challenge' })).toBeVisible();
     const intro = page.getByRole('region', { name: 'Today’s challenge' });
@@ -111,11 +116,11 @@ test.describe('daily challenge', () => {
     await expect(page.getByRole('button', { name: 'Start the challenge' })).toHaveCount(0);
 
     // Every answer counted as a review today.
-    await page.getByRole('main').getByRole('link', { name: 'Daily review' }).click();
+    await prepNav(page).getByRole('link', { name: 'Daily review' }).click();
     await expect(page).toHaveURL(/#\/review$/);
     const reviewed = page.getByRole('region', { name: 'Today' }).locator('dt', { hasText: /^Reviewed today$/ }).locator('xpath=following-sibling::dd[1]');
     await expect(reviewed).toHaveText('5');
-    await page.getByRole('main').getByRole('link', { name: 'Daily challenge' }).click();
+    await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
     await expect(page).toHaveURL(/#\/challenge$/);
   });
 

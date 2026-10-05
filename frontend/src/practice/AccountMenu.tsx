@@ -3,7 +3,7 @@ import Menu, { MenuItem } from '../components/Playground/Menu';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
-/** Sign in to sync progress and appear in the stats; signed in, the account's settings. Absent without an API. */
+/** Sign in to sync progress and appear in the stats; signed in, the account page (`#/me`) and the account's settings. Absent without an API. */
 export default function AccountMenu({ account }: { account: Account }) {
   const { state } = account;
   if (state.status === 'off' || state.status === 'loading') return null;
@@ -61,6 +61,15 @@ export default function AccountMenu({ account }: { account: Account }) {
             Signed in as <strong className="text-ink">{user.displayName}</strong>
             {user.providers?.length ? ` with ${user.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(', ')}` : ''}
           </p>
+          <MenuItem
+            onSelect={() => {
+              close();
+              window.location.hash = '#/me';
+            }}
+            icon={<UserRound size={14} />}
+          >
+            Your profile
+          </MenuItem>
           <MenuItem
             onSelect={() => void account.update({ publicProfile: !user.publicProfile })}
             icon={<Check size={14} className={user.publicProfile ? 'text-green-600 dark:text-green-400' : 'invisible'} />}

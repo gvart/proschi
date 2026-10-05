@@ -5,7 +5,7 @@ import type { Progress } from './progress';
 import { roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
-import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
+import { eyebrow, primaryButton } from '../components/Playground/ui';
 import type { Guide } from './guide/guides';
 
 const titleOf = (problems: ProblemListing[], id: string) => problems.find((p) => p.id === id)?.title ?? id;
@@ -28,7 +28,7 @@ interface RoadmapProps {
   locked?: { id: string; lock: StepLock };
 }
 
-/** The interview prep roadmap: stages of problems, each unlocked once every problem before it is solved. */
+/** The interview prep roadmap, the hub's first tab: stages of problems, each unlocked once every problem before it is solved. */
 export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked }: RoadmapProps) {
   const preview = access !== 'open';
   const state = roadmapState(stages, progress);
@@ -36,10 +36,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
   const current = stages[state.currentStage];
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
-      <a href="#/" className={`-ml-2.5 ${toolButton}`}>
-        All problems
-      </a>
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
       <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Interview prep roadmap</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         The problems in the order a system design interview builds on them, from foundations to large systems. Each one opens once you have solved

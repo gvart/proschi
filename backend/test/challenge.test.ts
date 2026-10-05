@@ -153,12 +153,15 @@ describe('daily challenge', () => {
 
     const response = await call(`/api/challenge/leaderboard?day=${today()}`);
     expect(response.status).toBe(200);
-    const board = (await response.json()) as { day: string; players: number; entries: { rank: number; displayName: string; score: number; correct: number }[] };
+    const board = (await response.json()) as { day: string; players: number; entries: { rank: number; id: string; displayName: string; score: number; correct: number }[] };
     expect(board).toMatchObject({ day: today(), players: 3 });
+    // Each entry carries the user's public id, for their profile.
     expect(board.entries).toEqual([
-      { rank: 2, displayName: 'Ada', score: 480, correct: 4 },
-      { rank: 3, displayName: 'Grace', score: 240, correct: 2 },
+      { rank: 2, id: second.id, displayName: 'Ada', score: 480, correct: 4 },
+      { rank: 3, id: third.id, displayName: 'Grace', score: 240, correct: 2 },
     ]);
+    expect(JSON.stringify(board)).not.toContain(best.id);
+    expect((await call(`/api/users/${board.entries[0].id}/profile`)).status).toBe(200);
     expect(JSON.stringify(board)).not.toContain('Hidden');
 
     const mine = (await (await call('/api/challenge/leaderboard', { token: best.token })).json()) as { you: { rank: number; score: number } };

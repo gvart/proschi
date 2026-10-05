@@ -55,10 +55,11 @@ test.describe('daily streak', () => {
   test('a session that reaches a milestone celebrates it, and the streak shows after it', async ({ page }) => {
     // A goal of 5 cards, met yesterday and the day before.
     await seed(page, { 'proschi.goal': 5, 'proschi.cards': seededReviews([-2, -1], 5) });
-    await page.goto('practice/');
-    await expect(page.getByRole('main').getByRole('group', { name: 'Daily streak' })).toContainText('2-day streak');
+    // The streak sits at the top of interview prep, on every tab.
+    await page.goto('practice/#/roadmap');
+    await expect(streak(page)).toContainText('2-day streak');
 
-    await page.getByRole('main').getByRole('link', { name: 'Start daily review' }).click();
+    await page.getByRole('navigation', { name: 'Interview prep' }).getByRole('link', { name: 'Daily review' }).click();
     await expect(streak(page)).toContainText('2-day streak');
     await expect(streak(page)).toContainText('0 of 5 cards today, or solve a problem');
     await expect(page.getByRole('radio', { name: '5 cards a day' })).toHaveAttribute('aria-checked', 'true');
@@ -146,7 +147,8 @@ test.describe('solve celebration', () => {
 
     // The solve meets today's goal.
     await page.getByRole('link', { name: /Problems/ }).click();
-    await expect(page.getByRole('main').getByRole('group', { name: 'Daily streak' })).toContainText('1-day streak');
+    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await expect(streak(page)).toContainText('1-day streak');
     // A second solve of the same problem is not a first one.
     await page.goto('practice/#/url-shortener');
     await page.getByRole('button', { name: 'Run tests' }).click();

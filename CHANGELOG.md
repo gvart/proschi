@@ -16,6 +16,26 @@ deployed from `main` and ships with the same changes.
   it", with a link to suggest an idea instead, and the footer links to the
   guide. New issue templates suggest a problem or a card without writing
   code.
+- Interview prep is a hub (`practice/#/roadmap`, "Interview prep" in the
+  header) with tabs for the roadmap, daily review, the daily challenge and
+  your progress, and your streak and today's goal at the top. The old
+  addresses (`#/review`, `#/review/<topic>`, `#/challenge`, `#/progress`,
+  `#/roadmap/<id>`) open inside it. The
+  Practice list is now just the problems, with one small link to interview
+  prep.
+- Your profile page (`practice/#/me`, "Your profile" in the account menu):
+  your streak, freezes and daily goal, your daily challenge streak and best
+  score, problems solved by difficulty, cards reviewed and mastered, the interview-ready score, the skill map, every
+  badge and the problems you solved, and the public profile setting. Badges
+  are a compact grid of small medals, here and on the progress page; tap one
+  for what it is and how far along you are.
+- Public profiles (`practice/#/u/<id>`), linked from the leaderboard and
+  the daily challenge's leaderboard, for users who opt in: name, month
+  joined, problems solved, streaks, the daily challenge streak and best
+  score, readiness, topic mastery and badges, never designs, review history
+  or challenge answers
+  (`GET /api/users/<id>/profile`; docs/PRIVACY.md lists exactly what is
+  shown).
 - 258 practice cards for daily review, from estimation and networking to
   consistency, streaming and probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
@@ -79,7 +99,7 @@ deployed from `main` and ships with the same changes.
   answer also counts as a review toward your daily goal, and a reload in the
   middle carries on at the next card. Three new badges:
   a first challenge, a perfect score and a 7-day challenge streak. Find it
-  on the practice list, the daily review page or in the footer.
+  as the Challenge tab of interview prep, or in the footer.
 - Sign-in for native apps, ready for a future mobile app: an app signs in
   with GitHub or Google in the system browser
   (`/auth/<provider>/start?client=app`, OAuth 2 with PKCE, back to an

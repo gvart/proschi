@@ -190,8 +190,8 @@ signed out there is no streak.
 
 ### Daily challenge
 
-The practice page's daily challenge (`practice/#/challenge`) is the same five
-cards for everyone each day. The day is the **UTC date**, so it starts at
+The practice page's daily challenge (`practice/#/challenge`, the Challenge
+tab of interview prep) is the same five cards for everyone each day. The day is the **UTC date**, so it starts at
 00:00 UTC everywhere. The rules are `frontend/src/learn/challenge.ts`, which
 the Worker runs too:
 
@@ -212,11 +212,13 @@ the Worker runs too:
   card was shown, once a day, and refuses answers whose times add up to more
   than the time since. Each answer is kept in the browser the moment it is
   given, so a reload carries on at the next card; a challenge left unfinished
-  at midnight is sent as it stands within 15 minutes, else dropped. The leaderboard lists the top 20
-  of those who chose to appear on the leaderboard; everyone else is counted
+  at midnight is sent as it stands within 15 minutes, else dropped. The
+  leaderboard lists the top 20 of those who chose to appear on the
+  leaderboard, each linked to their public profile; everyone else is counted
   but not named.
 - **The challenge streak**: days in a row with a completed challenge (UTC
-  days, no freezes), separate from the daily streak.
+  days, no freezes), separate from the daily streak. A public profile and the account
+  page show it, the longest one and the best score.
 - Every answer is also a review of its card, so it counts toward the daily
   goal and streak like any other.
 

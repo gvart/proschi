@@ -8,6 +8,7 @@ import {
   challengeRound,
   challengeStats,
   challengeStreak,
+  challengeSummary,
   describeAnswer,
   describeRightAnswer,
   gradeChallengeAnswer,
@@ -220,5 +221,17 @@ describe('the challenge streak', () => {
   it('feeds the badges', () => {
     const days = Array.from({ length: 7 }, (_, i) => ({ day: `2026-10-0${i + 1}`, perfect: i === 3 }));
     expect(challengeStats(days, '2026-10-07')).toEqual({ completed: 7, perfect: 1, longestStreak: 7 });
+  });
+
+  it('sums up a profile: the streak and the best score', () => {
+    expect(challengeSummary([], '2026-10-07')).toBeNull();
+    const attempts = [
+      { day: '2026-10-01', score: 480 },
+      { day: '2026-10-02', score: 590 },
+      { day: '2026-10-05', score: 120 },
+      { day: '2026-10-06', score: 300 },
+    ];
+    expect(challengeSummary(attempts, '2026-10-07')).toEqual({ current: 2, longest: 2, best: 590 });
+    expect(challengeSummary(attempts, '2026-10-09')).toEqual({ current: 0, longest: 2, best: 590 });
   });
 });

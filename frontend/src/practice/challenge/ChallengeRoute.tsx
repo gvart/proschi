@@ -299,7 +299,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
 
   if (setup.status === 'error') {
     return (
-      <main className="max-w-2xl mx-auto px-4 py-8 sm:py-14">
+      <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
         <Heading />
         <section aria-label="Today’s challenge" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
           <p role="alert" className="text-sm text-ink">
@@ -371,15 +371,8 @@ export default function ChallengeRoute({ account, activity }: { account: Account
   }
 
   return (
-    <main className="max-w-2xl mx-auto px-4 py-8 sm:py-14">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <a href="#/" className={`-ml-2.5 ${toolButton}`}>
-          All problems
-        </a>
-        <a href="#/review" className={toolButton}>
-          Daily review
-        </a>
-      </div>
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
+      {/* The interview prep hub's tabs lead to daily review and the rest. */}
       <Heading day={day} />
       {submitting ? (
         <PaneLoading label="Scoring your answers…" />
@@ -551,7 +544,7 @@ function ChallengeSession({
   if (!card) return null;
   const topic = deck.topics.find((t) => t.id === card.topic);
   return (
-    <main className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
       <div className="flex items-center gap-3">
         <button type="button" onClick={end} className={`-ml-2.5 ${toolButton}`} aria-describedby="challenge-end-hint">
           <X size={14} aria-hidden="true" />
@@ -817,17 +810,20 @@ function Leaderboard({ day, refresh }: { day: string; refresh: number }) {
         <p className="mt-2 text-sm text-muted">Nobody listed yet today.</p>
       ) : (
         <ol className="mt-3 divide-y divide-ink/15 rounded-lg border border-ink/15 bg-surface text-sm">
-          {board.entries.map((e, i) => (
-            <li key={`${e.rank}-${e.displayName}-${i}`} className="flex items-center gap-3 px-4 py-2">
-              <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
-              <span className="min-w-0 flex-1 truncate text-ink">{e.displayName}</span>
-              <span className="hidden tabular-nums text-ink/75 sm:inline">
-                <span aria-hidden="true">{'✅'.repeat(Math.min(e.correct, CHALLENGE_SIZE))}</span>
-                <span className="sr-only">
-                  {e.correct} of {CHALLENGE_SIZE} right
+          {board.entries.map((e) => (
+            <li key={e.id}>
+              <a
+                href={`#/u/${encodeURIComponent(e.id)}`}
+                aria-label={`${e.displayName}: rank ${e.rank}, ${e.score} points, ${e.correct} of ${CHALLENGE_SIZE} right. See their profile`}
+                className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+              >
+                <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
+                <span className="min-w-0 flex-1 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>
+                <span className="hidden tabular-nums text-ink/75 sm:inline" aria-hidden="true">
+                  {'✅'.repeat(Math.min(e.correct, CHALLENGE_SIZE))}
                 </span>
-              </span>
-              <span className="w-16 text-right font-semibold tabular-nums text-ink">{e.score}</span>
+                <span className="w-16 text-right font-semibold tabular-nums text-ink">{e.score}</span>
+              </a>
             </li>
           ))}
         </ol>

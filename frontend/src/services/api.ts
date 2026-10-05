@@ -57,6 +57,8 @@ export interface User {
   /** Cards a day the user aims for (GOAL_CHOICES in src/learn/streak.ts). */
   dailyGoal?: number;
   providers?: ProviderId[];
+  /** Unix seconds: when the account was made (GET /api/me). */
+  createdAt?: number;
 }
 
 /** A problem's progress as the server keeps it. */
@@ -125,7 +127,26 @@ export interface ProblemStats extends ProblemSummary {
 
 export interface Leaderboard {
   problems: number;
-  entries: { rank: number; displayName: string; solved: number; lastSolvedAt: number }[];
+  /** `id`: the user's public id, for their profile (`#/u/<id>`, GET /api/users/<id>/profile). */
+  entries: { rank: number; id: string; displayName: string; solved: number; lastSolvedAt: number }[];
+}
+
+/**
+ * GET /api/users/<id>/profile: what a user who opted in shows everyone
+ * (backend/src/profile.ts; docs/PRIVACY.md lists the same). Shares are 0 to 1
+ * in whole percent; times are Unix seconds at the start of a UTC day.
+ */
+export interface PublicProfile {
+  id: string;
+  displayName: string;
+  memberSince: number;
+  solved: { id: string; difficulty: 'easy' | 'medium' | 'hard' }[];
+  streak: { current: number; longest: number };
+  /** The daily challenge streak (days) and best score; null before a first challenge. */
+  challenge: { current: number; longest: number; best: number } | null;
+  readiness: number;
+  topics: { topic: string; mastery: number }[];
+  badges: { id: string; earnedAt: number }[];
 }
 
 /** GET /api/cards/state: the signed-in user's card states by card id, and with `?day=` that day's counts. */
@@ -181,6 +202,8 @@ export interface ChallengeToday {
   /** Signed in: when the first card was shown (POST /api/challenge/today/start), null before. */
   startedAt?: number | null;
   streak?: ChallengeStreakAnswer;
+  /** Signed in: the best score of any day, null before a first challenge. */
+  best?: number | null;
 }
 
 /** POST /api/challenge/today/attempt: the attempt kept and the challenge streak; a 409 (played already) carries them too. */
@@ -194,7 +217,8 @@ export interface ChallengeLeaderboard {
   day: string;
   players: number;
   maxScore: number;
-  entries: { rank: number; displayName: string; score: number; correct: number }[];
+  /** `id`: the user's public id, for their profile (`#/u/<id>`), as on the main leaderboard. */
+  entries: { rank: number; id: string; displayName: string; score: number; correct: number }[];
   you?: { rank: number; score: number; correct: number; players: number } | null;
 }
 

@@ -2,6 +2,7 @@ import {
   challengeDay,
   challengeEndsAt,
   challengeStreak,
+  challengeSummary,
   isPerfect,
   MAX_SCORE,
   pickChallenge,
@@ -11,6 +12,7 @@ import {
   type ChallengeCard,
   type ChallengeStats,
   type ChallengeStreak,
+  type ChallengeSummary,
 } from '../../frontend/src/learn/challenge';
 import { isDay } from '../../frontend/src/learn/review';
 import { addDays } from '../../frontend/src/learn/streak';
@@ -148,12 +150,21 @@ export async function loadChallengeStats(DB: D1Database, userId: string, t: numb
   return { completed: results.length, perfect: results.filter((r) => r.perfect === 1).length, longestStreak: streak.longest };
 }
 
+/** A public profile's challenge stats (GET /api/users/<id>/profile): the streak as of today (UTC) and the best score; null before a first challenge. */
+export async function loadChallengeSummary(DB: D1Database, userId: string, t: number): Promise<ChallengeSummary | null> {
+  const { results } = await DB.prepare('SELECT day, score FROM challenge_attempts WHERE user_id = ? AND submitted_at IS NOT NULL')
+    .bind(userId)
+    .all<{ day: string; score: number }>();
+  return challengeSummary(results, challengeDay(new Date(t * 1000)));
+}
+
 /**
  * GET /api/challenge/today: `{day, cardIds, endsAt, maxScore}`, the day's
  * cards in the order to show them (clients have the cards themselves) and
  * when the next challenge starts. Signed in, also `attempt` (null before
- * playing), `startedAt` (when the first card was shown, null before) and the
- * challenge `streak`.
+ * playing), `startedAt` (when the first card was shown, null before), the
+ * challenge `streak` and `best`, the best score of any day (null before a
+ * first challenge).
  */
 export async function getChallengeToday(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -162,12 +173,13 @@ export async function getChallengeToday(request: Request, ctx: Ctx): Promise<Res
   const day = challengeDay(new Date(now() * 1000));
   const base = { day, cardIds: challengeCards(day).map((c) => c.id), endsAt: challengeEndsAt(day), maxScore: MAX_SCORE };
   if (!user) return json(base, 200, NO_STORE);
-  const [attempt, streak, started] = await Promise.all([
+  const [attempt, streak, started, best] = await Promise.all([
     loadAttempt(DB, user.id, day),
     loadStreak(DB, user.id, day),
     DB.prepare('SELECT started_at FROM challenge_attempts WHERE user_id = ? AND day = ?').bind(user.id, day).first<{ started_at: number }>(),
+    DB.prepare('SELECT MAX(score) AS best FROM challenge_attempts WHERE user_id = ? AND submitted_at IS NOT NULL').bind(user.id).first<{ best: number | null }>(),
   ]);
-  return json({ ...base, attempt, startedAt: started?.started_at ?? null, streak }, 200, NO_STORE);
+  return json({ ...base, attempt, startedAt: started?.started_at ?? null, streak, best: best?.best ?? null }, 200, NO_STORE);
 }
 
 /**
@@ -244,6 +256,7 @@ export async function postChallengeAttempt(request: Request, ctx: Ctx): Promise<
 }
 
 interface BoardRow {
+  id: string;
   name: string;
   score: number;
   correct: number;
@@ -252,10 +265,11 @@ interface BoardRow {
 
 /**
  * GET /api/challenge/leaderboard?day=YYYY-MM-DD (default today, UTC):
- * `{day, players, maxScore, entries: [{rank, displayName, score, correct}]}`,
+ * `{day, players, maxScore, entries: [{rank, id, displayName, score, correct}]}`,
  * the day's best LEADERBOARD_SIZE among users who chose to appear on the
  * leaderboard, ranked among everyone who played (so ranks can skip the
- * others). Signed in, also `you`: the user's own rank, or null.
+ * others). `id` is the user's public id, for their profile (GET
+ * /api/users/<id>/profile): only users who opted in are listed. Signed in, also `you`: the user's own rank, or null.
  */
 export async function getChallengeLeaderboard(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -268,8 +282,8 @@ export async function getChallengeLeaderboard(request: Request, ctx: Ctx): Promi
   const board = await cached(ctx, `challenge/${day}`, async () => {
     const [entries, players] = await DB.batch([
       DB.prepare(
-        `SELECT name, score, correct, rank FROM (
-           SELECT u.display_name AS name, u.public_profile AS public, a.score, a.correct,
+        `SELECT id, name, score, correct, rank FROM (
+           SELECT u.id AS id, u.display_name AS name, u.public_profile AS public, a.score, a.correct,
              RANK() OVER (ORDER BY a.score DESC, a.total_ms ASC) AS rank, a.submitted_at
            FROM challenge_attempts a JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.submitted_at IS NOT NULL
          ) WHERE public = 1 ORDER BY rank, submitted_at LIMIT ?`,
@@ -280,7 +294,7 @@ export async function getChallengeLeaderboard(request: Request, ctx: Ctx): Promi
       day,
       players: (players.results[0] as { n: number }).n,
       maxScore: MAX_SCORE,
-      entries: (entries.results as unknown as BoardRow[]).map((r) => ({ rank: r.rank, displayName: r.name, score: r.score, correct: r.correct })),
+      entries: (entries.results as unknown as BoardRow[]).map((r) => ({ rank: r.rank, id: r.id, displayName: r.name, score: r.score, correct: r.correct })),
     };
   });
   if (!user) return json(board, 200, NO_STORE);

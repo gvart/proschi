@@ -33,7 +33,10 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
+| `prep.e2e.ts` | The Practice list without prep widgets, the interview prep hub's tabs and streak, the account page with its compact badge grid, a public profile (API mocked) |
 | `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
+| `challenge.e2e.ts` | Daily challenge (no accounts): the hub's Challenge tab, play, score, share, one attempt, resume after a reload, confetti, the next card's focus and scroll on a phone |
+| `challenge.accounts.e2e.ts` | Signed in (API mocked): the challenge as the hub's tab, its leaderboard rows linking to public profiles, the challenge streak and best score on `#/me` and a public profile, every page at 320px and 360px |
 | `header.accounts.e2e.ts` | Signed in (API mocked): the header with the account and help menus fits a 320px and 390px phone on every practice page, and their panels open inside the screen; the desktop header keeps the account name and the editor button |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
 | `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |
