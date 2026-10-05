@@ -12,6 +12,7 @@ import {
   setNodePosition,
   setOwner,
   setReplicas,
+  setSize,
   setTech,
   uniqueId,
 } from './edit';
@@ -256,5 +257,15 @@ describe('every edit', () => {
     const { source } = addNode(base, { name: 'Cache', tech: 'Redis' });
     expect(parse(source).diagnostics).toEqual([]);
     expect(source.split('\n').filter((l) => l !== 'cache "Cache" [Redis]')).toEqual(base.split('\n'));
+  });
+});
+
+describe('setSize', () => {
+  it('sets, replaces and clears the instance size', () => {
+    const big = setSize('db [PostgreSQL]', 'db', 'L');
+    expect(big).toBe('db [PostgreSQL]\ncapacity {\n  db size L\n}\n');
+    expect(parse(big).diagram.capacity?.[0].size).toBe('L');
+    expect(setSize(big, 'db', 'M')).toContain('  db size M\n');
+    expect(setSize(big, 'db', null)).toBe('db [PostgreSQL]\ncapacity {\n}\n');
   });
 });

@@ -28,6 +28,8 @@ export interface ComponentMetadata {
   description?: string;
   /** Load drawn over the node while the diagram is simulated (sim/overlay.ts). */
   overlay?: NodeOverlay;
+  /** Laid out by the page (the Arcade's rows): no resize handles. */
+  fixedSize?: boolean;
   // For text nodes
   textContent?: string;
   fontSize?: number;

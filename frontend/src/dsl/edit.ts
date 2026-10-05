@@ -1,6 +1,6 @@
 import { bracketDepth, tokenizeLine, type Token } from './lexer';
 import { parse } from './parser';
-import type { CapacityOverride, DiagramNode } from './types';
+import type { CapacityOverride, DiagramNode, InstanceSize } from './types';
 
 /**
  * Source-to-source edits used when the diagram is changed on the canvas. Each
@@ -242,9 +242,17 @@ export const CAPACITY_FIELD: Record<CapacityPart, keyof CapacityOverride> = {
  * the other way round, since they cannot be combined.
  */
 export function setCapacity(source: string, node: string, part: CapacityPart, value: number | null): string {
+  return setCapacityPart(source, node, part, value === null || !Number.isFinite(value) ? null : CAPACITY_UNIT[part](value));
+}
+
+/** Sets or clears a node's instance size (`size S|M|L`) in the `capacity` block. */
+export function setSize(source: string, node: string, size: InstanceSize | null): string {
+  return setCapacityPart(source, node, 'size', size ? `size ${size}` : null);
+}
+
+function setCapacityPart(source: string, node: string, part: CapacityPart | 'size', text: string | null): string {
   const parsed = parse(source);
   const existing = parsed.diagram.capacity?.find((c) => c.node === node && c.loc.file === undefined);
-  const text = value === null || !Number.isFinite(value) ? null : CAPACITY_UNIT[part](value);
 
   if (!existing) {
     if (!text) return source;
@@ -287,7 +295,7 @@ function capacitySpans(tokens: Token[]): { part: string; before: number; from: n
     let size = 1;
     let part = t.value;
     if (t.kind === 'quantity' || t.kind === 'number') part = 'rate';
-    else if (word(t, 'latency', 'availability', 'cost', 'timeout', 'reads', 'writes', 'shards', 'consistency', 'bandwidth', 'egress')) size = 2;
+    else if (word(t, 'latency', 'availability', 'cost', 'timeout', 'reads', 'writes', 'shards', 'size', 'consistency', 'bandwidth', 'egress')) size = 2;
     else if (!word(t, 'durable', 'volatile')) break;
     const last = tokens[Math.min(i + size, tokens.length) - 1];
     spans.push({ part, before: end(tokens[i - 1]), from: t.col - 1, to: end(last) });

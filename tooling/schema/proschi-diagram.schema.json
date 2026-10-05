@@ -1102,6 +1102,14 @@
           "minimum": 1,
           "description": "Write capacity of single-primary stores scales with shards."
         },
+        "size": {
+          "enum": [
+            "S",
+            "M",
+            "L"
+          ],
+          "description": "Instance size: scales the tech's default capacity (×1, ×2, ×4) and cost (×1, ×1.8, ×3.5)."
+        },
         "consistency": {
           "enum": [
             "strong",

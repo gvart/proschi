@@ -10,10 +10,11 @@ import {
   setEdgeLabel,
   setOwner,
   setReplicas,
+  setSize,
   setTech,
   type CapacityPart,
 } from '../../dsl/edit';
-import type { CapacityOverride, DiagramEdge, DiagramNode } from '../../dsl/types';
+import type { CapacityOverride, DiagramEdge, DiagramNode, InstanceSize } from '../../dsl/types';
 import { eyebrow, field, iconButton } from '../Playground/ui';
 
 type Edit = (source: string) => string;
@@ -135,6 +136,19 @@ function NodeFields({ node, capacity, readOnly, onEdit }: { node: DiagramNode; c
         <fieldset className="space-y-2 border-t border-ink/15 pt-3">
           <legend className={eyebrow}>Capacity per replica</legend>
           <p className="text-xs text-muted">Leave empty for the tech's defaults.</p>
+          <label className="block">
+            <span className={eyebrow}>Instance size</span>
+            <select
+              value={capacity?.size ?? 'S'}
+              disabled={readOnly}
+              onChange={(e) => onEdit((src) => setSize(src, id, e.target.value === 'S' ? null : (e.target.value as InstanceSize)))}
+              className={`${field} mt-1 w-full`}
+            >
+              <option value="S">S (the tech's defaults)</option>
+              <option value="M">M: ×2 capacity, ×1.8 cost</option>
+              <option value="L">L: ×4 capacity, ×3.5 cost</option>
+            </select>
+          </label>
           {CAPACITY_ROWS.filter((r) => !r.storeOnly || store).map((row) => {
             const current = capacity?.[CAPACITY_FIELD[row.part]];
             return (

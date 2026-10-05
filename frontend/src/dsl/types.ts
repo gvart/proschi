@@ -222,8 +222,12 @@ export interface CapacityOverride {
   egressUsdPerGb?: number;
   /** `timeout <duration>`: what a failed call (`-x`) to this node costs; 1 000 ms by default. */
   timeoutMs?: number;
+  /** `size S|M|L`: an instance size that scales the tech's default capacity and cost (sim/profiles.ts `SIZES`). */
+  size?: InstanceSize;
   loc: SourceLoc;
 }
+
+export type InstanceSize = 'S' | 'M' | 'L';
 
 export interface EntityField {
   name: string;

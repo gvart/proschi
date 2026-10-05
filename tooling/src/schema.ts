@@ -227,6 +227,7 @@ export function diagramSchema() {
           readRps: { ...num, description: '`reads`: read requests per second per replica.' },
           writeRps: { ...num, description: '`writes`: write requests per second per replica.' },
           shards: { type: 'integer', minimum: 1, description: 'Write capacity of single-primary stores scales with shards.' },
+          size: { enum: ['S', 'M', 'L'], description: "Instance size: scales the tech's default capacity (×1, ×2, ×4) and cost (×1, ×1.8, ×3.5)." },
           consistency: { enum: ['strong', 'eventual'] },
           bandwidthMBps: { ...num, exclusiveMinimum: 0, description: '`bandwidth`: megabytes per second per replica.' },
           egressUsdPerGb: { ...num, minimum: 0, description: '`egress`: price of data the node sends to clients and third parties (internet egress), in USD per GB.' },

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { componentCatalog } from '../catalog/componentCatalog';
 import type { DiagramNode, Kind } from '../dsl/types';
 import { KINDS, kindOf } from '../dsl/kinds';
-import { capacityOf, combinedUtilization, profileOf } from './profiles';
+import { SIZES, capacityOf, combinedUtilization, profileOf } from './profiles';
 
 const node = (type: DiagramNode['type'], techStack: DiagramNode['techStack'], kind: DiagramNode['kind'] = 'component'): DiagramNode => ({
   id: 'n',
@@ -203,5 +203,18 @@ describe('capacityOf and combinedUtilization', () => {
     expect(capacityOf(dynamo, 3)).toEqual({ readRps: 60_000, writeRps: 60_000 });
     expect(combinedUtilization(dynamo, 0.5, 0.25)).toBe(0.75);
     expect(capacityOf(profileOf(node('service', 'REST API')), 4)).toEqual({ readRps: 8000, writeRps: 8000 });
+  });
+});
+
+describe('instance sizes', () => {
+  const db = { id: 'db', kind: 'component', name: 'db', type: 'database', techStack: 'PostgreSQL', loc: { line: 1, col: 1, length: 2 } } as const;
+  const loc = { line: 1, col: 1, length: 1 };
+
+  it('scale the default capacity and cost, while explicit numbers win', () => {
+    const small = profileOf(db);
+    const large = profileOf(db, { node: 'db', size: 'L', loc });
+    expect(large.readRps).toBe(small.readRps * SIZES.L.capacity);
+    expect(large.costUsd).toBeCloseTo(small.costUsd * SIZES.L.cost);
+    expect(profileOf(db, { node: 'db', size: 'L', rps: 10, costUsd: 5, loc })).toMatchObject({ readRps: 10, writeRps: 10, costUsd: 5 });
   });
 });

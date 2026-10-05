@@ -1,5 +1,5 @@
 import { componentCatalog, type TechProfileKey } from '../catalog/componentCatalog';
-import type { CapacityOverride, DiagramNode, Kind } from '../dsl/types';
+import type { CapacityOverride, DiagramNode, InstanceSize, Kind } from '../dsl/types';
 import { isDataStore, kindOf } from '../dsl/kinds';
 
 /**
@@ -112,12 +112,24 @@ const DEFAULT_BANDWIDTH_MBPS = 100;
 /** Kinds you run and pay egress for; clients and third parties send at their own cost, DNS and annotations send nothing. */
 const CHARGES_EGRESS = (kind: Kind): boolean => kind !== 'client' && kind !== 'external' && kind !== 'dns' && kind !== 'other';
 
-/** The node's per-replica profile: tech table, else kind table, then the `capacity` override. */
+/**
+ * Instance sizes (`capacity { n size L }`): how much the tech's default
+ * capacity and cost grow. A bigger box costs a little less than the same
+ * capacity in replicas, but it is still one box to lose.
+ */
+export const SIZES: Record<InstanceSize, { capacity: number; cost: number }> = {
+  S: { capacity: 1, cost: 1 },
+  M: { capacity: 2, cost: 1.8 },
+  L: { capacity: 4, cost: 3.5 },
+};
+
+/** The node's per-replica profile: tech table, else kind table, then the `capacity` override (an explicit rate or cost wins over a size). */
 export function profileOf(node: DiagramNode, override?: CapacityOverride): Profile {
   const kind = kindOf(node);
   const base = (Object.hasOwn(TECH_PROFILES, node.techStack) ? TECH_PROFILES[node.techStack] : undefined) ?? KIND_PROFILES[kind];
-  const baseRead = base.readRps ?? base.rps;
-  const baseWrite = base.writeRps ?? base.rps;
+  const size = SIZES[override?.size ?? 'S'];
+  const baseRead = (base.readRps ?? base.rps) * size.capacity;
+  const baseWrite = (base.writeRps ?? base.rps) * size.capacity;
   const readRps = override?.readRps ?? override?.rps ?? baseRead;
   const writeRps = override?.writeRps ?? override?.rps ?? baseWrite;
   const consistency = override?.consistency ?? base.consistency;
@@ -130,7 +142,7 @@ export function profileOf(node: DiagramNode, override?: CapacityOverride): Profi
     shards: Math.max(1, Math.floor(override?.shards ?? 1)),
     latencyMs: override?.latencyMs ?? base.latencyMs,
     availability: override?.availability !== undefined ? override.availability / 100 : base.availability,
-    costUsd: override?.costUsd ?? base.costUsd,
+    costUsd: override?.costUsd ?? base.costUsd * size.cost,
     durable: override?.durable ?? base.durable,
     ...(consistency && isDataStore(kind) ? { consistency } : {}),
     bandwidthMBps: override?.bandwidthMBps ?? base.bandwidthMBps ?? BANDWIDTH[kind] ?? DEFAULT_BANDWIDTH_MBPS,

@@ -27,7 +27,7 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       data-stack={o?.replicas && o.replicas > 1 ? Math.min(2, o.replicas - 1) : undefined}
       style={o ? { background: heat(u, o.down) } : undefined}
     >
-      <NodeResizer color={CANVAS_ACCENT} isVisible={selected} minWidth={180} minHeight={80} />
+      <NodeResizer color={CANVAS_ACCENT} isVisible={selected && !data.fixedSize} minWidth={180} minHeight={80} />
 
       <Handle type="target" position={Position.Top} className="pc-handle" />
 
