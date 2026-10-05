@@ -32,6 +32,11 @@ import { isNew, reviewable, type CardStates } from './review';
  * none of them solved, the same cards score 0.645, and solving them is what
  * lifts it past 0.7. Recall decays between reviews, so mastery does too.
  *
+ * Playing Scale or Fail adds a small bonus on top: every game lesson of the
+ * topic met in a run (a tech card held, an incident survived) counts,
+ * GAME_LESSONS_FOR_FULL of them for the whole GAME_BONUS. It is a bonus, not
+ * a part, so a topic never scores less for being played.
+ *
  * Readiness is the mean of the topics' mastery weighted by how many cards
  * each has, so a topic with more to know counts more.
  */
@@ -42,6 +47,9 @@ export const MASTERY_WEIGHTS = { recall: 0.55, coverage: 0.15, problems: 0.3, ac
 export const PROBLEMS_FOR_FULL = 3;
 /** Estimation accuracy looks at this many of the latest estimate answers. */
 export const ACCURACY_WINDOW = 20;
+/** The most Scale or Fail adds to a topic's mastery, and the game lessons that earn all of it. */
+export const GAME_BONUS = 0.05;
+export const GAME_LESSONS_FOR_FULL = 3;
 /** The topic whose mastery includes estimation accuracy. */
 export const ESTIMATION_TOPIC = 'estimation';
 
@@ -63,6 +71,8 @@ export interface MasteryInput {
   solved: ReadonlySet<string> | readonly string[];
   /** The ratings of every estimate card answered, oldest first (1 is wrong; 3 and 4 right). */
   estimateRatings: readonly Rating[];
+  /** Scale or Fail lessons met per topic id; none when absent. */
+  gameLessons?: Readonly<Record<string, number>>;
 }
 
 export interface TopicMastery {
@@ -75,6 +85,8 @@ export interface TopicMastery {
   problems?: number;
   /** Only for the estimation topic. */
   accuracy?: number;
+  /** The Scale or Fail bonus, 0 to GAME_BONUS; absent without game lessons. */
+  game?: number;
   /** The topic's reviewable cards: its weight in readiness. */
   cards: number;
 }
@@ -128,13 +140,16 @@ export function topicMastery(topic: string, input: MasteryInput): TopicMastery {
     total += w.accuracy * accuracy;
     weights += w.accuracy;
   }
+  const lessons = input.gameLessons?.[topic] ?? 0;
+  const game = lessons > 0 ? GAME_BONUS * Math.min(1, lessons / GAME_LESSONS_FOR_FULL) : undefined;
   return {
     topic,
-    mastery: clamp01(total / weights),
+    mastery: clamp01(total / weights + (game ?? 0)),
     recall,
     coverage,
     ...(problems !== undefined ? { problems } : {}),
     ...(accuracy !== undefined ? { accuracy } : {}),
+    ...(game !== undefined ? { game } : {}),
     cards: pool.length,
   };
 }

@@ -1,6 +1,7 @@
 # Writing game scenarios
 
-**Scale or Fail** is the system design game on the Interview prep page. You
+**Scale or Fail** is the system design game on the Interview prep page
+([play it](https://proschi.app/practice/#/arcade)). You
 pick a scenario, place components on a board by tapping or dragging, and keep
 the system up while traffic grows, new use cases arrive and the requirements
 tighten. Every number comes from Proschi's simulation, and every failure says

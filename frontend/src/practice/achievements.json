@@ -42,5 +42,10 @@
 
   { "id": "challenge-first", "title": "Challenger", "description": "Complete your first daily challenge.", "icon": "zap", "rule": { "kind": "challenges", "min": 1 } },
   { "id": "challenge-perfect", "title": "Flawless", "description": "Answer all five cards of a daily challenge right.", "icon": "star", "tier": "silver", "rule": { "kind": "challenge-perfect", "min": 1 } },
-  { "id": "challenge-streak-7", "title": "Daily devotee", "description": "Complete the daily challenge 7 days in a row.", "icon": "flame", "tier": "gold", "rule": { "kind": "challenge-streak", "min": 7 } }
+  { "id": "challenge-streak-7", "title": "Daily devotee", "description": "Complete the daily challenge 7 days in a row.", "icon": "flame", "tier": "gold", "rule": { "kind": "challenge-streak", "min": 7 } },
+
+  { "id": "game-first-boss", "title": "Launch survived", "description": "Beat the first boss of a Scale or Fail scenario (reach wave 5).", "icon": "zap", "rule": { "kind": "game-waves", "min": 5 } },
+  { "id": "game-clear", "title": "Scaled it", "description": "Clear all twelve waves of a Scale or Fail scenario.", "icon": "trophy", "tier": "silver", "rule": { "kind": "game-clears", "min": 1 } },
+  { "id": "game-all-clear", "title": "Hockey stick", "description": "Clear every Scale or Fail scenario.", "icon": "trophy", "tier": "gold", "rule": { "kind": "game-clears", "min": 4 } },
+  { "id": "game-ascension-3", "title": "Battle-hardened", "description": "Clear a Scale or Fail scenario at ascension 3.", "icon": "shield", "tier": "gold", "rule": { "kind": "game-ascension", "min": 3 } }
 ]

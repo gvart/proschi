@@ -20,6 +20,7 @@ import {
   type AchievementContext,
   type Rule,
   type StatsSnapshot,
+  NO_GAME,
 } from './achievements';
 import type { ProblemInfo } from './mastery';
 import { addDays, goalFor } from './streak';
@@ -32,7 +33,7 @@ const problems: ProblemInfo[] = [
 ];
 const context: AchievementContext = { problems, stages: [{ id: 'one', problems: ['a', 'b', 'gone'] }] };
 
-const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 } };
+const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 }, game: NO_GAME };
 const snap = (over: Partial<StatsSnapshot>): StatsSnapshot => ({ ...empty, ...over });
 const solved = (...ids: string[]) => ids.map((id) => ({ id, firstRun: false, underReference: false }));
 
@@ -43,6 +44,9 @@ describe('rules', () => {
     [{ kind: 'mastered', min: 5 }, snap({ mastered: 3 }), 3, 5],
     [{ kind: 'streak', min: 7 }, snap({ longestStreak: 8 }), 7, 7],
     [{ kind: 'estimate-streak', min: 3 }, snap({ estimateStreak: 2 }), 2, 3],
+    [{ kind: 'game-waves', min: 5 }, snap({ game: { ...NO_GAME, reached: 8 } }), 5, 5],
+    [{ kind: 'game-clears', min: 4 }, snap({ game: { ...NO_GAME, clears: 1 } }), 1, 4],
+    [{ kind: 'game-ascension', min: 3 }, snap({ game: { ...NO_GAME, ascension: -1 } }), 0, 3],
     [{ kind: 'solved', min: 2 }, snap({ solved: solved('a', 'd') }), 2, 2],
     [{ kind: 'solved', min: 2, difficulty: 'hard' }, snap({ solved: solved('a', 'b') }), 1, 2],
     [{ kind: 'solved', min: 2, tag: 'caching' }, snap({ solved: solved('a', 'c') }), 1, 2],
@@ -171,7 +175,7 @@ describe('the achievements check', () => {
     // The lock is as `proschi achievements lock` writes it.
     expect(lock).toBe(writeAchievementsLock([], (raw as { id: string }[]).map((a) => a.id)));
     expect(check.achievements.length).toBeGreaterThanOrEqual(25);
-    expect(check.achievements.length).toBeLessThanOrEqual(35);
+    expect(check.achievements.length).toBeLessThanOrEqual(45);
     // Every rule kind is used.
     expect(new Set(check.achievements.map((a) => a.rule.kind))).toEqual(new Set(RULE_KINDS));
   });

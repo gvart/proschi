@@ -34,6 +34,8 @@ const GuideRoute = lazy(() => import('./GuideRoute'));
 const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
 // The daily challenge, with every card too.
 const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
+// Scale or Fail, the system design game: the engine, the simulation and the content.
+const ArcadeRoute = lazy(() => import('../game/ui/ArcadeRoute'));
 // The skill map and badges, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
 // The account page and public profiles, with the cards' topics.
@@ -50,7 +52,8 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
- * `#/review` daily review (`#/review/<topic>` one topic of it), `#/challenge`
+ * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
+ * system design game, `#/challenge`
  * the daily challenge, `#/progress` the skill map and badges, `#/me` the
  * account page and `#/u/<user id>` a public profile; hash routes work under
  * any sub-path. The roadmap, review, challenge and progress pages are the
@@ -124,11 +127,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
   const onChallenge = route === 'challenge';
+  const onArcade = route === 'arcade';
   const onMe = route === 'me';
   const profileId = profileIdOf(route);
   const onProfile = onMe || profileId !== undefined;
   /** A page other than the list or a problem. */
-  const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onProfile;
+  const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onArcade || onProfile;
   const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
   const problemId = fromRoadmap ? (target?.id ?? '') : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
   const problem = problemId && !onPage ? problems.find((p) => p.id === problemId) : undefined;
@@ -142,14 +146,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   ) : undefined;
   const achievements = useAchievements(account.state, progress);
   // The interview prep hub's tab: the roadmap (with its guides), daily review, the challenge or the skill map.
-  const prepTab = onRoadmap || guide || onReview || onChallenge || onProgress ? prepTabOf(route) : undefined;
+  const prepTab = onRoadmap || guide || onReview || onChallenge || onArcade || onProgress ? prepTabOf(route) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
     // The review, challenge, progress and profile pages name themselves.
-    if (onReview || onProgress || onChallenge || onProfile) return;
+    if (onReview || onProgress || onChallenge || onArcade || onProfile) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -157,7 +161,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge, onProfile]);
+  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge, onArcade, onProfile]);
 
   if (problem) {
     return (
@@ -207,6 +211,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             {onProgress ? (
               <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
                 <ProgressRoute account={account} achievements={achievements} />
+              </Suspense>
+            ) : onArcade ? (
+              <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
+                <ArcadeRoute account={account} />
               </Suspense>
             ) : onChallenge ? (
               <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>

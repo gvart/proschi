@@ -91,9 +91,9 @@ for (const width of [320, 360]) {
   test.describe(`signed in at ${width}px`, () => {
     test.use({ viewport: { width, height: 740 }, isMobile: true, hasTouch: true });
 
-    test('the hub’s four tabs, the challenge, the account page and a public profile fit the screen', async ({ page, request }) => {
+    test('the hub’s tabs, the challenge, the Arcade, the account page and a public profile fit the screen', async ({ page, request }) => {
       await mockChallenge(page, request);
-      for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me', `practice/#/u/${CHALLENGER.id}`]) {
+      for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/me', `practice/#/u/${CHALLENGER.id}`]) {
         await page.goto(path);
         await page.waitForLoadState('networkidle');
         if (path.endsWith('challenge')) await expect(page.getByRole('region', { name: 'Today’s leaderboard' }).getByRole('link')).toHaveCount(2);
@@ -103,7 +103,7 @@ for (const width of [320, 360]) {
       // Every tab of the hub can be reached in its strip (it scrolls sideways inside itself, never the page).
       await page.goto('practice/#/progress');
       const tabs = prepNav(page).getByRole('link');
-      await expect(tabs).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Progress']);
+      await expect(tabs).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Arcade', 'Progress']);
       for (const tab of await tabs.all()) {
         await tab.scrollIntoViewIfNeeded();
         await expect(tab).toBeInViewport();

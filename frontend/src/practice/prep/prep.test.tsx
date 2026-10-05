@@ -4,11 +4,12 @@ import LeaderboardPanel from '../LeaderboardPanel';
 import { PREP_TABS, prepTabOf } from './tabs';
 
 describe('interview prep hub', () => {
-  it('has the roadmap, daily review, the challenge and progress as tabs, in that order', () => {
+  it('has the roadmap, daily review, the challenge, the Arcade and progress as tabs, in that order', () => {
     expect(PREP_TABS.map((t) => [t.label, t.href])).toEqual([
       ['Roadmap', '#/roadmap'],
       ['Daily review', '#/review'],
       ['Challenge', '#/challenge'],
+      ['Arcade', '#/arcade'],
       ['Progress', '#/progress'],
     ]);
   });
@@ -19,6 +20,7 @@ describe('interview prep hub', () => {
     expect(prepTabOf('review')).toBe('review');
     expect(prepTabOf('review/caching')).toBe('review');
     expect(prepTabOf('challenge')).toBe('challenge');
+    expect(prepTabOf('arcade')).toBe('arcade');
     expect(prepTabOf('progress')).toBe('progress');
     expect(prepTabOf('')).toBeUndefined();
     expect(prepTabOf('url-shortener')).toBeUndefined();

@@ -23,6 +23,9 @@ import { loadProgress, type Progress } from '../progress';
 import { ROADMAP, roadmapFor } from '../roadmap';
 import { CARDS_LOG_KEY, readReviews } from '../review/store';
 import { loadRunStats } from '../runStats';
+import { gameContent } from '../../game/content';
+import { gameStats } from '../../game/engine/meta';
+import { loadLocalMeta } from '../../game/ui/store';
 
 /**
  * Achievements and the skill map in a build without accounts, from what this
@@ -92,6 +95,8 @@ export function localAchievements(now: number, progress: Progress = loadProgress
     solvedProblems,
     // The daily challenge's results kept in this browser, by UTC day.
     challenges: localChallengeStats(challengeDay(new Date(now * 1000))),
+    // Scale or Fail's progress kept in this browser.
+    game: gameStats(loadLocalMeta(), gameContent().content),
   });
   const earned = loadEarned();
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, context, earned, now);

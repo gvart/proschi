@@ -40,7 +40,7 @@ test.describe('practice and interview prep', () => {
     await page.goto('practice/#/roadmap');
     await expect(headerPrep(page)).toHaveAttribute('aria-current', 'page');
     await expect(page.locator('.ps-nav__link', { hasText: 'Practice' })).not.toHaveAttribute('aria-current', 'page');
-    await expect(prepNav(page).getByRole('link')).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Progress']);
+    await expect(prepNav(page).getByRole('link')).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Arcade', 'Progress']);
     await expect(prepNav(page).getByRole('link', { name: 'Roadmap' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('0 of 10 cards today');
@@ -48,6 +48,7 @@ test.describe('practice and interview prep', () => {
     const tabs: [string, RegExp, string][] = [
       ['Daily review', /#\/review$/, 'Daily review'],
       ['Challenge', /#\/challenge$/, 'Daily challenge'],
+      ['Arcade', /#\/arcade$/, 'Scale or Fail'],
       ['Progress', /#\/progress$/, 'Your progress'],
       ['Roadmap', /#\/roadmap$/, 'Interview prep roadmap'],
     ];

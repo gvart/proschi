@@ -1,3 +1,4 @@
+import type { GameStats } from '../../learn/achievements';
 import { ascensionRules, MAX_ASCENSION } from './rules';
 import type { GameContent, Loadout, ScenarioDef } from './types';
 
@@ -112,11 +113,11 @@ export function equip(content: GameContent, meta: Meta, perks: readonly string[]
 }
 
 /** Whether a scenario can be played, and if not, what unlocks it. */
-export function scenarioOpen(scenario: ScenarioDef, meta: Meta): { open: true } | { open: false; reason: string } {
+export function scenarioOpen(scenario: ScenarioDef, meta: Meta, titleOf: (id: string) => string = (id) => id): { open: true } | { open: false; reason: string } {
   if (!scenario.unlock) return { open: true };
   const reached = meta.scenarios[scenario.unlock.scenario]?.reached ?? 0;
   if (reached >= scenario.unlock.wave) return { open: true };
-  return { open: false, reason: `Reach wave ${scenario.unlock.wave} in ${scenario.unlock.scenario}` };
+  return { open: false, reason: `Reach wave ${scenario.unlock.wave} in ${titleOf(scenario.unlock.scenario)} to open it` };
 }
 
 /** The highest ascension a player may pick for a scenario: one above the highest cleared. */
@@ -173,4 +174,21 @@ export function dailyScenario(content: GameContent, day: string): ScenarioDef {
   const n = Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
   const list = [...content.scenarios].sort((a, b) => a.order - b.order);
   return list[((n % list.length) + list.length) % list.length];
+}
+
+/** What the game badges and the skill map's game bonus need: the furthest wave, clears, top ascension, and lessons met per topic. */
+export function gameStats(meta: Meta, content: Pick<GameContent, 'cards' | 'events'>): GameStats {
+  const scenarios = Object.values(meta.scenarios);
+  const topics = new Map<string, string>([...content.cards.map((c) => [c.id, c.topic] as const), ...content.events.map((e) => [e.id, e.topic] as const)]);
+  const lessons: Record<string, number> = {};
+  for (const id of meta.seen) {
+    const topic = topics.get(id);
+    if (topic) lessons[topic] = (lessons[topic] ?? 0) + 1;
+  }
+  return {
+    reached: Math.max(0, ...scenarios.map((s) => s.reached)),
+    clears: scenarios.filter((s) => s.cleared >= 0).length,
+    ascension: Math.max(-1, ...scenarios.map((s) => s.cleared)),
+    lessons,
+  };
 }

@@ -115,3 +115,19 @@ describe('readiness', () => {
     expect(percent(-1)).toBe(0);
   });
 });
+
+describe('the Scale or Fail bonus', () => {
+  it('adds up to GAME_BONUS to a topic, never takes away', async () => {
+    const { skills, GAME_BONUS, GAME_LESSONS_FOR_FULL } = await import('./mastery');
+    const topics = [{ id: 'caching', title: 'Caching', summary: 'x' }];
+    const base = { cards: [], topics, states: {}, now: 0, problems: [], solved: [], estimateRatings: [] };
+    expect(skills(base).topics).toEqual([]);
+    const card = { id: 'c1', topic: 'caching', tags: ['caching'], type: 'flip' as const, front: 'q', back: 'a', difficulty: 'easy' as const, related: [], decks: [], version: 1, retired: false, distinctFrom: [] };
+    const without = skills({ ...base, cards: [card] }).topics[0];
+    const some = skills({ ...base, cards: [card], gameLessons: { caching: 1 } }).topics[0];
+    const full = skills({ ...base, cards: [card], gameLessons: { caching: GAME_LESSONS_FOR_FULL + 5 } }).topics[0];
+    expect(some.mastery).toBeCloseTo(without.mastery + GAME_BONUS / GAME_LESSONS_FOR_FULL);
+    expect(full.mastery).toBeCloseTo(without.mastery + GAME_BONUS);
+    expect(full.game).toBe(GAME_BONUS);
+  });
+});
