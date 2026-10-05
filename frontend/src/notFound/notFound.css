@@ -1,0 +1,39 @@
+/* The 404 page (404.html). */
+
+.skip {
+  position: absolute;
+  left: 16px;
+  top: -100px;
+  z-index: 100;
+  padding: 10px 14px;
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  font-weight: 700;
+}
+
+.skip:focus {
+  top: 12px;
+}
+
+.not-found__inner {
+  padding-block: clamp(48px, 12vh, 128px);
+}
+
+.not-found__code {
+  margin: 0;
+  font: 800 var(--fs-h1) / 1 var(--font-display);
+  color: rgb(var(--c-pink));
+}
+
+.not-found h1 {
+  margin: 12px 0 8px;
+  font: 700 var(--fs-h2) / 1.1 var(--font-display);
+}
+
+.not-found__links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 24px;
+}

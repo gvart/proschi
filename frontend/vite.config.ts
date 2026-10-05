@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
 import { siteShell } from './plugins/siteShell'
 import { docsSite } from './plugins/docsSite'
+import { sitemap } from './plugins/sitemap'
 
 // `ANALYZE=1 npx vite build` also writes dist/stats.html, a treemap of every chunk.
 async function analyzer(): Promise<PluginOption> {
@@ -36,6 +37,7 @@ export default defineConfig(async () => ({
       stubsDir: fileURLToPath(new URL('./docs', import.meta.url)),
     }),
     siteShell(),
+    sitemap(fileURLToPath(new URL('../docs', import.meta.url))),
     await analyzer(),
   ],
   // Relative asset paths so the build works under any sub-path,
@@ -46,13 +48,14 @@ export default defineConfig(async () => ({
     assetsInlineLimit: (file: string) => (/\.woff2?$/.test(file) ? false : undefined),
     rollupOptions: {
       // The landing page at the root, the editor under app/, system design
-      // practice under practice/, and model/, which forwards to the docs.
+      // practice under practice/, model/, which forwards to the docs, and 404.html.
       // docsSite adds the docs pages (docs/**/index.html).
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
         app: fileURLToPath(new URL('./app/index.html', import.meta.url)),
         practice: fileURLToPath(new URL('./practice/index.html', import.meta.url)),
         model: fileURLToPath(new URL('./model/index.html', import.meta.url)),
+        notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
       },
       output: { manualChunks },
     },
