@@ -178,6 +178,25 @@ export function withActivity(activity: DayActivity[], add: DayActivity): DayActi
   return [...byDay([...activity, add]).values()].sort((a, b) => a.day.localeCompare(b.day));
 }
 
+/**
+ * The server's activity with the reviews it does not have yet (a device's
+ * outbox) added to their days, so the streak counts them before they are
+ * sent, as the session summary does. Each review counts once, by id; those
+ * in `sent` (answered by the server, whose day counts then include them)
+ * are left out, so none counts twice. Pending reviews add to `reviews`
+ * only: telling a card's first review needs its state.
+ */
+export function withPendingReviews(activity: DayActivity[], pending: readonly CardReview[], sent: ReadonlySet<string> = new Set()): DayActivity[] {
+  const seen = new Set(sent);
+  const added: DayActivity[] = [];
+  for (const r of pending) {
+    if (seen.has(r.id) || !isDay(r.day)) continue;
+    seen.add(r.id);
+    added.push({ day: r.day, reviews: 1, solves: 0 });
+  }
+  return added.length ? [...byDay([...activity, ...added]).values()].sort((a, b) => a.day.localeCompare(b.day)) : activity;
+}
+
 /** The Monday of `day`'s week. */
 export function weekStart(day: Day): Day {
   const weekday = new Date(`${day}T00:00:00Z`).getUTCDay(); // 0 is Sunday

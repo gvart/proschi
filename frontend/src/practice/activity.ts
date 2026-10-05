@@ -9,6 +9,7 @@ import {
   isGoalChoice,
   localDay,
   weeklyRecap,
+  withPendingReviews,
   type DailyGoal,
   type Day,
   type DayActivity,
@@ -18,7 +19,7 @@ import {
 import { api, type ActivityAnswer } from '../services/api';
 import { loadJson, saveJson } from '../services/storage';
 import { isSafeKey } from '../playground/sanitize';
-import { CARDS_LOG_KEY, readReviews } from './review/store';
+import { CARDS_LOG_KEY, pendingReviews, readReviews, sentReviews } from './review/store';
 import type { Account } from './useAccount';
 
 /**
@@ -27,7 +28,8 @@ import type { Account } from './useAccount';
  * reviews and the day of each first solve) and the goal, so every device
  * shows the same streak; a build without accounts computes it from this
  * browser's review log and the solve days kept below; signed out there is no
- * streak, only an invitation to sign in.
+ * streak, only an invitation to sign in. Signed in, reviews still in this
+ * browser's outbox count too (withOutbox), as in the session summary.
  */
 
 /** A build without accounts: the local day each problem was first solved, `{[problem id]: day}`. */
@@ -53,6 +55,16 @@ export function recordLocalSolve(problemId: string, day: Day): void {
 /** This browser's activity: the review log's days and the solve days. */
 export function localActivity(): DayActivity[] {
   return [...activityFromLog(readReviews(loadJson<unknown>(CARDS_LOG_KEY, []))), ...activityFromSolves(readSolves())];
+}
+
+/**
+ * Signed in: the server's activity with the user's reviews this browser has
+ * not sent yet (the outbox) counted on their days. Read when the server
+ * answers: a review sent since is out of the outbox, or among sentReviews(),
+ * so it is not counted twice.
+ */
+export function withOutbox(days: DayActivity[], userId: string): DayActivity[] {
+  return withPendingReviews(days, pendingReviews(userId), sentReviews());
 }
 
 /** This browser's daily goal (a build without accounts). */
@@ -110,7 +122,7 @@ export function useActivity(account: Account, { key, enabled = true }: { key?: s
     let cancelled = false;
     setState((s) => (s.status === 'ready' ? s : { status: 'loading' }));
     api<ActivityAnswer>(`/api/me/activity?day=${today}`).then(
-      (answer) => !cancelled && setState({ status: 'ready', days: answer.days, goal: answer.goal, today }),
+      (answer) => !cancelled && setState({ status: 'ready', days: userId ? withOutbox(answer.days, userId) : answer.days, goal: answer.goal, today }),
       () => !cancelled && setState((s) => (s.status === 'ready' ? s : { status: 'error' })),
     );
     return () => {

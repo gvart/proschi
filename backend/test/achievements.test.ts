@@ -72,7 +72,7 @@ describe('achievements', () => {
   it('answers every badge with its progress and an empty skill map for a new account', async () => {
     const { token } = await signedInUser();
     const answer = await get(token);
-    expect(answer.achievements.map((a) => a.id)).toEqual((raw as { id: string }[]).map((a) => a.id));
+    expect(answer.achievements.map((a) => a.id)).toEqual((raw as { id: string; retired?: boolean }[]).filter((a) => !a.retired).map((a) => a.id));
     expect(answer.achievements.every((a) => !a.earned && !a.unseen && a.current === 0)).toBe(true);
     expect(badge(answer, 'reviews-100')).toMatchObject({ title: 'Hundred club', icon: 'layers', tier: 'bronze', current: 0, target: 100 });
     expect(answer.skills.readiness).toBe(0);

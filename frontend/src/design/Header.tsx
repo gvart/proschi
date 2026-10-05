@@ -17,7 +17,7 @@ export interface HeaderProps {
   compact?: boolean;
   /** Compact only: the page's own controls, between the wordmark and the site links. */
   children?: ReactNode;
-  /** Controls before the theme toggle, like the account and help menus. */
+  /** Controls before the theme toggle, like the account and help menus; on phones they make room (components.css). */
   actions?: ReactNode;
 }
 
@@ -53,7 +53,7 @@ export default function Header({ base, current, compact = false, children, actio
   useEffect(() => (menuRef.current ? bindMenu(menuRef.current) : undefined), []);
 
   return (
-    <header className={compact ? 'ps-header ps-header--compact' : 'ps-header'}>
+    <header className={['ps-header', compact && 'ps-header--compact', actions && 'ps-header--actions'].filter(Boolean).join(' ')}>
       <div className="ps-header__inner">
         <Wordmark href={base} compact={compact} />
         {compact && children && <div className="ps-header__tools">{children}</div>}

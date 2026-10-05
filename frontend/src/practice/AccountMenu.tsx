@@ -50,7 +50,7 @@ export default function AccountMenu({ account }: { account: Account }) {
       trigger={
         <>
           <UserRound size={16} />
-          <span className="hidden sm:inline max-w-[10rem] truncate">{user.displayName}</span>
+          <span className="hidden md:inline-block max-w-[6rem] truncate align-bottom">{user.displayName}</span>
         </>
       }
     >
