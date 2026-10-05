@@ -18,3 +18,5 @@ promoted. Roughly how many acknowledged writes are lost?
 Everything inside the replication lag is gone: 5,000 writes/s × 2 s =
 **10,000 writes**. Synchronous (or semi-synchronous) replication would lose
 none, at the cost of slower writes.
+
+Numbers: [Numbers to know](../docs/numbers/#how-to-estimate).

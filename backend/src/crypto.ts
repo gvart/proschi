@@ -57,3 +57,13 @@ export function decodeJson(text: string): unknown {
     return undefined;
   }
 }
+
+/** Whether two strings are equal, in a time that does not depend on where they differ (for secrets such as a PKCE challenge). */
+export function timingSafeEqual(a: string, b: string): boolean {
+  const x = encoder.encode(a);
+  const y = encoder.encode(b);
+  const n = Math.max(x.length, y.length);
+  let diff = x.length ^ y.length;
+  for (let i = 0; i < n; i++) diff |= (x[i] ?? 0) ^ (y[i] ?? 0);
+  return diff === 0;
+}

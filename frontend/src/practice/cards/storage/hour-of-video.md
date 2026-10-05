@@ -17,3 +17,5 @@ How much storage does one hour of video at 5 Mbit/s take?
 5 Mbit/s ÷ 8 = 0.625 MB/s. × 3,600 s = 2,250 MB ≈ **2.25 GB**. Video
 services store several resolutions of each video, so the total is a few times
 that.
+
+Numbers: [Numbers to know](../docs/numbers/#sizes).

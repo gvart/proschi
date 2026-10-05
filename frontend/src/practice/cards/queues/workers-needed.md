@@ -18,3 +18,5 @@ one at a time. How many workers keep up?
 One worker handles 1 ÷ 0.05 s = 20 messages/s. 3,000 ÷ 20 = **150
 workers**, or 3,000 × 0.05 = 150 by Little's law. Add headroom for peaks and
 slow calls.
+
+Numbers: [Numbers to know](../docs/numbers/#how-to-estimate).

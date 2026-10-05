@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync } from 'node:fs'
 import markdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/dsl/parser'
@@ -84,6 +84,28 @@ describe('rendered pages', () => {
     const model = rendered.get('model')!
     expect(layoutHtml(site, rendered.get('quickstart')!)).toContain('data-toc="3-break-it-on-purpose">Break it on purpose</a>')
     expect(model.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['modelled', 'examples', 'quirks', 'not-modelled', 'reading', 'practice'])
+  })
+
+  it('numbers: has the cheat sheet’s sections, and every estimate card links to one that exists', () => {
+    const numbers = rendered.get('numbers')!
+    expect(numbers.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['latency', 'throughput-and-capacity', 'time-and-conversions', 'sizes', 'cloud-costs', 'how-to-estimate'])
+    const cardsDir = new URL('../src/practice/cards/', import.meta.url)
+    const cards = readdirSync(cardsDir, { recursive: true, encoding: 'utf8' }).filter((f) => f.endsWith('.md'))
+    let estimates = 0
+    for (const file of cards) {
+      const text = readFileSync(new URL(file, cardsDir), 'utf8')
+      if (/^type: estimate$/m.test(text)) {
+        estimates++
+        expect(text, file).toMatch(/\]\(\.\.\/docs\/numbers\/#[a-z0-9-]+\)/)
+      }
+      // Cards are shown on the practice page, so their docs links are relative to practice/.
+      for (const [, href] of text.matchAll(/\]\((\.\.\/docs\/[^)\s]*)\)/g)) {
+        const url = new URL(href, 'https://x/practice/')
+        const dest = rendered.get(url.pathname.replace(/^\/docs\//, '').replace(/\/$/, ''))
+        expect(url.pathname.startsWith('/docs/') && dest !== undefined && (!url.hash || dest.anchors.has(url.hash.slice(1))), `${file}: ${href}`).toBe(true)
+      }
+    }
+    expect(estimates).toBeGreaterThan(0)
   })
 
   it('escapes raw HTML in Markdown instead of rendering it', () => {

@@ -17,3 +17,5 @@ requests a day. How many failed requests can it afford in that period?
 30 days × 1,000,000 = 30,000,000 requests. The budget is 0.05% of them:
 30,000,000 × 0.0005 = **15,000 failed requests**. When the budget is spent,
 teams slow down risky changes until it recovers.
+
+Numbers: [Numbers to know](../docs/numbers/#availability-nines).

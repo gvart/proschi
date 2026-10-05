@@ -10,6 +10,12 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- `CONTRIBUTING.md`: how to set up, the checks before a pull request, and
+  step-by-step guides to adding a practice problem and a review card. The
+  practice list ends with "Have a system design problem in mind? Contribute
+  it", with a link to suggest an idea instead, and the footer links to the
+  guide. New issue templates suggest a problem or a card without writing
+  code.
 - 258 practice cards for daily review, from estimation and networking to
   consistency, streaming and probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
@@ -60,6 +66,23 @@ deployed from `main` and ships with the same changes.
   definitions, and `proschi achievements lock` records new ids in
   `achievements.lock`, so a badge's id is never deleted or reused (a badge is
   retired with `"retired": true` instead).
+- Sign-in for native apps, ready for a future mobile app: an app signs in
+  with GitHub or Google in the system browser
+  (`/auth/<provider>/start?client=app`, OAuth 2 with PKCE, back to an
+  allow-listed `APP_REDIRECT_URIS` address with a one-time code), exchanges
+  the code at `POST /auth/token` for an hour-long access token and a 60-day
+  refresh token that rotates on every use (a reused one signs that app out),
+  and calls every `/api` endpoint with `Authorization: Bearer`.
+  `POST /auth/revoke` signs an app out; "Sign out everywhere" and deleting
+  the account include apps, and "Download my data" lists each session with
+  its kind. The site keeps its cookie as before. How it works:
+  `backend/README.md`, "Mobile apps".
+- "Numbers to know" in the docs (`docs/numbers/`): a cheat sheet of the
+  round numbers system design runs on (latency, throughput and connections
+  per server, disk and network speeds, time and size conversions,
+  availability nines, object sizes and approximate cloud prices) with a
+  fully worked estimate, and how Proschi's simulation defaults compare.
+  Every estimate card and the interview guide link to the section they use.
 
 ### Changed
 - Signed in, reviews not sent to your account yet (made offline, say) now

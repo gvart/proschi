@@ -84,6 +84,7 @@ test "Notes are stored before they are returned" {
 | VS Code extension (`.vsix`) | [GitHub releases](https://github.com/gvart/proschi/releases) |
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |
 | Editor support, CLI, CI | [docs/EDITORS.md](docs/EDITORS.md) |
+| Contributing (problems, cards, code) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Writing practice problems | [docs/PRACTICE.md](docs/PRACTICE.md) |
 | Design: HLDs and the practice platform | [docs/design/hld-and-practice.md](docs/design/hld-and-practice.md) |
 | Changelog | [CHANGELOG.md](CHANGELOG.md) |
@@ -108,6 +109,13 @@ For VS Code, download `proschi-<version>.vsix` from the
 `code --install-extension proschi-<version>.vsix`.
 
 ## Contributing
+
+New practice problems and review cards are very welcome:
+[CONTRIBUTING.md](CONTRIBUTING.md) walks through
+[adding a problem](CONTRIBUTING.md#adding-a-new-problem) and
+[adding a card](CONTRIBUTING.md#adding-a-new-card) step by step, and how to
+[suggest one](https://github.com/gvart/proschi/issues/new?template=problem-idea.md)
+without writing code.
 
 The repository has three packages:
 

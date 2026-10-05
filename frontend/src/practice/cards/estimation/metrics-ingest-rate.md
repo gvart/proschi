@@ -15,3 +15,5 @@ per second does the ingestion tier receive?
 
 Per host: 200 ÷ 10 s = 20 points/s. × 100,000 hosts = **2,000,000 points/s**.
 At that rate, pre-aggregating before storage cuts the write volume a lot.
+
+Numbers: [Numbers to know](../docs/numbers/#how-to-estimate).

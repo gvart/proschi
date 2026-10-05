@@ -18,3 +18,5 @@ request arrives, ignoring server time?
 TCP handshake: 1 round trip. TLS 1.3 handshake: 1 round trip. The request and
 its response: 1 round trip. 3 × 150 ms = **450 ms**. Terminating connections
 at a nearby edge and reusing connections removes most of it.
+
+Numbers: [Numbers to know](../docs/numbers/#latency).

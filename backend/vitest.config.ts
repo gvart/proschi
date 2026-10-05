@@ -16,6 +16,7 @@ export default defineConfig(async () => {
             GITHUB_CLIENT_SECRET: 'gh-secret',
             GOOGLE_CLIENT_ID: 'google-client',
             GOOGLE_CLIENT_SECRET: 'google-secret',
+            APP_REDIRECT_URIS: 'proschi://auth, https://app.proschi.test/callback?x=1',
           },
         },
       }),

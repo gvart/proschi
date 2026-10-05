@@ -113,6 +113,10 @@ you need fifty. A few habits make it quick:
 - **Leave headroom.** Servers slow down sharply as they approach 100% busy,
   so plan to run them well below it, and keep enough spare to lose one.
 
+The tables below are the essentials; [Numbers to know](https://proschi.app/docs/numbers/)
+has the full cheat sheet (latency, throughput per server, sizes, cloud
+prices) and a fully worked estimate.
+
 Powers of two and ten that come up all the time:
 
 | Unit | Roughly |

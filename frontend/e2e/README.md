@@ -32,7 +32,7 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 | `landing.e2e.ts` | Hero, hero player, practice list (25 problems), example links into the editor |
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
-| `practice.e2e.ts` | Problem list, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
+| `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
 | `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
 | `header.accounts.e2e.ts` | Signed in (API mocked): the header with the account and help menus fits a 320px and 390px phone on every practice page, and their panels open inside the screen; the desktop header keeps the account name and the editor button |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |

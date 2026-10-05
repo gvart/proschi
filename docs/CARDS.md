@@ -123,6 +123,11 @@ what it counts, `tolerance` a factor from 1.1 to 10. Use a tighter tolerance
 for numbers people should know closely (99.9% is 43 minutes a month: 1.5).
 `## Solution`, the worked calculation, is required.
 
+Take the round numbers from [Numbers to know](NUMBERS.md), and end the
+solution (or `## Why`) with a pointer to the section it draws on:
+`Numbers: [Numbers to know](../docs/numbers/#latency).` The link is relative
+to the practice page, where cards are shown.
+
 ### Cloze
 
 Text with 1–3 gaps written `{{answer}}`. List other accepted answers after
@@ -275,4 +280,8 @@ node dist/cli.cjs achievements lock
 node dist/cli.cjs achievements check
 ```
 
-Suggestions for new cards or fixes are welcome as issues or pull requests.
+Suggestions for new cards or fixes are welcome as issues or pull requests:
+[CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-card) has the
+step-by-step checklist, and the
+[card template](https://github.com/gvart/proschi/issues/new?template=card-idea.md)
+suggests one without writing the file.

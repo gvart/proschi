@@ -17,3 +17,5 @@ How many shards do you need?
 
 120,000 ÷ 8,000 = **15 shards**. Round up and add headroom for growth and
 uneven keys; with logical shards, later growth is a matter of moving shards.
+
+Numbers: [Numbers to know](../docs/numbers/#servers-and-data-stores).
