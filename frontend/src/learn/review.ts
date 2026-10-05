@@ -84,12 +84,21 @@ export function reviewable(cards: readonly Card[], { topic, deck }: CardFilter =
 const DIFFICULTY_RANK: Record<Card['difficulty'], number> = { easy: 0, medium: 1, hard: 2 };
 
 /**
- * The order new cards are introduced in: one from each topic in turn, in
- * tags.json's order, and within a topic easy before hard (then by id), so
- * the first days touch every topic at its gentlest card. Stable for a given
- * set of cards.
+ * The order new cards are introduced in: the sample deck first (the
+ * hand-picked introduction to every topic), then the rest; within each, one
+ * from each topic in turn, in tags.json's order, and within a topic easy
+ * before hard (then by id), so the first days touch every topic at its
+ * gentlest card. Stable for a given set of cards, and adding cards outside
+ * the sample deck never changes where the sample cards come.
  */
 export function newCardOrder(cards: readonly Card[], topics: readonly Topic[]): Card[] {
+  const sample = cards.filter((c) => c.decks.includes('sample'));
+  const rest = cards.filter((c) => !c.decks.includes('sample'));
+  return [...interleave(sample, topics), ...interleave(rest, topics)];
+}
+
+/** One card from each topic in turn, in tags.json's order; easy before hard within a topic. */
+function interleave(cards: readonly Card[], topics: readonly Topic[]): Card[] {
   const rank = new Map(topics.map((t, i) => [t.id, i]));
   const byTopic = new Map<string, Card[]>();
   for (const card of cards) byTopic.set(card.topic, [...(byTopic.get(card.topic) ?? []), card]);

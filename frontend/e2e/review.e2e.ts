@@ -3,9 +3,10 @@ import { expect, test } from './fixtures';
 
 /**
  * Daily review in a build without accounts: every card, scheduled, with the
- * reviews kept in the browser. The first session's new cards come one per
- * topic in tags.json's order, easiest first (src/learn/review.ts), so the
- * cards and their order are known.
+ * reviews kept in the browser. The first session's new cards come from the
+ * sample deck, one per topic in tags.json's order, easiest first
+ * (src/learn/review.ts), so the cards and their order are known however many
+ * other cards are added.
  */
 
 const today = (page: Page) => page.getByRole('region', { name: 'Today' });

@@ -51,9 +51,16 @@ const repo = Object.entries(import.meta.glob<string>('../practice/cards/*/*.md',
 const repoTopics = readTopics(Object.values(import.meta.glob<string>('../practice/cards/tags.json', { query: '?raw', import: 'default', eager: true }))[0]);
 
 describe('which cards to review', () => {
-  it('introduces new cards a topic at a time in tags.json order, easy before hard', () => {
+  it('introduces the sample deck, then the rest, each a topic at a time in tags.json order, easy before hard', () => {
     const order = newCardOrder(reviewable(cards), topics).map((c) => c.id);
-    expect(order).toEqual(['e-easy', 'c-easy', 'r-medium', 'f-medium', 'b-medium', 'a-hard']);
+    expect(order).toEqual(['e-easy', 'c-easy', 'f-medium', 'b-medium', 'r-medium', 'a-hard']);
+  });
+
+  it('introduces the sample deck before every other card, however many are added', () => {
+    const order = newCardOrder(repo, repoTopics);
+    const sample = order.filter((c) => c.decks.includes('sample'));
+    expect(order.slice(0, sample.length)).toEqual(sample);
+    expect(newCardOrder(repo.filter((c) => c.decks.includes('sample')), repoTopics)).toEqual(sample);
   });
 
   it('leaves out retired cards and filters by topic (folder or tag) and deck', () => {

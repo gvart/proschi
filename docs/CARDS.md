@@ -152,7 +152,8 @@ When many requests miss a hot key at once, it is a {{cache stampede|thundering h
 
 Daily review is on the practice page, `practice/#/review` (`#/review/<topic>`
 trains one topic). Each day brings the cards that are due, then up to 10 new
-ones, one topic at a time in `tags.json` order and easy before hard; training
+ones: the sample deck's first, then the rest, each one topic at a time in
+`tags.json` order and easy before hard; training
 a topic is not held to that limit. Flip cards are rated again, hard, good or
 easy; the others are graded automatically: wrong is again, right is good
 (or easy, when the reviewer says so). An estimate accepts `2300`, `2,300`,
