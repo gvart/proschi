@@ -99,6 +99,30 @@ test.describe('no sideways scrolling on a phone', () => {
     await visit(page, 'practice/#/roadmap');
   });
 
+  test('daily review: the home, a topic and every card type, answered', async ({ page }) => {
+    await visit(page, 'practice/#/review/caching');
+    await visit(page, 'practice/#/review');
+    await page.getByRole('button', { name: /^Start review/ }).click();
+    const seen = new Set<string>();
+    for (let n = 1; seen.size < 4 && n <= 10; n++) {
+      const card = page.getByRole('article', { name: new RegExp(`^Card ${n} of`) });
+      const type = (await card.getAttribute('data-card-type'))!;
+      await expectNoHorizontalOverflow(page, `review, ${type} card`);
+      if (type === 'estimate') {
+        await card.getByLabel('Your estimate').fill('1k');
+        await card.getByRole('button', { name: 'Check' }).click();
+      } else if (type === 'choice') await card.getByRole('listitem').first().getByRole('button').click();
+      else await card.getByRole('button', { name: 'Show answer' }).click();
+      await expectNoHorizontalOverflow(page, `review, ${type} card answered`);
+      // Tap targets for rating and going on are at least 44px tall.
+      const next = type === 'flip' ? card.getByRole('button', { name: /^Good/ }) : card.getByRole('button', { name: 'Next' });
+      expect((await next.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+      await next.click();
+      seen.add(type);
+    }
+    expect(seen).toEqual(new Set(['flip', 'choice', 'estimate', 'cloze']));
+  });
+
   test('a problem, every tab', async ({ page }) => {
     await visit(page, 'practice/#/url-shortener');
     await eachTab(page, 'practice/#/url-shortener');

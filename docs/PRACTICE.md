@@ -23,8 +23,8 @@ The folder name is the problem id and its URLs: `practice/#/url-shortener` in
 the practice app, and `practice/url-shortener/`, a static page with the title,
 summary, statement and lesson (not the hints) that search engines index and
 the sitemap lists. Lowercase letters and digits, words joined by `-`; `problem`
-is taken by that page's template, and `roadmap` and `approach` by practice
-pages of their own (`RESERVED_IDS` in `problemFiles.ts`). Other files are an error,
+is taken by that page's template, and `roadmap`, `approach` and `review` by
+practice pages of their own (`RESERVED_IDS` in `problemFiles.ts`). Other files are an error,
 so a typo like `solutoin.proschi` is caught. Wrong design names follow the same
 rule (`wrong/miss-never-fills-cache.proschi`).
 

@@ -25,10 +25,11 @@ const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
  * Names a problem folder cannot have: `problem` is the template of the static
- * problem pages (practice/problem/), `roadmap` and `approach` are practice
- * routes and pages of their own (practice/#/roadmap, practice/approach/).
+ * problem pages (practice/problem/), `roadmap`, `approach` and `review` are
+ * practice routes and pages of their own (practice/#/roadmap,
+ * practice/approach/, practice/#/review).
  */
-export const RESERVED_IDS = ['problem', 'roadmap', 'approach'];
+export const RESERVED_IDS = ['problem', 'roadmap', 'approach', 'review'];
 const EXPECT_FAIL = /^#\s*expect-fail:\s*(.*?)\s*$/;
 
 /** What is wrong with one problem folder; `file` is relative to the folder. */

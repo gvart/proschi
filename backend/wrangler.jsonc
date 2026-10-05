@@ -32,15 +32,16 @@
       "migrations_dir": "migrations"
     }
   ],
-  // Per minute: test runs (they run the simulation), account changes and
-  // progress uploads per user; sign-ins and stats per IP.
+  // Per minute: test runs (they run the simulation), account changes,
+  // progress uploads and card review requests per user; sign-ins and stats per IP.
   "ratelimits": [
     { "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
     { "name": "AUTH_LIMITER", "namespace_id": "1002", "simple": { "limit": 20, "period": 60 } },
     { "name": "PROFILE_LIMITER", "namespace_id": "1003", "simple": { "limit": 10, "period": 60 } },
     { "name": "STATS_LIMITER", "namespace_id": "1004", "simple": { "limit": 120, "period": 60 } },
     { "name": "IMPORT_LIMITER", "namespace_id": "1005", "simple": { "limit": 3, "period": 60 } },
-    { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } }
+    { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
+    { "name": "CARD_LIMITER", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -70,7 +71,8 @@
         { "name": "PROFILE_LIMITER", "namespace_id": "2003", "simple": { "limit": 10, "period": 60 } },
         { "name": "STATS_LIMITER", "namespace_id": "2004", "simple": { "limit": 120, "period": 60 } },
         { "name": "IMPORT_LIMITER", "namespace_id": "2005", "simple": { "limit": 3, "period": 60 } },
-        { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } }
+        { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } },
+        { "name": "CARD_LIMITER", "namespace_id": "2007", "simple": { "limit": 60, "period": 60 } }
       ]
     }
   }

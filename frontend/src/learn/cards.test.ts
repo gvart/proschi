@@ -7,6 +7,7 @@ import {
   clozeWithAnswers,
   estimateError,
   gradeCloze,
+  normalizeAnswer,
   gradeEstimate,
   promptOf,
   readLock,
@@ -126,6 +127,8 @@ describe('grading', () => {
     const cloze = cardFromFile('caching/x.md', '---\ntype: cloze\ndifficulty: easy\n---\n## Text\nA {{cache stampede|thundering herd}}.\n') as ClozeCard;
     expect(gradeCloze(cloze, 0, 'Cache-Stampede')).toBe(true);
     expect(gradeCloze(cloze, 0, ' thundering herds ')).toBe(true);
+    expect(gradeCloze(cloze, 0, 'cache stampede.')).toBe(true);
+    expect(normalizeAnswer('A 2.5x cache... hit.')).toBe('a 2.5x cache hit');
     expect(gradeCloze(cloze, 0, 'stampede')).toBe(false);
     expect(gradeCloze(cloze, 0, '')).toBe(false);
     expect(gradeCloze(cloze, 1, 'cache stampede')).toBe(false);

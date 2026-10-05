@@ -17,6 +17,17 @@ deployed from `main` and ships with the same changes.
   ids that are never deleted or reused, topics, related problems, phone-sized
   text and near-duplicate cards) and `proschi cards lock` records new ids.
   How to write them: `docs/CARDS.md`.
+- Daily review on the practice page (`practice/#/review`): a few minutes of
+  cards a day, each scheduled to come back just before you would forget it
+  (FSRS). Recall a concept and rate yourself, pick an option, estimate a
+  number (typed as `2300`, `2.3k` or `1e6`) or fill a gap, with the reasoning
+  shown after each answer. Train one topic, or take the day's due and new
+  cards; keyboard shortcuts (space to flip, 1–4 to rate) and phone-sized
+  buttons. Signed in, every card is reviewed and your reviews are kept in
+  your account, even when sent later from a phone that was offline; signed
+  out, try the free sample deck. Find it from the "Daily review" card on the
+  practice list or in the footer. The cards are also published as
+  `practice/cards.json` for apps.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

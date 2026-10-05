@@ -311,12 +311,13 @@ export function clozeWithAnswers(card: ClozeCard): string {
   return card.text.replace(/\{\{(\d+)\}\}/g, (_, n: string) => card.blanks[Number(n)]?.[0] ?? '');
 }
 
-/** Lowercase, without punctuation and extra spaces: how typed answers are compared. */
+/** Lowercase, without punctuation and extra spaces: how typed answers are compared. A dot stays only inside a number, as in 2.5. */
 export function normalizeAnswer(s: string): string {
   return s
     .toLowerCase()
     .normalize('NFKD')
     .replace(/[̀-ͯ]/g, '')
+    .replace(/(?<!\d)\.|\.(?!\d)/g, ' ')
     .replace(/[^a-z0-9.]+/g, ' ')
     .trim();
 }

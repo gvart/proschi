@@ -1,3 +1,6 @@
+import type { CardState } from '../learn/fsrs';
+import type { DayCounts } from '../learn/review';
+
 /**
  * The Proschi API (backend/): sign-in and practice stats, under /api and
  * /auth on the site's own origin (proschi.app), with the session in an
@@ -115,4 +118,17 @@ export interface ProblemStats extends ProblemSummary {
 export interface Leaderboard {
   problems: number;
   entries: { rank: number; displayName: string; solved: number; lastSolvedAt: number }[];
+}
+
+/** GET /api/cards/state: the signed-in user's card states by card id, and with `?day=` that day's counts. */
+export interface CardStatesAnswer {
+  states: Record<string, CardState>;
+  today?: DayCounts;
+}
+
+/** POST /api/cards/reviews: how many reviews were new to the server, those it skipped and why, and their cards' states. */
+export interface CardReviewsAnswer {
+  accepted: number;
+  skipped: { id: string; cardId: string; reason: string }[];
+  states: Record<string, CardState>;
 }

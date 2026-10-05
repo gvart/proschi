@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { highlightLines, type TokenClass } from '../landing/highlight';
-import { parseMarkdown, type Block, type Inline } from './markdown';
+import { parseInline, parseMarkdown, type Block, type Inline } from './markdown';
 
 /** Renders a problem statement or a lesson; see markdown.ts for what it understands. */
 export default function Markdown({ source, blocks: given, large = false }: { source: string; /** Already parsed (e.g. for a table of contents). */ blocks?: Block[]; /** Article text size instead of the side panel's. */ large?: boolean }) {
@@ -12,6 +12,12 @@ export default function Markdown({ source, blocks: given, large = false }: { sou
       ))}
     </div>
   );
+}
+
+/** One line of Markdown (code, bold, links) without a paragraph around it, e.g. a choice card's option inside a button. */
+export function InlineMarkdown({ source }: { source: string }) {
+  const nodes = useMemo(() => parseInline(source), [source]);
+  return <Inlines nodes={nodes} />;
 }
 
 function BlockView({ block, large = false }: { block: Block; large?: boolean }) {

@@ -254,6 +254,8 @@ describe('data export', () => {
           problemVersion: 1,
         },
       ],
+      cardReviews: [],
+      cardStates: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);
