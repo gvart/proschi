@@ -132,6 +132,9 @@ describe('card reviews', () => {
     const r = review(CARD, 3, t);
     await post(a.token, [r]);
     expect((await state(b.token)).states).toEqual({});
+    // Review ids are per user: another user's review with the same id is stored too.
+    expect(((await (await post(b.token, [r])).json()) as Record<string, any>).accepted).toBe(1);
+    expect((await state(b.token)).states[CARD]).toEqual((await state(a.token)).states[CARD]);
 
     const exported = (await (await call('/api/me/export', { token: a.token })).json()) as Record<string, any>;
     expect(exported.cardReviews).toEqual([{ id: r.id, cardId: CARD, cardVersion: 1, rating: 3, reviewedAt: t, durationMs: r.durationMs, day: r.day }]);
@@ -150,7 +153,9 @@ describe('card reviews', () => {
 
     expect((await call('/api/me', { method: 'DELETE', token: a.token })).status).toBe(204);
     for (const table of ['card_reviews', 'card_state']) {
-      expect((await env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table}`).first<{ n: number }>())!.n, table).toBe(0);
+      const count = (user: string) => env.DB.prepare(`SELECT COUNT(*) AS n FROM ${table} WHERE user_id = ?`).bind(user).first<{ n: number }>();
+      expect((await count(a.id))!.n, table).toBe(0);
+      expect((await count(b.id))!.n, table).toBe(1);
     }
   });
 

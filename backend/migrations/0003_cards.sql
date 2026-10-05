@@ -2,9 +2,10 @@
 
 -- Every review a user made, as the client sent it; rows are only ever added.
 -- The client makes the id (a UUID), so a review sent twice, e.g. retried
--- after a dropped connection, is stored once.
+-- after a dropped connection, is stored once. Ids are per user, so one
+-- user's ids never collide with another's.
 CREATE TABLE card_reviews (
-  id TEXT PRIMARY KEY,
+  id TEXT NOT NULL,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
   -- The card's file name (frontend/src/practice/cards/<topic>/<id>.md).
   card_id TEXT NOT NULL,
@@ -16,7 +17,8 @@ CREATE TABLE card_reviews (
   -- From showing the card to answering it.
   duration_ms INTEGER,
   -- The user's local date of the review, YYYY-MM-DD, for the daily counts.
-  day TEXT NOT NULL
+  day TEXT NOT NULL,
+  PRIMARY KEY (user_id, id)
 );
 CREATE INDEX card_reviews_user ON card_reviews (user_id, reviewed_at);
 -- Replaying one card's reviews after new ones arrive.
