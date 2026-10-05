@@ -1,0 +1,20 @@
+# expect-fail: Each generator claims its worker id once, at startup
+# The generator checks its worker id with ZooKeeper on every request.
+import "problem.proschi"
+
+idgen "Snowflake" [gRPC] x15 @platform "Makes ids from the clock, its worker id and a sequence"
+
+tweets -> idgen : Thrift
+idgen  -> zk    : claim worker id
+
+usecase "Get ID" "A service asks for a new id" {
+  tweets -> idgen  : GET next id
+  idgen  -> zk     : GET /snowflake/workers/37
+  zk    --> idgen  : still ours
+  idgen --> tweets : 200 {"id": 1541815603606036480}
+}
+
+usecase "Start generator" "A generator process starts and claims a worker id" {
+  idgen -> zk    : CREATE /snowflake/workers/ ephemeral sequential
+  zk   --> idgen : worker id 37
+}

@@ -59,6 +59,13 @@ deployed from `main` and ships with the same changes.
   are refused; browser progress is uploaded in one request on sign-in. Every
   deploy goes to staging.proschi.app and passes a smoke test before
   production, which records a database bookmark to restore from.
+- Five practice problems based on published systems, each naming its
+  sources under *Based on*: Snowflake IDs (Twitter's id generator, easy),
+  Always-writable Shopping Cart (Amazon's Dynamo, easy), Durable Job Queue
+  (Slack's Kafka in front of Redis, medium), View Counting (Reddit's
+  HyperLogLog pipeline, medium) and Social Graph Cache (Facebook's TAO,
+  hard). Their scale and limits come from the posts and papers where these
+  give numbers. Seventeen problems in all.
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,

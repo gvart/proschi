@@ -12,7 +12,7 @@ import type { Problem } from './types';
 describe('problem catalog', () => {
   it('reads every problem folder', () => {
     expect(catalogErrors.map((e) => e.message)).toEqual([]);
-    expect(problems.length).toBeGreaterThanOrEqual(12);
+    expect(problems.length).toBeGreaterThanOrEqual(17);
   });
 
   it('has unique ids and finds problems by id', () => {
@@ -29,16 +29,21 @@ describe('problem catalog', () => {
 
   it('lists problems by difficulty, then order, then title', () => {
     expect(problems.map((p) => p.id)).toEqual([
+      'shopping-cart',
       'pastebin',
       'rate-limiter',
+      'snowflake-ids',
       'url-shortener',
       'chat',
+      'job-queue',
       'file-storage',
       'news-feed',
       'notification-fanout',
       'ride-matching',
       'search-autocomplete',
+      'view-counting',
       'payments',
+      'social-graph-cache',
       'ticket-booking',
       'video-streaming',
     ]);

@@ -1,0 +1,37 @@
+# expect-fail: The leader updates the other followers after the commit
+# Writes update the caller's follower only: every other follower keeps serving the old list until it expires.
+import "problem.proschi"
+
+followers "TAO Followers" [Cache] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
+leaders   "TAO Leaders"   [Cache] x2 @tao "One per shard: the only tier that reads and writes MySQL"
+
+capacity {
+  db shards 3
+}
+
+web       -> followers : TAO API
+followers -> leaders   : forward miss / write
+leaders   -> db        : SQL
+
+usecase "Read" "The web tier reads an association list" {
+  web -> followers : assoc_range(user 42, LIKES, 0, 50)
+
+  alt "Follower hit" when "the follower has the list" {
+    followers --> web : 50 associations
+  } alt "Follower miss" when "the follower does not" {
+    followers  -> leaders   : assoc_range(user 42, LIKES)
+    leaders    -> db        : SELECT FROM assocs WHERE id1 = 42 AND atype = LIKES
+    db        --> leaders   : rows
+    leaders   --> followers : 50 associations
+    followers --> web       : 50 associations
+  }
+}
+
+usecase "Write" "The web tier adds an association" {
+  web        -> followers : assoc_add(user 42, LIKES, post 7)
+  followers  -> leaders   : assoc_add(user 42, LIKES, post 7)
+  leaders    -> db        : INSERT INTO assocs
+  db        --> leaders   : ok
+  leaders   --> followers : ok, new version
+  followers --> web       : ok
+}

@@ -1,0 +1,33 @@
+# expect-fail: Reads are answered by the follower tier
+# expect-fail: Only the leader tier talks to MySQL
+# expect-fail: The leader updates the other followers after the commit
+# One cache tier in front of MySQL, memcache style: every cache server reads and writes the database.
+import "problem.proschi"
+
+followers "TAO Followers" [Cache] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
+
+capacity {
+  db shards 3
+}
+
+web       -> followers : TAO API
+followers -> db        : SQL
+
+usecase "Read" "The web tier reads an association list" {
+  web -> followers : assoc_range(user 42, LIKES, 0, 50)
+
+  alt "Follower hit" when "the follower has the list" {
+    followers --> web : 50 associations
+  } alt "Follower miss" when "the follower does not" {
+    followers  -> db        : SELECT FROM assocs WHERE id1 = 42 AND atype = LIKES
+    db        --> followers : rows
+    followers --> web       : 50 associations
+  }
+}
+
+usecase "Write" "The web tier adds an association" {
+  web        -> followers : assoc_add(user 42, LIKES, post 7)
+  followers  -> db        : INSERT INTO assocs
+  db        --> followers : ok
+  followers --> web       : ok
+}

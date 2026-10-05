@@ -1,0 +1,62 @@
+import "problem.proschi"
+
+followers "TAO Followers" [Cache] x16 @tao "Answer the web tier; forward misses and writes to the shard's leader"
+leaders   "TAO Leaders"   [Cache] x2 @tao "One per shard: the only tier that reads and writes MySQL"
+
+capacity {
+  db shards 3
+}
+
+web       -> followers : TAO API
+followers -> leaders   : forward miss / write
+leaders   -> db        : SQL
+leaders   -> followers : refill / invalidate
+
+entity Object in db "A node of the graph: a user, a post, a check-in" {
+  id      int key
+  otype   string
+  data    json
+  version int
+}
+entity Association in db "A typed edge, e.g. a user likes a post" {
+  id1   int    key
+  atype string key
+  id2   int    key
+  time  time   index
+  data  json   optional
+}
+
+decision "Two cache tiers: followers in front of a leader per shard" {
+  because "Followers absorb the read load and can be added freely; a single leader per shard is the only reader and writer of its MySQL shard, so the database sees each miss once and caches stay consistent with it"
+  rejected "One cache tier in front of MySQL" "Every cache server that misses goes to MySQL, and many writers race to fill and invalidate the same keys"
+}
+decision "Write through the cache, not around it" {
+  because "The leader writes MySQL and then its own cache, and the follower that forwarded the write updates itself on the way back, so the writer reads its own write"
+  rejected "Look-aside: write MySQL, then delete the cache key" "A concurrent miss can refill the old value after the delete"
+}
+decision "Invalidate other followers asynchronously" because "The writer does not wait for every follower; they converge within moments, which the social graph tolerates"
+decision "Three MySQL shards" because "About 36k reads a second miss the followers and reach MySQL; with 3 shards of a primary and a replica, each shard is 30% busy, 60% with a replica lost"
+
+usecase "Read" "The web tier reads an association list" {
+  web -> followers : assoc_range(user 42, LIKES, 0, 50)
+
+  alt "Follower hit" when "the follower has the list" {
+    followers --> web : 50 associations
+  } alt "Follower miss" when "the follower does not" {
+    followers  -> leaders   : assoc_range(user 42, LIKES)
+    leaders    -> db        : SELECT FROM assocs WHERE id1 = 42 AND atype = LIKES
+    db        --> leaders   : rows
+    leaders   --> followers : 50 associations
+    followers --> web       : 50 associations
+  }
+}
+
+usecase "Write" "The web tier adds an association" {
+  web        -> followers : assoc_add(user 42, LIKES, post 7)
+  followers  -> leaders   : assoc_add(user 42, LIKES, post 7)
+  leaders    -> db        : INSERT INTO assocs
+  db        --> leaders   : ok
+  leaders   --> followers : ok, new version
+  followers --> web       : ok
+  leaders   ->> followers : x4 INVALIDATE assoc 42 LIKES on the other followers
+}

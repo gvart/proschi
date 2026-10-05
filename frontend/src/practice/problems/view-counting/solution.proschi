@@ -1,0 +1,98 @@
+import "problem.proschi"
+
+lb        "Load Balancer"   [AWS Load Balancer] x2 @platform
+collector "Event Collector" [Go]                x16 @data "Takes view events and produces them to Kafka"
+api       "Counts API"      [REST API]          x8 @data "Serves the view count of a post"
+kafka     "Kafka"           [Kafka]             x3 @data "Topics: raw views and counted views"
+nazar     "Nazar"           [Go]                x16 @data "Decides whether a view counts"
+state     "Nazar State"     [Redis]             x2 @data "Recent views per user and post, for the rules"
+abacus    "Abacus"          [Go]                x16 @data "Adds counted views to each post's HyperLogLog"
+counts    "View Counters"   [Redis]             x2 @data "One HyperLogLog per post, about 12 KB each"
+store     "Counter Store"   [Cassandra]         x3 @data "Every post's counter, written every 10 seconds"
+
+reader    -> lb
+lb        -> collector : HTTPS
+lb        -> api       : HTTPS
+collector -> kafka     : produce
+kafka     -> nazar     : consume
+nazar     -> state     : RESP
+nazar     -> kafka     : produce
+kafka     -> abacus    : consume
+abacus    -> counts    : RESP
+abacus    -> store     : CQL
+api       -> counts    : RESP
+
+entity ViewCounter in store "A post's HyperLogLog, copied from Redis every 10 seconds" {
+  postId    string key
+  hll       bytes
+  updatedAt time
+}
+
+decision "Count unique viewers with HyperLogLog" {
+  because "A HyperLogLog takes at most 12 KB per post and errs by about 0.81%, inside the few percent the count may be off; a set of user ids for a post with a million viewers takes megabytes"
+  rejected "A row per viewer and post" "Exact, but storage and writes grow with every view of every post"
+}
+decision "Put Kafka between the event and the count" {
+  because "The reader's request only produces an event; filtering and counting run seconds later and can fall behind without slowing pages down"
+  rejected "Count in the request" "Every page view would wait for the rules and the counter"
+}
+decision "Flush counters to Cassandra every 10 seconds" {
+  because "Redis may evict a counter; a copy every 10 seconds bounds the loss and costs one write per active post, not one per view"
+  rejected "Write Cassandra on every view" "Ten times the writes for the same counter"
+}
+
+usecase "Record view" "A reader opens a post; the client reports the view" {
+  reader     -> lb        : POST /events json {"type": "view", "post": "t3_6da600", "user": "t2_1xk"}
+  lb         -> collector : POST /events
+  collector  -> kafka     : PRODUCE views
+  kafka     --> collector : ok
+  collector --> lb        : 202
+  lb        --> reader    : 202
+}
+
+usecase "Filter view" "Nazar decides whether the view should count" {
+  kafka -> nazar : ViewEvent t3_6da600 t2_1xk
+  nazar -> state : INCR seen:t2_1xk:t3_6da600
+
+  alt "Counted" when "the user has not viewed the post recently" {
+    state --> nazar : 1
+    nazar  -> kafka : PRODUCE counted-views
+    kafka --> nazar : ok
+  } alt "Ignored" when "a repeat view or a bot" {
+    state --> nazar : 7
+  }
+  nazar --> kafka : commit offset
+}
+
+usecase "Count view" "Abacus adds a counted view to the post's counter" {
+  kafka -> abacus : CountedView t3_6da600 t2_1xk
+
+  alt "Counter in Redis" when "the post's counter is in Redis" {
+    abacus  -> counts : PFADD views:t3_6da600 t2_1xk
+    counts --> abacus : 1
+  } alt "Counter evicted" when "Redis evicted the counter" {
+    abacus  -> store  : SELECT hll FROM view_counters
+    store  --> abacus : hll
+    abacus  -> counts : SET views:t3_6da600 hll
+    counts --> abacus : ok
+    abacus  -> counts : PFADD views:t3_6da600 t2_1xk
+    counts --> abacus : 1
+  }
+  abacus --> kafka : commit offset
+}
+
+usecase "Persist counts" "Every 10 seconds, Abacus copies the counters that changed" {
+  abacus  -> counts : GET views:t3_6da600
+  counts --> abacus : hll
+  abacus  -> store  : UPSERT view_counters
+  store  --> abacus : ok
+}
+
+usecase "Read count" "Show a post's view count" {
+  reader  -> lb     : GET /posts/t3_6da600/views
+  lb      -> api    : GET /posts/t3_6da600/views
+  api     -> counts : PFCOUNT views:t3_6da600
+  counts --> api    : 48210
+  api    --> lb     : 200 {"views": 48210}
+  lb     --> reader : 200 {"views": 48210}
+}

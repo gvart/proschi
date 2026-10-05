@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the id generator, its connections and the use cases "Get ID" and "Start generator".
+idgen "ID Generator" [gRPC]
+
+tweets -> idgen
+
+usecase "Get ID" {
+  tweets -> idgen  : GET next id
+  idgen --> tweets : 200 {"id": 1541815603606036480}
+}

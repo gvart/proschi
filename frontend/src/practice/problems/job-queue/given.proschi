@@ -1,0 +1,42 @@
+title "Durable Job Queue" "Takes 33k background jobs a second without losing one when Redis fills up"
+
+web     "Web App"     [REST API] x4 @web "The PHP application; enqueues a job for anything too slow for a web request"
+workers "Job Workers" [Worker]   x8 @jobs "Take jobs from Redis and run them; already exist"
+
+traffic {
+  "Enqueue" 33k rps
+  "Relay"   33k rps mix "Relayed" 99.9%, "Redis full" 0.1%
+  "Run job" 33k rps
+}
+
+requirements {
+  p99 "Enqueue" < 50ms
+  availability "Enqueue" >= 99.99%
+  durable "Enqueue"
+  survive any node failure
+  cost <= 8000 usd/month
+}
+
+test "Enqueuing never touches Redis" {
+  "Enqueue" starts at web
+  "Enqueue" writes any queue before responding
+  "Enqueue" never calls any cache
+  no path from web to any cache
+}
+
+test "The web app enqueues through a stateless gateway" {
+  "Enqueue" calls any service before any queue
+  no path from web to any queue
+}
+
+test "Only the relay moves jobs from Kafka to Redis" {
+  "Relay" starts at any queue
+  "Relay" scenario "Relayed" writes any cache before responding
+  "Run job" starts at workers
+  "Run job" calls any cache
+  "Run job" never calls any queue
+}
+
+test "A full Redis leaves the job in Kafka" {
+  "Relay" handles failure of any cache
+}

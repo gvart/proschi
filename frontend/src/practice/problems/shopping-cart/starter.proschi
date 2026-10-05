@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Add to cart" and "View cart".
+cart "Cart Service" [REST API]
+
+shopper -> cart
+
+usecase "Add to cart" {
+  shopper -> cart    : PUT /carts/c-77/items json {"sku": "B000123", "qty": 1}
+  cart   --> shopper : 200 {"items": 3}
+}

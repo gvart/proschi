@@ -1,0 +1,56 @@
+import "problem.proschi"
+
+gate  "Kafkagate" [Go]    x24 @jobs "Stateless HTTP front for Kafka; keeps the broker connections"
+kafka "Kafka"     [Kafka] x3 @jobs "Durable buffer: one topic per job type"
+relay "JQRelay"   [Go]    x24 @jobs "Moves jobs from Kafka into Redis, at a rate Redis can take"
+redis "Job Redis" [Redis] x2 @jobs "The queues the workers already read"
+
+web     -> gate  : HTTP POST
+gate    -> kafka : produce
+kafka   -> relay : consume
+relay   -> redis : RPUSH
+workers -> redis : LPOP
+
+entity Job in kafka "One background job" {
+  jobId      string key
+  type       string
+  payload    json
+  enqueuedAt time
+}
+
+decision "Put Kafka in front of Redis" {
+  because "Kafka keeps jobs on disk, so when workers fall behind or Redis runs out of memory, jobs wait in Kafka instead of being refused or lost"
+  rejected "Enqueue straight into Redis" "When Redis reaches its memory limit, enqueues fail and the web app loses work: the outage this design fixes"
+  rejected "Replace Redis with Kafka for the workers" "Rewriting every worker at once; keeping Redis keeps the queue interface the workers already use"
+}
+decision "Enqueue through Kafkagate" {
+  because "PHP processes cannot keep persistent broker connections; a small Go service holds them, follows leader changes, and gives the web app one HTTP call"
+  rejected "A Kafka client in every PHP request" "A new broker connection per request, and broker topology in the web app"
+}
+decision "Wait only for the partition leader's ack" because "Lower enqueue latency; a job is lost only if a leader dies before replicating it"
+decision "One relay per topic, held by a lock" because "A Consul lock per topic means one relay moves each topic; if it dies another takes over"
+
+usecase "Enqueue" "The web app hands off a background job" {
+  web    -> gate  : POST /enqueue json {"topic": "jobs.unfurl", "partition": 7, "job": {"url": "https://example.com"}}
+  gate   -> kafka : PRODUCE jobs.unfurl
+  kafka --> gate  : leader ack
+  gate  --> web   : 200
+}
+
+usecase "Relay" "A relay moves the next job from Kafka into Redis" {
+  kafka -> relay : Job jobs.unfurl offset 81231
+
+  alt "Relayed" when "Redis has room" {
+    relay  -> redis : RPUSH queue:unfurl job
+    redis --> relay : ok
+    relay --> kafka : commit offset
+  } alt "Redis full" when "Redis is out of memory or down" {
+    relay  -x redis : RPUSH queue:unfurl job
+    relay --> kafka : keep offset, retry with backoff
+  }
+}
+
+usecase "Run job" "A worker takes the next job from Redis" {
+  workers -> redis   : LPOP queue:unfurl
+  redis  --> workers : job
+}

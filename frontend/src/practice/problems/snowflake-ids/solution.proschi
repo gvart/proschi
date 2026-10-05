@@ -1,0 +1,28 @@
+import "problem.proschi"
+
+idgen "Snowflake" [gRPC] x15 @platform "Makes ids from the clock, its worker id and a sequence"
+
+tweets -> idgen : Thrift
+idgen  -> zk    : claim worker id
+
+decision "Make ids from time, worker id and a sequence" {
+  because "41 bits of milliseconds, 10 bits of worker id and a 12-bit sequence: unique without asking anyone, and ids made at about the same time sort close together"
+  rejected "A ticket table in MySQL" "Every id is a write to one primary: 5k a second at most, and a single point of failure"
+  rejected "INCR in Redis" "Still one round trip and one shared counter per id; a failover can hand out an id twice"
+  rejected "Random UUIDs" "128 bits, and they do not sort by time"
+}
+decision "Coordinate only at startup" {
+  because "The worker id is the only thing two generators must not share; claimed once in ZooKeeper, every id after that is made in memory"
+  rejected "Ask ZooKeeper for every id" "Puts the coordination cluster on the hot path of every tweet"
+}
+decision "Clients call any generator directly" because "Every generator can answer every request, so no load balancer and no extra hop"
+
+usecase "Get ID" "A service asks for a new id" {
+  tweets -> idgen  : GET next id
+  idgen --> tweets : 200 {"id": 1541815603606036480}
+}
+
+usecase "Start generator" "A generator process starts and claims a worker id" {
+  idgen -> zk    : CREATE /snowflake/workers/ ephemeral sequential
+  zk   --> idgen : worker id 37
+}

@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the follower and leader tiers (ids followers and leaders), the
+# connections, the shard count and the use cases "Read" and "Write".
+followers "TAO Followers" [Cache]
+
+web       -> followers
+followers -> db
+
+usecase "Read" {
+  web        -> followers : assoc_range(user 42, LIKES, 0, 50)
+  followers  -> db        : SELECT FROM assocs WHERE id1 = 42 AND atype = LIKES
+  db        --> followers : rows
+  followers --> web       : 50 associations
+}

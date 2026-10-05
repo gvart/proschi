@@ -1,0 +1,22 @@
+# expect-fail: An id is made without a round trip to shared storage
+# One shared counter in Redis: fast, but every id is still a round trip to it.
+import "problem.proschi"
+
+idgen   "ID Service" [gRPC]  x15 @platform "Hands out ids from the counter"
+counter "ID Counter" [Redis] x2 @platform "One INCR per id"
+
+tweets -> idgen   : Thrift
+idgen  -> counter : RESP
+idgen  -> zk      : register
+
+usecase "Get ID" "A service asks for a new id" {
+  tweets   -> idgen   : GET next id
+  idgen    -> counter : INCR ids
+  counter --> idgen   : 1541815603606036480
+  idgen   --> tweets  : 200 {"id": 1541815603606036480}
+}
+
+usecase "Start generator" "A service process starts and registers" {
+  idgen -> zk    : CREATE /snowflake/workers/ ephemeral sequential
+  zk   --> idgen : worker id 37
+}

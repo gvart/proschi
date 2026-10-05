@@ -1,0 +1,23 @@
+# expect-fail: An id is made without a round trip to shared storage
+# expect-fail: p99 of Get ID < 40 ms
+# The classic ticket server: every id is an auto-increment row in one MySQL primary.
+import "problem.proschi"
+
+idgen   "ID Service"    [gRPC]  x15 @platform "Hands out ids from the ticket table"
+tickets "Ticket Server" [MySQL] x2 @platform "One auto-increment table"
+
+tweets -> idgen   : Thrift
+idgen  -> tickets : SQL
+idgen  -> zk      : register
+
+usecase "Get ID" "A service asks for a new id" {
+  tweets   -> idgen   : GET next id
+  idgen    -> tickets : UPSERT tickets64 with REPLACE INTO
+  tickets --> idgen   : LAST_INSERT_ID() 1541815603606036480
+  idgen   --> tweets  : 200 {"id": 1541815603606036480}
+}
+
+usecase "Start generator" "A service process starts and registers" {
+  idgen -> zk    : CREATE /snowflake/workers/ ephemeral sequential
+  zk   --> idgen : worker id 37
+}
