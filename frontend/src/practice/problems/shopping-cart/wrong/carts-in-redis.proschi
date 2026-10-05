@@ -1,0 +1,36 @@
+# expect-fail: Add to cart is durable
+# Carts kept only in Redis: fast and always writable, until a node restarts.
+import "problem.proschi"
+
+lb    "Load Balancer" [AWS Load Balancer] x2 @platform
+cart  "Cart Service"  [REST API]          x3 @cart
+carts "Carts"         [Redis]             x3 @cart
+
+shopper -> lb
+lb      -> cart  : HTTPS
+cart    -> carts : RESP
+
+usecase "Add to cart" "Put an item in the shopper's cart" {
+  shopper -> lb      : PUT /carts/c-77/items json {"sku": "B000123", "qty": 1}
+  lb      -> cart    : PUT /carts/c-77/items
+  cart    -> carts   : HSET cart:c-77 B000123 1
+  carts  --> cart    : ok
+  cart   --> lb      : 200 {"items": 3}
+  lb     --> shopper : 200 {"items": 3}
+}
+
+usecase "View cart" "Show the shopper's cart" {
+  shopper -> lb    : GET /carts/c-77
+  lb      -> cart  : GET /carts/c-77
+  cart    -> carts : HGETALL cart:c-77
+
+  alt "One version" {
+    carts --> cart : items
+  } alt "Divergent versions" {
+    carts --> cart  : items
+    cart   -> carts : HSET cart:c-77 merged
+    carts --> cart  : ok
+  }
+  cart --> lb      : 200 {"items": 3}
+  lb   --> shopper : 200 {"items": 3}
+}

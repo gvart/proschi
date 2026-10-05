@@ -1,0 +1,39 @@
+# expect-fail: Only the relay moves jobs from Kafka to Redis
+# The workers are rewritten to read Kafka directly; the relay and Redis are bypassed.
+import "problem.proschi"
+
+gate  "Kafkagate" [Go]    x24 @jobs "Stateless HTTP front for Kafka; keeps the broker connections"
+kafka "Kafka"     [Kafka] x3 @jobs "Durable buffer: one topic per job type"
+relay "JQRelay"   [Go]    x24 @jobs "Moves jobs from Kafka into Redis, at a rate Redis can take"
+redis "Job Redis" [Redis] x2 @jobs "The queues the workers already read"
+
+web     -> gate  : HTTP POST
+gate    -> kafka : produce
+kafka   -> relay : consume
+relay   -> redis : RPUSH
+workers -> kafka : consume
+
+usecase "Enqueue" "The web app hands off a background job" {
+  web    -> gate  : POST /enqueue json {"topic": "jobs.unfurl", "partition": 7, "job": {"url": "https://example.com"}}
+  gate   -> kafka : PRODUCE jobs.unfurl
+  kafka --> gate  : leader ack
+  gate  --> web   : 200
+}
+
+usecase "Relay" "A relay moves the next job from Kafka into Redis" {
+  kafka -> relay : Job jobs.unfurl offset 81231
+
+  alt "Relayed" when "Redis has room" {
+    relay  -> redis : RPUSH queue:unfurl job
+    redis --> relay : ok
+    relay --> kafka : commit offset
+  } alt "Redis full" when "Redis is out of memory or down" {
+    relay  -x redis : RPUSH queue:unfurl job
+    relay --> kafka : keep offset, retry with backoff
+  }
+}
+
+usecase "Run job" "A worker takes the next job from Redis" {
+  workers -> kafka   : FETCH jobs.unfurl
+  kafka  --> workers : job
+}

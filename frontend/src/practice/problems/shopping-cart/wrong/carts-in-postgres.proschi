@@ -1,0 +1,37 @@
+# expect-fail: Adds go to an eventually consistent store that is always writable
+# expect-fail: availability of Add to cart ≥ 99.999%
+# Carts in a relational database: every add needs the one primary.
+import "problem.proschi"
+
+lb    "Load Balancer" [AWS Load Balancer] x2 @platform
+cart  "Cart Service"  [REST API]          x3 @cart
+carts "Carts"         [PostgreSQL]        x3 @cart
+
+shopper -> lb
+lb      -> cart  : HTTPS
+cart    -> carts : SQL
+
+usecase "Add to cart" "Put an item in the shopper's cart" {
+  shopper -> lb      : PUT /carts/c-77/items json {"sku": "B000123", "qty": 1}
+  lb      -> cart    : PUT /carts/c-77/items
+  cart    -> carts   : INSERT cart_item
+  carts  --> cart    : ok
+  cart   --> lb      : 200 {"items": 3}
+  lb     --> shopper : 200 {"items": 3}
+}
+
+usecase "View cart" "Show the shopper's cart" {
+  shopper -> lb    : GET /carts/c-77
+  lb      -> cart  : GET /carts/c-77
+  cart    -> carts : SELECT cart_items
+
+  alt "One version" {
+    carts --> cart : rows
+  } alt "Divergent versions" {
+    carts --> cart  : rows
+    cart   -> carts : UPDATE cart SET merged
+    carts --> cart  : ok
+  }
+  cart --> lb      : 200 {"items": 3}
+  lb   --> shopper : 200 {"items": 3}
+}

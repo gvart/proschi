@@ -1,0 +1,27 @@
+title "Snowflake IDs" "Hands out unique, roughly time-ordered 64-bit ids without a central counter"
+
+tweets "Tweet Service" [REST API]  x4 @tweets "Needs a new id for every tweet it creates"
+zk     "ZooKeeper"     [ZooKeeper] x3 @platform "The coordination cluster that already exists"
+
+traffic {
+  "Get ID"          20k rps
+  "Start generator" 1 rpm
+}
+
+requirements {
+  p99 "Get ID" < 40ms
+  availability "Get ID" >= 99.99%
+  survive any node failure
+  cost <= 4000 usd/month
+}
+
+test "An id is made without a round trip to shared storage" {
+  "Get ID" starts at tweets
+  "Get ID" never calls any database or any cache
+}
+
+test "Each generator claims its worker id once, at startup" {
+  "Start generator" calls zk
+  "Start generator" writes zk before responding
+  "Get ID" never calls zk
+}

@@ -1,0 +1,38 @@
+title "Social Graph Cache" "Serves a million social graph reads a second from two cache tiers over MySQL"
+
+web "Web Servers" [Actor] "The PHP web tier; every page reads dozens of objects and associations"
+db  "Graph MySQL" [MySQL] x2 @data "Objects and associations, the source of truth: a primary and a replica per shard, sharded by object id"
+
+traffic {
+  "Read"  1m rps mix "Follower hit" 96.4%, "Follower miss" 3.6%
+  "Write" 2k rps
+}
+
+requirements {
+  p99 "Read" < 25ms
+  p99 "Write" < 60ms
+  availability "Read" >= 99.99%
+  durable "Write"
+  survive any node failure
+  cost <= 6000 usd/month
+}
+
+test "Reads are answered by the follower tier" {
+  "Read" starts at web
+  "Read" calls followers before leaders
+  "Read" calls leaders before db
+  "Read" scenario "Follower hit" never calls leaders or db
+  no path from web to leaders or db
+}
+
+test "Only the leader tier talks to MySQL" {
+  "Write" calls followers before leaders
+  "Write" calls leaders before db
+  "Write" writes db before responding
+  no path from followers to db
+}
+
+test "The leader updates the other followers after the commit" {
+  "Write" calls followers after db
+  in "Write" leaders calls followers
+}

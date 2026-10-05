@@ -1,0 +1,12 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Enqueue", "Relay" and "Run job".
+redis "Job Redis" [Redis]
+
+web     -> redis
+workers -> redis
+
+usecase "Enqueue" {
+  web    -> redis : RPUSH queue:unfurl job
+  redis --> web   : ok
+}

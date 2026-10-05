@@ -1,0 +1,38 @@
+# expect-fail: Enqueuing never touches Redis
+# expect-fail: The web app enqueues through a stateless gateway
+# The old architecture: the web app pushes jobs straight into Redis, which refuses them once it is full.
+import "problem.proschi"
+
+gate  "Kafkagate" [Go]    x24 @jobs "Stateless HTTP front for Kafka; keeps the broker connections"
+kafka "Kafka"     [Kafka] x3 @jobs "Durable buffer: one topic per job type"
+relay "JQRelay"   [Go]    x24 @jobs "Moves jobs from Kafka into Redis, at a rate Redis can take"
+redis "Job Redis" [Redis] x2 @jobs "The queues the workers already read"
+
+web     -> redis : RPUSH
+gate    -> kafka : produce
+kafka   -> relay : consume
+relay   -> redis : RPUSH
+workers -> redis : LPOP
+
+usecase "Enqueue" "The web app hands off a background job" {
+  web    -> redis : RPUSH queue:unfurl job
+  redis --> web   : ok
+}
+
+usecase "Relay" "A relay moves the next job from Kafka into Redis" {
+  kafka -> relay : Job jobs.unfurl offset 81231
+
+  alt "Relayed" when "Redis has room" {
+    relay  -> redis : RPUSH queue:unfurl job
+    redis --> relay : ok
+    relay --> kafka : commit offset
+  } alt "Redis full" when "Redis is out of memory or down" {
+    relay  -x redis : RPUSH queue:unfurl job
+    relay --> kafka : keep offset, retry with backoff
+  }
+}
+
+usecase "Run job" "A worker takes the next job from Redis" {
+  workers -> redis   : LPOP queue:unfurl
+  redis  --> workers : job
+}

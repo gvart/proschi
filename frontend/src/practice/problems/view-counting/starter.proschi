@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the components, connections and the five use cases.
+collector "Event Collector" [Go]
+
+reader -> collector
+
+usecase "Record view" {
+  reader     -> collector : POST /events json {"type": "view", "post": "t3_6da600", "user": "t2_1xk"}
+  collector --> reader    : 202
+}

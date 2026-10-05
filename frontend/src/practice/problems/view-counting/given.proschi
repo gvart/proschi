@@ -1,0 +1,47 @@
+title "View Counting" "Counts unique viewers of every post in near real time"
+
+reader "Reader" [Actor]
+
+traffic {
+  "Record view"    20k rps
+  "Filter view"    20k rps mix "Counted" 90%, "Ignored" 10%
+  "Count view"     18k rps mix "Counter in Redis" 99%, "Counter evicted" 1%
+  "Persist counts" 2k rps
+  "Read count"     10k rps
+}
+
+requirements {
+  p99 "Record view" < 60ms
+  p99 "Read count" < 60ms
+  availability "Record view" >= 99.9%
+  availability "Read count" >= 99.9%
+  durable "Record view"
+  survive any node failure
+  cost <= 10000 usd/month
+}
+
+test "Recording a view never waits for counting" {
+  "Record view" writes any queue before responding
+  "Record view" never calls any cache or any database
+  "Record view" responds 2xx
+}
+
+test "Views are filtered before they are counted" {
+  "Filter view" starts at any queue
+  "Filter view" calls any cache
+  "Filter view" scenario "Counted" calls any queue
+  "Filter view" scenario "Ignored" never calls any queue
+}
+
+test "Unique viewers go into a HyperLogLog in Redis, not a database" {
+  "Count view" starts at any queue
+  "Count view" every scenario calls any cache
+  "Count view" scenario "Counter in Redis" never calls any database
+  "Count view" scenario "Counter evicted" calls any database before any cache
+}
+
+test "Redis serves the counts; the database is a backup written in batches" {
+  "Persist counts" calls any database after any cache
+  "Read count" calls any cache
+  "Read count" never calls any database
+}

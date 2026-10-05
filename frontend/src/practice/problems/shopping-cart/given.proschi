@@ -1,0 +1,28 @@
+title "Always-writable Shopping Cart" "A cart that accepts every add, even while parts of the store are down"
+
+shopper "Shopper" [Actor]
+
+traffic {
+  "Add to cart" 500 rps
+  "View cart"   1k rps mix "One version" 99.94%, "Divergent versions" 0.06%
+}
+
+requirements {
+  p999 "Add to cart" < 300ms
+  p999 "View cart" < 300ms
+  availability "Add to cart" >= 99.999%
+  durable "Add to cart"
+  survive any node failure
+  cost <= 3000 usd/month
+}
+
+test "Adds go to an eventually consistent store that is always writable" {
+  "Add to cart" writes any database before responding
+  "Add to cart" never calls any strong store
+  "Add to cart" responds 200
+}
+
+test "Divergent versions are merged and written back" {
+  "View cart" has scenario "Divergent versions"
+  "View cart" scenario "Divergent versions" writes any database before responding
+}

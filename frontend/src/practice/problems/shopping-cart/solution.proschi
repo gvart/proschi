@@ -1,0 +1,51 @@
+import "problem.proschi"
+
+lb    "Load Balancer" [AWS Load Balancer] x2 @platform
+cart  "Cart Service"  [REST API]          x3 @cart "Adds items, reads carts and merges divergent versions"
+carts "Carts"         [DynamoDB]          x3 @cart "Every cart, replicated to three nodes; any of them takes a write"
+
+shopper -> lb
+lb      -> cart  : HTTPS
+cart    -> carts : read / write
+
+entity Cart in carts "One shopper's cart; concurrent writes can leave several versions" {
+  cartId      string key
+  items       json
+  vectorClock json
+  updatedAt   time
+}
+
+decision "Keep carts in a leaderless, eventually consistent store" {
+  because "Any replica can take a write, so an add is accepted while a node or a whole replica is down; Dynamo trades consistency for this"
+  rejected "PostgreSQL with replicas" "Every write needs the one primary; a failover rejects adds until a replica is promoted"
+  rejected "Redis" "An add that lives only in memory is lost when the node restarts"
+}
+decision "Resolve conflicts on read, in the application" {
+  because "Only the cart knows how to merge: the union of the items keeps every add; deleted items can come back, which shoppers tolerate"
+  rejected "Last write wins" "Silently drops one of two concurrent adds"
+}
+
+usecase "Add to cart" "Put an item in the shopper's cart" {
+  shopper -> lb      : PUT /carts/c-77/items json {"sku": "B000123", "qty": 1}
+  lb      -> cart    : PUT /carts/c-77/items
+  cart    -> carts   : PutItem Cart with vector clock
+  carts  --> cart    : ok
+  cart   --> lb      : 200 {"items": 3}
+  lb     --> shopper : 200 {"items": 3}
+}
+
+usecase "View cart" "Show the shopper's cart" {
+  shopper -> lb    : GET /carts/c-77
+  lb      -> cart  : GET /carts/c-77
+  cart    -> carts : GetItem Cart, every version
+
+  alt "One version" when "no concurrent writes happened" {
+    carts --> cart : one version
+  } alt "Divergent versions" when "two writes raced or a node was partitioned" {
+    carts --> cart  : two versions
+    cart   -> carts : PutItem merged Cart, union of items
+    carts --> cart  : ok
+  }
+  cart --> lb      : 200 {"items": 3}
+  lb   --> shopper : 200 {"items": 3}
+}

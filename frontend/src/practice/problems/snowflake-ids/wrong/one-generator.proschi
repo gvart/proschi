@@ -1,0 +1,18 @@
+# expect-fail: survive any node failure
+# A single generator process: every id depends on one machine.
+import "problem.proschi"
+
+idgen "Snowflake" [gRPC] @platform "Makes ids from the clock, its worker id and a sequence"
+
+tweets -> idgen : Thrift
+idgen  -> zk    : claim worker id
+
+usecase "Get ID" "A service asks for a new id" {
+  tweets -> idgen  : GET next id
+  idgen --> tweets : 200 {"id": 1541815603606036480}
+}
+
+usecase "Start generator" "A generator process starts and claims a worker id" {
+  idgen -> zk    : CREATE /snowflake/workers/ ephemeral sequential
+  zk   --> idgen : worker id 37
+}

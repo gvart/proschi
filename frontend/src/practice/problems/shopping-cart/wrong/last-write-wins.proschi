@@ -1,0 +1,34 @@
+# expect-fail: Divergent versions are merged and written back
+# Divergent versions are resolved by keeping the newest one: a concurrent add is lost.
+import "problem.proschi"
+
+lb    "Load Balancer" [AWS Load Balancer] x2 @platform
+cart  "Cart Service"  [REST API]          x3 @cart
+carts "Carts"         [DynamoDB]          x3 @cart
+
+shopper -> lb
+lb      -> cart  : HTTPS
+cart    -> carts : read / write
+
+usecase "Add to cart" "Put an item in the shopper's cart" {
+  shopper -> lb      : PUT /carts/c-77/items json {"sku": "B000123", "qty": 1}
+  lb      -> cart    : PUT /carts/c-77/items
+  cart    -> carts   : PutItem Cart
+  carts  --> cart    : ok
+  cart   --> lb      : 200 {"items": 3}
+  lb     --> shopper : 200 {"items": 3}
+}
+
+usecase "View cart" "Show the shopper's cart" {
+  shopper -> lb    : GET /carts/c-77
+  lb      -> cart  : GET /carts/c-77
+  cart    -> carts : GetItem Cart, every version
+
+  alt "One version" {
+    carts --> cart : one version
+  } alt "Divergent versions" {
+    carts --> cart : two versions, keep the newest
+  }
+  cart --> lb      : 200 {"items": 2}
+  lb   --> shopper : 200 {"items": 2}
+}
