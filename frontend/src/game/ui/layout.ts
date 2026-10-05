@@ -82,54 +82,6 @@ export function layoutBoard(board: Board, components: ReadonlyMap<string, Compon
   };
 }
 
-/** A smooth path from one node to another: down (or up) between rows, sideways within one. */
-export function edgePath(a: Placed, b: Placed): string {
-  if (a.y === b.y) {
-    const [l, r] = a.x < b.x ? [a, b] : [b, a];
-    const x1 = l.x + l.w / 2;
-    const x2 = r.x - r.w / 2;
-    const lift = Math.min(28, (x2 - x1) / 2 + 10);
-    return `M${x1},${l.y - 6} C${x1 + 20},${l.y - lift} ${x2 - 20},${r.y - lift} ${x2},${r.y - 6}`;
-  }
-  const down = b.y > a.y;
-  const y1 = a.y + (down ? a.h / 2 : -a.h / 2);
-  const y2 = b.y + (down ? -b.h / 2 : b.h / 2);
-  const bend = (y2 - y1) / 2;
-  return `M${a.x},${y1} C${a.x},${y1 + bend} ${b.x},${y2 - bend} ${b.x},${y2}`;
-}
-
-/** A point at `t` (0..1) along `edgePath`'s cubic, for particles. */
-export function pointOn(a: Placed, b: Placed, t: number): { x: number; y: number } {
-  let p0: [number, number], p1: [number, number], p2: [number, number], p3: [number, number];
-  if (a.y === b.y) {
-    const [l, r] = a.x < b.x ? [a, b] : [b, a];
-    const x1 = l.x + l.w / 2;
-    const x2 = r.x - r.w / 2;
-    const lift = Math.min(28, (x2 - x1) / 2 + 10);
-    [p0, p1, p2, p3] = [
-      [x1, l.y - 6],
-      [x1 + 20, l.y - lift],
-      [x2 - 20, r.y - lift],
-      [x2, r.y - 6],
-    ];
-    if (a.x > b.x) t = 1 - t;
-  } else {
-    const down = b.y > a.y;
-    const y1 = a.y + (down ? a.h / 2 : -a.h / 2);
-    const y2 = b.y + (down ? -b.h / 2 : b.h / 2);
-    const bend = (y2 - y1) / 2;
-    [p0, p1, p2, p3] = [
-      [a.x, y1],
-      [a.x, y1 + bend],
-      [b.x, y2 - bend],
-      [b.x, y2],
-    ];
-  }
-  const u = 1 - t;
-  const c = (i: 0 | 1) => u * u * u * p0[i] + 3 * u * u * t * p1[i] + 3 * u * t * t * p2[i] + t * t * t * p3[i];
-  return { x: c(0), y: c(1) };
-}
-
 // ---- Edits ----
 
 export interface EditContext {

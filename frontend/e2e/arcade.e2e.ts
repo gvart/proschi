@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { appendCode, expect, test } from './fixtures';
 
 /**
  * Scale or Fail, signed out (the build without accounts): the Arcade tab of
@@ -57,6 +57,20 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await page.getByRole('button', { name: 'Carry on' }).click();
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 2');
   await expect(board(page).getByRole('button', { name: /^Load Balancer/ })).toBeVisible();
+});
+
+test('the board can be written as Proschi text, and the canvas follows', async ({ page }) => {
+  await startShortly(page);
+  await page.getByRole('tab', { name: 'Code' }).click();
+  await expect(page.locator('.cm-content')).toContainText('api "App Server" [Service]');
+  await appendCode(page, '\nlb "Load Balancer" [Load Balancer] x2\nusers -> lb\nlb -> api\ncapacity {\n  db size M\n}\n');
+  // A locked component is refused with the reason, and the board is left as it was.
+  await appendCode(page, 'c [Cache]\n');
+  await expect(page.getByText(/Cache is locked/)).toBeVisible();
+  await page.keyboard.press('ControlOrMeta+z');
+  await page.getByRole('tab', { name: 'Board' }).click();
+  await expect(board(page).getByRole('button', { name: /^Load Balancer, 2 replicas/ })).toBeVisible();
+  await expect(board(page).locator('.pc-node__stats').filter({ hasText: /\bM\b/ })).toBeVisible();
 });
 
 test('the shop sells unlocks for Blueprints', async ({ page }) => {

@@ -1,3 +1,4 @@
+import { SIZES } from '../../sim/profiles';
 import type { Role } from './types';
 
 /**
@@ -26,11 +27,8 @@ export const WIDE_SLOTS = 6;
 export const MAX_NODES = 40;
 
 /** Instance sizes: S, M, L. A bigger box costs more per unit of capacity, and L is the ceiling (scale out after that). */
-export const TIERS = [
-  { name: 'S', capacity: 1, cost: 1 },
-  { name: 'M', capacity: 2, cost: 1.8 },
-  { name: 'L', capacity: 4, cost: 3.5 },
-] as const;
+/** Instance sizes S, M, L: the language's `size` (sim/profiles.ts), in tier order. */
+export const TIERS = (['S', 'M', 'L'] as const).map((name) => ({ name, ...SIZES[name] }));
 
 /** Trust (lives): a run ends at 0. */
 export const MAX_TRUST = 100;

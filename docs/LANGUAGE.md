@@ -463,6 +463,7 @@ parts in any order:
 | `<rate>` | Requests per second per replica, reads and writes alike | `rps` |
 | `reads <rate>`, `writes <rate>` | Separate read and write capacity per replica | `readRps`, `writeRps` |
 | `shards <n>` | Number of shards (n ≥ 1). Single-primary stores scale writes with shards, not replicas. | `shards` |
+| `size S`, `size M` or `size L` | Instance size: the tech's default capacity ×1, ×2 or ×4 for ×1, ×1.8 or ×3.5 the cost. An explicit rate or cost wins. | `size` |
 | `latency <duration>` | Latency per call | `latencyMs` |
 | `availability <percent>` | Availability per replica | `availability` |
 | `cost <usd/month>` | Monthly cost per replica | `costUsd` |
@@ -655,7 +656,7 @@ requirement  = percentile , [ string , [ "scenario" , string ] ] , "<" , quantit
              | "cost" , "<=" , quantity ;
 percentile   = "p50" | "p90" | "p95" | "p99" | "p999" ;
 capacity     = "capacity" , "{" , { id , { capacity-part } } , "}" ;
-capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer
+capacity-part = quantity | "reads" , quantity | "writes" , quantity | "shards" , integer | "size" , ( "S" | "M" | "L" )
              | "latency" , quantity | "availability" , quantity | "cost" , quantity
              | "durable" | "volatile" | "consistency" , ( "strong" | "eventual" )
              | "bandwidth" , quantity | "egress" , quantity | "timeout" , quantity ;

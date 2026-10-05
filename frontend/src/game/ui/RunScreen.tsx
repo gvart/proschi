@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, FastForward, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowLeft, Code2, FastForward, LayoutGrid, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
 import { celebrate } from '../../design/celebrate';
 import { prefersReducedMotion } from '../../design/motion';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
@@ -8,7 +8,11 @@ import { compile } from '../engine/compile';
 import { Game, GameError, type TickResult } from '../engine/run';
 import { LOADTEST_COST, ONCALL_COST, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
-import BoardView from './BoardView';
+import GameCanvas from './GameCanvas';
+import { boardToDsl, dslToBoard } from '../engine/boardDsl';
+import type { Diagnostic } from '../../dsl/types';
+
+const CodeEditor = lazy(() => import('../../components/Playground/CodeEditor'));
 import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } from './layout';
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
@@ -89,13 +93,18 @@ export default function RunScreen(props: RunScreenProps) {
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; moved: boolean }>();
   const hold = useRef<number | undefined>(undefined);
   const narrow = useNarrow();
+  /** The board as Proschi text: a second way to edit the plan, for those who would rather type. */
+  const [pane, setPane] = useState<'board' | 'code'>('board');
+  const [code, setCode] = useState('');
+  const [codeProblems, setCodeProblems] = useState<Diagnostic[]>([]);
+  const typed = useRef<Board | undefined>(undefined);
 
   useEffect(() => setSound(settings.sound), [settings.sound]);
 
   // On a phone the inspector is a sheet over the bottom of the screen: keep the node it is about above it.
   useEffect(() => {
     if (!narrow || !selected) return;
-    const el = document.querySelector(`[data-node="${CSS.escape(selected)}"]`);
+    const el = document.querySelector(`.react-flow__node[data-id="${CSS.escape(selected)}"]`);
     if (!el) return;
     const top = el.getBoundingClientRect().top;
     const want = window.innerHeight * 0.2;
@@ -157,6 +166,26 @@ export default function RunScreen(props: RunScreenProps) {
   );
 
   const ctx = useMemo(() => ({ components, scenario: game.scenario }), [components, game]);
+
+  // The text follows the plan, except right after the player typed it (their formatting stays).
+  const shownBoard = s.phase === 'plan' ? plan : s.board;
+  useEffect(() => {
+    if (pane !== 'code') return;
+    if (typed.current === shownBoard) return;
+    setCode(boardToDsl(shownBoard, ctx));
+    setCodeProblems([]);
+  }, [pane, shownBoard, ctx]);
+
+  const onCode = (text: string) => {
+    setCode(text);
+    if (s.phase !== 'plan') return;
+    const r = dslToBoard(text, { ...ctx, previous: plan, unlocked });
+    setCodeProblems(r.diagnostics);
+    if (r.board) {
+      typed.current = r.board;
+      edit(r.board);
+    }
+  };
   const slots = wide ? WIDE_SLOTS : SLOTS;
   const placeOf = (id: string) => components.get(id)?.lane;
 
@@ -181,6 +210,20 @@ export default function RunScreen(props: RunScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [plan, ctx, edit, components, game, slots],
   );
+
+  const wire = (from: string, to: string) => {
+    if (s.phase !== 'plan' || plan.edges.some(([a, b]) => a === from && b === to)) return;
+    const r = toggleWire(plan, from, to, ctx);
+    if ('error' in r) {
+      setMessage({ text: r.error, tone: 'error' });
+      setShake(to);
+      setTimeout(() => setShake(undefined), 400);
+      play('error');
+    } else {
+      edit(r.board);
+      play('wire');
+    }
+  };
 
   const onNode = (id: string) => {
     if (s.phase === 'plan' && wiring && selected && selected !== id) {
@@ -348,6 +391,11 @@ export default function RunScreen(props: RunScreenProps) {
     );
   }
 
+  const onGhost = () => placing && place(placing);
+  const onBackground = () => {
+    setSelected(undefined);
+    setWiring(false);
+  };
   const forecast = game.forecast();
   const planning = s.phase === 'plan';
   const shown = planning ? plan : s.board;
@@ -516,33 +564,64 @@ export default function RunScreen(props: RunScreenProps) {
       </ul>
     </>
   );
+  const tabs = (
+    <div role="tablist" aria-label="Board view" className="flex gap-1">
+      {(
+        [
+          ['board', 'Board', LayoutGrid],
+          ['code', 'Code', Code2],
+        ] as const
+      ).map(([id, label, Icon]) => (
+        <button key={id} type="button" role="tab" aria-selected={pane === id} className={pane === id ? primaryButton : outlineButton} onClick={() => setPane(id)}>
+          <Icon size={14} aria-hidden="true" /> {label}
+        </button>
+      ))}
+    </div>
+  );
   const boardView = (
-    <div className="rounded-brutal border-bw-2 border-ink bg-paper shadow-brutal-md p-1 sm:p-2">
-      <BoardView
-        board={shown}
-        components={components}
-        scenario={game.scenario}
-        wide={wide}
-        compact={narrow}
-        tick={shownTick}
-        animate={!planning && !reduced && playing}
-        speed={settings.speed}
-        selected={selected}
-        wiringFrom={wiring ? selected : undefined}
-        validTargets={validTargets}
-        placingRow={planning && placing ? placeOf(placing) : undefined}
-        fresh={fresh}
-        shake={shake}
-        onNode={onNode}
-        onGhost={() => placing && place(placing)}
-        onBackground={() => {
-          setSelected(undefined);
-          setWiring(false);
-        }}
-        rowAt={(fn) => (dropRow.current = fn)}
-        pops={last && !planning ? [{ id: shown.nodes.find((n) => n.component === 'users')?.id ?? 'users', text: `+${Math.round(last.revenue)}`, tone: 'good' }] : undefined}
-        popKey={`${s.wave}-${s.tick}`}
-      />
+    <div className="space-y-2">
+      {tabs}
+      <div className="rounded-brutal border-bw-2 border-ink bg-paper shadow-brutal-md overflow-hidden">
+        {pane === 'board' ? (
+          <GameCanvas
+            board={shown}
+            components={components}
+            scenario={game.scenario}
+            wide={wide}
+            compact={narrow}
+            tick={shownTick}
+            animate={!planning && !reduced && playing}
+            speed={settings.speed}
+            selected={selected}
+            wiringFrom={wiring ? selected : undefined}
+            validTargets={validTargets}
+            placingRow={planning && placing ? placeOf(placing) : undefined}
+            fresh={fresh}
+            shake={shake}
+            editable={planning}
+            onNode={onNode}
+            onGhost={onGhost}
+            onBackground={onBackground}
+            onWire={wire}
+            rowAt={(fn) => (dropRow.current = fn)}
+          />
+        ) : (
+          <div className="h-[min(60vh,480px)] flex flex-col">
+            <Suspense fallback={<p className="p-3 text-sm text-muted">Loading the editor…</p>}>
+              <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} readOnly={!planning} />
+            </Suspense>
+            {codeProblems.length > 0 && (
+              <ul className="border-t border-ink/15 px-3 py-1.5 text-xs text-fail">
+                {codeProblems.slice(0, 3).map((d) => (
+                  <li key={`${d.line}:${d.message}`}>
+                    Line {d.line}: {d.message}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        )}
+      </div>
     </div>
   );
   const top = (

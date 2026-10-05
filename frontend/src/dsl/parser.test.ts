@@ -503,3 +503,12 @@ describe('missing connection warning', () => {
     ]);
   });
 });
+
+describe('capacity size', () => {
+  it('reads S, M and L, and refuses anything else', () => {
+    const { diagram, diagnostics } = parse('db [PostgreSQL]\ncapacity {\n  db size L shards 2\n}');
+    expect(diagnostics).toEqual([]);
+    expect(diagram.capacity?.[0]).toMatchObject({ node: 'db', size: 'L', shards: 2 });
+    expect(parse('db\ncapacity {\n  db size XL\n}').diagnostics[0].message).toMatch(/Expected S, M or L after size/);
+  });
+});

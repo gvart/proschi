@@ -10,6 +10,15 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Scale or Fail on the editor's canvas.** The Arcade's board is drawn with
+  the editor's nodes, icons and connections, with the simulation overlay
+  (heat, stacked replicas, load bars, request particles); drag from a node's
+  bottom dot to another to wire them. A **Code** tab shows the board as
+  Proschi text you can edit instead of tapping.
+- **`size S|M|L`** in `capacity` blocks: an instance size that scales a
+  tech's default capacity (×1, ×2, ×4) and cost (×1, ×1.8, ×3.5); an explicit
+  rate or cost wins. The editor's settings panel has an **Instance size**
+  picker. The Arcade's sizes are the same numbers.
 - **Overlay: load** on the editor's canvas, for documents with a `traffic`
   block: each node heats up from paper to yellow, pink and red with how busy
   it is, shows its replicas (stacked), shards and load, shakes past 100%,

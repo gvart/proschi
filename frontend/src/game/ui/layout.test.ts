@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { gameContent } from '../content';
-import { layoutBoard, placeComponent, pointOn, removeNode, toggleWire } from './layout';
+import { layoutBoard, placeComponent, removeNode, toggleWire } from './layout';
 
 const { content } = gameContent();
 const components = new Map(content.components.map((c) => [c.id, c]));
@@ -53,8 +53,5 @@ describe('board layout', () => {
     expect(api.y).toBe(app.y);
     expect(api.x).toBeLessThan(app.x);
     expect(layout.ghost('compute')).toEqual({ x: 500, y: api.y });
-    const mid = pointOn(lb, api, 0.5);
-    expect(mid.y).toBeGreaterThan(lb.y);
-    expect(mid.y).toBeLessThan(api.y);
   });
 });

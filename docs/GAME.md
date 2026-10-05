@@ -20,7 +20,12 @@ A run is twelve **waves** in three acts. Each wave is a month of traffic:
    their tick, below difficulty 1).
 2. **Plan.** Place, wire, scale out (replicas), scale up (sizes S, M, L),
    shard, remove. Nothing is timed. A **load test** shows the plan at the
-   forecast peak for $100.
+   forecast peak for $100. The board is drawn on the editor's canvas (the
+   same nodes and connections as a diagram), and **Code** shows it as
+   Proschi text you can edit instead: one line per component
+   (`api "App Server" [Service] x3`), one per wire, and `size` and `shards`
+   in a `capacity` block. Which use cases an app server handles is set in its
+   settings.
 3. **Run.** Eight ticks, each one simulated with the wave's traffic at that
    point of the curve. Once a wave you can page the **on-call** to add a
    replica mid-run ($200).

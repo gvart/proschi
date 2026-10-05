@@ -119,7 +119,7 @@ const UNIT_EXAMPLES: Record<Quantity['unit'], string> = {
   MBps: 'a bandwidth, e.g. 500 MB/s or 1 GB/s',
   'usd/GB': 'a price per gigabyte, e.g. 0.05 usd/GB',
 };
-const CAPACITY_PARTS = 'a rate, reads, writes, shards, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout';
+const CAPACITY_PARTS = 'a rate, reads, writes, shards, size, latency, availability, cost, durable or volatile, consistency, bandwidth, egress or timeout';
 const ASSERTION_HELP =
   'Expected an assertion: "Use case" calls <node>, "Use case" writes <node> before responding, <node> calls <node>, no path from <node> to <node>, <node> has replicas >= 2, …';
 const ASSERTION_VERBS = 'calls, every scenario calls, never calls, never waits for, writes, responds, starts at, has scenario or handles failure of';
@@ -1030,6 +1030,15 @@ class Parser {
           return;
         }
         override.shards = Number(n.value);
+        i += 2;
+      } else if (isWord(t, 'size')) {
+        part = 'size';
+        const value = tokens[i + 1];
+        if (!isWord(value, 'S') && !isWord(value, 'M') && !isWord(value, 'L')) {
+          this.error(`Expected S, M or L after size${value ? `, not ${describe(value)}` : ''}`, this.locOf(value ?? t, line));
+          return;
+        }
+        override.size = value!.value as 'S' | 'M' | 'L';
         i += 2;
       } else if (isWord(t, 'consistency')) {
         part = 'consistency';
