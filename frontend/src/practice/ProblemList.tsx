@@ -1,7 +1,7 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { Search } from 'lucide-react';
+import { ArrowRight, Map as MapIcon, Search } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
-import { field } from '../components/Playground/ui';
+import { field, outlineButton } from '../components/Playground/ui';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -43,10 +43,17 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
         Each problem gives use cases, traffic and requirements. Design the system in Proschi; the tests run in your browser and explain what holds up and
         what does not.
       </p>
-      <p className="mt-3 inline-flex rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold tabular-nums text-ink">
-        {solved} of {problems.length} solved
-        {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
-      </p>
+      <div className="mt-3 flex flex-wrap items-center gap-3">
+        <p className="inline-flex rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold tabular-nums text-ink">
+          {solved} of {problems.length} solved
+          {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
+        </p>
+        <a href="#/roadmap" className={outlineButton}>
+          <MapIcon size={14} />
+          Interview prep roadmap
+          <ArrowRight size={14} />
+        </a>
+      </div>
 
       <div className="mt-7 flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">

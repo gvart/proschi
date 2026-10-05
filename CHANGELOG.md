@@ -16,6 +16,13 @@ deployed from `main` and ships with the same changes.
   path on proschi.app.
 
 ### Added
+- An interview prep roadmap in practice (`practice/#/roadmap`): the problems
+  in eight stages, from foundations through caching, partitioning, queues,
+  fan-out, streams and consistency to large systems, each with a note on what
+  it teaches. A problem on the roadmap opens once every problem before it is
+  solved, with your progress, the current stage and a Continue button; a
+  problem opened from the roadmap links to the next one after a solve. The
+  problem list stays open.
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the

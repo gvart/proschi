@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, BookOpen, Code2, Eye, FlaskConical, Lightbulb, Network, RotateCcw } from 'lucide-react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
@@ -44,10 +44,14 @@ interface ProblemPageProps {
   onProgress: (update: (p: Progress) => Progress) => void;
   engine: Engine;
   account: Account;
+  /** Where the back link goes; the problem list by default. */
+  back?: { href: string; label: string };
+  /** Shown under the header, e.g. the roadmap's banner. */
+  banner?: ReactNode;
 }
 
 /** LeetCode-like: the statement on the left, the editor and diagram in the middle, tests at the bottom. Tabs on phones. */
-export default function ProblemPage({ problem, progress, onProgress, engine, account }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
@@ -114,9 +118,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
       <ZenCollapse zen={zen.zen}>
       <Header base="../" current="practice" compact>
-        <a href="#/" className={toolButton}>
+        <a href={back.href} className={toolButton}>
           <ArrowLeft size={16} />
-          <span className="hidden sm:inline">Problems</span>
+          <span className="hidden sm:inline">{back.label}</span>
         </a>
         <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
@@ -137,6 +141,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           }}
         />
       </Header>
+      {banner}
 
       {/* The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target. */}
       <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill md:hidden bg-surface">
