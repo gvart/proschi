@@ -18,12 +18,12 @@ export interface Account {
   signOut: () => Promise<void>;
   /** Ends every session of the account, this one included. */
   signOutEverywhere: () => Promise<void>;
-  update: (patch: Partial<Pick<User, 'displayName' | 'publicProfile'>>) => Promise<void>;
+  update: (patch: Partial<Pick<User, 'displayName' | 'publicProfile' | 'dailyGoal'>>) => Promise<void>;
   remove: () => Promise<void>;
   /** Saves everything the server stores about the account as proschi-data.json. */
   downloadData: () => Promise<void>;
-  /** Records a test run on the server, signed in; undefined otherwise or when it fails. */
-  recordRun: (problemId: string, source: string, solved: boolean) => Promise<RunRecord | undefined>;
+  /** Records a test run on the server, signed in, with the local `day` it was made; undefined otherwise or when it fails. */
+  recordRun: (problemId: string, source: string, solved: boolean, day: string) => Promise<RunRecord | undefined>;
 }
 
 type Boot = { me?: Me; providers: ProviderId[]; message?: string };
@@ -130,7 +130,7 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
   }, [whenSignedIn, signedOut]);
 
   const update = useCallback(
-    async (patch: Partial<Pick<User, 'displayName' | 'publicProfile'>>) => {
+    async (patch: Partial<Pick<User, 'displayName' | 'publicProfile' | 'dailyGoal'>>) => {
       const result = await whenSignedIn(() => api<{ user: User }>('/api/me', { method: 'PATCH', body: patch }));
       if (result) setState((s) => (s.status === 'signed-in' ? { ...s, user: { ...s.user, ...result.user }, message: undefined } : s));
     },
@@ -154,8 +154,8 @@ export function useAccount(onSignedIn: (me: Me) => void): Account {
   }, [whenSignedIn]);
 
   const recordRun = useCallback(
-    (problemId: string, source: string, solved: boolean) =>
-      whenSignedIn(() => api<RunRecord>(`/api/problems/${encodeURIComponent(problemId)}/runs`, { method: 'POST', body: { source, solved } })),
+    (problemId: string, source: string, solved: boolean, day: string) =>
+      whenSignedIn(() => api<RunRecord>(`/api/problems/${encodeURIComponent(problemId)}/runs`, { method: 'POST', body: { source, solved, day } })),
     [whenSignedIn],
   );
 

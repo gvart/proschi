@@ -28,6 +28,19 @@ deployed from `main` and ships with the same changes.
   out, try the free sample deck. Find it from the "Daily review" card on the
   practice list or in the footer. The cards are also published as
   `practice/cards.json` for apps.
+- A daily goal and streak: review 10 cards (or pick 5, 20 or 30) or solve a
+  problem each day to keep your streak going. The flame, a ring filling up
+  toward today's goal and your streak freezes show on the review page and the
+  practice list; every 7 days in a row earn a freeze (up to 2) that covers a
+  missed day for you. Signed in, your account keeps the streak, so every
+  device shows the same one.
+- Celebrations: a summary with a little confetti when a review session ends,
+  marking the daily goal and streaks of 3, 7, 14, 30, 50 and 100 days; on a
+  problem's first solve, the runs it took and your design's cost and p99 next
+  to the reference solution's, with links to the next roadmap problem and the
+  cards that train for it; a moment when you finish a roadmap stage; and a
+  weekly recap of last week's cards, solves and goal days on the review page.
+  With reduced motion set, there is no animation, just the summary.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

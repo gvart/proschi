@@ -171,6 +171,18 @@ The build also publishes every card as `practice/cards.json`,
 `{format: 1, hash, topics, cards}`, for apps: `hash` changes with any
 content, and `format` only when a field changes meaning.
 
+### Daily goal and streak
+
+A day counts toward the streak when it meets the daily goal: 10 cards
+reviewed (5, 20 or 30 when the learner picks so) or a problem solved for the
+first time. Every 7 counting days in a row earn a freeze, up to 2, which
+covers a missed day automatically. The rules, the milestones (3, 7, 14, 30,
+50 and 100 days) and the weekly recap are `frontend/src/learn/streak.ts`,
+which the Worker runs too: signed in, `GET /api/me/activity` answers the
+streak from the reviews' and solves' local dates (backend/README.md); a
+build without accounts computes it from this browser's reviews and solves;
+signed out there is no streak.
+
 ## The check
 
 `proschi cards check` (CI runs it on every pull request):

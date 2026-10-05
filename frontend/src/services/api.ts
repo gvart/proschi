@@ -1,5 +1,6 @@
 import type { CardState } from '../learn/fsrs';
 import type { DayCounts } from '../learn/review';
+import type { DailyGoal, DayActivity, Streak, WeeklyRecap } from '../learn/streak';
 
 /**
  * The Proschi API (backend/): sign-in and practice stats, under /api and
@@ -50,6 +51,8 @@ export interface User {
   id: string;
   displayName: string;
   publicProfile: boolean;
+  /** Cards a day the user aims for (GOAL_CHOICES in src/learn/streak.ts). */
+  dailyGoal?: number;
   providers?: ProviderId[];
 }
 
@@ -59,6 +62,8 @@ export interface ServerProgress {
   runs: number;
   source?: string;
   solvedAt?: number;
+  /** The local date of the first verified solve. */
+  solvedDay?: string;
   runsToSolve?: number;
   bestCostUsd?: number;
   bestP99Ms?: number;
@@ -131,4 +136,13 @@ export interface CardReviewsAnswer {
   accepted: number;
   skipped: { id: string; cardId: string; reason: string }[];
   states: Record<string, CardState>;
+}
+
+/** GET /api/me/activity?day=: each day's activity over the last 400 days, the goal, the streak as of `day` and last week's recap. */
+export interface ActivityAnswer {
+  day: string;
+  goal: DailyGoal;
+  days: DayActivity[];
+  streak: Streak;
+  recap: WeeklyRecap;
 }

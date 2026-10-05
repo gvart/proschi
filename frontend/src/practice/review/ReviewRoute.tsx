@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Layers, LogIn, PartyPopper, RotateCcw } from 'lucide-react';
+import { ArrowRight, Flame, Layers, LogIn, PartyPopper, RotateCcw, Target } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { nextState, type Rating } from '../../learn/fsrs';
 import { buildSession, isNew, localDay, NEW_PER_DAY, overview, SESSION_SIZE, type CardReview, type CardStates, type DayCounts, type SessionItem } from '../../learn/review';
+import { computeStreak, milestoneReached, recapIsEmpty, withActivity, type DailyGoal, type Streak } from '../../learn/streak';
 import type { Account } from '../useAccount';
+import { dismissRecap, recapDismissed, summarize, type Activity } from '../activity';
+import { Celebration, GoalPicker, StreakWidget, WeeklyRecapCard } from '../Streak';
 import { PROVIDER_LABEL } from '../account';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
@@ -17,6 +20,10 @@ import ReviewSession, { type SessionResult } from './ReviewSession';
  * and scheduled, and the reviews are stored on the server; signed out, the
  * free sample deck can be tried, kept in memory only; a build without
  * accounts reviews every card and keeps the reviews in this browser.
+ *
+ * With the streak (`activity`, src/practice/activity.ts): the daily goal and
+ * its picker, last week's recap once a week, and a summary that celebrates
+ * the goal met and streak milestones.
  *
  * Loaded lazily with the cards (virtual:practice-cards), so the problem list
  * does not ship them.
@@ -48,9 +55,16 @@ function dueIn(due: number, now: number): string {
 
 type Load = { status: 'loading' } | { status: 'ready' } | { status: 'error'; message: string };
 
-type View = { kind: 'home' } | { kind: 'session'; items: SessionItem[] } | { kind: 'summary'; results: SessionResult[] };
+/** The streak before and after a session, for its summary. */
+interface StreakChange {
+  before: Streak;
+  after: Streak;
+  goal: DailyGoal;
+}
 
-export default function ReviewRoute({ account, topic: topicId }: { account: Account; topic?: string }) {
+type View = { kind: 'home' } | { kind: 'session'; items: SessionItem[] } | { kind: 'summary'; results: SessionResult[]; streak?: StreakChange };
+
+export default function ReviewRoute({ account, activity, topic: topicId }: { account: Account; activity: Activity; topic?: string }) {
   const { state } = account;
   const userId = state.status === 'signed-in' ? state.user.id : undefined;
   const signedOut = state.status === 'signed-out';
@@ -69,6 +83,8 @@ export default function ReviewRoute({ account, topic: topicId }: { account: Acco
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<View>({ kind: 'home' });
+  // The weekly recap, once dismissed here (storage keeps it dismissed for the rest of the week).
+  const [recapHidden, setRecapHidden] = useState(false);
 
   useEffect(() => {
     if (!store) return;
@@ -143,9 +159,29 @@ export default function ReviewRoute({ account, topic: topicId }: { account: Acco
   }
 
   const end = (results: SessionResult[]) => {
-    flush();
-    setView(results.length ? { kind: 'summary', results } : { kind: 'home' });
+    // The streak again once the server has the session's reviews (this browser's log has them already).
+    if (store?.kind === 'account') void store.flush().catch(() => undefined).then(activity.refresh);
+    else activity.refresh();
+    waiting.current = 0;
+    setView(results.length ? { kind: 'summary', results, streak: streakChange(results) } : { kind: 'home' });
   };
+
+  /** The streak with a session's reviews counted today, from the activity as it was when it started. */
+  function streakChange(results: SessionResult[]): StreakChange | undefined {
+    if (activity.state.status !== 'ready' || view.kind !== 'session') return undefined;
+    const { days, goal } = activity.state;
+    const day = localDay(new Date());
+    const learned = view.items.filter((i) => i.isNew && results.some((r) => r.cardId === i.card.id)).length;
+    return {
+      before: computeStreak(days, day, goal),
+      after: computeStreak(withActivity(days, { day, reviews: results.length, solves: 0, newCards: learned }), day, goal),
+      goal,
+    };
+  }
+
+  const ready = activity.state.status === 'ready' ? activity.state : undefined;
+  const summary = ready && summarize(ready);
+  const recap = summary && !recapHidden && !recapIsEmpty(summary.recap) && !recapDismissed(summary.recap.start) ? summary.recap : undefined;
 
   if (view.kind === 'session') {
     return <ReviewSession items={view.items} states={states} topics={deck.topics} onReview={onReview} onDone={end} onQuit={end} />;
@@ -167,6 +203,23 @@ export default function ReviewRoute({ account, topic: topicId }: { account: Acco
 
       {signedOut && <SignInInvite account={account} sample={stats.total} />}
 
+      {ready && summary && view.kind === 'home' && (
+        <div className="mt-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-6">
+          <StreakWidget streak={summary.streak} goal={ready.goal} />
+          <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />
+        </div>
+      )}
+
+      {recap && view.kind === 'home' && !topic && (
+        <WeeklyRecapCard
+          recap={recap}
+          onDismiss={() => {
+            dismissRecap(recap.start);
+            setRecapHidden(true);
+          }}
+        />
+      )}
+
       {load.status === 'error' ? (
         <section aria-label="Today" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
           <p role="alert" className="text-sm text-ink">
@@ -178,7 +231,15 @@ export default function ReviewRoute({ account, topic: topicId }: { account: Acco
           </button>
         </section>
       ) : view.kind === 'summary' ? (
-        <Summary results={view.results} more={items.length} nextDue={stats.nextDue} now={now} onMore={() => setView({ kind: 'session', items })} onHome={() => setView({ kind: 'home' })} />
+        <Summary
+          results={view.results}
+          streak={view.streak}
+          more={items.length}
+          nextDue={stats.nextDue}
+          now={now}
+          onMore={() => setView({ kind: 'session', items })}
+          onHome={() => setView({ kind: 'home' })}
+        />
       ) : (
         <section aria-label="Today" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
           <dl className="flex flex-wrap gap-x-6 gap-y-2">
@@ -253,7 +314,8 @@ function SignInInvite({ account, sample }: { account: Account; sample: number })
         Trying the free sample deck: {sample} cards
       </p>
       <p className="mt-1 max-w-2xl text-sm text-ink/80">
-        Reviews made signed out are not saved. Sign in to review every card, have each one scheduled for you and keep your progress across devices.
+        Reviews made signed out are not saved. Sign in to review every card, have each one scheduled for you, keep a daily streak and keep your progress
+        across devices.
       </p>
       {providers.length > 0 && (
         <div className="mt-3 flex flex-wrap gap-2">
@@ -269,20 +331,54 @@ function SignInInvite({ account, sample }: { account: Account; sample: number })
   );
 }
 
-function Summary({ results, more, nextDue, now, onMore, onHome }: { results: SessionResult[]; more: number; nextDue?: number; now: number; onMore: () => void; onHome: () => void }) {
+/** The headline of a session's summary: a milestone, the goal met today, or just done. */
+function headline(streak: StreakChange | undefined): { title: string; icon: typeof Flame; tone: string } {
+  const milestone = streak && milestoneReached(streak.before.current, streak.after.current);
+  if (milestone) return { title: `${milestone}-day streak!`, icon: Flame, tone: 'bg-pop-yellow/30' };
+  if (streak && streak.after.todayDone && !streak.before.todayDone) return { title: 'Daily goal reached', icon: Target, tone: 'bg-pass/25' };
+  return { title: 'Session done', icon: PartyPopper, tone: 'bg-surface' };
+}
+
+/** After a session: what was reviewed and, with a streak, what it did for it; with a little confetti (none under reduced motion). */
+function Summary({
+  results,
+  streak,
+  more,
+  nextDue,
+  now,
+  onMore,
+  onHome,
+}: {
+  results: SessionResult[];
+  streak?: StreakChange;
+  more: number;
+  nextDue?: number;
+  now: number;
+  onMore: () => void;
+  onHome: () => void;
+}) {
   const remembered = results.filter((r) => r.rating > 1).length;
   const again = results.length - remembered;
+  const { title, icon: Icon, tone } = headline(streak);
+  // The session's cards are gone: focus the summary's heading, so it is read out and the keyboard carries on from it.
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => heading.current?.focus({ preventScroll: true }), []);
   return (
-    <section aria-label="Session summary" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-      <h2 className="flex items-center gap-2 font-display text-xl font-bold text-ink">
-        <PartyPopper size={18} aria-hidden="true" />
-        Session done
+    <Celebration label="Session summary" tone={tone} className="mt-6">
+      <h2 ref={heading} tabIndex={-1} className="flex items-center gap-2 font-display text-xl font-bold text-ink focus:outline-none">
+        <Icon size={18} aria-hidden="true" />
+        {title}
       </h2>
       <p className="mt-2 text-sm text-ink">
         You reviewed {results.length} {results.length === 1 ? 'card' : 'cards'}: {remembered} remembered
         {again > 0 && `, ${again} to see again soon`}.
         {nextDue !== undefined && more === 0 && ` The next card is due ${dueIn(nextDue, now)}.`}
       </p>
+      {streak && (
+        <div className="mt-3">
+          <StreakWidget streak={streak.after} goal={streak.goal} />
+        </div>
+      )}
       <div className="mt-4 flex flex-wrap gap-2">
         {more > 0 && (
           <button type="button" onClick={onMore} className={`min-h-[44px] ${primaryButton}`}>
@@ -294,6 +390,6 @@ function Summary({ results, more, nextDue, now, onMore, onHome }: { results: Ses
           Back to review
         </button>
       </div>
-    </section>
+    </Celebration>
   );
 }

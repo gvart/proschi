@@ -18,13 +18,15 @@ interface TestPanelProps {
   community?: ReactNode;
   /** The design review (src/review/ReviewPanel.tsx), shown in a view of its own next to the tests. */
   review?: ReactNode;
+  /** A first solve's celebration (SolveCelebration), under the verdict and above the results. */
+  celebration?: ReactNode;
 }
 
 const viewButton = (on: boolean) =>
   `inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review, celebration }: TestPanelProps) {
   const [view, setView] = useState<'tests' | 'review'>('tests');
   // A new run brings the tests back into view.
   const [shownRun, setShownRun] = useState(run);
@@ -33,15 +35,16 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
     setView('tests');
   }
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
-  // The first solve on this page gets a little burst (skipped under reduced motion).
+  // The first solve on this page gets a little burst (skipped under reduced motion), unless the celebration brings its own.
   const solvedRef = useRef<HTMLDivElement>(null);
   const celebrated = useRef(false);
   const solved = !!run?.solved;
+  const hasCelebration = !!celebration;
   useEffect(() => {
     if (!solved || celebrated.current || !solvedRef.current) return;
     celebrated.current = true;
-    void celebrate(solvedRef.current);
-  }, [solved]);
+    if (!hasCelebration) void celebrate(solvedRef.current);
+  }, [solved, hasCelebration]);
   return (
     <div className="h-full flex flex-col bg-surface">
       <div className={`flex items-center gap-2 px-3 py-2 ${subBar}`}>
@@ -101,6 +104,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
             </span>
           </div>
         )}
+        {celebration}
         {community}
 
         {run && run.results.length > 0 && (

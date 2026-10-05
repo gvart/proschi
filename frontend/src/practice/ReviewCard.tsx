@@ -1,13 +1,14 @@
+import type { ReactNode } from 'react';
 import { ArrowRight, Layers } from 'lucide-react';
 import summary from 'virtual:practice-cards-summary';
 import { eyebrow } from '../components/Playground/ui';
 
 /**
- * Daily review's card on the problem list, under the roadmap's: what it is
- * and the way in. Only the counts ship with the list; the cards load with
- * the review page.
+ * Daily review's card on the problem list, under the roadmap's: what it is,
+ * the streak (`children`) and the way in. Only the counts ship with the list;
+ * the cards load with the review page.
  */
-export default function ReviewCard() {
+export default function ReviewCard({ children }: { children?: ReactNode }) {
   if (summary.cards === 0) return null;
   return (
     <div className="mt-4 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md overflow-hidden">
@@ -23,6 +24,7 @@ export default function ReviewCard() {
             {summary.cards} cards in {summary.topics} topics: recall a concept, pick an option, estimate a number or fill a gap. Each comes back just before
             you would forget it.
           </p>
+          {children && <div className="mt-3">{children}</div>}
         </div>
         <a
           href="#/review"

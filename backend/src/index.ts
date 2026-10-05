@@ -1,4 +1,5 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
+import { getActivity } from './activity';
 import { getCardState, postCardReviews } from './cards';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
@@ -20,13 +21,14 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /auth/logout
  *   GET    /api/health                      the Worker and D1 answer
  *   GET    /api/me                          account and progress
- *   PATCH  /api/me {displayName?, publicProfile?}
+ *   PATCH  /api/me {displayName?, publicProfile?, dailyGoal?}
  *   DELETE /api/me
  *   GET    /api/me/export                   everything stored about the user, as a download
+ *   GET    /api/me/activity?day=YYYY-MM-DD  daily goal, streak, weekly recap and each day's activity
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
- *   POST   /api/problems/<id>/runs {source, solved, imported?}
+ *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
  *   GET    /api/stats                       every problem's summary
  *   GET    /api/stats/<id>                  one problem's distributions (+ yours, signed in)
  *   GET    /api/leaderboard
@@ -52,6 +54,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('PATCH', 'api', 'me')) return updateMe(request, ctx);
   if (is('DELETE', 'api', 'me')) return deleteMe(request, ctx);
   if (is('GET', 'api', 'me', 'export')) return exportMe(request, ctx);
+  if (is('GET', 'api', 'me', 'activity')) return getActivity(request, ctx);
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
   if (is('DELETE', 'api', 'me', 'identities', '*')) return unlinkIdentity(request, ctx, parts[3]);

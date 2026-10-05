@@ -14,6 +14,8 @@ interface ProblemListProps {
   progress: Progress;
   /** Global solve rates, when the API is there. */
   stats?: StatsSummary;
+  /** In the daily review card: the streak, or the invitation to sign in for one. */
+  streak?: ReactNode;
   /** After the list, e.g. the leaderboard. */
   children?: ReactNode;
 }
@@ -21,7 +23,7 @@ interface ProblemListProps {
 const STATUS_LABEL: Record<Status, string> = { todo: 'To do', attempted: 'Attempted', solved: 'Solved' };
 
 /** Every problem with its difficulty, tags and status, filtered by those and by a search. */
-export default function ProblemList({ problems, progress, stats, children }: ProblemListProps) {
+export default function ProblemList({ problems, progress, stats, streak, children }: ProblemListProps) {
   const [query, setQuery] = useState('');
   const [difficulty, setDifficulty] = useState<'' | Problem['difficulty']>('');
   const [tag, setTag] = useState('');
@@ -57,7 +59,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
       </div>
 
       <RoadmapCard problems={problems} progress={progress} />
-      <ReviewCard />
+      <ReviewCard>{streak}</ReviewCard>
 
       <div className="mt-7 flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">

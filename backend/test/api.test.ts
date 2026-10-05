@@ -95,7 +95,7 @@ describe('progress', () => {
     const { id, token } = await signedInUser();
     await run(token, { source: problem.solution, solved: true });
     const patched = await (await call('/api/me', { method: 'PATCH', token, body: { displayName: '  Ada  ', publicProfile: true } })).json();
-    expect(patched).toEqual({ user: { id, displayName: 'Ada', publicProfile: true } });
+    expect(patched).toEqual({ user: { id, displayName: 'Ada', publicProfile: true, dailyGoal: 10 } });
     expect((await call('/api/me', { method: 'PATCH', token, body: { displayName: ' ' } })).status).toBe(400);
     expect((await call('/api/me', { method: 'PATCH', token, body: { publicProfile: 'yes' } })).status).toBe(400);
 
