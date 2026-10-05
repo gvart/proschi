@@ -10,6 +10,12 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- `CONTRIBUTING.md`: how to set up, the checks before a pull request, and
+  step-by-step guides to adding a practice problem and a review card. The
+  practice list ends with "Have a system design problem in mind? Contribute
+  it", with a link to suggest an idea instead, and the footer links to the
+  guide. New issue templates suggest a problem or a card without writing
+  code.
 - 258 practice cards for daily review, from estimation and networking to
   consistency, streaming and probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
