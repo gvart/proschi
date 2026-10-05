@@ -73,6 +73,8 @@ jobs:
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
       - run: npm run build
+      # The same site with sign-in, for e2e/*.accounts.e2e.ts (the API is mocked).
+      - run: npm run build:accounts
       - run: npx playwright install --with-deps chromium
       - run: npm run e2e
       - uses: actions/upload-artifact@v7

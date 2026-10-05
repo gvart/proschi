@@ -1,0 +1,39 @@
+import type { Page } from '@playwright/test';
+
+/** GET /api/me's answer (Me in src/services/api.ts, which this tsconfig cannot compile). */
+interface Me {
+  user: { id: string; displayName: string; publicProfile: boolean; dailyGoal?: number; providers?: string[] };
+  progress: Record<string, unknown>;
+}
+
+/**
+ * A signed-in session for the build with accounts (`npm run build:accounts`,
+ * the `accounts` project in playwright.config.ts): page.route answers the
+ * API the practice page reads on load, so no Worker is needed. Requests it
+ * does not know get a 404, which fails the test as a console error.
+ */
+export const SIGNED_IN: Me = {
+  user: { id: 'u-e2e', displayName: 'gvart', publicProfile: true, dailyGoal: 10, providers: ['github'] },
+  progress: {},
+};
+
+export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void> {
+  const answers: [RegExp, unknown][] = [
+    [/^\/api\/me$/, me],
+    [/^\/auth\/providers$/, { providers: ['github', 'google'] }],
+    [/^\/api\/me\/activity$/, { day: '', goal: { reviews: me.user.dailyGoal ?? 10, solves: 1 }, days: [] }],
+    [/^\/api\/me\/achievements$/, { achievements: [], skills: { readiness: 0, topics: [], weakest: [] }, stats: { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 } }],
+    [/^\/api\/cards\/state$/, { states: {}, today: { reviews: 0, new: 0 } }],
+    [/^\/api\/stats$/, { problems: {}, solvers: 0 }],
+    [/^\/api\/stats\/[^/]+$/, { attempted: 0, solved: 0, medianRunsToSolve: null, costUsd: null, p99Ms: null, you: null }],
+    [/^\/api\/leaderboard$/, { problems: 0, entries: [] }],
+  ];
+  await page.route(
+    (url) => /^\/(api|auth)\//.test(url.pathname),
+    (route) => {
+      const { pathname } = new URL(route.request().url());
+      const answer = route.request().method() === 'GET' ? answers.find(([path]) => path.test(pathname)) : undefined;
+      return answer ? route.fulfill({ json: answer[1] }) : route.fulfill({ status: 404, json: { error: `not mocked: ${pathname}` } });
+    },
+  );
+}

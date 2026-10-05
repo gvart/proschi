@@ -63,7 +63,9 @@ deployed from `main` and ships with the same changes.
   data"; on a copy of the site without accounts they are kept
   in the browser. Find it from the daily review page or the progress strip
   on the practice list. `proschi achievements check` validates the badges'
-  definitions.
+  definitions, and `proschi achievements lock` records new ids in
+  `achievements.lock`, so a badge's id is never deleted or reused (a badge is
+  retired with `"retired": true` instead).
 - Sign-in for native apps, ready for a future mobile app: an app signs in
   with GitHub or Google in the system browser
   (`/auth/<provider>/start?client=app`, OAuth 2 with PKCE, back to an
@@ -88,6 +90,10 @@ deployed from `main` and ships with the same changes.
   It opens the difficulty, tag, company and status filters; Escape closes
   them. The filters in use show as chips under the search, each with an ×
   to remove it, and "Clear all".
+- Signed in, reviews not sent to your account yet (made offline, say) now
+  count toward the streak and today's goal on the daily review page and the
+  practice list right away, as they already did in a session's summary. Once
+  sent, they count once.
 
 ### Fixed
 - Daily review on a phone: after you answer a card, the next one scrolls
@@ -101,6 +107,13 @@ deployed from `main` and ships with the same changes.
   `#/roadmap/<id>/lesson`) shows the roadmap with that message instead of
   the step. The "Read first" guide, and lessons opened from the problem
   list, stay open to everyone.
+- On phones the header fits the screen on the practice pages: with the
+  account and help menus it no longer pushes the menu button off screen or
+  makes the page scroll sideways (the "Open the editor" button, also in the
+  menu, waits for wider screens, and below 380px the logo keeps its tile
+  only). The account, help and editor menus open inside the screen, spanning
+  it on phones, and a long display name is shortened in the header. The
+  editor's toolbar wraps instead of overflowing between 640 and 700px.
 - The practice problems' statements and lessons, and the interview approach
   guide, are clearer and more accurate: plainer English with shorter
   sentences, jargon explained where it first appears, estimates that match

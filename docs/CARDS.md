@@ -255,11 +255,30 @@ in `ICONS` (`frontend/src/learn/achievements.ts`). The rule kinds:
 | `mastery` | `topic`, `min` (0–1) | the topic's mastery at `min` or more |
 | `stage` | `stage` | every problem of the roadmap stage solved |
 
-An id never changes: earned badges are stored by it. A badge once earned
-stays earned. `proschi achievements check` (CI runs it) checks the file:
-unique ids, known icons, tiers and kinds, each rule with exactly its fields,
-tags, topics and stages that exist, counts the problems can reach, and no
-two badges with the same rule.
+An id never changes and is never reused: earned badges are stored by it, in
+the `achievements` table. A badge once earned stays earned. Like the cards'
+`ids.lock`, `frontend/src/practice/achievements.lock` (next to the JSON file)
+lists every achievement id ever published, sorted:
+
+- To remove a badge, add `"retired": true` to it and keep it in the file.
+  A retired badge is no longer evaluated or shown, and the badges already
+  earned stay stored. Its rule may name a tag, topic or stage that is gone,
+  and a new badge may reuse its rule. Deleting it fails the check, because
+  `achievements.lock` still lists the id.
+- After adding badges, run `proschi achievements lock` to add their ids to
+  `achievements.lock`, and commit it with them.
+
+`proschi achievements check` (CI runs it) checks the file: unique ids, known
+icons, tiers and kinds, each rule with exactly its fields, tags, topics and
+stages that exist, counts the problems can reach, no two badges with the same
+rule, and every id in `achievements.lock` and every locked id still in the
+file.
+
+```sh
+cd tooling && npm run build
+node dist/cli.cjs achievements lock
+node dist/cli.cjs achievements check
+```
 
 Suggestions for new cards or fixes are welcome as issues or pull requests:
 [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-card) has the

@@ -18,6 +18,7 @@ import {
   weeklyRecap,
   weekStart,
   withActivity,
+  withPendingReviews,
   type DayActivity,
 } from './streak';
 
@@ -136,6 +137,38 @@ describe('activity', () => {
       { day: T, reviews: 0, solves: 2, newCards: 0 },
     ]);
     expect(withActivity([{ day: T, reviews: 4, solves: 0 }], { day: T, reviews: 6, solves: 0, newCards: 2 })).toEqual([{ day: T, reviews: 10, solves: 0, newCards: 2 }]);
+  });
+});
+
+describe('pending reviews', () => {
+  const pending = (id: string, day = T): CardReview => ({ id, cardId: `card-${id}`, version: 1, rating: 3, reviewedAt: 100, durationMs: 1000, day });
+  const server: DayActivity[] = [
+    { day: addDays(T, -1), reviews: 10, solves: 0, newCards: 3 },
+    { day: T, reviews: 7, solves: 1, newCards: 1 },
+  ];
+
+  it('adds each pending review to its day, keeping solves and new cards', () => {
+    expect(withPendingReviews(server, [pending('a'), pending('b', addDays(T, -1)), pending('c', addDays(T, -3))])).toEqual([
+      { day: addDays(T, -3), reviews: 1, solves: 0, newCards: 0 },
+      { day: addDays(T, -1), reviews: 11, solves: 0, newCards: 3 },
+      { day: T, reviews: 8, solves: 1, newCards: 1 },
+    ]);
+  });
+
+  it('counts a review once by id, leaves out those already sent and those with a bad day', () => {
+    const merged = withPendingReviews(server, [pending('a'), pending('a'), pending('b'), pending('c'), { ...pending('d'), day: 'soon' }], new Set(['b']));
+    expect(merged.find((d) => d.day === T)).toEqual({ day: T, reviews: 9, solves: 1, newCards: 1 });
+  });
+
+  it('answers the activity itself when nothing is pending', () => {
+    expect(withPendingReviews(server, [])).toBe(server);
+    expect(withPendingReviews(server, [pending('a')], new Set(['a']))).toBe(server);
+  });
+
+  it('lets pending reviews meet today’s goal and keep a streak going', () => {
+    const days = [...run(3, 1), { day: T, reviews: 8, solves: 0 }];
+    expect(computeStreak(days, T, DEFAULT_GOAL)).toMatchObject({ current: 3, todayDone: false });
+    expect(computeStreak(withPendingReviews(days, [pending('a'), pending('b')]), T, DEFAULT_GOAL)).toMatchObject({ current: 4, todayDone: true });
   });
 });
 
