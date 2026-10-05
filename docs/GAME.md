@@ -235,6 +235,7 @@ A **contract** has an `id`, `name` and `text`, and any of: `useCase` with
 ```markdown
 ---
 name: Connection pooling
+icon: cable
 rarity: common
 topic: databases
 learn: [connection-pooler, connection-pool-size]
@@ -253,9 +254,12 @@ Databases take 20% more reads and writes.
 Every database connection costs the server memory…
 ```
 
-`rarity` is common, uncommon, rare or legendary; `unlock` (Blueprints)
-makes a card buyable instead of in the pool from the start. `learn` lists
-review card ids. The `effect` is one the engine implements:
+`icon` is required: a kebab-case [lucide](https://lucide.dev/icons/) name
+listed in `frontend/src/game/engine/icons.ts` (see [Icons](#icons)), and no
+other card may use it; its tile takes the card's rarity colour. `rarity` is
+common, uncommon, rare or legendary; `unlock` (Blueprints) makes a card
+buyable instead of in the pool from the start. `learn` lists review card
+ids. The `effect` is one the engine implements:
 
 | Effect | `target` / `value` |
 |---|---|
@@ -278,6 +282,7 @@ review card ids. The `effect` is one the engine implements:
 ```markdown
 ---
 title: Cache stampede
+icon: snowflake
 category: incident
 topic: caching
 learn: [cache-stampede, cold-cache-restart]
@@ -303,8 +308,30 @@ matching `target`), `failover` (a SQL database), `cache-cold` (`values` per
 tick, a share of the usual hit ratio), `latency` (multiplier), `hot-key`
 (share), `external-slow` (latency in ms; `target` an external id or none for
 all). `from` fixes the first tick; otherwise the seed picks it. `requires`
-lists roles the board must have for the pool to draw the event. All three
-sections are required: they are the debrief.
+lists roles the board must have for the pool to draw the event. `icon` is
+required, as for cards, and unique among the events; its tile is red for an
+incident and pink for a spike. All three sections are required: they are the
+debrief.
+
+### perks.json
+
+```json
+{ "id": "seed-round", "icon": "piggy-bank", "name": "Bigger seed round", "text": "Start every run with $250 more per level.", "costs": [6, 10, 14], "effect": "cash", "value": 250 }
+```
+
+`costs` are the Blueprints for each level, `value` is the effect per level,
+and `effect` is one of `cash`, `trust`, `free-reroll`, `starter-card`,
+`loadtest` or `oncall`. `icon` is required and unique among the perks.
+
+### Icons
+
+Perks, cards and events each have an icon of their own: an icon may appear
+once among the perks, once among the cards and once among the events, but
+not twice in one of them. The names are lucide's, listed in
+`frontend/src/game/engine/icons.ts` (no React, so `proschi game check` can
+read it) and mapped to their components in
+`frontend/src/game/ui/gameIcons.tsx`. To use a new icon, add its name to
+both; the frontend tests fail if the two lists differ.
 
 ## Reference and wrong runs
 
@@ -373,7 +400,8 @@ node tooling/dist/cli.cjs game lock      # adds new ids to ids.lock
 
 `game check` reads every file and checks: fields and their values, ids in
 `ids.lock` (and none removed), review cards, topics and practice problems
-that exist, card and event targets, requirement lines that parse and name a
+that exist, card and event targets, icons (known, and unique among the
+perks, the cards and the events), requirement lines that parse and name a
 use case, traffic for every active use case, start boards the first run
 allows, and the scripted runs. The frontend tests run the same check.
 

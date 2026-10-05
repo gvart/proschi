@@ -1,5 +1,6 @@
 ---
 name: Treasury management
+icon: coins
 rarity: rare
 topic: estimation
 learn: [seconds-in-a-month]

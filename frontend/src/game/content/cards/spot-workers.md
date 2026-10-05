@@ -1,5 +1,6 @@
 ---
 name: Spot workers
+icon: tag
 rarity: uncommon
 topic: queues
 learn: [competing-consumers]

@@ -1,4 +1,5 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from '../../practice/frontMatter';
+import type { IconName } from './icons';
 import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, RARITIES, ROLES, type Board, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
 
 /**
@@ -110,7 +111,7 @@ const fileId = (file: string) => file.replace(/^.*\//, '').replace(/\.md$/, '');
 
 export function cardFromFile(file: string, text: string): CardDef {
   const { fields: f, sections } = readMarkdown(file, text);
-  f.known(['name', 'rarity', 'topic', 'learn', 'effect', 'target', 'stat', 'value', 'unlock']);
+  f.known(['name', 'icon', 'rarity', 'topic', 'learn', 'effect', 'target', 'stat', 'value', 'unlock']);
   const id = fileId(file);
   if (!ID.test(id)) throw new ContentError(file, 'The file name must be lowercase words joined by "-"');
   const stat = f.optionalString('stat');
@@ -119,6 +120,7 @@ export function cardFromFile(file: string, text: string): CardDef {
   return {
     id,
     name: f.string('name'),
+    icon: f.string('icon') as IconName,
     rarity: f.oneOf('rarity', RARITIES),
     topic: f.string('topic'),
     learn: f.list('learn'),
@@ -134,7 +136,7 @@ export function cardFromFile(file: string, text: string): CardDef {
 
 export function eventFromFile(file: string, text: string): EventDef {
   const { fields: f, sections } = readMarkdown(file, text);
-  f.known(['title', 'category', 'topic', 'learn', 'effect', 'target', 'value', 'values', 'duration', 'from', 'telegraph', 'counters', 'requires', 'min-wave']);
+  f.known(['title', 'icon', 'category', 'topic', 'learn', 'effect', 'target', 'value', 'values', 'duration', 'from', 'telegraph', 'counters', 'requires', 'min-wave']);
   const id = fileId(file);
   if (!ID.test(id)) throw new ContentError(file, 'The file name must be lowercase words joined by "-"');
   const values = f.list('values').map((v) => {
@@ -150,6 +152,7 @@ export function eventFromFile(file: string, text: string): EventDef {
   return {
     id,
     title: f.string('title'),
+    icon: f.string('icon') as IconName,
     category: f.oneOf('category', ['incident', 'spike'] as const),
     topic: f.string('topic'),
     learn: f.list('learn'),

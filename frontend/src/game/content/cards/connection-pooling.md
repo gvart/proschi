@@ -1,5 +1,6 @@
 ---
 name: Connection pooling
+icon: cable
 rarity: common
 topic: databases
 learn: [connection-pooler, connection-pool-size]

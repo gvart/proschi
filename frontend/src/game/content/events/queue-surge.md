@@ -1,5 +1,6 @@
 ---
 title: Notification storm
+icon: megaphone
 category: spike
 topic: queues
 learn: [backlog-drain-time, scale-on-message-age, celebrity-fanout]

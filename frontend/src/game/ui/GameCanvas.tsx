@@ -203,7 +203,7 @@ function Canvas(props: GameCanvasProps) {
       });
     }
     return out;
-  }, [board, layout, rowY, nodeTicks, selected, wiringFrom, validTargets, placingRow, fresh, shake, editable, size, flowWidth, components, scenario, props.onGhost]);
+  }, [board, compact, layout, rowY, nodeTicks, selected, wiringFrom, validTargets, placingRow, fresh, shake, editable, size, flowWidth, components, scenario, props.onGhost]);
 
   const flowOf = useMemo(() => new Map((tick?.flows ?? []).map((f) => [`${f.from}>${f.to}`, f])), [tick]);
   const edges = useMemo<Edge[]>(

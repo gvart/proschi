@@ -1,5 +1,5 @@
 import { useRef, useState, type ReactNode } from 'react';
-import { AlertTriangle, ArrowRight, BookOpen, Coins, Flame, Heart, Lock, Minus, Plus, RotateCcw, Sparkles, Trash2, X, Zap } from 'lucide-react';
+import { AlertTriangle, ArrowRight, BookOpen, Coins, Flame, Heart, Lock, Minus, Plus, RotateCcw, Trash2, X, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import { promptOf, type Card } from '../../learn/cards';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
@@ -7,7 +7,8 @@ import { roleOf } from '../engine/board';
 import { MAX_REPLICAS, MAX_SHARDS, REROLL_COST, SKIP_CARD_CASH, STREAK_MAX, TIERS, TICKS } from '../engine/rules';
 import type { Breach, Forecast, NodeTick, WaveSummary } from '../engine/run';
 import type { Board, BoardNode, CardDef, ComponentDef, ContractDef, EventDef, GameContent, ScenarioDef } from '../engine/types';
-import { ICON, rps, usd } from './visual';
+import { IconTile } from './gameIcons';
+import { CATEGORY_TILE, ICON, RARITY_TILE, rps, usd } from './visual';
 
 /**
  * The panels around the board: the forecast before planning, the heads-up
@@ -163,16 +164,19 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible }: 
       )}
       {open && forecast.events.length > 0 && (
         <ul className="mt-2 space-y-1 text-sm">
-          {forecast.events.map((e) => (
+          {forecast.events.map((e) => {
+            const def = events.get(e.id);
+            return (
             <li key={e.id} className="flex items-start gap-1.5">
-              <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0 text-fail" />
+              {def ? <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" /> : <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0 text-fail" />}
               <span>
                 <strong>{e.title}</strong>
                 {e.from !== undefined ? ` at tick ${e.from}${e.duration > 1 ? `–${e.from + e.duration - 1}` : ''}` : ''}: {e.telegraph}
-                {events.get(e.id)?.counters.length ? <span className="text-muted"> (counters: {events.get(e.id)!.counters.join(', ')})</span> : null}
+                {def?.counters.length ? <span className="text-muted"> (counters: {def.counters.join(', ')})</span> : null}
               </span>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
     </section>
@@ -491,13 +495,18 @@ export function WaveResult({ summary, scenario, events, onContinue }: { summary:
           </dl>
         </div>
         <div className="space-y-3 text-sm">
-          {summary.worst && <BreachCard breach={summary.worst} count={summary.breaches.filter((b) => b.kind === summary.worst!.kind).length} />}
+          {summary.worst && <BreachCard breach={summary.worst} count={summary.breaches.filter((b) => b.kind === summary.worst!.kind).length} during={summary.events.map((e) => events.get(e.id)).filter((d): d is EventDef => !!d)} />}
           {summary.events.map((e) => {
             const def = events.get(e.id);
             if (!def) return null;
             return (
               <details key={e.id} className="rounded border-bw-1 border-ink/40 bg-surface p-2" open={!summary.clean}>
-                <summary className="cursor-pointer font-semibold">{def.title}</summary>
+                <summary className="cursor-pointer font-semibold">
+                  <span className="inline-flex items-center gap-1.5 align-middle">
+                    <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" />
+                    {def.title}
+                  </span>
+                </summary>
                 <p className="mt-1">{def.whatHappened}</p>
                 <p className="mt-1">
                   <strong>Why:</strong> {def.why}
@@ -527,7 +536,8 @@ export function WaveResult({ summary, scenario, events, onContinue }: { summary:
   );
 }
 
-export function BreachCard({ breach, count }: { breach: Breach; count?: number }) {
+/** A breach and its fix; `during` lists the incidents that were on when it happened. */
+export function BreachCard({ breach, count, during }: { breach: Breach; count?: number; during?: readonly EventDef[] }) {
   return (
     <div className="rounded border-bw-1 border-ink bg-fail/10 p-2">
       <p className="flex items-center gap-1 font-semibold">
@@ -536,6 +546,17 @@ export function BreachCard({ breach, count }: { breach: Breach; count?: number }
         {count && count > 1 ? <span className="text-muted font-normal"> ×{count} ticks</span> : null}
       </p>
       <p className="mt-1">{breach.message}</p>
+      {during && during.length > 0 && (
+        <p className="mt-1 flex flex-wrap items-center gap-1.5 text-xs text-muted">
+          During:
+          {during.map((d) => (
+            <span key={d.id} className="inline-flex items-center gap-1 font-semibold text-ink">
+              <IconTile name={d.icon} tone={CATEGORY_TILE[d.category]} size="sm" />
+              {d.title}
+            </span>
+          ))}
+        </p>
+      )}
       {breach.hint && (
         <p className="mt-1">
           <strong>Fix:</strong> {breach.hint}
@@ -563,11 +584,15 @@ export function Draft({ offer, cash, rerollCost, onPick, onReroll }: { offer: Ca
         {offer.map((card, i) => (
           <li key={card.id} className="sf-card">
             <button type="button" onClick={() => onPick(i)} className={`h-full w-full text-left rounded-brutal border-bw-2 border-ink p-3 shadow-brutal-sm transition-transform duration-d1 hover:-translate-y-1 hover:shadow-brutal-md ${RARITY_STYLE[card.rarity]}`}>
-              <p className={`${eyebrow} flex items-center gap-1`}>
-                {card.rarity !== 'common' && <Sparkles size={11} aria-hidden="true" />}
-                {card.rarity} · {topicTitle(card.topic)}
-              </p>
-              <p className="mt-1 font-display font-extrabold text-lg">{card.name}</p>
+              <span className="flex items-start gap-2">
+                <IconTile name={card.icon} tone={RARITY_TILE[card.rarity]} size="lg" className="shadow-brutal-sm" />
+                <span className="min-w-0">
+                  <span className={`${eyebrow} block`}>
+                    {card.rarity} · {topicTitle(card.topic)}
+                  </span>
+                  <span className="mt-0.5 block font-display font-extrabold text-lg leading-tight">{card.name}</span>
+                </span>
+              </span>
               <p className="mt-1 text-sm">{card.text}</p>
               <p className="mt-2 text-xs text-muted">{card.why.slice(0, 180)}{card.why.length > 180 ? '…' : ''}</p>
             </button>
@@ -617,10 +642,12 @@ export function Contracts({ offer, scenario, onPick }: { offer: ContractDef[]; s
 
 // ---- Report ----
 
-export function Timeline({ history }: { history: WaveSummary[] }) {
+export function Timeline({ history, events }: { history: WaveSummary[]; events?: ReadonlyMap<string, EventDef> }) {
   const max = Math.max(1, ...history.flatMap((h) => [h.revenue, h.cost]));
   const w = 26;
+  const met = events ? history.map((h, i) => ({ wave: i + 1, defs: h.events.map((e) => events.get(e.id)).filter((d): d is EventDef => !!d) })).filter((x) => x.defs.length) : [];
   return (
+    <>
     <svg viewBox={`0 0 ${history.length * w + 4} 80`} className="w-full h-24" role="img" aria-label="Revenue and cost per wave">
       {history.map((h, i) => (
         <g key={i}>
@@ -631,6 +658,22 @@ export function Timeline({ history }: { history: WaveSummary[] }) {
         </g>
       ))}
     </svg>
+    {met.length > 0 && (
+      <ul className="mt-2 flex flex-wrap gap-x-3 gap-y-1.5 text-xs" aria-label="Incidents per wave">
+        {met.map(({ wave, defs }) => (
+          <li key={wave} className="inline-flex items-center gap-1">
+            <span className="font-mono text-muted">W{wave}</span>
+            {defs.map((d) => (
+              <span key={d.id} className="inline-flex items-center gap-1" title={d.title}>
+                <IconTile name={d.icon} tone={CATEGORY_TILE[d.category]} size="sm" />
+                <span className="sr-only">{d.title}</span>
+              </span>
+            ))}
+          </li>
+        ))}
+      </ul>
+    )}
+    </>
   );
 }
 

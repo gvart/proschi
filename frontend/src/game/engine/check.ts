@@ -4,6 +4,7 @@ import { parse } from '../../dsl/parser';
 import { boardProblems, cloneBoard } from './board';
 import { USERS } from './compile';
 import { readContent, type ContentError } from './content';
+import { isIconName } from './icons';
 import { Game, GameError, LEARN_IDS, parseRequirements, type Outcome } from './run';
 import { MAX_ASCENSION, WAVES } from './rules';
 import { LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type RunSetup, type ScenarioDef } from './types';
@@ -180,6 +181,20 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
   for (const c of content.components) for (const r of c.requires ?? []) if (!componentIds.has(r)) v('components.json', `'${c.id}' requires unknown '${r}'`);
   for (const f of content.features) learn('components.json', f.learn);
   for (const p of content.perks) if (!p.costs.length || p.costs.some((x) => !(x > 0))) v('perks.json', `'${p.id}' needs positive costs`);
+  // Icons: each one known, and unique within its category (perks, cards, events).
+  const icons = (items: readonly { id: string; icon?: string }[], file: (id: string) => string, kind: string) => {
+    const seen = new Map<string, string>();
+    for (const it of items) {
+      const f = file(it.id);
+      if (typeof it.icon !== 'string' || !it.icon) v(f, `'${it.id}' needs an "icon" (a name from engine/icons.ts)`);
+      else if (!isIconName(it.icon)) v(f, `'${it.id}': unknown icon '${it.icon}'; add it to engine/icons.ts and ui/gameIcons.tsx, or pick one listed there`);
+      else if (seen.has(it.icon)) v(f, `'${it.id}': icon '${it.icon}' is already used by the ${kind} '${seen.get(it.icon)}'; each ${kind} has its own`);
+      else seen.set(it.icon, it.id);
+    }
+  };
+  icons(content.perks, () => 'perks.json', 'perk');
+  icons(content.cards, (id) => `cards/${id}.md`, 'card');
+  icons(content.events, (id) => `events/${id}.md`, 'event');
   const startUnlocked = content.components.filter((c) => c.unlock === 0).map((c) => c.role);
   for (const r of ['lb', 'app', 'db'] as const) if (!startUnlocked.includes(r)) v('components.json', `A first run needs a ${r} that is unlocked from the start`);
 

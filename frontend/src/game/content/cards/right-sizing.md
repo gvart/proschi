@@ -1,5 +1,6 @@
 ---
 name: Right-sizing
+icon: ruler
 rarity: common
 topic: estimation
 learn: [servers-for-peak-load]

@@ -1,5 +1,6 @@
 ---
 title: Cache stampede
+icon: snowflake
 category: incident
 topic: caching
 learn: [cache-stampede, cold-cache-restart, early-recomputation]

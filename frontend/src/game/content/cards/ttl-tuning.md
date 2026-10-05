@@ -1,5 +1,6 @@
 ---
 name: TTL tuning
+icon: timer
 rarity: common
 topic: caching
 learn: [choosing-a-ttl, negative-caching]

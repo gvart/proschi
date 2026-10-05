@@ -1,5 +1,6 @@
 ---
 title: Bot flood
+icon: bot
 category: incident
 topic: api-design
 learn: [token-bucket, rate-limit-response, load-shedding]

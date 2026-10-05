@@ -1,5 +1,6 @@
 ---
 name: Bridge loan
+icon: landmark
 rarity: common
 topic: estimation
 learn: [servers-for-peak-load]

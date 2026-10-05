@@ -1,5 +1,6 @@
 ---
 name: Presigned uploads
+icon: upload
 rarity: uncommon
 topic: storage
 learn: [presigned-upload, multipart-upload]

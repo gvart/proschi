@@ -1,5 +1,6 @@
 ---
 title: Bulk import
+icon: hard-drive-upload
 category: spike
 topic: sharding
 learn: [replicas-do-not-scale-writes, shards-for-write-rate, queue-load-levelling]

@@ -6,6 +6,8 @@
  * the `proschi game` CLI all run the same code.
  */
 
+import type { IconName } from './icons';
+
 /** Where a component sits on the board, top to bottom on a phone. */
 export const LANES = ['edge', 'compute', 'cache', 'data', 'async'] as const;
 export type Lane = (typeof LANES)[number];
@@ -53,6 +55,8 @@ export interface FeatureDef {
 export interface PerkDef {
   id: string;
   name: string;
+  /** A lucide icon name from GAME_ICONS, unique among perks. */
+  icon: IconName;
   text: string;
   /** Blueprints for each level, in order. */
   costs: number[];
@@ -96,6 +100,8 @@ export type Rarity = (typeof RARITIES)[number];
 export interface CardDef {
   id: string;
   name: string;
+  /** A lucide icon name from GAME_ICONS, unique among cards. */
+  icon: IconName;
   rarity: Rarity;
   /** A tag from the review cards' tags.json. */
   topic: string;
@@ -120,6 +126,8 @@ export type EventEffect = (typeof EVENT_EFFECTS)[number];
 export interface EventDef {
   id: string;
   title: string;
+  /** A lucide icon name from GAME_ICONS, unique among events. */
+  icon: IconName;
   category: 'incident' | 'spike';
   topic: string;
   learn: string[];

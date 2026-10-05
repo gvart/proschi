@@ -1,5 +1,6 @@
 ---
 name: Compression
+icon: file-archive
 rarity: common
 topic: networking
 learn: [egress-bill, bits-vs-bytes]

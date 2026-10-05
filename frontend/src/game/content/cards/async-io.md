@@ -1,5 +1,6 @@
 ---
 name: Async I/O
+icon: workflow
 rarity: common
 topic: api-design
 learn: [littles-law-concurrency]
