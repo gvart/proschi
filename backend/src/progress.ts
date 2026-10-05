@@ -98,7 +98,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions, progress and card reviews (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions, progress, card reviews and achievements (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -114,7 +114,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
-  const [account, identities, sessions, progress, cardReviews, cardStates] = await DB.batch([
+  const [account, identities, sessions, progress, cardReviews, cardStates, achievements] = await DB.batch([
     DB.prepare('SELECT created_at, daily_goal FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at').bind(user.id),
@@ -126,6 +126,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     DB.prepare(
       'SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ? ORDER BY card_id',
     ).bind(user.id),
+    DB.prepare('SELECT achievement_id, earned_at, seen_at FROM achievements WHERE user_id = ? ORDER BY earned_at, achievement_id').bind(user.id),
   ]);
   type Row = Record<string, string | number | null>;
   const body = {
@@ -172,6 +173,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       lapses: r.lapses,
       lastReviewAt: r.last_review_at,
     })),
+    achievements: (achievements.results as Row[]).map((r) => ({ achievementId: r.achievement_id, earnedAt: r.earned_at, seenAt: r.seen_at })),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

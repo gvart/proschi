@@ -55,6 +55,9 @@ export function localActivity(): DayActivity[] {
   return [...activityFromLog(readReviews(loadJson<unknown>(CARDS_LOG_KEY, []))), ...activityFromSolves(readSolves())];
 }
 
+/** This browser's daily goal (a build without accounts). */
+export const localGoal = (): DailyGoal => goalFor(loadJson<unknown>(GOAL_KEY, DEFAULT_GOAL.reviews));
+
 /** Whether the recap of the week starting `monday` was dismissed. */
 export const recapDismissed = (monday: Day) => loadJson<unknown>(RECAP_KEY, '') === monday;
 export const dismissRecap = (monday: Day) => saveJson(RECAP_KEY, monday);
@@ -101,7 +104,7 @@ export function useActivity(account: Account, { key, enabled = true }: { key?: s
     if (!enabled) return;
     const today = localDay();
     if (mode === 'local') {
-      setState({ status: 'ready', days: localActivity(), goal: goalFor(loadJson<unknown>(GOAL_KEY, DEFAULT_GOAL.reviews)), today });
+      setState({ status: 'ready', days: localActivity(), goal: localGoal(), today });
       return;
     }
     let cancelled = false;

@@ -169,6 +169,23 @@ test.describe('no sideways scrolling on a phone', () => {
     await expectNoHorizontalOverflow(page, 'solve celebration');
   });
 
+  test('progress page: skill map, badges and the new-badge toast', async ({ page }) => {
+    await visit(page, 'practice/#/progress');
+    // Earn a badge: one card reviewed, then the session ended.
+    await visit(page, 'practice/#/review');
+    await page.getByRole('button', { name: /^Start review/ }).click();
+    const card = page.getByRole('article', { name: /^Card 1 of/ });
+    await card.getByLabel('Your estimate').fill('2.3k');
+    await card.getByRole('button', { name: 'Check' }).click();
+    await card.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'End session' }).click();
+    await expect(page.getByRole('status', { name: 'New badge' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'review with the new-badge toast');
+    await visit(page, 'practice/#/progress');
+    await expect(page.locator('[data-achievement="first-card"]')).toHaveAttribute('data-earned', 'true');
+    await expectNoHorizontalOverflow(page, 'progress with a badge earned');
+  });
+
   test('a problem, every tab', async ({ page }) => {
     await visit(page, 'practice/#/url-shortener');
     await eachTab(page, 'practice/#/url-shortener');
