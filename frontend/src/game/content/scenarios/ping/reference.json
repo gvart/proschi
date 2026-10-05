@@ -1,0 +1,274 @@
+{
+  "seed": "reference",
+  "loadout": {
+    "unlocked": [
+      "cache",
+      "cdn",
+      "queue",
+      "worker",
+      "waf",
+      "storage",
+      "nosql",
+      "tiers",
+      "shards"
+    ],
+    "perks": {}
+  },
+  "plays": [
+    {
+      "pick": [
+        "async-io",
+        "write-batching"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ],
+      "pick": [
+        "write-batching",
+        "circuit-breaker",
+        "covering-index"
+      ],
+      "contract": "seed"
+    },
+    {
+      "add": [
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "api",
+          "push"
+        ]
+      ],
+      "wire": [
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "push"
+        ],
+        [
+          "worker",
+          "db"
+        ]
+      ],
+      "pick": [
+        "write-batching",
+        "connection-pooling",
+        "fast-failover"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "worker": {
+          "replicas": 3
+        },
+        "db": {
+          "replicas": 2
+        }
+      },
+      "pick": [
+        "write-batching",
+        "fast-failover",
+        "connection-pooling"
+      ]
+    },
+    {
+      "remove": [
+        "db"
+      ],
+      "add": [
+        {
+          "id": "db",
+          "component": "nosql",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "db"
+        ],
+        [
+          "worker",
+          "db"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 3
+        },
+        "lb": {
+          "replicas": 2
+        }
+      },
+      "pick": [
+        "write-batching",
+        "fast-failover",
+        "autoscaler"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 4
+        }
+      },
+      "pick": [
+        "write-batching",
+        "autoscaler",
+        "hiring-sre"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 5
+        },
+        "worker": {
+          "replicas": 4
+        }
+      },
+      "pick": [
+        "write-batching",
+        "autoscaler",
+        "hiring-sre"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 8
+        },
+        "worker": {
+          "replicas": 6
+        },
+        "db": {
+          "replicas": 3
+        }
+      },
+      "pick": [
+        "write-batching",
+        "autoscaler",
+        "hiring-sre"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 7
+        },
+        "worker": {
+          "replicas": 5
+        }
+      },
+      "pick": [
+        "write-batching",
+        "autoscaler"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 9
+        },
+        "worker": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 11
+        },
+        "worker": {
+          "replicas": 8
+        },
+        "db": {
+          "replicas": 4
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 12,
+          "tier": 1
+        },
+        "worker": {
+          "replicas": 12,
+          "tier": 1
+        },
+        "db": {
+          "replicas": 6
+        },
+        "queue": {
+          "replicas": 3
+        }
+      }
+    }
+  ],
+  "expect": {
+    "cleared": true
+  },
+  "note": "Accept, store, enqueue and answer 202; workers call the push provider and record deliveries in batches. A NoSQL store takes the write volume, since notifications do not need strong consistency."
+}

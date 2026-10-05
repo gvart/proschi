@@ -120,6 +120,13 @@ export interface AnalyzeOptions {
   timeoutMs?: number;
   /** Replica counts to use instead of the declared ones, by node id (`survive` analyses the design with one instance fewer). */
   replicas?: ReadonlyMap<string, number>;
+  /**
+   * Use case percentiles to compute; the others are NaN and their
+   * `tailScenario` is 0. The mixture quantile is the costly part of an
+   * analysis, so a caller that analyses many times (the game, once per tick)
+   * asks only for what it reads. All of them by default.
+   */
+  percentiles?: readonly Percentile[];
 }
 
 export const DEFAULT_TIMEOUT_MS = 1000;
@@ -486,6 +493,20 @@ export const pathQuantile = (path: PathModel, p: number): number => pathAt(path,
 /** `P(latency ≤ t)` for a path: `1 − e^(−l)` for the largest tail factor l whose quantile is at most t. */
 export function pathCdf(path: PathModel, t: number): number {
   if (pathAt(path, 0) > t) return 0;
+  // Without par groups the quantile is linear in l, `F + T·l`, so l = (t − F) / T exactly.
+  if (path.parts.every((part) => part.length <= 1)) {
+    let fixed = 0;
+    let tail = 0;
+    for (const part of path.parts) {
+      if (part.length) {
+        fixed += part[0].fixedMs;
+        tail += part[0].tailMs;
+      }
+    }
+    if (tail <= 0) return 1;
+    const l = (t - fixed) / tail;
+    return l > 1e6 ? 1 : 1 - Math.exp(-l);
+  }
   let hi = 1;
   while (pathAt(path, hi) <= t) {
     hi *= 2;
@@ -613,9 +634,11 @@ export function analyze(diagram: Diagram, options: AnalyzeOptions = {}): Analysi
       percentiles: Object.fromEntries(PERCENTILES.map((q) => [PERCENTILE_KEYS[q], pathQuantile(paths[i], q / 100)])) as Percentiles,
     }));
     const weighted = paths.map((path, i) => ({ share: shares[i] ?? 0, path }));
-    const percentiles = Object.fromEntries(PERCENTILES.map((q) => [PERCENTILE_KEYS[q], mixtureQuantile(weighted, q / 100)])) as Percentiles;
+    const wanted = new Set(options.percentiles ?? PERCENTILES);
+    const percentiles = Object.fromEntries(PERCENTILES.map((q) => [PERCENTILE_KEYS[q], wanted.has(q) ? mixtureQuantile(weighted, q / 100) : NaN])) as Percentiles;
     const tailScenario = Object.fromEntries(
       PERCENTILES.map((q) => {
+        if (!wanted.has(q)) return [PERCENTILE_KEYS[q], 0];
         const t = percentiles[PERCENTILE_KEYS[q]];
         const above = weighted.map((s) => (s.share > 0 ? s.share * (1 - pathCdf(s.path, t * (1 - 1e-9))) : -1));
         return [PERCENTILE_KEYS[q], Math.max(0, above.indexOf(Math.max(...above)))];

@@ -1,0 +1,10 @@
+{
+  "perks": [
+    { "id": "seed-round", "name": "Bigger seed round", "text": "Start every run with $250 more per level.", "costs": [6, 10, 14], "effect": "cash", "value": 250 },
+    { "id": "loyal-users", "name": "Loyal users", "text": "Start with 10 more Trust per level, and keep a higher cap.", "costs": [8, 14], "effect": "trust", "value": 10 },
+    { "id": "free-reroll", "name": "Friendly vendor", "text": "The first reroll of every draft is free.", "costs": [10], "effect": "free-reroll", "value": 1 },
+    { "id": "starter-card", "name": "Tech lead", "text": "Start every run holding a random common card.", "costs": [12], "effect": "starter-card", "value": 1 },
+    { "id": "load-lab", "name": "Load lab", "text": "One free load test every wave.", "costs": [8], "effect": "loadtest", "value": 1 },
+    { "id": "second-pager", "name": "Second pager", "text": "One more on-call action every wave.", "costs": [12], "effect": "oncall", "value": 1 }
+  ]
+}

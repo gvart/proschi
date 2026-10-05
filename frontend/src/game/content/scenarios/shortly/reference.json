@@ -1,0 +1,216 @@
+{
+  "seed": "reference",
+  "loadout": {
+    "unlocked": [
+      "cache",
+      "cdn",
+      "queue",
+      "worker",
+      "waf",
+      "tiers",
+      "shards"
+    ],
+    "perks": {}
+  },
+  "plays": [
+    {
+      "pick": "async-io"
+    },
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ],
+      "pick": "ttl-tuning",
+      "contract": "angel"
+    },
+    {
+      "pick": "cdn-contract"
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        },
+        "db": {
+          "replicas": 2
+        },
+        "lb": {
+          "replicas": 2
+        }
+      },
+      "pick": "fast-failover"
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        }
+      },
+      "pick": "right-sizing",
+      "contract": "stats"
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 5
+        }
+      },
+      "pick": "covering-index"
+    },
+    {
+      "add": [
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "cache"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 5
+        }
+      },
+      "pick": "request-coalescing"
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 7
+        }
+      },
+      "contract": "click-tracking",
+      "pick": "connection-pooling"
+    },
+    {
+      "add": [
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 2
+        },
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ],
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "db"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 7
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 9
+        },
+        "db": {
+          "replicas": 2,
+          "shards": 2
+        }
+      },
+      "pick": null
+    },
+    {
+      "add": [
+        {
+          "id": "waf",
+          "component": "waf",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "cdn"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "waf"
+        ],
+        [
+          "waf",
+          "cdn"
+        ]
+      ],
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    }
+  ],
+  "expect": {
+    "cleared": true
+  },
+  "note": "Scale out behind a load balancer, cache-aside, then a CDN for far users, a queue for click tracking, and shards when the click writes reach the primary."
+}

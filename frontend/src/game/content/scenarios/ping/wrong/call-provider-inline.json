@@ -1,0 +1,14 @@
+{
+  "seed": "wrong",
+  "note": "Calling the push provider while the client waits, and scaling app servers to make up for it: the latency target and the slow provider win.",
+  "loadout": { "unlocked": ["cache", "queue", "worker", "nosql", "tiers"], "perks": {} },
+  "plays": [
+    {},
+    { "add": [{ "id": "lb", "component": "lb", "replicas": 2 }], "set": { "api": { "replicas": 2 } }, "unwire": [["users", "api"]], "wire": [["users", "lb"], ["lb", "api"]] },
+    { "set": { "api": { "replicas": 3 } } },
+    { "set": { "api": { "replicas": 6 }, "db": { "replicas": 2 } } },
+    { "set": { "api": { "replicas": 6 } } },
+    { "set": { "api": { "replicas": 8 } } }
+  ],
+  "expect": { "failsBy": 7 }
+}

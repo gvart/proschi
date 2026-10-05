@@ -1,0 +1,225 @@
+{
+  "seed": "reference",
+  "loadout": {
+    "unlocked": [
+      "cache",
+      "cdn",
+      "queue",
+      "worker",
+      "waf",
+      "storage",
+      "tiers",
+      "shards",
+      "presigned-uploads"
+    ],
+    "perks": {}
+  },
+  "plays": [
+    {
+      "pick": [
+        "async-io",
+        "right-sizing"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 1
+        },
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 1
+        }
+      ],
+      "set": {
+        "api": {
+          "replicas": 2
+        }
+      },
+      "unwire": [
+        [
+          "users",
+          "api"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ]
+      ],
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "ttl-tuning"
+      ],
+      "contract": "grant"
+    },
+    {
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "cdn-contract"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 3
+        },
+        "lb": {
+          "replicas": 2
+        },
+        "db": {
+          "replicas": 2
+        }
+      },
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "fast-failover"
+      ]
+    },
+    {
+      "add": [
+        {
+          "id": "queue",
+          "component": "queue",
+          "replicas": 2
+        },
+        {
+          "id": "worker",
+          "component": "worker",
+          "replicas": 2
+        },
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 2
+        }
+      ],
+      "wire": [
+        [
+          "api",
+          "queue"
+        ],
+        [
+          "queue",
+          "worker"
+        ],
+        [
+          "worker",
+          "store"
+        ],
+        [
+          "api",
+          "cache"
+        ]
+      ],
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "gzip"
+      ],
+      "contract": "comments"
+    },
+    {
+      "set": {
+        "store": {
+          "replicas": 2
+        },
+        "cdn": {
+          "replicas": 2
+        }
+      },
+      "wire": [
+        [
+          "worker",
+          "db"
+        ]
+      ],
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "covering-index"
+      ]
+    },
+    {
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "edge-rules"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        }
+      },
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "connection-pooling"
+      ]
+    },
+    {
+      "pick": [
+        "presigned-uploads",
+        "circuit-breaker",
+        "edge-rules"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 5
+        }
+      },
+      "pick": [
+        "presigned-uploads",
+        "edge-rules",
+        "hot-key-replication"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 6
+        },
+        "lb": {
+          "replicas": 3
+        }
+      },
+      "pick": [
+        "request-coalescing",
+        "hot-key-replication"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 10
+        },
+        "lb": {
+          "replicas": 4
+        }
+      }
+    }
+  ],
+  "expect": {
+    "cleared": true
+  },
+  "note": "Files in object storage behind a CDN from the start, presigned uploads, thumbnails and notifications made by workers from a queue, and a cache for the metadata."
+}

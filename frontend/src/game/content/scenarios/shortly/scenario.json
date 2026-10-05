@@ -1,0 +1,139 @@
+{
+  "start": {
+    "cash": 3000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        { "id": "users", "component": "users", "replicas": 1 },
+        { "id": "api", "component": "app", "replicas": 1 },
+        { "id": "db", "component": "sql", "replicas": 1 }
+      ],
+      "edges": [["users", "api"], ["api", "db"]]
+    }
+  },
+  "externals": [],
+  "useCases": {
+    "redirect": {
+      "name": "Redirect",
+      "method": "GET",
+      "path": "/aZ3x9",
+      "status": 302,
+      "value": 250,
+      "steps": [{ "op": "read", "to": "db", "entity": "Url" }],
+      "cache": 0.9,
+      "edge": 0.85
+    },
+    "shorten": {
+      "name": "Shorten",
+      "method": "POST",
+      "path": "/links",
+      "status": 201,
+      "value": 2500,
+      "steps": [{ "op": "write", "to": "db", "entity": "Url" }]
+    },
+    "alias": {
+      "name": "Custom alias",
+      "method": "PUT",
+      "path": "/links/my-brand",
+      "status": 201,
+      "value": 5000,
+      "steps": [
+        { "op": "read", "to": "db", "entity": "Url" },
+        { "op": "write", "to": "db", "entity": "Url" }
+      ]
+    },
+    "stats": {
+      "name": "Link stats",
+      "method": "GET",
+      "path": "/links/aZ3x9/stats",
+      "status": 200,
+      "value": 2000,
+      "optional": true,
+      "steps": [{ "op": "read", "to": "db", "entity": "Click", "x": 3 }],
+      "cache": 0.6
+    },
+    "clicks": {
+      "name": "Record click",
+      "method": "POST",
+      "path": "/clicks",
+      "status": 202,
+      "value": 300,
+      "optional": true,
+      "steps": [{ "op": "write", "to": "db", "entity": "Click", "async": true }]
+    },
+    "qr": {
+      "name": "QR code",
+      "method": "GET",
+      "path": "/aZ3x9/qr.png",
+      "status": 200,
+      "value": 500,
+      "optional": true,
+      "steps": [{ "op": "read", "to": "db", "entity": "Url", "size": "8KB" }],
+      "cache": 0.9,
+      "edge": 0.9
+    }
+  },
+  "waves": [
+    { "name": "Garage", "traffic": { "redirect": 300, "shorten": 20 }, "curve": "day", "requirements": ["p99 \"Redirect\" < 200ms"] },
+    { "traffic": { "redirect": 500, "shorten": 30 }, "curve": "day", "contract": true },
+    { "traffic": { "redirect": 800, "shorten": 40 }, "curve": "ramp", "requirements": ["availability \"Redirect\" >= 99.5%"] },
+    { "name": "Product Hunt launch", "boss": true, "traffic": { "redirect": 1100, "shorten": 50 }, "curve": "spike" },
+    { "name": "Growth", "traffic": { "redirect": 1700, "shorten": 70, "alias": 15 }, "curve": "day", "contract": true },
+    { "traffic": { "redirect": 2500, "shorten": 90, "alias": 20 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
+    { "traffic": { "redirect": 3600, "shorten": 120, "alias": 30 }, "curve": "day", "requirements": ["p99 \"Redirect\" < 50ms"], "debrief": "db-read-ceiling" },
+    { "name": "Launch day", "boss": true, "traffic": { "redirect": 5000, "shorten": 150, "alias": 40 }, "curve": "ramp", "events": ["az-outage", "cache-stampede"], "contract": true },
+    { "name": "Scale", "traffic": { "redirect": 9000, "shorten": 220, "alias": 50 }, "curve": "day", "global": 0.4, "requirements": ["p99 \"Redirect\" < 250ms", "p90 \"Redirect\" < 60ms", "p99 \"Shorten\" < 400ms"] },
+    { "traffic": { "redirect": 14000, "shorten": 300, "alias": 70 }, "curve": "double-peak", "requirements": ["availability \"Redirect\" >= 99.95%"] },
+    { "traffic": { "redirect": 20000, "shorten": 400, "alias": 90 }, "curve": "day", "events": ["write-surge"] },
+    { "name": "Super Bowl ad", "boss": true, "traffic": { "redirect": 26000, "shorten": 500, "alias": 110 }, "curve": "spike", "events": ["hot-key", "ddos"] }
+  ],
+  "eventPool": [
+    { "id": "noisy-neighbor", "weight": 3 },
+    { "id": "viral-spike", "weight": 2 },
+    { "id": "db-failover", "weight": 2 },
+    { "id": "cache-stampede", "weight": 2 },
+    { "id": "cache-node-loss", "weight": 1 },
+    { "id": "write-surge", "weight": 1 }
+  ],
+  "contracts": [
+    {
+      "id": "stats",
+      "name": "Link stats",
+      "text": "Marketers pay to see who clicked. Three reads of click data per request, p99 under 300 ms.",
+      "useCase": "stats",
+      "rps": 60,
+      "growth": 1.5,
+      "requirements": ["p99 \"Link stats\" < 300ms"]
+    },
+    {
+      "id": "click-tracking",
+      "name": "Click tracking",
+      "text": "Record every click for analytics. It can be a little late: within 30 minutes.",
+      "useCase": "clicks",
+      "rps": 400,
+      "growth": 1.5,
+      "freshness": [{ "useCase": "clicks", "maxMinutes": 30 }]
+    },
+    {
+      "id": "qr-codes",
+      "name": "QR codes",
+      "text": "An 8 KB PNG for every link. Very cacheable; very heavy without a CDN.",
+      "useCase": "qr",
+      "rps": 300,
+      "growth": 1.5
+    },
+    {
+      "id": "enterprise",
+      "name": "Enterprise tier",
+      "text": "Revenue ×1.25 from now on, if Redirect stays at 99.95% availability.",
+      "revenue": 1.25,
+      "requirements": ["availability \"Redirect\" >= 99.95%"]
+    },
+    {
+      "id": "angel",
+      "name": "Angel check",
+      "text": "$1 500 now, no strings attached.",
+      "cash": 1500
+    }
+  ]
+}

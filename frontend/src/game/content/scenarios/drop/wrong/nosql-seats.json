@@ -1,0 +1,14 @@
+{
+  "seed": "wrong",
+  "note": "Moving seats to a NoSQL store for its write throughput: it scales, but it is eventually consistent, so seats are sold twice.",
+  "loadout": { "unlocked": ["cache", "waf", "nosql", "queue", "worker"], "perks": {} },
+  "plays": [
+    {},
+    { "add": [{ "id": "lb", "component": "lb", "replicas": 2 }], "set": { "api": { "replicas": 2 } }, "unwire": [["users", "api"]], "wire": [["users", "lb"], ["lb", "api"]] },
+    { "remove": ["db"], "add": [{ "id": "db", "component": "nosql", "replicas": 2 }], "wire": [["api", "db"]] },
+    { "set": { "api": { "replicas": 4 } } },
+    { "set": { "api": { "replicas": 4 } } },
+    { "set": { "api": { "replicas": 5 } } }
+  ],
+  "expect": { "failsBy": 6 }
+}

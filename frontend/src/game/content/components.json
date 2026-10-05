@@ -1,0 +1,184 @@
+{
+  "components": [
+    {
+      "id": "lb",
+      "name": "Load Balancer",
+      "tech": "Load Balancer",
+      "role": "lb",
+      "lane": "edge",
+      "unlock": 0,
+      "examples": "AWS ALB, NGINX, HAProxy",
+      "summary": "Spreads requests over every app server behind it, and stops sending to one that fails its health check.",
+      "tradeoff": "Cheap and takes 100k requests a second, but one load balancer is a single point of failure: run two.",
+      "learn": ["l4-vs-l7-load-balancer", "least-connections", "deep-health-checks"]
+    },
+    {
+      "id": "app",
+      "name": "App Server",
+      "tech": "Service",
+      "role": "app",
+      "lane": "compute",
+      "unlock": 0,
+      "examples": "a Spring Boot, Node.js or Go service on VMs or containers",
+      "summary": "Runs your code: takes requests, reads and writes stores, answers. About 2 000 requests a second each.",
+      "tradeoff": "Stateless, so you scale it out by adding replicas. One instance fails about 0.5% of the time.",
+      "learn": ["servers-for-peak-load", "littles-law-concurrency", "sticky-sessions"]
+    },
+    {
+      "id": "sql",
+      "name": "SQL Database",
+      "tech": "Database",
+      "role": "db",
+      "lane": "data",
+      "unlock": 0,
+      "examples": "PostgreSQL, MySQL, Amazon Aurora",
+      "summary": "Strongly consistent rows with transactions. Each replica serves about 20 000 reads a second; every write goes to one primary (5 000 a second).",
+      "tradeoff": "Read replicas add reads, not writes: for more writes, shard. A replica to promote turns a long outage into a short failover.",
+      "learn": ["replicas-do-not-scale-writes", "shards-for-write-rate", "when-relational", "failover-timeout"]
+    },
+    {
+      "id": "cache",
+      "name": "Cache",
+      "tech": "Cache",
+      "role": "cache",
+      "lane": "cache",
+      "unlock": 5,
+      "examples": "Redis, Memcached, Amazon ElastiCache",
+      "summary": "Keeps hot data in memory: 100 000 reads a second at about 1 ms. Wire it to an app server and its reads go cache-aside.",
+      "tradeoff": "Only as good as its hit ratio. When it restarts cold or a hot key expires, every miss lands on the database at once.",
+      "learn": ["cache-aside", "hit-rate-to-db-load", "cache-stampede", "choosing-a-ttl"]
+    },
+    {
+      "id": "cdn",
+      "name": "CDN",
+      "tech": "CDN",
+      "role": "cdn",
+      "lane": "edge",
+      "unlock": 8,
+      "examples": "Cloudflare, Amazon CloudFront, Fastly",
+      "summary": "Answers cacheable requests from a data center near the user, before they reach you. Far users stop paying the ocean crossing.",
+      "tradeoff": "Only helps with responses that can be cached and shared; it does nothing for writes or per-user data.",
+      "learn": ["cdn-cache-control", "cdn-helps-on-miss", "anycast", "fingerprinted-assets"]
+    },
+    {
+      "id": "queue",
+      "name": "Queue",
+      "tech": "Message Queue",
+      "role": "queue",
+      "lane": "async",
+      "unlock": 10,
+      "examples": "Amazon SQS, RabbitMQ, Kafka",
+      "summary": "Takes a message durably in a few milliseconds, so the request can answer now and a worker does the slow part later.",
+      "tradeoff": "Work becomes eventual: if workers fall behind, the backlog grows and users wait minutes for the result.",
+      "learn": ["queue-load-levelling", "backlog-drain-time", "at-least-once-needs-idempotency"]
+    },
+    {
+      "id": "worker",
+      "name": "Worker",
+      "tech": "Worker",
+      "role": "worker",
+      "lane": "async",
+      "unlock": 10,
+      "requires": ["queue"],
+      "examples": "a consumer service, AWS Lambda on SQS, Celery, Sidekiq",
+      "summary": "Takes jobs from a queue and does them: writes, emails, fan-out. About 2 000 jobs a second each.",
+      "tradeoff": "Scale it on the backlog, not on CPU: a worker that keeps up at the average falls behind at the peak.",
+      "learn": ["workers-needed", "competing-consumers", "scale-on-message-age"]
+    },
+    {
+      "id": "waf",
+      "name": "Firewall (WAF)",
+      "tech": "WAF",
+      "role": "waf",
+      "lane": "edge",
+      "unlock": 10,
+      "examples": "AWS WAF, Cloudflare WAF",
+      "summary": "Stops bots, scrapers and attacks at the edge, before they cost you an app server or a database read.",
+      "tradeoff": "Another hop and another bill; it blocks known-bad traffic, not a flood of real users.",
+      "learn": ["token-bucket", "rate-limit-response"]
+    },
+    {
+      "id": "storage",
+      "name": "Object Storage",
+      "tech": "Object Storage",
+      "role": "blob",
+      "lane": "data",
+      "unlock": 10,
+      "examples": "Amazon S3, Google Cloud Storage, Cloudflare R2",
+      "summary": "Holds files and blobs of any size, cheaply and durably. Scales without you managing instances.",
+      "tradeoff": "Slow per request (tens of ms), and every byte sent to the internet is billed as egress: put a CDN in front of downloads.",
+      "learn": ["object-vs-block-storage", "presigned-upload", "egress-bill", "metadata-vs-content"]
+    },
+    {
+      "id": "gateway",
+      "name": "API Gateway",
+      "tech": "API Gateway",
+      "role": "gateway",
+      "lane": "edge",
+      "unlock": 12,
+      "examples": "Amazon API Gateway, Kong, Envoy",
+      "summary": "Authenticates, rate-limits and routes API calls. Rejects bot floods with 429 before they reach an app server.",
+      "tradeoff": "About 10 000 requests a second each, and 10 ms more on every call.",
+      "learn": ["api-gateway-scope", "token-bucket", "rate-limit-response"]
+    },
+    {
+      "id": "nosql",
+      "name": "NoSQL Database",
+      "tech": "NoSQL Database",
+      "role": "db",
+      "lane": "data",
+      "unlock": 15,
+      "examples": "Amazon DynamoDB, Cassandra, MongoDB",
+      "summary": "Partitioned by key: every replica takes 20 000 reads and 20 000 writes a second, so writes scale out.",
+      "tradeoff": "Eventually consistent by default: a read may miss the latest write. Never use it where two users must not get the same seat.",
+      "learn": ["good-partition-key", "hot-partition-key", "when-eventual-is-fine", "leaderless-replication"]
+    },
+    {
+      "id": "search",
+      "name": "Search Index",
+      "tech": "Search Engine",
+      "role": "search",
+      "lane": "data",
+      "unlock": 20,
+      "examples": "Elasticsearch, OpenSearch, Algolia",
+      "summary": "An inverted index for full-text and filtered queries the database cannot do fast.",
+      "tradeoff": "About 3 000 queries a second each, and it lags the database: feed it asynchronously.",
+      "learn": ["inverted-index", "change-data-capture"]
+    },
+    {
+      "id": "warehouse",
+      "name": "Data Warehouse",
+      "tech": "Data Warehouse",
+      "role": "warehouse",
+      "lane": "data",
+      "unlock": 20,
+      "examples": "BigQuery, Snowflake, Amazon Redshift, ClickHouse",
+      "summary": "Columnar storage for analytics over billions of rows.",
+      "tradeoff": "Built for big scans, not for traffic: about 200 requests a second. Load it in batches from a queue.",
+      "learn": ["oltp-vs-olap", "pre-aggregate-counts", "batch-is-fine"]
+    }
+  ],
+  "features": [
+    {
+      "id": "tiers",
+      "name": "Instance sizes",
+      "unlock": 8,
+      "summary": "Pick M (2× capacity for 1.8× the price) or L (4× for 3.5×) for app servers, workers, caches and databases. L is the biggest box there is: after that, scale out.",
+      "learn": ["servers-for-peak-load"]
+    },
+    {
+      "id": "shards",
+      "name": "Sharding",
+      "unlock": 15,
+      "summary": "Split a database into partitions, each with its own primary: write capacity grows with every shard.",
+      "learn": ["shards-for-write-rate", "consistent-hashing", "good-partition-key"]
+    },
+    {
+      "id": "wide-lanes",
+      "name": "Wide lanes",
+      "unlock": 20,
+      "summary": "Six components per lane instead of four.",
+      "learn": []
+    }
+  ]
+}
