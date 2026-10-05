@@ -1,0 +1,36 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "set": { "mono": { "replicas": 5 } }
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "set": { "mono": { "replicas": 10 }, "db": { "replicas": 3 } }
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "set": { "mono": { "replicas": 7 } }
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "set": { "mono": { "replicas": 8 } }
+    },
+    {
+      "set": { "mono": { "replicas": 12 }, "db": { "replicas": 4 } }
+    },
+    {
+      "set": { "mono": { "replicas": 6, "tier": 2 }, "db": { "replicas": 6 } }
+    },
+    {
+      "sunset": ["orders-xml"],
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "set": { "mono": { "replicas": 4, "tier": 2 }, "db": { "replicas": 3 } }
+    }
+  ],
+  "expect": { "failsBy": 7, "shows": ["drop"] },
+  "note": "Answers every ticket with a bigger monolith and more read replicas: scrapers walk straight through to the database, and in Black Friday week carts and orders still share one write primary, which no replica can help."
+}

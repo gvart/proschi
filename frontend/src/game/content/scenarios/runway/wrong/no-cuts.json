@@ -1,0 +1,17 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "remove": [
+        "search"
+      ]
+    }
+  ],
+  "expect": {
+    "failsBy": 4,
+    "shows": [
+      "cost"
+    ]
+  },
+  "note": "Turns off the idle search cluster and calls it done: twelve app servers, three of everything else and a CDN with nothing to cache keep the bill over budget until the money runs out."
+}

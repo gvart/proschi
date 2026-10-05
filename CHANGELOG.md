@@ -10,6 +10,12 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Legacy rescue** and **Cost crunch**, the last two design-first Arcade
+  modes. **Monolith** (8 waves): strangle a ten-year-old shop's monolith
+  behind a gateway, extract search and a catalog API, split the orders table
+  with expand and contract, and retire the XML export once partners stop
+  calling it. **Runway** (7 waves): an over-built startup must halve its
+  cloud bill while keeping its SLA, a failover and a zone drill.
 - **On-call**, a design-first Arcade mode, and its scenario **Dinnerbell**:
   five pages for a food-delivery app (a TV-ad spike, a dead database primary,
   a bot flood, a cold cache, a lost zone), each with its alert and logs. Name

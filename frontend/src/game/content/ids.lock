@@ -61,7 +61,9 @@ perk:seed-round
 perk:starter-card
 scenario:dinnerbell
 scenario:drop
+scenario:monolith
 scenario:pawprint
 scenario:ping
+scenario:runway
 scenario:shortly
 scenario:snapshots

@@ -1,0 +1,147 @@
+{
+  "start": {
+    "cash": 5000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        { "id": "users", "component": "users", "replicas": 1 },
+        { "id": "lb", "component": "lb", "replicas": 2 },
+        { "id": "mono", "component": "app", "replicas": 4 },
+        { "id": "db", "component": "sql", "replicas": 2 }
+      ],
+      "edges": [["users", "lb"], ["lb", "mono"], ["mono", "db"]]
+    }
+  },
+  "grants": ["gateway", "cache"],
+  "useCases": {
+    "browse": {
+      "name": "Browse products",
+      "method": "GET",
+      "path": "/products/8812-trail-runner",
+      "status": 200,
+      "value": 300,
+      "steps": [{ "op": "read", "to": "db", "entity": "Product" }],
+      "cache": 0.9
+    },
+    "search": {
+      "name": "Search products",
+      "method": "GET",
+      "path": "/search?q=trail+shoes",
+      "status": 200,
+      "value": 300,
+      "steps": [{ "op": "read", "to": "db", "entity": "Product", "x": 4 }],
+      "cache": 0.8
+    },
+    "cart": {
+      "name": "Add to cart",
+      "method": "POST",
+      "path": "/cart/items",
+      "status": 201,
+      "value": 500,
+      "steps": [{ "op": "write", "to": "db", "entity": "Cart" }]
+    },
+    "checkout": {
+      "name": "Place an order",
+      "method": "POST",
+      "path": "/orders",
+      "status": 201,
+      "value": 8000,
+      "steps": [{ "op": "write", "to": "db", "entity": "Order", "x": 2 }]
+    },
+    "orders-xml": {
+      "name": "Order export v1",
+      "method": "GET",
+      "path": "/api/v1/orders.xml",
+      "status": 200,
+      "value": 200,
+      "steps": [{ "op": "read", "to": "db", "entity": "Order", "x": 2 }],
+      "legacy": { "upkeep": 500, "replacedBy": "orders-api" }
+    },
+    "catalog-v2": {
+      "name": "Catalog API v2",
+      "method": "GET",
+      "path": "/v2/catalog/products?cursor=eyJpZCI6ODgxMn0",
+      "status": 200,
+      "value": 250,
+      "steps": [{ "op": "read", "to": "db", "entity": "Product" }],
+      "cache": 0.85
+    },
+    "orders-api": {
+      "name": "Orders API",
+      "method": "GET",
+      "path": "/v2/orders?since=2026-10-01",
+      "status": 200,
+      "value": 400,
+      "steps": [{ "op": "read", "to": "db", "entity": "Order" }]
+    }
+  },
+  "migrations": [
+    {
+      "id": "orders",
+      "name": "the orders table split",
+      "entity": "Order",
+      "store": "db",
+      "needs": ["orders-api"],
+      "writers": ["checkout"],
+      "oldReaders": ["orders-xml"],
+      "backfillRps": 1500
+    }
+  ],
+  "waves": [
+    {
+      "ticket": { "id": "release-train", "from": "cto", "kind": "reliability", "title": "Teams want to ship without the release train" },
+      "traffic": { "browse": 2000, "search": 800, "cart": 300, "checkout": 80, "orders-xml": 150 },
+      "curve": "day",
+      "requirements": ["availability \"Place an order\" >= 99.9%", "p99 \"Place an order\" < 300ms"]
+    },
+    {
+      "ticket": { "id": "orders-table", "from": "sre", "kind": "data-move", "title": "The orders table is 1.4 TB and growing" },
+      "traffic": { "browse": 2300, "search": 1000, "cart": 380, "checkout": 100, "orders-xml": 150 },
+      "curve": "day",
+      "requirements": ["availability \"Add to cart\" >= 99.9%"]
+    },
+    {
+      "ticket": { "id": "sale-day", "from": "sre", "kind": "performance", "title": "Search melts the monolith on sale days" },
+      "traffic": { "browse": 2500, "search": 1300, "cart": 420, "checkout": 110, "orders-xml": 140 },
+      "curve": "spike",
+      "requirements": ["p99 \"Search products\" < 200ms", "availability \"Search products\" >= 99.5%"]
+    },
+    {
+      "ticket": { "id": "catalog-v2", "from": "pm", "kind": "api-version", "title": "The mobile team needs a catalog API v2" },
+      "traffic": { "browse": 2800, "search": 1600, "cart": 500, "checkout": 140, "orders-xml": 130, "catalog-v2": 1200 },
+      "curve": "double-peak",
+      "requirements": ["p99 \"Catalog API v2\" < 200ms", "availability \"Catalog API v2\" >= 99.9%"]
+    },
+    {
+      "ticket": { "id": "orders-api", "from": "customer", "kind": "api-version", "title": "Partners want a JSON orders API" },
+      "traffic": { "browse": 3100, "search": 1900, "cart": 580, "checkout": 160, "orders-xml": 100, "catalog-v2": 1800, "orders-api": 300 },
+      "curve": "day",
+      "requirements": ["availability \"Orders API\" >= 99.9%", "availability \"Place an order\" >= 99.95%"]
+    },
+    {
+      "ticket": { "id": "scrapers", "from": "sre", "kind": "security", "title": "A price scraper hammers search" },
+      "traffic": { "browse": 3400, "search": 2200, "cart": 650, "checkout": 190, "orders-xml": 60, "catalog-v2": 2400, "orders-api": 400 },
+      "curve": "day",
+      "events": ["ddos"],
+      "requirements": ["availability \"Search products\" >= 99.9%"]
+    },
+    {
+      "ticket": { "id": "black-friday", "from": "marketing", "kind": "scale", "title": "Black Friday week: carts four times a normal day" },
+      "traffic": { "browse": 3800, "search": 2600, "cart": 2600, "checkout": 650, "orders-xml": 20, "catalog-v2": 3000, "orders-api": 500 },
+      "curve": "ramp",
+      "requirements": ["survive any node failure"]
+    },
+    {
+      "ticket": { "id": "xml-export", "from": "finance", "kind": "deprecation", "title": "We still pay for the XML export" },
+      "traffic": { "browse": 4000, "search": 2800, "cart": 1200, "checkout": 320, "orders-xml": 0, "catalog-v2": 3400, "orders-api": 600 },
+      "curve": "day",
+      "requirements": ["cost <= 4500 usd/month"]
+    }
+  ],
+  "eventPool": [
+    { "id": "noisy-neighbor", "weight": 3 },
+    { "id": "hot-key", "weight": 1 },
+    { "id": "cache-stampede", "weight": 1 }
+  ],
+  "contracts": []
+}

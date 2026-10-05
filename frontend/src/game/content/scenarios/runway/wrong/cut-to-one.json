@@ -1,0 +1,45 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "remove": [
+        "search"
+      ]
+    },
+    {
+      "remove": [
+        "cdn"
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "lb": {
+          "replicas": 1
+        },
+        "api": {
+          "replicas": 3
+        },
+        "cache": {
+          "replicas": 1
+        },
+        "db": {
+          "replicas": 1
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 7,
+    "shows": [
+      "resilience",
+      "unroutable"
+    ]
+  },
+  "note": "Cuts to one of everything (and three app servers) for the smallest bill: the database failover has no replica to promote, summer saturates the app tier, and the lost zone ends it."
+}

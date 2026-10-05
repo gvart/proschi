@@ -1,0 +1,34 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "add": [{ "id": "gw", "component": "gateway", "replicas": 2 }],
+      "unwire": [["lb", "mono"]],
+      "wire": [["lb", "gw"], ["gw", "mono"]]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "big-bang" }],
+      "add": [
+        { "id": "ordersdb", "component": "sql", "replicas": 2 },
+        { "id": "orders", "component": "app", "replicas": 2, "handles": ["checkout", "orders-api"] }
+      ],
+      "set": { "mono": { "handles": ["browse", "search", "cart", "orders-xml", "catalog-v2"] } },
+      "wire": [["gw", "orders"], ["orders", "ordersdb"]]
+    },
+    {
+      "add": [
+        { "id": "search", "component": "app", "replicas": 4, "handles": ["search"] },
+        { "id": "cache", "component": "cache", "replicas": 2 }
+      ],
+      "set": { "mono": { "replicas": 8, "handles": ["browse", "cart", "orders-xml", "catalog-v2"] }, "gw": { "replicas": 3 } },
+      "wire": [["gw", "search"], ["search", "cache"], ["search", "db"], ["mono", "cache"]]
+    },
+    {
+      "add": [{ "id": "catalog", "component": "app", "replicas": 2, "handles": ["catalog-v2"] }],
+      "set": { "mono": { "replicas": 4, "handles": ["browse", "cart", "orders-xml"] }, "search": { "replicas": 2 }, "gw": { "replicas": 2 } },
+      "wire": [["gw", "catalog"], ["catalog", "cache"], ["catalog", "db"]]
+    }
+  ],
+  "expect": { "failsBy": 3, "shows": ["migration", "compat"] },
+  "note": "Moves orders to the new database in one weekend cutover: the copy locks every order and cart write for two ticks, and the XML export, which still reads the old table, breaks for the partners who depend on it."
+}

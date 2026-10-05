@@ -112,8 +112,16 @@ its alert and logs, the incident really happens, and before deploying you
 points, wrong costs Trust, and every answer explains why. Then you fix it on
 the board, and the next page tests whether the fix holds.
 
-The other design-first modes (Legacy rescue, Cost crunch) use the same
-tickets and rules.
+**Legacy rescue** (Monolith) is about change without downtime: put a gateway in
+front of a ten-year-old monolith, move one use case at a time to new app
+servers (an app server's settings say which use cases it handles), split a
+table out with a migration, and retire the old endpoint once its clients are
+gone. A big-bang rewrite locks writes and breaks the old readers.
+
+**Cost crunch** (Runway) is about spending less without breaking anything:
+finance lowers a `cost <= … usd/month` requirement every wave while the SLOs
+stay. Remove what is idle, right-size what is over-built, keep the cache that
+spares the database, and keep two of everything for the failure drills.
 
 ## How the game uses the simulation
 

@@ -1,0 +1,56 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "remove": [
+        "search"
+      ]
+    },
+    {
+      "remove": [
+        "cdn"
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        }
+      }
+    },
+    {},
+    {
+      "set": {
+        "cache": {
+          "replicas": 2
+        },
+        "db": {
+          "replicas": 2
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 7
+        }
+      }
+    }
+  ],
+  "expect": {
+    "cleared": true
+  }
+}

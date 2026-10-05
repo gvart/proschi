@@ -1,0 +1,47 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "add": [{ "id": "gw", "component": "gateway", "replicas": 2 }],
+      "unwire": [["lb", "mono"]],
+      "wire": [["lb", "gw"], ["gw", "mono"]]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "add": [{ "id": "ordersdb", "component": "sql", "replicas": 2 }]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "add": [
+        { "id": "search", "component": "app", "replicas": 4, "handles": ["search"] },
+        { "id": "cache", "component": "cache", "replicas": 2 }
+      ],
+      "set": { "mono": { "replicas": 8, "handles": ["browse", "cart", "checkout", "orders-xml"] }, "gw": { "replicas": 3 } },
+      "wire": [["gw", "search"], ["search", "cache"], ["search", "db"], ["mono", "cache"]]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "add": [{ "id": "catalog", "component": "app", "replicas": 2, "handles": ["catalog-v2"] }],
+      "set": { "mono": { "replicas": 4 }, "search": { "replicas": 2 }, "gw": { "replicas": 2 } },
+      "wire": [["gw", "catalog"], ["catalog", "cache"], ["catalog", "db"]]
+    },
+    {
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "add": [{ "id": "orders", "component": "app", "replicas": 2, "handles": ["checkout", "orders-api"] }],
+      "set": { "mono": { "handles": ["browse", "cart", "orders-xml"] }, "search": { "replicas": 3 }, "catalog": { "replicas": 3 } },
+      "wire": [["gw", "orders"], ["orders", "ordersdb"]]
+    },
+    {
+      "set": { "gw": { "replicas": 4 }, "mono": { "replicas": 5 } }
+    },
+    {
+      "set": { "gw": { "replicas": 4 }, "mono": { "replicas": 6 }, "search": { "replicas": 4 }, "catalog": { "replicas": 4 }, "orders": { "replicas": 3 } }
+    },
+    {
+      "sunset": ["orders-xml"],
+      "migrate": [{ "id": "orders", "to": "next" }],
+      "set": { "gw": { "replicas": 3 }, "mono": { "replicas": 5 }, "search": { "replicas": 4 }, "catalog": { "replicas": 4 }, "orders": { "replicas": 2 } }
+    }
+  ],
+  "expect": { "cleared": true }
+}
