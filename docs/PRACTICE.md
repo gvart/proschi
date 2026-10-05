@@ -7,6 +7,10 @@ page, the landing page's list and `proschi problem check` all read the same
 folders. The idea behind the format is in
 [the design](design/hld-and-practice.md#53-practice-platform-practice).
 
+Contributing a problem? [CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-problem)
+has the step-by-step checklist, from scaffolding to the pull request; this
+page is the reference for the format.
+
 ## Folder layout
 
 ```text

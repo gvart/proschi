@@ -14,6 +14,20 @@ test.describe('practice', () => {
     await expect(page.getByText('0 of 25 solved')).toBeVisible();
   });
 
+  test('ends with links to contribute a problem or suggest one, in a new tab', async ({ page }) => {
+    await page.goto('practice/');
+    const contribute = page.getByRole('complementary', { name: 'Contribute a problem' });
+    await expect(contribute).toContainText('Have a system design problem in mind?');
+    const write = contribute.getByRole('link', { name: 'Contribute it' });
+    await expect(write).toHaveAttribute('href', 'https://github.com/gvart/proschi/blob/main/CONTRIBUTING.md#adding-a-new-problem');
+    const suggest = contribute.getByRole('link', { name: 'suggest an idea' });
+    await expect(suggest).toHaveAttribute('href', 'https://github.com/gvart/proschi/issues/new?template=problem-idea.md');
+    for (const link of [write, suggest]) {
+      await expect(link).toHaveAttribute('target', '_blank');
+      await expect(link).toHaveAttribute('rel', 'noopener');
+    }
+  });
+
   test('filters by the company whose published system a problem is based on', async ({ page }) => {
     await page.goto('practice/');
     await page.getByRole('button', { name: 'Filters' }).click();

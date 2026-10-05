@@ -261,4 +261,8 @@ unique ids, known icons, tiers and kinds, each rule with exactly its fields,
 tags, topics and stages that exist, counts the problems can reach, and no
 two badges with the same rule.
 
-Suggestions for new cards or fixes are welcome as issues or pull requests.
+Suggestions for new cards or fixes are welcome as issues or pull requests:
+[CONTRIBUTING.md](../CONTRIBUTING.md#adding-a-new-card) has the
+step-by-step checklist, and the
+[card template](https://github.com/gvart/proschi/issues/new?template=card-idea.md)
+suggests one without writing the file.

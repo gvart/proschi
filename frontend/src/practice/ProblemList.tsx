@@ -2,6 +2,7 @@ import { useMemo, useState, type ReactNode } from 'react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import RoadmapCard from './RoadmapCard';
 import ReviewCard from './ReviewCard';
+import ContributeCard from './ContributeCard';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
 import ProblemFilters from './ProblemFilters';
@@ -90,6 +91,7 @@ export default function ProblemList({ problems, progress, stats, streak, summary
         })}
         {shown.length === 0 && <li className="px-4 py-6 text-center text-sm text-muted">No problem matches these filters.</li>}
       </ul>
+      <ContributeCard />
       {children}
     </main>
   );
