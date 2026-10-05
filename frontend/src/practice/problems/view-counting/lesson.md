@@ -19,9 +19,15 @@ The five use cases in this problem map onto a pipeline:
 - **Persist counts**: every 10 seconds, the counters that changed are copied from Redis to the database (Cassandra at Reddit).
 - **Read count**: a reader sees the count, served from Redis.
 
-Non-functional limits: p99 of Record view and Read count under 60 ms, both 99.9% available, the view durable before the answer, any single machine may fail, and $10,000 a month.
+Non-functional limits: p99 of Record view and Read count under 60 ms; both 99.9% available; the view durable before the answer; the loss of any single machine survived; and at most $10,000 a month.
 
-The given file contains only the `reader` actor plus traffic, requirements and tests. You build everything else. The tests say, in plain words: recording a view writes a queue and touches no cache or database; filtering starts at a queue, consults a cache, and only counted views go back to a queue; counting always uses a cache and only touches the database when the counter was evicted (and then reads the database before the cache); persistence reads the cache before writing the database; and reading a count uses the cache, never the database.
+The given file contains only the `reader` actor plus traffic, requirements and tests. You build everything else. The tests say, in plain words:
+
+- Recording a view writes a queue and touches no cache or database.
+- Filtering starts at a queue and checks a cache, and only counted views go back to a queue.
+- Counting always uses a cache. It touches the database only when the counter was evicted, and then it reads the database before the cache.
+- Persisting reads the cache before writing the database.
+- Reading a count uses the cache, never the database.
 
 ## Back-of-the-envelope
 
@@ -55,7 +61,7 @@ Then add headroom: Proschi marks anything above 70% as hot, and "survive any nod
 
 ### HyperLogLog: counting distinct things in fixed memory
 
-Hash every user id to a uniformly random-looking bit string. In a random bit string, a run of k leading zeros happens with probability 1 in 2^k, so if the longest run you have seen is 20, you have probably seen about a million distinct values. One such estimate is noisy, so HyperLogLog splits the hash space into many buckets (Redis uses 16,384), tracks the longest run per bucket in a few bits each, and combines the buckets with a harmonic mean. Flajolet and colleagues showed the relative error is about 1.04 / √m for m buckets, which is where Redis's 0.81% comes from.
+Hash every user id to a bit string that looks random. In a random bit string, a run of k leading zeros happens with probability 1 in 2^k. So if the longest run you have seen is 20, you have probably seen about a million (2^20) distinct values. One such estimate is noisy. So HyperLogLog splits the hash space into many buckets (Redis uses 16,384), keeps the longest run per bucket in a few bits each, and combines the buckets with a harmonic mean (a kind of average that is not thrown off by a few very large values). Flajolet and colleagues showed the relative error is about 1.04 / √m for m buckets, which is where Redis's 0.81% comes from.
 
 Properties that matter in design:
 
@@ -86,7 +92,7 @@ usecase "Count members" {
 
 ### A durable log first, the work later
 
-The user's request should do the minimum that guarantees the event is not lost: append it to a replicated log and answer. Everything else (rules, counting, persistence) runs in consumers that read the log at their own pace. If the counters fall behind during a spike, pages are not slower; the count is a few seconds staler.
+The user's request should do the minimum that guarantees the event is not lost: append it to a replicated log and answer. Everything else (rules, counting, persistence) runs in consumers that read the log at their own pace. If the counters fall behind during a spike, pages are not slower; the count is just a few seconds older.
 
 Splitting the consumer work into stages connected by topics has its own benefits. The filter can be changed, scaled or replayed without touching the counter, and the counter only sees events that matter. The cost is more moving parts and end-to-end latency in seconds rather than milliseconds.
 
@@ -124,9 +130,9 @@ usecase "Enrich" {
 
 ### Cache as primary, database as periodic backup
 
-Usually a cache sits in front of the database, and the database is the truth. Here it is inverted for the hot data: Redis is where counters live and are read, and Cassandra holds a copy refreshed every 10 seconds so that an evicted or lost counter can be restored. This is a form of **write-behind** caching: writes land in memory and reach durable storage in batches.
+Usually a cache sits in front of the database, and the database is the truth. Here it is the other way around for the hot data. Redis is where counters live and are read. Cassandra holds a copy, refreshed every 10 seconds, so that an evicted or lost counter can be restored. This is a form of **write-behind** caching: writes land in memory and reach durable storage in batches.
 
-Why it works here: the counter is approximate anyway, losing up to 10 seconds of increments for a rare eviction is within "a few percent", and the raw events are still in Kafka if you need to rebuild. Why it is dangerous elsewhere: write-behind can lose acknowledged writes on a crash. Never use it for money, orders, or anything a user was told is saved.
+Why it works here: the counter is approximate anyway, and losing up to 10 seconds of increments on a rare eviction is within "a few percent". The raw events are also still in Kafka if you need to rebuild. Why it is dangerous elsewhere: write-behind can lose acknowledged writes on a crash. Never use it for money, orders, or anything a user was told is saved.
 
 ```proschi
 title "Write-behind snapshot"
@@ -166,7 +172,7 @@ usecase "Flush" {
 
 ## Common mistakes
 
-**Counting in the request** (`wrong/count-in-request`). The collector does a PFADD before answering. In production this couples page latency to Redis health: a slow or failing counter cluster now slows or fails view recording, and spikes hit Redis head on. It also skips the filter, so bots get counted. In Proschi the numbers barely move (Redis has capacity to spare), which is exactly why the flow test "Recording a view never waits for counting" exists: it catches the coupling the latency numbers cannot.
+**Counting in the request** (`wrong/count-in-request`). The collector does a PFADD before answering. In production this ties page latency to the health of Redis: a slow or failing counter cluster now slows or fails view recording, and spikes hit Redis directly. It also skips the filter, so bots get counted. In Proschi the numbers barely move (Redis has capacity to spare). That is exactly why the flow test "Recording a view never waits for counting" exists: it catches the coupling that the latency numbers cannot.
 
 **Reading the count from Cassandra** (`wrong/read-count-from-cassandra`). The database copy is up to 10 seconds behind Redis, and every read now hits the slower, costlier store. It also turns the backup into a read-path dependency. Proschi still meets the latency limit here, so the test "Redis serves the counts; the database is a backup written in batches" is what fails.
 

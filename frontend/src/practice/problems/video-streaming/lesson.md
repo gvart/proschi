@@ -13,11 +13,18 @@
 Think of a small YouTube. Creators upload videos; viewers watch them. Four use cases:
 
 - **Upload video**: the creator registers a video (title, size) and gets `201` with an upload URL. The video is recorded as *uploading*. The creator then sends the ~2 GB file **straight to object storage** with that URL. When the file lands, storage announces it so it gets transcoded.
-- **Transcode video**: a queue hands one uploaded original to a transcoder, which reads it, writes the HLS renditions (the video cut into a few seconds per segment, at several resolutions) back to storage, and marks the video *ready*.
+- **Transcode video**: a queue hands one uploaded original to a transcoder. The transcoder reads it, writes the HLS renditions back to storage, and marks the video *ready*. A rendition is one version of the video at one resolution, cut into segments a few seconds long.
 - **Open video**: a viewer opens the video page and gets the title, status and manifest URL, usually from a cache (`"Cache hit"`), sometimes from the database (`"Cache miss"`).
 - **Stream video**: the player fetches the next 4 MB segment, either from the edge (`"Edge hit"`) or, on a miss, from where renditions are stored (`"Edge miss"`).
 
-The non-functional requirements: transcoding never runs while the creator waits and is fed by a queue (upload p99 under 1 s); the video is recorded durably before the URL is handed out; no server of yours touches upload bytes; opening a video under 75 ms p99; a segment under 600 ms p99, transfer included; streaming available 99.99%; survive any machine; at most $2.5M a month, bandwidth included.
+The non-functional requirements:
+
+- Transcoding never runs while the creator waits, and a queue feeds it (upload p99 under 1 s).
+- The video is recorded durably before the URL is handed out.
+- No server of yours touches the upload bytes.
+- Opening a video: p99 under 75 ms. A segment: p99 under 600 ms, transfer included.
+- Streaming is available 99.99% of the time, and the system survives the loss of any machine.
+- At most $2.5M a month, bandwidth included.
 
 The given declares the creator, the viewer and the **transcoder** fleet: 10 workers, each taking a job about every two seconds (0.5 rps), where a job takes 60 s. The traffic is 2 uploads and 2 transcodes a second, 5k page opens and 10k segment requests a second.
 
@@ -41,13 +48,13 @@ Request rates are modest here. Bytes are not.
 | Object storage, or a load balancer / service in front of it | $0.09 | ≈ $9.3M |
 | CDN | $0.02 | ≈ $2.1M |
 
-Only the CDN fits under $2.5M. Note that a load balancer between viewers and storage does not help: the bytes still leave your network from something you run, at the higher price. In the model, traffic between your own nodes (a CDN filling from storage, a transcoder reading an original) is free.
+Only the CDN fits under $2.5M. A load balancer between viewers and storage does not help: the bytes still leave your network from something you run, at the higher price. In the model, traffic between your own nodes (a CDN filling from storage, a transcoder reading an original) is free.
 
 **Transfer time.** The model adds payload size ÷ the slower end's bandwidth to every percentile. A viewer has 10 MB/s, so a 4 MB segment takes 400 ms just to arrive. That leaves only about 200 ms of the 600 ms budget for everything else at p99. The CDN's 5 ms is fine; one extra slow hop is not.
 
-For the upload, 2 GB at 10 MB/s is **200 seconds**. If those bytes are on the path before the `201`, the 1 s upload limit is impossible. In the reference design the creator gets the `201` first and then sends the bytes to storage, after the response, which is why the bytes do not count against the request's latency.
+For the upload, 2 GB at 10 MB/s is **200 seconds**. If those bytes are on the path before the `201`, the 1 s upload limit is impossible. So the creator gets the `201` first and sends the bytes to storage after the response. That is why the bytes do not count against the request's latency.
 
-**Transcoding.** 2 uploads a second × 60 s = 120 videos in flight on average. The fleet's capacity in the model is 10 × 0.5 = 5 jobs a second, so 2 a second is 40%. Real transcoding is bursty (a creator conference, a time zone waking up), and the queue absorbs bursts the fleet cannot take immediately.
+**Transcoding.** 2 uploads a second × 60 s = 120 videos in flight on average. The fleet's capacity in the model is 10 × 0.5 = 5 jobs a second, so 2 a second is 40%. Real uploads come in bursts (a creator conference, a time zone waking up), and the queue holds the jobs the fleet cannot take right away.
 
 **Cache misses.** At 99% edge hits, storage serves 100 segment requests a second, a trivial load. At 95% page-cache hits, the database serves 250 reads a second.
 
@@ -59,7 +66,7 @@ For the upload, 2 GB at 10 MB/s is **200 seconds**. If those bytes are on the pa
 
 A **presigned URL** is a URL to an object in a bucket, signed with your credentials, that grants one specific operation (here, `PUT` of one key) for a limited time. Your API checks the user, records the video, signs the URL and returns it. The client then uploads straight to storage.
 
-Why: object storage is built to absorb large, slow uploads from millions of clients, and you pay nothing in server time for them. Passing 2 GB through your API means a request that lasts minutes, a load balancer and API replicas busy copying bytes, and a retry from zero if anything in the chain hiccups. Multipart uploads (chunks uploaded independently, then combined) make resumable uploads possible on top of this.
+Why: object storage is built to absorb large, slow uploads from millions of clients, and you pay nothing in server time for them. Passing 2 GB through your API means a request that lasts minutes, a load balancer and API replicas busy copying bytes, and a retry from zero if anything in the chain fails. On top of this, multipart uploads (chunks uploaded independently, then combined) make uploads resumable.
 
 When not to use it: small payloads that you must inspect or transform synchronously, such as a profile picture you resize before saving, or uploads that must be scanned before they land anywhere.
 
@@ -134,13 +141,13 @@ usecase "Get image" {
 
 **3. Deep dive.**
 
-*The upload.* Explain why the bytes never pass the API, and the order of steps: insert the video as *uploading*, return the presigned URL, then the client's `PUT` goes to storage after the response. Storage announces the new object on the queue with an async send.
+*The upload.* Explain why the bytes never pass through the API, and the order of steps: insert the video as *uploading*, return the presigned URL, and then the client sends its `PUT` to storage after the response. Storage announces the new object on the queue with an async send.
 
-*The pipeline.* The transcoder consumes from the queue, reads the original, writes renditions, then updates the status. Talk about retries and idempotency: a redelivered job overwrites the same rendition keys, so running it twice is harmless.
+*The pipeline.* The transcoder consumes from the queue, reads the original, writes renditions, then updates the status. Talk about retries and idempotency (running the same job twice has the same effect as running it once): a redelivered job overwrites the same rendition keys, so running it twice is harmless.
 
 *Playback.* Do the egress arithmetic out loud. It is the most convincing argument in the interview. Then put the CDN in front of the bucket, make segments immutable with long cache lifetimes, and keep the manifest short-lived if it can change.
 
-*Video pages.* The cache-aside pattern: read the cache; on a miss read the database and refill the cache asynchronously.
+*Video pages.* Use the cache-aside pattern: read the cache; on a miss, read the database and refill the cache asynchronously.
 
 *Failure.* Two of everything you run; the queue retains jobs while transcoders are replaced.
 
@@ -158,7 +165,7 @@ usecase "Get image" {
 
 **Segments from storage** (`wrong/segments-from-storage`). Viewers read the bucket directly. Latency is similar, since the viewer's own bandwidth dominates, but every byte is billed at $0.09/GB: over $9M a month. Caught by **cost ≤ $2,500,000/month** (and the CDN flow test).
 
-**A load balancer instead of a CDN** (`wrong/load-balancer-instead-of-cdn`). It looks like an edge, but it caches nothing: storage still serves every segment and the load balancer sends every byte, at the expensive rate, through its own bandwidth. Caught by **"Segments are served by a CDN, with storage as its origin"**, plus latency, failure and cost limits.
+**A load balancer instead of a CDN** (`wrong/load-balancer-instead-of-cdn`). It looks like an edge, but it caches nothing. Storage still serves every segment, and the load balancer sends every byte through its own bandwidth, at the expensive rate. Caught by **"Segments are served by a CDN, with storage as its origin"**, plus latency, failure and cost limits.
 
 ## In the interview
 

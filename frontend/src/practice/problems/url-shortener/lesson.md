@@ -20,7 +20,7 @@ The non-functional requirements are where the design lives:
 - **Scale**: 10k redirects per second and 100 shortenings per second. 95% of redirects are for codes that were opened recently.
 - **Latency**: p99 of a redirect under 50 ms, of shortening under 200 ms. *p99* means the 99th percentile: 99 out of 100 requests are at least that fast.
 - **Availability**: redirects work 99.9% of the time. A dead short link is a broken link on every poster that printed it.
-- **Durability**: once a code was returned, it is never lost. It must be written to a database (not only to memory) before the answer.
+- **Durability**: once a code has been returned, it is never lost. It must be written to a database (not only to memory) before the answer.
 - **Fault tolerance**: losing any one machine must not take the service down.
 - **Budget**: at most $3,000 a month.
 
@@ -51,7 +51,7 @@ Start with the ratio. 10,000 redirects against 100 shortenings is **100 reads fo
 | Redirects that reach the database | 10,000 × 5% | 500 rps |
 | Cache writes (fills on miss) | same as misses | 500 rps |
 
-The 500-byte row is an assumption (code, URL, timestamp, overhead). A few terabytes a year fits one modern database, so storage is not what makes this problem hard.
+The 500-byte row is an assumption (code, URL, timestamp, overhead). About 1.6 TB a year fits one modern database, so storage is not what makes this problem hard.
 
 Now the per-component load. In Proschi's simulation each kind of node has a default capacity per replica ([How the simulation works](https://proschi.app/docs/model/) lists them all):
 
@@ -61,11 +61,11 @@ Now the per-component load. In Proschi's simulation each kind of node has a defa
 | Cache (`[Redis]`) | 10,000 reads + 500 writes | 100,000 rps | 1 |
 | Database (`[DynamoDB]`) | 500 reads + 100 writes | 20,000 rps | 1 |
 
-The right-hand column is a **floor, not an answer**. At 100% a node is saturated and every latency requirement that touches it fails. The simulation models each node as a queue: the busier the replicas, the longer a request waits for a free one, and the wait balloons as utilisation nears 100%. Anything above 70% is flagged as *hot*. Size the API well below that, then read p99 in the Analysis tab and adjust.
+The right-hand column is a **floor, not an answer**. At 100% a node is saturated and every latency requirement that touches it fails. The simulation models each node as a queue. The busier the replicas, the longer a request waits for a free one, and the wait grows very fast as utilisation (how busy the node is) nears 100%. Anything above 70% is flagged as *hot*. Size the API well below that, then read p99 in the Analysis tab and adjust.
 
 A few more estimates show up directly in the numbers:
 
-- **Latency.** The default idle latencies are about 2 ms for a load balancer, 10 ms for a service, 1 ms for Redis and 5 ms for a database. A hit path is roughly *load balancer + API + cache*; a miss path adds the database read and the cache fill. The simulation turns each hop's mean into a percentile; an idle hop's p99 is about 2.8× its mean. Add up the hops on the miss path and multiply, and you'll see why the miss path is the one that pushes against 50 ms.
+- **Latency.** The default idle latencies are about 2 ms for a load balancer, 10 ms for a service, 1 ms for Redis and 5 ms for a database. A hit path is roughly *load balancer + API + cache*; a miss path adds the database read and the cache fill. The simulation turns each hop's mean into a percentile: an idle hop's p99 is about 2.8× its mean. Add up the hops on the miss path and multiply, and you'll see why the miss path is the one that pushes against 50 ms.
 - **Availability.** A single service replica is up 99.5% of the time in the model. That alone fails a 99.9% target. Two replicas are both down only 0.5% × 0.5% = 0.0025% of the time, so the node is up 99.9975%. Every node on the path multiplies in, which is why "two of everything" is the starting point.
 - **Cost.** Every replica has a flat monthly price: roughly $50 for a load balancer, $100 for a service, $150 for Redis, $400 for PostgreSQL, $500 for DynamoDB. Multiply out your replica counts before you run anything and you'll know whether you are near the $3,000 line.
 
@@ -75,7 +75,7 @@ A few more estimates show up directly in the numbers:
 
 **What it is.** The application owns the cache. On a read it asks the cache first. On a hit, it is done. On a miss, it reads the database, writes the value into the cache (usually with a time-to-live, *TTL*), and returns it. The database never talks to the cache directly.
 
-**Why it works.** Access to links is wildly skewed: a viral link gets millions of clicks in an hour, most links a handful ever. Keeping only *recently used* codes in memory gives a high hit rate with a cache far smaller than the database, answering in about a millisecond.
+**Why it works.** Access to links is very uneven: a viral link gets millions of clicks in an hour, while most links get only a handful ever. Keeping only *recently used* codes in memory gives a high hit rate with a cache far smaller than the database. And the cache answers in about a millisecond.
 
 **Trade-offs.** The first reader of every code pays a miss. Cached values can go stale if the underlying row changes, which is why caches usually carry a TTL. A cold cache (after a restart) sends a burst of misses to the database.
 
@@ -112,7 +112,7 @@ usecase "Get item" {
 
 Notice `->>` on the fill: the API doesn't need to wait for the `SET` before answering, so the fill is off the critical path.
 
-**The miss path decides p99.** Averages hide pain: if 95% of requests take 12 ms and 5% take 60 ms, the mean is about 14 ms, but the slowest 1% are all misses. A redirect's p99 is computed over all redirects, hits and misses mixed by share, so with 5% misses it sits deep inside the miss path. Shaving the hit path does little; removing a hop or queueing from the miss path does a lot.
+**The miss path decides p99.** Averages hide pain: if 95% of requests take 12 ms and 5% take 60 ms, the mean is about 14 ms, but the slowest 1% are all misses. A redirect's p99 is computed over all redirects, hits and misses mixed by their share. With 5% misses, the slowest 1% of redirects all come from the miss path, so the p99 is set by it. Shaving the hit path does little; removing a hop or queueing from the miss path does a lot.
 
 ### Redundancy and availability arithmetic
 
@@ -199,7 +199,7 @@ Put a load balancer in front of the API so a visitor never depends on one API in
 
 **The write path.** `Shorten` must write to the database *before* it responds; a code that exists only in the cache or in a queue could vanish. Don't put a cache write on the shorten path unless you have a reason: the link may never be opened, and the miss path will fill the cache when it is.
 
-**The miss path.** This is where your p99 is decided. Count the hops: load balancer, API, cache (miss), database, and the fill. Make the fill asynchronous (`->>`) so the visitor doesn't wait for it. Then keep each hop un-queued: if the API replicas are busy, every hop through them waits.
+**The miss path.** This is where your p99 is decided. Count the hops: load balancer, API, cache (miss), database, and the fill. Make the fill asynchronous (`->>`) so the visitor doesn't wait for it. Then keep queueing low on each hop: if the API replicas are busy, every request through them waits.
 
 **Sizing.** Take the per-component load table above, choose replica counts that keep every node comfortably below 70%, and make sure each node still holds up with *one replica fewer*. The `survive any node failure` check removes one replica from each node and re-runs the analysis. Then read the Analysis tab: is p99 of `Redirect` under 50 ms with room to spare? Is the total under $3,000? If the cost is tight, look at what each replica costs before cutting the ones on the hot path.
 
@@ -211,7 +211,7 @@ Summarise in one breath: "A stateless API behind a load balancer; codes written 
 
 ## Common mistakes
 
-**The miss never fills the cache** (`wrong/miss-never-fills-cache`). The design reads the cache, misses, reads the database and answers, but never writes the code into the cache. In production this is a silent disaster: the cache only ever contains what something else put there, the hit rate decays toward zero, and the database takes the full read load. Latency and load numbers can look fine in a simulation that assumes a fixed 95% hit rate, which is exactly why a flow test catches it here: **Misses fill the cache** requires a cache call after the database call in the `"Cache miss"` scenario.
+**The miss never fills the cache** (`wrong/miss-never-fills-cache`). The design reads the cache, misses, reads the database and answers, but never writes the code into the cache. In production this is a silent disaster. The cache only ever contains what something else put there, the hit rate drops toward zero, and the database takes the full read load. Latency and load numbers can look fine in a simulation that assumes a fixed 95% hit rate. That is exactly why a flow test catches it here: **Misses fill the cache** requires a cache call after the database call in the `"Cache miss"` scenario.
 
 **No cache at all.** Every redirect goes to the database. It might even meet the latency limit on paper with enough database replicas, but it fails **Redirects read the cache first**, and in reality you'd pay for a database sized for the full read load.
 
@@ -232,7 +232,7 @@ Summarise in one breath: "A stateless API behind a load balancer; codes written 
 Follow-up questions you'll likely get:
 
 - **"How do you generate codes without collisions?"** A counter in Base62 never collides. To avoid a single counter bottleneck, give each API server a block of numbers (say 1,000 at a time) from a central sequence. If enumeration is a concern, permute the numbers.
-- **"301 or 302?"** 301 is cached by browsers, cheaper for us, but we lose click counts and can't change the target. 302 keeps every click visible. Most shorteners that sell analytics use 302.
+- **"301 or 302?"** A 301 is cached by browsers, which is cheaper for us, but we lose click counts and can't change the target. 302 keeps every click visible. Most shorteners that sell analytics use 302.
 - **"What's your cache eviction policy?"** LRU (least recently used) with a TTL. Codes never change, so staleness isn't a worry; memory is.
 - **"What happens when the cache goes down?"** Fall back to the database, ideally with a limit on how hard you hit it, and warm the cache back up. Mention the thundering-herd risk.
 - **"How would you add click analytics?"** Publish a click event to a queue asynchronously on each redirect, and count in a separate pipeline. Never put analytics on the redirect's critical path.
