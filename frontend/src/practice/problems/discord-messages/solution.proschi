@@ -1,0 +1,53 @@
+import "problem.proschi"
+
+data "Data Services" [Rust] x48 @data "One gRPC endpoint per query; coalesce concurrent reads of the same rows"
+
+api  -> data     : gRPC, routed by consistent hash of channel_id
+data -> messages : CQL
+data -> hot      : CQL
+
+entity Message in messages "One message; a partition holds one channel's messages for a 10-day bucket" {
+  channel_id int key
+  bucket     int key
+  message_id int key
+  author_id  int
+  content    string
+}
+
+decision "Data services between the API and the database" {
+  because "A thin Rust service per query owns the connection to ScyllaDB, so concurrency limits and coalescing live in one place instead of in every API process"
+  rejected "The API queries ScyllaDB itself" "Thousands of API processes each send their own copy of the same read to the same three replicas"
+}
+decision "Coalesce concurrent reads of the same channel" {
+  because "When a big server pings everyone, tens of thousands of clients fetch the same latest messages within milliseconds; the first request starts the query and the rest subscribe to its result, so the partition sees one read instead of thousands"
+  rejected "Add replicas or shards" "A partition lives on its replication factor's nodes: neither more replicas of the cluster nor more shards spread one channel's bucket"
+  rejected "A message cache in front of ScyllaDB" "Messages are edited, deleted and reacted to; every write would have to invalidate it, and a stale cache shows deleted messages"
+}
+decision "Route by consistent hash of channel_id" because "Requests for one channel reach the same data service instance, so they find each other's in-flight query"
+decision "Partition by channel and a 10-day bucket" because "A channel's recent messages are read together from one partition, and a bucket keeps the largest channel's partitions near 100 MB"
+
+usecase "Send message" "A user posts a message to a channel" {
+  api       -> data     : SendMessage(channel 1046, "gg")
+  data      -> messages : x3 INSERT INTO messages (channel_id, bucket, message_id) at QUORUM
+  messages --> data     : ok
+  data     --> api      : message 1129
+}
+
+usecase "Read messages" "A user opens an ordinary channel and loads its latest messages" {
+  api       -> data     : GetMessages(channel 2210, limit 50)
+  data      -> messages : x2 SELECT FROM messages WHERE channel_id = 2210 AND bucket = 1912 LIMIT 50 at QUORUM
+  messages --> data     : 50 rows
+  data     --> api      : 50 messages
+}
+
+usecase "Read busy channel" "Everyone in a huge server opens the channel that was just pinged" {
+  api -> data : GetMessages(channel 1046, limit 50)
+
+  alt "Joined in-flight read" when "a query for this channel is already running on this instance" {
+    data --> api : 50 messages, from the shared query
+  } alt "First read" when "no query for this channel is in flight" {
+    data  -> hot  : x2 SELECT FROM messages WHERE channel_id = 1046 AND bucket = 1912 LIMIT 50 at QUORUM
+    hot  --> data : 50 rows
+    data --> api  : 50 messages, also to every request that joined
+  }
+}

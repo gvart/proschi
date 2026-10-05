@@ -1,0 +1,21 @@
+# expect-fail: Queries go through PgBouncer
+# Every API server opens its own connections to all 32 databases: thousands of Postgres connections, each a process on the server.
+import "problem.proschi"
+
+db "Block Store" [PostgreSQL] x2 @data "480 logical shards, 15 per physical database"
+
+capacity {
+  db shards 32
+}
+
+web -> db : SQL to the workspace's shard
+
+usecase "Load page" "A user opens a page" {
+  web -> db  : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  db --> web : 120 rows
+}
+
+usecase "Edit block" "A user types into a block" {
+  web -> db  : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  db --> web : UPDATE 1
+}

@@ -1,0 +1,26 @@
+# expect-fail: p99 of Edit block < 70 ms
+# Four shards with eight replicas each: plenty of read capacity, but only four primaries to take the edits.
+import "problem.proschi"
+
+db "Block Store" [PostgreSQL] x8 @data "Four shards of a primary and seven replicas"
+
+capacity {
+  db shards 4
+}
+
+web       -> pgbouncer : SQL to the workspace's shard
+pgbouncer -> db        : pooled connections
+
+usecase "Load page" "A user opens a page" {
+  web        -> pgbouncer : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  pgbouncer  -> db        : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  db        --> pgbouncer : 120 rows
+  pgbouncer --> web       : 120 rows
+}
+
+usecase "Edit block" "A user types into a block" {
+  web        -> pgbouncer : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  pgbouncer  -> db        : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  db        --> pgbouncer : UPDATE 1
+  pgbouncer --> web       : UPDATE 1
+}

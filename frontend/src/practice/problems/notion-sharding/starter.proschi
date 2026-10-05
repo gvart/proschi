@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the Postgres fleet, choose its shards with capacity { db shards N },
+# and write the use cases "Load page" and "Edit block".
+db "Block Store" [PostgreSQL]
+
+web       -> pgbouncer
+pgbouncer -> db
+
+usecase "Load page" {
+  web        -> pgbouncer : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  pgbouncer  -> db        : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  db        --> pgbouncer : 120 rows
+  pgbouncer --> web       : 120 rows
+}
