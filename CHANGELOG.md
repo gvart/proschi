@@ -66,6 +66,9 @@ deployed from `main` and ships with the same changes.
   HyperLogLog pipeline, medium) and Social Graph Cache (Facebook's TAO,
   hard). Their scale and limits come from the posts and papers where these
   give numbers. Seventeen problems in all.
+- Two more practice problems based on published systems: Push Gateway
+  (Netflix's Zuul Push, medium) and Flash Sale (Shopify's edge cache,
+  checkout throttle and inventory in the shop's database, hard).
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,

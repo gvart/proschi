@@ -1,0 +1,70 @@
+import "problem.proschi"
+
+lb         "Load Balancer"     [AWS Load Balancer] x2 @edge "Layer 4, with a long idle timeout for persistent connections"
+push       "Zuul Push Servers" [Java]              x14 @edge "Netty servers holding the WebSocket and SSE connections; each knows its own connections in memory"
+registry   "Push Registry"     [Redis]             x3 @edge "Dynomite over Redis: customer id to push server, with a TTL"
+kafka      "Push Queue"        [Kafka]             x3 @edge "Messages from every sender, partitioned by customer"
+processors "Message Processor" [Java]              x16 @edge "Look the customer up in the registry and hand the message to that push server"
+
+device     -> lb         : WebSocket / SSE
+lb         -> push       : TCP
+push       -> registry   : RESP
+push       -> device     : push frames
+senders    -> kafka      : push library
+kafka      -> processors : consume
+processors -> registry   : RESP
+processors -> push       : deliver
+
+entity Registration in registry "Where a customer's device is connected; expires unless the connection renews it" {
+  customerId  string key
+  server      string
+  connectedAt time
+}
+
+decision "Put Kafka between the senders and the push servers" {
+  because "Many backend services push messages; with a queue in between they make one call to the push library, never need to know which server holds a connection, and never wait for delivery"
+  rejected "Senders call push servers" "Every sender would need the registry and would wait for delivery, and a burst of messages would land on the push servers at once"
+}
+decision "Look up the connection, do not broadcast" {
+  because "A message goes to the one server that holds the connection; sending it to every push server multiplies their load by the size of the fleet"
+  rejected "Ask every push server" "Fourteen deliveries for each message, thirteen of them wasted"
+}
+decision "A Redis-based registry (Dynomite)" {
+  because "Every connection writes it and every message reads it: it needs low latency, record expiry, sharding and replication"
+  rejected "A relational database" "5.5k registrations a second exceed one primary, and rows do not expire"
+  rejected "DynamoDB or Cassandra" "Would work, but costs over three times as much as Redis for this load"
+}
+decision "Drop messages for devices that are not connected" because "Push is best effort: a device that is offline fetches fresh data when it next connects"
+decision "Records expire after 30 minutes" because "Clients reconnect at least every half hour (with random dither), so a record nobody renewed belongs to a dead connection"
+
+usecase "Connect" "A device opens its push connection" {
+  device    -> lb       : GET /push (Upgrade: websocket)
+  lb        -> push     : GET /push (Upgrade: websocket)
+  push      -> registry : SET conn:cust-81 push-i-0a1b EX 1800
+  registry --> push     : OK
+  push     --> lb       : 101 Switching Protocols
+  lb       --> device   : 101 Switching Protocols
+}
+
+usecase "Send" "A backend service pushes a message to a customer" {
+  senders -> kafka   : PRODUCE push-messages {"customer": "cust-81", "type": "new-recommendations"}
+  kafka  --> senders : ack
+}
+
+usecase "Deliver" "A message processor delivers a queued message" {
+  kafka      -> processors : PushMessage cust-81
+  processors -> registry   : GET conn:cust-81
+
+  alt "Online" when "the customer has a connection open" {
+    registry  --> processors : push-i-0a1b
+    processors -> push       : deliver to cust-81
+    push       -> device     : message frame
+    push      --> processors : delivered
+  } alt "Offline" when "no device of the customer is connected" {
+    registry --> processors : nil
+  } alt "Stale route" when "the push server in the record went away with its connections" {
+    registry  --> processors : push-i-0a1b
+    processors -x push       : deliver to cust-81
+  }
+  processors --> kafka : commit offset
+}

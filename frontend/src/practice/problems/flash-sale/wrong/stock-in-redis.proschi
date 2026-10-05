@@ -1,0 +1,48 @@
+# expect-fail: The pod's database decides the stock and records the order
+# The stock is a Redis counter (DECR) and the order goes to MySQL: two stores that a crash between the calls leaves disagreeing.
+import "problem.proschi"
+
+edge  "Edge (OpenResty)" [nginx]         x3 @edge "nginx with Lua: page cache, checkout throttle (a leaky bucket) and routing to the pod"
+app   "Shopify Core"     [Ruby on Rails] x5 @core "Renders storefront pages on a miss and runs checkout"
+stock "Stock Counters"   [Redis]         x2 @core "Units left per variant"
+
+buyer -> edge  : HTTPS
+edge  -> app   : HTTP
+app   -> pod   : SQL
+app   -> stock : RESP
+
+usecase "View product" "A buyer opens the product page" {
+  buyer -> edge : GET /products/lip-kit
+
+  alt "Page cache hit" when "the edge has the page" {
+    edge --> buyer : 200 page
+  } alt "Page cache miss" when "the page expired or was never cached" {
+    edge  -> app   : GET /products/lip-kit
+    app   -> pod   : SELECT product, variants
+    pod  --> app   : rows
+    app  --> edge  : 200 page
+    edge --> buyer : 200 page
+  }
+}
+
+usecase "Checkout" "A buyer checks out one unit" {
+  buyer -> edge : POST /checkout {"variant": 42, "quantity": 1}
+
+  alt "Queued" when "the bucket is full and the buyer has no pass" {
+    edge --> buyer : 429 queue page, polls again in a few seconds
+  } alt "Order placed" when "admitted, and a unit is left" {
+    edge   -> app   : POST /checkout
+    app    -> stock : DECR stock:42
+    stock --> app   : 17
+    app    -> pod   : INSERT order
+    pod   --> app   : order 1001
+    app   --> edge  : 201 {"order": 1001}
+    edge  --> buyer : 201 {"order": 1001}
+  } alt "Sold out" when "admitted, but the last unit is gone" {
+    edge   -> app   : POST /checkout
+    app    -> stock : DECR stock:42
+    stock --> app   : -1
+    app   --> edge  : 409 {"error": "sold out"}
+    edge  --> buyer : 409 {"error": "sold out"}
+  }
+}
