@@ -4,6 +4,8 @@ import type { Card, ChoiceCard, ClozeCard, EstimateCard, FlipCard, Topic } from 
 import { previewIntervals, RATINGS, type CardState, type Rating } from '../../learn/fsrs';
 import { formatFactor, formatNumber, gradeClozeAnswers, gradeEstimateAnswer, optionOrder, parseNumber } from '../../learn/grade';
 import { autoRating, formatInterval, type SessionItem } from '../../learn/review';
+import type { ChallengeAnswer } from '../../learn/challenge';
+import { TYPE_LABEL } from './labels';
 import Markdown, { InlineMarkdown } from '../Markdown';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 
@@ -23,7 +25,6 @@ interface SessionProps {
   onQuit: (results: SessionResult[]) => void;
 }
 
-const TYPE_LABEL: Record<Card['type'], string> = { flip: 'Recall', choice: 'Pick one', estimate: 'Estimate', cloze: 'Fill the gaps' };
 
 /** A review session: one card at a time, each rated, then the summary. */
 export default function ReviewSession({ items, states, topics, onReview, onDone, onQuit }: SessionProps) {
@@ -105,6 +106,10 @@ interface CardViewProps {
   state?: CardState;
   position: string;
   onRate: (rating: Rating, durationMs: number) => void;
+  /** The order of a choice card's options (grade.ts optionOrder); the card's review count by default. */
+  round?: number;
+  /** Called once with the answer itself, as the daily challenge sends it (challenge.ts), when an auto-graded card is answered. */
+  onAnswer?: (answer: ChallengeAnswer) => void;
 }
 
 /** An auto-graded card's outcome once answered: right or wrong, and the explanation to show. */
@@ -115,7 +120,8 @@ interface Outcome {
   explanation?: ReactNode;
 }
 
-function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps) {
+/** One card: its question, the answer, and the rating (shared by daily review and the daily challenge). */
+export function CardView({ card, isNew, topic, state, position, onRate, round, onAnswer }: CardViewProps) {
   const shownAt = useRef(Date.now());
   const answeredAfter = useRef<number | undefined>(undefined);
   const box = useRef<HTMLElement>(null);
@@ -123,6 +129,10 @@ function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps
   useEffect(() => box.current?.focus({ preventScroll: true }), []);
   const answered = () => {
     answeredAfter.current ??= Date.now() - shownAt.current;
+  };
+  const answeredWith = (answer: ChallengeAnswer) => {
+    answered();
+    onAnswer?.(answer);
   };
   const rate = (rating: Rating) => onRate(rating, answeredAfter.current ?? Date.now() - shownAt.current);
 
@@ -132,6 +142,7 @@ function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps
       tabIndex={-1}
       aria-label={position}
       data-card-type={card.type}
+      data-card-id={card.id}
       className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md focus:outline-none"
     >
       <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5">
@@ -146,11 +157,11 @@ function CardView({ card, isNew, topic, state, position, onRate }: CardViewProps
         {card.type === 'flip' ? (
           <FlipBody card={card} state={state} onShow={answered} onRate={rate} />
         ) : card.type === 'choice' ? (
-          <ChoiceBody card={card} round={state?.reps ?? 0} onAnswer={answered} onRate={rate} />
+          <ChoiceBody card={card} round={round ?? state?.reps ?? 0} onAnswer={answeredWith} onRate={rate} />
         ) : card.type === 'estimate' ? (
-          <EstimateBody card={card} onAnswer={answered} onRate={rate} />
+          <EstimateBody card={card} onAnswer={answeredWith} onRate={rate} />
         ) : (
-          <ClozeBody card={card} onAnswer={answered} onRate={rate} />
+          <ClozeBody card={card} onAnswer={answeredWith} onRate={rate} />
         )}
       </div>
     </article>
@@ -254,12 +265,12 @@ function Graded({ outcome, onRate }: { outcome: Outcome; onRate: (r: Rating) => 
   );
 }
 
-function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round: number; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round: number; onAnswer: (answer: number) => void; onRate: (r: Rating) => void }) {
   const order = useMemo(() => optionOrder(card, round), [card, round]);
   const [picked, setPicked] = useState<number | undefined>(undefined);
   const pick = (i: number) => {
     if (picked !== undefined) return;
-    onAnswer();
+    onAnswer(i);
     setPicked(i);
   };
   useKeys(picked === undefined ? Object.fromEntries(order.map((option, n) => [String(n + 1), () => pick(option)])) : {});
@@ -279,6 +290,7 @@ function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round
                 type="button"
                 onClick={() => pick(i)}
                 disabled={picked !== undefined}
+                data-option={i}
                 className={`flex w-full min-h-[48px] items-start gap-3 rounded border-bw-1 border-ink px-3 py-2.5 text-left text-sm text-ink shadow-brutal-sm transition-[background-color] duration-d1 [overflow-wrap:anywhere] disabled:cursor-default ${tone}`}
               >
                 <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm border-bw-1 border-ink/40 font-mono text-[11px] text-muted" aria-hidden="true">
@@ -301,7 +313,7 @@ function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round
   );
 }
 
-function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer: (answer: number) => void; onRate: (r: Rating) => void }) {
   const [text, setText] = useState('');
   const [error, setError] = useState<string | undefined>(undefined);
   const [value, setValue] = useState<number | undefined>(undefined);
@@ -312,7 +324,7 @@ function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer
       setError('Enter a number above 0, for example 2300, 2,300, 2.3k or 1e6.');
       return;
     }
-    onAnswer();
+    onAnswer(parsed);
     setError(undefined);
     setValue(parsed);
   };
@@ -384,16 +396,16 @@ function clozeSource(card: ClozeCard, filled: boolean): string {
   return filled ? card.text.replace(/\{\{(\d+)\}\}/g, (_, n: string) => `**${card.blanks[Number(n)]?.[0] ?? ''}**`) : card.text.replace(/\{\{(\d+)\}\}/g, (_, n: string) => `**[ ${Number(n) + 1} ]**`);
 }
 
-function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: () => void; onRate: (r: Rating) => void }) {
+function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: (answer: string[] | null) => void; onRate: (r: Rating) => void }) {
   const [typed, setTyped] = useState<string[]>(() => card.blanks.map(() => ''));
   const [result, setResult] = useState<{ correct: boolean; gaps: boolean[]; gaveUp: boolean } | undefined>(undefined);
   const check = (e: FormEvent) => {
     e.preventDefault();
-    onAnswer();
+    onAnswer(typed);
     setResult({ ...gradeClozeAnswers(card, typed), gaveUp: false });
   };
   const giveUp = () => {
-    onAnswer();
+    onAnswer(null);
     setResult({ correct: false, gaps: card.blanks.map(() => false), gaveUp: true });
   };
 
@@ -413,6 +425,7 @@ function ClozeBody({ card, onAnswer, onRate }: { card: ClozeCard; onAnswer: () =
               autoCapitalize="off"
               enterKeyHint={i === card.blanks.length - 1 ? 'done' : 'next'}
               spellCheck={false}
+              maxLength={200}
               value={typed[i]}
               readOnly={!!result}
               onChange={(e) => setTyped(typed.map((t, j) => (j === i ? e.target.value : t)))}

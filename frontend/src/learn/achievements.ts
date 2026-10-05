@@ -4,6 +4,7 @@ import { isNew, reviewable, type CardStates } from './review';
 import { computeStreak, type DailyGoal, type Day, type DayActivity } from './streak';
 import type { Rating } from './fsrs';
 import { percent, skills, type MasteryInput, type ProblemInfo, type Skills } from './mastery';
+import type { ChallengeStats } from './challenge';
 
 /**
  * Achievements: badges for milestones in review and practice, defined as data
@@ -50,7 +51,13 @@ export type Rule =
   /** A topic's mastery (mastery.ts) at `min` or more. */
   | { kind: 'mastery'; topic: string; min: number }
   /** Every problem of a roadmap stage solved. */
-  | { kind: 'stage'; stage: string };
+  | { kind: 'stage'; stage: string }
+  /** Daily challenges completed (challenge.ts). */
+  | { kind: 'challenges'; min: number }
+  /** Daily challenges with every card right. */
+  | { kind: 'challenge-perfect'; min: number }
+  /** The longest challenge streak: UTC days in a row with a completed daily challenge. */
+  | { kind: 'challenge-streak'; min: number };
 
 export type RuleKind = Rule['kind'];
 
@@ -66,6 +73,9 @@ const RULE_FIELDS: Record<RuleKind, { required: string[]; optional: string[] }> 
   'estimate-streak': { required: ['min'], optional: [] },
   mastery: { required: ['topic', 'min'], optional: [] },
   stage: { required: ['stage'], optional: [] },
+  challenges: { required: ['min'], optional: [] },
+  'challenge-perfect': { required: ['min'], optional: [] },
+  'challenge-streak': { required: ['min'], optional: [] },
 };
 export const RULE_KINDS = Object.keys(RULE_FIELDS) as RuleKind[];
 
@@ -106,6 +116,8 @@ export interface StatsSnapshot {
   solved: SolvedProblem[];
   /** Each topic's mastery, by topic id. */
   mastery: Record<string, number>;
+  /** The daily challenge: completed, perfect, and the longest challenge streak. */
+  challenges: ChallengeStats;
 }
 
 /** What rules about problems and stages need: the catalog. */
@@ -147,6 +159,12 @@ export function ruleProgress(rule: Rule, s: StatsSnapshot, context: AchievementC
       return count(s.estimateStreak, rule.min);
     case 'mastery':
       return count(percent(s.mastery[rule.topic] ?? 0), percent(rule.min));
+    case 'challenges':
+      return count(s.challenges.completed, rule.min);
+    case 'challenge-perfect':
+      return count(s.challenges.perfect, rule.min);
+    case 'challenge-streak':
+      return count(s.challenges.longestStreak, rule.min);
     case 'stage': {
       const known = new Set(context.problems.map((p) => p.id));
       const ids = context.stages.find((st) => st.id === rule.stage)?.problems.filter((id) => known.has(id)) ?? [];
@@ -230,7 +248,11 @@ export interface SnapshotInput extends Omit<MasteryInput, 'solved'> {
   reviews: number;
   longestStreak: number;
   solvedProblems: readonly SolvedProblem[];
+  /** The daily challenge's stats; none when absent. */
+  challenges?: ChallengeStats;
 }
+
+const NO_CHALLENGES: ChallengeStats = { completed: 0, perfect: 0, longestStreak: 0 };
 
 /** The snapshot, and the skill map computed on the way. */
 export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; skills: Skills } {
@@ -243,6 +265,7 @@ export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; 
       estimateStreak: longestRightRun(input.estimateRatings),
       solved: [...input.solvedProblems],
       mastery: Object.fromEntries(map.topics.map((t) => [t.topic, t.mastery])),
+      challenges: input.challenges ?? NO_CHALLENGES,
     },
     skills: map,
   };

@@ -4,6 +4,7 @@ import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { field } from '../components/Playground/ui';
 import RoadmapCard from './RoadmapCard';
 import ReviewCard from './ReviewCard';
+import ChallengeCard from './ChallengeCard';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -62,6 +63,7 @@ export default function ProblemList({ problems, progress, stats, streak, summary
 
       <RoadmapCard problems={problems} progress={progress} />
       <ReviewCard>{streak}</ReviewCard>
+      <ChallengeCard />
       {summary}
 
       <div className="mt-7 flex flex-wrap items-center gap-2">

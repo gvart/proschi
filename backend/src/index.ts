@@ -2,6 +2,7 @@ import { SIM_VERSION } from '../../frontend/src/sim/version';
 import { getActivity } from './activity';
 import { getAchievements, markAchievementsSeen } from './achievements';
 import { getCardState, postCardReviews } from './cards';
+import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
 import { purgeExpiredSessions } from './cron';
@@ -37,6 +38,9 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   GET    /api/leaderboard
  *   GET    /api/cards/state?day=YYYY-MM-DD   card review states (+ that day's counts)
  *   POST   /api/cards/reviews {reviews}     up to 200 card reviews; answers the cards' new states
+ *   GET    /api/challenge/today             the daily challenge's cards (+ your attempt and challenge streak, signed in)
+ *   POST   /api/challenge/today/attempt {answers, day?}   grades, scores and keeps your first attempt of the day
+ *   GET    /api/challenge/leaderboard?day=  the day's top 20 who opted in (+ your rank, signed in)
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
  */
 
@@ -69,6 +73,9 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'leaderboard')) return getLeaderboard(ctx);
   if (is('GET', 'api', 'cards', 'state')) return getCardState(request, ctx);
   if (is('POST', 'api', 'cards', 'reviews')) return postCardReviews(request, ctx);
+  if (is('GET', 'api', 'challenge', 'today')) return getChallengeToday(request, ctx);
+  if (is('POST', 'api', 'challenge', 'today', 'attempt')) return postChallengeAttempt(request, ctx);
+  if (is('GET', 'api', 'challenge', 'leaderboard')) return getChallengeLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
   return errorResponse(404, 'Not found');
 }

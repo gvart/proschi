@@ -58,6 +58,19 @@ deployed from `main` and ships with the same changes.
   in the browser. Find it from the daily review page or the progress strip
   on the practice list. `proschi achievements check` validates the badges'
   definitions.
+- A daily challenge (`practice/#/challenge`): five cards a day, the same for
+  everyone and new at 00:00 UTC, mixing topics and difficulties with at least
+  one estimate. Each right answer scores 100 points plus up to 20 for
+  answering within 10 seconds (fading to nothing at a minute), for at most
+  600. Signed in, the server grades your answers, keeps your first attempt
+  and ranks it on today's leaderboard (top 20 of those who chose to appear on
+  it); signed out, play and see your score, then sign in to save it. The
+  result shows each right answer with why, your rank, a challenge streak and
+  a "Copy result" button for sharing, e.g. `Proschi daily challenge
+  2026-10-06: 480/600 ✅✅❌✅✅`, and a perfect score gets confetti. Every
+  answer also counts as a review toward your daily goal. Three new badges:
+  a first challenge, a perfect score and a 7-day challenge streak. Find it
+  on the practice list, the daily review page or in the footer.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

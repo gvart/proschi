@@ -183,6 +183,38 @@ streak from the reviews' and solves' local dates (backend/README.md); a
 build without accounts computes it from this browser's reviews and solves;
 signed out there is no streak.
 
+### Daily challenge
+
+The practice page's daily challenge (`practice/#/challenge`) is the same five
+cards for everyone each day. The day is the **UTC date**, so it starts at
+00:00 UTC everywhere. The rules are `frontend/src/learn/challenge.ts`, which
+the Worker runs too:
+
+- **The cards**: only `choice`, `estimate` and `cloze` cards (graded
+  automatically, so everyone is scored alike), never retired ones, picked by
+  a generator seeded with the date. One estimate card when there is one, then
+  cards from topics not picked yet, at most two of a difficulty and two of a
+  type; shown easy to hard. A choice card's options are shuffled the same way
+  for everyone that day.
+- **The score**: 100 points per right answer plus a speed bonus of up to 20,
+  all of it within 10 s of the card showing, falling linearly to 0 at 60 s
+  (`round(20 × (60 − t) / 50)` for `t` seconds in between). A wrong answer
+  scores 0. Five cards make at most **600**; one more right answer is always
+  worth more than any speed.
+- **One attempt**: signed in, the server picks the cards, grades the
+  answers itself, keeps only the first attempt of the day and ranks it among
+  the day's (by score, then the total time). The leaderboard lists the top 20
+  of those who chose to appear on the leaderboard; everyone else is counted
+  but not named.
+- **The challenge streak**: days in a row with a completed challenge (UTC
+  days, no freezes), separate from the daily streak.
+- Every answer is also a review of its card, so it counts toward the daily
+  goal and streak like any other.
+
+Signed out, the challenge is scored in the browser and can be saved to an
+account after signing in; a copy of the site without accounts keeps every
+result and the challenge streak in the browser.
+
 ## The check
 
 `proschi cards check` (CI runs it on every pull request):
@@ -249,6 +281,9 @@ in `ICONS` (`frontend/src/learn/achievements.ts`). The rule kinds:
 | `estimate-streak` | `min` | that many estimate cards right in a row |
 | `mastery` | `topic`, `min` (0–1) | the topic's mastery at `min` or more |
 | `stage` | `stage` | every problem of the roadmap stage solved |
+| `challenges` | `min` | that many daily challenges completed |
+| `challenge-perfect` | `min` | that many daily challenges with every card right |
+| `challenge-streak` | `min` | a challenge streak of that many days at its longest |
 
 An id never changes: earned badges are stored by it. A badge once earned
 stays earned. `proschi achievements check` (CI runs it) checks the file:

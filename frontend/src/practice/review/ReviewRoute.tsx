@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Flame, Layers, LogIn, PartyPopper, Radar, RotateCcw, Target } from 'lucide-react';
+import { ArrowRight, Flame, Layers, LogIn, PartyPopper, Radar, RotateCcw, Target, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { nextState, type Rating } from '../../learn/fsrs';
@@ -11,7 +11,7 @@ import { Celebration, GoalPicker, StreakWidget, WeeklyRecapCard } from '../Strea
 import { PROVIDER_LABEL } from '../account';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
-import { accountStore, localStore, memoryStore, signedOutError, type CardStore } from './store';
+import { accountStore, localStore, memoryStore, reviewId, signedOutError, type CardStore } from './store';
 import ReviewSession, { type SessionResult } from './ReviewSession';
 import { notifyActivity } from '../skills/activity';
 
@@ -34,16 +34,6 @@ import { notifyActivity } from '../skills/activity';
 const FLUSH_AT = 5;
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
-
-/** A random id for a review; randomUUID needs a secure context, which a local preview over http may not be. */
-function reviewId(): string {
-  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
-  const b = crypto.getRandomValues(new Uint8Array(16));
-  b[6] = (b[6] & 0x0f) | 0x40;
-  b[8] = (b[8] & 0x3f) | 0x80;
-  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
-  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
-}
 
 /** "later today", "tomorrow", "in 5 days". */
 function dueIn(due: number, now: number): string {
@@ -195,10 +185,16 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
         <a href={topic ? '#/review' : '#/'} className={`-ml-2.5 ${toolButton}`}>
           {topic ? 'All topics' : 'All problems'}
         </a>
-        <a href="#/progress" className={toolButton}>
-          <Radar size={14} aria-hidden="true" />
-          Skill map and badges
-        </a>
+        <span className="flex flex-wrap items-center gap-1">
+          <a href="#/challenge" className={toolButton}>
+            <Zap size={14} aria-hidden="true" />
+            Daily challenge
+          </a>
+          <a href="#/progress" className={toolButton}>
+            <Radar size={14} aria-hidden="true" />
+            Skill map and badges
+          </a>
+        </span>
       </div>
       <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">{topic ? `Review: ${topic.title}` : 'Daily review'}</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">

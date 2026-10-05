@@ -143,5 +143,15 @@ export function accountStore(userId: string): CardStore {
   };
 }
 
+/** A random id for a review; randomUUID needs a secure context, which a local preview over http may not be. */
+export function reviewId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID();
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  b[6] = (b[6] & 0x0f) | 0x40;
+  b[8] = (b[8] & 0x3f) | 0x80;
+  const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+  return `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+}
+
 /** Whether an error means the session is gone (sign in again) rather than the network. */
 export const signedOutError = (e: unknown) => e instanceof ApiError && e.status === 401;
