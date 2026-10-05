@@ -233,7 +233,7 @@ describe('data export', () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       exportedAt: expect.any(Number),
-      user: { id, displayName: 'Ada', publicProfile: false, createdAt: 0 },
+      user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, createdAt: 0 },
       identities: [{ provider: 'github', subject: id }],
       sessions: [
         { createdAt: 0, expiresAt: 4_000_000_000 },
@@ -247,6 +247,7 @@ describe('data export', () => {
           firstRunAt: expect.any(Number),
           updatedAt: expect.any(Number),
           solvedAt: expect.any(Number),
+          solvedDay: expect.stringMatching(/^\d{4}-\d{2}-\d{2}$/),
           runsToSolve: 1,
           bestCostUsd: expect.any(Number),
           bestP99Ms: expect.any(Number),

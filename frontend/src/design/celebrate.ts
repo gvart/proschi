@@ -1,15 +1,17 @@
-// A small burst of 14 coloured squares from an element, for a moment worth
-// celebrating (all tests pass). Plain DOM and WAAPI, so static pages and React
-// both use it. Fixed to <body>: inside <main> (a view-transition stacking
-// context) it would slip under the sticky header. No-op under reduced motion.
+// A small burst of coloured squares from an element, for a moment worth
+// celebrating (all tests pass, a review session done). Plain DOM and WAAPI,
+// so static pages and React both use it. Fixed to <body>: inside <main> (a
+// view-transition stacking context) it would slip under the sticky header.
+// No-op under reduced motion.
 
 import { prefersReducedMotion } from './motion';
 
 const COLORS = ['--c-yellow', '--c-pink', '--c-blue', '--c-pass', '--c-lilac'];
+/** Squares in a burst, unless asked for more. */
 const COUNT = 14;
 
-/** Bursts squares out of the centre of `from`; resolves when they are gone. */
-export function celebrate(from: Element): Promise<void> {
+/** Bursts `count` squares (14 by default) out of the centre of `from`; resolves when they are gone. */
+export function celebrate(from: Element, { count = COUNT }: { count?: number } = {}): Promise<void> {
   if (prefersReducedMotion() || typeof document === 'undefined' || !document.body.animate) return Promise.resolve();
   const box = from.getBoundingClientRect();
   const layer = document.createElement('div');
@@ -26,7 +28,7 @@ export function celebrate(from: Element): Promise<void> {
   });
   document.body.append(layer);
 
-  const runs = Array.from({ length: COUNT }, (_, i) => {
+  const runs = Array.from({ length: count }, (_, i) => {
     const bit = document.createElement('i');
     const size = 8 + ((i * 7) % 9);
     Object.assign(bit.style, {
@@ -41,7 +43,7 @@ export function celebrate(from: Element): Promise<void> {
     });
     layer.append(bit);
     // Evenly round the circle, jittered, mostly upward; then gravity pulls them down.
-    const angle = (i / COUNT) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.5;
     const distance = 70 + Math.random() * 90;
     const dx = Math.cos(angle) * distance;
     const dy = Math.sin(angle) * distance - 40;

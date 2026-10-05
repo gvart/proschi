@@ -295,6 +295,8 @@ export interface User {
   id: string;
   displayName: string;
   publicProfile: boolean;
+  /** Cards a day the user aims for (GOAL_CHOICES in frontend/src/learn/streak.ts); a solve also meets it. */
+  dailyGoal: number;
 }
 
 /**
@@ -308,11 +310,11 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
   const hash = await sha256(token);
   const t = now();
   const row = await ctx.env.DB.prepare(
-    `SELECT u.id, u.display_name, u.public_profile, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.expires_at > ?`,
   )
     .bind(hash, t)
-    .first<{ id: string; display_name: string; public_profile: number; expires_at: number }>();
+    .first<{ id: string; display_name: string; public_profile: number; daily_goal: number; expires_at: number }>();
   if (!row) return undefined;
   ctx.userId = row.id;
   if (row.expires_at - t < SESSION_TTL / 2) {
@@ -322,7 +324,7 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
       .run();
     if (meta.changes > 0) ctx.setCookies.push(sessionCookie(token, SESSION_TTL));
   }
-  return { id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1 };
+  return { id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal };
 }
 
 export async function requireUser(request: Request, ctx: Ctx): Promise<User> {

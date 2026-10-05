@@ -11,6 +11,8 @@ import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
+import { summarize, useActivity } from './activity';
+import { StreakInvite, StreakWidget } from './Streak';
 import AccountMenu from './AccountMenu';
 import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
@@ -105,6 +107,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
   const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
   const problem = problemId && !onRoadmap && !guide && !onReview ? problems.find((p) => p.id === problemId) : undefined;
+  // Read again on each page but a problem's: a solve or a session there changes it.
+  const activity = useActivity(account, { key: route, enabled: !problem });
+  const ready = activity.state.status === 'ready' ? activity.state : undefined;
+  const streak = ready ? (
+    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} compact />
+  ) : activity.state.status === 'sign-in' ? (
+    <StreakInvite account={account} compact />
+  ) : undefined;
   useEffect(() => {
     // The review page names itself (its topic).
     if (onReview) return;
@@ -162,7 +172,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         )}
         {onReview ? (
           <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
-            <ReviewRoute account={account} topic={route.slice('review/'.length) || undefined} />
+            <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
           </Suspense>
         ) : guide ? (
           <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
@@ -180,7 +190,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             guide={firstGuide}
           />
         ) : (
-          <ProblemList problems={problems} progress={progress} stats={stats}>
+          <ProblemList problems={problems} progress={progress} stats={stats} streak={streak}>
             {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
           </ProblemList>
         )}

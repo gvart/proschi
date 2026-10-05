@@ -1,7 +1,7 @@
 import { problemFromFiles } from '../../frontend/src/practice/problemFiles';
 import { parseSolution, runTests } from '../../frontend/src/practice/workspace';
 import type { Problem } from '../../frontend/src/practice/types';
-import { defaultEngine, type Analysis, type Engine } from '../../frontend/src/hld/engine';
+import { defaultEngine } from '../../frontend/src/hld/engine';
 import { problemFolders } from './problems.gen';
 
 /**
@@ -37,16 +37,6 @@ export interface Verdict {
 }
 
 export function verify(problem: Problem, source: string): Verdict {
-  // Keep the analysis runTests computes, for the design metrics.
-  let analysis: Analysis | undefined;
-  const engine: Engine = { ...defaultEngine, analyze: (d) => (analysis = defaultEngine.analyze(d)) };
-  const run = runTests(parseSolution(problem, source), engine);
-  const verdict: Verdict = { solved: run.solved, passed: run.passed, total: run.results.length };
-  if (!run.solved || !analysis) return verdict;
-  const p99s = analysis.useCases.map((u) => u.percentiles.p99).filter(Number.isFinite);
-  return {
-    ...verdict,
-    ...(Number.isFinite(analysis.totalCostUsd) ? { costUsd: analysis.totalCostUsd } : {}),
-    ...(p99s.length ? { p99Ms: Math.max(...p99s) } : {}),
-  };
+  const run = runTests(parseSolution(problem, source), defaultEngine);
+  return { solved: run.solved, passed: run.passed, total: run.results.length, ...run.metrics };
 }

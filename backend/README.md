@@ -39,6 +39,11 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
   the cards from `src/cards.gen.ts`, which `scripts/cards.mjs` writes from
   `frontend/src/practice/cards` before `dev`, `typecheck`, `test` and
   `deploy`.
+- **Daily goal and streak** (`frontend/src/learn/streak.ts`): the user's
+  daily goal (cards a day; a solved problem also meets it), and per day the
+  card reviews, new cards and first solves, from the reviews' and solves'
+  local dates. The Worker computes the streak, its freezes and last week's
+  recap with the page's own code, so the page and an app show the same.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
@@ -53,14 +58,15 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /auth/<provider>/callback` | Sets the session cookie (30 days) and redirects to the path; on failure adds `?login_error=cancelled\|failed`. Linking keeps the session and adds `?linked=<provider>` or `?login_error=identity_in_use\|provider_linked` |
 | `POST /auth/logout` | Ends the session |
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
-| `GET /api/me` | `{user, progress: {<problem id>: {status, runs, source, solvedAt, runsToSolve, bestCostUsd, bestP99Ms}}}` |
-| `PATCH /api/me {displayName?, publicProfile?}` | `publicProfile: true` shows the user on the leaderboard |
+| `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
+| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboard; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
 | `DELETE /api/me` | Deletes the account, its sessions, its progress and its card reviews |
 | `GET /api/me/export` | Everything stored about the user, as `proschi-data.json` (no session token hashes) |
+| `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
-| `POST /api/problems/<id>/runs {source, solved, imported?}` | Records a run; `solved: true` makes the server verify it |
+| `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
 | `GET /api/leaderboard` | Top 50 who opted in, by problems solved |
@@ -69,7 +75,7 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports and 60 card review requests per user; 20 sign-in steps, 120 stats
+changes or exports, 3 imports and 60 card review and activity requests per user; 20 sign-in steps, 120 stats
 requests and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)

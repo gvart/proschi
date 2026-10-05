@@ -1,6 +1,6 @@
 import { parse } from '../dsl/parser';
 import type { CapacityOverride, Diagnostic, ImportResolver, ParseResult } from '../dsl/types';
-import type { Engine, TestResult } from '../hld/engine';
+import type { Analysis, Engine, TestResult } from '../hld/engine';
 import { filesResolver } from '../playground/imports';
 import type { Problem } from './types';
 
@@ -60,6 +60,22 @@ export interface RunResult {
   passed: number;
   /** Every test ran and passed. */
   solved: boolean;
+  /** Of a solving design. */
+  metrics?: DesignMetrics;
+}
+
+/** A design's monthly cost and its worst use case p99, as the server records a solve's (backend/src/verify.ts). */
+export interface DesignMetrics {
+  costUsd?: number;
+  p99Ms?: number;
+}
+
+export function designMetrics(analysis: Analysis): DesignMetrics {
+  const p99s = analysis.useCases.map((u) => u.percentiles.p99).filter(Number.isFinite);
+  return {
+    ...(Number.isFinite(analysis.totalCostUsd) ? { costUsd: analysis.totalCostUsd } : {}),
+    ...(p99s.length ? { p99Ms: Math.max(...p99s) } : {}),
+  };
 }
 
 /** Runs the problem's requirements and tests against a parsed solution. */
@@ -69,5 +85,6 @@ export function runTests(parsed: ParseResult, engine: Engine): RunResult {
   const analysis = engine.analyze(parsed.diagram);
   const results = engine.runTests(parsed.diagram, analysis);
   const passed = results.filter((r) => r.passed).length;
-  return { results, passed, solved: results.length > 0 && passed === results.length };
+  const solved = results.length > 0 && passed === results.length;
+  return { results, passed, solved, ...(solved && analysis ? { metrics: designMetrics(analysis) } : {}) };
 }

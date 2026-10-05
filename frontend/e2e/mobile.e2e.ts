@@ -123,6 +123,52 @@ test.describe('no sideways scrolling on a phone', () => {
     expect(seen).toEqual(new Set(['flip', 'choice', 'estimate', 'cloze']));
   });
 
+  test('daily streak: the review home with the recap, a session summary and a solve celebration', async ({ page }) => {
+    // Two weeks of reviews, so the streak holds freezes and last week has a recap.
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      const reviews = Array.from({ length: 14 }, (_, i) => {
+        const at = Date.now() - (i + 1) * 86_400_000;
+        return Array.from({ length: 10 }, (_, j) => ({
+          id: `seed-${i}-${j}`,
+          cardId: `seed-card-${j}`,
+          version: 1,
+          rating: 3,
+          reviewedAt: Math.floor(at / 1000) + j,
+          durationMs: 1000,
+          day: new Date(at).toISOString().slice(0, 10),
+        }));
+      }).flat();
+      localStorage.setItem('proschi.cards', JSON.stringify(reviews));
+    });
+    await visit(page, 'practice/');
+    await expect(page.getByRole('main').getByRole('group', { name: 'Daily streak' })).toContainText('14-day streak');
+    await visit(page, 'practice/#/review');
+    await expect(page.getByRole('region', { name: 'Your week in review' })).toBeVisible();
+    await expect(page.getByRole('radiogroup', { name: 'Daily goal' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'review home with the streak and the recap');
+
+    await page.getByRole('button', { name: /^Start review/ }).click();
+    // The first new card is an estimate (e2e/review.e2e.ts).
+    const card = page.getByRole('article', { name: /^Card 1 of/ });
+    await card.getByLabel('Your estimate').fill('2.3k');
+    await card.getByRole('button', { name: 'Check' }).click();
+    await card.getByRole('button', { name: 'Next' }).click();
+    await page.getByRole('button', { name: 'End session' }).click();
+    await expect(page.getByRole('region', { name: 'Session summary' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'session summary');
+
+    await visit(page, 'practice/#/url-shortener');
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Show reference solution' }).click();
+    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await page.getByRole('tab', { name: 'Tests' }).click();
+    await page.getByRole('button', { name: 'Run tests' }).click();
+    await expect(page.getByRole('region', { name: 'First solve' })).toBeVisible();
+    await expectNoHorizontalOverflow(page, 'solve celebration');
+  });
+
   test('a problem, every tab', async ({ page }) => {
     await visit(page, 'practice/#/url-shortener');
     await eachTab(page, 'practice/#/url-shortener');

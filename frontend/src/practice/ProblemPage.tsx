@@ -14,7 +14,9 @@ import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { lessonRead, markLessonRead, sourceOf, statusOf, withRun, withSource, type Progress } from './progress';
-import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
+import { PROBLEM_FILE, parseSolution, runTests, type DesignMetrics, type RunResult } from './workspace';
+import { localDay } from '../learn/streak';
+import { recordLocalSolve } from './activity';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
 import Header from '../design/Header';
@@ -29,6 +31,8 @@ import EditorZone from '../components/Playground/EditorZone';
 import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
+// Loaded on a problem's first solve, with the related cards.
+const SolveCelebration = lazy(() => import('./SolveCelebration'));
 
 const PARSE_DELAY_MS = 150;
 
@@ -102,6 +106,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   // Bumped once a run is recorded (or, signed out, made), to show and refresh how others did.
   const [statsRefresh, setStatsRefresh] = useState(0);
   const [serverNote, setServerNote] = useState<string>();
+  // The first solve on this page of a problem not solved before: what it took, and the progress before it.
+  const [firstSolve, setFirstSolve] = useState<{ runs: number; metrics?: DesignMetrics; before: Progress }>();
   const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, account.state.status === 'signed-in', statsRefresh);
 
   // Re-parse and remember the source shortly after typing stops.
@@ -124,9 +130,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
     setRuns((n) => n + 1);
+    const day = localDay();
+    if (result.solved && status !== 'solved' && !firstSolve) {
+      // Without accounts the streak counts this browser's solves; signed in, the server keeps the day.
+      if (account.state.status === 'off') recordLocalSolve(problem.id, day);
+      setFirstSolve({ runs: runs + 1, metrics: result.metrics, before: progress });
+    }
     if (!result.blocked) {
       onProgress((p) => withRun(p, problem, result.solved));
-      void account.recordRun(problem.id, source, result.solved).then((record) => {
+      void account.recordRun(problem.id, source, result.solved, day).then((record) => {
+        const counted = record?.verdict?.solved ? record.progress.runsToSolve : undefined;
+        if (counted !== undefined) setFirstSolve((f) => f && { ...f, runs: counted });
         setServerNote(
           result.solved && record?.verdict && !record.verdict.solved
             ? 'The server did not confirm this solve, so it is not in your stats. Reload the page to get the latest version and run the tests again.'
@@ -261,6 +275,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               onRun={runNow}
               onSelect={goTo}
               review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
+              celebration={
+                firstSolve && run?.result.solved ? (
+                  <Suspense fallback={null}>
+                    <SolveCelebration problem={problem} engine={engine} runs={firstSolve.runs} metrics={firstSolve.metrics} before={firstSolve.before} />
+                  </Suspense>
+                ) : undefined
+              }
               community={
                 run && !run.result.blocked && (community || serverNote) ? (
                   <>
