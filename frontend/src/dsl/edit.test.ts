@@ -1,5 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from './edit';
+import {
+  addConnection,
+  addNode,
+  clearPositions,
+  removeConnections,
+  removeNode,
+  renameNode,
+  setCapacity,
+  setDescription,
+  setEdgeLabel,
+  setNodePosition,
+  setOwner,
+  setReplicas,
+  setTech,
+  uniqueId,
+} from './edit';
 import { parse } from './parser';
 
 describe('setNodePosition', () => {
@@ -105,5 +120,141 @@ describe('removeNode', () => {
   it('refuses groups and nodes used in use cases', () => {
     expect(removeNode('group g {\n  a\n}', 'g').error).toMatch(/group/);
     expect(removeNode('a\nb\nusecase "Flow" {\n  a -> b\n}', 'b').error).toMatch(/"Flow"/);
+  });
+});
+
+describe('addNode', () => {
+  it('declares a node with a name, tech and position before the use cases', () => {
+    const src = 'api [REST API]\n\nusecase U {\n  api -> api\n}\n';
+    const { source, id } = addNode(src, { name: 'Session cache', tech: 'Redis', position: { x: 10.2, y: 20.7 } });
+    expect(id).toBe('session_cache');
+    expect(source).toBe('api [REST API]\nsession_cache "Session cache" [Redis] pos 10,21\n\nusecase U {\n  api -> api\n}\n');
+    expect(parse(source).diagnostics).toEqual([]);
+  });
+
+  it('picks free ids that are not keywords', () => {
+    expect(uniqueId('redis\nredis2', 'Redis')).toBe('redis3');
+    expect(uniqueId('', 'Capacity')).toBe('capacity2');
+    expect(uniqueId('', '3 Nodes!')).toBe('n3_nodes');
+    expect(uniqueId('', '')).toBe('node');
+    expect(addNode('', { name: 'db', tech: 'PostgreSQL' }).source).toBe('db [PostgreSQL]\n');
+  });
+});
+
+describe('node properties', () => {
+  it('sets, replaces and clears the tech', () => {
+    expect(setTech('api "API" x2 # c', 'api', 'Node.js')).toBe('api "API" [Node.js] x2 # c');
+    expect(setTech('api [Go] x2', 'api', 'Rust')).toBe('api [Rust] x2');
+    expect(setTech('api [Go] x2', 'api', null)).toBe('api x2');
+  });
+
+  it('sets replicas, and removes them at 1', () => {
+    expect(setReplicas('api "API" [Go] pos 1,2', 'api', 3)).toBe('api "API" [Go] x3 pos 1,2');
+    expect(setReplicas('api [Go] x3 @core', 'api', 5)).toBe('api [Go] x5 @core');
+    expect(setReplicas('api [Go] x3 @core', 'api', 1)).toBe('api [Go] @core');
+    expect(parse(setReplicas('a -> b', 'b', 2)).diagram.nodes.find((n) => n.id === 'b')?.replicas).toBe(2);
+    expect(setReplicas('a -> b', 'b', 1)).toBe('a -> b');
+  });
+
+  it('sets and clears the owner', () => {
+    expect(setOwner('api [Go]', 'api', '@Core Team')).toBe('api [Go] @Core-Team');
+    expect(setOwner('api [Go] @old', 'api', null)).toBe('api [Go]');
+  });
+
+  it('sets and clears the description', () => {
+    expect(setDescription('api "API" [Go]', 'api', 'Handles requests')).toBe('api "API" "Handles requests" [Go]');
+    expect(setDescription('api "API" "Old" [Go]', 'api', null)).toBe('api "API" [Go]');
+    const added = setDescription('api [Go]', 'api', 'Edge');
+    expect(added).toBe('api "api" "Edge" [Go]');
+    expect(parse(added).diagram.nodes[0]).toMatchObject({ name: 'api', description: 'Edge' });
+  });
+});
+
+describe('setCapacity', () => {
+  it('adds a capacity block when there is none', () => {
+    const result = setCapacity('db [PostgreSQL]', 'db', 'latency', 4);
+    expect(result).toBe('db [PostgreSQL]\ncapacity {\n  db latency 4ms\n}\n');
+    expect(parse(result).diagram.capacity?.[0]).toMatchObject({ node: 'db', latencyMs: 4 });
+  });
+
+  it('adds a line to the existing block, keeping its indentation', () => {
+    const src = 'db\ncache [Redis]\ncapacity {\n    db 20k rps\n}\n';
+    expect(setCapacity(src, 'cache', 'rate', 50000)).toBe('db\ncache [Redis]\ncapacity {\n    db 20k rps\n    cache 50000 rps\n}\n');
+  });
+
+  it('replaces, adds and removes parts of a line', () => {
+    const src = 'db\ncapacity {\n  db 20k rps latency 4ms # tuned\n}';
+    expect(setCapacity(src, 'db', 'latency', 9)).toBe('db\ncapacity {\n  db 20k rps latency 9ms # tuned\n}');
+    expect(setCapacity(src, 'db', 'shards', 4)).toBe('db\ncapacity {\n  db 20k rps latency 4ms shards 4 # tuned\n}');
+    expect(setCapacity(src, 'db', 'rate', null)).toBe('db\ncapacity {\n  db latency 4ms # tuned\n}');
+  });
+
+  it('swaps a rate for reads and removes an emptied line', () => {
+    const src = 'db\ncapacity {\n  db 20k rps\n}';
+    const reads = setCapacity(src, 'db', 'reads', 30000);
+    expect(reads).toBe('db\ncapacity {\n  db reads 30000 rps\n}');
+    expect(parse(reads).diagnostics).toEqual([]);
+    expect(setCapacity(reads, 'db', 'reads', null)).toBe('db\ncapacity {\n}');
+  });
+});
+
+describe('setEdgeLabel', () => {
+  it('sets, replaces and clears a label', () => {
+    expect(setEdgeLabel('a -> b', 'a->b', 'reads')).toBe('a -> b : reads');
+    expect(setEdgeLabel('a -> b : old # c', 'a->b', 'new')).toBe('a -> b : new');
+    expect(setEdgeLabel('a -> b : old', 'a->b', null)).toBe('a -> b');
+  });
+
+  it('leaves multi-line payloads alone', () => {
+    const src = 'a -> b : {\n  "x": 1\n}';
+    expect(setEdgeLabel(src, 'a->b', 'y')).toBe(src);
+  });
+});
+
+describe('every edit', () => {
+  const base = [
+    '# Shop',
+    'title "Shop"',
+    'lb "LB" [Load Balancer] # entry',
+    'group vpc "VPC" {',
+    '  api "API" [REST API] x2 @core',
+    '  db [PostgreSQL]',
+    '}',
+    'lb -> api : https',
+    'api -> db',
+    'capacity {',
+    '  db 20k rps',
+    '}',
+    '',
+    'usecase "Buy" {',
+    '  lb -> api : POST /buy',
+    '  api -> db : insert',
+    '}',
+    '',
+  ].join('\n');
+
+  const edits: [string, (s: string) => string, number[]][] = [
+    ['tech', (s) => setTech(s, 'db', 'MySQL'), [6]],
+    ['replicas', (s) => setReplicas(s, 'api', 4), [5]],
+    ['owner', (s) => setOwner(s, 'db', 'data'), [6]],
+    ['description', (s) => setDescription(s, 'lb', 'Public entry'), [3]],
+    ['capacity', (s) => setCapacity(s, 'db', 'latency', 3), [11]],
+    ['edge label', (s) => setEdgeLabel(s, 'api->db', 'SQL'), [9]],
+  ];
+
+  it.each(edits)('%s keeps the document valid and touches one line', (_, edit, changed) => {
+    const result = edit(base);
+    expect(parse(result).diagnostics).toEqual([]);
+    const before = base.split('\n');
+    const after = result.split('\n');
+    expect(after).toHaveLength(before.length);
+    const diff = before.flatMap((line, i) => (line === after[i] ? [] : [i + 1]));
+    expect(diff).toEqual(changed);
+  });
+
+  it('adding a node keeps every existing line', () => {
+    const { source } = addNode(base, { name: 'Cache', tech: 'Redis' });
+    expect(parse(source).diagnostics).toEqual([]);
+    expect(source.split('\n').filter((l) => l !== 'cache "Cache" [Redis]')).toEqual(base.split('\n'));
   });
 });

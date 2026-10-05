@@ -10,6 +10,14 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Build diagrams without typing.** The editor's canvas has an **Add
+  component** palette (search the catalog, click to add or drag onto the
+  canvas) and a settings panel for the selected node or connection: name,
+  tech, replicas, owner, description, capacity, latency, availability, cost,
+  shards and connection labels. Every change is written into the text, which
+  stays the source of truth, touching only the part of the line it changes.
+  `proschi parse` output gains `blocks`: where each section block starts and
+  ends.
 - **Scale or Fail** is playable: the Arcade tab of Interview prep
   (`practice/#/arcade`). Pick a scenario and build its system by tapping or
   dragging components onto the board (they wire themselves sensibly; tap a

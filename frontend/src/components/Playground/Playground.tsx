@@ -29,6 +29,7 @@ import {
   Upload,
   Code2,
   Pencil,
+  Plus,
   Network,
   Archive,
   ArchiveRestore,
@@ -58,7 +59,10 @@ import { filesResolver, importableFiles, usedImports } from '../../playground/im
 import { LONG_LINK_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
+import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
+import type { Diagram } from '../../dsl/types';
+import Palette, { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import Inspector from '../Diagram/Inspector';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
@@ -352,6 +356,11 @@ export default function Playground() {
     const file = importedNodes.get(id);
     if (file) setNotice(`'${id}' is declared in ${file}; rename it there.`);
     else editSource((src) => renameNode(src, id, name));
+  };
+
+  /** Adds a catalog component; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
+  const addFromCanvas = (tech: string, position?: { x: number; y: number }) => {
+    editSource((src) => addNode(src, { name: tech, tech, position }).source);
   };
 
   const connectNodes = (from: string, to: string) => {
@@ -675,6 +684,9 @@ export default function Playground() {
                     onMoveNodes={moveNodes}
                     onConnectNodes={connectNodes}
                     onRenameNode={renameFromCanvas}
+                    onAddNode={addFromCanvas}
+                    onEdit={editSource}
+                    diagram={diagram}
                     onResetLayout={() => editSource(clearPositions)}
                     onDelete={deleteFromCanvas}
                     fitKey={`${mobilePane}:${layoutSettled}`}
@@ -824,6 +836,12 @@ interface DiagramViewProps {
   onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
   onConnectNodes: (from: string, to: string) => void;
   onRenameNode: (id: string, name: string) => void;
+  /** Adds a component from the palette, at a canvas position when it was dropped. */
+  onAddNode: (techStack: string, position?: { x: number; y: number }) => void;
+  /** Applies an inspector edit to the text. */
+  onEdit: (edit: (source: string) => string) => void;
+  /** The parsed diagram, for the inspector. */
+  diagram: Diagram;
   onResetLayout: () => void;
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
@@ -849,6 +867,9 @@ function DiagramView({
   onMoveNodes,
   onConnectNodes,
   onRenameNode,
+  onAddNode,
+  onEdit,
+  diagram,
   onResetLayout,
   onDelete,
   fitKey,
@@ -858,8 +879,15 @@ function DiagramView({
   onNotice,
   cover,
 }: DiagramViewProps) {
-  const { getNodes } = useReactFlow();
+  const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  const [paletteOpen, setPaletteOpen] = useState(false);
+  /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
+  const [closedSettings, setClosedSettings] = useState<string | null>(null);
+  const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
+  const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
+  const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
+  const showSettings = single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
@@ -935,7 +963,19 @@ function DiagramView({
   return (
     <div
       ref={wrapperRef}
-      className="h-full"
+      className="relative h-full"
+      onDragOver={(e) => {
+        if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'copy';
+      }}
+      onDrop={(e) => {
+        const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
+        if (!tech) return;
+        e.preventDefault();
+        setPaletteOpen(false);
+        onAddNode(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+      }}
       onKeyDown={(e) => {
         const target = e.target as HTMLElement;
         if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
@@ -984,9 +1024,36 @@ function DiagramView({
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         <Controls showInteractive={false} />
+        <Panel position="top-left" className="flex items-start gap-1">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => setPaletteOpen((o) => !o)}
+              aria-label="Add component"
+              aria-expanded={paletteOpen}
+              aria-haspopup="dialog"
+              className={`${toolButton} border-ink bg-surface shadow-brutal-sm aria-expanded:bg-pop-yellow aria-expanded:text-on-accent`}
+            >
+              <Plus size={16} />
+              <span className="whitespace-nowrap">
+                Add<span className="hidden sm:inline"> component</span>
+              </span>
+            </button>
+            {paletteOpen && (
+              <div className="absolute left-0 top-full z-10 mt-1">
+                <Palette
+                  onAdd={(tech) => {
+                    setPaletteOpen(false);
+                    onAddNode(tech);
+                  }}
+                  onClose={() => setPaletteOpen(false)}
+                />
+              </div>
+            )}
+          </div>
         {(selection.nodes.length > 0 || selection.edges.length > 0) && (
-          <Panel position="top-left" className="flex items-center gap-1 rounded border-bw-1 border-ink bg-surface p-1 shadow-brutal-sm">
-            <span className="px-2 text-xs text-muted">
+          <div className="flex items-center gap-1 rounded border-bw-1 border-ink bg-surface p-1 shadow-brutal-sm">
+            <span className="hidden px-2 text-xs text-muted sm:inline">
               {selection.nodes.length === 1 && selection.edges.length === 0
                 ? (selection.nodes[0].data?.name ?? selection.nodes[0].id)
                 : `${selection.nodes.length + selection.edges.length} selected`}
@@ -1007,8 +1074,9 @@ function DiagramView({
               <Trash2 size={14} />
               Delete
             </button>
-          </Panel>
+          </div>
         )}
+        </Panel>
         {notice && (
           <Panel position="bottom-center" role="status" className="rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
             {notice}
@@ -1016,7 +1084,7 @@ function DiagramView({
         )}
         {nodes.length > 0 && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
-            Drag to pin · double-click to rename · drag between dots to connect · Delete removes
+            Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
         )}
         {nodes.length > 0 && (
@@ -1066,6 +1134,19 @@ function DiagramView({
           </Panel>
         )}
       </ReactFlow>
+      {showSettings && (
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+          <Inspector
+            key={single.id}
+            node={selectedNode}
+            edge={selectedNode ? undefined : selectedEdge}
+            capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
+            importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
+            onEdit={onEdit}
+            onClose={() => setClosedSettings(single.id)}
+          />
+        </div>
+      )}
     </div>
   );
 }
