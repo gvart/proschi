@@ -141,7 +141,7 @@ test.describe('solve celebration', () => {
     await expect(celebration).toContainText('Worst p99');
     await expect(celebration.getByText('the same as the reference')).toHaveCount(2);
     await expect(page.getByText(/^\d+ \/ \d+ passed/)).toBeVisible();
-    await expect(celebration.getByRole('link', { name: /Review the card on Estimation/ })).toBeVisible();
+    await expect(celebration.getByRole('link', { name: /Review (the card|\d+ cards) on Estimation/ })).toBeVisible();
     await expect(celebration.getByRole('link', { name: /Next on the roadmap: Pastebin/ })).toHaveAttribute('href', '#/roadmap/pastebin');
 
     // The solve meets today's goal.
