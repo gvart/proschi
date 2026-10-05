@@ -224,6 +224,14 @@ browser or synced when signed in); the problem list itself stays open. A
 problem opened from the roadmap (`practice/#/roadmap/<id>`) shows its stage
 and, once solved, a link to the next one.
 
+Anyone can see the stages, but starting the roadmap takes an account: signed
+out, the page lists the problems without links and offers the sign-in buttons,
+and `practice/#/roadmap/<id>` shows the roadmap instead of the problem (sign-in
+returns to that address). The rule is `roadmapAccess` in `roadmap.ts`, the one
+place to change when the roadmap moves behind a paid plan. A build without
+accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
+nothing to sign in to, so the roadmap is open there.
+
 The stages are plain data in `frontend/src/practice/roadmap.ts` (`ROADMAP`):
 each has an `id`, a `title`, a sentence or two on what it teaches and why it
 comes at that point (`why`), and its problem ids in the order they are solved.

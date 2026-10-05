@@ -1,4 +1,5 @@
 import { statusOf, type Progress, type Status } from './progress';
+import type { AccountState } from './useAccount';
 
 /**
  * The interview prep roadmap: the practice problems as a guided path, in
@@ -148,4 +149,27 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
     next,
     currentStage: next?.stage ?? Math.max(0, stages.length - 1),
   };
+}
+
+/**
+ * Whether the viewer may start the roadmap: `open`, `checking` while the
+ * account loads, or `sign-in`. Anyone can see the stages; working through them
+ * takes an account. This is the one place to put a paid plan later (an
+ * `upgrade` answer for an account without one).
+ *
+ * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e
+ * build, forks) has nothing to sign in to, so the roadmap is open there.
+ */
+export type RoadmapAccess = 'open' | 'checking' | 'sign-in';
+
+export function roadmapAccess(account: AccountState): RoadmapAccess {
+  switch (account.status) {
+    case 'off':
+    case 'signed-in':
+      return 'open';
+    case 'loading':
+      return 'checking';
+    case 'signed-out':
+      return 'sign-in';
+  }
 }

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { ROADMAP, roadmapFor, roadmapState, validateRoadmap, type RoadmapStage } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 
 /**
@@ -91,4 +91,14 @@ describe('roadmapState', () => {
     expect(state.next).toBeUndefined();
     expect(state).toMatchObject({ solved: 3, currentStage: 1 });
   });
+});
+
+describe('roadmapAccess', () => {
+  it('takes an account to start, when the build has accounts', () => {
+    expect(roadmapAccess({ status: 'signed-out', providers: ['github'] })).toBe('sign-in');
+    expect(roadmapAccess({ status: 'loading' })).toBe('checking');
+    expect(roadmapAccess({ status: 'signed-in', user: { id: 'u1', displayName: 'Ada', publicProfile: false }, providers: [] })).toBe('open');
+  });
+
+  it('is open in a build without accounts', () => expect(roadmapAccess({ status: 'off' })).toBe('open'));
 });

@@ -21,8 +21,9 @@ deployed from `main` and ships with the same changes.
   fan-out, streams and consistency to large systems, each with a note on what
   it teaches. A problem on the roadmap opens once every problem before it is
   solved, with your progress, the current stage and a Continue button; a
-  problem opened from the roadmap links to the next one after a solve. The
-  problem list stays open.
+  problem opened from the roadmap links to the next one after a solve. Anyone
+  can see the roadmap; starting it takes signing in. The problem list stays
+  open.
 - Practice problems based on a published system name its company: an
   optional `company` field in problem.md (docs/PRACTICE.md), set on Snowflake
   IDs (Twitter), Shopping Cart (Amazon), Job Queue (Slack), View Counting

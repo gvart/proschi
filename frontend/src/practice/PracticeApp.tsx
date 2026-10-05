@@ -4,7 +4,7 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapFor } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor } from './roadmap';
 import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
@@ -83,8 +83,10 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  const onRoadmap = route === 'roadmap';
+  // Starting the roadmap takes an account: signed out, `#/roadmap/<id>` shows the roadmap (sign-in comes back to the same address).
+  const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
+  const onRoadmap = route === 'roadmap' || (fromRoadmap && access !== 'open');
   const problemId = fromRoadmap ? route.slice('roadmap/'.length) : route;
   const problem = problemId && !onRoadmap ? problems.find((p) => p.id === problemId) : undefined;
   useEffect(() => {
@@ -137,7 +139,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
         {onRoadmap ? (
-          <Roadmap stages={roadmap} problems={problems} progress={progress} />
+          <Roadmap
+            stages={roadmap}
+            problems={problems}
+            progress={progress}
+            access={access}
+            providers={account.state.status === 'signed-out' ? account.state.providers : []}
+            onSignIn={account.signIn}
+          />
         ) : (
           <ProblemList problems={problems} progress={progress} stats={stats}>
             {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}

@@ -1,8 +1,10 @@
-import { ArrowRight, Lock, Map as MapIcon, PartyPopper } from 'lucide-react';
+import { ArrowRight, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { roadmapHref, roadmapState, type RoadmapStage, type RoadmapState } from './roadmap';
+import { roadmapHref, roadmapState, type RoadmapAccess, type RoadmapStage, type RoadmapState } from './roadmap';
+import { PROVIDER_LABEL } from './account';
+import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
 
 const titleOf = (problems: ProblemListing[], id: string) => problems.find((p) => p.id === id)?.title ?? id;
@@ -12,10 +14,16 @@ interface RoadmapProps {
   stages: RoadmapStage[];
   problems: ProblemListing[];
   progress: Progress;
+  /** roadmapAccess: anyone sees the stages; starting them takes an account. */
+  access: RoadmapAccess;
+  /** The sign-in providers on offer, for `access: 'sign-in'`. */
+  providers: ProviderId[];
+  onSignIn: (provider: ProviderId) => void;
 }
 
 /** The interview prep roadmap: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn }: RoadmapProps) {
+  const preview = access !== 'open';
   const state = roadmapState(stages, progress);
   const total = state.steps.length;
   const current = stages[state.currentStage];
@@ -31,55 +39,83 @@ export default function Roadmap({ stages, problems, progress }: RoadmapProps) {
         every problem before it. The full list stays open if you want to skip ahead.
       </p>
 
-      <section aria-label="Your progress" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-        <div className="flex flex-wrap items-center gap-3">
-          <p className="font-semibold tabular-nums text-ink">
-            {state.solved} of {total} solved
-          </p>
-          {current && (
-            <p className="text-sm text-ink/80">
-              <span className={eyebrow}>{state.next ? 'Current stage' : 'Last stage'}</span>{' '}
-              <span className="font-semibold text-ink">
-                {state.currentStage + 1}. {current.title}
-              </span>
+      {preview ? (
+        <SignInToStart access={access} providers={providers} onSignIn={onSignIn} total={total} stages={stages.length} />
+      ) : (
+        <section aria-label="Your progress" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+          <div className="flex flex-wrap items-center gap-3">
+            <p className="font-semibold tabular-nums text-ink">
+              {state.solved} of {total} solved
             </p>
-          )}
-          {state.next ? (
-            <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton}`}>
-              {state.solved === 0 ? 'Start' : 'Continue'}: {titleOf(problems, state.next.id)}
-              <ArrowRight size={14} />
-            </a>
-          ) : (
-            total > 0 && (
-              <p className="sm:ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
-                <PartyPopper size={16} /> Roadmap complete
+            {current && (
+              <p className="text-sm text-ink/80">
+                <span className={eyebrow}>{state.next ? 'Current stage' : 'Last stage'}</span>{' '}
+                <span className="font-semibold text-ink">
+                  {state.currentStage + 1}. {current.title}
+                </span>
               </p>
-            )
-          )}
-        </div>
-        <div
-          role="progressbar"
-          aria-label="Roadmap progress"
-          aria-valuemin={0}
-          aria-valuemax={total}
-          aria-valuenow={state.solved}
-          className="mt-3 h-3 overflow-hidden rounded-full border-bw-1 border-ink bg-paper"
-        >
-          <div className="h-full bg-pass transition-[width] duration-d2" style={{ width: `${total ? (state.solved / total) * 100 : 0}%` }} />
-        </div>
-      </section>
+            )}
+            {state.next ? (
+              <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton}`}>
+                {state.solved === 0 ? 'Start' : 'Continue'}: {titleOf(problems, state.next.id)}
+                <ArrowRight size={14} />
+              </a>
+            ) : (
+              total > 0 && (
+                <p className="sm:ml-auto inline-flex items-center gap-1.5 text-sm font-semibold text-ink">
+                  <PartyPopper size={16} /> Roadmap complete
+                </p>
+              )
+            )}
+          </div>
+          <div
+            role="progressbar"
+            aria-label="Roadmap progress"
+            aria-valuemin={0}
+            aria-valuemax={total}
+            aria-valuenow={state.solved}
+            className="mt-3 h-3 overflow-hidden rounded-full border-bw-1 border-ink bg-paper"
+          >
+            <div className="h-full bg-pass transition-[width] duration-d2" style={{ width: `${total ? (state.solved / total) * 100 : 0}%` }} />
+          </div>
+        </section>
+      )}
 
       <ol className="mt-8 space-y-8">
         {stages.map((stage, i) => (
-          <StageSection key={stage.id} stage={stage} index={i} state={state} problems={problems} current={i === state.currentStage && !!state.next} />
+          <StageSection
+            key={stage.id}
+            stage={stage}
+            index={i}
+            state={state}
+            problems={problems}
+            current={!preview && i === state.currentStage && !!state.next}
+            preview={preview}
+          />
         ))}
       </ol>
     </main>
   );
 }
 
-function StageSection({ stage, index, state, problems, current }: { stage: RoadmapStage; index: number; state: RoadmapState; problems: ProblemListing[]; current: boolean }) {
-  const steps = state.steps.filter((s) => s.stage === index);
+function StageSection({
+  stage,
+  index,
+  state,
+  problems,
+  current,
+  preview,
+}: {
+  stage: RoadmapStage;
+  index: number;
+  state: RoadmapState;
+  problems: ProblemListing[];
+  current: boolean;
+  /** Not started (signed out): every problem shows, none opens. */
+  preview: boolean;
+}) {
+  // A preview shows the problems without the viewer's progress.
+  const steps = state.steps.filter((s) => s.stage === index).map((s) => (preview ? { ...s, status: 'todo' as const, locked: true } : s));
   const solved = steps.filter((s) => s.status === 'solved').length;
   return (
     <li aria-label={`Stage ${index + 1}: ${stage.title}`}>
@@ -87,9 +123,7 @@ function StageSection({ stage, index, state, problems, current }: { stage: Roadm
         <h2 className="font-display text-xl font-bold text-ink">
           <span className="tabular-nums text-muted">{index + 1}.</span> {stage.title}
         </h2>
-        <span className="text-xs tabular-nums text-muted">
-          {solved} / {steps.length}
-        </span>
+        <span className="text-xs tabular-nums text-muted">{preview ? `${steps.length} problems` : `${solved} / ${steps.length}`}</span>
         {current && <span className="rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-xs font-bold text-on-accent">You are here</span>}
       </div>
       <p className="mt-1 max-w-2xl text-sm text-ink/80">{stage.why}</p>
@@ -102,7 +136,7 @@ function StageSection({ stage, index, state, problems, current }: { stage: Roadm
               {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
               <span className="flex-1 min-w-0">
                 <span className={`block font-display text-lg font-bold leading-tight ${step.locked ? 'text-ink/50' : 'text-ink'}`}>{title}</span>
-                {step.locked && state.next && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.next.id)} first</span>}
+                {step.locked && !preview && state.next && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.next.id)} first</span>}
               </span>
               {p && <DifficultyBadge difficulty={p.difficulty} />}
             </>
@@ -126,6 +160,50 @@ function StageSection({ stage, index, state, problems, current }: { stage: Roadm
         })}
       </ul>
     </li>
+  );
+}
+
+/** In place of the progress, signed out: what the roadmap holds and the sign-in buttons. */
+function SignInToStart({
+  access,
+  providers,
+  onSignIn,
+  total,
+  stages,
+}: {
+  access: RoadmapAccess;
+  providers: ProviderId[];
+  onSignIn: (provider: ProviderId) => void;
+  total: number;
+  stages: number;
+}) {
+  return (
+    <section aria-label="Start the roadmap" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+      <p className="font-semibold text-ink">
+        {total} problems in {stages} stages
+      </p>
+      {access === 'checking' ? (
+        <p role="status" className="mt-2 text-sm text-muted">
+          Checking your sign-in…
+        </p>
+      ) : (
+        <>
+          <p className="mt-2 max-w-2xl text-sm text-ink/80">Sign in to start the roadmap. It opens one problem at a time and keeps your place in your account.</p>
+          {providers.length > 0 ? (
+            <div className="mt-3 flex flex-wrap gap-2">
+              {providers.map((p) => (
+                <button key={p} type="button" onClick={() => onSignIn(p)} className={primaryButton}>
+                  <LogIn size={14} />
+                  Sign in with {PROVIDER_LABEL[p]} to start
+                </button>
+              ))}
+            </div>
+          ) : (
+            <p className="mt-2 text-sm text-muted">Sign-in is not available right now; try again later.</p>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
