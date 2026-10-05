@@ -2,6 +2,7 @@ import { parse } from '../../dsl/parser';
 import type { CapacityOverride, Diagram, Percentile, Requirement, SourceLoc, TrafficEntry } from '../../dsl/types';
 import { analyze, type Analysis } from '../../sim/analyze';
 import { findScenario, findUseCase, pathNodes } from '../../sim/flow';
+import { flowsOf } from '../../sim/overlay';
 import { profileOf, type Profile } from '../../sim/profiles';
 import { runTests, type TestResult } from '../../sim/tests';
 import { boardKey, boardProblems, cloneBoard } from './board';
@@ -1209,25 +1210,6 @@ export class Game {
 }
 
 /** Requests per second on each wire, for the particles. */
-function flowsOf(diagram: Diagram, traffic: TrafficEntry[]): FlowTick[] {
-  const flows = new Map<string, FlowTick>();
-  for (const t of traffic) {
-    const u = findUseCase(diagram, t.useCase);
-    if (!u || t.rps <= 0) continue;
-    for (const sc of u.scenarios) {
-      const share = t.mix ? (t.mix.find((m) => m.scenario === sc.name)?.share ?? 0) : sc === u.scenarios[0] ? 1 : 0;
-      if (share <= 0) continue;
-      for (const step of sc.steps) {
-        if (step.failed) continue;
-        const key = `${step.fromServiceId}>${step.toServiceId}`;
-        const f = flows.get(key) ?? { from: step.fromServiceId, to: step.toServiceId, rps: 0, async: step.executionType !== 'SYNC_REQUEST_RESPONSE' };
-        f.rps += t.rps * share * (step.multiplier ?? 1);
-        flows.set(key, f);
-      }
-    }
-  }
-  return [...flows.values()];
-}
 
 function baseProfile(tech: string, make: () => Profile): Profile {
   let p = PROFILE_CACHE.get(tech);

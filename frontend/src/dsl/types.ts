@@ -283,9 +283,18 @@ export interface DiagramImport {
   loc: SourceLoc;
 }
 
+/** Where a top-level section block of the root document starts and ends (1-based lines, the `}` line included). */
+export interface BlockSpan {
+  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+  start: number;
+  end: number;
+}
+
 export interface ParseResult {
   diagram: Diagram;
   diagnostics: Diagnostic[];
+  /** Section blocks of the root document, so edits can add lines to them; left out when there are none. */
+  blocks?: BlockSpan[];
   /** Every import statement that was read; left out when the document has none. */
   imports?: DiagramImport[];
 }

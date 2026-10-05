@@ -1,4 +1,5 @@
 import type { TechName, TechStack } from '../catalog/componentCatalog';
+import type { NodeOverlay } from '../sim/overlay';
 
 export type ComponentType =
   | 'shape'
@@ -25,6 +26,8 @@ export interface ComponentMetadata {
   techStack: TechName;
   ownerTeam?: string;
   description?: string;
+  /** Load drawn over the node while the diagram is simulated (sim/overlay.ts). */
+  overlay?: NodeOverlay;
   // For text nodes
   textContent?: string;
   fontSize?: number;

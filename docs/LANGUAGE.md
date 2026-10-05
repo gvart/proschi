@@ -598,7 +598,18 @@ The text is the source of truth. Edits on the diagram are written back into it:
 | Drag a node or group | Adds or updates `pos x,y` on its declaration. Positions of group members are relative to the group. |
 | Double-click a node | Sets its display name: `id "New name"`. |
 | Drag from one node's dot to another's | Adds a connection, `a -> b`. |
+| **Add component**, then pick one | Declares it above the first use case: `redis "Redis" [Redis]`. Dragged onto the canvas instead, it also gets `pos x,y` where it was dropped. |
+| Select a node, then change its settings | Name, tech (`[Redis]`), replicas (`x3`), owner (`@team`) and description edit its declaration. Capacity, latency, availability, cost and (for data stores) shards edit its line in the `capacity` block, which is added when there is none. |
+| Select a connection, then change its label | `a -> b : label`. A label with a JSON or XML payload is edited in the text. |
+| Select, then **Delete** | Removes the node and its connections, or the connection. |
 | **Auto-layout** button | Removes every `pos x,y`. |
+
+Each edit changes only the part of the line it is about, so comments and alignment survive.
+
+With a `traffic` block, **Overlay: load** draws the simulation on the canvas:
+each node is coloured by how busy it is at the traffic's rates, shows its
+replicas, shards and utilisation, and requests flow along the connections
+(hollow dots for async work, red ones falling off a node past 100%).
 
 A node that was only referenced, never declared, gets a declaration line above the first use case.
 

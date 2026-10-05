@@ -20,6 +20,13 @@
         "$ref": "#/$defs/import"
       },
       "description": "Every `import` statement read, in any file; left out when there are none."
+    },
+    "blocks": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/block"
+      },
+      "description": "Where each top-level section block of the root document starts and ends, so tools can add lines to it; left out when there are none."
     }
   },
   "required": [
@@ -28,6 +35,37 @@
   ],
   "additionalProperties": false,
   "$defs": {
+    "block": {
+      "type": "object",
+      "properties": {
+        "kind": {
+          "enum": [
+            "traffic",
+            "requirements",
+            "capacity",
+            "entity",
+            "decision",
+            "test"
+          ]
+        },
+        "start": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line of the block's opening line."
+        },
+        "end": {
+          "type": "integer",
+          "minimum": 1,
+          "description": "1-based line of its closing `}`."
+        }
+      },
+      "required": [
+        "kind",
+        "start",
+        "end"
+      ],
+      "additionalProperties": false
+    },
     "loc": {
       "type": "object",
       "description": "1-based source position.",

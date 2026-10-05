@@ -42,6 +42,27 @@ test.describe('editor', () => {
     await expect(page.getByText('No problems')).toBeVisible();
   });
 
+  test('a component added from the palette is edited in its settings', async ({ page }) => {
+    const before = await canvasNodes(page).count();
+    await page.getByRole('button', { name: 'Add component' }).click();
+    const palette = page.getByRole('dialog', { name: 'Add a component' });
+    await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
+    await palette.getByRole('button', { name: 'Redis', exact: true }).click();
+    await expect(palette).toBeHidden();
+    await expect(canvasNodes(page)).toHaveCount(before + 1);
+    expect(await editorText(page)).toContain('redis "Redis" [Redis]');
+
+    await canvasNodes(page).filter({ hasText: 'Redis' }).click();
+    const settings = page.getByRole('region', { name: 'Redis settings' });
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await expect.poll(() => editorText(page)).toContain('redis "Redis" [Redis] x3');
+    await settings.getByLabel('Latency').fill('4');
+    await settings.getByLabel('Latency').press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/redis latency 4ms/);
+    await expect(page.getByText('No problems')).toBeVisible();
+  });
+
   test('a bad line shows a diagnostic', async ({ page }) => {
     await appendCode(page, '\nthis line is broken !!\n');
     const diagnostics = page.getByTestId('diagnostics');
@@ -135,6 +156,19 @@ test.describe('editor', () => {
     await expect(sections.first()).toBeVisible();
     expect(await sections.count()).toBeGreaterThan(1);
     await expect(nav.getByRole('link')).toHaveCount(await sections.count());
+  });
+
+  test('Overlay: load shows how busy each node is at the traffic block\'s rates', async ({ page }) => {
+    // The default example has no traffic block, so there is nothing to overlay.
+    await expect(page.getByRole('button', { name: /load$/ })).toBeHidden();
+    await openExample(page, /URL shortener HLD/);
+    const toggle = page.getByRole('button', { name: 'Overlay: load' });
+    await toggle.click();
+    await expect(toggle).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('.pc-node[data-load]').first()).toBeVisible();
+    await expect(page.locator('.pc-node__stats').filter({ hasText: /\d+%/ }).first()).toBeVisible();
+    await toggle.click();
+    await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
   });
 
   test('Analysis and Tests tabs render for the URL shortener', async ({ page }) => {

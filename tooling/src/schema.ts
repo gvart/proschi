@@ -45,10 +45,19 @@ export function diagramSchema() {
         diagram: { $ref: '#/$defs/diagram' },
         diagnostics: { type: 'array', items: { $ref: '#/$defs/diagnostic' } },
         imports: { type: 'array', items: { $ref: '#/$defs/import' }, description: 'Every `import` statement read, in any file; left out when there are none.' },
+        blocks: array('block', 'Where each top-level section block of the root document starts and ends, so tools can add lines to it; left out when there are none.'),
       },
       ['diagram', 'diagnostics'],
     ),
     $defs: {
+      block: object(
+        {
+          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test'] },
+          start: { type: 'integer', minimum: 1, description: "1-based line of the block's opening line." },
+          end: { type: 'integer', minimum: 1, description: "1-based line of its closing `}`." },
+        },
+        ['kind', 'start', 'end'],
+      ),
       loc: object(
         { line: { type: 'integer', minimum: 1 }, col: { type: 'integer', minimum: 1 }, length: { type: 'integer', minimum: 0 }, file },
         ['line', 'col', 'length'],
