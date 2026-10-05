@@ -531,7 +531,7 @@ export default function Playground() {
           }}
         />
 
-        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:ml-auto">
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"

@@ -2,6 +2,7 @@ import {
   achievementsAnswer,
   achievementStatuses,
   buildSnapshot,
+  liveAchievements,
   longestStreak,
   type Achievement,
   type AchievementContext,
@@ -31,8 +32,11 @@ import { findProblem, problemIds, referenceCost } from './verify';
  * /api/me/achievements/seen records that a client celebrated them.
  */
 
-/** Checked in CI (`proschi achievements check`, the frontend tests); read as it is. */
-const ACHIEVEMENTS = raw as unknown as Achievement[];
+/**
+ * Checked in CI (`proschi achievements check`, the frontend tests); read as it
+ * is. Retired badges are left out; their rows in the achievements table stay.
+ */
+const ACHIEVEMENTS = liveAchievements(raw as unknown as Achievement[]);
 
 let context: AchievementContext | undefined;
 
