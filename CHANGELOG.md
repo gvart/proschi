@@ -23,6 +23,12 @@ deployed from `main` and ships with the same changes.
   plays every scenario's reference and wrong runs, `proschi game lock`
   records new ids, and `proschi game sim` prints a run wave by wave for
   balancing.
+- Scale or Fail on the server (`/api/game/*`, backend/README.md): ranked
+  runs are started by the server, which picks the seed and the loadout from
+  your stored progress, and scored only by replaying their moves with the
+  same engine. Leaderboards per scenario and difficulty and for the daily
+  run, purchases of unlocks and perks, and runs played signed out carried
+  over when you sign in. Your game progress and runs are in the data export.
 - `analyze()` takes the percentiles to compute, and `runTests()` the options
   the analysis was made with (so `survive` re-analyses the same way). A
   latency quantile without parallel steps is computed in closed form, which

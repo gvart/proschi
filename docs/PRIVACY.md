@@ -86,6 +86,11 @@ Without signing in, nothing about you reaches the server.
   sent it. Your rank is computed from everyone's scores each time it is
   shown. A challenge played signed out stays in your browser until you sign
   in, when it is saved to your account.
+- Scale or Fail, the system design game: your progress (Blueprints,
+  unlocks, perks, the furthest wave and highest difficulty per scenario, the
+  cards and incidents you have seen) and every run you submit: its scenario,
+  seed, loadout, the moves you made, the score and when you played. Runs
+  played signed out stay in your browser and are sent when you sign in.
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
@@ -110,8 +115,9 @@ Cloudflare's retention period.
 **What others see**: practice statistics are aggregates over everyone, such
 as how many solved a problem and how your design's runs, cost and p99 compare.
 Your display name and number of solved problems appear on the leaderboard,
-and your display name and daily challenge score on that day's challenge
-leaderboard, only if you opt in ("Show me on the leaderboard", in the account
+your display name and daily challenge score on that day's challenge
+leaderboard, and your display name and best game score on the game's
+leaderboards, only if you opt in ("Show me on the leaderboard", in the account
 menu or on your profile page). Without it, your challenge score still counts
 toward the number of players and everyone's ranks, but your name is never
 shown.

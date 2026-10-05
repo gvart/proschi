@@ -8,6 +8,7 @@ import { now, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
+import { exportGame } from './game';
 
 /** The signed-in user's account and practice progress. */
 
@@ -199,6 +200,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       results: r.results === null ? null : (JSON.parse(String(r.results)) as unknown),
       submittedAt: r.submitted_at,
     })),
+    game: await exportGame(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

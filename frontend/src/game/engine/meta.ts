@@ -167,3 +167,10 @@ export function recordRun(meta: Meta, run: RunRecord): Meta {
 
 /** Whether this would be the player's first clear of the scenario (worth extra Blueprints). */
 export const firstClear = (meta: Meta, scenario: string): boolean => (meta.scenarios[scenario]?.cleared ?? -1) < 0;
+
+/** The daily run's scenario: the same for everyone on a UTC day, in turn, open to all whatever their progress. */
+export function dailyScenario(content: GameContent, day: string): ScenarioDef {
+  const n = Math.floor(Date.parse(`${day}T00:00:00Z`) / 86_400_000);
+  const list = [...content.scenarios].sort((a, b) => a.order - b.order);
+  return list[((n % list.length) + list.length) % list.length];
+}

@@ -1,3 +1,4 @@
+import { gameCacheKeys } from './game';
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import type { Problem } from '../../frontend/src/practice/types';
 import { authenticate } from './auth';
@@ -35,7 +36,7 @@ export async function cached<T>(ctx: Ctx, key: string, compute: () => Promise<T>
 /** Tests call this between cases. */
 export async function clearStatsCache(): Promise<void> {
   const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
-  const keys = ['stats', 'leaderboard', ...problemIds().map((id) => `problem/${id}`), ...[-1, 0, 1].map((n) => `challenge/${day(n)}`)];
+  const keys = ['stats', 'leaderboard', ...problemIds().map((id) => `problem/${id}`), ...[-1, 0, 1].map((n) => `challenge/${day(n)}`), ...gameCacheKeys()];
   await Promise.all(keys.map((key) => caches.default.delete(cacheKey(key))));
 }
 
