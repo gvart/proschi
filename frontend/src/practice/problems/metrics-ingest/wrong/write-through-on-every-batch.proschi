@@ -1,0 +1,37 @@
+# expect-fail: Ingest never waits for storage
+# expect-fail: p99 of Emit metrics < 40 ms
+# The aggregator also writes each raw batch to M3DB before answering: hosts wait for a quorum write, and storage takes the raw volume again.
+import "problem.proschi"
+
+aggregators "M3 Aggregator" [Go] x16 @ingest "Rolls datapoints up in memory by the rules, sharded by series id, and flushes once per resolution"
+query       "M3 Query"      [Go] x3 @query "Runs PromQL and M3QL queries against M3DB"
+
+collectors  -> aggregators : batches of datapoints
+aggregators -> m3db        : quorum writes
+grafana     -> query       : PromQL over HTTP
+query       -> m3db        : fetch series
+
+usecase "Emit metrics" "A host sends a batch of datapoints" {
+  collectors   -> aggregators : POST /write batch of 2,000 datapoints
+  aggregators  -> m3db        : x3 WRITE 2,000 raw datapoints
+  m3db        --> aggregators : majority acked
+  aggregators --> collectors  : 200
+}
+
+usecase "Flush aggregates" "At a resolution boundary, an aggregator writes the closed windows to M3DB" {
+  alt "All replicas up" when "every replica of the shard answers" {
+    aggregators -> m3db        : x3 WRITE 2,000 aggregated datapoints
+    m3db       --> aggregators : majority acked
+  } alt "Replica down" when "one replica of the shard is down" {
+    aggregators -> m3db        : x2 WRITE 2,000 aggregated datapoints
+    aggregators -x m3db        : WRITE to the third replica
+    m3db       --> aggregators : majority acked
+  }
+}
+
+usecase "Query" "A dashboard panel or an alert reads a series" {
+  grafana -> query   : GET /api/v1/query_range?query=rate(http_requests_total[1m])
+  query   -> m3db    : x2 FETCH series blocks
+  m3db   --> query   : datapoints
+  query  --> grafana : 200 {"resultType": "matrix"}
+}

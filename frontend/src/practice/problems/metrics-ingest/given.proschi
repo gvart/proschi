@@ -1,0 +1,47 @@
+title "Metrics Ingest" "Takes 40 million datapoints a second and keeps them queryable on a fixed storage cluster"
+
+collectors "Collectors"            [Actor]          "Prometheus and the M3 collector on every host; each request is a batch of 2,000 datapoints"
+grafana    "Dashboards and alerts" [Actor]          "Grafana dashboards and the alert evaluators; each query reads recent series"
+m3db       "M3DB"                  [NoSQL Database] x3 @storage "The time series store: every shard on three replicas"
+
+traffic {
+  "Emit metrics"     20k rps
+  "Flush aggregates" 800 rps mix "All replicas up" 99.9%, "Replica down" 0.1%
+  "Query"            1k rps
+}
+
+requirements {
+  p99 "Emit metrics" < 40ms
+  p99 "Query" < 80ms
+  availability "Emit metrics" >= 99.99%
+  availability "Query" >= 99.9%
+  durable "Flush aggregates"
+  survive any node failure
+  cost <= 7500 usd/month
+}
+
+capacity {
+  m3db shards 2 reads 5k rps writes 2k rps cost 700 usd/month
+}
+
+test "Ingest never waits for storage" {
+  "Emit metrics" starts at collectors
+  "Emit metrics" never calls any database
+}
+
+test "Only aggregates reach storage" {
+  no path from collectors to m3db
+  "Flush aggregates" starts at any service
+  "Flush aggregates" writes m3db before responding
+}
+
+test "A quorum write survives a replica that is down" {
+  "Flush aggregates" has scenario "Replica down"
+  "Flush aggregates" handles failure of m3db
+}
+
+test "Queries go through the query tier" {
+  "Query" starts at grafana
+  "Query" calls any service before m3db
+  no path from grafana to m3db
+}
