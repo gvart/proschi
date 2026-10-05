@@ -1,0 +1,265 @@
+{
+  "start": {
+    "cash": 5000,
+    "trust": 100,
+    "board": {
+      "nodes": [
+        {
+          "id": "users",
+          "component": "users",
+          "replicas": 1
+        },
+        {
+          "id": "cdn",
+          "component": "cdn",
+          "replicas": 3
+        },
+        {
+          "id": "lb",
+          "component": "lb",
+          "replicas": 2
+        },
+        {
+          "id": "api",
+          "component": "app",
+          "replicas": 12
+        },
+        {
+          "id": "cache",
+          "component": "cache",
+          "replicas": 3
+        },
+        {
+          "id": "search",
+          "component": "search",
+          "replicas": 2
+        },
+        {
+          "id": "db",
+          "component": "sql",
+          "replicas": 3
+        }
+      ],
+      "edges": [
+        [
+          "users",
+          "cdn"
+        ],
+        [
+          "cdn",
+          "lb"
+        ],
+        [
+          "lb",
+          "api"
+        ],
+        [
+          "api",
+          "cache"
+        ],
+        [
+          "api",
+          "search"
+        ],
+        [
+          "api",
+          "db"
+        ]
+      ]
+    }
+  },
+  "grants": [
+    "cache",
+    "cdn",
+    "search"
+  ],
+  "externals": [],
+  "useCases": {
+    "search": {
+      "name": "Search places",
+      "method": "GET",
+      "path": "/places?q=lisbon",
+      "status": 200,
+      "value": 450,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Place",
+          "x": 16
+        }
+      ],
+      "cache": 0.9
+    },
+    "trips": {
+      "name": "My trips",
+      "method": "GET",
+      "path": "/me/trips",
+      "status": 200,
+      "value": 750,
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Trip",
+          "x": 2
+        }
+      ],
+      "cache": 0.7
+    },
+    "save": {
+      "name": "Save a trip",
+      "method": "POST",
+      "path": "/trips",
+      "status": 201,
+      "value": 6000,
+      "size": "1KB",
+      "steps": [
+        {
+          "op": "read",
+          "to": "db",
+          "entity": "Place"
+        },
+        {
+          "op": "write",
+          "to": "db",
+          "entity": "Trip"
+        }
+      ]
+    }
+  },
+  "waves": [
+    {
+      "ticket": {
+        "id": "runway",
+        "from": "finance",
+        "kind": "cost",
+        "title": "Two months of runway"
+      },
+      "traffic": {
+        "search": 1500,
+        "trips": 800,
+        "save": 60
+      },
+      "curve": "day",
+      "requirements": [
+        "cost <= 3600 usd/month",
+        "p99 \"Save a trip\" < 400ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "cdn-bill",
+        "from": "finance",
+        "kind": "cost",
+        "title": "What is the CDN for?"
+      },
+      "traffic": {
+        "search": 1600,
+        "trips": 850,
+        "save": 65
+      },
+      "curve": "day",
+      "requirements": [
+        "cost <= 3000 usd/month"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "idle-fleet",
+        "from": "finance",
+        "kind": "cost",
+        "title": "Twelve servers at 14% CPU"
+      },
+      "traffic": {
+        "search": 1700,
+        "trips": 900,
+        "save": 70
+      },
+      "curve": "double-peak",
+      "requirements": [
+        "cost <= 2300 usd/month",
+        "p99 \"Search places\" < 250ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "sla",
+        "from": "customer",
+        "kind": "reliability",
+        "title": "A travel agency wants an SLA"
+      },
+      "traffic": {
+        "search": 1800,
+        "trips": 950,
+        "save": 75
+      },
+      "curve": "day",
+      "requirements": [
+        "availability \"Save a trip\" >= 99.9%",
+        "survive any node failure"
+      ],
+      "events": [
+        "db-failover"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "redis",
+        "from": "finance",
+        "kind": "cost",
+        "title": "Do we need Redis?"
+      },
+      "traffic": {
+        "search": 2000,
+        "trips": 1000,
+        "save": 80
+      },
+      "curve": "day",
+      "requirements": [
+        "cost <= 1900 usd/month"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "summer",
+        "from": "marketing",
+        "kind": "scale",
+        "title": "Summer travel season"
+      },
+      "traffic": {
+        "search": 3400,
+        "trips": 1600,
+        "save": 130
+      },
+      "curve": "double-peak",
+      "requirements": [
+        "p99 \"Search places\" < 200ms"
+      ]
+    },
+    {
+      "ticket": {
+        "id": "zone-drill",
+        "from": "sre",
+        "kind": "reliability",
+        "title": "The zone drill"
+      },
+      "traffic": {
+        "search": 3800,
+        "trips": 1800,
+        "save": 150
+      },
+      "curve": "day",
+      "events": [
+        "az-outage"
+      ]
+    }
+  ],
+  "eventPool": [
+    {
+      "id": "noisy-neighbor",
+      "weight": 1
+    }
+  ],
+  "contracts": []
+}

@@ -1,0 +1,56 @@
+{
+  "seed": "reference",
+  "plays": [
+    {
+      "remove": [
+        "search"
+      ]
+    },
+    {
+      "remove": [
+        "cdn"
+      ],
+      "wire": [
+        [
+          "users",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 4
+        }
+      }
+    },
+    {},
+    {
+      "remove": [
+        "cache"
+      ]
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "set": {
+        "api": {
+          "replicas": 7
+        }
+      }
+    }
+  ],
+  "expect": {
+    "failsBy": 7,
+    "shows": [
+      "drop",
+      "resilience"
+    ]
+  },
+  "note": "Answers \"do we need Redis?\" with no: every search goes to the database twelve times, and three database replicas cannot carry summer, let alone a lost zone."
+}
