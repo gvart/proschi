@@ -183,7 +183,7 @@ describe('daily challenge', () => {
     const { id, token } = await signedInUser();
     for (const n of [2, 1]) {
       await env.DB.prepare(
-        "INSERT INTO challenge_attempts (user_id, day, score, correct, perfect, total_ms, results, submitted_at) VALUES (?, ?, 100, 1, 0, 1000, '[]', 0)",
+        "INSERT INTO challenge_attempts (user_id, day, started_at, score, correct, perfect, total_ms, results, submitted_at) VALUES (?, ?, 0, 100, 1, 0, 1000, '[]', 0)",
       )
         .bind(id, addDays(today(), -n))
         .run();
@@ -198,6 +198,37 @@ describe('daily challenge', () => {
     expect(badge('challenge-streak-7')).toMatchObject({ earned: false, current: 3, target: 7 });
   });
 
+  it('records the start once, from any device, and keeps it out of the counts until the attempt', async () => {
+    const { token } = await signedInUser('Ada', true);
+    const start = async () => {
+      const response = await call('/api/challenge/today/start', { method: 'POST', token, body: {} });
+      expect(response.status).toBe(200);
+      return (await response.json()) as { day: string; startedAt: number; submitted: boolean };
+    };
+    expect((await call('/api/challenge/today/start', { method: 'POST', body: {} })).status).toBe(401);
+    const first = await start();
+    expect(first).toMatchObject({ day: today(), submitted: false });
+    // Another device (another session of the same user) gets the same start.
+    await env.DB.prepare('UPDATE challenge_attempts SET started_at = started_at - 30').run();
+    expect((await start()).startedAt).toBe(first.startedAt - 30);
+    const seen = await getToday(token);
+    expect(seen).toMatchObject({ attempt: null, startedAt: first.startedAt - 30, streak: { current: 0, todayDone: false } });
+    const board = (await (await call('/api/challenge/leaderboard')).json()) as { players: number; entries: unknown[] };
+    expect(board).toMatchObject({ players: 0, entries: [] });
+
+    // Times adding up to far more than the 30 s since the start are refused.
+    const slow = await attempt(token, { answers: await answers([true, true, true, true, true], 60_000) });
+    expect(slow.status).toBe(400);
+    expect(((await slow.json()) as { error: string }).error).toMatch(/longer than the challenge has been open/);
+    const sent = await attempt(token, { answers: await answers([true, true, true, true, true], 5000) });
+    expect(sent.status).toBe(200);
+    expect(((await sent.json()) as { attempt: Attempt }).attempt).toMatchObject({ score: 600, rank: 1, players: 1 });
+    const row = await env.DB.prepare('SELECT started_at, submitted_at FROM challenge_attempts').first<{ started_at: number; submitted_at: number }>();
+    expect(row?.started_at).toBe(first.startedAt - 30);
+    expect(row?.submitted_at).toBeGreaterThanOrEqual(first.startedAt);
+    expect(await start()).toMatchObject({ startedAt: first.startedAt - 30, submitted: true });
+  });
+
   it('exports the attempts and deletes them with the account', async () => {
     const { id, token } = await signedInUser();
     await attempt(token, { answers: await answers([true, false, true, false, true]) });
@@ -205,6 +236,7 @@ describe('daily challenge', () => {
     expect(exported.challengeAttempts).toHaveLength(1);
     expect(exported.challengeAttempts[0]).toMatchObject({ day: today(), correct: 3, perfect: false });
     expect(exported.challengeAttempts[0].results.map((r) => r.cardId)).toEqual((await getToday()).cardIds);
+    expect(exported.challengeAttempts[0]).toMatchObject({ startedAt: expect.any(Number), submittedAt: expect.any(Number) });
 
     expect((await call('/api/me', { method: 'DELETE', token })).status).toBe(204);
     const left = await env.DB.prepare('SELECT COUNT(*) AS n FROM challenge_attempts WHERE user_id = ?').bind(id).first<{ n: number }>();

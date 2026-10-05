@@ -178,6 +178,8 @@ export interface ChallengeToday {
   endsAt: number;
   maxScore: number;
   attempt?: ChallengeAttempt | null;
+  /** Signed in: when the first card was shown (POST /api/challenge/today/start), null before. */
+  startedAt?: number | null;
   streak?: ChallengeStreakAnswer;
 }
 

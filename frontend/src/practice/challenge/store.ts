@@ -117,7 +117,53 @@ export function guestChallenge(): GuestChallenge | undefined {
   return { result, answers, reviews: readReviews(raw.reviews) };
 }
 
-export const saveGuestChallenge = (guest: GuestChallenge) => saveJson(CHALLENGE_GUEST_KEY, guest);
+/**
+ * A challenge in progress: the answers given so far (each kept the moment it
+ * is given) and how many of them were reviewed, so a reload resumes at the
+ * next card unanswered. By owner: a user id signed in, `guest` signed out,
+ * `local` in a build without accounts.
+ */
+export const CHALLENGE_PROGRESS_KEY = 'proschi.challenge.progress';
+
+export interface ChallengeProgress {
+  day: string;
+  answers: ChallengeAnswerItem[];
+  /** Of `answers`, those already recorded as card reviews. */
+  reviewed: number;
+  /** Signed out: the reviews made so far, kept with the result. */
+  reviews: CardReview[];
+}
+
+function readAllProgress(): Record<string, unknown> {
+  const raw = loadJson<unknown>(CHALLENGE_PROGRESS_KEY, {});
+  return raw && typeof raw === 'object' && !Array.isArray(raw) ? (raw as Record<string, unknown>) : {};
+}
+
+const isAnswer = (a: unknown): a is ChallengeAnswerItem => {
+  const x = a as Partial<ChallengeAnswerItem> | null;
+  return !!x && typeof x === 'object' && typeof x.cardId === 'string' && isWhole(x.ms) && (x.answer === null || typeof x.answer === 'number' || (Array.isArray(x.answer) && x.answer.every((t) => typeof t === 'string')));
+};
+
+/** The owner's challenge in progress, if any. */
+export function challengeProgress(owner: string): ChallengeProgress | undefined {
+  const all = readAllProgress();
+  const p = (Object.prototype.hasOwnProperty.call(all, owner) ? all[owner] : undefined) as Partial<ChallengeProgress> | undefined;
+  if (!p || typeof p !== 'object' || !isDay(p.day) || !Array.isArray(p.answers) || !p.answers.every(isAnswer)) return undefined;
+  return { day: p.day, answers: p.answers, reviewed: isWhole(p.reviewed) ? Math.min(p.reviewed, p.answers.length) : 0, reviews: readReviews(p.reviews) };
+}
+
+export function saveChallengeProgress(owner: string, progress: ChallengeProgress): void {
+  saveJson(CHALLENGE_PROGRESS_KEY, { ...readAllProgress(), [owner]: progress });
+}
+
+export function clearChallengeProgress(owner: string): void {
+  const all = readAllProgress();
+  if (!Object.prototype.hasOwnProperty.call(all, owner)) return;
+  delete all[owner];
+  saveJson(CHALLENGE_PROGRESS_KEY, all);
+}
+
+export const saveGuestChallenge =(guest: GuestChallenge) => saveJson(CHALLENGE_GUEST_KEY, guest);
 
 export function clearGuestChallenge(): void {
   try {

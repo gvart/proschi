@@ -21,6 +21,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak and its badges |
 | `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points) |
 | `proschi.challenge.guest` | The daily challenge, signed out: the last one you played (answers, times, points and the card reviews it made), so it can be saved to your account when you sign in |
+| `proschi.challenge.progress` | The daily challenge you are in the middle of: the day, your answers so far and how long each took, so a reload carries on where you were; removed when you finish |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
 | `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
@@ -79,7 +80,8 @@ Without signing in, nothing about you reaches the server.
 - Your daily goal (cards a day). The daily streak and the weekly recap are
   computed from your card reviews and solve dates; nothing more is stored
   for them.
-- The daily challenge, per day you play it: your answers to its five cards,
+- The daily challenge, per day you play it: when you saw its first card,
+  your answers to its five cards,
   how long each took, which were right, the points, the score and when you
   sent it. Your rank is computed from everyone's scores each time it is
   shown. A challenge played signed out stays in your browser until you sign

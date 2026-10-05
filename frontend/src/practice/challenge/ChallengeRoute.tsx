@@ -21,11 +21,11 @@ import {
   SPEED_BONUS_MAX,
   SPEED_FULL_MS,
   SPEED_ZERO_MS,
-  type ChallengeAnswer,
   type ChallengeAnswerItem,
   type ChallengeCard,
 } from '../../learn/challenge';
 import { autoRating, localDay, type CardReview } from '../../learn/review';
+import { addDays } from '../../learn/streak';
 import { celebrate } from '../../design/celebrate';
 import { api, ApiError, apiEnabled, type ChallengeAttemptAnswer, type ChallengeLeaderboard, type ChallengeStreakAnswer, type ChallengeToday } from '../../services/api';
 import PaneLoading from '../../components/PaneLoading';
@@ -40,10 +40,13 @@ import { accountStore, localStore, reviewId, signedOutError, type CardStore } fr
 import { notifyActivity } from '../skills/activity';
 import type { Account } from '../useAccount';
 import {
+  challengeProgress,
+  clearChallengeProgress,
   clearGuestChallenge,
   guestChallenge,
   localResults,
   localStreak,
+  saveChallengeProgress,
   saveGuestChallenge,
   saveLocalResult,
   scoreLocally,
@@ -76,7 +79,14 @@ type Setup =
       streak?: ChallengeStreakAnswer;
       /** Signed in, a result the server does not have yet (it could not be reached). */
       unsaved?: ChallengeAnswerItem[];
+      /** Answers given before a reload: the challenge resumes after them. */
+      resume?: ChallengeAnswerItem[];
+      /** Signed in: when the challenge's first card was shown, on any device (null before). */
+      startedAt?: number | null;
     };
+
+/** A challenge in progress at midnight is still sent for yesterday this long after 00:00 UTC, as the server allows. */
+const GRACE_SECONDS = 15 * 60;
 
 const nowSeconds = () => Math.floor(Date.now() / 1000);
 const cardsById = new Map<string, Card>(deck.cards.map((c) => [c.id, c]));
@@ -140,6 +150,8 @@ export default function ChallengeRoute({ account, activity }: { account: Account
   const [attempt, setAttempt] = useState(0);
   const [submitting, setSubmitting] = useState(false);
   const { refresh } = activity;
+  /** Whose challenge in progress this browser keeps. */
+  const owner = mode === 'account' ? (userId ?? 'account') : (mode ?? 'loading');
 
   useEffect(() => {
     document.title = 'Daily challenge · Proschi practice';
@@ -166,9 +178,64 @@ export default function ChallengeRoute({ account, activity }: { account: Account
     });
   }, [store, refresh]);
 
+  /** Every challenge answer is a review of its card too. */
+  const guestReviews = useRef<CardReview[]>([]);
+  const onReview = useCallback(
+    (card: Card, rating: Rating, durationMs: number) => {
+      const at = nowSeconds();
+      const review: CardReview = { id: reviewId(), cardId: card.id, version: card.version, rating, reviewedAt: at, durationMs: Math.round(durationMs), day: localDay(new Date(at * 1000)) };
+      if (store) store.add(review);
+      else guestReviews.current.push(review);
+    },
+    [store],
+  );
+
+  /** Signed in: records that the first card is shown (once a day; a reload or another device keeps the first time). */
+  const recordStart = useCallback((day: string) => {
+    if (mode === 'account') void api('/api/challenge/today/start', { method: 'POST', body: { day } }).catch(() => undefined);
+  }, [mode]);
+
   useEffect(() => {
     if (!mode) return;
     let cancelled = false;
+    /**
+     * Today's challenge in progress in this browser, to resume. One of
+     * another day is dropped, or, within GRACE_SECONDS of midnight, sent for
+     * yesterday as it stands (signed in or without accounts).
+     */
+    const inProgress = async (day: string, played: boolean): Promise<ChallengeAnswerItem[] | undefined> => {
+      const p = challengeProgress(owner);
+      if (!p) return undefined;
+      if (p.day === day && !played) {
+        // Answers given but not moved on from before the reload are reviews too.
+        const cards = cardsFor(p.answers.map((a) => a.cardId)) ?? [];
+        guestReviews.current = p.reviews;
+        p.answers.slice(p.reviewed).forEach((a, i) => {
+          const card = cards[p.reviewed + i];
+          if (card) onReview(card, autoRating(gradeChallengeAnswer(card, a.answer)), a.ms);
+        });
+        saveChallengeProgress(owner, { ...p, reviewed: p.answers.length, reviews: guestReviews.current });
+        return p.answers;
+      }
+      clearChallengeProgress(owner);
+      const inGrace = p.day === addDays(day, -1) && nowSeconds() - Date.parse(`${day}T00:00:00Z`) / 1000 < GRACE_SECONDS;
+      if (inGrace && mode !== 'guest') {
+        const cards = pickChallenge(deck.cards, p.day);
+        const all = [...p.answers, ...cards.slice(p.answers.length).map((c) => ({ cardId: c.id, answer: null, ms: 0 }))];
+        if (mode === 'local') saveLocalResult(scoreLocally(p.day, cards, all));
+        else await submit(p.day, all).catch(() => undefined);
+      }
+      return undefined;
+    };
+    /** Ready; straight back into the session when resuming. */
+    const ready = (next: Extract<Setup, { status: 'ready' }>) => {
+      if (cancelled) return;
+      setSetup(next);
+      if (next.resume && !next.result) {
+        recordStart(next.day);
+        setView('session');
+      }
+    };
     setSetup({ status: 'loading' });
     const local = () => {
       const day = challengeDay();
@@ -177,7 +244,9 @@ export default function ChallengeRoute({ account, activity }: { account: Account
     void (async () => {
       if (mode === 'local') {
         const today = local();
-        setSetup({ status: 'ready', ...today, result: localResults()[today.day], streak: localStreak(today.day) });
+        const result = localResults()[today.day];
+        const resume = await inProgress(today.day, !!result);
+        ready({ status: 'ready', ...today, result: localResults()[today.day], streak: localStreak(today.day), resume });
         return;
       }
       let answer: ChallengeToday | undefined;
@@ -199,15 +268,18 @@ export default function ChallengeRoute({ account, activity }: { account: Account
       const guest = guestChallenge();
       const guestToday = guest && guest.result.day === today.day ? guest : undefined;
       if (mode === 'guest') {
-        setSetup({ status: 'ready', ...today, cards: today.cards, result: guestToday?.result });
+        const resume = await inProgress(today.day, !!guestToday);
+        ready({ status: 'ready', ...today, cards: today.cards, result: guestToday?.result, resume });
         return;
       }
       // Signed in. Played already, or played signed out before signing in: save that now.
       if (answer?.attempt || !guestToday) {
         if (guest) clearGuestChallenge();
-        setSetup({ status: 'ready', ...today, cards: today.cards, result: answer?.attempt ?? undefined, streak: answer?.streak });
+        const resume = await inProgress(today.day, !!answer?.attempt);
+        ready({ status: 'ready', ...today, cards: today.cards, result: answer?.attempt ?? undefined, streak: answer?.streak, startedAt: answer?.startedAt, resume });
         return;
       }
+      clearChallengeProgress(owner);
       try {
         const saved = await submit(today.day, guestToday.answers);
         if (store) for (const review of guestToday.reviews) store.add(review);
@@ -221,19 +293,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
     return () => {
       cancelled = true;
     };
-  }, [mode, attempt, submit, store, afterwards]);
-
-  /** Every challenge answer is a review of its card too. */
-  const guestReviews = useRef<CardReview[]>([]);
-  const onReview = useCallback(
-    (card: Card, rating: Rating, durationMs: number) => {
-      const at = nowSeconds();
-      const review: CardReview = { id: reviewId(), cardId: card.id, version: card.version, rating, reviewedAt: at, durationMs: Math.round(durationMs), day: localDay(new Date(at * 1000)) };
-      if (store) store.add(review);
-      else guestReviews.current.push(review);
-    },
-    [store],
-  );
+  }, [mode, owner, attempt, submit, store, afterwards, onReview, recordStart]);
 
   if (!mode || setup.status === 'loading') return <PaneLoading label={!mode ? 'Checking your sign-in…' : 'Loading today’s challenge…'} />;
 
@@ -258,6 +318,8 @@ export default function ChallengeRoute({ account, activity }: { account: Account
 
   const finish = async (answers: ChallengeAnswerItem[]) => {
     const local = scoreLocally(day, cards, answers);
+    clearChallengeProgress(owner);
+    setSetup({ ...setup, resume: undefined });
     setView('intro');
     if (mode === 'local') {
       setSetup({ ...setup, result: saveLocalResult(local), streak: localStreak(day) });
@@ -295,7 +357,18 @@ export default function ChallengeRoute({ account, activity }: { account: Account
     }
   };
 
-  if (view === 'session') return <ChallengeSession day={day} cards={cards} onReview={onReview} onDone={(answers) => void finish(answers)} />;
+  if (view === 'session') {
+    return (
+      <ChallengeSession
+        day={day}
+        cards={cards}
+        initial={setup.resume ?? []}
+        onReview={onReview}
+        onProgress={(answers, reviewed) => saveChallengeProgress(owner, { day, answers, reviewed, reviews: guestReviews.current })}
+        onDone={(answers) => void finish(answers)}
+      />
+    );
+  }
 
   return (
     <main className="max-w-2xl mx-auto px-4 py-8 sm:py-14">
@@ -321,7 +394,17 @@ export default function ChallengeRoute({ account, activity }: { account: Account
           onRetrySave={() => void retrySave()}
         />
       ) : (
-        <Intro cards={cards} endsAt={endsAt} streak={setup.streak} mode={mode} onStart={() => setView('session')} />
+        <Intro
+          cards={cards}
+          endsAt={endsAt}
+          streak={setup.streak}
+          mode={mode}
+          startedAt={setup.startedAt ?? undefined}
+          onStart={() => {
+            recordStart(day);
+            setView('session');
+          }}
+        />
       )}
       {apiEnabled && <Leaderboard day={day} refresh={setup.result?.score ?? -1} />}
     </main>
@@ -361,7 +444,22 @@ function ChallengeStreakLine({ streak }: { streak?: ChallengeStreakAnswer }) {
   );
 }
 
-function Intro({ cards, endsAt, streak, mode, onStart }: { cards: ChallengeCard[]; endsAt: number; streak?: ChallengeStreakAnswer; mode: Mode; onStart: () => void }) {
+function Intro({
+  cards,
+  endsAt,
+  streak,
+  mode,
+  startedAt,
+  onStart,
+}: {
+  cards: ChallengeCard[];
+  endsAt: number;
+  streak?: ChallengeStreakAnswer;
+  mode: Mode;
+  /** Signed in: started already, on another device or before this browser's storage was cleared. */
+  startedAt?: number;
+  onStart: () => void;
+}) {
   return (
     <section aria-label="Today’s challenge" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md sm:p-5">
       <p className="text-base text-ink">
@@ -380,54 +478,74 @@ function Intro({ cards, endsAt, streak, mode, onStart }: { cards: ChallengeCard[
         <NextReset endsAt={endsAt} />
       </div>
       <ChallengeStreakLine streak={streak} />
+      {startedAt !== undefined && (
+        <p className="mt-3 text-sm font-semibold text-ink">
+          You started today’s challenge at {new Date(startedAt * 1000).toISOString().slice(11, 16)} UTC, maybe on another device. Its answers are not in this
+          browser, so it starts again from the first card.
+        </p>
+      )}
       <button type="button" onClick={onStart} disabled={cards.length === 0} className={`mt-4 flex w-full justify-center min-h-[48px] sm:w-auto ${primaryButton}`}>
-        Start the challenge
+        {startedAt !== undefined ? 'Continue the challenge' : 'Start the challenge'}
         <ArrowRight size={14} aria-hidden="true" />
       </button>
     </section>
   );
 }
 
-/** The five cards, one at a time, with the review page's card view. */
+/**
+ * The five cards, one at a time, with the review page's card view. Each
+ * answer is kept the moment it is given (`onProgress`), so a reload resumes
+ * at the next card unanswered, never replaying one whose answer was shown.
+ */
 function ChallengeSession({
   day,
   cards,
+  initial,
   onReview,
+  onProgress,
   onDone,
 }: {
   day: string;
   cards: ChallengeCard[];
+  /** Answers given before a reload, the first cards' in order. */
+  initial: ChallengeAnswerItem[];
   onReview: (card: Card, rating: Rating, durationMs: number) => void;
+  /** The answers so far, and how many of them were reviewed (moved on from). */
+  onProgress: (answers: ChallengeAnswerItem[], reviewed: number) => void;
   onDone: (answers: ChallengeAnswerItem[]) => void;
 }) {
-  const [index, setIndex] = useState(0);
-  const answers = useRef<ChallengeAnswerItem[]>([]);
+  const [index, setIndex] = useState(() => Math.min(initial.length, cards.length));
+  const answers = useRef<ChallengeAnswerItem[]>(initial.slice(0, cards.length));
   const shownAt = useRef(Date.now());
-  const current = useRef<{ answer: ChallengeAnswer; ms: number } | undefined>(undefined);
   const card = cards[index];
   const round = challengeRound(day);
+  const done = useRef(false);
+  const finish = useCallback(() => {
+    if (done.current) return;
+    done.current = true;
+    onDone(answers.current);
+  }, [onDone]);
+  // Every card was answered before a reload: straight to the result.
+  useEffect(() => {
+    if (index >= cards.length) finish();
+  }, [index, cards.length, finish]);
 
-  const record = () => {
-    const given = current.current;
-    answers.current.push({ cardId: card.id, answer: given?.answer ?? null, ms: given ? given.ms : MAX_CARD_MS });
-    current.current = undefined;
-  };
   const next = (rating: Rating, durationMs: number) => {
-    record();
     onReview(card, rating, durationMs);
-    if (index + 1 >= cards.length) onDone(answers.current);
+    onProgress(answers.current, index + 1);
+    if (index + 1 >= cards.length) finish();
     else {
       shownAt.current = Date.now();
       setIndex(index + 1);
     }
   };
-  /** Ends early: the card on screen keeps its answer, if given; the rest count as unanswered. */
+  /** Ends early: the card on screen keeps its answer, if given; the rest count as unanswered (and score 0). */
   const end = () => {
+    const given = answers.current[index];
     // An answer on screen not moved on from is still a review of its card.
-    if (current.current) onReview(card, autoRating(gradeChallengeAnswer(card, current.current.answer)), current.current.ms);
-    record();
-    for (const c of cards.slice(index + 1)) answers.current.push({ cardId: c.id, answer: null, ms: MAX_CARD_MS });
-    onDone(answers.current);
+    if (given) onReview(card, autoRating(gradeChallengeAnswer(card, given.answer)), given.ms);
+    for (const c of cards.slice(answers.current.length)) answers.current.push({ cardId: c.id, answer: null, ms: 0 });
+    finish();
   };
 
   if (!card) return null;
@@ -464,7 +582,9 @@ function ChallengeSession({
         position={`Challenge card ${index + 1} of ${cards.length}`}
         round={round}
         onAnswer={(answer) => {
-          current.current ??= { answer, ms: Date.now() - shownAt.current };
+          if (answers.current.length > index) return;
+          answers.current.push({ cardId: card.id, answer, ms: Date.now() - shownAt.current });
+          onProgress(answers.current, index);
         }}
         onRate={next}
       />

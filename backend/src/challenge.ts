@@ -26,11 +26,20 @@ import { cached } from './stats';
  * cards a UTC day, the same for everyone. The server picks them with the
  * page's own code, grades and scores each attempt itself (a client never
  * claims a score), keeps a user's first attempt of a day only, and ranks the
- * day's attempts by score, then by the total time.
+ * day's attempts by score, then by the total time. Signed in, the client
+ * records when the first card is shown (a start), once per user and day, so
+ * a challenge is not restarted from scratch on another device and the
+ * answers' times cannot add up to more than the time since.
  */
 
 /** An attempt at yesterday's challenge is still taken this long after 00:00 UTC, for a player who started it before midnight. */
 export const GRACE_SECONDS = 15 * 60;
+/**
+ * Slack, in seconds, between the time since the server-side start and the
+ * answers' times added up: an attempt claiming more than that is refused
+ * (clocks, network and a reload in between).
+ */
+export const TIME_SLACK_SECONDS = 120;
 /** Entries of the day's leaderboard. */
 export const LEADERBOARD_SIZE = 20;
 /** The earliest day the leaderboard answers. */
@@ -93,9 +102,10 @@ interface AttemptRow {
 async function loadAttempt(DB: D1Database, userId: string, day: string): Promise<Attempt | null> {
   const row = await DB.prepare(
     `SELECT m.day, m.score, m.correct, m.perfect, m.total_ms, m.results, m.submitted_at,
-       (SELECT COUNT(*) FROM challenge_attempts o WHERE o.day = m.day AND (o.score > m.score OR (o.score = m.score AND o.total_ms < m.total_ms))) + 1 AS rank,
-       (SELECT COUNT(*) FROM challenge_attempts o WHERE o.day = m.day) AS players
-     FROM challenge_attempts m WHERE m.user_id = ? AND m.day = ?`,
+       (SELECT COUNT(*) FROM challenge_attempts o WHERE o.day = m.day AND o.submitted_at IS NOT NULL
+          AND (o.score > m.score OR (o.score = m.score AND o.total_ms < m.total_ms))) + 1 AS rank,
+       (SELECT COUNT(*) FROM challenge_attempts o WHERE o.day = m.day AND o.submitted_at IS NOT NULL) AS players
+     FROM challenge_attempts m WHERE m.user_id = ? AND m.day = ? AND m.submitted_at IS NOT NULL`,
   )
     .bind(userId, day)
     .first<AttemptRow>();
@@ -116,7 +126,9 @@ async function loadAttempt(DB: D1Database, userId: string, day: string): Promise
 
 /** The user's challenge streak as of `today`. */
 async function loadStreak(DB: D1Database, userId: string, today: string): Promise<ChallengeStreak> {
-  const { results } = await DB.prepare('SELECT day FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(userId).all<{ day: string }>();
+  const { results } = await DB.prepare('SELECT day FROM challenge_attempts WHERE user_id = ? AND submitted_at IS NOT NULL ORDER BY day')
+    .bind(userId)
+    .all<{ day: string }>();
   return challengeStreak(
     results.map((r) => r.day),
     today,
@@ -125,7 +137,9 @@ async function loadStreak(DB: D1Database, userId: string, today: string): Promis
 
 /** What the challenge badges look at (GET /api/me/achievements). */
 export async function loadChallengeStats(DB: D1Database, userId: string, t: number): Promise<ChallengeStats> {
-  const { results } = await DB.prepare('SELECT day, perfect FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(userId).all<{ day: string; perfect: number }>();
+  const { results } = await DB.prepare('SELECT day, perfect FROM challenge_attempts WHERE user_id = ? AND submitted_at IS NOT NULL ORDER BY day')
+    .bind(userId)
+    .all<{ day: string; perfect: number }>();
   const today = challengeDay(new Date(t * 1000));
   const streak = challengeStreak(
     results.map((r) => r.day),
@@ -138,7 +152,8 @@ export async function loadChallengeStats(DB: D1Database, userId: string, t: numb
  * GET /api/challenge/today: `{day, cardIds, endsAt, maxScore}`, the day's
  * cards in the order to show them (clients have the cards themselves) and
  * when the next challenge starts. Signed in, also `attempt` (null before
- * playing) and the challenge `streak`.
+ * playing), `startedAt` (when the first card was shown, null before) and the
+ * challenge `streak`.
  */
 export async function getChallengeToday(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -147,8 +162,31 @@ export async function getChallengeToday(request: Request, ctx: Ctx): Promise<Res
   const day = challengeDay(new Date(now() * 1000));
   const base = { day, cardIds: challengeCards(day).map((c) => c.id), endsAt: challengeEndsAt(day), maxScore: MAX_SCORE };
   if (!user) return json(base, 200, NO_STORE);
-  const [attempt, streak] = await Promise.all([loadAttempt(DB, user.id, day), loadStreak(DB, user.id, day)]);
-  return json({ ...base, attempt, streak }, 200, NO_STORE);
+  const [attempt, streak, started] = await Promise.all([
+    loadAttempt(DB, user.id, day),
+    loadStreak(DB, user.id, day),
+    DB.prepare('SELECT started_at FROM challenge_attempts WHERE user_id = ? AND day = ?').bind(user.id, day).first<{ started_at: number }>(),
+  ]);
+  return json({ ...base, attempt, startedAt: started?.started_at ?? null, streak }, 200, NO_STORE);
+}
+
+/**
+ * POST /api/challenge/today/start {day?}: records that the challenge's first
+ * card is shown, once per user and day (a second call, from this device or
+ * another, keeps the first time). Answers `{day, startedAt, submitted}`.
+ */
+export async function postChallengeStart(request: Request, ctx: Ctx): Promise<Response> {
+  const { DB } = ctx.env;
+  const user = await requireUser(request, ctx);
+  const body = await readJson(request, 1024);
+  await rateLimit(ctx.env.CHALLENGE_LIMITER, user.id, 'Too many challenge requests; wait a minute');
+  const t = now();
+  const day = attemptDay(body.day, t);
+  await DB.prepare('INSERT OR IGNORE INTO challenge_attempts (user_id, day, started_at) VALUES (?, ?, ?)').bind(user.id, day, t).run();
+  const row = await DB.prepare('SELECT started_at, submitted_at FROM challenge_attempts WHERE user_id = ? AND day = ?')
+    .bind(user.id, day)
+    .first<{ started_at: number; submitted_at: number | null }>();
+  return json({ day, startedAt: row?.started_at ?? t, submitted: row?.submitted_at != null }, 200, NO_STORE);
 }
 
 /** The day an attempt is for: today, or yesterday within GRACE_SECONDS of midnight. */
@@ -166,7 +204,9 @@ function attemptDay(raw: unknown, t: number): string {
  * attempt and answers it with its rank and the challenge streak. 409 when the
  * user played that day already (with `attempt`, the one kept). `day`, the
  * challenge the client showed, may be yesterday's for GRACE_SECONDS after
- * midnight.
+ * midnight. After a start, answers whose times add up to more than the time
+ * since (plus TIME_SLACK_SECONDS) are refused; an attempt without a start
+ * (one played signed out, saved after signing in) starts and ends at once.
  */
 export async function postChallengeAttempt(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -182,11 +222,21 @@ export async function postChallengeAttempt(request: Request, ctx: Ctx): Promise<
   const score = scoreChallenge(cards, read.answers);
   const results: StoredResult[] = read.answers.map((a, i) => ({ ...a, correct: score.results[i].correct, points: score.results[i].points, bonus: score.results[i].bonus }));
 
+  const started = await DB.prepare('SELECT started_at, submitted_at FROM challenge_attempts WHERE user_id = ? AND day = ?')
+    .bind(user.id, day)
+    .first<{ started_at: number; submitted_at: number | null }>();
+  if (started && started.submitted_at === null && score.totalMs > (t - started.started_at + TIME_SLACK_SECONDS) * 1000) {
+    throw new HttpError(400, 'The answers took longer than the challenge has been open');
+  }
+  // Fills a started row, or adds one; never overwrites a sent attempt.
   const inserted = await DB.prepare(
-    `INSERT OR IGNORE INTO challenge_attempts (user_id, day, score, correct, perfect, total_ms, results, submitted_at)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+    `INSERT INTO challenge_attempts (user_id, day, started_at, score, correct, perfect, total_ms, results, submitted_at)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?3)
+     ON CONFLICT (user_id, day) DO UPDATE SET score = excluded.score, correct = excluded.correct, perfect = excluded.perfect,
+       total_ms = excluded.total_ms, results = excluded.results, submitted_at = excluded.submitted_at
+     WHERE challenge_attempts.submitted_at IS NULL`,
   )
-    .bind(user.id, day, score.score, score.correct, isPerfect(score) ? 1 : 0, score.totalMs, JSON.stringify(results), t)
+    .bind(user.id, day, t, score.score, score.correct, isPerfect(score) ? 1 : 0, score.totalMs, JSON.stringify(results))
     .run();
   const [attempt, streak] = await Promise.all([loadAttempt(DB, user.id, day), loadStreak(DB, user.id, challengeDay(new Date(t * 1000)))]);
   if (!inserted.meta.changes) return json({ error: 'You already played this challenge; only the first attempt counts', attempt, streak }, 409, NO_STORE);
@@ -221,10 +271,10 @@ export async function getChallengeLeaderboard(request: Request, ctx: Ctx): Promi
         `SELECT name, score, correct, rank FROM (
            SELECT u.display_name AS name, u.public_profile AS public, a.score, a.correct,
              RANK() OVER (ORDER BY a.score DESC, a.total_ms ASC) AS rank, a.submitted_at
-           FROM challenge_attempts a JOIN users u ON u.id = a.user_id WHERE a.day = ?
+           FROM challenge_attempts a JOIN users u ON u.id = a.user_id WHERE a.day = ? AND a.submitted_at IS NOT NULL
          ) WHERE public = 1 ORDER BY rank, submitted_at LIMIT ?`,
       ).bind(day, LEADERBOARD_SIZE),
-      DB.prepare('SELECT COUNT(*) AS n FROM challenge_attempts WHERE day = ?').bind(day),
+      DB.prepare('SELECT COUNT(*) AS n FROM challenge_attempts WHERE day = ? AND submitted_at IS NOT NULL').bind(day),
     ]);
     return {
       day,

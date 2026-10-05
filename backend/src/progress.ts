@@ -127,7 +127,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       'SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ? ORDER BY card_id',
     ).bind(user.id),
     DB.prepare('SELECT achievement_id, earned_at, seen_at FROM achievements WHERE user_id = ? ORDER BY earned_at, achievement_id').bind(user.id),
-    DB.prepare('SELECT day, score, correct, perfect, total_ms, results, submitted_at FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(user.id),
+    DB.prepare('SELECT day, started_at, score, correct, perfect, total_ms, results, submitted_at FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(user.id),
   ]);
   type Row = Record<string, string | number | null>;
   const body = {
@@ -182,12 +182,14 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     })),
     achievements: (achievements.results as Row[]).map((r) => ({ achievementId: r.achievement_id, earnedAt: r.earned_at, seenAt: r.seen_at })),
     challengeAttempts: (challenges.results as Row[]).map((r) => ({
+      // A challenge started but not sent has only startedAt.
       day: r.day,
+      startedAt: r.started_at,
       score: r.score,
       correct: r.correct,
-      perfect: r.perfect === 1,
+      perfect: r.perfect === null ? null : r.perfect === 1,
       totalMs: r.total_ms,
-      results: JSON.parse(String(r.results)) as unknown,
+      results: r.results === null ? null : (JSON.parse(String(r.results)) as unknown),
       submittedAt: r.submitted_at,
     })),
   };

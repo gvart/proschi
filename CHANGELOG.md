@@ -68,7 +68,8 @@ deployed from `main` and ships with the same changes.
   result shows each right answer with why, your rank, a challenge streak and
   a "Copy result" button for sharing, e.g. `Proschi daily challenge
   2026-10-06: 480/600 ✅✅❌✅✅`, and a perfect score gets confetti. Every
-  answer also counts as a review toward your daily goal. Three new badges:
+  answer also counts as a review toward your daily goal, and a reload in the
+  middle carries on at the next card. Three new badges:
   a first challenge, a perfect score and a 7-day challenge streak. Find it
   on the practice list, the daily review page or in the footer.
 - Sign-in for native apps, ready for a future mobile app: an app signs in

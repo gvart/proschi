@@ -208,7 +208,11 @@ the Worker runs too:
   worth more than any speed.
 - **One attempt**: signed in, the server picks the cards, grades the
   answers itself, keeps only the first attempt of the day and ranks it among
-  the day's (by score, then the total time). The leaderboard lists the top 20
+  the day's (by score, then the total time). It also records when the first
+  card was shown, once a day, and refuses answers whose times add up to more
+  than the time since. Each answer is kept in the browser the moment it is
+  given, so a reload carries on at the next card; a challenge left unfinished
+  at midnight is sent as it stands within 15 minutes, else dropped. The leaderboard lists the top 20
   of those who chose to appear on the leaderboard; everyone else is counted
   but not named.
 - **The challenge streak**: days in a row with a completed challenge (UTC

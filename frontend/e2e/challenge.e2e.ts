@@ -119,6 +119,59 @@ test.describe('daily challenge', () => {
     await expect(page).toHaveURL(/#\/challenge$/);
   });
 
+  test('a reload carries on at the next card, keeping the answers given', async ({ page, request }) => {
+    const cards = await loadCards(request);
+    await page.goto('practice/#/challenge');
+    await page.getByRole('button', { name: 'Start the challenge' }).click();
+    const first = await challengeCard(page, 1).getAttribute('data-card-id');
+    await answer(challengeCard(page, 1), cards, true);
+    await answer(challengeCard(page, 2), cards, false);
+    const third = await challengeCard(page, 3).getAttribute('data-card-id');
+
+    await page.reload();
+    // Straight back into the challenge, at card 3: the cards answered are not shown again.
+    await expect(challengeCard(page, 3)).toBeVisible();
+    await expect(challengeCard(page, 3)).toHaveAttribute('data-card-id', third!);
+    await expect(page.getByRole('progressbar', { name: 'Challenge progress' })).toHaveAttribute('aria-valuenow', '2');
+    const kept = await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.challenge.progress') ?? '{}'));
+    expect(kept.local).toMatchObject({ day: DAY, reviewed: 2 });
+    expect(kept.local.answers).toHaveLength(2);
+    expect(kept.local.answers[0].cardId).toBe(first);
+
+    for (let n = 3; n <= 5; n++) await answer(challengeCard(page, n), cards, true);
+    const result = page.getByRole('region', { name: 'Your result' });
+    // The two answers from before the reload count: card 2 was wrong.
+    await expect(page.locator('#challenge-share-text')).toHaveText(`Proschi daily challenge ${DAY}: 480/600 ✅❌✅✅✅ proschi.app/practice/#/challenge`);
+    await expect(result).toContainText('4 of 5 right');
+    expect(await page.evaluate(() => localStorage.getItem('proschi.challenge.progress'))).toBe('{}');
+    // Five reviews, none twice.
+    const reviews = await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.cards') ?? '[]') as unknown[]);
+    expect(reviews).toHaveLength(5);
+  });
+
+  test('an answer shown just before a reload is kept, and the card is not shown again', async ({ page, request }) => {
+    const cards = await loadCards(request);
+    await page.goto('practice/#/challenge');
+    await page.getByRole('button', { name: 'Start the challenge' }).click();
+    const c = challengeCard(page, 1);
+    const id = await c.getAttribute('data-card-id');
+    const card = cards.get(id!)!;
+    // Answer, see the feedback, but reload instead of moving on.
+    if (card.type === 'choice') await c.locator(`button[data-option="${card.options!.findIndex((o) => o.correct)}"]`).click();
+    else if (card.type === 'estimate') {
+      await c.getByLabel('Your estimate').fill(String(card.answer));
+      await c.getByRole('button', { name: 'Check' }).click();
+    } else {
+      for (const [i, accepted] of card.blanks!.entries()) await c.getByLabel(`Gap ${i + 1}`).fill(accepted[0]);
+      await c.getByRole('button', { name: 'Check' }).click();
+    }
+    await expect(c.getByRole('region', { name: 'Correct' })).toBeVisible();
+    await page.reload();
+    await expect(challengeCard(page, 2)).toBeVisible();
+    const reviews = await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.cards') ?? '[]') as { cardId: string }[]);
+    expect(reviews.map((r) => r.cardId)).toEqual([id]);
+  });
+
   test('a perfect score celebrates, unless motion is reduced', async ({ page, request }) => {
     const cards = await loadCards(request);
     await page.goto('practice/#/challenge');
