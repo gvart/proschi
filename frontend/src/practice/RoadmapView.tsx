@@ -2,7 +2,7 @@ import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from '
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { roadmapHref, roadmapState, type RoadmapAccess, type RoadmapStage, type RoadmapState } from './roadmap';
+import { roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
@@ -24,10 +24,12 @@ interface RoadmapProps {
   lessons?: Record<string, number>;
   /** The article to read before the first problem, with its reading minutes. */
   guide?: Guide & { minutes?: number };
+  /** A locked step the address asked for (`#/roadmap/<id>` or its lesson): the roadmap shows what unlocks it. */
+  locked?: { id: string; lock: StepLock };
 }
 
 /** The interview prep roadmap: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked }: RoadmapProps) {
   const preview = access !== 'open';
   const state = roadmapState(stages, progress);
   const total = state.steps.length;
@@ -43,6 +45,8 @@ export default function Roadmap({ stages, problems, progress, access, providers,
         The problems in the order a system design interview builds on them, from foundations to large systems. Each one opens once you have solved
         every problem before it. The full list stays open if you want to skip ahead.
       </p>
+
+      {locked && <LockedNotice title={titleOf(problems, locked.id)} lock={locked.lock} problems={problems} />}
 
       {preview ? (
         <SignInToStart access={access} providers={providers} onSignIn={onSignIn} total={total} stages={stages.length} />
@@ -118,6 +122,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             problems={problems}
             current={!preview && i === state.currentStage && !!state.next}
             preview={preview}
+            access={access}
             lessons={lessons}
           />
         ))}
@@ -133,6 +138,7 @@ function StageSection({
   problems,
   current,
   preview,
+  access,
   lessons,
 }: {
   stage: RoadmapStage;
@@ -140,8 +146,9 @@ function StageSection({
   state: RoadmapState;
   problems: ProblemListing[];
   current: boolean;
-  /** Not started (signed out): every problem shows, none opens (their lessons do). */
+  /** Not started (signed out): every problem shows, none opens, nor do their lessons. */
   preview: boolean;
+  access: RoadmapAccess;
   lessons: Record<string, number>;
 }) {
   // A preview shows the problems without the viewer's progress.
@@ -162,6 +169,7 @@ function StageSection({
           const p = problems.find((q) => q.id === step.id);
           const title = p?.title ?? step.id;
           const minutes = lessons[step.id];
+          const hint = step.locked ? unlockHint(stepLock(state, step.id, access), (id) => titleOf(problems, id)) : undefined;
           const content = (
             <>
               {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
@@ -187,11 +195,17 @@ function StageSection({
                     {content}
                   </div>
                   {minutes !== undefined && (
-                    // Lessons are open to everyone; only the challenge waits its turn.
-                    <a href={`#/${step.id}/lesson`} aria-label={`Read the lesson: ${title}`} className={`${toolButton} !py-1 text-xs`}>
-                      <BookOpen size={14} aria-hidden="true" />
+                    // A step's lesson waits for its turn like its challenge (the problem list's lessons stay open).
+                    <span
+                      role="link"
+                      aria-disabled="true"
+                      aria-label={`Read the lesson: ${title}, locked`}
+                      title={hint ? `Locked: ${hint}` : 'Locked'}
+                      className="inline-flex cursor-not-allowed items-center gap-1.5 rounded border-bw-1 border-dashed border-ink/30 px-2.5 py-1 text-xs font-semibold text-ink/50"
+                    >
+                      <Lock size={12} aria-hidden="true" />
                       Read the lesson
-                    </a>
+                    </span>
                   )}
                 </div>
               ) : (
@@ -207,6 +221,21 @@ function StageSection({
         })}
       </ul>
     </li>
+  );
+}
+
+/** On a locked step's address: why the roadmap shows instead of the step, and what unlocks it. */
+function LockedNotice({ title, lock, problems }: { title: string; lock: StepLock; problems: ProblemListing[] }) {
+  // While the sign-in is checked, the step may well open: no alarm yet.
+  if (lock.kind === 'checking' || lock.kind === 'open') return null;
+  return (
+    <p role="status" className="mt-6 flex items-start gap-2 rounded-brutal border-bw-2 border-ink bg-pop-yellow/30 p-3 text-sm text-ink shadow-brutal-sm">
+      <Lock size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+      <span>
+        <strong>{title}</strong> is locked on the roadmap, its lesson and challenge alike.{' '}
+        {lock.kind === 'order' ? `Solve ${titleOf(problems, lock.next)} first to open it.` : 'Sign in to start the roadmap; it opens one problem at a time.'}
+      </span>
+    </p>
   );
 }
 
@@ -269,7 +298,6 @@ export function RoadmapBanner({ id, stages, problems, progress }: { id: string; 
       <span className="text-ink/80">
         Stage {step.stage + 1} of {stages.length}: {stage.title} · {state.steps.indexOf(step) + 1} of {state.steps.length}
       </span>
-      {step.locked && state.next && <span className="text-muted">Locked on the roadmap: solve {titleOf(problems, state.next.id)} first</span>}
       {step.status === 'solved' &&
         (state.next ? (
           <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton} !py-1`}>

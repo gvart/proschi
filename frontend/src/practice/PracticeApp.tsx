@@ -5,7 +5,7 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapAccess, roadmapFor } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
@@ -102,16 +102,19 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // Starting the roadmap takes an account: signed out, `#/roadmap/<id>` shows the roadmap (sign-in comes back to the same address).
-  // Guides and lessons are open to everyone.
+  // Starting the roadmap takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
+  // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
+  // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
   const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
-  const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
+  const target = guide ? undefined : roadmapTarget(route);
+  const lock = target ? stepLock(roadmapState(roadmap, progress), target.id, access) : undefined;
+  const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
-  const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
-  const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
+  const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
+  const problemId = fromRoadmap ? (target?.id ?? '') : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
   const problem = problemId && !onRoadmap && !guide && !onReview && !onProgress ? problems.find((p) => p.id === problemId) : undefined;
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
@@ -149,7 +152,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           engine={engine}
           account={account}
           {...(fromRoadmap
-            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: 'unread' as const }
+            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
             : lessonRoute
               ? { openLesson: 'always' as const }
               : {})}
@@ -203,6 +206,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             onSignIn={account.signIn}
             lessons={lessons}
             guide={firstGuide}
+            locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
           />
         ) : (
           <ProblemList problems={problems} progress={progress} stats={stats} streak={streak} summary={<ProgressStrip state={achievements.state} />}>

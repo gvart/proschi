@@ -85,12 +85,28 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- The practice list's filters take one row on a phone: a search box and a
+  "Filters" button that shows how many are on (for example "Filters · 2").
+  It opens the difficulty, tag, company and status filters; Escape closes
+  them. The filters in use show as chips under the search, each with an ×
+  to remove it, and "Clear all".
 - Signed in, reviews not sent to your account yet (made offline, say) now
   count toward the streak and today's goal on the daily review page and the
   practice list right away, as they already did in a session's summary. Once
   sent, they count once.
 
 ### Fixed
+- Daily review on a phone: after you answer a card, the next one scrolls
+  into view with its topic, type and question below the site header, and
+  keyboard focus moves to its heading. Showing an answer brings it into view
+  without scrolling the question away. Scrolling is instant when your device
+  asks for reduced motion.
+- On the interview prep roadmap, a locked step's "Read the lesson" is locked
+  too, with a lock and what opens it ("Solve URL Shortener first", or sign
+  in). Opening a locked step's address (`#/roadmap/<id>` or
+  `#/roadmap/<id>/lesson`) shows the roadmap with that message instead of
+  the step. The "Read first" guide, and lessons opened from the problem
+  list, stay open to everyone.
 - On phones the header fits the screen on the practice pages: with the
   account and help menus it no longer pushes the menu button off screen or
   makes the page scroll sideways (the "Open the editor" button, also in the
