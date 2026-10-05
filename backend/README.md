@@ -31,6 +31,14 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
   count only the current ones, and a user's first run after either changed
   starts their stats for that problem over. Public answers are cached for a
   minute (the Cache API).
+- **Daily review of practice cards** (`docs/CARDS.md`): every card review,
+  an append-only log that clients send in batches (each review carries an id
+  the client made, so resending is harmless and a device can review offline),
+  and per card the scheduler's state, recomputed by replaying the log with
+  the page's own FSRS code (`frontend/src/learn/fsrs.ts`). The Worker knows
+  the cards from `src/cards.gen.ts`, which `scripts/cards.mjs` writes from
+  `frontend/src/practice/cards` before `dev`, `typecheck`, `test` and
+  `deploy`.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
@@ -47,7 +55,7 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user, progress: {<problem id>: {status, runs, source, solvedAt, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?}` | `publicProfile: true` shows the user on the leaderboard |
-| `DELETE /api/me` | Deletes the account, its sessions and its progress |
+| `DELETE /api/me` | Deletes the account, its sessions, its progress and its card reviews |
 | `GET /api/me/export` | Everything stored about the user, as `proschi-data.json` (no session token hashes) |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user |
@@ -56,10 +64,12 @@ HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
 | `GET /api/stats` | Every problem's `{attempted, solved, medianRunsToSolve}`, and `solvers` |
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
 | `GET /api/leaderboard` | Top 50 who opted in, by problems solved |
+| `GET /api/cards/state?day=YYYY-MM-DD` | `{states: {<card id>: {version, due, stability, difficulty, reps, lapses, lastReview}}, today?: {reviews, new}}`: the user's card states; with `day` (the client's local date), that day's reviews and new cards |
+| `POST /api/cards/reviews {reviews: [{id, cardId, version, rating, reviewedAt, durationMs, day}]}` | Up to 200 reviews (`rating` 1 again to 4 easy, `reviewedAt` Unix seconds). Idempotent by `id`. Answers `{accepted, skipped: [{id, cardId, reason}], states}`: reviews of unknown cards or versions, dated in the future or far from `day`, are skipped; `states` are the reviewed cards' new states |
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports and 3 imports per user; 20 sign-in steps, 120 stats
+changes or exports, 3 imports and 60 card review requests per user; 20 sign-in steps, 120 stats
 requests and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)

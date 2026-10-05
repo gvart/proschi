@@ -17,6 +17,8 @@ export interface SiteLink {
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
 /** The interview prep roadmap: a route of the practice page (src/practice/roadmap.ts). */
 export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
+/** Daily review of the practice cards: a route of the practice page (src/practice/review/). */
+export const DAILY_REVIEW_HREF = 'practice/#/review';
 
 /** The header's links; the editor is its call to action instead. */
 export const NAV: SiteLink[] = [
@@ -35,6 +37,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       { label: 'Editor', href: 'app/' },
       { label: 'Practice', href: 'practice/' },
       { label: 'Interview prep', href: INTERVIEW_PREP_HREF },
+      { label: 'Daily review', href: DAILY_REVIEW_HREF },
     ],
   },
   {

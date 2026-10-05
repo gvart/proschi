@@ -3,6 +3,7 @@ import { Search } from 'lucide-react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { field } from '../components/Playground/ui';
 import RoadmapCard from './RoadmapCard';
+import ReviewCard from './ReviewCard';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -56,6 +57,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
       </div>
 
       <RoadmapCard problems={problems} progress={progress} />
+      <ReviewCard />
 
       <div className="mt-7 flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">

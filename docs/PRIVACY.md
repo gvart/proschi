@@ -14,6 +14,8 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.docs` | Your diagrams in the editor: their text, file names and which one is open |
 | `proschi.playground.source` | A diagram saved by an older version of the editor, read once to carry it over |
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
+| `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
+| `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
 | `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
 | `proschi.theme` | Light, dark, or following your system |
 | `proschi.chunkReloadAt` | Session storage only: when the page last reloaded itself after a site update, so it never loops |
@@ -53,6 +55,11 @@ Without signing in, nothing about you reaches the server.
   simulation and problem versions it was recorded under. When you sign in,
   designs in your browser that your account lacks are uploaded to it, and the
   server re-runs their tests before it counts a solve.
+- Daily review, per card review: which card (and its version), your rating
+  (again, hard, good or easy), when, how long you took to answer and your
+  local date; and per card the schedule computed from them (when it is due
+  next and how well you know it). Reviews made signed out stay in the page
+  and are gone when you close it.
 
 **What is not stored**: your email address, your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
@@ -78,8 +85,8 @@ only if you opt in.
 In the account menu on the practice page:
 
 - **Download my data** saves everything stored about you as JSON.
-- **Delete account** removes your account, sessions and progress from the
-  server at once; the progress in your browser stays.
+- **Delete account** removes your account, sessions, progress and card
+  reviews from the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device.

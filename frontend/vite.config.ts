@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { defineConfig, type PluginOption } from 'vite'
 import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
+import { practiceCards } from './plugins/practiceCards'
 import { practicePages } from './plugins/practicePages'
 import { siteShell } from './plugins/siteShell'
 import { docsSite } from './plugins/docsSite'
@@ -33,6 +34,7 @@ export default defineConfig(async () => ({
     react(),
     practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
     practicePages(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
+    practiceCards(fileURLToPath(new URL('./src/practice/cards', import.meta.url))),
     // Before siteShell: the docs pages' layout goes in first, the header and footer around it.
     docsSite({
       docsDir: fileURLToPath(new URL('../docs', import.meta.url)),

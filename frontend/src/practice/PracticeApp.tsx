@@ -23,6 +23,8 @@ import Header from '../design/Header';
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
 // A roadmap article, e.g. "How to approach a system design interview".
 const GuideRoute = lazy(() => import('./GuideRoute'));
+// Daily review, with every card (virtual:practice-cards).
+const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
@@ -33,8 +35,9 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
 /**
  * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
- * opened from it and `#/roadmap/<guide id>` an article of the roadmap; hash
- * routes work under any sub-path.
+ * opened from it, `#/roadmap/<guide id>` an article of the roadmap, and
+ * `#/review` daily review (`#/review/<topic>` one topic of it); hash routes
+ * work under any sub-path.
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -98,10 +101,13 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && access !== 'open'));
+  const onReview = route === 'review' || route.startsWith('review/');
   const lessonRoute = !fromRoadmap && route.endsWith('/lesson');
   const problemId = fromRoadmap ? route.slice('roadmap/'.length) : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
-  const problem = problemId && !onRoadmap && !guide ? problems.find((p) => p.id === problemId) : undefined;
+  const problem = problemId && !onRoadmap && !guide && !onReview ? problems.find((p) => p.id === problemId) : undefined;
   useEffect(() => {
+    // The review page names itself (its topic).
+    if (onReview) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -109,7 +115,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap]);
+  }, [problem, guide, onRoadmap, onReview]);
 
   if (problem) {
     return (
@@ -151,10 +157,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && !onRoadmap && !guide && (
+        {route && !onRoadmap && !guide && !onReview && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
-        {guide ? (
+        {onReview ? (
+          <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
+            <ReviewRoute account={account} topic={route.slice('review/'.length) || undefined} />
+          </Suspense>
+        ) : guide ? (
           <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
             <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
           </Suspense>

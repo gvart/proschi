@@ -87,7 +87,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions and progress. */
+/** DELETE /api/me: the account, its identities, sessions, progress and card reviews (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -103,13 +103,17 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
-  const [account, identities, sessions, progress] = await DB.batch([
+  const [account, identities, sessions, progress, cardReviews, cardStates] = await DB.batch([
     DB.prepare('SELECT created_at FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at').bind(user.id),
     DB.prepare(
       `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, runs_to_solve, best_cost_usd, best_p99_ms, sim_version, problem_version
        FROM progress WHERE user_id = ? ORDER BY problem_id`,
+    ).bind(user.id),
+    DB.prepare('SELECT id, card_id, card_version, rating, reviewed_at, duration_ms, day FROM card_reviews WHERE user_id = ? ORDER BY reviewed_at, id').bind(user.id),
+    DB.prepare(
+      'SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ? ORDER BY card_id',
     ).bind(user.id),
   ]);
   type Row = Record<string, string | number | null>;
@@ -130,6 +134,25 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       bestP99Ms: r.best_p99_ms,
       simVersion: r.sim_version,
       problemVersion: r.problem_version,
+    })),
+    cardReviews: (cardReviews.results as Row[]).map((r) => ({
+      id: r.id,
+      cardId: r.card_id,
+      cardVersion: r.card_version,
+      rating: r.rating,
+      reviewedAt: r.reviewed_at,
+      durationMs: r.duration_ms,
+      day: r.day,
+    })),
+    cardStates: (cardStates.results as Row[]).map((r) => ({
+      cardId: r.card_id,
+      cardVersion: r.card_version,
+      dueAt: r.due_at,
+      stability: r.stability,
+      difficulty: r.difficulty,
+      reps: r.reps,
+      lapses: r.lapses,
+      lastReviewAt: r.last_review_at,
     })),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });

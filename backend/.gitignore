@@ -2,3 +2,4 @@ node_modules
 .wrangler
 .dev.vars
 src/problems.gen.ts
+src/cards.gen.ts

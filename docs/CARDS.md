@@ -148,6 +148,28 @@ When many requests miss a hot key at once, it is a {{cache stampede|thundering h
 - **Link problems** with `related`, so the practice page can suggest the
   card before and after the problem.
 
+## Reviewing
+
+Daily review is on the practice page, `practice/#/review` (`#/review/<topic>`
+trains one topic). Each day brings the cards that are due, then up to 10 new
+ones, one topic at a time in `tags.json` order and easy before hard; training
+a topic is not held to that limit. Flip cards are rated again, hard, good or
+easy; the others are graded automatically: wrong is again, right is good
+(or easy, when the reviewer says so). An estimate accepts `2300`, `2,300`,
+`2.3k`, `1e6` or `5M`, and "showing the answer" of a cloze card counts as
+again.
+
+The schedule is FSRS-5 with its default weights, aiming at 90% recall
+(`frontend/src/learn/fsrs.ts`); the queue is `frontend/src/learn/review.ts`.
+Both are plain TypeScript the Worker runs too: signed in, the page sends its
+reviews to the API in batches (backend/README.md) and the server replays
+them into the same states. Signed out, only the `sample` deck is offered and
+nothing is saved. A card whose `version` went up is new again for everyone.
+
+The build also publishes every card as `practice/cards.json`,
+`{format: 1, hash, topics, cards}`, for apps: `hash` changes with any
+content, and `format` only when a field changes meaning.
+
 ## The check
 
 `proschi cards check` (CI runs it on every pull request):
