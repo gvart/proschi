@@ -58,6 +58,12 @@ deployed from `main` and ships with the same changes.
   in the browser. Find it from the daily review page or the progress strip
   on the practice list. `proschi achievements check` validates the badges'
   definitions.
+- "Numbers to know" in the docs (`docs/numbers/`): a cheat sheet of the
+  round numbers system design runs on (latency, throughput and connections
+  per server, disk and network speeds, time and size conversions,
+  availability nines, object sizes and approximate cloud prices) with a
+  fully worked estimate, and how Proschi's simulation defaults compare.
+  Every estimate card and the interview guide link to the section they use.
 
 ### Fixed
 - The practice problems' statements and lessons, and the interview approach

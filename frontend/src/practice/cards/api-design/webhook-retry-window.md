@@ -18,3 +18,5 @@ first attempt does it give up?
 Waits: 1 + 2 + 4 + 8 + 16 + 32 + 64 + 128 + 256 + 512 minutes = 1,023
 minutes (2¹⁰ − 1). 1,023 ÷ 60 ≈ **17 hours**. Exponential backoff covers a
 long outage with few attempts.
+
+Numbers: [Numbers to know](../docs/numbers/#powers-of-two-and-ten).

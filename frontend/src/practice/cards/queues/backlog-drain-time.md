@@ -18,3 +18,5 @@ backlog is gone?
 The backlog shrinks by 2,000 − 1,500 = 500 messages a second. 1,800,000 ÷
 500 = 3,600 s = **60 minutes**. Only the spare capacity drains a backlog, so
 adding consumers for the recovery shortens it a lot.
+
+Numbers: [Numbers to know](../docs/numbers/#how-to-estimate).

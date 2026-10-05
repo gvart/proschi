@@ -17,3 +17,5 @@ comfortably holds 50,000. How many servers do you need?
 
 10,000,000 ÷ 50,000 = **200 servers**. Add headroom so that when a server
 dies, its 50,000 clients can reconnect to the others without overloading them.
+
+Numbers: [Numbers to know](../docs/numbers/#connections).

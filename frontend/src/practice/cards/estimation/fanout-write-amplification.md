@@ -18,3 +18,5 @@ that cause?
 Each post is copied into every follower's feed: 5,000 × 200 =
 **1,000,000 inserts/s**. A modest write rate becomes the busiest path in the
 system, which is why the fan-out runs on workers behind a queue.
+
+Numbers: [Numbers to know](../docs/numbers/#servers-and-data-stores).
