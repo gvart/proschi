@@ -31,7 +31,7 @@ rule (`wrong/miss-never-fills-cache.proschi`).
 ```markdown
 ---
 title: URL Shortener
-summary: Cache-first redirects with a fallback when Redis is down.
+summary: Cache-first redirects that survive losing any single machine.
 difficulty: easy
 tags: [caching, read-heavy, durability]
 order: 1
