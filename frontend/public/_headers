@@ -1,0 +1,16 @@
+# Response headers for the static site on Cloudflare (backend/wrangler.jsonc serves
+# frontend/dist as Workers static assets); the API sets its own (backend/src/http.ts).
+# The pages' Content-Security-Policy is a <meta> tag, which cannot say
+# frame-ancestors, so framing is refused here. Ignored by `vite preview`.
+/*
+  Strict-Transport-Security: max-age=63072000; includeSubDomains
+  X-Content-Type-Options: nosniff
+  X-Frame-Options: DENY
+  Content-Security-Policy: frame-ancestors 'none'
+  Referrer-Policy: strict-origin-when-cross-origin
+  Cross-Origin-Opener-Policy: same-origin
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# Vite names these by content hash, so they never change.
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable

@@ -52,7 +52,8 @@ export function siteShell(): Plugin {
         const folder = relative(config.root, dirname(ctx.filename));
         const depth = folder ? folder.split(sep).length : 0;
         const base = depth ? '../'.repeat(depth) : './';
-        const current = PAGES[folder.split(sep)[0]];
+        // 404.html sits at the root but is no page of the header's.
+        const current = /(^|[\\/])404\.html$/.test(ctx.filename) ? undefined : PAGES[folder.split(sep)[0]];
         const shell = await load();
         return html.replace(PLACEHOLDER, (_, slot: string) => {
           if (!SLOTS.has(slot)) throw new Error(`${ctx.filename}: unknown placeholder <!--shell:${slot}-->`);

@@ -28,6 +28,14 @@ deployed from `main` and ships with the same changes.
   email address is stored; the session is an HttpOnly cookie on proschi.app,
   and the account menu deletes the account and its data. Builds without
   `VITE_ACCOUNTS=true` work as before, with progress in the browser only.
+- A "page not found" page for any missing path on proschi.app, with the site
+  header and links to the editor, practice and docs, in place of Cloudflare's
+  default.
+- The editor and practice show a "Something went wrong" screen, with a reload
+  button and a link to file a GitHub issue (the error and the browser only,
+  never your designs), when a page crashes, instead of a blank page.
+- `robots.txt` and a `sitemap.xml` of the landing page, editor, practice and
+  every docs page, generated from `docs/site.json` at build time.
 - Account controls in the practice account menu: link a second sign-in
   (GitHub and Google) to the same account and unlink one, sign out everywhere,
   and download everything the server stores about you as JSON. Sessions
@@ -42,6 +50,13 @@ deployed from `main` and ships with the same changes.
   are refused; browser progress is uploaded in one request on sign-in. Every
   deploy goes to staging.proschi.app and passes a smoke test before
   production, which records a database bookmark to restore from.
+
+### Security
+- The static site sends HSTS and refuses to be framed (`X-Frame-Options`,
+  `frame-ancestors`), along with `nosniff`, a referrer policy, a
+  cross-origin opener policy and a permissions policy, from
+  `frontend/public/_headers`. Hashed assets are cached for a year. The deploy
+  smoke test checks these headers, the 404 page, the sitemap and robots.txt.
 
 ## [0.7.0] - 2026-10-04
 
