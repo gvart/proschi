@@ -1,7 +1,8 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { ArrowRight, Map as MapIcon, Search } from 'lucide-react';
+import { Search } from 'lucide-react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import { field, outlineButton } from '../components/Playground/ui';
+import { field } from '../components/Playground/ui';
+import RoadmapCard from './RoadmapCard';
 import { DIFFICULTIES, type Problem } from './types';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress, type Status } from './progress';
@@ -52,12 +53,9 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
           {solved} of {problems.length} solved
           {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
         </p>
-        <a href="#/roadmap" className={outlineButton}>
-          <MapIcon size={14} />
-          Interview prep roadmap
-          <ArrowRight size={14} />
-        </a>
       </div>
+
+      <RoadmapCard problems={problems} progress={progress} />
 
       <div className="mt-7 flex flex-wrap items-center gap-2">
         <label className="relative flex-1 min-w-[12rem]">

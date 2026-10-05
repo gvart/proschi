@@ -15,7 +15,7 @@
     <title>Proschi: architecture diagrams as code, and system design practice</title>
     <meta
       name="description"
-      content="Write services and use cases as text. Proschi draws the architecture diagram and plays every request through it, the happy path and every failure. Free, open source, runs in your browser."
+      content="Write services and use cases as text: Proschi draws the architecture diagram and plays every request through it. Plus an interview prep roadmap of system design problems."
     />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#FFF8E7" />
@@ -60,6 +60,11 @@
               <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./app/">Open the editor <span class="ps-btn__trail" aria-hidden="true">→</span></a>
               <a class="ps-btn ps-btn--secondary ps-btn--lg" href="./docs/quickstart/">2-minute quickstart</a>
             </div>
+            <a class="hero__prep" href="#interview-prep">
+              <span class="ps-badge ps-badge--yellow">Interview prep</span>
+              <span class="hero__prep-text"><!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages</span>
+              <span class="hero__prep-go" aria-hidden="true">→</span>
+            </a>
             <ul class="hero__facts" aria-label="In short">
               <li>Free &amp; open source</li>
               <li>No account</li>
@@ -125,6 +130,44 @@ usecase "Place order" {
               </div>
             </div>
           </figure>
+        </div>
+      </section>
+
+      <!-- The stages and counts come from src/practice/roadmap.ts at build time (src/landing/prep.ts). -->
+      <section class="prep" id="interview-prep" aria-labelledby="prep-title">
+        <div class="ps-wrap prep__wrap">
+          <div class="prep__text" data-reveal>
+            <p class="prep__kicker"><span class="ps-badge ps-badge--pink">For system design interviews</span></p>
+            <h2 id="prep-title" class="prep__title">Interview prep roadmap</h2>
+            <p class="prep__lede">
+              <!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages, from a URL shortener to ride matching.
+              Each stage builds on the one before, the way interviewers expect you to reason.
+            </p>
+            <ul class="prep__parts">
+              <li class="ps-card ps-card--yellow prep__part">
+                <b>Lesson</b>
+                <span>Explains the concepts the problem needs before you start.</span>
+              </li>
+              <li class="ps-card ps-card--blue prep__part">
+                <b>Challenge</b>
+                <span>Design it hands-on; a simulation checks load, latency, failures and cost.</span>
+              </li>
+              <li class="ps-card ps-card--pink prep__part">
+                <b>Review</b>
+                <span>Feedback on your design: what holds up and what to improve.</span>
+              </li>
+            </ul>
+            <div class="prep__ctas">
+              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./practice/#/roadmap">Start interview prep <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+            </div>
+            <p class="prep__note">Sign in to start; browse the stages and lessons any time.</p>
+          </div>
+          <div class="prep__map" data-reveal>
+            <p class="prep__map-title" id="prep-stages-title">The stages</p>
+            <ol class="prep__stages" aria-labelledby="prep-stages-title">
+<!--roadmap:stages-->
+            </ol>
+          </div>
         </div>
       </section>
 

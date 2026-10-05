@@ -1,4 +1,4 @@
-import { ArrowRight, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
+import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
@@ -6,6 +6,7 @@ import { roadmapHref, roadmapState, type RoadmapAccess, type RoadmapStage, type 
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
+import type { Guide } from './guide/guides';
 
 const titleOf = (problems: ProblemListing[], id: string) => problems.find((p) => p.id === id)?.title ?? id;
 
@@ -19,10 +20,14 @@ interface RoadmapProps {
   /** The sign-in providers on offer, for `access: 'sign-in'`. */
   providers: ProviderId[];
   onSignIn: (provider: ProviderId) => void;
+  /** Reading minutes of each problem's lesson, by id (problems without one are absent). */
+  lessons?: Record<string, number>;
+  /** The article to read before the first problem, with its reading minutes. */
+  guide?: Guide & { minutes?: number };
 }
 
 /** The interview prep roadmap: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress, access, providers, onSignIn }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide }: RoadmapProps) {
   const preview = access !== 'open';
   const state = roadmapState(stages, progress);
   const total = state.steps.length;
@@ -81,6 +86,28 @@ export default function Roadmap({ stages, problems, progress, access, providers,
         </section>
       )}
 
+      {guide && (
+        <a
+          href={`#/roadmap/${guide.id}`}
+          className="group mt-8 flex items-start gap-3 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md transition-[transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue"
+        >
+          <BookOpen size={22} className="mt-0.5 flex-shrink-0 text-ink" aria-hidden="true" />
+          <span className="min-w-0 flex-1">
+            <span className={`block ${eyebrow}`}>
+              Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
+            </span>
+            <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
+            <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
+          </span>
+          <ArrowRight size={18} className="mt-1 flex-shrink-0 text-ink" aria-hidden="true" />
+        </a>
+      )}
+
+      <p className="mt-6 max-w-2xl text-sm text-ink/80">
+        Each step is a lesson, then a challenge: read the concepts behind the problem, then design it and let the tests and the review check your
+        understanding.
+      </p>
+
       <ol className="mt-8 space-y-8">
         {stages.map((stage, i) => (
           <StageSection
@@ -91,6 +118,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             problems={problems}
             current={!preview && i === state.currentStage && !!state.next}
             preview={preview}
+            lessons={lessons}
           />
         ))}
       </ol>
@@ -105,14 +133,16 @@ function StageSection({
   problems,
   current,
   preview,
+  lessons,
 }: {
   stage: RoadmapStage;
   index: number;
   state: RoadmapState;
   problems: ProblemListing[];
   current: boolean;
-  /** Not started (signed out): every problem shows, none opens. */
+  /** Not started (signed out): every problem shows, none opens (their lessons do). */
   preview: boolean;
+  lessons: Record<string, number>;
 }) {
   // A preview shows the problems without the viewer's progress.
   const steps = state.steps.filter((s) => s.stage === index).map((s) => (preview ? { ...s, status: 'todo' as const, locked: true } : s));
@@ -131,11 +161,19 @@ function StageSection({
         {steps.map((step) => {
           const p = problems.find((q) => q.id === step.id);
           const title = p?.title ?? step.id;
+          const minutes = lessons[step.id];
           const content = (
             <>
               {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
               <span className="flex-1 min-w-0">
                 <span className={`block font-display text-lg font-bold leading-tight ${step.locked ? 'text-ink/50' : 'text-ink'}`}>{title}</span>
+                {minutes !== undefined && (
+                  <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+                    <BookOpen size={12} aria-hidden="true" />
+                    <span>Lesson · Challenge</span>
+                    <span className="tabular-nums">· {minutes} min read</span>
+                  </span>
+                )}
                 {step.locked && !preview && state.next && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.next.id)} first</span>}
               </span>
               {p && <DifficultyBadge difficulty={p.difficulty} />}
@@ -144,8 +182,17 @@ function StageSection({
           return (
             <li key={step.id}>
               {step.locked ? (
-                <div aria-disabled="true" className="flex items-center gap-3 px-4 py-3.5 cursor-not-allowed bg-paper/60">
-                  {content}
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3.5 bg-paper/60">
+                  <div aria-disabled="true" className="flex flex-1 min-w-[12rem] items-center gap-3 cursor-not-allowed">
+                    {content}
+                  </div>
+                  {minutes !== undefined && (
+                    // Lessons are open to everyone; only the challenge waits its turn.
+                    <a href={`#/${step.id}/lesson`} aria-label={`Read the lesson: ${title}`} className={`${toolButton} !py-1 text-xs`}>
+                      <BookOpen size={14} aria-hidden="true" />
+                      Read the lesson
+                    </a>
+                  )}
                 </div>
               ) : (
                 <a

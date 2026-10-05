@@ -632,6 +632,171 @@ h3 {
   }
 }
 
+/* ---------- interview prep: the roadmap, right under the hero ---------- */
+
+.hero__prep {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  max-width: 100%;
+  min-height: 44px;
+  margin-top: 24px;
+  padding: 8px 14px 8px 8px;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  box-shadow: var(--sh-sm);
+  font-weight: 700;
+  font-size: var(--fs-14);
+  text-decoration: none;
+  transition:
+    transform var(--d-spring) var(--e-spring),
+    box-shadow var(--d-2) var(--e-out);
+}
+.hero__prep:hover {
+  transform: translate(-2px, -2px);
+  box-shadow: var(--sh-md);
+}
+.hero__prep-text {
+  min-width: 0;
+  line-height: 1.3;
+}
+.hero__prep-go {
+  font-weight: 800;
+}
+
+.prep {
+  position: relative;
+  padding: 72px 0;
+  border-bottom: var(--bw-3) solid rgb(var(--c-ink));
+  background: rgb(var(--c-blue) / 0.1);
+  scroll-margin-top: 72px;
+}
+@media (min-width: 720px) {
+  .prep {
+    padding: 104px 0;
+  }
+}
+.prep__wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 48px;
+  align-items: start;
+}
+@media (min-width: 980px) {
+  .prep__wrap {
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: 64px;
+  }
+}
+.prep__title {
+  margin-top: 16px;
+  font-size: var(--fs-h2);
+  letter-spacing: -0.03em;
+}
+.prep__lede {
+  max-width: 40rem;
+  margin-top: 16px;
+  font-size: clamp(1.125rem, 1.6vw, 1.3rem);
+  line-height: 1.45;
+  color: rgb(var(--c-ink) / 0.85);
+  text-wrap: pretty;
+}
+.prep__parts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+  gap: 20px;
+  margin-top: 32px;
+}
+.prep__parts .prep__part {
+  display: grid;
+  align-content: start;
+  gap: 6px;
+}
+.prep__part b {
+  font: 800 var(--fs-20) / 1.15 var(--font-display);
+}
+.prep__part span {
+  color: rgb(var(--c-ink) / 0.8);
+  font-size: var(--fs-14);
+}
+.prep__ctas {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 36px;
+}
+.prep__note {
+  margin-top: 14px;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.prep__map {
+  padding: 20px;
+  background: rgb(var(--c-surface));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-lg);
+}
+.prep__map-title {
+  margin-bottom: 12px;
+  font: 800 var(--fs-14) / 1.2 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgb(var(--c-muted));
+}
+.prep__stages {
+  position: relative;
+  display: grid;
+  gap: 4px;
+}
+/* The dashed rail through the stage numbers. */
+.prep__stages::before {
+  content: '';
+  position: absolute;
+  left: 17px;
+  top: 18px;
+  bottom: 18px;
+  border-left: var(--bw-2) dashed rgb(var(--c-ink) / 0.6);
+}
+.prep__stage {
+  position: relative;
+  display: grid;
+  grid-template-columns: 36px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  min-height: 48px;
+}
+.prep__stage-no {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  background: rgb(var(--c-paper));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: 50%;
+  font: 800 var(--fs-16) / 1 var(--font-display);
+}
+.prep__stage:first-child .prep__stage-no {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+}
+.prep__stage:last-child .prep__stage-no {
+  background: rgb(var(--c-pink));
+  color: rgb(var(--c-on-accent));
+}
+.prep__stage-title {
+  font-weight: 700;
+  line-height: 1.25;
+}
+.prep__stage-count {
+  color: rgb(var(--c-muted));
+  font: 600 var(--fs-12) / 1.2 var(--font-mono);
+  white-space: nowrap;
+}
+
 /* ---------- story sections ---------- */
 
 .story {
@@ -707,6 +872,8 @@ h3 {
 }
 .hop__cards {
   display: grid;
+  /* minmax(0, …): an implicit auto column grows to the widest code line and pushes the cards off a phone screen. */
+  grid-template-columns: minmax(0, 1fr);
   gap: 28px;
   padding-left: 44px;
 }

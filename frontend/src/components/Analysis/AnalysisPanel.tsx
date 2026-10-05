@@ -1,4 +1,5 @@
 import { AlertTriangle, Info, ShieldAlert } from 'lucide-react';
+import type { ReactNode } from 'react';
 import type { Diagram, SourceLoc } from '../../dsl';
 import ModelLink from './ModelLink';
 import { HOT, formatAvailability, formatMs, formatPercent, formatRps, formatUsd, type Analysis, type NodeAnalysis } from '../../sim';
@@ -8,12 +9,14 @@ interface AnalysisPanelProps {
   analysis: Analysis;
   /** Jumps to a node's declaration. */
   onSelect: (loc: SourceLoc) => void;
+  /** The design review (src/review/ReviewPanel.tsx), under the headline numbers. */
+  review?: ReactNode;
 }
 
 const PERCENTILES = ['p50', 'p95', 'p99', 'p999'] as const;
 
 /** Capacity, latency, availability and cost of the design under its `traffic`. */
-export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisPanelProps) {
+export default function AnalysisPanel({ diagram, analysis, onSelect, review }: AnalysisPanelProps) {
   if ((diagram.traffic ?? []).length === 0) return <EmptyState />;
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const nodes = analysis.nodes.filter((n) => n.kind !== 'client' && n.kind !== 'other');
@@ -43,6 +46,13 @@ export default function AnalysisPanel({ diagram, analysis, onSelect }: AnalysisP
               </li>
             ))}
           </ul>
+        )}
+
+        {review && (
+          <section className="rounded-md border border-ink/15">
+            <h2 className="px-3 pt-2 font-semibold text-ink">Review</h2>
+            {review}
+          </section>
         )}
 
         <section>

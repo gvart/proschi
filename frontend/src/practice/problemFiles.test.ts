@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { defaultEngine } from '../hld/engine';
 import { FrontMatterError, frontMatterString, isPlainSafe, parseFrontMatter } from './frontMatter';
 import { catalogFromFiles, compareProblems, expectFailLines, problemFromFiles, ProblemFolderError } from './problemFiles';
+import { LESSON_HEADINGS } from './lesson';
 import type { Problem } from './types';
 import { validateProblem } from './validate';
 
@@ -133,11 +134,20 @@ describe('problem folders', () => {
     expect(p.wrong).toEqual([{ name: 'no-api', source: expect.stringContaining('# expect-fail'), expectFail: ['Echo goes through the API'] }]);
   });
 
+  it('read the optional lesson.md', () => {
+    expect(problemFromFiles('echo', files()).lesson).toBeUndefined();
+    expect(problemFromFiles('echo', files({ 'lesson.md': "## What you'll learn\n" })).lesson).toBe("## What you'll learn\n");
+  });
+
   it.each([
     ['a missing file', 'echo', files({ 'solution.proschi': undefined as unknown as string }), /problems\/echo: Missing solution\.proschi/],
     ['an unexpected file', 'echo', files({ 'solutoin.proschi': '' }), /problems\/echo: Unexpected file solutoin\.proschi/],
     ['a bad wrong file name', 'echo', files({ 'wrong/No Way.proschi': '' }), /Unexpected file wrong\/No Way\.proschi/],
     ['a bad folder name', 'Echo', files(), /problems\/Echo: The folder name/],
+    ['a reserved id (a practice page)', 'approach', files(), /problems\/approach: "approach" is taken by a practice page/],
+    ["the roadmap's id", 'roadmap', files(), /"roadmap" is taken/],
+    ['a lesson in a subfolder', 'echo', files({ 'wrong/lesson.md': '' }), /Unexpected file wrong\/lesson\.md/],
+    ['a misspelt lesson', 'echo', files({ 'lessons.md': '' }), /Unexpected file lessons\.md: .*optionally lesson\.md/],
     ['bad front matter', 'echo', files({ 'problem.md': MD.replace('title: Echo', 'title: Echo: the problem') }), /problems\/echo: problem\.md:2: Ambiguous/],
     ['an unknown field', 'echo', files({ 'problem.md': MD.replace('title: Echo', 'title: Echo\nlevel: 3') }), /Unknown front matter field 'level'/],
     ['a bad difficulty', 'echo', files({ 'problem.md': MD.replace('difficulty: easy', 'difficulty: trivial') }), /'difficulty' must be one of easy, medium, hard/],
@@ -211,6 +221,14 @@ describe('validateProblem', () => {
 
   it('reports capacity in the solution', () => {
     expect(messages({ solution: `${SOLUTION}\ncapacity {\n  api 1m rps\n}\n` })).toEqual([expect.stringMatching(/^solution\.proschi:13: error: capacity is set by the problem; change the design \(replicas, shards, caching\) instead/)]);
+  });
+
+  it('reports a lesson without its sections in order, or with links off the web', () => {
+    const lesson = LESSON_HEADINGS.map((h) => `## ${h}\n\nText.\n`).join('\n');
+    expect(messages({ lesson })).toEqual([]);
+    expect(messages({ lesson: lesson.replace('## Concepts\n', '') })).toEqual([expect.stringMatching(/^lesson\.md: The lesson needs a "## Concepts" section/)]);
+    expect(messages({ lesson: `${lesson}\nSee [the docs](/docs/).\n` })).toEqual(['lesson.md:33: Links in a lesson must go to an http(s) address, not "/docs/"']);
+    expect(messages({ lesson: '' })).toEqual(['lesson.md: The lesson is empty']);
   });
 
   it('reports a starter that already passes, or has errors', () => {

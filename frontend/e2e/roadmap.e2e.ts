@@ -1,14 +1,16 @@
-import type { Page } from '@playwright/test';
+import type { Locator, Page } from '@playwright/test';
 import { expect, test, waitForCanvas } from './fixtures';
 
 /** A stage of the roadmap, by its title. */
 const stage = (page: Page, title: string) => page.getByRole('listitem', { name: new RegExp(`^Stage \\d+: ${title}$`) });
 const progress = (page: Page) => page.getByRole('region', { name: 'Your progress' });
+/** The links that open a problem (not the "Read the lesson" links, which every step with a lesson has). */
+const challenges = (scope: Locator) => scope.getByRole('link', { name: /^(?!Read the lesson)/ });
 
 test.describe('interview prep roadmap', () => {
   test('opens one problem at a time and unlocks the next after a solve', async ({ page }) => {
     await page.goto('practice/');
-    await page.getByRole('link', { name: 'Interview prep roadmap' }).click();
+    await page.getByRole('main').getByRole('link', { name: 'Start interview prep' }).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(page).toHaveTitle('Interview prep roadmap · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
@@ -17,13 +19,13 @@ test.describe('interview prep roadmap', () => {
 
     // Only the first problem is open; the rest show a lock and what to solve first.
     const foundations = stage(page, 'Foundations');
-    await expect(foundations.getByRole('link')).toHaveCount(1);
+    await expect(challenges(foundations)).toHaveCount(1);
     await expect(foundations.getByRole('link', { name: /URL Shortener/ })).toBeVisible();
-    await expect(foundations.getByRole('link', { name: /Pastebin/ })).toHaveCount(0);
+    await expect(challenges(foundations).filter({ hasText: 'Pastebin' })).toHaveCount(0);
     const pastebin = foundations.getByRole('listitem').filter({ hasText: 'Pastebin' });
     await expect(pastebin.getByRole('img', { name: 'Locked' })).toBeVisible();
     await expect(pastebin).toContainText('Solve URL Shortener first');
-    await expect(stage(page, 'Caching and the edge').getByRole('link')).toHaveCount(0);
+    await expect(challenges(stage(page, 'Caching and the edge'))).toHaveCount(0);
 
     // Start opens the first problem with the roadmap's banner.
     await progress(page).getByRole('link', { name: 'Start: URL Shortener' }).click();
@@ -31,6 +33,9 @@ test.describe('interview prep roadmap', () => {
     const banner = page.getByRole('region', { name: 'Roadmap' });
     await expect(banner).toContainText(/Stage 1 of \d+: Foundations · 1 of \d+/);
     await expect(banner.getByRole('link', { name: /Next in roadmap/ })).toHaveCount(0);
+    // A step is a lesson first, then the challenge.
+    await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+    await page.getByRole('button', { name: 'Start the challenge' }).first().click();
     await waitForCanvas(page);
 
     // Solve it with the reference solution (both steps ask for confirmation).
@@ -49,7 +54,7 @@ test.describe('interview prep roadmap', () => {
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(progress(page).getByText(/^1 of \d+ solved$/)).toBeVisible();
     await expect(progress(page).getByRole('link', { name: 'Continue: Pastebin' })).toBeVisible();
-    await expect(foundations.getByRole('link')).toHaveCount(2);
+    await expect(challenges(foundations)).toHaveCount(2);
     await expect(foundations.getByRole('link', { name: /URL Shortener/ }).getByRole('img', { name: 'Solved' })).toBeVisible();
     await expect(foundations.getByRole('listitem').filter({ hasText: 'Always-writable Shopping Cart' })).toContainText('Solve Pastebin first');
 

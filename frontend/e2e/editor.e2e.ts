@@ -145,6 +145,8 @@ test.describe('editor', () => {
     await views.getByRole('tab', { name: 'Analysis' }).click();
     await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
     await expect(page.getByRole('meter').first()).toBeVisible();
+    await page.getByRole('button', { name: 'Review my design' }).click();
+    await expect(page.getByTestId('review-result').getByText(/tests pass/).first()).toBeVisible();
 
     const testsTab = views.getByRole('tab', { name: /Tests/ });
     await expect(testsTab).toContainText(/\d+\/\d+/);

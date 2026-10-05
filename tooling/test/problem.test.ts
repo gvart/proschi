@@ -82,6 +82,11 @@ describe('proschi problem check', () => {
     ['an unknown difficulty', (f: string) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: trivial')), /echo\/problem\.md: 'difficulty' must be one of/],
     ['a missing file', (f: string) => rmSync(join(f, 'starter.proschi')), /echo: Missing starter\.proschi/],
     ['an unexpected file', (f: string) => writeFileSync(join(f, 'notes.txt'), ''), /echo: Unexpected file notes\.txt/],
+    ['a lesson without its sections', (f: string) => writeFileSync(join(f, 'lesson.md'), "## What you'll learn\n\nText.\n"), /echo\/lesson\.md: The lesson needs a "## The problem, explained" section/],
+    ['a lesson with a relative link', (f: string) => {
+        cpSync(join(repoProblems, 'url-shortener', 'lesson.md'), join(f, 'lesson.md'));
+        rewrite(join(f, 'lesson.md'), (s) => `${s}\n[docs](../docs/)\n`);
+      }, /echo\/lesson\.md:\d+: Links in a lesson must go to an http\(s\) address, not "\.\.\/docs\/"/],
     ['a given with errors', (f: string) => rewrite(join(f, 'given.proschi'), (s) => `${s}x [Redis]\nx [Redis]\n`), /echo\/given\.proschi:\d+: error: Duplicate id 'x'/],
     ['a non-canonical given', (f: string) => rewrite(join(f, 'given.proschi'), (s) => s.replace('user "User" [Actor]', 'user  "User"  [Actor]')), /echo\/given\.proschi: Not in canonical format/],
     ['a solution with a warning', (f: string) => rewrite(join(f, 'solution.proschi'), (s) => s.replace('[PostgreSQL]', '[PostgreSQX]')), /echo\/solution\.proschi:6: warning: Unknown tech stack 'PostgreSQX'/],

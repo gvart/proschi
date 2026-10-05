@@ -27,17 +27,28 @@ test.describe('practice', () => {
     await expect(links.filter({ hasText: 'URL Shortener' })).toHaveCount(1);
   });
 
-  test('the AI review is a placeholder that says it is coming soon', async ({ page }) => {
-    await page.goto('practice/#/snowflake-ids');
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Snowflake IDs');
-    await expect(page.locator('header [data-company="Twitter"]')).toBeVisible();
-    await page.getByRole('button', { name: 'AI review' }).click();
+  test('the review explains what the starter is missing, from the simulation and the tests', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
+    await page.getByRole('button', { name: 'Review', exact: true }).click();
+    await expect(page.getByText('An automatic review, based on the simulation and the tests. An AI reviewer is coming.')).toBeVisible();
     await page.getByRole('button', { name: 'Review my design' }).click();
-    await expect(page.getByRole('status').filter({ hasText: 'AI review is coming soon.' })).toBeVisible();
+    const result = page.getByTestId('review-result');
+    await expect(result.getByRole('heading', { name: /^Critical/ })).toBeVisible();
+    await expect(result.getByText('The use case "Redirect" is missing', { exact: true })).toBeVisible();
+    await expect(result.getByRole('listitem').first()).toBeVisible();
+    // A finding about one of the solver's nodes jumps to its line in the code.
+    await expect(result.getByRole('button', { name: 'api', exact: true })).toBeVisible();
     // Running the tests brings them back into view.
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(passedCount(page)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Review my design' })).toBeHidden();
+  });
+
+  test('the Twitter-based problem shows its company', async ({ page }) => {
+    await page.goto('practice/#/snowflake-ids');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Snowflake IDs');
+    await expect(page.locator('header [data-company="Twitter"]')).toBeVisible();
   });
 
   test("a problem's own page shows the statement and opens it in practice", async ({ page }) => {
@@ -45,7 +56,7 @@ test.describe('practice', () => {
     await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');
     await expect(page.getByRole('heading', { level: 1, name: 'URL Shortener' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Pastebin' })).toHaveAttribute('href', '../pastebin/');
+    await expect(page.getByRole('link', { name: 'Pastebin', exact: true })).toHaveAttribute('href', '../pastebin/');
     await page.getByRole('link', { name: /Solve it in your browser/ }).click();
     await expect(page).toHaveURL(/\/practice\/#\/url-shortener$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
@@ -99,7 +110,7 @@ test.describe('practice on a phone', () => {
   test('shows the tabbed layout', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
-    await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
+    await expect(tabs.getByRole('tab')).toHaveText(['Lesson', 'Problem', 'Code', 'Diagram', 'Tests']);
     await expect(tabs.getByRole('tab', { name: 'Problem' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('button', { name: 'Show reference solution' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);

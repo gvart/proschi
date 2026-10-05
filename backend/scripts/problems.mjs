@@ -14,7 +14,8 @@ for (const id of readdirSync(root).sort()) {
     for (const name of readdirSync(dir).sort()) {
       const path = join(dir, name);
       if (statSync(path).isDirectory()) read(path, `${prefix}${name}/`);
-      else files[`${prefix}${name}`] = readFileSync(path, 'utf8');
+      // The lesson is for readers; the Worker only checks solutions, so it stays out of the bundle.
+      else if (!(prefix === '' && name === 'lesson.md')) files[`${prefix}${name}`] = readFileSync(path, 'utf8');
     }
   };
   read(folder, '');

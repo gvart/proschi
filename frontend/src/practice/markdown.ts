@@ -1,8 +1,10 @@
 /**
- * A small Markdown reader for problem statements: headings, paragraphs,
- * bullet and numbered lists, fenced code, inline code, bold, italics and
- * links. It produces a tree that Markdown.tsx renders as React elements, so
- * no HTML from a statement ever reaches the page; anything else is text.
+ * A small Markdown reader for problem statements and lessons: headings (with
+ * stable ids), paragraphs, bullet and numbered lists, fenced code (```proschi
+ * is highlighted), GFM pipe tables, `>` blockquotes, inline code, bold,
+ * italics and links. It produces a tree that Markdown.tsx (and the static
+ * pages, plugins/practicePages.ts) render, so no HTML from a statement ever
+ * reaches the page; anything else is text.
  */
 
 export type Inline =
@@ -12,11 +14,18 @@ export type Inline =
   | { kind: 'em'; children: Inline[] }
   | { kind: 'link'; href: string; children: Inline[] };
 
+export type Align = 'left' | 'center' | 'right' | undefined;
+
 export type Block =
-  | { kind: 'heading'; level: 1 | 2 | 3 | 4; children: Inline[] }
+  /** `id` is a slug of the text, unique within one parse (`-1`, `-2` for repeats). */
+  | { kind: 'heading'; level: 1 | 2 | 3 | 4; id: string; children: Inline[] }
   | { kind: 'paragraph'; children: Inline[] }
   | { kind: 'list'; ordered: boolean; items: ListItem[] }
-  | { kind: 'code'; lang?: string; text: string };
+  | { kind: 'code'; lang?: string; text: string }
+  /** A GFM pipe table; every row has as many cells as the header. */
+  | { kind: 'table'; align: Align[]; header: Inline[][]; rows: Inline[][][] }
+  /** A `>` blockquote, shown as a callout. */
+  | { kind: 'quote'; children: Block[] };
 
 /** A list item, with at most one level of nested items. */
 export interface ListItem {
@@ -68,9 +77,74 @@ export function parseInline(text: string): Inline[] {
   return out;
 }
 
-const LIST_ITEM = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/;
+/** The plain text of inline nodes. */
+export function inlineText(nodes: Inline[]): string {
+  return nodes.map((n) => ('children' in n ? inlineText(n.children) : n.text)).join('');
+}
 
-export function parseMarkdown(source: string): Block[] {
+/** The level-2 headings of parsed Markdown with their ids, for a table of contents. */
+export function lessonToc(blocks: Block[]): { id: string; text: string }[] {
+  return blocks.flatMap((b) => (b.kind === 'heading' && b.level === 2 ? [{ id: b.id, text: inlineText(b.children) }] : []));
+}
+
+/**
+ * Heading ids, GitHub style (as the docs pages make them, plugins/docsSite.ts):
+ * lowercase, punctuation dropped, spaces to `-`, a repeat gets `-1`, `-2`.
+ * One slugger per page keeps its ids unique.
+ */
+export type Slugger = (text: string) => string;
+
+export function slugger(): Slugger {
+  const seen = new Map<string, number>();
+  return (text) => {
+    const base =
+      text
+        .toLowerCase()
+        .trim()
+        .replace(/[^\p{L}\p{N}\p{M}\s_-]/gu, '')
+        .replace(/\s/g, '-') || 'section';
+    const n = seen.get(base);
+    seen.set(base, (n ?? -1) + 1);
+    return n === undefined ? base : `${base}-${n + 1}`;
+  };
+}
+
+/** The cells of a table row: split on `|` (not `\|`), outer pipes optional. */
+function splitRow(line: string): string[] {
+  let row = line.trim();
+  if (row.startsWith('|')) row = row.slice(1);
+  if (row.endsWith('|') && !row.endsWith('\\|')) row = row.slice(0, -1);
+  const cells: string[] = [];
+  let cell = '';
+  for (let i = 0; i < row.length; i++) {
+    if (row[i] === '\\' && row[i + 1] === '|') {
+      cell += '|';
+      i++;
+    } else if (row[i] === '|') {
+      cells.push(cell.trim());
+      cell = '';
+    } else cell += row[i];
+  }
+  cells.push(cell.trim());
+  return cells;
+}
+
+const DELIMITER_CELL = /^:?-+:?$/;
+
+/** The alignments of a table's delimiter row (`| --- | :-: |`), or undefined when the line is not one. */
+function delimiterRow(line: string): Align[] | undefined {
+  if (!line.includes('-') || !/^[\s|:-]+$/.test(line)) return undefined;
+  const cells = splitRow(line);
+  if (!cells.every((c) => DELIMITER_CELL.test(c))) return undefined;
+  return cells.map((c) => (c.startsWith(':') && c.endsWith(':') ? 'center' : c.endsWith(':') ? 'right' : c.startsWith(':') ? 'left' : undefined));
+}
+
+const LIST_ITEM = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/;
+const FENCE = /^\s*```\s*([\w-]*)(?:\s+[\w-]+)*\s*$/;
+const QUOTE = /^\s{0,3}>\s?(.*)$/;
+
+/** Parses Markdown into blocks. Pass one `slug` to several parses that share a page, so their heading ids stay unique. */
+export function parseMarkdown(source: string, slug: Slugger = slugger()): Block[] {
   const lines = source.replace(/\r\n?/g, '\n').split('\n');
   const blocks: Block[] = [];
   let paragraph: string[] = [];
@@ -91,7 +165,7 @@ export function parseMarkdown(source: string): Block[] {
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
-    const fence = /^\s*```\s*([\w-]*)\s*$/.exec(line);
+    const fence = FENCE.exec(line);
     if (fence) {
       flush();
       const body: string[] = [];
@@ -106,7 +180,31 @@ export function parseMarkdown(source: string): Block[] {
     const heading = /^(#{1,4})\s+(.*?)\s*#*\s*$/.exec(line);
     if (heading) {
       flush();
-      blocks.push({ kind: 'heading', level: heading[1].length as 1 | 2 | 3 | 4, children: parseInline(heading[2]) });
+      const children = parseInline(heading[2]);
+      blocks.push({ kind: 'heading', level: heading[1].length as 1 | 2 | 3 | 4, id: slug(inlineText(children)), children });
+      continue;
+    }
+    if (QUOTE.test(line)) {
+      // The quote runs to the first line without `>`; inside it is Markdown again.
+      flush();
+      const body: string[] = [];
+      for (; i < lines.length && QUOTE.test(lines[i]); i++) body.push(QUOTE.exec(lines[i])![1]);
+      i--;
+      blocks.push({ kind: 'quote', children: parseMarkdown(body.join('\n'), slug) });
+      continue;
+    }
+    const align = line.includes('|') && i + 1 < lines.length ? delimiterRow(lines[i + 1]) : undefined;
+    if (align && splitRow(line).length === align.length && !list) {
+      // A GFM table: header, delimiter, then rows up to a blank line or the start of another block.
+      flush();
+      const width = align.length;
+      const fit = (cells: string[]) => Array.from({ length: width }, (_, k) => parseInline(cells[k] ?? ''));
+      const header = fit(splitRow(line));
+      const rows: Inline[][][] = [];
+      const endsTable = (l: string) => !l.trim() || FENCE.test(l) || QUOTE.test(l) || /^#{1,4}\s/.test(l);
+      for (i += 2; i < lines.length && !endsTable(lines[i]); i++) rows.push(fit(splitRow(lines[i])));
+      i--;
+      blocks.push({ kind: 'table', align, header, rows });
       continue;
     }
     const item = LIST_ITEM.exec(line);
