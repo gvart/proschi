@@ -56,7 +56,7 @@ test.describe('practice', () => {
     await expect(page).toHaveTitle('URL Shortener: system design practice · Proschi');
     await expect(page.getByRole('heading', { level: 1, name: 'URL Shortener' })).toBeVisible();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await expect(page.getByRole('link', { name: 'Pastebin' })).toHaveAttribute('href', '../pastebin/');
+    await expect(page.getByRole('link', { name: 'Pastebin', exact: true })).toHaveAttribute('href', '../pastebin/');
     await page.getByRole('link', { name: /Solve it in your browser/ }).click();
     await expect(page).toHaveURL(/\/practice\/#\/url-shortener$/);
     await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');

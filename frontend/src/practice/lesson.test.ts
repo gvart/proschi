@@ -13,32 +13,7 @@ import { ROADMAP } from './roadmap';
  * Remove an id once its lesson lands; the test below fails if a listed
  * problem already has one, so the list cannot go stale.
  */
-const LESSONS_PENDING: string[] = [
-  'cdn-tiered-cache',
-  'chat',
-  'discord-messages',
-  'file-storage',
-  'flash-sale',
-  'github-repo-replication',
-  'job-queue',
-  'metrics-ingest',
-  'news-feed',
-  'notification-fanout',
-  'notion-sharding',
-  'pastebin',
-  'payments',
-  'push-gateway',
-  'rate-limiter',
-  'ride-matching',
-  'search-autocomplete',
-  'shopping-cart',
-  'snowflake-ids',
-  'social-graph-cache',
-  'ticket-booking',
-  'trending-topics',
-  'video-streaming',
-  'view-counting',
-];
+const LESSONS_PENDING: string[] = [];
 
 const lessonOf = (headings: readonly string[], body = 'Text.') => headings.map((h) => `## ${h}\n\n${body}\n`).join('\n');
 

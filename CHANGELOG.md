@@ -29,6 +29,11 @@ deployed from `main` and ships with the same changes.
   sitemap. Statements and lessons understand tables, blockquotes and
   highlighted ```` ```proschi ```` blocks, and `proschi problem check`
   validates lessons.
+- A lesson for every one of the 25 problems: the problem explained,
+  back-of-the-envelope numbers, the concepts it needs, a step-by-step design,
+  why each wrong design fails, what interviewers ask, and further reading
+  (engineering posts and papers, the System Design Primer, awesome-scalability
+  and the *System Design Interview* chapters by title).
 
 ### Changed
 - Interview prep is easier to find: a section right under the landing page's
