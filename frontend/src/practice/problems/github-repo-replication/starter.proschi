@@ -1,0 +1,12 @@
+import "problem.proschi"
+
+# Add the proxy, the file servers (id fs), the connections and the use cases
+# "Push" and "Fetch".
+fs "Git File Servers" [NoSQL Database]
+
+dev -> fs
+
+usecase "Fetch" {
+  dev -> fs  : FETCH packfile
+  fs --> dev : 200 packfile
+}

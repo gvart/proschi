@@ -1,0 +1,41 @@
+# expect-fail: A push commits on a quorum of replicas
+# A primary replica takes the push and answers; the other two copy it
+# afterwards. When the primary is down, pushes fail until another takes over,
+# and a push acknowledged by the primary alone dies with it.
+import "problem.proschi"
+
+proxy "Spokes Proxy"     [Go]             x16 @git
+fs    "Git File Servers" [NoSQL Database] x3 @git
+
+capacity {
+  fs shards 2
+}
+
+dev   -> proxy  : git over SSH / HTTPS
+proxy -> fs     : Git protocol
+proxy -> routes : SQL
+
+usecase "Push" "A developer pushes commits to a repository" {
+  dev -> proxy : git push origin main
+
+  alt "All replicas commit" when "the primary replica is up" {
+    proxy   -> fs     : WRITE refs/heads/main on the primary
+    fs     --> proxy  : ok
+    proxy   -> routes : UPDATE replicas SET checksum
+    routes --> proxy  : ok
+    proxy  --> dev    : 200 ok refs/heads/main
+    proxy  ->> fs     : x2 REPLICATE refs/heads/main to the other replicas
+  } alt "One replica down" when "the primary replica is down" {
+    proxy  -x fs  : WRITE refs/heads/main on the primary
+    proxy --> dev : 503 repository unavailable, try again
+  }
+}
+
+usecase "Fetch" "A developer fetches or clones a repository" {
+  dev     -> proxy  : git fetch origin
+  proxy   -> routes : SELECT host FROM replicas WHERE checksum is current
+  routes --> proxy  : 3 replicas in sync
+  proxy   -> fs     : FETCH packfile from the nearest of them
+  fs     --> proxy  : packfile
+  proxy  --> dev    : 200 packfile
+}

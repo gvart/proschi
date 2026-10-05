@@ -1,0 +1,37 @@
+# expect-fail: Edge misses go to the upper tier, not the origin
+# expect-fail: Only the upper tier talks to the origin
+# expect-fail: p99 of Fetch asset < 150 ms
+# A flat CDN: every edge data center fills its own cache from the origin, so
+# what an upper tier would have answered reaches the origin too.
+import "problem.proschi"
+
+edge  "Edge Data Centers" [Cloudflare] x2 @cdn
+purge "Purge API"         [REST API]   x2 @cdn
+
+visitor -> edge   : HTTPS
+edge    -> origin : HTTPS
+owner   -> purge  : HTTPS
+purge   -> edge   : purge
+
+usecase "Fetch asset" "A visitor requests a cacheable asset" {
+  visitor -> edge : GET /assets/hero.jpg
+
+  alt "Edge hit" {
+    edge --> visitor : 200 cached
+  } alt "Upper-tier hit" {
+    edge    -> origin  : GET /assets/hero.jpg
+    origin --> edge    : 200
+    edge   --> visitor : 200
+  } alt "Upper-tier miss" {
+    edge    -> origin  : GET /assets/hero.jpg
+    origin --> edge    : 200
+    edge   --> visitor : 200
+  }
+}
+
+usecase "Purge" "The site owner purges a changed asset" {
+  owner  -> purge : POST /purge_cache json {"files": ["https://example.com/assets/hero.jpg"]}
+  purge  -> edge  : x300 DELETE /assets/hero.jpg
+  edge  --> purge : purged
+  purge --> owner : 200 {"success": true}
+}
