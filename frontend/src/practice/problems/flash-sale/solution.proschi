@@ -1,0 +1,70 @@
+import "problem.proschi"
+
+edge "Edge (OpenResty)" [nginx]         x3 @edge "nginx with Lua: page cache, checkout throttle (a leaky bucket) and routing to the pod"
+app  "Shopify Core"     [Ruby on Rails] x5 @core "Renders storefront pages on a miss and runs checkout"
+
+buyer -> edge : HTTPS
+edge  -> app  : HTTP
+app   -> pod  : SQL
+
+entity InventoryLevel in pod "How many units of a variant are left" {
+  variantId int key
+  available int
+}
+entity Order in pod "A placed order" {
+  id        int key
+  shopId    int index
+  variantId int
+  createdAt time
+}
+
+decision "Serve product pages from the edge cache" {
+  because "Eighty thousand page views a second are the same few pages; the edge answers 95% of them from its cache and the app renders only the misses"
+  rejected "Render every page in the app" "Forty times the app servers, and every view reads the database"
+}
+decision "Throttle checkout at the edge" {
+  because "Checkout writes, and the pod's database takes about 2k writes a second; a leaky bucket in the load balancer admits what checkout can handle and sends everyone else a cached queue page that polls again"
+  rejected "Let everyone into checkout" "Ten thousand checkouts a second are about 17k writes, eight times what the pod takes, for a product that sells out in minutes"
+  rejected "A queue page rendered by the app" "Turning buyers away would still cost an app request each, twenty times the admitted rate"
+}
+decision "Decrement stock and write the order in the pod's database" {
+  because "A conditional UPDATE (available > 0) cannot sell a unit twice, and in the same transaction as the order a crash cannot leave a sold unit without its order or the reverse"
+  rejected "Stock counter in Redis" "Atomic too, but a second store: a reservation and its order can disagree after a failure"
+}
+decision "One shard for the shop" because "A shop lives on one pod; its rows cannot be spread over other pods for one sale, so the load has to be shaped before it reaches the database"
+
+usecase "View product" "A buyer opens the product page" {
+  buyer -> edge : GET /products/lip-kit
+
+  alt "Page cache hit" when "the edge has the page" {
+    edge --> buyer : 200 page
+  } alt "Page cache miss" when "the page expired or was never cached" {
+    edge  -> app   : GET /products/lip-kit
+    app   -> pod   : SELECT product, variants
+    pod  --> app   : rows
+    app  --> edge  : 200 page
+    edge --> buyer : 200 page
+  }
+}
+
+usecase "Checkout" "A buyer checks out one unit" {
+  buyer -> edge : POST /checkout {"variant": 42, "quantity": 1}
+
+  alt "Queued" when "the bucket is full and the buyer has no pass" {
+    edge --> buyer : 429 queue page, polls again in a few seconds
+  } alt "Order placed" when "admitted, and a unit is left" {
+    edge  -> app   : POST /checkout
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 1 row
+    app   -> pod   : INSERT order, COMMIT
+    pod  --> app   : order 1001
+    app  --> edge  : 201 {"order": 1001}
+    edge --> buyer : 201 {"order": 1001}
+  } alt "Sold out" when "admitted, but the last unit is gone" {
+    edge  -> app   : POST /checkout
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 0 rows
+    app  --> edge  : 409 {"error": "sold out"}
+    edge --> buyer : 409 {"error": "sold out"}
+  }
+}

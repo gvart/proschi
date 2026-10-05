@@ -1,0 +1,39 @@
+title "Replicated Git Storage" "Keeps every repository on three file servers; a push commits on a quorum, a fetch reads one up-to-date replica"
+
+dev    "Developer"     [Actor]
+routes "Replica Table" [MySQL] x4 @git "Which file servers hold each repository, and each replica's checksum"
+
+traffic {
+  "Push"  1k rps mix "All replicas commit" 99.9%, "One replica down" 0.1%
+  "Fetch" 20k rps
+}
+
+requirements {
+  p99 "Push" < 100ms
+  p99 "Fetch" < 75ms
+  availability "Push" >= 99.99%
+  availability "Fetch" >= 99.99%
+  durable "Push"
+  survive any node failure
+  cost <= 6800 usd/month
+}
+
+test "Every repository lives on three file servers behind a proxy" {
+  fs has replicas >= 3
+  no path from dev to fs or routes
+  "Push" starts at dev
+  "Fetch" starts at dev
+}
+
+test "A push commits on a quorum of replicas" {
+  "Push" writes fs before responding
+  "Push" writes routes before responding
+  "Push" calls routes after fs
+  "Push" handles failure of fs
+  "Push" scenario "One replica down" responds 2xx
+}
+
+test "A fetch reads one replica that is up to date" {
+  "Fetch" calls routes before fs
+  "Fetch" responds 2xx
+}

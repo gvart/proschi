@@ -52,6 +52,7 @@ Design a service that turns long URLs into short codes …
 | `summary` | yes | One line, shown on the landing page |
 | `difficulty` | yes | `easy`, `medium` or `hard` |
 | `tags` | yes | A list of strings, used by the list's tag filter |
+| `company` | no | A string, e.g. `Twitter`: the company whose published system the problem is based on, cited in a `## Based on` section of the statement. It says where the design comes from, never that the company asks the problem in its interviews. The list shows it as a badge and filters by it (only companies some problem names); the problem page and its static page show the badge |
 | `order` | no | A number: the position within its difficulty |
 | `hints` | yes | A list, from a nudge to nearly the answer; the page reveals them one at a time |
 | `version` | no | A whole number, 1 when absent. Bump it when a change to the given, the tests or the requirements can change whether a design solves the problem, or its cost or p99: proschi.app's global stats then count only solves of the new version, and a signed-in user's next run starts their stats for the problem over |
@@ -154,7 +155,7 @@ proschi problem check --format json                   # every report, with what 
 ✓ url-shortener: 10 tests, the starter fails 8, 1 wrong design
     wrong/miss-never-fills-cache: fails "Misses fill the cache"
 …
-17 problems, 55 wrong designs: no violations
+25 problems, 86 wrong designs: no violations
 ```
 
 It exits with 1 on any violation. `npm test` in `frontend/` runs the same
@@ -214,6 +215,36 @@ the statement must spell out the exact names (`"Cache hit"`, `"Cache miss"`)
 and the solver must use them. The test messages name what is missing when they
 do not match.
 
+## The interview prep roadmap
+
+`practice/#/roadmap` is a guided path through the problems, in stages from
+foundations to large systems. On the roadmap a problem opens only once every
+problem before it is solved (with the same progress as the list, in the
+browser or synced when signed in); the problem list itself stays open. A
+problem opened from the roadmap (`practice/#/roadmap/<id>`) shows its stage
+and, once solved, a link to the next one.
+
+Anyone can see the stages, but starting the roadmap takes an account: signed
+out, the page lists the problems without links and offers the sign-in buttons,
+and `practice/#/roadmap/<id>` shows the roadmap instead of the problem (sign-in
+returns to that address). The rule is `roadmapAccess` in `roadmap.ts`, the one
+place to change when the roadmap moves behind a paid plan. A build without
+accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
+nothing to sign in to, so the roadmap is open there.
+
+The stages are plain data in `frontend/src/practice/roadmap.ts` (`ROADMAP`):
+each has an `id`, a `title`, a sentence or two on what it teaches and why it
+comes at that point (`why`), and its problem ids in the order they are solved.
+To change the path, edit that list:
+
+- Every problem must appear in the roadmap exactly once, so **a new problem
+  needs a place in a stage**; `npm test` fails otherwise.
+- An id that is not a problem fails the tests too, unless it is in `PENDING`
+  in `roadmap.test.ts` (problems being added in parallel). The page skips ids
+  that do not exist and stages left empty.
+- Earlier stages are prerequisites of later ones: put a problem after the
+  ideas it builds on, easier problems first within a stage.
+
 ## Adding a problem in 5 steps
 
 1. **Scaffold** it: `proschi problem new seat-map` (inside the repository it
@@ -227,4 +258,5 @@ do not match.
    the example wrong design with the shortcuts your limits must reject.
 5. **Check** it: `proschi problem check` (or `npm test` in `frontend/`), then
    open `practice/#/seat-map` in `npm run dev` to read it as a solver would.
-   The landing page and the practice list pick the folder up by themselves.
+   The landing page and the practice list pick the folder up by themselves;
+   add its id to a stage of [the roadmap](#the-interview-prep-roadmap).

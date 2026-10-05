@@ -5,6 +5,9 @@ language and simulation code, served by the Worker in `backend/`. The editor
 runs entirely in the browser; documents and practice progress live in
 `localStorage`. Built with `VITE_ACCOUNTS=true`, the practice page also offers
 sign-in and global stats from the API on the same origin (backend/README.md).
+The practice page's "AI review" (`src/review/`) is a placeholder that says the
+review is coming soon; built with `VITE_AI_REVIEW=true`, it calls
+`POST /api/review` instead.
 
 | Page | Entry | Source |
 |---|---|---|

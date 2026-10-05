@@ -1,0 +1,48 @@
+# expect-fail: Only the upper tier talks to the origin
+# One upper-tier data center; when it is down, every edge falls back to the
+# origin, which then takes all the misses the upper tier used to absorb.
+import "problem.proschi"
+
+edge  "Edge Data Centers" [Cloudflare] x2 @cdn
+upper "Upper Tier"        [Cloudflare] @cdn
+purge "Purge API"         [REST API]   x2 @cdn
+
+visitor -> edge   : HTTPS
+edge    -> upper  : cache fill
+edge    -> origin : HTTPS, only when the upper tier is down
+upper   -> origin : HTTPS
+owner   -> purge  : HTTPS
+purge   -> upper  : purge
+purge   -> edge   : purge
+
+usecase "Fetch asset" "A visitor requests a cacheable asset" {
+  visitor -> edge : GET /assets/hero.jpg
+
+  alt "Edge hit" {
+    edge --> visitor : 200 cached
+  } alt "Upper-tier hit" {
+    edge   -> upper   : GET /assets/hero.jpg
+    upper --> edge    : 200 cached
+    edge  --> visitor : 200
+  } alt "Upper-tier miss" {
+    edge    -> upper   : GET /assets/hero.jpg
+    upper   -> origin  : GET /assets/hero.jpg
+    origin --> upper   : 200 Cache-Control max-age=86400
+    upper  --> edge    : 200
+    edge   --> visitor : 200
+  } alt "Upper tier down" {
+    edge    -x upper   : GET /assets/hero.jpg
+    edge    -> origin  : GET /assets/hero.jpg
+    origin --> edge    : 200
+    edge   --> visitor : 200
+  }
+}
+
+usecase "Purge" "The site owner purges a changed asset" {
+  owner  -> purge : POST /purge_cache json {"files": ["https://example.com/assets/hero.jpg"]}
+  purge  -> upper : DELETE /assets/hero.jpg
+  upper --> purge : purged
+  purge  -> edge  : x300 DELETE /assets/hero.jpg
+  edge  --> purge : purged
+  purge --> owner : 200 {"success": true}
+}

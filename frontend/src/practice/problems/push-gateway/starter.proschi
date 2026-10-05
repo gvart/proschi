@@ -1,0 +1,13 @@
+import "problem.proschi"
+
+# Add the push servers (id push), the push registry (id registry), the queue,
+# the message processors, the connections and the use cases "Connect",
+# "Send" and "Deliver".
+push "Push Servers" [Java]
+
+device -> push
+
+usecase "Connect" {
+  device -> push   : GET /push (Upgrade: websocket)
+  push  --> device : 101 Switching Protocols
+}

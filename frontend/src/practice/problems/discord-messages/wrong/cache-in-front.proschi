@@ -1,0 +1,40 @@
+# expect-fail: No message cache to keep in sync
+# A Redis cache of recent messages takes the busy channel's reads, and every edit, delete and reaction must now invalidate it.
+import "problem.proschi"
+
+data  "Data Services" [Rust]  x48 @data "One gRPC endpoint per query"
+cache "Message Cache" [Redis] x2 @data "The latest 50 messages of busy channels"
+
+api  -> data     : gRPC
+data -> messages : CQL
+data -> hot      : CQL
+data -> cache    : RESP
+
+usecase "Send message" "A user posts a message to a channel" {
+  api       -> data     : SendMessage(channel 1046, "gg")
+  data      -> messages : x3 INSERT INTO messages (channel_id, bucket, message_id) at QUORUM
+  messages --> data     : ok
+  data     --> api      : message 1129
+}
+
+usecase "Read messages" "A user opens an ordinary channel and loads its latest messages" {
+  api       -> data     : GetMessages(channel 2210, limit 50)
+  data      -> messages : x2 SELECT FROM messages WHERE channel_id = 2210 AND bucket = 1912 LIMIT 50 at QUORUM
+  messages --> data     : 50 rows
+  data     --> api      : 50 messages
+}
+
+usecase "Read busy channel" "Everyone in a huge server opens the channel that was just pinged" {
+  api  -> data  : GetMessages(channel 1046, limit 50)
+  data -> cache : GET latest:1046
+
+  alt "Joined in-flight read" when "the cache has the channel" {
+    cache --> data : 50 messages
+    data  --> api  : 50 messages
+  } alt "First read" when "the cache missed" {
+    data  -> hot   : x2 SELECT FROM messages WHERE channel_id = 1046 AND bucket = 1912 LIMIT 50 at QUORUM
+    hot  --> data  : 50 rows
+    data  -> cache : SET latest:1046
+    data --> api   : 50 messages
+  }
+}

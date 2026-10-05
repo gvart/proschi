@@ -1,0 +1,43 @@
+# expect-fail: survive any node failure
+# Every fetch reads all three replicas and compares them: three times the read load on the file servers.
+import "problem.proschi"
+
+proxy "Spokes Proxy"     [Go]             x16 @git "Routes every Git request; replicates pushes and picks the replica for each read"
+fs    "Git File Servers" [NoSQL Database] x3 @git "Bare Git repositories on local disk; each repository on three servers"
+
+capacity {
+  fs shards 2
+}
+
+dev   -> proxy  : git over SSH / HTTPS
+proxy -> fs     : Git protocol
+proxy -> routes : SQL
+
+usecase "Push" "A developer pushes commits to a repository" {
+  dev -> proxy : git push origin main
+
+  alt "All replicas commit" when "all three file servers are up" {
+    proxy -> fs    : x3 PREPARE update refs/heads/main
+    fs   --> proxy : 3 votes yes
+    proxy -> fs    : x3 COMMIT refs/heads/main
+    fs   --> proxy : committed
+  } alt "One replica down" when "one of the three file servers is down" {
+    proxy -x fs    : PREPARE update refs/heads/main on the server that is down
+    proxy -> fs    : x2 PREPARE update refs/heads/main
+    fs   --> proxy : 2 votes yes, a quorum
+    proxy -> fs    : x2 COMMIT refs/heads/main
+    fs   --> proxy : committed
+  }
+  proxy   -> routes : UPDATE replicas SET checksum
+  routes --> proxy  : ok
+  proxy  --> dev    : 200 ok refs/heads/main
+}
+
+usecase "Fetch" "A developer fetches or clones a repository" {
+  dev     -> proxy  : git fetch origin
+  proxy   -> routes : SELECT host FROM replicas WHERE checksum is current
+  routes --> proxy  : 3 replicas in sync
+  proxy   -> fs     : x3 FETCH packfile from every replica, compare
+  fs     --> proxy  : packfile
+  proxy  --> dev    : 200 packfile
+}

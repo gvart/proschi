@@ -1,0 +1,51 @@
+# expect-fail: p99 of Connect < 60 ms
+# expect-fail: survive any node failure
+# The registry in PostgreSQL: every connection is a write, and 5.5k a second is more than one primary takes. Rows do not expire either.
+import "problem.proschi"
+
+lb         "Load Balancer"     [AWS Load Balancer] x2 @edge "Layer 4, with a long idle timeout for persistent connections"
+push       "Zuul Push Servers" [Java]              x14 @edge "Netty servers holding the WebSocket and SSE connections; each knows its own connections in memory"
+registry   "Push Registry"     [PostgreSQL]        x2 @edge "Customer id to push server"
+kafka      "Push Queue"        [Kafka]             x3 @edge "Messages from every sender, partitioned by customer"
+processors "Message Processor" [Java]              x16 @edge "Look the customer up in the registry and hand the message to that push server"
+
+device     -> lb         : WebSocket / SSE
+lb         -> push       : TCP
+push       -> registry   : SQL
+push       -> device     : push frames
+senders    -> kafka      : push library
+kafka      -> processors : consume
+processors -> registry   : SQL
+processors -> push       : deliver
+
+usecase "Connect" "A device opens its push connection" {
+  device    -> lb       : GET /push (Upgrade: websocket)
+  lb        -> push     : GET /push (Upgrade: websocket)
+  push      -> registry : UPSERT registrations (cust-81, push-i-0a1b)
+  registry --> push     : ok
+  push     --> lb       : 101 Switching Protocols
+  lb       --> device   : 101 Switching Protocols
+}
+
+usecase "Send" "A backend service pushes a message to a customer" {
+  senders -> kafka   : PRODUCE push-messages {"customer": "cust-81", "type": "new-recommendations"}
+  kafka  --> senders : ack
+}
+
+usecase "Deliver" "A message processor delivers a queued message" {
+  kafka      -> processors : PushMessage cust-81
+  processors -> registry   : SELECT server FROM registrations WHERE customer = cust-81
+
+  alt "Online" when "the customer has a connection open" {
+    registry  --> processors : push-i-0a1b
+    processors -> push       : deliver to cust-81
+    push       -> device     : message frame
+    push      --> processors : delivered
+  } alt "Offline" when "no device of the customer is connected" {
+    registry --> processors : no row
+  } alt "Stale route" when "the push server in the record went away with its connections" {
+    registry  --> processors : push-i-0a1b
+    processors -x push       : deliver to cust-81
+  }
+  processors --> kafka : commit offset
+}

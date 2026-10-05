@@ -36,8 +36,18 @@ describe('problem pages', () => {
     expect(html).not.toContain('What can answer a redirect without touching the database')
   })
 
+  it('show the company whose published system a problem is based on, and nothing for the others', () => {
+    const snowflake = problems.find((p) => p.id === 'snowflake-ids')!
+    expect(snowflake.company).toBe('Twitter')
+    expect(pageHtml(snowflake, problems)).toContain(
+      '<span class="ps-badge ps-badge--blue" title="Based on a system Twitter published"><span class="sr-only">Based on a system published by </span>Twitter</span>',
+    )
+    expect(shortener.company).toBeUndefined()
+    expect(pageHtml(shortener, problems)).not.toContain('Based on a system')
+  })
+
   it('escape everything from the statement', () => {
-    const evil: PageProblem = { ...shortener, title: '<img src=x onerror=alert(1)>', summary: '</script><script>alert(1)</script>', statement: '<b>x</b> [a](javascript:alert(1))' }
+    const evil: PageProblem = { ...shortener, company: '<img src=x>', title: '<img src=x onerror=alert(1)>', summary: '</script><script>alert(1)</script>', statement: '<b>x</b> [a](javascript:alert(1))' }
     const html = fillTemplate('<!--problem:head--><!--problem:page-->', evil, [evil])
     expect(html).not.toMatch(/<img|<b>|javascript:|<\/script><script>/)
   })

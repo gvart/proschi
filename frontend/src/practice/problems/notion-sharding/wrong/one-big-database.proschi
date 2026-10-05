@@ -1,0 +1,23 @@
+# expect-fail: p99 of Edit block < 70 ms
+# expect-fail: p99 of Load page < 70 ms
+# Keep the monolith and add replicas: every edit still lands on its one primary.
+import "problem.proschi"
+
+db "Block Store" [PostgreSQL] x4 @data "The monolith: one primary and three replicas"
+
+web       -> pgbouncer : SQL
+pgbouncer -> db        : pooled connections
+
+usecase "Load page" "A user opens a page" {
+  web        -> pgbouncer : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  pgbouncer  -> db        : SELECT blocks WHERE space_id = $1 AND parent_id = $2
+  db        --> pgbouncer : 120 rows
+  pgbouncer --> web       : 120 rows
+}
+
+usecase "Edit block" "A user types into a block" {
+  web        -> pgbouncer : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  pgbouncer  -> db        : UPDATE block SET properties WHERE space_id = $1 AND id = $2
+  db        --> pgbouncer : UPDATE 1
+  pgbouncer --> web       : UPDATE 1
+}

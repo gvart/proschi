@@ -1,0 +1,62 @@
+import "problem.proschi"
+
+proxy "Spokes Proxy"     [Go]             x16 @git "Routes every Git request; replicates pushes and picks the replica for each read"
+fs    "Git File Servers" [NoSQL Database] x3 @git "Bare Git repositories on local disk; each repository on three servers"
+
+capacity {
+  fs shards 2
+}
+
+dev   -> proxy  : git over SSH / HTTPS
+proxy -> fs     : Git protocol
+proxy -> routes : SQL
+
+entity Replica in routes "One copy of a repository on one file server" {
+  repoId   int    key
+  host     string key
+  checksum string
+  state    string
+}
+
+decision "Replicate Git, not disks" {
+  because "Three loosely coupled Git repositories kept in sync by the proxy: any file server can hold any repository, and every replica can serve reads"
+  rejected "An active server with a DRBD standby" "The standby serves nothing, and losing the active server stops the repository until it fails over"
+}
+decision "Commit a push on a quorum of two" {
+  because "The proxy sends the update to all three replicas and commits once two agree, so a push succeeds while one file server is down and is never on fewer than two servers"
+  rejected "Acknowledge after one replica, copy the rest later" "A push acknowledged by one server is lost with that server"
+}
+decision "Read one up-to-date replica" {
+  because "Most requests are fetches and clones; the checksums say which replicas are current, and any of them can answer, nearly tripling read capacity"
+  rejected "Read every replica and compare" "Three times the read load for answers the checksums already give"
+}
+decision "Two sets of three file servers" because "Repositories are spread over sets of three servers; with two sets, a set that loses a server still keeps pushes under 100 ms"
+
+usecase "Push" "A developer pushes commits to a repository" {
+  dev -> proxy : git push origin main
+
+  alt "All replicas commit" when "all three file servers are up" {
+    proxy -> fs    : x3 PREPARE update refs/heads/main
+    fs   --> proxy : 3 votes yes
+    proxy -> fs    : x3 COMMIT refs/heads/main
+    fs   --> proxy : committed
+  } alt "One replica down" when "one of the three file servers is down" {
+    proxy -x fs    : PREPARE update refs/heads/main on the server that is down
+    proxy -> fs    : x2 PREPARE update refs/heads/main
+    fs   --> proxy : 2 votes yes, a quorum
+    proxy -> fs    : x2 COMMIT refs/heads/main
+    fs   --> proxy : committed
+  }
+  proxy   -> routes : UPDATE replicas SET checksum
+  routes --> proxy  : ok
+  proxy  --> dev    : 200 ok refs/heads/main
+}
+
+usecase "Fetch" "A developer fetches or clones a repository" {
+  dev     -> proxy  : git fetch origin
+  proxy   -> routes : SELECT host FROM replicas WHERE checksum is current
+  routes --> proxy  : 3 replicas in sync
+  proxy   -> fs     : FETCH packfile from the nearest of them
+  fs     --> proxy  : packfile
+  proxy  --> dev    : 200 packfile
+}

@@ -127,6 +127,9 @@ describe('problem folders', () => {
     expect(p.order).toBeUndefined();
     expect(p.version).toBeUndefined();
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'version: 2\ntags:') })).version).toBe(2);
+    expect(p.company).toBeUndefined();
+    expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: Twitter\ntags:') })).company).toBe('Twitter');
+    expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: "Example, Inc."\ntags:') })).company).toBe('Example, Inc.');
     expect(p.wrong).toEqual([{ name: 'no-api', source: expect.stringContaining('# expect-fail'), expectFail: ['Echo goes through the API'] }]);
   });
 
@@ -142,6 +145,10 @@ describe('problem folders', () => {
     ['a string order', 'echo', files({ 'problem.md': MD.replace('tags:', 'order: first\ntags:') }), /'order' must be a number/],
     ['a fractional version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 1.5\ntags:') }), /'version' must be a whole number from 1/],
     ['a zero version', 'echo', files({ 'problem.md': MD.replace('tags:', 'version: 0\ntags:') }), /'version' must be a whole number from 1/],
+    ['an empty company', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: ""\ntags:') }), /'company' must be a non-empty string/],
+    ['a blank company', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: "  "\ntags:') }), /'company' must be a non-empty string/],
+    ['a company list', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: [Twitter, Meta]\ntags:') }), /'company' must be a non-empty string/],
+    ['a numeric company', 'echo', files({ 'problem.md': MD.replace('tags:', 'company: 42\ntags:') }), /'company' must be a non-empty string/],
     ['tags that are not a list', 'echo', files({ 'problem.md': MD.replace('tags: [basics]', 'tags: basics') }), /'tags' must be a list/],
     ['an empty statement', 'echo', files({ 'problem.md': MD.slice(0, MD.indexOf('---\n\n') + 4) }), /statement .* is empty/],
   ])('reject %s, naming the folder', (_name, id, folderFiles, message) => {

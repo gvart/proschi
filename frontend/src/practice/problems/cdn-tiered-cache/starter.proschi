@@ -1,0 +1,20 @@
+import "problem.proschi"
+
+# Add the upper tier (id upper), the purge service, the connections and the
+# use cases "Fetch asset" and "Purge". Keep the edge tier's id: edge.
+edge "Edge Data Centers" [Cloudflare]
+
+visitor -> edge
+edge    -> origin
+
+usecase "Fetch asset" {
+  visitor -> edge : GET /assets/hero.jpg
+
+  alt "Edge hit" {
+    edge --> visitor : 200 cached
+  } alt "Upper-tier miss" {
+    edge    -> origin  : GET /assets/hero.jpg
+    origin --> edge    : 200
+    edge   --> visitor : 200
+  }
+}

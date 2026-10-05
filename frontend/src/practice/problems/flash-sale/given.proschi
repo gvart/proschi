@@ -1,0 +1,43 @@
+title "Flash Sale" "Sells a limited product drop to a crowd far bigger than checkout can serve"
+
+buyer "Buyer"      [Actor]
+pod   "Shop's Pod" [MySQL] x2 @core "The shop's MySQL shard, a primary and a replica: products, inventory and orders"
+
+capacity {
+  pod writes 2k rps
+}
+
+traffic {
+  "View product" 80k rps mix "Page cache hit" 95%, "Page cache miss" 5%
+  "Checkout"     10k rps mix "Queued" 95%, "Order placed" 3.5%, "Sold out" 1.5%
+}
+
+requirements {
+  p99 "View product" < 50ms
+  p99 "Checkout" scenario "Order placed" < 150ms
+  availability "View product" >= 99.99%
+  availability "Checkout" >= 99.95%
+  durable "Checkout"
+  survive any node failure
+  cost <= 2000 usd/month
+}
+
+test "Product pages are served from the edge cache" {
+  "View product" starts at buyer
+  "View product" scenario "Page cache hit" never calls any service or any database
+  "View product" calls any edge before any service
+}
+
+test "The throttle keeps the crowd out of checkout" {
+  "Checkout" has scenario "Queued"
+  "Checkout" scenario "Queued" never calls any service or any database
+  "Checkout" scenario "Queued" responds 429
+}
+
+test "The pod's database decides the stock and records the order" {
+  "Checkout" never calls any eventual store
+  "Checkout" scenario "Order placed" writes pod before responding
+  "Checkout" scenario "Order placed" responds 201
+  "Checkout" scenario "Sold out" calls pod
+  "Checkout" scenario "Sold out" responds 409
+}

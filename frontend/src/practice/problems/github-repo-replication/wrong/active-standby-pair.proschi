@@ -1,0 +1,55 @@
+# expect-fail: Every repository lives on three file servers behind a proxy
+# expect-fail: A push commits on a quorum of replicas
+# GitHub's design before DGit: each repository on an active file server with a
+# DRBD standby next to it. The standby only mirrors the disk and serves no
+# reads; pushes stop while the active server fails over.
+import "problem.proschi"
+
+proxy   "Git Proxy"            [Go]             x16 @git
+fs      "Active File Servers"  [NoSQL Database] @git
+standby "Standby File Servers" [NoSQL Database] @git "Mirrors the active server's disk block by block"
+
+capacity {
+  fs      shards 3
+  standby shards 3
+}
+
+dev   -> proxy   : git over SSH / HTTPS
+proxy -> fs      : Git protocol
+proxy -> standby : Git protocol, after a failover
+fs    -> standby : DRBD
+proxy -> routes  : SQL
+
+usecase "Push" "A developer pushes commits to a repository" {
+  dev -> proxy : git push origin main
+
+  alt "All replicas commit" when "the active server is up" {
+    proxy    -> fs      : WRITE refs/heads/main
+    fs       -> standby : WRITE disk blocks
+    standby --> fs      : ok
+    fs      --> proxy   : ok
+    proxy    -> routes  : UPDATE replicas SET checksum
+    routes  --> proxy   : ok
+    proxy   --> dev     : 200 ok refs/heads/main
+  } alt "One replica down" when "the active server is down" {
+    proxy  -x fs  : WRITE refs/heads/main
+    proxy --> dev : 503 repository unavailable during failover
+  }
+}
+
+usecase "Fetch" "A developer fetches or clones a repository" {
+  dev     -> proxy  : git fetch origin
+  proxy   -> routes : SELECT host FROM replicas WHERE checksum is current
+  routes --> proxy  : the active server
+
+  alt "Active up" when "the active server is up" {
+    proxy  -> fs    : FETCH packfile
+    fs    --> proxy : packfile
+    proxy --> dev   : 200 packfile
+  } alt "Failed over" when "the active server is down" {
+    proxy    -x fs      : FETCH packfile
+    proxy    -> standby : FETCH packfile
+    standby --> proxy   : packfile
+    proxy   --> dev     : 200 packfile
+  }
+}

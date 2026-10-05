@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the edge, the app servers, the connections and the use cases
+# "View product" and "Checkout".
+app "Shopify Core" [Ruby on Rails]
+
+buyer -> app
+app   -> pod
+
+usecase "View product" {
+  buyer -> app   : GET /products/lip-kit
+  app   -> pod   : SELECT product, variants
+  pod  --> app   : rows
+  app  --> buyer : 200 page
+}

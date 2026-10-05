@@ -1,0 +1,48 @@
+# expect-fail: Product pages are served from the edge cache
+# expect-fail: cost ≤ $2,000/month
+# Every product page is rendered by the app: forty times the app servers, and every view reads the database.
+import "problem.proschi"
+
+edge "Load Balancer" [nginx]         x3 @edge "nginx with Lua: checkout throttle (a leaky bucket) and routing to the pod"
+app  "Shopify Core"  [Ruby on Rails] x56 @core "Renders every storefront page and runs checkout"
+
+buyer -> edge : HTTPS
+edge  -> app  : HTTP
+app   -> pod  : SQL
+
+usecase "View product" "A buyer opens the product page" {
+  buyer -> edge : GET /products/lip-kit
+  edge  -> app  : GET /products/lip-kit
+
+  alt "Page cache hit" when "the app's fragment cache has the page" {
+    app  --> edge  : 200 page
+    edge --> buyer : 200 page
+  } alt "Page cache miss" when "the page expired or was never cached" {
+    app   -> pod   : SELECT product, variants
+    pod  --> app   : rows
+    app  --> edge  : 200 page
+    edge --> buyer : 200 page
+  }
+}
+
+usecase "Checkout" "A buyer checks out one unit" {
+  buyer -> edge : POST /checkout {"variant": 42, "quantity": 1}
+
+  alt "Queued" when "the bucket is full and the buyer has no pass" {
+    edge --> buyer : 429 queue page, polls again in a few seconds
+  } alt "Order placed" when "admitted, and a unit is left" {
+    edge  -> app   : POST /checkout
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 1 row
+    app   -> pod   : INSERT order, COMMIT
+    pod  --> app   : order 1001
+    app  --> edge  : 201 {"order": 1001}
+    edge --> buyer : 201 {"order": 1001}
+  } alt "Sold out" when "admitted, but the last unit is gone" {
+    edge  -> app   : POST /checkout
+    app   -> pod   : UPDATE inventory SET available = available - 1 WHERE variant = 42 AND available > 0
+    pod  --> app   : 0 rows
+    app  --> edge  : 409 {"error": "sold out"}
+    edge --> buyer : 409 {"error": "sold out"}
+  }
+}

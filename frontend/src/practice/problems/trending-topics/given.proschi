@@ -1,0 +1,44 @@
+title "Trending Topics" "Finds the terms whose volume is spiking and serves each location's trends list"
+
+user       "User"          [Actor]
+tweets     "Tweet Service" [REST API]  x16 @tweets "Takes new tweets; already exists"
+tweetstore "Tweet Store"   [Cassandra] x3 @tweets "Every tweet, the source of truth; already exists"
+
+user   -> tweets     : HTTPS
+tweets -> tweetstore : write tweets
+
+traffic {
+  "Post tweet"     20k rps
+  "Count tweet"    20k rps
+  "Publish trends" 200 rps
+  "Get trends"     30k rps mix "Cache hit" 99%, "Cache miss" 1%
+}
+
+requirements {
+  p99 "Post tweet" < 80ms
+  p99 "Get trends" < 50ms
+  availability "Get trends" >= 99.99%
+  durable "Post tweet"
+  survive any node failure
+  cost <= 11000 usd/month
+}
+
+test "Posting a tweet never waits for counting" {
+  "Post tweet" starts at user
+  "Post tweet" writes tweetstore before responding
+  "Post tweet" calls any queue
+  "Post tweet" never waits for any queue
+  "Post tweet" never calls any cache
+}
+
+test "Tweets are counted in the stream, in memory" {
+  "Count tweet" starts at any queue
+  "Count tweet" never calls any cache or any database
+}
+
+test "Trends are ranked ahead of time and served from a cache" {
+  "Publish trends" calls any cache
+  "Get trends" calls any cache before any database
+  "Get trends" scenario "Cache hit" never calls any database
+  "Get trends" never calls tweetstore
+}

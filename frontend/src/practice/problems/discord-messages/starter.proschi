@@ -1,0 +1,10 @@
+import "problem.proschi"
+
+# Add the data services (id data), the connections and the use cases
+# "Send message", "Read messages" and "Read busy channel".
+api -> messages
+
+usecase "Send message" {
+  api       -> messages : INSERT INTO messages (channel_id, bucket, message_id)
+  messages --> api      : ok
+}

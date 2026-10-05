@@ -1,0 +1,35 @@
+title "Notion Sharding" "Splits Notion's Postgres monolith by workspace so that every shard keeps up"
+
+web       "API Servers" [Actor]   "Notion's TypeScript API fleet; it decides which shard a query goes to"
+pgbouncer "PgBouncer"   [Service] x10 @data "Pools the API servers' connections to Postgres"
+
+capacity {
+  pgbouncer 50k rps latency 1ms cost 100 usd/month
+}
+
+traffic {
+  "Load page"  200k rps
+  "Edit block" 100k rps
+}
+
+requirements {
+  p99 "Load page" < 70ms
+  p99 "Edit block" < 70ms
+  availability >= 99.95%
+  durable "Edit block"
+  survive any node failure
+  cost <= 30000 usd/month
+}
+
+test "Queries go through PgBouncer" {
+  "Load page" starts at web
+  "Edit block" starts at web
+  "Load page" calls pgbouncer before [PostgreSQL]
+  "Edit block" calls pgbouncer before [PostgreSQL]
+  no path from web to any database
+}
+
+test "Blocks stay in Postgres" {
+  "Load page" calls [PostgreSQL]
+  "Edit block" writes [PostgreSQL] before responding
+}

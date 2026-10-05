@@ -1,0 +1,50 @@
+import "problem.proschi"
+
+edge  "Edge Data Centers" [Cloudflare] x2 @cdn "The lower tier: every data center near visitors, each with its own cache"
+upper "Upper Tier"        [Cloudflare] x2 @cdn "A few data centers close to the origin: the only ones that fill from it"
+purge "Purge API"         [REST API]   x2 @cdn "Takes purge requests and clears both tiers"
+
+visitor -> edge   : HTTPS
+edge    -> upper  : cache fill
+upper   -> origin : HTTPS
+owner   -> purge  : HTTPS
+purge   -> upper  : purge
+purge   -> edge   : purge
+
+decision "Edge data centers fill from an upper tier, not from the origin" {
+  because "Hundreds of edge caches each miss on the same asset; an upper tier near the origin misses on it once, so 60% of edge misses never reach the origin"
+  rejected "Every data center fills from the origin" "The origin sees each asset's first request from every data center: 2.5 times the requests it gets behind an upper tier"
+  rejected "Add origin servers" "Pays the cloud for servers and egress that an upper-tier hit makes unnecessary"
+}
+decision "Two upper-tier data centers, a primary and a fallback" {
+  because "Losing an upper-tier data center must not send every edge miss to the origin at once"
+  rejected "Fall back to the origin when the upper tier is down" "Turns an upper-tier outage into an origin overload"
+}
+decision "Purge the upper tier first" because "An edge that misses between the two purges would otherwise refill the old copy from the upper tier"
+
+usecase "Fetch asset" "A visitor requests a cacheable asset" {
+  visitor -> edge : GET /assets/hero.jpg
+
+  alt "Edge hit" when "the visitor's data center has the asset" {
+    edge --> visitor : 200 cached
+  } alt "Upper-tier hit" when "another data center already filled the upper tier" {
+    edge   -> upper   : GET /assets/hero.jpg
+    upper --> edge    : 200 cached
+    edge  --> visitor : 200
+  } alt "Upper-tier miss" when "no data center has the asset" {
+    edge    -> upper   : GET /assets/hero.jpg
+    upper   -> origin  : GET /assets/hero.jpg
+    origin --> upper   : 200 Cache-Control max-age=86400
+    upper  --> edge    : 200
+    edge   --> visitor : 200
+  }
+}
+
+usecase "Purge" "The site owner purges a changed asset" {
+  owner  -> purge : POST /purge_cache json {"files": ["https://example.com/assets/hero.jpg"]}
+  purge  -> upper : DELETE /assets/hero.jpg
+  upper --> purge : purged
+  purge  -> edge  : x300 DELETE /assets/hero.jpg
+  edge  --> purge : purged
+  purge --> owner : 200 {"success": true}
+}

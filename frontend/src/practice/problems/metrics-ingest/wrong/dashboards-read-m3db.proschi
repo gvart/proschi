@@ -1,0 +1,30 @@
+# expect-fail: Queries go through the query tier
+# Grafana reads M3DB with its own client: every dashboard has to know the cluster layout and compute the query itself.
+import "problem.proschi"
+
+aggregators "M3 Aggregator" [Go] x16 @ingest "Rolls datapoints up in memory by the rules, sharded by series id, and flushes once per resolution"
+
+collectors  -> aggregators : batches of datapoints
+aggregators -> m3db        : quorum writes
+grafana     -> m3db        : fetch series
+
+usecase "Emit metrics" "A host sends a batch of datapoints" {
+  collectors   -> aggregators : POST /write batch of 2,000 datapoints
+  aggregators --> collectors  : 200
+}
+
+usecase "Flush aggregates" "At a resolution boundary, an aggregator writes the closed windows to M3DB" {
+  alt "All replicas up" when "every replica of the shard answers" {
+    aggregators -> m3db        : x3 WRITE 2,000 aggregated datapoints
+    m3db       --> aggregators : majority acked
+  } alt "Replica down" when "one replica of the shard is down" {
+    aggregators -> m3db        : x2 WRITE 2,000 aggregated datapoints
+    aggregators -x m3db        : WRITE to the third replica
+    m3db       --> aggregators : majority acked
+  }
+}
+
+usecase "Query" "A dashboard panel or an alert reads a series" {
+  grafana -> m3db    : x2 FETCH series blocks
+  m3db   --> grafana : datapoints
+}

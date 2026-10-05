@@ -12,7 +12,7 @@ import type { Problem } from './types';
 describe('problem catalog', () => {
   it('reads every problem folder', () => {
     expect(catalogErrors.map((e) => e.message)).toEqual([]);
-    expect(problems.length).toBeGreaterThanOrEqual(17);
+    expect(problems.length).toBeGreaterThanOrEqual(25);
   });
 
   it('has unique ids and finds problems by id', () => {
@@ -39,14 +39,35 @@ describe('problem catalog', () => {
       'file-storage',
       'news-feed',
       'notification-fanout',
+      'notion-sharding',
+      'push-gateway',
+      'github-repo-replication',
       'ride-matching',
       'search-autocomplete',
+      'cdn-tiered-cache',
+      'trending-topics',
       'view-counting',
+      'discord-messages',
+      'flash-sale',
+      'metrics-ingest',
       'payments',
       'social-graph-cache',
       'ticket-booking',
       'video-streaming',
     ]);
+  });
+
+  it('names the company only of problems based on a published system', () => {
+    expect(Object.fromEntries(['snowflake-ids', 'shopping-cart', 'job-queue', 'view-counting', 'social-graph-cache'].map((id) => [id, findProblem(id)?.company]))).toEqual({
+      'snowflake-ids': 'Twitter',
+      'shopping-cart': 'Amazon',
+      'job-queue': 'Slack',
+      'view-counting': 'Reddit',
+      'social-graph-cache': 'Meta',
+    });
+    expect(findProblem('url-shortener')?.company).toBeUndefined();
+    // The company is where the design comes from, so the statement cites its sources.
+    for (const p of problems.filter((q) => q.company)) expect(p.statement, p.id).toMatch(/^## Based on$/m);
   });
 
   // validate.ts is the definition `proschi problem check` uses too.

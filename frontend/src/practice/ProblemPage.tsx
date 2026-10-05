@@ -1,4 +1,4 @@
-import { Suspense, lazy, useEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, BookOpen, Code2, Eye, FlaskConical, Lightbulb, Network, RotateCcw } from 'lucide-react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
@@ -9,7 +9,9 @@ import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
 import TestPanel from './TestPanel';
-import { DifficultyBadge, StatusIcon } from './Badges';
+import ReviewPanel from '../review/ReviewPanel';
+import { practiceReviewInput } from '../review/practice';
+import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import { sourceOf, statusOf, withRun, withSource, type Progress } from './progress';
 import { PROBLEM_FILE, parseSolution, runTests, type RunResult } from './workspace';
 import type { Problem } from './types';
@@ -44,10 +46,14 @@ interface ProblemPageProps {
   onProgress: (update: (p: Progress) => Progress) => void;
   engine: Engine;
   account: Account;
+  /** Where the back link goes; the problem list by default. */
+  back?: { href: string; label: string };
+  /** Shown under the header, e.g. the roadmap's banner. */
+  banner?: ReactNode;
 }
 
 /** LeetCode-like: the statement on the left, the editor and diagram in the middle, tests at the bottom. Tabs on phones. */
-export default function ProblemPage({ problem, progress, onProgress, engine, account }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
@@ -114,15 +120,20 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
       <ZenCollapse zen={zen.zen}>
       <Header base="../" current="practice" compact>
-        <a href="#/" className={toolButton}>
+        <a href={back.href} className={toolButton}>
           <ArrowLeft size={16} />
-          <span className="hidden sm:inline">Problems</span>
+          <span className="hidden sm:inline">{back.label}</span>
         </a>
         <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
           <span className="truncate">{problem.title}</span>
         </h1>
         <DifficultyBadge difficulty={problem.difficulty} />
+        {problem.company && (
+          <span className="hidden sm:inline-flex">
+            <CompanyBadge company={problem.company} />
+          </span>
+        )}
         <button onClick={reset} className={`ml-auto ${toolButton}`} title="Start over from the starter code">
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
@@ -137,6 +148,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           }}
         />
       </Header>
+      {banner}
 
       {/* The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target. */}
       <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill md:hidden bg-surface">
@@ -184,6 +196,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               diagnostics={diagnostics}
               onRun={runNow}
               onSelect={goTo}
+              review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
               community={
                 run && !run.result.blocked && (community || serverNote) ? (
                   <>
@@ -217,6 +230,12 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
 
   return (
     <div className="px-4 py-4 space-y-5">
+      {/* The header shows it from sm up. */}
+      {problem.company && (
+        <p className="sm:hidden">
+          <CompanyBadge company={problem.company} />
+        </p>
+      )}
       <Markdown source={problem.statement} />
 
       <details className="rounded border-bw-1 border-ink bg-paper">

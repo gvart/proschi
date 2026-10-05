@@ -3,6 +3,7 @@ title: Durable Job Queue
 summary: "Slack's job queue: Kafka in front of Redis, so a full Redis loses nothing."
 difficulty: medium
 tags: [queues, durability, availability, migration, real-world]
+company: Slack
 hints:
   - "The outage came from Redis refusing enqueues once it was full. Put something durable, that can hold a backlog on disk, between the web app and Redis."
   - "The web app is PHP and should not talk to Kafka brokers itself: give it one HTTP call to a small stateless service that produces to Kafka. The answer comes after the broker's ack, and nothing on that path touches Redis."

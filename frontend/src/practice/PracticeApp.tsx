@@ -3,6 +3,8 @@ import problems from 'virtual:practice-listings';
 import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
+import Roadmap, { RoadmapBanner } from './RoadmapView';
+import { ROADMAP, roadmapAccess, roadmapFor } from './roadmap';
 import { loadProgress, saveProgress, type Progress } from './progress';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
@@ -18,7 +20,13 @@ import Header from '../design/Header';
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
 
-/** `#/` is the list, `#/<problem id>` a problem; hash routes work under any sub-path. */
+/** The roadmap's stages with the problems this build has. */
+const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
+
+/**
+ * `#/` is the list, `#/<problem id>` a problem, `#/roadmap` the roadmap and
+ * `#/roadmap/<problem id>` a problem opened from it; hash routes work under any sub-path.
+ */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
   const [route, setRoute] = useState(read);
@@ -75,15 +83,34 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  const problem = route ? problems.find((p) => p.id === route) : undefined;
+  // Starting the roadmap takes an account: signed out, `#/roadmap/<id>` shows the roadmap (sign-in comes back to the same address).
+  const access = roadmapAccess(account.state);
+  const fromRoadmap = route.startsWith('roadmap/');
+  const onRoadmap = route === 'roadmap' || (fromRoadmap && access !== 'open');
+  const problemId = fromRoadmap ? route.slice('roadmap/'.length) : route;
+  const problem = problemId && !onRoadmap ? problems.find((p) => p.id === problemId) : undefined;
   useEffect(() => {
-    document.title = problem ? `${problem.title} · Proschi practice` : 'System design practice problems with automatic tests · Proschi';
-  }, [problem]);
+    document.title = problem
+      ? `${problem.title} · Proschi practice`
+      : onRoadmap
+        ? 'Interview prep roadmap · Proschi practice'
+        : 'System design practice problems with automatic tests · Proschi';
+  }, [problem, onRoadmap]);
 
   if (problem) {
     return (
       <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
-        <ProblemRoute key={problem.id} id={problem.id} progress={progress} onProgress={updateProgress} engine={engine} account={account} />
+        <ProblemRoute
+          key={problem.id}
+          id={problem.id}
+          progress={progress}
+          onProgress={updateProgress}
+          engine={engine}
+          account={account}
+          {...(fromRoadmap
+            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} /> }
+            : {})}
+        />
       </Suspense>
     );
   }
@@ -108,10 +135,23 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {route && <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{route}”. Pick one below.</p>}
-        <ProblemList problems={problems} progress={progress} stats={stats}>
-          {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
-        </ProblemList>
+        {route && !onRoadmap && (
+          <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
+        )}
+        {onRoadmap ? (
+          <Roadmap
+            stages={roadmap}
+            problems={problems}
+            progress={progress}
+            access={access}
+            providers={account.state.status === 'signed-out' ? account.state.providers : []}
+            onSignIn={account.signIn}
+          />
+        ) : (
+          <ProblemList problems={problems} progress={progress} stats={stats}>
+            {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
+          </ProblemList>
+        )}
       </div>
       <Footer base="../" />
     </div>

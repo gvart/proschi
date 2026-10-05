@@ -16,6 +16,29 @@ deployed from `main` and ships with the same changes.
   path on proschi.app.
 
 ### Added
+- An interview prep roadmap in practice (`practice/#/roadmap`): the problems
+  in eight stages, from foundations through caching, partitioning, queues,
+  fan-out, streams and consistency to large systems, each with a note on what
+  it teaches. A problem on the roadmap opens once every problem before it is
+  solved, with your progress, the current stage and a Continue button; a
+  problem opened from the roadmap links to the next one after a solve. Anyone
+  can see the roadmap; starting it takes signing in. The problem list stays
+  open.
+- Practice problems based on a published system name its company: an
+  optional `company` field in problem.md (docs/PRACTICE.md), set on Snowflake
+  IDs (Twitter), Shopping Cart (Amazon), Job Queue (Slack), View Counting
+  (Reddit) and Social Graph Cache (Meta). The problem list shows it as a
+  badge and filters by it, and the problem page and its static page show the
+  badge. It says where the design comes from, not that the company asks the
+  problem in interviews.
+- An "AI review" view next to the tests on the practice page, with a "Review
+  my design" button. It is a placeholder for now: it says the review is
+  coming soon and gives no feedback. The request it will send (the design,
+  its parsed model, test results, and cost, p99 and availability from the
+  simulation) and the review it expects are defined in
+  `frontend/src/review/`, and the Worker has a stub `POST /api/review` that
+  validates the request and answers 501 (backend/README.md). Builds with
+  `VITE_AI_REVIEW=true` call it.
 - Practice accounts and global stats, from the Worker's API and a D1
   database. Sign in with GitHub or Google from the practice
   header to keep progress and designs across devices; progress already in the
@@ -65,7 +88,13 @@ deployed from `main` and ships with the same changes.
   (Slack's Kafka in front of Redis, medium), View Counting (Reddit's
   HyperLogLog pipeline, medium) and Social Graph Cache (Facebook's TAO,
   hard). Their scale and limits come from the posts and papers where these
-  give numbers. Seventeen problems in all.
+  give numbers.
+- Eight more problems based on published systems, each with its company:
+  Discord Messages (Discord, hard), Notion Sharding (Notion, medium), Tiered
+  CDN Cache (Cloudflare, medium), Replicated Git Storage (GitHub, medium),
+  Push Gateway (Netflix, medium), Flash Sale (Shopify, hard), Metrics Ingest
+  (Uber, hard) and Trending Topics (Twitter, medium). Twenty-five problems in
+  all.
 
 ### Security
 - The static site sends HSTS and refuses to be framed (`X-Frame-Options`,
