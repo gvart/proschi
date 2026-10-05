@@ -9,6 +9,7 @@ import type {
   FlowStep,
   Protocol,
   Assertion,
+  BlockSpan,
   CapacityOverride,
   Decision,
   Diagnostic,
@@ -202,6 +203,7 @@ class Parser {
   private readonly entities: Entity[] = [];
   private readonly decisions: Decision[] = [];
   private readonly tests: FlowTest[] = [];
+  private readonly blocks: BlockSpan[] = [];
   /** Checks of use case, scenario and node names, run once every file is read and use cases are built. */
   private readonly deferred: (() => void)[] = [];
   private built: DiagramUseCase[] = [];
@@ -245,7 +247,12 @@ class Parser {
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
     this.diagnostics.sort((a, b) => order(a) - order(b) || a.line - b.line || a.col - b.col);
-    return { diagram, diagnostics: this.diagnostics, ...(this.imports.length ? { imports: this.imports } : {}) };
+    return {
+      diagram,
+      diagnostics: this.diagnostics,
+      ...(this.imports.length ? { imports: this.imports } : {}),
+      ...(this.blocks.length ? { blocks: this.blocks } : {}),
+    };
   }
 
   /** Reads the current file's lines and reports blocks it leaves open. */
@@ -298,6 +305,7 @@ class Parser {
       if (first.kind === 'rbrace') {
         this.stack.pop();
         if (!top.discard) this.closeSection(top);
+        if (!top.discard && this.file === undefined) this.blocks.push({ kind: top.section, start: top.loc.line, end: line });
         if (second) this.error('Unexpected input after }', loc(second));
       } else if (!top.discard) {
         this.parseSectionLine(top, tokens, line);

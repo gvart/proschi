@@ -42,6 +42,27 @@ test.describe('editor', () => {
     await expect(page.getByText('No problems')).toBeVisible();
   });
 
+  test('a component added from the palette is edited in its settings', async ({ page }) => {
+    const before = await canvasNodes(page).count();
+    await page.getByRole('button', { name: 'Add component' }).click();
+    const palette = page.getByRole('dialog', { name: 'Add a component' });
+    await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
+    await palette.getByRole('button', { name: 'Redis', exact: true }).click();
+    await expect(palette).toBeHidden();
+    await expect(canvasNodes(page)).toHaveCount(before + 1);
+    expect(await editorText(page)).toContain('redis "Redis" [Redis]');
+
+    await canvasNodes(page).filter({ hasText: 'Redis' }).click();
+    const settings = page.getByRole('region', { name: 'Redis settings' });
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await expect.poll(() => editorText(page)).toContain('redis "Redis" [Redis] x3');
+    await settings.getByLabel('Latency').fill('4');
+    await settings.getByLabel('Latency').press('Enter');
+    await expect.poll(() => editorText(page)).toMatch(/redis latency 4ms/);
+    await expect(page.getByText('No problems')).toBeVisible();
+  });
+
   test('a bad line shows a diagnostic', async ({ page }) => {
     await appendCode(page, '\nthis line is broken !!\n');
     const diagnostics = page.getByTestId('diagnostics');
