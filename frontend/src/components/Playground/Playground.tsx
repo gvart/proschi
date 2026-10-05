@@ -30,6 +30,7 @@ import {
   Code2,
   Pencil,
   Plus,
+  Gauge,
   Network,
   Archive,
   ArchiveRestore,
@@ -63,6 +64,8 @@ import { addConnection, addNode, clearPositions, removeConnections, removeNode, 
 import type { Diagram } from '../../dsl/types';
 import Palette, { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import Inspector from '../Diagram/Inspector';
+import FlowParticles from '../Overlay/FlowParticles';
+import { analysisOverlay, type SimOverlay } from '../../sim/overlay';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
@@ -221,6 +224,17 @@ export default function Playground() {
   }, [source, playbackKey, importsKey]);
 
   const [nodes, setNodes] = useState<Node[]>([]);
+  /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block. */
+  const [overlayOn, setOverlayOn] = useState(false);
+  const canOverlay = (diagram.traffic?.length ?? 0) > 0;
+  const overlay = useMemo(
+    () => (overlayOn && canOverlay ? analysisOverlay(diagram, simulation.analysis) : undefined),
+    [overlayOn, canOverlay, diagram, simulation.analysis],
+  );
+  const shownNodes = useMemo(
+    () => (overlay ? nodes.map((n) => (overlay.nodes[n.id] ? { ...n, data: { ...n.data, overlay: overlay.nodes[n.id] } } : n)) : nodes),
+    [nodes, overlay],
+  );
   const [edges, setEdges] = useState<Edge[]>([]);
 
   // Edges are local state so selection works; keep it across re-parses.
@@ -674,7 +688,10 @@ export default function Playground() {
               ) : (
                 <ReactFlowProvider>
                   <DiagramView
-                    nodes={nodes}
+                    nodes={shownNodes}
+                    overlay={overlay}
+                    canOverlay={canOverlay}
+                    onToggleOverlay={() => setOverlayOn((on) => !on)}
                     edges={edges}
                     onNodesChange={setNodes}
                     onEdgesChange={setEdges}
@@ -842,6 +859,11 @@ interface DiagramViewProps {
   onEdit: (edit: (source: string) => string) => void;
   /** The parsed diagram, for the inspector. */
   diagram: Diagram;
+  /** The simulation drawn on the canvas, when "Overlay: load" is on. */
+  overlay?: SimOverlay;
+  /** The document has traffic to simulate, so the overlay can be turned on. */
+  canOverlay: boolean;
+  onToggleOverlay: () => void;
   onResetLayout: () => void;
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
@@ -870,6 +892,9 @@ function DiagramView({
   onAddNode,
   onEdit,
   diagram,
+  overlay,
+  canOverlay,
+  onToggleOverlay,
   onResetLayout,
   onDelete,
   fitKey,
@@ -1023,6 +1048,7 @@ function DiagramView({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
+        {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false} />
         <Panel position="top-left" className="flex items-start gap-1">
           <div className="relative">
@@ -1089,6 +1115,20 @@ function DiagramView({
         )}
         {nodes.length > 0 && (
           <Panel position="top-right" className="flex items-center gap-1">
+            {canOverlay && (
+              <button
+                type="button"
+                onClick={onToggleOverlay}
+                aria-pressed={overlay !== undefined}
+                title="Show how busy each node is and the requests flowing, at the traffic block's rates"
+                className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
+              >
+                <Gauge size={16} />
+                <span className="whitespace-nowrap">
+                  <span className="hidden sm:inline">Overlay: </span>load
+                </span>
+              </button>
+            )}
             {hasPinnedNodes && (
               <button
                 onClick={onResetLayout}

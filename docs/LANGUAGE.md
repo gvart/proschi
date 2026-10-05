@@ -606,6 +606,11 @@ The text is the source of truth. Edits on the diagram are written back into it:
 
 Each edit changes only the part of the line it is about, so comments and alignment survive.
 
+With a `traffic` block, **Overlay: load** draws the simulation on the canvas:
+each node is coloured by how busy it is at the traffic's rates, shows its
+replicas, shards and utilisation, and requests flow along the connections
+(hollow dots for async work, red ones falling off a node past 100%).
+
 A node that was only referenced, never declared, gets a declaration line above the first use case.
 
 ## Links

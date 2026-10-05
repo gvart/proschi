@@ -5,6 +5,8 @@ import type { NodeProps } from 'reactflow';
 import type { ComponentMetadata } from '../../types/canvas';
 import { getTechStackIcon } from '../../utils/iconMapping';
 import { CANVAS_ACCENT } from '../../utils/canvasColors';
+import { heat } from '../../utils/heat';
+import type { NodeOverlay } from '../../sim/overlay';
 import './canvas.css';
 
 /**
@@ -14,9 +16,17 @@ import './canvas.css';
  */
 const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
   const icon = getTechStackIcon(data.techStack, data.type);
+  const o = data.overlay;
+  const u = o?.utilization;
 
   return (
-    <div className="pc-node" data-selected={selected || undefined}>
+    <div
+      className="pc-node"
+      data-selected={selected || undefined}
+      data-load={o ? (o.down ? 'down' : o.saturated ? 'over' : u !== undefined && u >= 0.9 ? 'hot' : 'ok') : undefined}
+      data-stack={o?.replicas && o.replicas > 1 ? Math.min(2, o.replicas - 1) : undefined}
+      style={o ? { background: heat(u, o.down) } : undefined}
+    >
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected} minWidth={180} minHeight={80} />
 
       <Handle type="target" position={Position.Top} className="pc-handle" />
@@ -29,11 +39,28 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
         </div>
       </div>
 
-      {data.ownerTeam && <div className="pc-node__team truncate">Team: {data.ownerTeam}</div>}
+      {data.ownerTeam && !o && <div className="pc-node__team truncate">Team: {data.ownerTeam}</div>}
+      {o && <LoadBadge overlay={o} />}
 
       <Handle type="source" position={Position.Bottom} className="pc-handle" />
     </div>
   );
 };
+
+/** Replicas, size, shards and how busy the node is, with a bar; "down" when it is. */
+function LoadBadge({ overlay: o }: { overlay: NodeOverlay }) {
+  const u = o.utilization;
+  const parts = [o.replicas && o.replicas > 1 ? `×${o.replicas}` : '', o.size ?? '', o.shards && o.shards > 1 ? `⧉${o.shards}` : '', o.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : ''].filter(Boolean);
+  return (
+    <div className="pc-node__load">
+      {parts.length > 0 && <div className="pc-node__stats">{parts.join(' · ')}</div>}
+      {u !== undefined && !o.down && (
+        <div className="pc-node__bar" aria-hidden="true">
+          <div style={{ width: `${Math.min(100, u * 100)}%` }} data-over={u >= 1 || undefined} />
+        </div>
+      )}
+    </div>
+  );
+}
 
 export default memo(ComponentNode);
