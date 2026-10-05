@@ -1,7 +1,8 @@
+import { appRedirect, isAppRedirectUri, isAppState, isChallenge, issueAppCode, type AppLogin } from './apptokens';
 import type { Ctx } from './context';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, secretOk, type Env } from './env';
-import { errorResponse, HttpError, rateLimit } from './http';
+import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
 import { errorText, log } from './log';
 import { rejectName } from './moderation';
 
@@ -20,6 +21,11 @@ import { rejectName } from './moderation';
  *
  * Signed in, /start?link=1 adds the provider's identity to the account
  * instead: the callback links it and starts no new session.
+ *
+ * A native app starts with /start?client=app&redirect_uri=<allow-listed
+ * URI>&code_challenge=<S256>: the callback sets no cookie but sends the app
+ * back to its URI with a one-time code for POST /auth/token (apptokens.ts).
+ * Requests then carry `Authorization: Bearer <access token>`.
  */
 
 export type ProviderId = 'github' | 'google';
@@ -123,8 +129,7 @@ export function configuredProviders(env: Env): ProviderId[] {
 }
 
 const STATE_COOKIE = 'proschi_oauth';
-/** `__Host-`: only this exact host, Secure, Path=/. */
-export const SESSION_COOKIE = '__Host-proschi_session';
+export { SESSION_COOKIE };
 const STATE_TTL = 600;
 export const SESSION_TTL = 30 * 24 * 3600;
 export const MAX_NAME = 40;
@@ -137,6 +142,8 @@ interface LoginState {
   expires: number;
   /** Linking: the signed-in user to add the identity to. */
   linkUserId?: string;
+  /** A native app's sign-in: the callback answers its redirect URI with a one-time code instead of setting the cookie. */
+  app?: AppLogin;
 }
 
 /** A path on this site to come back to; anything else (another origin, `//host`, a scheme) is refused. */
@@ -158,14 +165,6 @@ export function sessionCookie(value: string, maxAge: number): string {
   return `${SESSION_COOKIE}=${value}; Path=/; Max-Age=${maxAge}; HttpOnly; Secure; SameSite=Lax`;
 }
 
-function readCookie(request: Request, name: string): string | undefined {
-  for (const part of (request.headers.get('Cookie') ?? '').split(';')) {
-    const [key, ...rest] = part.trim().split('=');
-    if (key === name) return rest.join('=');
-  }
-  return undefined;
-}
-
 function withParam(path: string, key: string, value: string): string {
   const url = new URL(path, 'https://site.invalid');
   url.searchParams.set(key, value);
@@ -178,7 +177,21 @@ function unavailable(ctx: Ctx): Response {
   return errorResponse(503, 'Sign-in is unavailable (server misconfigured)');
 }
 
-/** GET /auth/<provider>/start?return=<path>[&link=1] */
+/**
+ * The app part of /start?client=app: redirect_uri must be allow-listed
+ * (APP_REDIRECT_URIS), code_challenge an S256 challenge; state is optional.
+ */
+function readAppLogin(env: Env, params: URLSearchParams): AppLogin | string {
+  const redirectUri = params.get('redirect_uri') ?? '';
+  if (!isAppRedirectUri(env, redirectUri)) return 'redirect_uri is not an allowed app redirect URI';
+  const challenge = params.get('code_challenge') ?? '';
+  if (params.get('code_challenge_method') !== 'S256' || !isChallenge(challenge)) return 'code_challenge must be an S256 PKCE challenge (code_challenge_method=S256)';
+  const state = params.get('state');
+  if (state !== null && !isAppState(state)) return 'state must be at most 256 printable ASCII characters';
+  return { redirectUri, challenge, ...(state !== null ? { state } : {}) };
+}
+
+/** GET /auth/<provider>/start?return=<path>[&link=1], or ?client=app&redirect_uri=&code_challenge=&code_challenge_method=S256[&state=] */
 export async function startLogin(request: Request, ctx: Ctx, provider: ProviderId): Promise<Response> {
   const { env } = ctx;
   if (!secretOk(env)) return unavailable(ctx);
@@ -186,10 +199,18 @@ export async function startLogin(request: Request, ctx: Ctx, provider: ProviderI
   const clientId = PROVIDERS[provider].clientId(env);
   if (!clientId || !configuredProviders(env).includes(provider)) return errorResponse(404, `Sign-in with ${provider} is not configured`);
   const url = new URL(request.url);
-  const returnTo = url.searchParams.get('return') ?? '/';
+  const client = url.searchParams.get('client');
+  if (client !== null && client !== 'app') return errorResponse(400, 'client must be app');
+  const returnTo = client === 'app' ? '/' : (url.searchParams.get('return') ?? '/');
   if (!isReturnPath(returnTo)) return errorResponse(400, 'return must be a path on this site');
   const login: LoginState = { provider, state: randomToken(16), verifier: randomToken(32), returnTo, expires: now() + STATE_TTL };
-  if (url.searchParams.get('link') === '1') login.linkUserId = (await requireUser(request, ctx)).id;
+  if (client === 'app') {
+    if (url.searchParams.has('link')) return errorResponse(400, 'An app cannot link a sign-in');
+    const app = readAppLogin(env, url.searchParams);
+    // Never redirected to: an address that is not allow-listed only gets this error.
+    if (typeof app === 'string') return errorResponse(400, app);
+    login.app = app;
+  } else if (url.searchParams.get('link') === '1') login.linkUserId = (await requireUser(request, ctx)).id;
   const cookie = await sign(encodeJson(login), env.SESSION_SECRET);
   const redirectUri = `${url.origin}/auth/${provider}/callback`;
   return redirect(PROVIDERS[provider].authorizeUrl(clientId, redirectUri, login.state, await sha256(login.verifier)), [
@@ -202,6 +223,8 @@ async function readLoginState(request: Request, env: Env & { SESSION_SECRET: str
   const value = cookie && (await unsign(cookie, env.SESSION_SECRET));
   const login = value ? (decodeJson(value) as LoginState | undefined) : undefined;
   if (!login || login.provider !== provider || !(login.expires > now()) || !isReturnPath(login.returnTo)) return undefined;
+  // Checked again: the allow-list may have changed since /start.
+  if (login.app && !isAppRedirectUri(env, login.app.redirectUri)) return undefined;
   return login;
 }
 
@@ -219,15 +242,29 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
     });
   }
   const clearState: [string, string] = ['Set-Cookie', stateCookie('', 0)];
+  const { app } = login;
+  /** Back to the page, or to the app's redirect URI (OAuth error codes), with the error. */
+  const failed = (reason: 'cancelled' | 'failed') =>
+    app
+      ? redirect(appRedirect(app.redirectUri, { error: reason === 'cancelled' ? 'access_denied' : 'server_error', state: app.state }), [clearState])
+      : redirect(withParam(login.returnTo, 'login_error', reason), [clearState]);
   const code = url.searchParams.get('code');
-  if (!code) return redirect(withParam(login.returnTo, 'login_error', url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'failed'), [clearState]);
+  if (!code) return failed(url.searchParams.get('error') === 'access_denied' ? 'cancelled' : 'failed');
 
   let profile: Profile;
   try {
     profile = await PROVIDERS[provider].profile(env, code, `${url.origin}/auth/${provider}/callback`, login.verifier);
   } catch (e) {
     log('warn', `Sign-in with ${provider} failed`, { requestId: ctx.requestId, error: errorText(e) });
-    return redirect(withParam(login.returnTo, 'login_error', 'failed'), [clearState]);
+    return failed('failed');
+  }
+
+  if (app) {
+    // No cookie: the app exchanges this code, with its PKCE verifier, at POST /auth/token.
+    const userId = await upsertUser(env, provider, profile);
+    ctx.userId = userId;
+    const appCode = await issueAppCode(env, userId, app);
+    return redirect(appRedirect(app.redirectUri, { code: appCode, state: app.state }), [clearState]);
   }
 
   if (login.linkUserId) {
@@ -243,7 +280,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
   const userId = await upsertUser(env, provider, profile);
   const token = randomToken();
   const t = now();
-  await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)')
+  await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind) VALUES (?, ?, ?, ?, 'web')")
     .bind(await sha256(token), userId, t + SESSION_TTL, t)
     .run();
   return redirect(login.returnTo, [clearState, ['Set-Cookie', sessionCookie(token, SESSION_TTL)]]);
@@ -299,52 +336,85 @@ export interface User {
   dailyGoal: number;
 }
 
+interface UserRow {
+  id: string;
+  display_name: string;
+  public_profile: number;
+  daily_goal: number;
+  expires_at: number;
+}
+
+const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal });
+
 /**
- * The signed-in user, or undefined without a valid session cookie. Sessions
- * slide: one used in the second half of its 30 days gets 30 more, and the
- * response carries the renewed cookie.
+ * The signed-in user, or undefined without valid credentials. A request
+ * with `Authorization: Bearer` is an app's: only its access token counts,
+ * never the cookie. Otherwise the session cookie: sessions slide, one used in
+ * the second half of its 30 days gets 30 more, and the response carries the
+ * renewed cookie.
  */
 export async function authenticate(request: Request, ctx: Ctx): Promise<User | undefined> {
+  const bearer = bearerToken(request);
+  if (bearer !== undefined) {
+    if (!bearer) return undefined;
+    // Access tokens only: a refresh token or a cookie's token is refused here.
+    const row = await ctx.env.DB.prepare(
+      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ?`,
+    )
+      .bind(await sha256(bearer), now())
+      .first<UserRow>();
+    if (!row) return undefined;
+    ctx.userId = row.id;
+    return toUser(row);
+  }
   const token = readCookie(request, SESSION_COOKIE);
   if (!token) return undefined;
   const hash = await sha256(token);
   const t = now();
   const row = await ctx.env.DB.prepare(
     `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.expires_at > ?`,
+     WHERE s.token_hash = ? AND s.kind = 'web' AND s.expires_at > ?`,
   )
     .bind(hash, t)
-    .first<{ id: string; display_name: string; public_profile: number; daily_goal: number; expires_at: number }>();
+    .first<UserRow>();
   if (!row) return undefined;
   ctx.userId = row.id;
   if (row.expires_at - t < SESSION_TTL / 2) {
     // Conditional, so of concurrent requests only the first renews it.
-    const { meta } = await ctx.env.DB.prepare('UPDATE sessions SET expires_at = ? WHERE token_hash = ? AND expires_at = ?')
+    const { meta } = await ctx.env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ? AND kind = 'web' AND expires_at = ?")
       .bind(t + SESSION_TTL, hash, row.expires_at)
       .run();
     if (meta.changes > 0) ctx.setCookies.push(sessionCookie(token, SESSION_TTL));
   }
-  return { id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal };
+  return toUser(row);
 }
 
 export async function requireUser(request: Request, ctx: Ctx): Promise<User> {
   const user = await authenticate(request, ctx);
-  if (!user) throw new HttpError(401, 'Sign in first');
+  if (!user) {
+    // RFC 6750: tells an app its access token is no good (expired or revoked), so it refreshes.
+    const headers: Record<string, string> = bearerToken(request) !== undefined ? { 'WWW-Authenticate': 'Bearer error="invalid_token"' } : {};
+    throw new HttpError(401, 'Sign in first', headers);
+  }
   return user;
 }
 
-/** POST /auth/logout: ends the session and clears its cookie. */
+/** POST /auth/logout: ends the cookie's session and clears the cookie (an app uses POST /auth/revoke). */
 export async function logout(request: Request, ctx: Ctx): Promise<Response> {
   const token = readCookie(request, SESSION_COOKIE);
-  if (token) await ctx.env.DB.prepare('DELETE FROM sessions WHERE token_hash = ?').bind(await sha256(token)).run();
+  if (token) await ctx.env.DB.prepare("DELETE FROM sessions WHERE token_hash = ? AND kind = 'web'").bind(await sha256(token)).run();
   return new Response(null, { status: 204, headers: { 'Set-Cookie': sessionCookie('', 0) } });
 }
 
-/** POST /api/me/sessions/revoke-all: signs the user out everywhere, this browser included. */
+/** POST /api/me/sessions/revoke-all: signs the user out everywhere, this browser included, apps' tokens and pending codes too. */
 export async function revokeAllSessions(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
-  await ctx.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id).run();
+  await ctx.env.DB.batch([
+    ctx.env.DB.prepare('DELETE FROM sessions WHERE user_id = ?').bind(user.id),
+    ctx.env.DB.prepare('DELETE FROM app_auth_codes WHERE user_id = ?').bind(user.id),
+  ]);
   // Instead of a renewal authenticate may have queued.
   ctx.setCookies = [sessionCookie('', 0)];
   return new Response(null, { status: 204 });

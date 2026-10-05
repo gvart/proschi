@@ -18,3 +18,5 @@ ids can one worker issue per second?
 2¹² = 4,096 ids per millisecond. × 1,000 ms = **4,096,000 ids/s**, about 4
 million. When the sequence runs out, the generator waits for the next
 millisecond.
+
+Numbers: [Numbers to know](../docs/numbers/#powers-of-two-and-ten).

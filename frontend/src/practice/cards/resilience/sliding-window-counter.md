@@ -20,3 +20,5 @@ The sliding minute covers the last 40 s of the previous window, 40/60 ≈ 0.67
 of it. Estimate = 30 + 80 × 0.67 ≈ 30 + 53 = **83 requests**, so the next
 request is allowed (83 < 100). It assumes the previous minute's requests were
 spread evenly.
+
+Numbers: [Numbers to know](../docs/numbers/#how-to-estimate).

@@ -19,3 +19,5 @@ All three must be down at once: 0.05³ = 0.000125, so availability is
 99.9875%. A month has 43,200 minutes: 43,200 × 0.000125 ≈ **5.4 minutes**.
 Three mediocre replicas beat one excellent server, as long as their failures
 really are independent.
+
+Numbers: [Numbers to know](../docs/numbers/#availability-nines).

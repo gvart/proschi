@@ -98,7 +98,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions, progress, card reviews and achievements (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews and achievements (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -117,7 +117,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements] = await DB.batch([
     DB.prepare('SELECT created_at, daily_goal FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
-    DB.prepare('SELECT created_at, expires_at FROM sessions WHERE user_id = ? ORDER BY created_at').bind(user.id),
+    DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
       `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, sim_version, problem_version
        FROM progress WHERE user_id = ? ORDER BY problem_id`,
@@ -139,7 +139,13 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       createdAt: (account.results[0] as Row).created_at,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
-    sessions: (sessions.results as Row[]).map((r) => ({ createdAt: r.created_at, expiresAt: r.expires_at })),
+    // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).
+    sessions: (sessions.results as Row[]).map((r) => ({
+      kind: r.kind,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      ...(r.kind === 'app_refresh' ? { rotatedAt: r.used_at } : {}),
+    })),
     progress: (progress.results as Row[]).map((r) => ({
       problemId: r.problem_id,
       runs: r.runs,

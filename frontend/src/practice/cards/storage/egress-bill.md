@@ -19,3 +19,5 @@ $0.05 per GB, what is the monthly egress bill?
 often much cheaper than sending them, which is why a CDN's lower bandwidth
 price and caching matter for file and video services. (Prices vary by
 provider and volume.)
+
+Numbers: [Numbers to know](../docs/numbers/#cloud-costs).
