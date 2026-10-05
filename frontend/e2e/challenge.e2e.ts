@@ -204,6 +204,18 @@ test.describe('daily challenge', () => {
     for (let n = 1; n <= 5; n++) {
       const c = challengeCard(page, n);
       await expect(c).toBeVisible();
+      // As in daily review: the card's heading takes focus and its top shows below the sticky header.
+      const heading = c.getByRole('heading', { level: 2 });
+      await expect(heading).toBeFocused();
+      await expect
+        .poll(() =>
+          heading.evaluate((h) => {
+            const header = document.querySelector('.ps-header')?.getBoundingClientRect().bottom ?? 0;
+            const r = h.getBoundingClientRect();
+            return r.top >= header - 1 && r.bottom <= window.innerHeight;
+          }),
+        )
+        .toBe(true);
       await expectNoHorizontalScroll(page, `card ${n}`);
       await answer(c, cards, n % 2 === 1);
     }

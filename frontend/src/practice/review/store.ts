@@ -78,6 +78,14 @@ function readOutbox(): Record<string, CardReview[]> {
   return Object.fromEntries(Object.entries(raw as Record<string, unknown>).map(([user, list]) => [user, readReviews(list)]));
 }
 
+/**
+ * Reviews the server has answered for in this page's life, by id, from any
+ * account store: its day counts include them even while the outbox still
+ * holds them (storage that could not drop them, another tab's copy).
+ */
+const answered = new Set<string>();
+export const sentReviews = (): ReadonlySet<string> => answered;
+
 /** The user's reviews waiting to be sent. */
 export function pendingReviews(userId: string): CardReview[] {
   const all = readOutbox();
@@ -115,7 +123,10 @@ export function accountStore(userId: string): CardStore {
         for (let batch = pending().slice(0, MAX_BATCH); batch.length; batch = pending().slice(0, MAX_BATCH)) {
           const answer = await api<CardReviewsAnswer>('/api/cards/reviews', { method: 'POST', body: { reviews: batch } });
           // Stored or skipped (an unknown card, a bad time): either way the server has answered for it.
-          for (const r of batch) sent.add(r.id);
+          for (const r of batch) {
+            sent.add(r.id);
+            answered.add(r.id);
+          }
           memory = memory.filter((r) => !sent.has(r.id));
           updateOutbox(userId, (list) => list.filter((r) => !sent.has(r.id)));
           Object.assign(states, answer.states);

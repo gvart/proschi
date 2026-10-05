@@ -222,3 +222,20 @@ test.describe('no sideways scrolling on a phone', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'This page does not exist.' })).toBeVisible();
   });
 });
+
+// The narrowest phones, and widths around the header's breakpoints (the
+// editor button shows from 480px): the header row never gets wider than the
+// screen. With the account menu as well: header.accounts.e2e.ts.
+for (const width of [320, 400, 470]) {
+  test.describe(`the header at ${width}px`, () => {
+    test.use({ viewport: { width, height: 740 }, isMobile: true, hasTouch: true });
+
+    test('fits on every kind of page', async ({ page }) => {
+      for (const path of ['./', 'practice/', 'practice/#/review', 'practice/#/url-shortener', 'app/', 'docs/']) {
+        await visit(page, path);
+        const burger = (await page.locator('.ps-header .ps-menu__button').boundingBox())!;
+        expect(burger.x + burger.width, `${path}: the menu button is off screen`).toBeLessThanOrEqual(width);
+      }
+    });
+  });
+}

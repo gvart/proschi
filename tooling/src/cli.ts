@@ -5,7 +5,7 @@
  * `proschi test` and `proschi analyze` run the simulation (see simulation.ts);
  * `proschi problem check|new` validates and scaffolds practice problems (see problem.ts);
  * `proschi cards check|lock` validates the practice cards (see cards.ts);
- * `proschi achievements check` validates the practice achievements (see achievements.ts).
+ * `proschi achievements check|lock` validates the practice achievements (see achievements.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';

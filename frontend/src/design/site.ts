@@ -15,6 +15,11 @@ export interface SiteLink {
 }
 
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
+/** How to contribute (CONTRIBUTING.md at the repository root), and its section on problems. */
+export const CONTRIBUTING_URL = `${GITHUB_URL}/blob/main/CONTRIBUTING.md`;
+export const CONTRIBUTE_PROBLEM_URL = `${CONTRIBUTING_URL}#adding-a-new-problem`;
+/** A new issue from .github/ISSUE_TEMPLATE/problem-idea.md, for an idea without the code. */
+export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-idea.md`;
 /** The interview prep roadmap: a route of the practice page (src/practice/roadmap.ts). */
 export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
 /** Daily review of the practice cards: a route of the practice page (src/practice/review/). */
@@ -56,6 +61,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     title: 'Project',
     links: [
       { label: 'GitHub', href: GITHUB_URL },
+      { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
       { label: 'Privacy', href: 'docs/privacy/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },

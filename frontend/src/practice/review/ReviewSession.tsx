@@ -8,6 +8,7 @@ import type { ChallengeAnswer } from '../../learn/challenge';
 import { TYPE_LABEL } from './labels';
 import Markdown, { InlineMarkdown } from '../Markdown';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
+import { prefersReducedMotion } from '../../design/motion';
 
 /** One answered card of a session, for the summary. */
 export interface SessionResult {
@@ -76,6 +77,40 @@ export default function ReviewSession({ items, states, topics, onReview, onDone,
   );
 }
 
+/** The bottom edge of the sticky site header, the first visible pixel below it (0 without one). */
+function headerBottom(): number {
+  const header = document.querySelector('.ps-header');
+  return header ? Math.max(0, header.getBoundingClientRect().bottom) : 0;
+}
+
+const scrollBehavior = (): ScrollBehavior => (prefersReducedMotion() ? 'auto' : 'smooth');
+
+/**
+ * Brings a new card's top (topic, type and question) into view below the
+ * sticky header. On a phone the page is still scrolled down to the last
+ * card's buttons; a card that already starts in view stays where it is.
+ */
+function showCardTop(el: HTMLElement) {
+  const offset = headerBottom() + 12;
+  const top = el.getBoundingClientRect().top;
+  if (top >= offset && top <= window.innerHeight - 96) return;
+  el.style.scrollMarginTop = `${offset}px`;
+  el.scrollIntoView({ block: 'start', behavior: scrollBehavior() });
+}
+
+/**
+ * Brings the start of a just-revealed answer into view when it opened below
+ * the fold, scrolling only as far as needed so the question above stays in
+ * sight: no jump away from what is being read.
+ */
+function showRevealed(el: HTMLElement) {
+  const top = el.getBoundingClientRect().top;
+  const limit = window.innerHeight - 96;
+  if (top <= limit) return;
+  const target = Math.max(headerBottom() + 12, window.innerHeight / 3);
+  window.scrollBy({ top: top - target, behavior: scrollBehavior() });
+}
+
 /** Keys typed into a field or on a button belong to it, not to the shortcuts. */
 function ownKey(e: KeyboardEvent): boolean {
   const el = e.target as HTMLElement | null;
@@ -125,8 +160,13 @@ export function CardView({ card, isNew, topic, state, position, onRate, round, o
   const shownAt = useRef(Date.now());
   const answeredAfter = useRef<number | undefined>(undefined);
   const box = useRef<HTMLElement>(null);
-  // The new card is announced to screen readers and takes keyboard focus from the last one's buttons.
-  useEffect(() => box.current?.focus({ preventScroll: true }), []);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // The new card's heading takes keyboard focus from the last card's buttons, so it is announced
+  // and the next Tab goes into this card; the card's top is scrolled into view below the header.
+  useEffect(() => {
+    heading.current?.focus({ preventScroll: true });
+    if (box.current) showCardTop(box.current);
+  }, []);
   const answered = () => {
     answeredAfter.current ??= Date.now() - shownAt.current;
   };
@@ -145,14 +185,20 @@ export function CardView({ card, isNew, topic, state, position, onRate, round, o
       data-card-id={card.id}
       className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md focus:outline-none"
     >
-      <div className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5">
+      <h2
+        ref={heading}
+        tabIndex={-1}
+        data-card-heading=""
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5 focus:outline-none focus-visible:bg-pop-yellow/20"
+      >
+        <span className="sr-only">{position}: </span>
         <span className={eyebrow}>{topic}</span>
         <span className="text-muted" aria-hidden="true">
           ·
         </span>
         <span className={eyebrow}>{TYPE_LABEL[card.type]}</span>
         {isNew && <span className="ml-auto rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-[11px] font-bold text-on-accent">New</span>}
-      </div>
+      </h2>
       <div className="p-4 sm:p-5">
         {card.type === 'flip' ? (
           <FlipBody card={card} state={state} onShow={answered} onRate={rate} />
@@ -188,7 +234,11 @@ function Why({ card }: { card: Card }) {
 /** A focusable region for what is revealed after answering, so it is read out and keyboard focus lands there. */
 function Revealed({ label, children }: { label: string; children: ReactNode }) {
   const ref = useRef<HTMLDivElement>(null);
-  useEffect(() => ref.current?.focus({ preventScroll: true }), []);
+  useEffect(() => {
+    if (!ref.current) return;
+    ref.current.focus({ preventScroll: true });
+    showRevealed(ref.current);
+  }, []);
   return (
     <div ref={ref} tabIndex={-1} role="region" aria-label={label} className="mt-4 border-t-bw-1 border-dashed border-ink/40 pt-4 focus:outline-none">
       {children}

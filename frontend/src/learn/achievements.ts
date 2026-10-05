@@ -1,5 +1,5 @@
 import type { Card } from './cards';
-import { CARD_ID } from './cards';
+import { CARD_ID, readLock } from './cards';
 import { isNew, reviewable, type CardStates } from './review';
 import { computeStreak, type DailyGoal, type Day, type DayActivity } from './streak';
 import type { Rating } from './fsrs';
@@ -89,6 +89,16 @@ export interface Achievement {
   icon: Icon;
   tier?: Tier;
   rule: Rule;
+  /**
+   * Hidden without deleting it (its id stays in achievements.lock): not
+   * evaluated and not shown, while the badges already earned stay stored.
+   */
+  retired?: boolean;
+}
+
+/** The achievements in use: those not retired. */
+export function liveAchievements<A extends Pick<Achievement, 'retired'>>(achievements: readonly A[]): A[] {
+  return achievements.filter((a) => a.retired !== true);
 }
 
 /** A card counts as mastered from this stability (days until recall falls to 90%). */
@@ -204,7 +214,7 @@ export function achievementStatuses(
   now: number,
 ): { statuses: AchievementStatus[]; newly: string[] } {
   const newly: string[] = [];
-  const statuses = achievements.map((a): AchievementStatus => {
+  const statuses = liveAchievements(achievements).map((a): AchievementStatus => {
     const progress = ruleProgress(a.rule, snapshot, context);
     const record = Object.prototype.hasOwnProperty.call(earned, a.id) ? earned[a.id] : undefined;
     if (record) return { ...a, current: progress.target, target: progress.target, earned: true, earnedAt: record.earnedAt, unseen: record.seenAt === undefined };
@@ -299,6 +309,8 @@ export function achievementsAnswer(statuses: AchievementStatus[], map: Skills, s
 export interface AchievementViolation {
   index?: number;
   id?: string;
+  /** About achievements.lock rather than the achievements file. */
+  inLock?: true;
   message: string;
 }
 
@@ -310,12 +322,31 @@ export interface AchievementCheckContext {
   topics: readonly string[];
   /** Roadmap stage ids. */
   stages: readonly string[];
+  /**
+   * The text of achievements.lock, every id ever published: each achievement
+   * must be in it and each id in it must still have an achievement. Not
+   * checked when absent.
+   */
+  lock?: string;
+}
+
+/** The file next to achievements.json listing every achievement id ever published. */
+export const ACHIEVEMENTS_LOCK_FILE = 'achievements.lock';
+
+export const ACHIEVEMENTS_LOCK_HEADER = `# Every achievement id ever published, sorted. Earned badges are stored by id,
+# so an id is never deleted or reused: retire a badge with "retired": true instead.
+# \`proschi achievements lock\` adds new achievements' ids (docs/CARDS.md).
+`;
+
+/** achievements.lock with `ids` added, sorted and without duplicates. */
+export function writeAchievementsLock(existing: readonly string[], ids: readonly string[]): string {
+  return ACHIEVEMENTS_LOCK_HEADER + [...new Set([...existing, ...ids])].sort().join('\n') + '\n';
 }
 
 /** Lengths that keep a badge readable on a phone. */
 export const ACHIEVEMENT_LIMITS = { title: 32, description: 120 } as const;
 
-const FIELDS = ['id', 'title', 'description', 'icon', 'tier', 'rule'];
+const FIELDS = ['id', 'title', 'description', 'icon', 'tier', 'rule', 'retired'];
 const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
 
 /**
@@ -323,7 +354,11 @@ const DIFFICULTIES: Difficulty[] = ['easy', 'medium', 'hard'];
  * description, icon, tier?, rule}` with unique ids, known icons, tiers and
  * rule kinds, each rule with exactly its fields, tags, topics and stages
  * that exist, counts of solves there are enough problems for, and no two
- * badges with the same rule. Answers the achievements that read well and every violation.
+ * badges with the same rule. With `context.lock`, also that every id is in
+ * achievements.lock and every locked id still has an achievement. A retired
+ * badge (`"retired": true`) keeps its id but is not held to the catalog: its
+ * tags, topics and stages may be gone and another badge may take its rule.
+ * Answers the achievements that read well and every violation.
  */
 export function checkAchievements(raw: unknown, context: AchievementCheckContext): { achievements: Achievement[]; violations: AchievementViolation[] } {
   const violations: AchievementViolation[] = [];
@@ -351,9 +386,11 @@ export function checkAchievements(raw: unknown, context: AchievementCheckContext
     }
     if (!ICONS.includes(a.icon as Icon)) fail(`"icon" must be one of ${ICONS.join(', ')}`);
     if (a.tier !== undefined && !TIERS.includes(a.tier as Tier)) fail(`"tier" must be one of ${TIERS.join(', ')}`);
-    const ruleError = checkRule(a.rule, context);
+    if (a.retired !== undefined && a.retired !== true) fail('"retired" is true or left out');
+    const retired = a.retired === true;
+    const ruleError = checkRule(a.rule, context, retired);
     if (ruleError) fail(ruleError);
-    else {
+    else if (!retired) {
       const key = JSON.stringify(Object.entries(a.rule as object).sort(([x], [y]) => x.localeCompare(y)));
       const other = rules.get(key);
       if (other !== undefined) fail(`Same rule as "${other}"`);
@@ -361,11 +398,22 @@ export function checkAchievements(raw: unknown, context: AchievementCheckContext
     }
     if (violations.length === before) achievements.push(a as unknown as Achievement);
   });
+  if (context.lock !== undefined) {
+    const { ids: locked, lines } = readLock(context.lock);
+    if (locked.join('\n') !== [...new Set(locked)].sort().join('\n')) violations.push({ inLock: true, message: `${ACHIEVEMENTS_LOCK_FILE} is not sorted, or an id appears twice; run \`proschi achievements lock\`` });
+    raw.forEach((item: unknown, index) => {
+      const id = item && typeof item === 'object' ? (item as Record<string, unknown>).id : undefined;
+      if (typeof id === 'string' && CARD_ID.test(id) && !lines.has(id)) violations.push({ index, id, message: `New achievement: add its id to ${ACHIEVEMENTS_LOCK_FILE} with \`proschi achievements lock\`` });
+    });
+    for (const id of lines.keys()) {
+      if (!ids.has(id)) violations.push({ id, inLock: true, message: `${ACHIEVEMENTS_LOCK_FILE} lists "${id}", which has no achievement: never delete one, set "retired": true on it instead` });
+    }
+  }
   return { achievements, violations };
 }
 
 /** What is wrong with one rule, or undefined. */
-function checkRule(raw: unknown, context: AchievementCheckContext): string | undefined {
+function checkRule(raw: unknown, context: AchievementCheckContext, retired = false): string | undefined {
   const rule = raw as Record<string, unknown> | null;
   if (!rule || typeof rule !== 'object' || Array.isArray(rule)) return '"rule" must be an object {"kind", …}';
   const kind = rule.kind as RuleKind;
@@ -380,6 +428,8 @@ function checkRule(raw: unknown, context: AchievementCheckContext): string | und
     } else if (typeof min !== 'number' || !Number.isInteger(min) || min < 1) return `"min" of a "${kind}" rule must be a whole number from 1`;
   }
   if (rule.difficulty !== undefined && !DIFFICULTIES.includes(rule.difficulty as Difficulty)) return `"difficulty" must be one of ${DIFFICULTIES.join(', ')}`;
+  // A retired badge is never evaluated: what it names may be gone.
+  if (retired) return undefined;
   if (rule.tag !== undefined && (typeof rule.tag !== 'string' || !context.problems.some((p) => p.tags.includes(rule.tag as string)))) {
     return `"tag" names "${String(rule.tag)}", which no practice problem has`;
   }

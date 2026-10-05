@@ -22,6 +22,10 @@ test.describe('shared header and footer', () => {
     }
     expect(footers).toHaveLength(3);
     expect(new Set(footers.map((f) => f.join('|'))).size).toBe(1);
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Contribute' })).toHaveAttribute(
+      'href',
+      'https://github.com/gvart/proschi/blob/main/CONTRIBUTING.md',
+    );
   });
 
   test('the theme toggle persists across pages and reloads, and "system" follows the system', async ({ page }) => {
