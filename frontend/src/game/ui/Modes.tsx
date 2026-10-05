@@ -1,8 +1,9 @@
-import { GitBranch, Undo2, Zap } from 'lucide-react';
+import { CheckCircle2, GitBranch, Search, Undo2, XCircle, Zap } from 'lucide-react';
+import { useState } from 'react';
 import Markdown from '../../practice/Markdown';
 import { eyebrow, outlineButton } from '../../components/Playground/ui';
 import type { Forecast, Game } from '../engine/run';
-import { MIGRATION_PHASES, type MigrationPhase } from '../engine/types';
+import { MIGRATION_PHASES, type DiagnosisDef, type MigrationPhase } from '../engine/types';
 import { IconTile } from './gameIcons';
 import { rps, SENDER_LABEL, TICKET_ICON, usd } from './visual';
 
@@ -152,6 +153,48 @@ export function ChangesPanel({ game, planning, onMigrate, onSunset }: { game: Ga
           </ul>
         </div>
       )}
+    </section>
+  );
+}
+
+/** On-call: name the root cause before touching anything; the answer explains every option. */
+export function DiagnosisPanel({ diagnosis, picked, onPick }: { diagnosis: DiagnosisDef; picked?: { pick: string; correct: boolean }; onPick: (id: string) => void }) {
+  const [choice, setChoice] = useState<string>();
+  return (
+    <section className={`${panel} p-3`} aria-label="Diagnosis">
+      <p className={`${eyebrow} flex items-center gap-1.5`}>
+        <Search size={14} aria-hidden="true" /> Diagnose before you act
+      </p>
+      <fieldset className="mt-1">
+        <legend className="font-semibold">{diagnosis.question}</legend>
+        <ul className="mt-2 space-y-1.5">
+          {diagnosis.options.map((o) => {
+            const mine = picked?.pick === o.id;
+            return (
+              <li key={o.id}>
+                <label className={`flex items-start gap-2 rounded border-bw-1 p-2 text-sm ${picked ? (o.correct ? 'border-pass bg-pass/10' : mine ? 'border-fail bg-fail/10' : 'border-ink/20') : 'border-ink/30 hover:bg-ink/5'}`}>
+                  <input type="radio" name="diagnosis" className="mt-0.5" disabled={!!picked} checked={picked ? mine : choice === o.id} onChange={() => setChoice(o.id)} />
+                  <span>
+                    {o.text}
+                    {picked && (
+                      <span className="mt-0.5 flex items-start gap-1 text-muted">
+                        {o.correct ? <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0 text-pass" aria-label="Right" /> : <XCircle size={14} className="mt-0.5 flex-shrink-0 text-fail" aria-label="Wrong" />}
+                        {o.why}
+                      </span>
+                    )}
+                  </span>
+                </label>
+              </li>
+            );
+          })}
+        </ul>
+      </fieldset>
+      {!picked && (
+        <button type="button" className={`${outlineButton} mt-2`} disabled={!choice} onClick={() => choice && onPick(choice)}>
+          Commit to this cause
+        </button>
+      )}
+      {picked && <p className={`mt-2 text-sm font-semibold ${picked.correct ? 'text-pass' : 'text-fail'}`}>{picked.correct ? 'Right: now fix it on the board.' : 'Not it: that cost Trust. Fix the real cause on the board.'}</p>}
     </section>
   );
 }

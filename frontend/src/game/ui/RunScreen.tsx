@@ -18,7 +18,7 @@ const CodeEditor = lazy(() => import('../../components/Playground/CodeEditor'));
 import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } from './layout';
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
-import { ChangesPanel, TicketCard } from './Modes';
+import { ChangesPanel, DiagnosisPanel, TicketCard } from './Modes';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
 import type { Arcade, RunResult } from './useArcade';
@@ -265,7 +265,11 @@ export default function RunScreen(props: RunScreenProps) {
   }, [wiring, selected, plan, components, game]);
 
   // Planning feedback: what the plan breaks, what it costs a month.
-  const problems = useMemo(() => (s.phase === 'plan' ? game.problems(plan) : []), [s.phase, plan, game]);
+  const needsDiagnosis = s.phase === 'plan' && !!game.waveDef().diagnosis && !s.diagnosis;
+  const problems = useMemo(
+    () => (s.phase === 'plan' ? [...(needsDiagnosis ? ['Name the root cause first: the fix depends on it.'] : []), ...game.problems(plan)] : []),
+    [s.phase, plan, game, needsDiagnosis],
+  );
   const broken = useMemo(() => {
     if (s.phase !== 'plan' || problems.length) return [];
     try {
@@ -657,6 +661,9 @@ export default function RunScreen(props: RunScreenProps) {
       {!narrow && hud}
       {stampEl}
       {planning && forecast.ticket && <TicketCard ticket={forecast.ticket} key={`ticket-${s.wave}`} />}
+      {planning && game.waveDef().diagnosis && (
+        <DiagnosisPanel key={`diagnosis-${s.wave}`} diagnosis={game.waveDef().diagnosis!} picked={s.diagnosis} onPick={(pick) => apply({ t: 'diagnose', pick })} />
+      )}
       {planning && <ForecastPanel forecast={forecast} scenario={game.scenario} events={events} act={act} collapsible={narrow} key={`forecast-${s.wave}`} />}
       {planning && (
         <ChangesPanel
