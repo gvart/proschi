@@ -6,7 +6,7 @@ import { flowsOf } from '../../sim/overlay';
 import { profileOf, type Profile } from '../../sim/profiles';
 import { runTests, type TestResult } from '../../sim/tests';
 import { boardKey, boardProblems, cloneBoard } from './board';
-import { BOTS, compile, USERS, WAN, WAN_MS, type Compiled, type Situation } from './compile';
+import { BACKFILL_PREFIX, BOTS, compile, USERS, WAN, WAN_MS, type Compiled, type Situation } from './compile';
 import { computeMods, targets, type Mods } from './mods';
 import { shuffled, stream, weighted } from './rng';
 import {
@@ -42,6 +42,8 @@ import {
   TRUST_BOSS,
   TRUST_CLEAN_WAVE,
   TRUST_PENALTY,
+  DIAGNOSIS_POINTS,
+  DIAGNOSIS_TRUST,
 } from './rules';
 import {
   CURVES,
@@ -172,6 +174,8 @@ export interface WaveSummary {
   worst?: Breach;
   events: EventInstance[];
   debrief?: string;
+  /** On-call: the root cause picked, and whether it was right. */
+  diagnosis?: { pick: string; correct: boolean };
 }
 
 export type Outcome = 'cleared' | 'retired' | 'churned' | 'bankrupt' | 'max';
@@ -219,6 +223,8 @@ export interface RunState {
   sunset: string[];
   /** Migrations done in one go this wave: the store's writes lock for two ticks. */
   bigBang: string[];
+  /** On-call: the root cause picked this wave. */
+  diagnosis?: { pick: string; correct: boolean };
 }
 
 /** What the forecast panel shows before planning. */
@@ -322,7 +328,7 @@ export interface MigrationState {
 
 const phaseIndex = (p: MigrationPhase) => MIGRATION_PHASES.indexOf(p);
 /** The background job's use case key while a migration backfills. */
-export const backfillKey = (id: string) => `backfill_${id}`;
+export const backfillKey = (id: string) => `${BACKFILL_PREFIX}${id}`;
 export const LEARN_IDS: readonly string[] = [...new Set(Object.values(BREACH_LEARN).flat())];
 
 export class Game {
@@ -492,6 +498,7 @@ export class Game {
     switch (action.t) {
       case 'deploy': {
         this.expect('plan');
+        if (this.waveDef().diagnosis && !s.diagnosis) throw new GameError('Name the root cause first: the fix depends on it');
         this.checkBoard(action.board);
         s.board = cloneBoard(action.board);
         s.phase = 'run';
@@ -582,6 +589,24 @@ export class Game {
         } else throw new GameError('A migration moves next, rolls back, or goes all at once');
         break;
       }
+      case 'diagnose': {
+        this.expect('plan');
+        const d = this.waveDef().diagnosis;
+        if (!d) throw new GameError('There is nothing to diagnose this wave');
+        if (s.diagnosis) throw new GameError('You already named a root cause this wave');
+        const option = d.options.find((o) => o.id === action.pick);
+        if (!option) throw new GameError(`No such diagnosis '${action.pick}'`);
+        const correct = !!option.correct;
+        s.diagnosis = { pick: option.id, correct };
+        if (correct) {
+          s.trust = Math.min(s.maxTrust, s.trust + DIAGNOSIS_TRUST);
+          s.score += DIAGNOSIS_POINTS;
+        } else {
+          s.trust = Math.max(0, s.trust - TRUST_PENALTY.misdiagnosis);
+          if (s.trust <= 0) this.end('churned');
+        }
+        break;
+      }
       case 'sunset': {
         this.expect('plan');
         const uc = this.scenario.useCases[action.useCase];
@@ -645,6 +670,7 @@ export class Game {
     s.ticks = [];
     s.rerolls = 0;
     s.bigBang = [];
+    delete s.diagnosis;
     for (const key of Object.keys(w.traffic)) if (!s.useCases.includes(key)) s.useCases.push(key);
     const lines = (w.requirements ?? []).map((l) => this.harder(l));
     s.requirements = mergeRequirements(s.requirements, lines);
@@ -755,6 +781,7 @@ export class Game {
       ...(worst ? { worst } : {}),
       events: s.events,
       ...(w.debrief ? { debrief: w.debrief } : {}),
+      ...(s.diagnosis ? { diagnosis: s.diagnosis } : {}),
     };
     s.history.push(summary);
     return summary;

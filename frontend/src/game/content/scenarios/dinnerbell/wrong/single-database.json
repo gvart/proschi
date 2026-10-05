@@ -1,0 +1,71 @@
+{
+  "seed": "reference",
+  "note": "Names every cause right but never runs a database replica: each failover is an outage, and the cold cache and the zone loss land on one box.",
+  "plays": [
+    {
+      "diagnose": "spike",
+      "set": {
+        "api": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "diagnose": "no-replica"
+    },
+    {
+      "diagnose": "bots",
+      "add": [
+        {
+          "id": "waf",
+          "component": "waf",
+          "replicas": 2
+        }
+      ],
+      "unwire": [
+        [
+          "users",
+          "lb"
+        ]
+      ],
+      "wire": [
+        [
+          "users",
+          "waf"
+        ],
+        [
+          "waf",
+          "lb"
+        ]
+      ]
+    },
+    {
+      "diagnose": "stampede"
+    },
+    {
+      "diagnose": "single",
+      "set": {
+        "lb": {
+          "replicas": 2
+        },
+        "cache": {
+          "replicas": 2
+        },
+        "queue": {
+          "replicas": 2
+        },
+        "worker": {
+          "replicas": 2
+        },
+        "waf": {
+          "replicas": 3
+        }
+      }
+    }
+  ],
+  "expect": {
+    "shows": [
+      "unroutable"
+    ]
+  }
+}

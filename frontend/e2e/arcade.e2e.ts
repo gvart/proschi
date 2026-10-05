@@ -141,3 +141,16 @@ test('Chaotic Startup: tickets instead of a draft, and a migration one phase a w
   await expect(changes.getByRole('list', { name: /Expand$/ })).toBeVisible();
   await expect(changes.getByRole('button', { name: 'Roll back' })).toBeDisabled();
 });
+
+test('On-call: name the root cause before deploying, and see why each answer is right or wrong', async ({ page }) => {
+  await page.goto('practice/#/arcade');
+  await page.getByRole('listitem').filter({ hasText: 'Dinnerbell' }).getByRole('button', { name: 'Play', exact: true }).click();
+  await expect(page.getByRole('article', { name: /Ticket: PAGE: menus timing out/ })).toContainText('requests/s 1 310 -> 2 640');
+  await expect(page.getByRole('button', { name: 'Deploy wave 1' })).toBeDisabled();
+  const diagnosis = page.getByRole('region', { name: 'Diagnosis' });
+  await diagnosis.getByLabel('Twice the usual traffic, and the app servers are full').check();
+  await diagnosis.getByRole('button', { name: 'Commit to this cause' }).click();
+  await expect(diagnosis).toContainText('Right: now fix it on the board.');
+  await expect(diagnosis).toContainText('Rolling back would cost time');
+  await expect(page.getByRole('button', { name: 'Deploy wave 1' })).toBeEnabled();
+});

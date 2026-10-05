@@ -1,0 +1,47 @@
+{
+  "seed": "reference",
+  "note": "Guesses the first cause that comes to mind and throws app servers at every page: the database stays single, bots still pour in, and the zone outage takes what ran once.",
+  "plays": [
+    {
+      "diagnose": "db-slow",
+      "set": {
+        "api": {
+          "replicas": 6
+        }
+      }
+    },
+    {
+      "diagnose": "cache",
+      "set": {
+        "api": {
+          "replicas": 8
+        }
+      }
+    },
+    {
+      "diagnose": "launch",
+      "set": {
+        "api": {
+          "replicas": 10
+        }
+      }
+    },
+    {
+      "diagnose": "bigger",
+      "set": {
+        "api": {
+          "replicas": 12
+        }
+      }
+    },
+    {
+      "diagnose": "failover-region"
+    }
+  ],
+  "expect": {
+    "failsBy": 5,
+    "shows": [
+      "unroutable"
+    ]
+  }
+}

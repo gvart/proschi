@@ -27,6 +27,9 @@ import { parseSize } from '../../dsl/parser';
  */
 
 /** The parts of the board's situation that change the compiled source (the rest is numbers, applied per tick). */
+/** Use case keys of migration backfill jobs (run.ts `backfillKey`). */
+export const BACKFILL_PREFIX = 'backfill_';
+
 export interface Situation {
   /** Nodes with no instance up. */
   down: readonly string[];
@@ -181,9 +184,10 @@ export function compile(
     return undefined;
   };
 
+  // A migration's backfill is a job, not a route: any app server runs it.
   const handles = (id: string, key: string) => {
     const h = info.get(id)?.node.handles;
-    return !h || h.length === 0 || h.includes(key);
+    return !h || h.length === 0 || h.includes(key) || key.startsWith(BACKFILL_PREFIX);
   };
 
   const lines: string[] = [`title ${quote(scenario.title)} ${quote(scenario.summary)}`, ''];

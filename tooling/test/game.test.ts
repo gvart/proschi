@@ -27,7 +27,7 @@ describe('proschi game check', () => {
   it("passes the repository's content and plays its scripted runs", () => {
     const { code, out } = capture(['check']);
     expect(code).toBe(0);
-    expect(out).toMatch(/5 scenario\(s\), \d+ components, \d+ cards, \d+ events, \d+ perks: no violations/);
+    expect(out).toMatch(/6 scenario\(s\), \d+ components, \d+ cards, \d+ events, \d+ perks: no violations/);
     expect(out).toMatch(/shortly\/reference\.json: retired after 12 wave\(s\)/);
     expect(out).toMatch(/drop\/wrong\/nosql-seats\.json: churned after \d wave\(s\)/);
   });

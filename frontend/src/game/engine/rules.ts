@@ -30,6 +30,10 @@ export const MAX_NODES = 40;
 /** Instance sizes S, M, L: the language's `size` (sim/profiles.ts), in tier order. */
 export const TIERS = (['S', 'M', 'L'] as const).map((name) => ({ name, ...SIZES[name] }));
 
+/** A right diagnosis: Trust back (time to recover was short) and points. */
+export const DIAGNOSIS_TRUST = 5;
+export const DIAGNOSIS_POINTS = 400;
+
 /** Trust (lives): a run ends at 0. */
 export const MAX_TRUST = 100;
 export const TRUST_PENALTY = {
@@ -51,6 +55,8 @@ export const TRUST_PENALTY = {
   compat: 6,
   /** A migration that locked writes or lost rows. */
   migration: 6,
+  /** Blaming the wrong cause: the fix goes the wrong way while users wait. */
+  misdiagnosis: 10,
 } as const;
 export const TRUST_CLEAN_WAVE = 5;
 export const TRUST_BOSS = 15;

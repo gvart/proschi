@@ -60,6 +60,8 @@ export interface Play {
   migrate?: { id: string; to: 'next' | 'rollback' | 'big-bang' }[];
   /** Legacy use cases to stop serving before deploying. */
   sunset?: string[];
+  /** The diagnosis option to pick, on a wave that asks for one. */
+  diagnose?: string;
 }
 
 export interface ScriptedRun {
@@ -114,6 +116,10 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
     const play = run.plays[w] ?? {};
     for (const m of play.migrate ?? []) game.apply({ t: 'migrate', id: m.id, to: m.to });
     for (const key of play.sunset ?? []) game.apply({ t: 'sunset', useCase: key });
+    if (game.waveDef().diagnosis) {
+      game.apply({ t: 'diagnose', pick: play.diagnose ?? game.waveDef().diagnosis!.options[0].id });
+      if ((s.phase as string) === 'over') break;
+    }
     const board = applyPlay(s.board, play);
     if (play.loadtest) game.apply({ t: 'loadtest', board });
     game.apply({ t: 'deploy', board });
@@ -374,7 +380,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
       if ('cleared' in run.expect) {
         if (!st.cleared) {
           const last = st.history[st.history.length - 1];
-          v(path, `Must clear all ${WAVES} waves, but ended in wave ${st.history.length} (${st.outcome}): ${last?.worst?.message ?? 'no breach'}`);
+          v(path, `Must clear all ${s.waves.length} waves, but ended in wave ${st.history.length} (${st.outcome}): ${last?.worst?.message ?? 'no breach'}`);
         }
       } else {
         if ('failsBy' in run.expect) {

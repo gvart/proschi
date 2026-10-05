@@ -262,10 +262,18 @@ export interface Freshness {
   maxMinutes: number;
 }
 
+/** On-call: what the player must work out before acting, from the ticket's alert and logs. */
+export interface DiagnosisDef {
+  question: string;
+  options: { id: string; text: string; correct?: boolean; why: string }[];
+}
+
 export interface WaveDef {
   name?: string;
   /** The ticket of this wave (design-first modes). */
   ticket?: TicketDef;
+  /** A root cause to pick before deploying (on-call). */
+  diagnosis?: DiagnosisDef;
   boss?: boolean;
   /** Base rps per use case key; the curve multiplies it. */
   traffic: Record<string, number>;
@@ -405,6 +413,8 @@ export type Action =
   | { t: 'contract'; pick: number | null }
   /** Planning: move a migration one phase on, back, or all the way at once. */
   | { t: 'migrate'; id: string; to: 'next' | 'rollback' | 'big-bang' }
+  /** Planning: name the root cause of the wave's incident (one of the diagnosis options). */
+  | { t: 'diagnose'; pick: string }
   /** Planning: stop serving a legacy use case (an old API version). */
   | { t: 'sunset'; useCase: string }
   /** After the last wave: keep going (Endless) or bank the score. */

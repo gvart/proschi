@@ -32,13 +32,13 @@ const setup = (over: Partial<RunSetup> = {}): RunSetup => ({
 describe('game content', () => {
   it('reads without errors', () => {
     expect(errors.map((e) => e.message)).toEqual([]);
-    expect(content.scenarios.map((s) => s.id)).toEqual(['shortly', 'snapshots', 'ping', 'drop', 'pawprint']);
+    expect(content.scenarios.map((s) => s.id)).toEqual(['shortly', 'snapshots', 'ping', 'drop', 'pawprint', 'dinnerbell']);
   });
 
   it('passes every check: ids, references, requirements, and the scripted runs', () => {
     const check = checkGame(files, ctx);
     expect(check.violations).toEqual([]);
-    expect(check.runs.filter((r) => r.name === 'reference.json').every((r) => r.outcome === 'retired' && r.waves === WAVES)).toBe(true);
+    expect(check.runs.filter((r) => r.name === 'reference.json').every((r) => r.outcome === 'retired' && r.waves === content.scenarios.find((s) => s.id === r.scenario)!.waves.length)).toBe(true);
   });
 
   it('finds what a contributor gets wrong', () => {

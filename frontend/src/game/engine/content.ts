@@ -201,6 +201,12 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
   for (const [i, w] of data.waves.entries()) {
     need(w && typeof w.traffic === 'object', `Wave ${i + 1} needs "traffic"`);
     need(w.curve === undefined || w.curve in CURVES, `Wave ${i + 1}: unknown curve "${w.curve}"; use ${Object.keys(CURVES).join(', ')}`);
+    if (w.diagnosis !== undefined) {
+      const d = w.diagnosis;
+      need(d && typeof d.question === 'string' && Array.isArray(d.options) && d.options.length >= 2, `Wave ${i + 1}: a diagnosis needs a question and at least two options`);
+      need(d.options.every((o) => o && typeof o.id === 'string' && typeof o.text === 'string' && typeof o.why === 'string'), `Wave ${i + 1}: every diagnosis option needs an id, a text and a why`);
+      need(d.options.filter((o) => o.correct).length === 1, `Wave ${i + 1}: exactly one diagnosis option is correct`);
+    }
     if (w.ticket !== undefined) {
       const t = w.ticket;
       need(t && typeof t.id === 'string' && typeof t.title === 'string', `Wave ${i + 1}: a ticket needs an id and a title`);
