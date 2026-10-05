@@ -1,0 +1,17 @@
+[
+  { "id": "estimation", "title": "Estimation", "summary": "Back-of-envelope numbers: requests per second, storage, bandwidth and the constants behind them." },
+  { "id": "networking", "title": "Networking", "summary": "DNS, load balancers, proxies and what happens between the client and the first server." },
+  { "id": "api-design", "title": "API design", "summary": "Endpoints, pagination, idempotency keys and the contracts between services." },
+  { "id": "caching", "title": "Caching", "summary": "Cache-aside, write policies, eviction, invalidation and hot keys." },
+  { "id": "databases", "title": "Databases", "summary": "Indexes, storage engines, transactions and choosing a data store." },
+  { "id": "replication", "title": "Replication", "summary": "Leaders and followers, synchronous and asynchronous copies, and replication lag." },
+  { "id": "sharding", "title": "Sharding", "summary": "Splitting data across machines: partition keys, consistent hashing and hot partitions." },
+  { "id": "consistency", "title": "Consistency", "summary": "CAP, quorums, isolation levels and the guarantees a reader can count on." },
+  { "id": "queues", "title": "Queues", "summary": "Message queues, pub/sub, delivery guarantees and smoothing load with async work." },
+  { "id": "streaming", "title": "Streaming", "summary": "Logs like Kafka, partitions and ordering, windows and aggregations over events." },
+  { "id": "availability", "title": "Availability", "summary": "Nines, redundancy, failover and how availability combines across components." },
+  { "id": "resilience", "title": "Resilience", "summary": "Timeouts, retries with backoff, circuit breakers, rate limits and graceful degradation." },
+  { "id": "storage", "title": "Storage", "summary": "Object, block and file storage, CDNs for big files, and what bytes cost." },
+  { "id": "realtime", "title": "Realtime", "summary": "WebSockets, push, presence and routing messages to connected clients." },
+  { "id": "data-structures", "title": "Data structures", "summary": "Bloom filters, HyperLogLog, count-min sketches, geohashes and other tools of scale." }
+]

@@ -1,0 +1,35 @@
+# Every card id ever published, sorted. Review history is stored by id, so an
+# id is never deleted or reused: retire a card with `status: retired` instead.
+# `proschi cards lock` adds new cards' ids (docs/CARDS.md).
+at-least-once-needs-idempotency
+availability-in-series
+b-tree-vs-lsm-tree
+backoff-with-jitter
+bloom-filter
+cache-aside
+cache-stampede
+cap-during-a-partition
+circuit-breaker
+consistent-hashing
+cost-of-an-index
+cursor-vs-offset-pagination
+dns-ttl-tradeoff
+hot-partition-key
+hour-of-video
+http-idempotent-methods
+hyperloglog
+kafka-ordering
+l4-vs-l7-load-balancer
+object-vs-block-storage
+presence-heartbeats
+qps-from-daily-users
+queue-vs-pub-sub
+quorum-read-size
+read-your-writes
+routing-to-a-websocket
+seconds-in-a-day
+storage-for-five-years-of-posts
+sync-vs-async-replication
+three-nines-downtime
+tumbling-window
+write-back-risk

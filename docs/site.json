@@ -38,6 +38,12 @@
       "description": "How a Proschi practice problem is put together: the statement, the given design, the reference solution, the wrong designs and the calibration."
     },
     {
+      "slug": "cards-authoring",
+      "title": "Writing practice cards",
+      "source": "CARDS.md",
+      "description": "How Proschi's practice cards are written: flip, choice, estimate and cloze cards, topics, ids that never change, and the check that catches duplicates."
+    },
+    {
       "slug": "privacy",
       "title": "Privacy",
       "source": "PRIVACY.md",
@@ -78,7 +84,8 @@
       "title": "Practice",
       "items": [
         { "href": "practice/", "label": "Solving problems" },
-        { "page": "practice-authoring", "label": "Writing problems" }
+        { "page": "practice-authoring", "label": "Writing problems" },
+        { "page": "cards-authoring", "label": "Writing cards" }
       ]
     },
     {
