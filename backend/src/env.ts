@@ -12,6 +12,8 @@ export interface Env {
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
   GAME_LIMITER: RateLimit;
+  /** Short links created, per user. */
+  SHARE_LIMITER: RateLimit;
   /** POST /api/metrics, per IP (the IP is only the limiter's key, never stored). */
   METRICS_LIMITER: RateLimit;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */

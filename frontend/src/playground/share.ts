@@ -15,7 +15,11 @@ export const MAX_SHARE_CHARS = 2_000_000;
 export const LONG_LINK_CHARS = 8_000;
 
 export const LONG_LINK_MESSAGE =
-  'This link is long; some chat apps cut links over ~2 000–8 000 characters. Download the .proschi file to share it reliably.';
+  'This link is long; some chat apps cut links over ~2 000–8 000 characters. Signed in, Share → Short link gives a short one with a preview; or download the .proschi file.';
+
+/** The long-link warning for someone signed in, whose Share menu offers a short link. */
+export const LONG_LINK_SHORTEN_MESSAGE =
+  'This link is long; some chat apps cut links over ~2 000–8 000 characters. A short link with a preview is safer to paste.';
 
 export const TOO_LARGE_MESSAGE = 'This link holds a diagram larger than 2 MB, so it was not opened. Ask for the .proschi file instead.';
 

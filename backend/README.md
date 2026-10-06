@@ -6,6 +6,8 @@ One Cloudflare Worker serves <https://proschi.app/>:
   run the Worker's code, and static asset requests are free.
 - **The API** under `/api` and `/auth`: sign-in and practice stats, backed by
   a D1 (SQLite) database.
+- **Short links** under `/s/<id>`: a page with a shared diagram's preview
+  tags, and its image ([Short links and embeds](#short-links-and-embeds)).
 
 Site and API share one origin, so there is no CORS. The session is an
 HttpOnly, `SameSite=Lax`, `__Host-` cookie that page scripts cannot read.
@@ -72,6 +74,9 @@ instead ([Mobile apps](#mobile-apps)).
   in (`/api/game/sync`) and count for progress, never for a leaderboard.
   There is a board per scenario, ascension and version, and one per daily
   run (the same scenario and seed for everyone, the first run of the day).
+- **Short links and embeds** ([below](#short-links-and-embeds)): a
+  signed-in user stores a diagram at `/s/<id>` with a preview image; anyone
+  with the link opens it in the editor or the embed page.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
@@ -96,8 +101,8 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements and its game progress and runs |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs |
+| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs, and its short links |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl` |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
@@ -123,13 +128,56 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/game/leaderboard?scenario=<id>&ascension=<n>` or `?day=YYYY-MM-DD` | `{board, title, players, entries: [{rank, id, displayName, score, waves}]}`: each player's best run, the top 20 who opted in, ranked among everyone; signed in, also `you: {score, rank, players}` or null. Cached for a minute |
 | `GET /api/challenge/leaderboard?day=YYYY-MM-DD` | `{day, players, maxScore, entries: [{rank, id, displayName, score, correct}]}`: the day's (default today, UTC) top 20 who opted in (`id` is the user's public id, for their profile), ranked among everyone who played; signed in, also `you: {rank, score, correct, players}` or null |
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
+| `POST /api/shares {source, imports?, image?}` | Signed in: stores a short link, `201 {id, url, title, hasImage, createdAt}`. `imports` maps paths to sources; the source and imports together at most 64 KiB (413). `image` is a base64 PNG (a `data:` URL is fine) of at most 300 KB and 2400×2400 pixels; anything but a complete PNG is a 400. 409 past 100 short links |
+| `GET /api/shares/<id>` | `{id, title, source, imports?, hasImage, createdAt}`, no sign-in needed; 404 for an unknown or deleted id. Cached for 5 minutes |
+| `DELETE /api/shares/<id>` | The owner's only (404 otherwise) |
+| `GET /api/me/shares` | `{shares: [{id, url, title, hasImage, createdAt}], max}`, newest first |
+| `GET /api/oembed?url=<link>&maxwidth=&maxheight=` | oEmbed 1.0 `rich` answer for a `/s/<id>` or `/embed/?s=<id>` link of this site: the iframe in `html`, `width`, `height` (800×480 at most), the preview as `thumbnail_url`; 404 for other links, 501 for `format=xml`. Rate limited per IP |
+| `GET /s/<id>` | HTML for link previews (`og:title`, `og:description`, `og:image`, `twitter:card` `summary_large_image`, canonical, oEmbed discovery) that sends people on to `/app/?s=<id>` with a meta refresh; 404 page for an unknown id |
+| `GET /s/<id>.png` | The preview, `Cache-Control: public, max-age=31536000, immutable`; without one (or for an unknown id) a 302 to `/og.png` |
+
 | `POST /api/metrics {event}` or `{events: [...]}` | Adds one to today's (UTC) count of each event, signed in or not: 204. Up to 20 events, each from the allow-list (`frontend/src/services/metricsEvents.ts`, `sign_in` excluded); an unknown one refuses the whole request (400) |
 | `GET /api/metrics/summary?days=30` | With `X-Metrics-Token: <METRICS_TOKEN>`: `{from, to, events, days: [{day, counts: {<event>: n}}], totals: {<event>: n}}`, the last `days` UTC days (1–400) newest first. 404 without the secret set or with a wrong token |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
-requests (the daily challenge's cards and leaderboard included, and metrics
+changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases), 10 short links and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
+requests (the daily challenge's cards and leaderboard included, oEmbed and metrics
 summaries), 30 usage count requests and 10 design reviews per IP.
+
+### Short links and embeds
+
+Share links put the whole diagram in the address after `#`, which no server
+sees: link previews can only show `/og.png`, long diagrams make links chat
+apps cut, and nothing can be embedded. Short links fix that for signed-in
+users (`src/shares.ts`, `migrations/0010_shares.sql`, docs/SHARING.md):
+
+- **Creating** needs a session (the content and the image are user-hosted,
+  so every share has an accountable owner), the same-origin check of every
+  POST, and `SHARE_LIMITER` (10 a minute per user); a user keeps at most 100.
+  The id is 10 random base62 characters (about 59 bits).
+- **The preview** is rendered by the page, not the Worker: the editor draws
+  the diagram onto a 1200×630 PNG with the same `html-to-image` as its PNG
+  export (`renderPreviewPng` in `frontend/src/components/Playground/exportDiagram.ts`),
+  half that size when it would pass 300 KB, and none when it still does. The
+  Worker checks the PNG signature, that IHDR comes first with sane
+  dimensions and that IEND ends it; it never decodes the image.
+- **Storage**: one D1 row per share, the image as a BLOB (at most 300 KB of
+  D1's 2 MB row limit). At the caps a user holds at most about 37 MB; D1
+  includes 5 GB on Workers Paid (then $0.75 per GB-month), so no other
+  storage (R2, KV) is needed at this scale.
+- **Reading** needs no sign-in: `GET /api/shares/<id>` (the editor's
+  `/app/?s=<id>` and the embed page's `/embed/?s=<id>` call it), `/s/<id>`
+  and `/s/<id>.png`. `/s/*` is in `run_worker_first` (wrangler.jsonc), so
+  those paths reach the Worker instead of the static 404 page. The image is
+  served with `Cross-Origin-Resource-Policy: cross-origin` and a year's
+  cache, since a share never changes; a deleted share's image may live on in
+  caches that fetched it.
+- **The embed page** (`frontend/embed/`, a Vite entry without the code
+  editor) is static. `frontend/public/_headers` lets any site frame
+  `/embed/*` and only that path; every other page keeps `X-Frame-Options:
+  DENY` and `frame-ancestors 'none'`.
+- Shares are in `GET /api/me/export` (`shares`, each with its `imageUrl`)
+  and are deleted with the account (`ON DELETE CASCADE`).
 
 ### Usage counts
 
@@ -422,7 +470,7 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1010 in production and 2001–2010 in staging.
+1001–1011 in production and 2001–2011 in staging (1010/2010 is METRICS_LIMITER).
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.
