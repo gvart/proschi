@@ -13,5 +13,8 @@
   { "id": "resilience", "title": "Resilience", "summary": "Timeouts, retries with backoff, circuit breakers, rate limits and graceful degradation." },
   { "id": "storage", "title": "Storage", "summary": "Object, block and file storage, CDNs for big files, and what bytes cost." },
   { "id": "realtime", "title": "Realtime", "summary": "WebSockets, push, presence and routing messages to connected clients." },
-  { "id": "data-structures", "title": "Data structures", "summary": "Bloom filters, HyperLogLog, count-min sketches, geohashes and other tools of scale." }
+  { "id": "data-structures", "title": "Data structures", "summary": "Bloom filters, HyperLogLog, count-min sketches, geohashes and other tools of scale." },
+  { "id": "security", "title": "Security", "summary": "Authentication and authorization, tokens and cookies, TLS between services, secrets, encryption and abuse." },
+  { "id": "observability", "title": "Observability", "summary": "Metrics, logs and traces, SLOs and error budgets, percentiles and alerting on what users feel." },
+  { "id": "coordination", "title": "Coordination", "summary": "Leader election, consensus, locks and fencing, distributed transactions, sagas and logical clocks." }
 ]

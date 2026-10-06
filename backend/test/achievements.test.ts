@@ -76,7 +76,7 @@ describe('achievements', () => {
     expect(answer.achievements.every((a) => !a.earned && !a.unseen && a.current === 0)).toBe(true);
     expect(badge(answer, 'reviews-100')).toMatchObject({ title: 'Hundred club', icon: 'layers', tier: 'bronze', current: 0, target: 100 });
     expect(answer.skills.readiness).toBe(0);
-    expect(answer.skills.topics.length).toBe(15);
+    expect(answer.skills.topics.length).toBe(18);
     expect(answer.skills.weakest).toHaveLength(3);
     expect(answer.stats).toEqual({ reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 });
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM achievements').first('n')).toBe(0);
