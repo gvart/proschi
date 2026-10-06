@@ -266,6 +266,26 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **A shorter landing page with two ways in.** The hero offers "Design a
+  system" (the editor) and "Prepare for interviews" (the roadmap) side by
+  side, next to the live demo. "How it works" is gone (the demo plays the
+  same three steps), the interview prep section moved below the examples,
+  and a new card links the Arcade, Scale or Fail, which the header and
+  footer now link too. The practice list and its problem count are in the
+  page from the build, so they show before any JavaScript runs.
+- **The interview prep roadmap's first stage needs no account.** Signed
+  out, you can work through stage 1 with your progress kept in this
+  browser; signing in is optional and keeps your progress on every device
+  and opens the stages after it. The landing page no longer says both "No
+  account" and "Sign in to start".
+- **The editor's first visit opens a small design with traffic and
+  requirements** (Hello Proschi), so the tour's "Will it scale?" step shows
+  real numbers on Analysis and Tests without switching documents. On a
+  phone, a first visit opens on the Code pane; share links still open on
+  the diagram.
+- **Example links**: `app/?example=<id>` opens that bundled example (`hello`,
+  `ecommerce`, `serverless`, `login`, `events`, `url-shortener`), and the
+  landing page's example cards use them.
 - The Arcade's per-wave "on-call" actions are now **Hotfixes**, so they
   are no longer confused with the On-call mode (Dinnerbell).
 - The Arcade shop shows an icon and a one-line description for every item:

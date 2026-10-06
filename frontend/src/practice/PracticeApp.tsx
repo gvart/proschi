@@ -117,7 +117,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // Starting the roadmap takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
+  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
   // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
   // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
   const access = roadmapAccess(account.state);

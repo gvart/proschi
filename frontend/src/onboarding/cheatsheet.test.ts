@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from '../dsl';
+import { FIRST_RUN_SOURCE } from '../playground/exampleLink';
 import { nameTarget } from './nameTarget';
 import { ARROWS, CHEAT_SECTIONS, cheatSheetDocument } from './cheatsheet';
 import { STARTER_TEMPLATE } from './template';
@@ -49,12 +50,16 @@ describe('syntax cheat-sheet', () => {
 });
 
 describe('tour name target', () => {
-  it('picks a service of the default example and points inside its quotes', () => {
-    const { diagram } = parse(ecommerceExample);
-    const found = nameTarget(ecommerceExample, diagram.nodes);
-    expect(found?.id).toBe('orders');
-    const line = ecommerceExample.split('\n')[found!.line - 1];
+  it('picks a service of the first-run document and points inside its quotes', () => {
+    const { diagram } = parse(FIRST_RUN_SOURCE);
+    const found = nameTarget(FIRST_RUN_SOURCE, diagram.nodes);
+    expect(found?.id).toBe('api');
+    const line = FIRST_RUN_SOURCE.split('\n')[found!.line - 1];
     expect(line.slice(found!.col - 1, found!.col - 1 + found!.name.length)).toBe(found!.name);
+  });
+
+  it('picks a service of the e-commerce example', () => {
+    expect(nameTarget(ecommerceExample, parse(ecommerceExample).diagram.nodes)?.id).toBe('orders');
   });
 
   it('finds nothing to rename in a document without quoted names', () => {
