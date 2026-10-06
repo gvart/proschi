@@ -25,6 +25,7 @@ import AchievementToast from './skills/AchievementToast';
 import PrepHub from './prep/PrepHub';
 import { prepTabOf } from './prep/tabs';
 import { profileIdOf } from './profile/profile';
+import { track } from '../services/metrics';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -92,6 +93,7 @@ async function importProgress(items: { problemId: string; source: string; solved
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const route = useHashRoute();
   const [progress, setProgress] = useState<Progress>(loadProgress);
+  useEffect(() => track('practice_open', { once: 'session' }), []);
   const updateProgress = useCallback((update: (p: Progress) => Progress) => {
     setProgress((p) => {
       const next = update(p);

@@ -32,6 +32,7 @@ import { useKeyboardViewport } from '../components/Playground/useKeyboardViewpor
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
 import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
+import { track } from '../services/metrics';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 // Loaded on a problem's first solve, with the related cards.
@@ -114,6 +115,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [firstSolve, setFirstSolve] = useState<{ runs: number; metrics?: DesignMetrics; before: Progress }>();
   const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, account.state.status === 'signed-in', statsRefresh);
 
+  useEffect(() => track('problem_start', { once: 'session', key: `problem_start:${problem.id}` }), [problem.id]);
+
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -134,8 +137,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
     setRuns((n) => n + 1);
+    track('test_run');
     const day = localDay();
     if (result.solved && status !== 'solved' && !firstSolve) {
+      // Signed in, the server counts the solve once it has verified it (backend/src/progress.ts).
+      if (account.state.status !== 'signed-in') track('problem_solve', { once: 'browser', key: `problem_solve:${problem.id}` });
       // Without accounts the streak counts this browser's solves; signed in, the server keeps the day.
       if (account.state.status === 'off') recordLocalSolve(problem.id, day);
       setFirstSolve({ runs: runs + 1, metrics: result.metrics, before: progress });

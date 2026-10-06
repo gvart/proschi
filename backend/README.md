@@ -77,9 +77,12 @@ instead ([Mobile apps](#mobile-apps)).
   out everywhere, delete the account. Display names that pass for the site or
   its staff, or contain a slur, are refused (`src/moderation.ts`).
 - **Sessions** last 30 days and slide: one used in its second half is renewed
-  for 30 more. A daily cron (03:17 UTC) deletes expired ones, and game runs
-  started over 7 days ago and never submitted. It keeps every card review:
-  FSRS replays the whole history to schedule a card.
+  for 30 more. A daily cron (03:17 UTC) deletes expired ones, game runs
+  started over 7 days ago and never submitted, and usage counts older than
+  400 days. It keeps every card review: FSRS replays the whole history to
+  schedule a card.
+- **Usage counts** ([below](#usage-counts)): one anonymous number per UTC day
+  and event, for the activation funnel. No user, IP or cookie is stored.
 
 | | |
 |---|---|
@@ -120,10 +123,44 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/game/leaderboard?scenario=<id>&ascension=<n>` or `?day=YYYY-MM-DD` | `{board, title, players, entries: [{rank, id, displayName, score, waves}]}`: each player's best run, the top 20 who opted in, ranked among everyone; signed in, also `you: {score, rank, players}` or null. Cached for a minute |
 | `GET /api/challenge/leaderboard?day=YYYY-MM-DD` | `{day, players, maxScore, entries: [{rank, id, displayName, score, correct}]}`: the day's (default today, UTC) top 20 who opted in (`id` is the user's public id, for their profile), ranked among everyone who played; signed in, also `you: {rank, score, correct, players}` or null |
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
+| `POST /api/metrics {event}` or `{events: [...]}` | Adds one to today's (UTC) count of each event, signed in or not: 204. Up to 20 events, each from the allow-list (`frontend/src/services/metricsEvents.ts`, `sign_in` excluded); an unknown one refuses the whole request (400) |
+| `GET /api/metrics/summary?days=30` | With `X-Metrics-Token: <METRICS_TOKEN>`: `{from, to, events, days: [{day, counts: {<event>: n}}], totals: {<event>: n}}`, the last `days` UTC days (1–400) newest first. 404 without the secret set or with a wrong token |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
 changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
-requests (the daily challenge's cards and leaderboard included) and 10 design reviews per IP.
+requests (the daily challenge's cards and leaderboard included, and metrics
+summaries), 30 usage count requests and 10 design reviews per IP.
+
+### Usage counts
+
+Product metrics without tracking (docs/PRIVACY.md, "Usage counts"): the page
+calls `track(event)` (`frontend/src/services/metrics.ts`), which batches
+events for two seconds (or until the page is hidden) and sends their names
+with `navigator.sendBeacon` (or `fetch` with `keepalive`) to `POST
+/api/metrics`. The Worker upserts `count = count + n` into
+`daily_counts(day, event, count)` (`migrations/0009_metrics.sql`) and stores
+nothing else: it never reads the session, and the IP is only the rate
+limit's key. Some events count once per tab session or once per browser;
+the page keeps which in `proschi.metrics.once`. A page sends nothing when the
+browser sends Do Not Track or Global Privacy Control, nor in a build without
+accounts, a development build or on `localhost` (`VITE_METRICS=true` turns
+it on there, e.g. against `wrangler dev`), so the e2e tests send nothing.
+
+The Worker counts two events itself, where it knows better: `sign_in` (each
+completed sign-in, web or app, not a linking) and `problem_solve` for a
+signed-in user's first verified solve of a problem (not an imported one).
+The page sends `problem_solve` only when not signed in, so a solve counts
+once. The daily cron deletes days older than 400 days.
+
+To read them, set the secret `METRICS_TOKEN` (at least 16 characters;
+`npx wrangler secret put METRICS_TOKEN`) and run
+
+```sh
+METRICS_TOKEN=<secret> npm run metrics -- https://proschi.app 30
+```
+
+which prints the funnel (each step's total and its share of landing page
+views) and a per-day table. Without the secret the summary answers 404.
 
 ### Design review (`POST /api/review`)
 
@@ -331,6 +368,9 @@ solve locally either way.
      one for staging. Sign-in stays off without it.
    - `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET`.
    - `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET`.
+   - `METRICS_TOKEN` (optional): a random string of at least 16 characters,
+     for reading the [usage counts](#usage-counts). Without it the summary
+     answers 404; counting works either way.
 
    A provider is offered once both of its secrets are set; no redeploy is
    needed.
@@ -382,7 +422,7 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1006 in production and 2001–2006 in staging.
+1001–1010 in production and 2001–2010 in staging.
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.

@@ -89,6 +89,14 @@ describe('sign-in', () => {
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n).toBe(1);
   });
 
+  it('counts each sign-in in the daily usage counts, and nothing about who', async () => {
+    mockProviders();
+    await signIn();
+    await signIn();
+    const { results } = await env.DB.prepare('SELECT event, count FROM daily_counts').all();
+    expect(results).toEqual([{ event: 'sign_in', count: 2 }]);
+  });
+
   it('signs in with Google', async () => {
     mockProviders();
     const { token } = await signIn('google');
