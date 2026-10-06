@@ -46,9 +46,11 @@ interface HldViewProps {
   analysis?: Analysis;
   results?: TestResult[];
   engine?: Engine;
+  /** Opens the editor's Results tab, where every check has its detail; the document then only sums them up on top. */
+  onOpenResults?: () => void;
 }
 
-export default function HldView({ diagram, nodes, edges, analysis, results, engine = defaultEngine }: HldViewProps) {
+export default function HldView({ diagram, nodes, edges, analysis, results, engine = defaultEngine, onOpenResults }: HldViewProps) {
   const doc = useMemo(() => (analysis ? hld(diagram, analysis, results) : buildHld(diagram, engine)), [diagram, analysis, results, engine]);
   const hasChecks = doc.sections.some((s) => s.kind === 'requirements' && (s.nonFunctional.length > 0 || s.flowTests.length > 0));
 
@@ -86,6 +88,7 @@ export default function HldView({ diagram, nodes, edges, analysis, results, engi
             The simulation is not available yet, so requirements and tests are listed but not checked.
           </p>
         )}
+        {onOpenResults && results && results.length > 0 && <ChecksSummary results={results} onOpen={onOpenResults} />}
         {doc.sections.length === 0 && <p className="mt-6 text-muted">Add components and use cases to generate a design document.</p>}
         {doc.sections.map((s) => (
           <section key={s.kind} id={`hld-${s.kind}`} className="mt-8 scroll-mt-14">
@@ -95,6 +98,22 @@ export default function HldView({ diagram, nodes, edges, analysis, results, engi
         ))}
       </article>
     </div>
+  );
+}
+
+/** One line on top: how many checks pass, and the way to their detail in Results. */
+function ChecksSummary({ results, onOpen }: { results: TestResult[]; onOpen: () => void }) {
+  const failed = results.filter((r) => !r.passed).length;
+  return (
+    <p data-testid="hld-checks" className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 rounded-md border border-ink/15 bg-surface px-3 py-2">
+      {failed ? <XCircle size={16} className="text-red-600 dark:text-red-400" aria-hidden="true" /> : <CheckCircle2 size={16} className="text-green-600 dark:text-green-400" aria-hidden="true" />}
+      <span className={failed ? 'text-red-700 dark:text-red-300' : 'text-green-700 dark:text-green-300'}>
+        {failed ? `${failed} of ${results.length} checks failing` : `All ${results.length} checks passing`}
+      </span>
+      <button type="button" onClick={onOpen} className="text-pop-blue hover:underline">
+        See Results
+      </button>
+    </p>
   );
 }
 

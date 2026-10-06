@@ -175,26 +175,62 @@ test.describe('editor', () => {
     await expect(page.locator('.pc-node[data-load]')).toHaveCount(0);
   });
 
-  test('Analysis and Tests tabs render for the URL shortener', async ({ page }) => {
+  test('three views: Diagram, Results and HLD', async ({ page }) => {
+    const views = page.getByRole('tablist', { name: 'Diagram view' });
+    await expect(views.getByRole('tab')).toHaveText(['Diagram', 'Results', 'HLD']);
+  });
+
+  test('Results lists the checks, then the analysis and the review, for the URL shortener', async ({ page }) => {
     await openExample(page, /URL shortener HLD/);
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');
     const views = page.getByRole('tablist', { name: 'Diagram view' });
 
-    await views.getByRole('tab', { name: 'Analysis' }).click();
+    const resultsTab = views.getByRole('tab', { name: /Results/ });
+    await expect(resultsTab).toContainText(/\d+\/\d+/);
+    await resultsTab.click();
+    await expect(page.getByRole('heading', { name: 'Requirements and tests' })).toBeVisible();
+    await expect(page.getByText(/^(All \d+ passing|\d+ of \d+ failing)$/)).toBeVisible();
+    // Passing checks are folded away until asked for.
+    await expect(page.getByRole('img', { name: 'passed' }).first()).toBeHidden();
+    await page.getByText(/^\d+ passing$/).click();
+    await expect(page.getByRole('img', { name: 'passed' }).first()).toBeVisible();
+
     await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
     await expect(page.getByRole('meter').first()).toBeVisible();
     await page.getByRole('button', { name: 'Review my design' }).click();
     await expect(page.getByTestId('review-result').getByText(/tests pass/).first()).toBeVisible();
-
-    const testsTab = views.getByRole('tab', { name: /Tests/ });
-    await expect(testsTab).toContainText(/\d+\/\d+/);
-    await testsTab.click();
-    await expect(page.getByText(/^(All \d+ passing|\d+ of \d+ failing)$/)).toBeVisible();
-    await expect(page.getByRole('img', { name: /passed|failed/ }).first()).toBeVisible();
   });
 
-  test('Export PNG downloads an image', async ({ page }) => {
-    await page.getByRole('button', { name: 'Export image' }).click();
+  test('a failing requirement comes first, with its hint', async ({ page }) => {
+    await page.goto('app/?example=url-shortener');
+    await waitForCanvas(page);
+    await appendCode(page, '\nrequirements {\n  p99 "Redirect" < 1ms\n}\n');
+    const views = page.getByRole('tablist', { name: 'Diagram view' });
+    await views.getByRole('tab', { name: /Results/ }).click();
+    await expect(page.getByText(/^\d+ of \d+ failing$/)).toBeVisible();
+    await expect(page.getByRole('img', { name: /^(passed|failed)$/ }).first()).toHaveAccessibleName('failed');
+  });
+
+  test('HLD sums the checks up and links to Results', async ({ page }) => {
+    await openExample(page, /URL shortener HLD/);
+    const views = page.getByRole('tablist', { name: 'Diagram view' });
+    await views.getByRole('tab', { name: 'HLD' }).click();
+    const summary = page.getByTestId('hld-checks');
+    await expect(summary).toContainText(/checks (passing|failing)/);
+    await summary.getByRole('button', { name: 'See Results' }).click();
+    await expect(views.getByRole('tab', { name: /Results/ })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('?view=tests and ?view=analysis open the Results tab', async ({ page }) => {
+    for (const old of ['tests', 'analysis']) {
+      await page.goto(`app/?example=url-shortener&view=${old}`);
+      await expect(page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: /Results/ })).toHaveAttribute('aria-selected', 'true');
+      await expect(page.getByRole('heading', { name: 'Requirements and tests' })).toBeVisible();
+    }
+  });
+
+  test('Export → PNG downloads an image', async ({ page }) => {
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
     const downloadPromise = page.waitForEvent('download');
     await page.getByRole('menuitem', { name: 'PNG image' }).click();
     const download = await downloadPromise;
@@ -203,6 +239,39 @@ test.describe('editor', () => {
     // PNG signature, and more than an empty image.
     expect(bytes.subarray(0, 8).toString('hex')).toBe('89504e470d0a1a0a');
     expect(bytes.length).toBeGreaterThan(10_000);
+  });
+
+  test('Export → SVG works from another tab, going back to the diagram', async ({ page }) => {
+    const views = page.getByRole('tablist', { name: 'Diagram view' });
+    await views.getByRole('tab', { name: /Results/ }).click();
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    const downloadPromise = page.waitForEvent('download');
+    await page.getByRole('menuitem', { name: 'SVG image' }).click();
+    const download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('e-commerce-platform.svg');
+    expect(download.url()).toMatch(/^data:image\/svg\+xml/);
+    await expect(views.getByRole('tab', { name: 'Diagram' })).toHaveAttribute('aria-selected', 'true');
+  });
+
+  test('Export has the Mermaid and file downloads; the canvas has no menu of its own', async ({ page }) => {
+    await expect(page.getByRole('button', { name: 'Export image' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    const menu = page.getByRole('menu');
+    await expect(menu.getByRole('menuitem', { name: 'Copy Mermaid: architecture' })).toBeVisible();
+    await expect(menu.getByRole('menuitem', { name: 'Export all (.zip)' })).toBeVisible();
+
+    let downloadPromise = page.waitForEvent('download');
+    await menu.getByRole('menuitem', { name: 'Download Mermaid (.mmd)' }).click();
+    let download = await downloadPromise;
+    expect(download.suggestedFilename()).toBe('e-commerce-platform.mmd');
+    expect((await readFile(await download.path(), 'utf8')).length).toBeGreaterThan(50);
+
+    await page.getByRole('button', { name: 'Export', exact: true }).click();
+    downloadPromise = page.waitForEvent('download');
+    await page.getByRole('menu').getByRole('menuitem', { name: 'Download .proschi file' }).click();
+    download = await downloadPromise;
+    expect(download.suggestedFilename()).toMatch(/\.proschi$/);
+    expect(await readFile(await download.path(), 'utf8')).toContain('title "E-Commerce Platform"');
   });
 });
 
@@ -213,9 +282,10 @@ test.describe('first visit and example links', () => {
     await waitForCanvas(page, 3);
     await expect(page.getByText('No problems')).toBeVisible();
     const views = page.getByRole('tablist', { name: 'Diagram view' });
-    await views.getByRole('tab', { name: /Tests/ }).click();
-    await expect(page.getByText('p99 of Create a note < 200 ms')).toBeVisible();
+    await views.getByRole('tab', { name: /Results/ }).click();
     await expect(page.getByText(/^All \d+ passing$/)).toBeVisible();
+    await page.getByText(/^\d+ passing$/).click();
+    await expect(page.getByText('p99 of Create a note < 200 ms')).toBeVisible();
   });
 
   test('?example=<id> opens that example, once however often it is opened', async ({ page }) => {
@@ -289,3 +359,38 @@ test.describe('editor on a phone', () => {
     await expectDiagramFitted(page);
   });
 });
+
+// The compact header carries the diagrams menu, the use case picker, Play, Zen, Export and Share.
+for (const width of [375, 320]) {
+  test.describe(`editor header at ${width}px`, () => {
+    test.use({ viewport: { width, height: 700 }, hasTouch: true, isMobile: true });
+
+    test('every control is on screen, and Export and Examples still work', async ({ page }) => {
+      await page.goto('app/?example=ecommerce');
+      await waitForCanvas(page, DEFAULT_NODES);
+      const controls = [
+        page.getByRole('button', { name: 'Diagrams' }),
+        page.getByRole('combobox', { name: 'Use case' }),
+        page.getByRole('button', { name: 'Play', exact: true }),
+        page.getByRole('button', { name: 'Export', exact: true }),
+        page.getByRole('button', { name: 'Share', exact: true }),
+      ];
+      for (const control of controls) {
+        const box = (await control.boundingBox())!;
+        const name = await control.getAttribute('aria-label');
+        expect(box.x, `${name} starts off screen`).toBeGreaterThanOrEqual(0);
+        expect(box.x + box.width, `${name} ends off screen`).toBeLessThanOrEqual(width);
+      }
+      expect((await controls[1].boundingBox())!.width, 'the use case picker is squeezed out').toBeGreaterThanOrEqual(60);
+
+      await page.getByRole('button', { name: 'Export', exact: true }).click();
+      await expect(page.getByRole('menuitem', { name: 'PNG image' })).toBeInViewport();
+      await page.keyboard.press('Escape');
+
+      // Examples moves into the Diagrams menu on phones.
+      await page.getByRole('button', { name: 'Diagrams' }).click();
+      await page.getByRole('menuitem', { name: 'Examples…' }).click();
+      await expect(page.getByRole('dialog', { name: 'Examples' })).toBeVisible();
+    });
+  });
+}

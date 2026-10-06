@@ -56,16 +56,14 @@ test.describe('simulation page', () => {
     await page.getByRole('dialog', { name: 'Examples' }).getByRole('button', { name: /URL shortener HLD/ }).click();
     const views = page.getByRole('tablist', { name: 'Diagram view' });
 
-    await views.getByRole('tab', { name: 'Analysis' }).click();
-    await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
-    const fromAnalysis = await openInNewTab(page, () => page.getByRole('link', { name: 'How is this calculated?' }).click());
-    await expect(fromAnalysis).toHaveURL(/\/proschi\/docs\/model\/$/);
-    await expect(modelHeading(fromAnalysis)).toBeVisible();
-    await fromAnalysis.close();
-
-    await views.getByRole('tab', { name: /Tests/ }).click();
+    await views.getByRole('tab', { name: /Results/ }).click();
     await expect(page.getByText(/^(All \d+ passing|\d+ of \d+ failing)$/)).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Nodes' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'How is this calculated?' })).toHaveAttribute('href', '../docs/model/');
+    const fromResults = await openInNewTab(page, () => page.getByRole('link', { name: 'How is this calculated?' }).click());
+    await expect(fromResults).toHaveURL(/\/proschi\/docs\/model\/$/);
+    await expect(modelHeading(fromResults)).toBeVisible();
+    await fromResults.close();
 
     await page.goto('practice/#/url-shortener');
     await expect(codeEditor(page)).toBeVisible();

@@ -70,9 +70,9 @@ test.describe('editor tour', () => {
     await page.getByRole('button', { name: 'Back to diagram' }).click();
     await expect(tour).toHaveAccessibleName('Quick tour: Will it scale?');
 
-    // Step 4 reacts to the Analysis tab, on the same document: the first-run design has traffic and requirements.
+    // Step 4 reacts to the Results tab, on the same document: the first-run design has traffic and requirements.
     await expect(tour.getByRole('button', { name: 'Open an example' })).toHaveCount(0);
-    await page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: 'Analysis' }).click();
+    await page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: /Results/ }).click();
     await expect(tour.getByText('Every requirement becomes a check like these.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Hello Proschi');
     await tour.getByRole('button', { name: 'Next' }).click();

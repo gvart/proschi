@@ -71,7 +71,7 @@ usecase "Place order" {
 ## 4. Ask whether it holds up
 
 Say how much traffic comes in and what the design must do. The editor's
-**Tests** tab checks it as you type, with a deterministic model of load,
+**Results** tab checks it as you type, with a deterministic model of load,
 latency, availability and cost.
 
 ```proschi

@@ -296,7 +296,7 @@ test.describe('editor diagram on a phone', () => {
     await expect(bar.getByRole('button', { name: 'Rename' })).toBeVisible();
     await expect(bar.getByRole('button', { name: 'Delete' })).toBeVisible();
     const box = (await bar.boundingBox())!;
-    for (const other of [page.getByRole('button', { name: 'Export image' }), page.getByRole('button', { name: 'Add component' }), page.locator('.react-flow__controls')]) {
+    for (const other of [page.getByRole('button', { name: 'Add component' }), page.locator('.react-flow__controls')]) {
       expect(overlap(box, (await other.boundingBox())!), `the selection bar overlaps ${await other.getAttribute('class')}`).toBe(false);
     }
   });

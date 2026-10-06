@@ -390,6 +390,18 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **Editor: one Results tab, one Export menu.** The Analysis and Tests tabs
+  are now a single **Results** tab: failing requirements and tests first with
+  their hints, the passing ones folded away, then the load, latency,
+  availability and cost per node, then *Review my design*. The views are
+  Diagram, Results and HLD; the HLD opens with a one-line summary of the
+  checks that links to Results, and `?view=analysis` or `?view=tests` links
+  open Results. **Export**, next to Share, now holds every way out: PNG and
+  SVG images (from any tab), Mermaid (copy, or download as `.mmd`), the
+  `.proschi` file and *Export all (.zip)*; the canvas's own Export menu is
+  gone and the Diagrams menu keeps New, Open, Import and Import backup. On
+  phones, Examples moves into the Diagrams menu so the header still fits at
+  320px.
 - **A shorter landing page with two ways in.** The hero offers "Design a
   system" (the editor) and "Prepare for interviews" (the roadmap) side by
   side, next to the live demo. "How it works" is gone (the demo plays the

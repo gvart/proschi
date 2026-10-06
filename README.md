@@ -97,7 +97,7 @@ test "Notes are stored before they are returned" {
 ## Quick start
 
 Open the [editor](https://proschi.app/app/), pick one of the
-Examples and edit the text; the diagram, scenarios, Analysis, Tests and HLD
+Examples and edit the text; the diagram, scenarios, Results and HLD
 tabs follow as you type.
 
 On the command line (Node 18 or newer):

@@ -4,6 +4,8 @@ import { toolButton } from './ui';
 interface MenuProps {
   trigger: ReactNode;
   label: string;
+  /** A tooltip for the button, e.g. when it shows only an icon. */
+  title?: string;
   align?: 'left' | 'right';
   /** The trigger's look; a borderless toolbar button by default. */
   buttonClassName?: string;
@@ -17,7 +19,7 @@ interface MenuProps {
  * out past an edge; long lines wrap. Wider, a panel that would still cross
  * an edge (a button near the other side) is moved back inside.
  */
-export default function Menu({ trigger, label, align = 'left', buttonClassName = toolButton, children }: MenuProps) {
+export default function Menu({ trigger, label, title, align = 'left', buttonClassName = toolButton, children }: MenuProps) {
   const [open, setOpen] = useState(false);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
@@ -55,6 +57,7 @@ export default function Menu({ trigger, label, align = 'left', buttonClassName =
       <button
         type="button"
         aria-label={label}
+        title={title}
         aria-expanded={open}
         onClick={() => setOpen((o) => !o)}
         className={`${buttonClassName} aria-expanded:border-ink aria-expanded:bg-surface aria-expanded:shadow-brutal-sm`}
