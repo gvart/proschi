@@ -33,6 +33,20 @@ deployed from `main` and ships with the same changes.
 - **Shared links show what they are about**: each problem page and card topic
   has its own preview image (title, difficulty, a line about it) instead of
   the site-wide one.
+- **Interview mode** on every practice problem, off unless you turn it on:
+  a 30, 45 or 60 minute clock you can pause, and four phases. *Clarify*
+  hides the scale and constraints until you ask good questions (weak ones
+  get told why); *Estimate* grades back-of-the-envelope numbers against a
+  range and shows the worked answer; *Design* is the usual editor and
+  tests; *Wrap-up* is a self-review and a summary of time per phase,
+  questions, estimates and tests. Everything stays in your browser.
+- **Guided walkthrough** for the roadmap's first stage (URL Shortener,
+  Pastebin, Always-writable Shopping Cart, Snowflake IDs): a side panel of
+  short steps, each unlocked by a checkpoint on your design. Skippable, and
+  it remembers where you were.
+- `proschi problem check` validates `interview.md` (good questions must
+  reveal facts from the statement; estimates need a number and a range) and
+  `guided.md` (valid checks that the reference solution passes).
 - **A gentler first run in the Arcade.** Until your first clear of a Scale
   or Fail scenario, runs play the basic rules: no mutators, bounties,
   contracts or card sets, an exact forecast, no unannounced or cascading
