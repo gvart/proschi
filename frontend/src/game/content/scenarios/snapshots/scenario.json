@@ -79,15 +79,15 @@
     { "name": "Beta", "traffic": { "view": 50, "upload": 2 }, "curve": "day", "requirements": ["p99 \"View photo\" < 300ms", "durable \"Upload photo\""] },
     { "traffic": { "view": 90, "upload": 4 }, "curve": "day", "contract": true },
     { "traffic": { "view": 150, "upload": 6 }, "curve": "ramp", "requirements": ["availability \"View photo\" >= 99.5%"] },
-    { "name": "Featured on the App Store", "boss": true, "traffic": { "view": 220, "upload": 10 }, "curve": "spike" },
+    { "name": "Featured on the App Store", "brief": "Apple featured us on the App Store! New users upload their first photos all at once. Watch the bytes, not just the requests.", "boss": true, "traffic": { "view": 220, "upload": 10 }, "curve": "spike" },
     { "name": "Growth", "traffic": { "view": 330, "upload": 15, "feed": 40 }, "curve": "day", "contract": true, "freshness": [{ "useCase": "upload", "maxMinutes": 15 }], "requirements": ["p99 \"Home feed\" < 250ms"] },
     { "traffic": { "view": 500, "upload": 22, "feed": 60 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
     { "traffic": { "view": 750, "upload": 32, "feed": 90 }, "curve": "day", "requirements": ["cost <= 4000 usd/month"], "debrief": "egress" },
-    { "name": "Holiday weekend", "boss": true, "traffic": { "view": 1100, "upload": 50, "feed": 130 }, "curve": "ramp", "events": ["az-outage", "write-surge"], "contract": true },
+    { "name": "Holiday weekend", "brief": "Holiday weekend: everyone's taking photos and sharing them with family. Uploads climb all weekend, and the writes come with them.", "boss": true, "traffic": { "view": 1100, "upload": 50, "feed": 130 }, "curve": "ramp", "events": ["az-outage", "write-surge"], "contract": true },
     { "name": "Scale", "traffic": { "view": 1600, "upload": 70, "feed": 190 }, "curve": "day", "global": 0.35, "requirements": ["p90 \"View photo\" < 80ms", "p99 \"View photo\" < 300ms"] },
     { "traffic": { "view": 2300, "upload": 100, "feed": 270 }, "curve": "double-peak", "requirements": ["availability \"Upload photo\" >= 99.9%", "cost <= 12000 usd/month"] },
     { "traffic": { "view": 3300, "upload": 140, "feed": 380 }, "curve": "day" },
-    { "name": "Celebrity joins", "boss": true, "traffic": { "view": 4500, "upload": 190, "feed": 520 }, "curve": "spike", "events": ["hot-key", "cache-stampede"] }
+    { "name": "Celebrity joins", "brief": "A celebrity just joined and posted. Their millions of followers all open the same photos. That's a hot spot if I ever saw one.", "boss": true, "traffic": { "view": 4500, "upload": 190, "feed": 520 }, "curve": "spike", "events": ["hot-key", "cache-stampede"] }
   ],
   "eventPool": [
     { "id": "noisy-neighbor", "weight": 3 },

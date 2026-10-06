@@ -77,15 +77,15 @@
     { "name": "Garage", "traffic": { "redirect": 300, "shorten": 20 }, "curve": "day", "requirements": ["p99 \"Redirect\" < 200ms"] },
     { "traffic": { "redirect": 500, "shorten": 30 }, "curve": "day", "contract": true },
     { "traffic": { "redirect": 800, "shorten": 40 }, "curve": "ramp", "requirements": ["availability \"Redirect\" >= 99.5%"] },
-    { "name": "Product Hunt launch", "boss": true, "traffic": { "redirect": 1100, "shorten": 50 }, "curve": "spike" },
+    { "name": "Product Hunt launch", "brief": "We're on the front page of Product Hunt! Everyone clicks at once, so traffic jumps four times for a couple of hours. Fur's standing up already.", "boss": true, "traffic": { "redirect": 1100, "shorten": 50 }, "curve": "spike" },
     { "name": "Growth", "traffic": { "redirect": 1700, "shorten": 70, "alias": 15 }, "curve": "day", "contract": true },
     { "traffic": { "redirect": 2500, "shorten": 90, "alias": 20 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
     { "traffic": { "redirect": 3600, "shorten": 120, "alias": 30 }, "curve": "day", "requirements": ["p99 \"Redirect\" < 50ms"], "debrief": "db-read-ceiling" },
-    { "name": "Launch day", "boss": true, "traffic": { "redirect": 5000, "shorten": 150, "alias": 40 }, "curve": "ramp", "events": ["az-outage", "cache-stampede"], "contract": true },
+    { "name": "Launch day", "brief": "Launch day! The press embargo lifts and every article links to us. Traffic climbs all month, and the worst comes last.", "boss": true, "traffic": { "redirect": 5000, "shorten": 150, "alias": 40 }, "curve": "ramp", "events": ["az-outage", "cache-stampede"], "contract": true },
     { "name": "Scale", "traffic": { "redirect": 9000, "shorten": 220, "alias": 50 }, "curve": "day", "global": 0.4, "requirements": ["p99 \"Redirect\" < 250ms", "p90 \"Redirect\" < 60ms", "p99 \"Shorten\" < 400ms"] },
     { "traffic": { "redirect": 14000, "shorten": 300, "alias": 70 }, "curve": "double-peak", "requirements": ["availability \"Redirect\" >= 99.95%"] },
     { "traffic": { "redirect": 20000, "shorten": 400, "alias": 90 }, "curve": "day", "events": ["write-surge"] },
-    { "name": "Super Bowl ad", "boss": true, "traffic": { "redirect": 26000, "shorten": 500, "alias": 110 }, "curve": "spike", "events": ["hot-key", "ddos"] }
+    { "name": "Super Bowl ad", "brief": "We bought a Super Bowl ad. Millions of phones open the same link in the same minute. Whatever you've got, it gets tested now.", "boss": true, "traffic": { "redirect": 26000, "shorten": 500, "alias": 110 }, "curve": "spike", "events": ["hot-key", "ddos"] }
   ],
   "eventPool": [
     { "id": "noisy-neighbor", "weight": 3 },

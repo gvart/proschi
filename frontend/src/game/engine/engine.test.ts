@@ -42,12 +42,13 @@ describe('game content', () => {
   });
 
   it('finds what a contributor gets wrong', () => {
-    const broken: Record<string, string> = { ...files, 'scenarios/shortly/scenario.json': files['scenarios/shortly/scenario.json'].replace('p99 \\"Redirect\\" < 200ms', 'p99 \\"Redirects\\" < 200ms') };
+    const broken: Record<string, string> = { ...files, 'scenarios/shortly/scenario.json': files['scenarios/shortly/scenario.json'].replace('p99 \\"Redirect\\" < 200ms', 'p99 \\"Redirects\\" < 200ms').replace('"brief": "We\'re on the front page', '"brief": "   ", "x": "') };
     delete broken['events/ddos.md'];
     const messages = checkGame(broken, ctx).violations.map((v) => v.message);
     expect(messages).toContain('Wave 1: "p99 \\"Redirects\\" < 200ms" names no use case of this scenario'.replace(/\\"/g, '"'));
     expect(messages.some((m) => m.includes("unknown event 'ddos'"))).toBe(true);
     expect(messages.some((m) => m.includes("'event:ddos' was published and is gone"))).toBe(true);
+    expect(messages).toContain("Wave 4's brief should be one or two sentences (at most 240 characters)");
   });
 });
 

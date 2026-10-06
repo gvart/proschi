@@ -15,9 +15,13 @@ cards, incidents and components are plain files in
 
 A run is twelve **waves** in three acts. Each wave is a month of traffic:
 
-1. **Forecast.** The traffic curve and its peak per use case, the
+1. **Forecast.** Kernel, the cat SRE lead, briefs the wave in plain words:
+   how traffic changed since last month, the new use cases and requirements,
+   and the incidents coming (a boss wave opens with its own intro). The
+   forecast panel then shows the traffic curve and its peak per use case, the
    requirements in force (as Proschi lines), and the incidents coming (with
-   their tick, below difficulty 1).
+   their tick, below difficulty 1). The cat button in the run's header turns
+   the briefings off.
 2. **Plan.** Place, wire, scale out (replicas), scale up (sizes S, M, L),
    shard, remove. Nothing is timed. A **load test** shows the plan at the
    forecast peak for $100. The board is drawn on the editor's canvas (the
@@ -264,6 +268,7 @@ A **wave**:
 | `contract` | Offer three contracts after this wave. |
 | `global` | Share of far users from this wave on. |
 | `boss`, `name` | Waves 4, 8 and 12 are bosses. |
+| `brief` | What Kernel says first when the wave begins, at most 240 characters: a boss's intro. The rest of the briefing comes from the wave itself. |
 | `debrief` | A `## Debrief: <id>` section shown after the wave. |
 
 From wave 3, one incident a wave is also drawn from the **eventPool**

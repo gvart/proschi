@@ -225,6 +225,18 @@ export interface RunState {
   bigBang: string[];
   /** On-call: the root cause picked this wave. */
   diagnosis?: { pick: string; correct: boolean };
+  /** What changed since the last wave began, for the briefing. */
+  news: WaveNews;
+}
+
+/** What a wave brings since the one before: the mascot's briefing reads it. */
+export interface WaveNews {
+  /** Use cases live from this wave (from the traffic or a signed contract). */
+  useCases: string[];
+  /** Requirement lines added or tightened, as they apply (ascension included). */
+  requirements: string[];
+  /** Base traffic over the last wave's (1.6: 60% more); absent on the first wave. */
+  growth?: number;
 }
 
 /** What the forecast panel shows before planning. */
@@ -245,6 +257,7 @@ export interface Forecast {
   contract: boolean;
   /** The wave's ticket, with its text. */
   ticket?: TicketDef & { text: string };
+  news: WaveNews;
 }
 
 const LOC: SourceLoc = { line: 0, col: 0, length: 0 };
@@ -340,6 +353,8 @@ export class Game {
   private readonly rules: ReturnType<typeof ascensionRules>;
   private compiled = new Map<string, Compiled>();
   private effectiveCache?: { key: string; value: ReturnType<Game['effective']> };
+  /** The use cases, requirements and base traffic when the last wave began, to tell what is new. */
+  private briefed?: { useCases: string[]; requirements: string[]; traffic: number };
 
   constructor(content: GameContent, setup: RunSetup) {
     this.content = content;
@@ -387,6 +402,7 @@ export class Game {
       migrations: {},
       sunset: [],
       bigBang: [],
+      news: { useCases: [], requirements: [] },
     };
     if (perks.some((p) => p.def.effect === 'starter-card')) {
       const commons = this.pool().filter((c) => c.rarity === 'common');
@@ -450,6 +466,7 @@ export class Game {
       global: this.state.global,
       contract: !!w.contract && this.state.wave < this.scenario.waves.length - 1,
       ...(w.ticket ? { ticket: { ...w.ticket, text: this.scenario.sections[`Ticket: ${w.ticket.id}`] ?? '' } } : {}),
+      news: this.state.news,
     };
   }
 
@@ -680,6 +697,14 @@ export class Game {
     s.oncallLeft = ONCALL_PER_WAVE + mods.oncall;
     s.loadtestsFree = mods.loadtests;
     s.events = this.drawEvents();
+    const traffic = s.useCases.reduce((a, key) => a + this.baseRps(key), 0);
+    const prev = this.briefed;
+    s.news = {
+      useCases: s.useCases.filter((k) => !prev?.useCases.includes(k)),
+      requirements: s.requirements.filter((l) => !prev?.requirements.includes(l)),
+      ...(prev && prev.traffic > 0 ? { growth: traffic / prev.traffic } : {}),
+    };
+    this.briefed = { useCases: [...s.useCases], requirements: [...s.requirements], traffic };
   }
 
   private drawEvents(): EventInstance[] {

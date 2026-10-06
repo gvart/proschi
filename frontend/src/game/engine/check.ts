@@ -318,6 +318,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
       for (const id of w.events ?? []) if (!content.events.some((e) => e.id === id)) v(jf, `Wave ${i + 1}: unknown event '${id}'`);
       for (const f of w.freshness ?? []) if (!s.useCases[f.useCase]?.steps.some((st) => st.async)) v(jf, `Wave ${i + 1}: freshness for '${f.useCase}', which has no async step`);
       if (w.debrief && !s.sections[`Debrief: ${w.debrief}`]) v(mf, `Wave ${i + 1} uses "## Debrief: ${w.debrief}", which is missing`);
+      if (w.brief !== undefined && (typeof w.brief !== 'string' || !w.brief.trim() || w.brief.length > 240)) v(jf, `Wave ${i + 1}'s brief should be one or two sentences (at most 240 characters)`);
       if (w.global !== undefined && !(w.global >= 0 && w.global < 1)) v(jf, `Wave ${i + 1}: global is a share 0 to 0.99`);
     });
     for (const p of s.eventPool) if (!content.events.some((e) => e.id === p.id)) v(jf, `Event pool: unknown event '${p.id}'`);

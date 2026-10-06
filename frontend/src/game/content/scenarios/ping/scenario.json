@@ -77,15 +77,15 @@
     { "name": "Launch", "traffic": { "send": 80, "inbox": 150 }, "curve": "day", "requirements": ["p99 \"Send notification\" < 300ms", "durable \"Send notification\""] },
     { "traffic": { "send": 130, "inbox": 250 }, "curve": "day", "contract": true },
     { "traffic": { "send": 220, "inbox": 400 }, "curve": "ramp", "requirements": ["p99 \"Send notification\" < 100ms"], "freshness": [{ "useCase": "send", "maxMinutes": 5 }], "debrief": "async" },
-    { "name": "Breaking news", "boss": true, "traffic": { "send": 350, "inbox": 600 }, "curve": "spike", "events": ["slow-provider"] },
+    { "name": "Breaking news", "brief": "Breaking news! Every publisher sends an alert at the same moment. Answer fast, deliver soon, and don't lose a single one.", "boss": true, "traffic": { "send": 350, "inbox": 600 }, "curve": "spike", "events": ["slow-provider"] },
     { "name": "Growth", "traffic": { "send": 550, "inbox": 900, "broadcast": 2 }, "curve": "day", "contract": true, "freshness": [{ "useCase": "broadcast", "maxMinutes": 15 }], "requirements": ["availability \"Send notification\" >= 99.5%"] },
     { "traffic": { "send": 850, "inbox": 1300, "broadcast": 3 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
     { "traffic": { "send": 1300, "inbox": 1900, "broadcast": 5 }, "curve": "day", "freshness": [{ "useCase": "send", "maxMinutes": 2 }], "debrief": "backlog" },
-    { "name": "Election night", "boss": true, "traffic": { "send": 1900, "inbox": 2800, "broadcast": 7 }, "curve": "ramp", "events": ["queue-surge", "db-failover"], "contract": true },
+    { "name": "Election night", "brief": "Election night: results drop state by state, and every result is a push to millions. It builds all night, so the worst comes last.", "boss": true, "traffic": { "send": 1900, "inbox": 2800, "broadcast": 7 }, "curve": "ramp", "events": ["queue-surge", "db-failover"], "contract": true },
     { "name": "Scale", "traffic": { "send": 2800, "inbox": 4000, "broadcast": 10 }, "curve": "day", "requirements": ["p99 \"Read inbox\" < 80ms"] },
     { "traffic": { "send": 4000, "inbox": 5800, "broadcast": 14 }, "curve": "double-peak", "requirements": ["availability \"Send notification\" >= 99.9%"] },
     { "traffic": { "send": 5500, "inbox": 8000, "broadcast": 18 }, "curve": "day", "events": ["slow-provider"] },
-    { "name": "New Year's Eve", "boss": true, "traffic": { "send": 7500, "inbox": 11000, "broadcast": 25 }, "curve": "spike", "events": ["queue-surge", "az-outage"] }
+    { "name": "New Year's Eve", "brief": "New Year's Eve! At midnight everyone messages everyone. It's the biggest fan-out of the year. Hold on to your whiskers.", "boss": true, "traffic": { "send": 7500, "inbox": 11000, "broadcast": 25 }, "curve": "spike", "events": ["queue-surge", "az-outage"] }
   ],
   "eventPool": [
     { "id": "slow-provider", "weight": 3 },

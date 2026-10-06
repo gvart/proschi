@@ -270,6 +270,8 @@ export interface DiagnosisDef {
 
 export interface WaveDef {
   name?: string;
+  /** What the mascot says first when the wave begins (a boss's intro); the rest of its briefing comes from the wave. */
+  brief?: string;
   /** The ticket of this wave (design-first modes). */
   ticket?: TicketDef;
   /** A root cause to pick before deploying (on-call). */

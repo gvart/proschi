@@ -133,11 +133,101 @@
   }
 }
 
+/* Kernel, the cat SRE: the briefing slides in, the cat blinks, twitches an
+   ear now and then, and moves its mouth while the text types out. */
+.sf-brief {
+  animation: sf-brief-in var(--d-spring) var(--e-spring) both;
+}
+.sf-bubble::before {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: 14px;
+  width: 12px;
+  height: 12px;
+  background: inherit;
+  border-left: var(--bw-1) solid rgb(var(--c-ink));
+  border-bottom: var(--bw-1) solid rgb(var(--c-ink));
+  transform: rotate(45deg);
+}
+.sf-cat {
+  overflow: visible;
+}
+.sf-cat-eyes {
+  transform-origin: 60px 54px;
+  animation: sf-cat-blink 4.2s infinite;
+}
+.sf-cat-ear--right {
+  transform-origin: 80px 42px;
+  animation: sf-cat-twitch 5.5s 1.2s infinite;
+}
+.sf-cat-ears {
+  transition: transform var(--d-2) var(--e-out);
+  transform-origin: 60px 46px;
+}
+.sf-cat-ears--back {
+  transform: scaleY(0.82) translateY(6px);
+}
+.sf-cat--talking .sf-cat-mouth {
+  transform-origin: 60px 74px;
+  animation: sf-cat-talk 180ms infinite alternate;
+}
+.sf-cat--talking {
+  animation: sf-cat-bob 600ms ease-in-out infinite alternate;
+}
+
 @media (prefers-reduced-motion: reduce) {
+  .sf-brief,
+  .sf-cat-eyes,
+  .sf-cat-ear--right,
+  .sf-cat--talking,
+  .sf-cat--talking .sf-cat-mouth,
   .sf-shake,
   .sf-ghost-slot,
   .sf-canvas .sf-node--new .pc-node,
   .sf-canvas .sf-shake .pc-node {
     animation: none;
+  }
+}
+@keyframes sf-brief-in {
+  from {
+    transform: translateY(-16px) scale(0.97);
+    opacity: 0;
+  }
+}
+@keyframes sf-cat-blink {
+  0%,
+  92%,
+  100% {
+    transform: scaleY(1);
+  }
+  95% {
+    transform: scaleY(0.1);
+  }
+}
+@keyframes sf-cat-twitch {
+  0%,
+  88%,
+  100% {
+    transform: rotate(0);
+  }
+  91% {
+    transform: rotate(12deg);
+  }
+  94% {
+    transform: rotate(-4deg);
+  }
+}
+@keyframes sf-cat-talk {
+  from {
+    transform: scaleY(0.3);
+  }
+  to {
+    transform: scaleY(1.1);
+  }
+}
+@keyframes sf-cat-bob {
+  to {
+    transform: translateY(-2px) rotate(-1.5deg);
   }
 }
