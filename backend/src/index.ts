@@ -95,8 +95,11 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   const method = request.method;
   const parts = pathname.split('/').filter(Boolean);
   const is = (m: string, ...path: string[]) => method === m && parts.length === path.length && path.every((p, i) => p === '*' || p === parts[i]);
-  // Mail clients send one-click unsubscribes (RFC 8058) from their own servers, with no session; the link's token is the only credential.
+  // The email links' POSTs carry their only credential in the token and never read the session, so they skip the
+  // same-origin check: mail clients send one-click unsubscribes (RFC 8058) from their own servers, and the confirm
+  // page's form arrives with `Origin: null` (its Referrer-Policy is no-referrer).
   if (is('POST', 'api', 'email', 'unsubscribe')) return unsubscribe(request, ctx);
+  if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   assertSameOrigin(request);
 
   if (is('GET', 'auth', 'providers')) return json({ providers: configuredProviders(env) }, 200, { 'Cache-Control': 'public, max-age=300' });
@@ -117,7 +120,6 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('PATCH', 'api', 'me', 'email')) return patchEmail(request, ctx);
   if (is('DELETE', 'api', 'me', 'email')) return deleteEmail(request, ctx);
   if (is('GET', 'api', 'email', 'confirm')) return confirmPage(request, ctx);
-  if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   if (is('GET', 'api', 'email', 'unsubscribe')) return unsubscribePage(request, ctx);
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
