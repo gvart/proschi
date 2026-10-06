@@ -1,0 +1,27 @@
+---
+title: Photo sharing
+---
+flowchart TD
+  %% Clients and the edge
+  user((Mobile user)) --> cdn[CloudFront]
+  user --> lb{Load balancer}
+  lb -->|HTTPS| api(Photo API)
+  subgraph core [Core services]
+    api
+    feed[Feed Service]
+  end
+  subgraph data ["Data layer"]
+    photos[(Photos DB)]
+    cache[(Redis)]
+    blobs@{ shape: docs, label: "Photo files" }
+  end
+  api -- reads --> cache
+  api -.-> photos
+  api ==> uploads[[Upload events]]
+  uploads --> thumbs(Thumbnail worker) & feed
+  thumbs --> blobs
+  feed --- photos
+  api <--> feed
+  note>Thumbnails are made asynchronously]
+  classDef hot fill:#f96
+  class api hot

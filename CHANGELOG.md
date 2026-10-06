@@ -10,6 +10,19 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Import from Mermaid and OpenAPI.** *Diagrams › Import Mermaid or
+  OpenAPI…* turns a Mermaid flowchart or sequence diagram (or Markdown with
+  several ```` ```mermaid ```` blocks) into a Proschi document: shapes and
+  labels become kinds, subgraphs groups, link labels connection labels, and
+  messages, `alt` and `par` blocks a use case. An OpenAPI 3 spec (YAML or
+  JSON) becomes a starter design with a use case per operation. Paste or pick
+  a file, check the preview and its warnings, open it as a new diagram. The
+  CLI has the same: `proschi import mermaid|openapi <file>`.
+- **Start from…** The editor's examples gallery is searchable and filtered by
+  pattern (cache, queue, CDN, fan-out, sharding, replication, rate limiting…),
+  with tags derived from each design. It also offers the reference solution of
+  every practice problem you have solved; the others are listed as "Solve …
+  to unlock", linking to the problem.
 - **Every review card has a page of its own** at `practice/cards/<topic>/<id>/`:
   the question, the answer with why (every option of a choice card with the
   right one marked, the full sentence of a fill-in-the-blank, the worked
