@@ -7,7 +7,7 @@ import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun,
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
-import { purgeExpiredSessions } from './cron';
+import { dailyCron } from './cron';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
@@ -154,6 +154,6 @@ export default {
   },
 
   async scheduled(_controller, env): Promise<void> {
-    await purgeExpiredSessions(env);
+    await dailyCron(env);
   },
 } satisfies ExportedHandler<Env>;

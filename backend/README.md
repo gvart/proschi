@@ -77,7 +77,10 @@ instead ([Mobile apps](#mobile-apps)).
   out everywhere, delete the account. Display names that pass for the site or
   its staff, or contain a slur, are refused (`src/moderation.ts`).
 - **Sessions** last 30 days and slide: one used in its second half is renewed
-  for 30 more. A daily cron (03:17 UTC) deletes expired ones.
+  for 30 more. A daily cron (03:17 UTC) deletes expired ones, game runs
+  started over 7 days ago and never submitted, and usage counts older than
+  400 days. It keeps every card review: FSRS replays the whole history to
+  schedule a card.
 - **Usage counts** ([below](#usage-counts)): one anonymous number per UTC day
   and event, for the activation funnel. No user, IP or cookie is stored.
 

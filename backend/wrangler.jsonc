@@ -20,7 +20,8 @@
     "run_worker_first": ["/api/*", "/auth/*"],
     "not_found_handling": "404-page"
   },
-  // Daily: delete expired sessions and usage counts older than 400 days (src/cron.ts).
+  // Daily: delete expired sessions, abandoned game runs and usage counts older
+  // than 400 days (src/cron.ts).
   "triggers": { "crons": ["17 3 * * *"] },
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
   // (exact URIs, comma-separated; README "Mobile apps"). Empty: app sign-in is off.
