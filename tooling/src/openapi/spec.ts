@@ -6,6 +6,7 @@ import { readFileSync, statSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Ajv2020, type ErrorObject, type ValidateFunction } from 'ajv/dist/2020';
 import { parse as parseYaml } from 'yaml';
+import { serverPrefix } from '../../../frontend/src/dsl/importOpenApi';
 
 type Json = Record<string, unknown>;
 
@@ -143,19 +144,6 @@ function describeError(e: ErrorObject): string {
   if (e.keyword === 'additionalProperties' || e.keyword === 'unevaluatedProperties') message += ` ('${p.additionalProperty ?? p.unevaluatedProperty}')`;
   if (e.keyword === 'enum' && Array.isArray(p.allowedValues)) message += `: ${p.allowedValues.map((v) => JSON.stringify(v)).join(', ')}`;
   return `${where} ${message}`;
-}
-
-/** The path part of `servers[0].url`, with `{variables}` replaced by their defaults. */
-function serverPrefix(servers: unknown): string {
-  const server = Array.isArray(servers) ? servers[0] : undefined;
-  if (!isObject(server) || typeof server.url !== 'string') return '';
-  const vars = isObject(server.variables) ? server.variables : {};
-  const url = server.url.replace(/\{([^}]+)\}/g, (_, name: string) => {
-    const v = vars[name];
-    return isObject(v) && v.default !== undefined ? String(v.default) : '';
-  });
-  const path = url.match(/^[a-z][a-z0-9+.-]*:\/\/[^/]*(\/.*)?$/i)?.[1] ?? (url.startsWith('/') ? url : '');
-  return path.replace(/[?#].*$/, '').replace(/\/+$/, '');
 }
 
 /**

@@ -34,6 +34,7 @@ import {
   Network,
   Archive,
   ArchiveRestore,
+  Import,
 } from 'lucide-react';
 import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
@@ -97,6 +98,7 @@ const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
 const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
+const ImportDialog = lazy(() => import('./ImportDialog'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
 const TourHint = lazy(() => import('../../onboarding/TourHint'));
@@ -152,6 +154,7 @@ export default function Playground() {
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
   const [view, setView] = useState<View>('diagram');
@@ -491,6 +494,15 @@ export default function Playground() {
                   Open .proschi file…
                 </MenuItem>
                 <MenuItem
+                  icon={<Import size={14} />}
+                  onSelect={() => {
+                    setShowImport(true);
+                    close();
+                  }}
+                >
+                  Import Mermaid or OpenAPI…
+                </MenuItem>
+                <MenuItem
                   icon={<Download size={14} />}
                   onSelect={() => {
                     downloadText(source, rootPath);
@@ -744,9 +756,21 @@ export default function Playground() {
         <Suspense fallback={<PaneLoading overlay />}>
           <ExamplesGallery
             onClose={() => setShowExamples(false)}
-            onPick={(example) => {
-              openExample(example.source);
+            onPick={(picked) => {
+              openExample(picked);
               setShowExamples(false);
+            }}
+          />
+        </Suspense>
+      )}
+
+      {showImport && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ImportDialog
+            onClose={() => setShowImport(false)}
+            onOpen={(imported) => {
+              openExample(imported);
+              setShowImport(false);
             }}
           />
         </Suspense>

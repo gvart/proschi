@@ -75,7 +75,7 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await result.getByRole('button', { name: 'Continue' }).click();
   const draft = page.getByRole('dialog', { name: 'Pick a tech card' });
   await expect(draft.getByRole('listitem')).toHaveCount(3);
-  await draft.getByRole('button', { name: /Skip/ }).click();
+  await draft.getByRole('button', { name: /^Skip \(/ }).click();
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 2');
 
   // The run survives a reload.
@@ -133,7 +133,7 @@ test('hold the line: change the board during the run and ship it live', async ({
   await expect(live).toContainText('2 left this wave');
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('dialog', { name: /Wave 1/ }).getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /Skip/ }).click();
+  await page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /^Skip \(/ }).click();
   // The change carries into the next wave's plan.
   await expect(board(page).getByRole('button', { name: /^App Server, 2 replicas/ })).toBeVisible();
 });
