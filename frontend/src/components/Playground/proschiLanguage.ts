@@ -157,14 +157,25 @@ function inTestBlock(doc: Text, number: number): boolean {
   return false;
 }
 
-/** Completes tech stacks inside [ ] and node ids / keywords elsewhere. */
-export function proschiCompletions(getNodeIds: () => string[]) {
+/** A tech the editor offers inside [ ], when a page narrows the catalog (the Arcade offers only what the player may place). */
+export interface TechChoice {
+  tech: string;
+  /** Shown next to it, e.g. the game's name for the component. */
+  detail?: string;
+}
+
+/** Completes tech stacks inside [ ] and node ids / keywords elsewhere; `getTechs` narrows the techs offered when it returns a list. */
+export function proschiCompletions(getNodeIds: () => string[], getTechs?: () => readonly TechChoice[] | undefined) {
   return (ctx: CompletionContext): CompletionResult | null => {
     const line = ctx.state.doc.lineAt(ctx.pos);
     const before = line.text.slice(0, ctx.pos - line.from);
 
     const tech = before.match(/\[([^\]]*)$/);
-    if (tech) return { from: ctx.pos - tech[1].length, options: techOptions, validFor: /^[\w ./-]*$/ };
+    if (tech) {
+      const only = getTechs?.();
+      const options = only ? only.map((t) => ({ label: t.tech, type: 'type', detail: t.detail, apply: applyTech(t.tech) })) : techOptions;
+      return { from: ctx.pos - tech[1].length, options, validFor: /^[\w ./-]*$/ };
+    }
 
     // Labels after ':' are free text.
     if (/^[^"#]*:/.test(before)) return null;

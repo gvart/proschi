@@ -80,14 +80,32 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await expect(board(page).getByRole('button', { name: /^Load Balancer/ })).toBeVisible();
 });
 
-test('the board can be written as Proschi text, and the canvas follows', async ({ page }) => {
+test('in Shortly the code pane first watches the board: each change writes its line', async ({ page }) => {
   await startShortly(page);
+  await page.getByRole('complementary', { name: "Kernel's briefing" }).getByRole('button', { name: 'Got it' }).click();
+  await page.getByRole('tab', { name: 'Code' }).click();
+  await expect(page.getByTestId('code-hint')).toContainText('You can type here from wave 3');
+  await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false');
+  await page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: 'Load Balancer' }).click();
+  await page.getByRole('tab', { name: 'Board' }).click();
+  await board(page).getByRole('button', { name: /Place it in the edge row/ }).click();
+  await page.getByRole('tab', { name: 'Code' }).click();
+  await expect(page.locator('.cm-content')).toContainText('lb "Load Balancer" [Load Balancer]');
+  // The Compiled tab shows the whole document the simulation reads.
+  await page.getByRole('tab', { name: 'Compiled' }).click();
+  await expect(page.locator('.cm-content')).toContainText('usecase "Redirect"');
+  await expect(page.locator('.cm-content')).toContainText('requirements {');
+});
+
+test('the board can be written as Proschi text, and the canvas follows', async ({ page }) => {
+  await page.goto('practice/#/arcade');
+  await page.getByRole('listitem').filter({ hasText: 'Pawprint' }).getByRole('button', { name: 'Play', exact: true }).click();
   await page.getByRole('tab', { name: 'Code' }).click();
   await expect(page.locator('.cm-content')).toContainText('api "App Server" [Service]');
   await appendCode(page, '\nlb "Load Balancer" [Load Balancer] x2\nusers -> lb\nlb -> api\ncapacity {\n  db size M\n}\n');
   // A locked component is refused with the reason, and the board is left as it was.
-  await appendCode(page, 'c [Cache]\n');
-  await expect(page.getByText(/Cache is locked/)).toBeVisible();
+  await appendCode(page, 'c [CDN]\n');
+  await expect(page.getByText(/CDN is locked/)).toBeVisible();
   await page.keyboard.press('ControlOrMeta+z');
   await page.getByRole('tab', { name: 'Board' }).click();
   await expect(board(page).getByRole('button', { name: /^Load Balancer, 2 replicas/ })).toBeVisible();

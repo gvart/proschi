@@ -72,6 +72,13 @@ export function briefing(scenario: ScenarioDef, wave: WaveDef, forecast: Forecas
     const { pays } = forecast.bounty;
     lines.push(`Bounty, if you want it: ${forecast.bounty.text} It pays $${pays.cash.toLocaleString('en-US')} and ${pays.points.toLocaleString('en-US')} points.`);
   }
+  // The code pane, as the scenario opens it up (watch, then type, then type only).
+  const waveNo = forecast.wave + 1;
+  const { edit, only } = scenario.code;
+  if (first && edit > 1) lines.push('Open the Code tab while you build: every change on the board writes a line of Proschi there, and it lights up.');
+  else if (waveNo === edit && edit > 1) lines.push('From this wave you can type the board yourself in the Code tab. Ctrl+Space lists what you can place.');
+  if (waveNo === only) lines.push('From now on new components are typed in the Code tab, not placed from the palette (on a phone the palette stays).');
+
   const quiet = !first && !fresh.length && !news.requirements.length && !farUsers && !forecast.events.length && !forecast.ticket && !wave.diagnosis;
   if (quiet) lines.push('Nothing else is new. Check the forecast and deploy when you are ready.');
 

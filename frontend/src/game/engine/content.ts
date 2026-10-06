@@ -1,6 +1,6 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from '../../practice/frontMatter';
 import type { IconName } from './icons';
-import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type MigrationDef, type BountyDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type MutatorDef, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
+import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type CodeLevels, type MigrationDef, type BountyDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type MutatorDef, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
 
 /**
  * Reads the game's content folder (docs/GAME.md) from a map of files keyed
@@ -190,7 +190,7 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
   const mdFile = `scenarios/${id}/scenario.md`;
   const { fields: f, sections } = readMarkdown(mdFile, markdown);
   f.known(['title', 'summary', 'difficulty', 'tags', 'related', 'cards', 'order', 'version', 'mode']);
-  const data = json<Omit<ScenarioDef, 'id' | 'title' | 'summary' | 'difficulty' | 'tags' | 'related' | 'cards' | 'order' | 'version' | 'sections' | 'grants'> & { grants?: unknown[] }>(jsonFile, jsonText);
+  const data = json<Omit<ScenarioDef, 'id' | 'title' | 'summary' | 'difficulty' | 'tags' | 'related' | 'cards' | 'order' | 'version' | 'sections' | 'grants' | 'code'> & { grants?: unknown[]; code?: unknown }>(jsonFile, jsonText);
   const need = (cond: unknown, message: string) => {
     if (!cond) throw new ContentError(jsonFile, message);
   };
@@ -223,6 +223,10 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
     need(['needs', 'writers', 'oldReaders'].every((k) => Array.isArray(m[k as 'needs'])), `Migration '${m.id}' needs "needs", "writers" and "oldReaders" lists`);
     need(typeof m.backfillRps === 'number' && m.backfillRps > 0, `Migration '${m.id}' needs a positive "backfillRps"`);
   }
+  const code = (data.code ?? { edit: 1 }) as Partial<CodeLevels>;
+  const wave = (x: unknown) => Number.isInteger(x) && (x as number) >= 1 && (x as number) <= data.waves.length;
+  need(code && typeof code === 'object' && (code.edit === undefined || wave(code.edit)) && (code.only === undefined || wave(code.only)), `"code" is {"edit": <wave>, "only": <wave>}, waves 1 to ${data.waves.length}`);
+  need(code.only === undefined || code.only >= (code.edit ?? 1), '"code": "only" comes at or after "edit"');
   return {
     id,
     title: f.string('title'),
@@ -244,6 +248,7 @@ export function scenarioFromFiles(id: string, jsonText: string, markdown: string
     grants: Array.isArray(data.grants) ? data.grants.filter((g): g is string => typeof g === 'string') : [],
     mode: f.optionalOneOf('mode', GAME_MODES) ?? 'scale',
     migrations,
+    code: { edit: code.edit ?? 1, ...(code.only !== undefined ? { only: code.only } : {}) },
   };
 }
 

@@ -30,7 +30,12 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    Proschi text you can edit instead: one line per component
    (`api "App Server" [Service] x3`), one per wire, and `size` and `shards`
    in a `capacity` block. Which use cases an app server handles is set in its
-   settings.
+   settings, or written after its line as `# handles: book, pay` (use case
+   keys). Users and the externals stay on the board: their lines cannot be
+   typed into. **Compiled** shows the whole document the simulation runs: the
+   board with the scenario's use cases, the peak traffic and the
+   requirements, and after a load test (or during the run) a warning on each
+   line that broke. See [The code pane](#the-code-pane).
 3. **Run.** Eight ticks, each one simulated with the wave's traffic at that
    point of the curve. Once a wave you can page the **on-call** to add a
    replica mid-run ($200).
@@ -45,6 +50,23 @@ A run is twelve **waves** in three acts. It starts with a choice of three
 Waves 4, 8 and 12 are **bosses**: a launch, a holiday, a Super Bowl ad. After
 wave 12 you can bank the score or keep going in **Endless** (traffic ×1.3 a
 wave, two incidents, up to wave 24).
+
+### The code pane
+
+The game teaches Proschi as it goes. A scenario's `code` setting opens the
+code pane in steps:
+
+- **Watch** (before the wave in `edit`): the Code tab is read-only, and every
+  change on the board lights up the line it wrote.
+- **Edit** (from `edit`): type the board, with completion that offers only
+  what you can place (Ctrl+Space).
+- **Only** (from `only`): on a wide screen the palette is gone, and new
+  components are typed; nodes are still tapped to scale, size or remove.
+  On a phone the palette stays.
+
+Kernel says when a step begins. The terminal button in a run's header turns
+**Code only** on for any scenario, as a player's own choice; it changes
+nothing in the score.
 
 ### Mutators and bounties
 
@@ -240,7 +262,8 @@ in an interview.
   "waves": [ … twelve … ],
   "eventPool": [{ "id": "noisy-neighbor", "weight": 3 }],
   "contracts": [ … ],
-  "unlock": { "scenario": "shortly", "wave": 6 }
+  "unlock": { "scenario": "shortly", "wave": 6 },
+  "code": { "edit": 3, "only": 9 }
 }
 ```
 
@@ -252,6 +275,9 @@ in an interview.
   external kind, with optional `rps` and `latencyMs`.
 - **unlock**: reach this wave in that scenario to open this one. Leave it out
   for a scenario open from the start.
+- **code**: the waves (1-based) from which the code pane may be typed in
+  (`edit`, 1 when absent) and from which new components are typed only
+  (`only`, never when absent). See [The code pane](#the-code-pane).
 
 A **use case**:
 

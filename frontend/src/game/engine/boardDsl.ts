@@ -9,8 +9,8 @@ import type { Board, BoardNode, ComponentDef, ScenarioDef } from './types';
  * pane: one line per component (`api "App Server" [Service] x3`), one per
  * wire, and a `capacity` block for sizes and shards. Only the board is
  * written here: the use cases and requirements come from the scenario. Which
- * use cases an app server handles has no syntax, so it is kept from the
- * board the text was written from.
+ * use cases an app server handles has no syntax in the language, so the game
+ * writes it as a comment the parser ignores: `api "App Server" [Service] x2  # handles: book, pay`.
  */
 
 const USERS_TECH = 'Actor';
@@ -29,6 +29,9 @@ function nameOf(node: BoardNode, { components, scenario }: Context): { name: str
   return { name: c?.name ?? node.component, tech: c?.tech ?? node.component };
 }
 
+/** The game's own comment on an app server's line: which use cases it handles (keys). */
+const HANDLES = /#\s*handles:\s*(.*)$/;
+
 const quote = (text: string) => `"${text.replace(/[\\"]/g, '\\$&')}"`;
 
 export function boardToDsl(board: Board, ctx: Context): string {
@@ -37,7 +40,8 @@ export function boardToDsl(board: Board, ctx: Context): string {
   const lines = board.nodes.map((n) => {
     const { name, tech } = nameOf(n, ctx);
     const fixed = n.component === USERS || ctx.scenario.externals.some((e) => e.id === n.component);
-    return `${pad(n.id)} ${quote(name)} [${tech}]${!fixed && n.replicas > 1 ? ` x${n.replicas}` : ''}`;
+    const line = `${pad(n.id)} ${quote(name)} [${tech}]${!fixed && n.replicas > 1 ? ` x${n.replicas}` : ''}`;
+    return n.handles?.length ? `${line}  # handles: ${n.handles.join(', ')}` : line;
   });
   const wires = board.edges.map(([a, b]) => `${pad(a)} -> ${b}`);
   const capacity = board.nodes.flatMap((n) => {
@@ -47,6 +51,7 @@ export function boardToDsl(board: Board, ctx: Context): string {
   return [
     '# Your board: components, wires, replicas (x3), sizes and shards.',
     '# The use cases and requirements come from the scenario.',
+    '# An app server serves every use case, or those after "# handles:".',
     '',
     ...lines,
     '',
@@ -63,9 +68,10 @@ export interface DslBoard {
   diagnostics: Diagnostic[];
 }
 
-/** Reads the board back. `previous` supplies what the text cannot say (app servers' handled use cases). */
+/** Reads the board back; `previous` is the board before, for components declared without a tech. */
 export function dslToBoard(source: string, ctx: Context & { previous: Board; unlocked: ReadonlySet<string> }): DslBoard {
   const { diagram, diagnostics } = parse(source);
+  const sourceLines = source.split('\n');
   const problems: Diagnostic[] = diagnostics.filter((d) => d.severity === 'error');
   const error = (message: string, loc: { line: number; col: number; length: number }) => problems.push({ severity: 'error', message, ...loc });
 
@@ -94,14 +100,14 @@ export function dslToBoard(source: string, ctx: Context & { previous: Board; unl
     }
     const cap = caps.get(n.id);
     const tier = cap?.size ? SIZE_OF_TIER.indexOf(cap.size) : 0;
-    const prev = ctx.previous.nodes.find((p) => p.id === n.id && p.component === component);
+    const handles = handlesOf(sourceLines[n.loc.line - 1] ?? '', n.loc.line, def, ctx.scenario, error);
     nodes.push({
       id: n.id,
       component,
       replicas: n.replicas ?? 1,
       ...(tier > 0 ? { tier } : {}),
       ...((cap?.shards ?? 1) > 1 ? { shards: cap!.shards } : {}),
-      ...(prev?.handles?.length ? { handles: prev.handles } : {}),
+      ...(handles?.length ? { handles } : {}),
     });
   }
   for (const c of diagram.capacity ?? []) {
@@ -113,4 +119,22 @@ export function dslToBoard(source: string, ctx: Context & { previous: Board; unl
   }
   if (problems.length) return { diagnostics: problems };
   return { board: { nodes, edges: diagram.edges.map((e) => [e.source, e.target]) }, diagnostics: [] };
+}
+
+/** The use case keys after `# handles:` on a component's line; reports unknown keys and a comment on anything but an app server. */
+function handlesOf(text: string, line: number, def: ComponentDef | undefined, scenario: ScenarioDef, error: (message: string, loc: { line: number; col: number; length: number }) => void): string[] | undefined {
+  const m = HANDLES.exec(text);
+  if (!m) return undefined;
+  const col = m.index + 1;
+  if (def?.role !== 'app') {
+    error('Only app servers handle use cases.', { line, col, length: m[0].length });
+    return undefined;
+  }
+  const keys = m[1].split(',').map((k) => k.trim()).filter(Boolean);
+  const unknown = keys.filter((k) => !scenario.useCases[k]);
+  if (unknown.length) {
+    error(`No use case '${unknown[0]}'. This scenario's are: ${Object.keys(scenario.useCases).join(', ')}.`, { line, col, length: m[0].length });
+    return undefined;
+  }
+  return [...new Set(keys)];
 }
