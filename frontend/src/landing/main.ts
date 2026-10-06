@@ -7,6 +7,7 @@ import { highlightElement } from './highlight';
 import { exampleLink } from './links';
 import { practiceListHtml } from './practiceList';
 import { initStory } from './story';
+import { track } from '../services/metrics';
 import practiceProblems from 'virtual:practice-listings';
 
 // Everything here is plain DOM and small; React and the editor load only with the demo, below.
@@ -25,6 +26,7 @@ if (practiceList) practiceList.innerHTML = practiceListHtml(practiceProblems);
 
 enhance();
 initStory(document);
+track('landing_view', { once: 'session' });
 
 /**
  * The hero's live demo: the poster in #live-demo is real markup (the code and

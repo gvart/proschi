@@ -8,6 +8,7 @@ import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postC
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
 import { purgeExpiredSessions } from './cron';
+import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
@@ -58,6 +59,8 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
  *   GET    /api/game/leaderboard?scenario=&ascension= | ?day=   top 20 who opted in (+ your rank, signed in)
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
+ *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -104,6 +107,8 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
+  if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
+  if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
   return errorResponse(404, 'Not found');
 }
 

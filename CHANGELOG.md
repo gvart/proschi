@@ -10,6 +10,13 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Anonymous usage counts.** proschi.app now counts, per day, how often a
+  few things happen (the editor opened, a first edit, tests run, a problem
+  solved, a sign-in, …) to see where people get stuck. Only the event's name
+  is sent, and the server keeps one number per day and event: no user id,
+  IP address, cookie or page address, kept for 400 days. Nothing is sent when
+  the browser asks not to be tracked (Do Not Track or Global Privacy
+  Control). The privacy page lists every count.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live
