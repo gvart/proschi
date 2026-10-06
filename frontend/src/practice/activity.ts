@@ -1,7 +1,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
+  ACTIVITY_DAYS,
   activityFromLog,
+  activityFromPlay,
   activityFromSolves,
+  addDays,
   computeStreak,
   DEFAULT_GOAL,
   goalFor,
@@ -20,20 +23,25 @@ import { api, type ActivityAnswer } from '../services/api';
 import { loadJson, saveJson } from '../services/storage';
 import { isSafeKey } from '../playground/sanitize';
 import { CARDS_LOG_KEY, pendingReviews, readReviews, sentReviews } from './review/store';
+import { localResults } from './challenge/store';
 import type { Account } from './useAccount';
 
 /**
  * The daily goal and streak on the practice page: the browser's glue around
  * src/learn/streak.ts. Signed in, the server keeps the activity (card
- * reviews and the day of each first solve) and the goal, so every device
- * shows the same streak; a build without accounts computes it from this
- * browser's review log and the solve days kept below; signed out there is no
+ * reviews, the day of each first solve, daily challenges and Scale or Fail
+ * runs) and the goal, so every device shows the same streak; a build without
+ * accounts computes it from this browser's review log, the solve days and
+ * finished-run days kept below and the daily challenge results kept by
+ * challenge/store.ts; signed out there is no
  * streak, only an invitation to sign in. Signed in, reviews still in this
  * browser's outbox count too (withOutbox), as in the session summary.
  */
 
 /** A build without accounts: the local day each problem was first solved, `{[problem id]: day}`. */
 export const SOLVES_KEY = 'proschi.solves';
+/** A build without accounts: how many Scale or Fail runs were finished each local day, `{[day]: count}`. */
+export const RUN_DAYS_KEY = 'proschi.game.days';
 /** A build without accounts: the daily goal, cards a day. */
 export const GOAL_KEY = 'proschi.goal';
 /** The Monday of the last weekly recap dismissed. */
@@ -52,9 +60,31 @@ export function recordLocalSolve(problemId: string, day: Day): void {
   saveJson(SOLVES_KEY, { ...solves, [problemId]: day });
 }
 
-/** This browser's activity: the review log's days and the solve days. */
+function readRunDays(): Record<Day, number> {
+  const raw = loadJson<unknown>(RUN_DAYS_KEY, {});
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return {};
+  return Object.fromEntries(
+    Object.entries(raw as Record<string, unknown>).filter((e): e is [Day, number] => isDay(e[0]) && typeof e[1] === 'number' && Number.isInteger(e[1]) && e[1] > 0),
+  );
+}
+
+/** Remembers a finished Scale or Fail run on `day` (a build without accounts), forgetting days older than the streak looks back. */
+export function recordLocalRun(day: Day): void {
+  if (!isDay(day)) return;
+  const oldest = addDays(day, -ACTIVITY_DAYS);
+  const days = Object.fromEntries(Object.entries(readRunDays()).filter(([d]) => d >= oldest));
+  saveJson(RUN_DAYS_KEY, { ...days, [day]: (days[day] ?? 0) + 1 });
+}
+
+/**
+ * This browser's activity: the review log's days, the solve days, the days
+ * of the daily challenges played (a result from before the local day was
+ * kept counts on the challenge's UTC day) and of finished Scale or Fail runs.
+ */
 export function localActivity(): DayActivity[] {
-  return [...activityFromLog(readReviews(loadJson<unknown>(CARDS_LOG_KEY, []))), ...activityFromSolves(readSolves())];
+  const runs = Object.entries(readRunDays()).flatMap(([day, n]) => Array.from({ length: Math.min(n, 100) }, () => day));
+  const challenges = Object.values(localResults()).map((r) => r.localDay ?? r.day);
+  return [...activityFromLog(readReviews(loadJson<unknown>(CARDS_LOG_KEY, []))), ...activityFromSolves(readSolves()), ...activityFromPlay({ challenges, runs })];
 }
 
 /**

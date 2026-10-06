@@ -5,6 +5,8 @@ import type { Topic } from '../learn/cards';
 import type { Engine } from '../hld/engine';
 import { formatMs, formatUsd } from '../sim/format';
 import { eyebrow } from '../components/Playground/ui';
+import ShareButton from '../components/ShareButton';
+import { solveShareText } from '../learn/share';
 import { Celebration } from './Streak';
 import type { Progress } from './progress';
 import { ROADMAP, roadmapFor, roadmapHref } from './roadmap';
@@ -29,7 +31,8 @@ interface SolveCelebrationProps {
 /**
  * A problem's first solve: what it took, the design's cost and p99 next to
  * the reference solution's, a roadmap stage completed, and where to go next
- * (the next roadmap problem, the cards that train for this one).
+ * (the next roadmap problem, the cards that train for this one), and a
+ * share button with the cost and p99 (learn/share.ts).
  */
 export default function SolveCelebration({ problem, engine, runs, metrics, before }: SolveCelebrationProps) {
   const reference = useMemo(() => runTests(parseSolution(problem, problem.solution), engine).metrics, [problem, engine]);
@@ -78,6 +81,12 @@ export default function SolveCelebration({ problem, engine, runs, metrics, befor
             </div>
           ))}
         </dl>
+        <div className="mt-3">
+          <ShareButton
+            label="Share your solve"
+            text={solveShareText({ id: problem.id, title: problem.title, costUsd: metrics?.costUsd, referenceCostUsd: reference?.costUsd, p99Ms: metrics?.p99Ms })}
+          />
+        </div>
         <ul className="mt-3 flex flex-col gap-1.5 text-sm">
           {roadmap.next && (
             <li>

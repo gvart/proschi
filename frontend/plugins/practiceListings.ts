@@ -4,6 +4,7 @@ import type { Plugin } from 'vite'
 import { listingsFrom } from '../src/practice/listing'
 import { ROADMAP, roadmapFor } from '../src/practice/roadmap'
 import { fillPrepPlaceholders } from '../src/landing/prep'
+import { fillPracticePlaceholders } from '../src/landing/practiceList'
 import { readingMinutes } from '../src/practice/lesson'
 
 const ID = 'virtual:practice-listings'
@@ -34,7 +35,8 @@ export function lessonMinutes(problemsDir: string, guideDir: string): { lessons:
  *
  * Also fills the `<!--roadmap:…-->` placeholders of HTML pages (the landing
  * page's interview prep section, src/landing/prep.ts) from the roadmap and the
- * same problem folders.
+ * same problem folders, and the `<!--practice:…-->` ones (the landing page's
+ * practice list and its count, src/landing/practiceList.ts).
  */
 export function practiceListings(problemsDir: string): Plugin {
   const read = (watch?: (file: string) => void) => {
@@ -65,8 +67,9 @@ export function practiceListings(problemsDir: string): Plugin {
       return `export default ${JSON.stringify(read((file) => this.addWatchFile(file)))}`
     },
     transformIndexHtml(html) {
-      if (!html.includes('<!--roadmap:')) return html
-      return fillPrepPlaceholders(html, roadmapFor(ROADMAP, read().map((p) => p.id)))
+      if (!html.includes('<!--roadmap:') && !html.includes('<!--practice:')) return html
+      const listings = read()
+      return fillPracticePlaceholders(fillPrepPlaceholders(html, roadmapFor(ROADMAP, listings.map((p) => p.id))), listings)
     },
   }
 }

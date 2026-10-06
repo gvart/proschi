@@ -11,7 +11,7 @@ unlock: 6
 
 ## Text
 
-One more on-call action every wave.
+One more hotfix every wave.
 
 ## Why
 

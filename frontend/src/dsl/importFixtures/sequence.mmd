@@ -1,0 +1,26 @@
+sequenceDiagram
+  title Checkout
+  autonumber
+  actor U as Shopper
+  participant W as Web App
+  participant P as Payments API
+  participant D@{ "type": "database" } as Orders
+  U->>W: POST /checkout {"cart": "c-1"}
+  W->>+P: POST /charges
+  alt Card accepted
+    P-->>-W: 201 {"chargeId": "ch_1"}
+    par Save and notify
+      W->>D: INSERT order
+    and
+      W-)U: OrderConfirmed
+    end
+    W-->>U: 200
+  else Card declined
+    P-->>W: 402
+    W-->>U: 402 {"error": "declined"}
+  end
+  loop Every line item
+    W->>D: UPDATE stock
+  end
+  Note right of W: Truncated payloads lose their body
+  W->>D: AUDIT {"items": [1, 2…

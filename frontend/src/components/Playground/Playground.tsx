@@ -24,6 +24,10 @@ import {
   Image,
   LayoutGrid,
   Link,
+  Link2,
+  Code,
+  LogIn,
+  List,
   Play,
   Trash2,
   Upload,
@@ -34,12 +38,14 @@ import {
   Network,
   Archive,
   ArchiveRestore,
+  Import,
 } from 'lucide-react';
-import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
+import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
+import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
   addDoc,
@@ -48,6 +54,7 @@ import {
   fileNameOf,
   initialState,
   isBlank,
+  openShared,
   removeDoc,
   renameFile,
   selectDoc,
@@ -57,7 +64,7 @@ import {
 } from '../../playground/documents';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
-import { LONG_LINK_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
+import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
 import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
@@ -75,7 +82,11 @@ import { useSimulation } from '../Analysis/useSimulation';
 import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
-import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
+import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
+import { ApiError } from '../../services/api';
+import { useAccount } from '../../practice/useAccount';
+import { track } from '../../services/metrics';
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { useZenMode } from './useZenMode';
@@ -97,11 +108,14 @@ const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
 const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
+const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
+const ImportDialog = lazy(() => import('./ImportDialog'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
 const TourHint = lazy(() => import('../../onboarding/TourHint'));
 const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
+const noop = () => {};
 const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
@@ -114,21 +128,40 @@ const nodeTypes = {
 };
 
 function loadInitialState(): DocumentState {
+  // A share link wins over `?example=`: once an example is edited, the address bar holds the edits.
   const link = decodeShareLink(window.location.hash);
+  const example = link ? undefined : exampleFromSearch(window.location.search)?.example;
   return initialState({
     stored: loadJson<unknown>(DOCS_KEY, null),
     legacySource: loadJson<unknown>(LEGACY_SOURCE_KEY, null),
-    sharedSource: link?.source ?? null,
+    sharedSource: link?.source ?? example?.source ?? null,
     sharedImports: link?.imports,
-    fallbackSource: ecommerceExample,
+    fallbackSource: FIRST_RUN_SOURCE,
   });
 }
 
-/** The tour on a first visit; only a hint over a shared diagram or example link, which should be seen first. */
+/** Whether the page opened on a shared diagram or an example link (`?example=<id>`), which should be seen first. */
+function isDeepLink(): boolean {
+  return (
+    readShareLink(window.location.hash) !== null ||
+    exampleFromSearch(window.location.search) !== null ||
+    new URLSearchParams(window.location.search).has('s')
+  );
+}
+
+/** Whether this browser has saved diagrams from an earlier visit. */
+function isReturning(): boolean {
+  return loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
+}
+
+/** The tour on a first visit; only a hint over a shared diagram or example link. */
 function initialTourMode(): StartMode {
-  const deepLink = readShareLink(window.location.hash) !== null || new URLSearchParams(window.location.search).has('example');
-  const returning = loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
-  return startMode('editor', { deepLink, returning });
+  return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
+}
+
+/** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
+function initialMobilePane(): 'code' | 'diagram' {
+  return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
 }
 
 export default function Playground() {
@@ -137,11 +170,16 @@ export default function Playground() {
   const source = current.source;
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
+  const typeSource = (next: string) => {
+    if (next !== source) track('editor_first_edit', { once: 'browser' });
+    setSource(next);
+  };
   /** Applies a canvas edit to the current document's text. */
-  const editSource = useCallback(
-    (edit: (source: string) => string) => setDocState((s) => updateCurrent(s, edit(currentDoc(s).source))),
-    [],
-  );
+  const editSource = useCallback((edit: (source: string) => string) => {
+    track('editor_first_edit', { once: 'browser' });
+    setDocState((s) => updateCurrent(s, edit(currentDoc(s).source)));
+  }, []);
 
   // A link may point at a use case step; open straight into playback there.
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
@@ -152,8 +190,15 @@ export default function Playground() {
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
+  const [showShortLinks, setShowShortLinks] = useState(false);
+  /** Short links, signed in on a build with accounts; `off` elsewhere. */
+  const account = useAccount(noop);
+  /** The short link made for a document and its imports, so asking again reuses it. */
+  const shortLinkRef = useRef<{ key: string; id: string; url: string } | null>(null);
+  const [shortening, setShortening] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   // Phones show one pane at a time.
-  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
   const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
   const [tour, setTour] = useState<StartMode>(initialTourMode);
@@ -166,6 +211,8 @@ export default function Playground() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
   const keyboard = useKeyboardViewport();
+
+  useEffect(() => track('editor_open', { once: 'session' }), []);
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -194,7 +241,9 @@ export default function Playground() {
   // A link that could not be opened says so; the banner also carries long-link and backup messages.
   const [banner, setBanner] = useState<BannerMessage | null>(() => {
     const link = readShareLink(window.location.hash);
-    return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
+    if (link && 'error' in link) return { message: link.error, tone: 'warning' };
+    const example = link ? null : exampleFromSearch(window.location.search);
+    return example && !example.example ? { message: `There is no example called “${example.id}”; Examples in the top bar lists them all.`, tone: 'warning' } : null;
   });
   useEffect(() => {
     if (!notice) return;
@@ -214,6 +263,43 @@ export default function Playground() {
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
+
+  // A short link (/s/<id>) sends people here with ?s=<id>: open its diagram, then drop the parameter.
+  useEffect(() => {
+    const id = shareIdFromSearch(window.location.search);
+    if (!id) return;
+    let cancelled = false;
+    const dropParam = (hash: string) => {
+      const params = new URLSearchParams(window.location.search);
+      params.delete('s');
+      const query = params.toString();
+      window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}${hash}`);
+    };
+    fetchShare(id).then(
+      (share) => {
+        if (cancelled) return;
+        openDoc((s) => openShared(s, share.source, share.imports));
+        dropParam(encodeShareHash(share.source, undefined, share.imports));
+      },
+      (error: unknown) => {
+        if (cancelled) return;
+        const gone = error instanceof ApiError && error.status === 404;
+        setBanner({ message: gone ? 'This short link no longer exists: its owner deleted it.' : 'Could not open the short link; try again in a moment.', tone: 'warning' });
+        if (gone) dropParam(window.location.hash);
+      },
+    );
+    return () => {
+      cancelled = true;
+    };
+    // Once, on load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // An example link has done its job once the example is open: the address bar becomes a share link like any other.
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    if (exampleFromSearch(search) !== null) window.history.replaceState(null, '', `${pathname}${withoutExample(search)}${hash}`);
+  }, []);
 
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
   useEffect(() => {
@@ -238,6 +324,13 @@ export default function Playground() {
     [nodes, overlay],
   );
   const [edges, setEdges] = useState<Edge[]>([]);
+
+  // Usage counts: the first look at the simulation's numbers (the Analysis or
+  // HLD tab, or the load overlay) and at the tests, once per session each.
+  useEffect(() => {
+    if (view === 'analysis' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'tests') track('test_run', { once: 'session', key: 'test_run:editor' });
+  }, [view, overlayOn, canOverlay]);
 
   // Edges are local state so selection works; keep it across re-parses.
   useEffect(() => {
@@ -283,18 +376,75 @@ export default function Playground() {
     openDoc((s) => addFile(s, text, file.name));
   };
 
-  const copyShareLink = async () => {
-    const url = shareUrl(source, window.location, playback, imports);
+  const signedIn = account.state.status === 'signed-in';
+
+  const copyText = async (text: string, prompt: string) => {
     try {
-      await navigator.clipboard.writeText(url);
+      await navigator.clipboard.writeText(text);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt('Copy this link:', url);
+      window.prompt(prompt, text);
     }
+  };
+
+  /** The short link of this document: the one made already, or a new one with a preview of the diagram on screen. */
+  const ensureShortLink = async (): Promise<{ id: string; url: string } | undefined> => {
+    const key = JSON.stringify([source, imports]);
+    if (shortLinkRef.current?.key === key) return shortLinkRef.current;
+    setShortening(true);
+    try {
+      let image: string | undefined;
+      const viewport = document.querySelector<HTMLElement>('#pane-panel-diagram .react-flow__viewport');
+      if (viewport) image = await renderPreviewPng(viewport, MAX_PREVIEW_BYTES).catch(() => undefined);
+      const share = await createShare(source, imports, image);
+      shortLinkRef.current = { key, id: share.id, url: share.url };
+      return shortLinkRef.current;
+    } catch (error) {
+      const message =
+        error instanceof ApiError && error.status === 401 ? 'your session expired; sign in again.' : error instanceof Error ? error.message : String(error);
+      setBanner({ message: `Could not make a short link: ${message}`, tone: 'warning' });
+      return undefined;
+    } finally {
+      setShortening(false);
+    }
+  };
+
+  const copyShortLink = async () => {
+    const share = await ensureShortLink();
+    if (!share) return;
+    track('share_link_created');
+    await copyText(share.url, 'Copy this short link:');
+    setBanner({ message: `Short link copied: ${share.url}. Anyone with it can open the diagram; delete it under Share → Your short links.` });
+  };
+
+  const copyShareLink = async () => {
+    const url = shareUrl(source, window.location, playback, imports);
+    track('share_link_created');
+    await copyText(url, 'Copy this link:');
     if (isLongLink(url)) {
-      setBanner({ message: LONG_LINK_MESSAGE, tone: 'warning', action: { label: 'Download .proschi', run: () => downloadText(source, rootPath) } });
+      setBanner(
+        signedIn
+          ? { message: LONG_LINK_SHORTEN_MESSAGE, tone: 'warning', action: { label: 'Copy a short link', run: () => void copyShortLink() } }
+          : { message: LONG_LINK_MESSAGE, tone: 'warning', action: { label: 'Download .proschi', run: () => downloadText(source, rootPath) } },
+      );
     }
+  };
+
+  /** An <iframe> of the read-only embed page: a short link signed in, else the diagram in the address. */
+  const copyEmbed = async () => {
+    const share = signedIn ? await ensureShortLink() : undefined;
+    if (signedIn && !share) return;
+    const url = embedUrl(window.location.href, share ? { id: share.id } : { hash: encodeShareHash(source, undefined, imports) });
+    await copyText(embedSnippet(url, titleOf(source)), 'Copy this embed code:');
+    setBanner(
+      isLongLink(url)
+        ? {
+            message: `Embed code copied, but it is long: the diagram is in its address.${account.state.status === 'signed-out' ? ' Signed in, it uses a short link.' : ''}`,
+            tone: 'warning',
+          }
+        : { message: 'Embed code copied: paste the <iframe> into a page, a wiki or a blog post.' },
+    );
   };
 
   const exportAll = () => {
@@ -491,6 +641,15 @@ export default function Playground() {
                   Open .proschi file…
                 </MenuItem>
                 <MenuItem
+                  icon={<Import size={14} />}
+                  onSelect={() => {
+                    setShowImport(true);
+                    close();
+                  }}
+                >
+                  Import Mermaid or OpenAPI…
+                </MenuItem>
+                <MenuItem
                   icon={<Download size={14} />}
                   onSelect={() => {
                     downloadText(source, rootPath);
@@ -621,16 +780,76 @@ export default function Playground() {
 
           <ZenButton zen={zen} className={iconButton} />
 
-          <button
-            onClick={copyShareLink}
-            data-tour="share"
-            aria-label={copied ? 'Copied' : 'Share'}
-            title={playing ? 'Copy a link to this step of the use case' : 'Copy a link that contains this diagram'}
-            className={outlineButton}
-          >
-            {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
-            <span className="hidden sm:inline">{copied ? 'Copied' : 'Share'}</span>
-          </button>
+          <div data-tour="share">
+            <Menu
+              label={copied ? 'Copied' : 'Share'}
+              align="right"
+              buttonClassName={outlineButton}
+              trigger={
+                <>
+                  {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
+                  <span className="hidden sm:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
+                </>
+              }
+            >
+              {(close) => (
+                <>
+                  <MenuItem
+                    icon={<Link size={16} />}
+                    onSelect={() => {
+                      close();
+                      void copyShareLink();
+                    }}
+                  >
+                    {playing ? 'Copy link to this step' : 'Copy link'}
+                  </MenuItem>
+                  {signedIn && (
+                    <MenuItem
+                      icon={<Link2 size={16} />}
+                      disabled={shortening}
+                      onSelect={() => {
+                        close();
+                        void copyShortLink();
+                      }}
+                    >
+                      Short link with preview
+                    </MenuItem>
+                  )}
+                  <MenuItem
+                    icon={<Code size={16} />}
+                    disabled={shortening}
+                    onSelect={() => {
+                      close();
+                      void copyEmbed();
+                    }}
+                  >
+                    Embed
+                  </MenuItem>
+                  {signedIn && (
+                    <MenuItem
+                      icon={<List size={16} />}
+                      onSelect={() => {
+                        close();
+                        setShowShortLinks(true);
+                      }}
+                    >
+                      Your short links…
+                    </MenuItem>
+                  )}
+                  {account.state.status === 'signed-out' && account.state.providers.length > 0 && (
+                    <>
+                      <p className="mt-1 border-t border-ink/15 px-3 pt-2 pb-1 text-xs text-muted">Sign in for short links with a preview of the diagram.</p>
+                      {account.state.providers.map((provider) => (
+                        <MenuItem key={provider} icon={<LogIn size={16} />} onSelect={() => account.signIn(provider)}>
+                          Sign in with {provider === 'github' ? 'GitHub' : 'Google'}
+                        </MenuItem>
+                      ))}
+                    </>
+                  )}
+                </>
+              )}
+            </Menu>
+          </div>
         </div>
         </Header>
         {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
@@ -657,7 +876,7 @@ export default function Playground() {
           className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r-bw-2`}
         >
           <div className="flex-1 min-h-0">
-            <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+            <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
         </EditorZone>
@@ -744,9 +963,32 @@ export default function Playground() {
         <Suspense fallback={<PaneLoading overlay />}>
           <ExamplesGallery
             onClose={() => setShowExamples(false)}
-            onPick={(example) => {
-              openExample(example.source);
+            onPick={(picked) => {
+              openExample(picked);
               setShowExamples(false);
+            }}
+          />
+        </Suspense>
+      )}
+
+      {showShortLinks && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ShortLinksDialog
+            onClose={() => setShowShortLinks(false)}
+            onDeleted={(id) => {
+              if (shortLinkRef.current?.id === id) shortLinkRef.current = null;
+            }}
+          />
+        </Suspense>
+      )}
+
+      {showImport && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ImportDialog
+            onClose={() => setShowImport(false)}
+            onOpen={(imported) => {
+              openExample(imported);
+              setShowImport(false);
             }}
           />
         </Suspense>

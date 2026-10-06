@@ -10,6 +10,80 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **One daily streak for any daily practice.** The daily goal is now met by
+  your cards for the day, a solved problem, the daily challenge or a
+  finished Arcade run (played to the end, not just started), with freezes
+  and milestones as before. Past challenges and Arcade runs count too, so a
+  streak may have grown. The challenge page shows the challenge's own days
+  in a row as a sub-stat ("Challenge: 4 days in a row") under the one streak
+  at the top of interview prep, and the weekly recap lists challenges and
+  Arcade runs when the week had any.
+- **Per-problem leaderboards**: under how others did on a problem, after a
+  run, the cheapest passing design and the lowest p99 of those who chose to
+  appear on the leaderboard, with your own rank. They come only from designs
+  the server ran the tests on itself, keep your best (a cheaper design later
+  moves you up) and break ties by who got there first.
+- **Share your results.** A finished Arcade daily run shares a square per
+  wave (🟩 clean, 🟨 hit, 🟥 lost), the score and today's rank, and "Beat my
+  score" dares a friend with a link that opens today's daily run
+  (`#/arcade/daily`). A first solve shares its cost against the reference and
+  its p99 with a link to the problem, and a new badge, with a public profile,
+  a link to it. On phones the share sheet opens; elsewhere the text is copied.
+- **Public profiles have addresses of their own**, `proschi.app/u/<id>`,
+  with the profile's name, solved problems, badges and streak in the link
+  preview and a picture card made for it. Only profiles their owner made
+  public have one; `#/u/<id>` keeps working.
+- **Short links with a preview, and embeds.** The editor's Share button is a
+  menu now. Signed in, **Short link with preview** stores the diagram on
+  proschi.app and copies `https://proschi.app/s/<id>`: short whatever the
+  diagram's size, and link previews in chat apps show its title and an
+  image of the diagram. **Embed** copies an `<iframe>` of a new read-only
+  page (`/embed/`): the diagram, its use cases to play and **Open in
+  Proschi**, with `theme=light|dark`; short links also answer oEmbed.
+  **Your short links** lists and deletes yours; they are in Download my
+  data and go with the account. Signed out, links work as before, and the
+  long-link warning points to short links. See
+  [Sharing and embedding](docs/SHARING.md).
+- **Import from Mermaid and OpenAPI.** *Diagrams › Import Mermaid or
+  OpenAPI…* turns a Mermaid flowchart or sequence diagram (or Markdown with
+  several ```` ```mermaid ```` blocks) into a Proschi document: shapes and
+  labels become kinds, subgraphs groups, link labels connection labels, and
+  messages, `alt` and `par` blocks a use case. An OpenAPI 3 spec (YAML or
+  JSON) becomes a starter design with a use case per operation. Paste or pick
+  a file, check the preview and its warnings, open it as a new diagram. The
+  CLI has the same: `proschi import mermaid|openapi <file>`.
+- **Start from…** The editor's examples gallery is searchable and filtered by
+  pattern (cache, queue, CDN, fan-out, sharding, replication, rate limiting…),
+  with tags derived from each design. It also offers the reference solution of
+  every practice problem you have solved; the others are listed as "Solve …
+  to unlock", linking to the problem.
+- **Every review card has a page of its own** at `practice/cards/<topic>/<id>/`:
+  the question, the answer with why (every option of a choice card with the
+  right one marked, the full sentence of a fill-in-the-blank, the worked
+  estimate), the problems it prepares for, the previous and next card of its
+  topic and a way into daily review. `practice/cards/` lists the topics and
+  each topic has a page listing its cards. All are in the sitemap, and a
+  problem's page now links to the cards that prepare for it.
+- **Shared links show what they are about**: each problem page and card topic
+  has its own preview image (title, difficulty, a line about it) instead of
+  the site-wide one.
+- **A gentler first run in the Arcade.** Until your first clear of a Scale
+  or Fail scenario, runs play the basic rules: no mutators, bounties,
+  contracts or card sets, an exact forecast, no unannounced or cascading
+  incidents, and no live changes during a wave. In Shortly's first wave
+  Kernel walks you through it: place a load balancer, add a replica, load
+  test, deploy (skippable, shown once). After your first clear, Kernel
+  introduces the twists before your next run. The daily run always has
+  every twist, for everyone. The server decides the rules from your stored
+  progress, so ranked runs replay exactly. New leaderboards start with this
+  version.
+- **Anonymous usage counts.** proschi.app now counts, per day, how often a
+  few things happen (the editor opened, a first edit, tests run, a problem
+  solved, a sign-in, …) to see where people get stuck. Only the event's name
+  is sent, and the server keeps one number per day and event: no user id,
+  IP address, cookie or page address, kept for 400 days. Nothing is sent when
+  the browser asks not to be tracked (Do Not Track or Global Privacy
+  Control). The privacy page lists every count.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live
@@ -250,6 +324,28 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **A shorter landing page with two ways in.** The hero offers "Design a
+  system" (the editor) and "Prepare for interviews" (the roadmap) side by
+  side, next to the live demo. "How it works" is gone (the demo plays the
+  same three steps), the interview prep section moved below the examples,
+  and a new card links the Arcade, Scale or Fail, which the header and
+  footer now link too. The practice list and its problem count are in the
+  page from the build, so they show before any JavaScript runs.
+- **The interview prep roadmap's first stage needs no account.** Signed
+  out, you can work through stage 1 with your progress kept in this
+  browser; signing in is optional and keeps your progress on every device
+  and opens the stages after it. The landing page no longer says both "No
+  account" and "Sign in to start".
+- **The editor's first visit opens a small design with traffic and
+  requirements** (Hello Proschi), so the tour's "Will it scale?" step shows
+  real numbers on Analysis and Tests without switching documents. On a
+  phone, a first visit opens on the Code pane; share links still open on
+  the diagram.
+- **Example links**: `app/?example=<id>` opens that bundled example (`hello`,
+  `ecommerce`, `serverless`, `login`, `events`, `url-shortener`), and the
+  landing page's example cards use them.
+- The Arcade's per-wave "on-call" actions are now **Hotfixes**, so they
+  are no longer confused with the On-call mode (Dinnerbell).
 - The Arcade shop shows an icon and a one-line description for every item:
   components with the icon the board draws for them, features with their
   own. Each tab (Components, Features, Rare cards, Perks) says what it sells,

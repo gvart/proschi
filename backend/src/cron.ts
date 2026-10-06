@@ -1,5 +1,6 @@
 import { now, type Env } from './env';
 import { log } from './log';
+import { pruneDailyCounts } from './metrics';
 
 /** An unsubmitted game run counts as abandoned this long after its start. */
 export const ABANDONED_RUN_SECONDS = 7 * 86_400;
@@ -11,6 +12,8 @@ export const ABANDONED_RUN_SECONDS = 7 * 86_400;
 export async function dailyCron(env: Env): Promise<void> {
   await purgeExpiredSessions(env);
   await pruneAbandonedGameRuns(env);
+  const counts = await pruneDailyCounts(env);
+  log('info', 'Pruned old usage counts', { deleted: counts });
 }
 
 /**

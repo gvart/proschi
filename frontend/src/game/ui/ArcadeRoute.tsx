@@ -1,11 +1,13 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, CalendarDays, Gem, Lock, Medal, Play, ShoppingBag, Sparkles, Trophy, Wrench, type LucideIcon } from 'lucide-react';
 import { api, apiEnabled } from '../../services/api';
 import type { Account } from '../../practice/useAccount';
+import type { Activity } from '../../practice/activity';
+import { notifyActivity } from '../../practice/skills/activity';
 import { PROVIDER_LABEL } from '../../practice/account';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { gameContent } from '../content';
-import { maxAscension, scenarioOpen, shop, type ShopItem } from '../engine/meta';
+import { maxAscension, scenarioOpen, shop, twistsOpen, type ShopItem } from '../engine/meta';
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
 import type { Action, RunSetup } from '../engine/types';
 import { IconTile } from './gameIcons';
@@ -21,7 +23,8 @@ import './arcade.css';
  * screen has today's daily run, the scenarios (locked ones say what opens
  * them, cleared ones offer the next difficulty), the shop where Blueprints
  * buy components, cards and perks, and the leaderboards. A run in progress
- * survives a reload.
+ * survives a reload. `#/arcade/daily` (the link in a shared daily run)
+ * opens on today's daily run.
  */
 
 interface Playing {
@@ -31,9 +34,15 @@ interface Playing {
   key: number;
 }
 
-export default function ArcadeRoute({ account }: { account: Account }) {
+export default function ArcadeRoute({ account, activity, focusDaily = false }: { account: Account; activity?: Activity; focusDaily?: boolean }) {
   const { content, errors } = gameContent();
-  const arcade = useArcade(content, account.state);
+  const refreshActivity = activity?.refresh;
+  // A finished run meets the daily goal: the streak at the top, and badges, again.
+  const onRunDone = useCallback(() => {
+    refreshActivity?.();
+    notifyActivity();
+  }, [refreshActivity]);
+  const arcade = useArcade(content, account.state, onRunDone);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [playing, setPlaying] = useState<Playing>();
   const [saved, setSaved] = useState(() => loadRun());
@@ -45,6 +54,14 @@ export default function ArcadeRoute({ account }: { account: Account }) {
   useEffect(() => {
     document.title = 'Scale or Fail: the system design game · Proschi';
   }, []);
+
+  const dailyBox = useRef<HTMLElement>(null);
+  const hasDaily = content.scenarios.some((s) => s.id === arcade.daily.scenario);
+  useEffect(() => {
+    if (!focusDaily || !hasDaily || playing) return;
+    dailyBox.current?.scrollIntoView({ block: 'center' });
+    dailyBox.current?.focus({ preventScroll: true });
+  }, [focusDaily, hasDaily, playing]);
 
   const updateSettings = (s: Settings) => {
     setSettings(s);
@@ -162,7 +179,12 @@ export default function ArcadeRoute({ account }: { account: Account }) {
       )}
 
       {daily && (
-        <section className="rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+        <section
+          ref={dailyBox}
+          tabIndex={-1}
+          aria-label="Today’s daily run"
+          className={`rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md focus:outline-none ${focusDaily ? 'ring-4 ring-pop-yellow' : ''}`}
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className={`${eyebrow} flex items-center gap-1`}>
@@ -187,6 +209,11 @@ export default function ArcadeRoute({ account }: { account: Account }) {
 
       <section>
         <h3 className="font-display text-2xl font-extrabold">Scenarios</h3>
+        {!twistsOpen(content, meta) && (
+          <p className="mt-1 text-sm text-muted">
+            Your first runs play the basic rules, and Kernel walks you through Shortly's first wave. Clear a Scale or Fail scenario to unlock the twists: mutators, bounties, forecast ranges, live changes and more.
+          </p>
+        )}
         <ul className="mt-3 grid gap-4 sm:grid-cols-2">
           {content.scenarios.map((s) => {
             const open = scenarioOpen(s, meta, (id) => content.scenarios.find((x) => x.id === id)?.title ?? id);
@@ -253,8 +280,9 @@ function HowItWorks() {
         <li>Twelve waves in three acts. Each wave, read the forecast, plan the board, and deploy: eight ticks of real simulated traffic follow.</li>
         <li>Cash pays the cloud bill; requests that succeed earn it. Trust is your lives: missed latency or availability targets, dropped requests and outages cost it.</li>
         <li>The score is revenue × quality × your uptime streak. Running every node between 40% and 75% at the peak earns the right-sized bonus; over-provisioning burns cash.</li>
-        <li>Each run starts with a choice of three mutators: twists like users on another continent or three times the writes, which change the winning design and multiply your points. Every wave also has an optional bounty that pays cash and points.</li>
-        <li>Between waves, take a tech card. Every few waves, a contract adds a use case. Waves 4, 8 and 12 are bosses.</li>
+        <li>Your first clear unlocks the twists. Each run then starts with a choice of three mutators, like users on another continent or three times the writes, which change the winning design and multiply your points; every wave offers optional bounties; forecasts become ranges; and you can change the board while a wave runs. The daily run always has them.</li>
+        <li>During a wave, a few hotfixes act at once: one more replica, a rate limit, a warm cache, a feature switched off.</li>
+        <li>Between waves, take a tech card. With the twists, every few waves a contract adds a use case. Waves 4, 8 and 12 are bosses.</li>
         <li>Runs earn Blueprints for the shop: new components, rare cards and perks, which you keep. Clear a scenario to open the next difficulty.</li>
       </ul>
     </details>

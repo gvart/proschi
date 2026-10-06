@@ -1,8 +1,11 @@
 # Privacy
 
-Short version: the editor never sends your diagrams anywhere, there is no
-analytics and no tracking, and an account is optional and only for practice.
-The rest of this page lists exactly what is kept, where, and for how long.
+Short version: the editor never sends your diagrams anywhere unless you make
+a short link, there are no analytics or tracking scripts, no cookies for
+counting and nothing that follows you; the site only counts, per day, how often
+a few things happen (say, "the editor was opened 412 times on 6 October"), with
+nothing about who. An account is optional (for practice and short links). The
+rest of this page lists exactly what is kept, where, and for how long.
 
 ## In your browser
 
@@ -19,7 +22,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
 | `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak and its badges |
-| `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points) |
+| `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points, and your local date, for the daily streak) |
 | `proschi.challenge.guest` | The daily challenge, signed out: the last one you played (answers, times, points and the card reviews it made), so it can be saved to your account when you sign in |
 | `proschi.challenge.progress` | The daily challenge you are in the middle of: the day, your answers so far and how long each took, so a reload carries on where you were; removed when you finish |
 | `proschi.game.meta` | Scale or Fail, signed out: your progress (Blueprints, unlocks, perks, the furthest wave and highest difficulty per scenario, what you have seen) |
@@ -27,31 +30,82 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.game.run` | Scale or Fail: the run you are in the middle of (its setup and your moves so far), so a reload carries on; removed when it ends |
 | `proschi.game.daily` | Scale or Fail, signed out: the day and score of the last daily run you played |
 | `proschi.game.settings` | Scale or Fail: sound on or off, and the run's speed |
+| `proschi.game.days` | Scale or Fail, on a copy of the site without accounts: how many runs you finished on each local date (the last 400 days), for the daily streak |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
-| `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
+| `proschi.onboarding` | Which first-run tours you have seen, the Arcade's first-wave tutorial and its intro to the twists included (in session storage when local storage is blocked) |
 | `proschi.theme` | Light, dark, or following your system |
 | `proschi.chunkReloadAt` | Session storage only: when the page last reloaded itself after a site update, so it never loops |
+| `proschi.metrics.once` | Which usage counts this browser has already sent where one counts only once (below): in local storage for the first edit and a first solve signed out (with the problem's id), in session storage for the rest. Never sent anywhere |
 
 Clearing the site's data in your browser removes all of it. Apart from the
 theme, the docs pages and their live examples store nothing.
 
 **Share links** carry the whole diagram in the part of the address after
 `#`, which browsers never send to a server. Whoever you give a link to can
-read the diagram; nobody else sees it.
+read the diagram; nobody else sees it. The same goes for an embed made
+signed out (`/embed/#code=…`).
 
-## No analytics
+**Short links** (`/s/<id>`, signed in only) are different: the diagram is
+stored on the server, below.
+
+**Share buttons** (a daily run, a solve, a badge, a profile) only hand text
+to your device's share sheet or clipboard; nothing is sent to us or to
+anyone else until you paste it somewhere. A badge's share text links to your
+public profile, so it is offered only while your profile is public.
+
+## No tracking
 
 No analytics, advertising or tracking scripts, no third-party cookies, and
 no requests to other sites: fonts and scripts are served by proschi.app
 itself, and every page's Content-Security-Policy forbids loading them from
 anywhere else.
 
+## Usage counts
+
+To know whether the site is useful (do people who open the editor go on to
+edit? do people who start a problem solve it?), proschi.app counts how many
+times a day each of these happens:
+
+| Count | When |
+|---|---|
+| `landing_view` | The home page is opened (once per browser tab session) |
+| `editor_open` | The editor is opened (once per session) |
+| `editor_first_edit` | The first edit in the editor (once per browser, ever) |
+| `simulation_run` | The editor's Analysis or HLD tab or the load overlay is first shown (once per session) |
+| `test_run` | The tests of a practice problem are run, or the editor's Tests tab is first shown in a session |
+| `share_link_created` | A share link is copied |
+| `export` | A diagram is downloaded (image, `.proschi` file, backup) or copied as Mermaid |
+| `practice_open` | The practice page is opened (once per session) |
+| `problem_start` | A problem is opened (once per problem and session) |
+| `problem_solve` | A problem is solved for the first time: signed in, counted by the server once it verified the solve; signed out, sent by the page (once per problem and browser) |
+| `card_review_session` | A daily review session is finished |
+| `challenge_complete` | A daily challenge is finished |
+| `arcade_run_start`, `arcade_run_end` | A Scale or Fail run starts, ends |
+| `sign_in` | Someone signs in (counted by the server) |
+
+**What is sent and kept**: the page sends only the names of these events
+(`POST /api/metrics`), a few at a time. The server adds them to one number
+per day (UTC) and event, e.g. `2026-10-06, editor_open, 412`, and keeps
+nothing else: no user id even when you are signed in, no IP address, no
+cookie or device id, no page address or referrer, no problem id, no time of
+day. Your IP address is used only for the minute-long rate limit that keeps
+the counts from being flooded, and is never written down. Because a count
+cannot be traced back to anyone, it is not part of **Download my data** and
+stays when you delete your account. The daily counts are kept for 400 days,
+then deleted.
+
+**Turning it off**: the page sends nothing when your browser sends Do Not
+Track or Global Privacy Control. Copies of the site without accounts (such as
+a local build) never send anything.
+
 ## With a practice account
 
 On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub or
-Google to keep practice progress across devices and see how others did.
-Without signing in, nothing about you reaches the server.
+Google to keep practice progress across devices, see how others did and make
+short links to diagrams.
+Without signing in, nothing about you reaches the server (the usage counts
+above are about events, not about you).
 
 **What is stored**
 
@@ -73,7 +127,8 @@ Without signing in, nothing about you reaches the server.
 - Practice progress, per problem: how many times you ran the tests, your
   latest design, when you first ran and last ran it, when you solved it and
   in how many runs and on which local date, the cost and p99 of your best
-  solving designs, and the simulation and problem versions it was recorded
+  solving designs (as the server measured them) and when each was reached,
+  and the simulation and problem versions it was recorded
   under. When you sign in,
   designs in your browser that your account lacks are uploaded to it, and the
   server re-runs their tests before it counts a solve.
@@ -83,19 +138,30 @@ Without signing in, nothing about you reaches the server.
   next and how well you know it). Reviews made signed out stay in the page
   and are gone when you close it.
 - Your daily goal (cards a day). The daily streak and the weekly recap are
-  computed from your card reviews and solve dates; nothing more is stored
-  for them.
+  computed from your card reviews, solve dates, daily challenges and game
+  runs (by the local date each was sent on, kept with them); nothing more is
+  stored for them.
 - The daily challenge, per day you play it: when you saw its first card,
   your answers to its five cards,
-  how long each took, which were right, the points, the score and when you
-  sent it. Your rank is computed from everyone's scores each time it is
+  how long each took, which were right, the points, the score, when you
+  sent it and your local date then. Your rank is computed from everyone's scores each time it is
   shown. A challenge played signed out stays in your browser until you sign
   in, when it is saved to your account.
 - Scale or Fail, the system design game: your progress (Blueprints,
   unlocks, perks, the furthest wave and highest difficulty per scenario, the
   cards and incidents you have seen) and every run you submit: its scenario,
-  seed, loadout, the moves you made, the score and when you played. Runs
+  seed, loadout, the moves you made, the score, when you played and your
+  local date then. Runs
   played signed out stay in your browser and are sent when you sign in.
+- Short links, each one you make with Share → Short link with preview (or
+  Share → Embed, signed in): the diagram's text and the files it imports,
+  its title, a PNG preview of the diagram that your browser rendered (none
+  if it could not), and when you made it. **Anyone with the link can open
+  the diagram and its preview**, without an account; the link's id is ten
+  random characters, so it can't be guessed, but treat it like the diagram
+  itself. Your name is not shown with it. Share → Your short links lists
+  and deletes them; a deleted link stops working at once, though chat apps
+  and link previews that already fetched the preview may keep their copy.
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
@@ -120,16 +186,22 @@ Cloudflare's retention period.
 **What others see**: practice statistics are aggregates over everyone, such
 as how many solved a problem and how your design's runs, cost and p99 compare.
 Your display name and number of solved problems appear on the leaderboard,
+your display name and the monthly cost and p99 of your best solving designs
+on each problem's leaderboards,
 your display name and daily challenge score on that day's challenge
 leaderboard, and your display name and best game score on the game's
 leaderboards, only if you opt in ("Show me on the leaderboard", in the account
-menu or on your profile page). Without it, your challenge score still counts
+menu or on your profile page). Without it, your challenge score and your best designs still count
 toward the number of players and everyone's ranks, but your name is never
 shown.
 
 **Your public profile**: opting in also makes a public profile, linked from
-your name on either leaderboard, at an address with your user id. It shows
-exactly this, and nothing more:
+your name on either leaderboard, at an address with your user id
+(`proschi.app/u/<your id>`). That address can be shared and found by search
+engines, and its link preview (the page's title, description and a picture
+card) shows your display name, how many problems you solved, your badge
+count, your current streak and your interview-ready score, all from the
+list below. The profile shows exactly this, and nothing more:
 
 - your display name, and the month you joined;
 - the problems you solved (which ones and their difficulty, never your
@@ -145,16 +217,20 @@ Your designs, your daily goal, your card reviews and when you made them, how
 many cards you reviewed, your daily challenge answers, your test runs and
 their costs, your sign-in providers and your sessions are never on it. Turning the option off hides the profile at once:
 its address then answers "not found", the same as an address no user has, so
-nobody can tell whether you have an account.
+nobody can tell whether you have an account. Its picture card stops being
+served at once too, but link previews that a chat app or social network
+already fetched are kept by them, beyond our control.
 
 ## Your controls
 
 In the account menu on the practice page:
 
 - **Download my data** saves everything stored about you as JSON, every
-  session with its kind (the site or an app) but never the token hashes.
+  session with its kind (the site or an app) but never the token hashes;
+  short links come with their diagrams and the address of each preview.
 - **Delete account** removes your account, sessions (apps' too), progress, card
-  reviews, daily challenge results and badges from the server at once; the progress in your browser stays.
+  reviews, daily challenge results, badges, game progress and short links from
+  the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

@@ -93,7 +93,9 @@ test.describe('daily challenge', () => {
     await expect(result).toContainText('480 / 600');
     await expect(result).toContainText('4 of 5 right: 400 points, and 80 for speed.');
     await expect(result).toContainText('Scored in this browser.');
-    await expect(result.getByLabel('Challenge streak')).toHaveText('1-day challenge streak');
+    await expect(result.getByLabel('Challenge streak')).toHaveText('Challenge: 1 day in a row');
+    // The challenge meets the daily goal by itself (its five reviews would not): the one streak, at the top of the hub.
+    await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('1-day streak');
     const text = `Proschi daily challenge ${DAY}: 480/600 ✅✅❌✅✅ proschi.app/practice/#/challenge`;
     await expect(page.locator('#challenge-share-text')).toHaveText(text);
     await result.getByRole('button', { name: 'Copy result' }).click();

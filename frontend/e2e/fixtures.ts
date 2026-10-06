@@ -7,8 +7,11 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
  * loads nothing from third parties, so the suite runs offline.
  */
 
-/** Known-benign console errors. Each entry needs a comment saying why it is harmless. */
-const ALLOWED_CONSOLE_ERRORS: RegExp[] = [];
+/** Known-benign console errors, matched against the message and its ` (url:line)`. Each entry needs a comment saying why it is harmless. */
+const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
+  // Signed out (build with accounts), GET /api/me answers 401 and the page reads that as signed out; Chromium logs every non-2xx load.
+  /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\) \(http:\/\/127\.0\.0\.1:\d+\/api\/me:0\)$/,
+];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
 export const ONBOARDING_KEY = 'proschi.onboarding';
@@ -41,10 +44,10 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
       context.on('weberror', (error) => errors.push(`pageerror: ${error.error().stack ?? error.error().message}`));
       context.on('console', (msg) => {
         if (msg.type() !== 'error') return;
-        const text = msg.text();
-        if (ALLOWED_CONSOLE_ERRORS.some((re) => re.test(text))) return;
         const { url, lineNumber } = msg.location();
-        errors.push(`console.error: ${text}${url ? ` (${url}:${lineNumber})` : ''}`);
+        const text = `${msg.text()}${url ? ` (${url}:${lineNumber})` : ''}`;
+        if (ALLOWED_CONSOLE_ERRORS.some((re) => re.test(text))) return;
+        errors.push(`console.error: ${text}`);
       });
       // Every page, fonts included, is served by the site itself: a request
       // anywhere else is a bug (and would make the suite depend on the network).
@@ -114,6 +117,24 @@ export async function nodesBox(page: Page): Promise<{ left: number; top: number;
       bottom: Math.max(...rects.map((r) => r.bottom)),
     };
   });
+}
+
+/**
+ * A clipboard that keeps what is copied (and no share sheet, so share buttons
+ * copy), for tests of share buttons; read it back with copiedText.
+ */
+export async function mockClipboard(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const copied: string[] = [];
+    Object.defineProperty(window, '__copied', { value: copied });
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void copied.push(text) }, configurable: true });
+  });
+}
+
+/** The last text copied since mockClipboard, or '' for none. */
+export function copiedText(page: Page): Promise<string> {
+  return page.evaluate(() => (window as unknown as { __copied: string[] }).__copied.at(-1) ?? '');
 }
 
 /** Waits until every canvas node lies inside the visible canvas (the view is fitted), optionally above `bottomLimit`. */

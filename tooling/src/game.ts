@@ -15,7 +15,7 @@ import { findProblemsDir } from './problem';
 
 export const GAME_USAGE = `  proschi game check [--format text|github|json] [dir]
   proschi game lock [dir]
-  proschi game sim <scenario> [--run <file.json>] [--seed <seed>] [--ascension <n>] [dir]`;
+  proschi game sim <scenario> [--run <file.json>] [--seed <seed>] [--ascension <n>] [--basic] [dir]`;
 
 export const GAME_HELP = `game    Scale or Fail, the system design game (docs/GAME.md).
         check validates the content folder (default: the repository's
@@ -25,10 +25,13 @@ export const GAME_HELP = `game    Scale or Fail, the system design game (docs/GA
         parse; and the scripted runs: every reference.json must clear all
         waves, every wrong/*.json must fail by its wave, doing nothing must
         lose, and the reference must get past act 1 with every mutator its
-        scenario offers. Exits with 1 on any violation.
+        scenario offers, and under the basic rules of a first run (no
+        twists) clear Shortly and get past act 1 elsewhere. Exits with 1 on
+        any violation.
         lock adds new ids to ids.lock.
         sim plays a scenario's reference run (or --run) and prints every
-        wave: traffic, cost, revenue, score, Trust and what broke.`;
+        wave: traffic, cost, revenue, score, Trust and what broke. --basic
+        plays it under the basic rules of a first run.`;
 
 export const REPO_GAME = join('frontend', 'src', 'game', 'content');
 
@@ -96,6 +99,7 @@ interface Args {
   run?: string;
   seed?: string;
   ascension?: number;
+  basic?: boolean;
 }
 
 function parseArgs(args: string[], err: (s: string) => void): Args | undefined {
@@ -127,6 +131,8 @@ function parseArgs(args: string[], err: (s: string) => void): Args | undefined {
         return undefined;
       }
       a.ascension = v;
+    } else if (arg === '--basic') {
+      a.basic = true;
     } else if (arg.startsWith('-')) {
       err(`Unknown option ${arg}\n\nUsage:\n${GAME_USAGE}`);
       return undefined;
@@ -236,6 +242,7 @@ function gameSim(args: string[], out: (s: string) => void, err: (s: string) => v
   }
   if (a.seed !== undefined) run.seed = a.seed;
   if (a.ascension !== undefined) run.ascension = a.ascension;
+  if (a.basic) run.twists = false;
   let game;
   try {
     game = playScript(content, scenario, run);

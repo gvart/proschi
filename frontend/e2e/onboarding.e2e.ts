@@ -1,6 +1,9 @@
 import type { Page } from '@playwright/test';
 import { ONBOARDING_KEY, canvasNodes, codeEditor, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
+/** The first visit's document (the hello example) has three components. */
+const FIRST_RUN_NODES = 3;
+
 /** The tour popover (non-modal dialog), named after its tour and current step. */
 const editorTour = (page: Page) => page.getByRole('dialog', { name: /^Quick tour:/ });
 const practiceTour = (page: Page) => page.getByRole('dialog', { name: /^Practice tour:/ });
@@ -21,7 +24,7 @@ test.describe('editor tour', () => {
     // Keyboard users land in it.
     await expect(tour).toBeFocused();
     // Nothing is blocked: the page underneath still works.
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: 'HLD' }).click();
     await expect(page.getByRole('navigation', { name: 'HLD sections' })).toBeVisible();
 
@@ -47,7 +50,7 @@ test.describe('editor tour', () => {
 
   test('interactive steps advance when the user does the thing', async ({ page }) => {
     await page.goto('app/');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     const tour = editorTour(page);
     await tour.getByRole('button', { name: 'Next' }).click();
 
@@ -67,12 +70,11 @@ test.describe('editor tour', () => {
     await page.getByRole('button', { name: 'Back to diagram' }).click();
     await expect(tour).toHaveAccessibleName('Quick tour: Will it scale?');
 
-    // Step 4 reacts to the Analysis tab and offers an example with traffic.
+    // Step 4 reacts to the Analysis tab, on the same document: the first-run design has traffic and requirements.
+    await expect(tour.getByRole('button', { name: 'Open an example' })).toHaveCount(0);
     await page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: 'Analysis' }).click();
-    await expect(tour.getByText(/No traffic here yet/)).toBeVisible();
-    await tour.getByRole('button', { name: 'Open an example' }).click();
-    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');
-    await expect(page.getByRole('tablist', { name: 'Diagram view' }).getByRole('tab', { name: /Tests/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(tour.getByText('Every requirement becomes a check like these.')).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Hello Proschi');
     await tour.getByRole('button', { name: 'Next' }).click();
 
     await expect(tour).toHaveAccessibleName('Quick tour: Share and keep your work');
@@ -83,16 +85,16 @@ test.describe('editor tour', () => {
 
   test('"Show me" does the edit step', async ({ page }) => {
     await page.goto('app/');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await editorTour(page).getByRole('button', { name: 'Next' }).click();
     await editorTour(page).getByRole('button', { name: 'Show me' }).click();
-    await expect(canvasNodes(page).filter({ hasText: 'My Order Service' })).toBeVisible();
+    await expect(canvasNodes(page).filter({ hasText: 'My Notes API' })).toBeVisible();
     await expect(editorTour(page)).toHaveAccessibleName('Quick tour: Play a use case');
   });
 
   test('a share link opens without the tour, with a small hint', async ({ page, context }) => {
     await page.goto('app/?tour=0');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await expect(editorTour(page)).toHaveCount(0);
     await expect(page).toHaveURL(/#code=/);
     const link = page.url().replace('?tour=0', '');
@@ -102,7 +104,7 @@ test.describe('editor tour', () => {
 
     const other = await context.newPage();
     await other.goto(link);
-    await waitForCanvas(other, 6);
+    await waitForCanvas(other, FIRST_RUN_NODES);
     const hint = other.getByRole('complementary', { name: 'Tour' });
     await expect(hint).toBeVisible();
     await expect(editorTour(other)).toHaveCount(0);
@@ -129,7 +131,7 @@ test.describe('editor tour', () => {
 
   test('?tour=1 forces the tour, ?tour=0 suppresses it', async ({ page }) => {
     await page.goto('app/?tour=0');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await expect(editorTour(page)).toHaveCount(0);
     await page.evaluate((key) => localStorage.setItem(key, JSON.stringify({ editor: true })), ONBOARDING_KEY);
     await page.goto('app/?tour=1');
@@ -146,12 +148,12 @@ test.describe('editor tour', () => {
     });
     await page.goto('app/');
     await expect(editorTour(page)).toBeVisible();
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await page.keyboard.press('Escape');
     await expect(editorTour(page)).toHaveCount(0);
     // A reload keeps the diagram in the address bar, which counts as a link: at most the hint.
     await page.reload();
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await expect(editorTour(page)).toHaveCount(0);
   });
 });
@@ -177,7 +179,7 @@ test.describe('editor tour on a phone', () => {
     // The next step brings the diagram back, with the edit drawn.
     await expect(tour).toHaveAccessibleName('Quick tour: Play a use case');
     await expect(panes.getByRole('tab', { name: /Diagram/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(canvasNodes(page).filter({ hasText: 'My Order Service' })).toBeVisible();
+    await expect(canvasNodes(page).filter({ hasText: 'My Notes API' })).toBeVisible();
     // The diagram is fitted into the part of the canvas the docked card leaves free.
     const card = (await tour.boundingBox())!;
     await expectDiagramFitted(page, card.y);
@@ -187,7 +189,7 @@ test.describe('editor tour on a phone', () => {
 test.describe('help menu', () => {
   test('the cheat-sheet opens next to the page and closes with Escape', async ({ page }) => {
     await page.goto('app/');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await expect(editorTour(page)).toHaveCount(0); // the fixture marks tours as seen
     const help = page.getByRole('button', { name: 'Help' });
     await help.click();
@@ -206,7 +208,7 @@ test.describe('help menu', () => {
 test.describe('starter for a new diagram', () => {
   test('offers a template, examples and practice', async ({ page }) => {
     await page.goto('app/');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await page.getByRole('button', { name: 'Diagrams' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     const starter = page.getByRole('region', { name: 'Start a diagram' });
@@ -222,7 +224,7 @@ test.describe('starter for a new diagram', () => {
 
   test('an example picked from an empty diagram replaces it', async ({ page }) => {
     await page.goto('app/');
-    await waitForCanvas(page, 6);
+    await waitForCanvas(page, FIRST_RUN_NODES);
     await page.getByRole('button', { name: 'Diagrams' }).click();
     await page.getByRole('menuitem', { name: 'New diagram' }).click();
     await page.getByRole('region', { name: 'Start a diagram' }).getByRole('button', { name: /Start from an example/ }).click();
@@ -230,7 +232,7 @@ test.describe('starter for a new diagram', () => {
     await page.getByRole('button', { name: 'Diagrams' }).click();
     const menu = page.getByRole('menu');
     await expect(menu.getByText('Untitled')).toHaveCount(0);
-    await expect(menu.getByText('E-Commerce Platform')).toBeVisible();
+    await expect(menu.getByText('Hello Proschi')).toBeVisible();
   });
 });
 

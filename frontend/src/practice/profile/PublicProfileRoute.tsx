@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { Eye, RotateCcw } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import PaneLoading from '../../components/PaneLoading';
+import ShareButton from '../../components/ShareButton';
+import { profileShareText } from '../../learn/share';
 import { primaryButton, toolButton } from '../../components/Playground/ui';
 import { api, ApiError, type PublicProfile } from '../../services/api';
 import { ACHIEVEMENTS } from '../achievementList';
@@ -79,10 +81,13 @@ export default function PublicProfileRoute({ id }: { id: string }) {
       model={publicProfile(load.profile, ACHIEVEMENTS, problems)}
       kicker="Public profile"
       note={
-        <p role="note" className="mt-3 inline-flex max-w-full items-center gap-2 rounded-full border-bw-1 border-ink bg-pop-blue/15 px-3 py-1 text-sm text-ink">
-          <Eye size={14} aria-hidden="true" className="flex-shrink-0" />
-          This is a public profile: only what {load.profile.displayName} chose to share.
-        </p>
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          <p role="note" className="inline-flex max-w-full items-center gap-2 rounded-full border-bw-1 border-ink bg-pop-blue/15 px-3 py-1 text-sm text-ink">
+            <Eye size={14} aria-hidden="true" className="flex-shrink-0" />
+            This is a public profile: only what {load.profile.displayName} chose to share.
+          </p>
+          <ShareButton label="Share profile" text={profileShareText({ displayName: load.profile.displayName, userId: load.profile.id, own: false })} />
+        </div>
       }
     />
   );
