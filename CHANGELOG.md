@@ -10,6 +10,12 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Hold the line**: in the Arcade a wave's run is no longer something you
+  watch. Change the board while it runs and ship it live: scaling lands the
+  next tick, new components and wires in two, and a cache that goes live
+  mid-wave starts cold. Three live changes a wave, next to the on-call's
+  instant (and dearer) actions. Works on a phone: the dock swaps the on-call
+  menu for the palette.
 - **Scale or Fail is less of a solved puzzle.**
   - **Forecasts are now ranges.** The real traffic lands within 12% of the forecast (20% on a boss), so a load test tests the middle and headroom is a choice.
   - **Some incidents come unannounced** from wave 5.

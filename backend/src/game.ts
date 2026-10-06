@@ -51,7 +51,8 @@ export const MAX_ACTIONS = 2000;
 export const MIN_SECONDS_PER_WAVE = 3;
 /** Runs one sync request may replay (each takes up to a few hundred ms of the Worker's CPU). */
 export const MAX_SYNC_RUNS = 3;
-const MAX_BODY = 192 * 1024;
+/** A run's actions carry a board per deploy, load test and live change: room for a long Endless run. */
+const MAX_BODY = 512 * 1024;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
 let content: GameContent | undefined;

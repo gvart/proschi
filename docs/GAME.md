@@ -40,8 +40,14 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    board with the scenario's use cases, the peak traffic and the
    requirements, and after a load test (or during the run) a warning on each
    line that broke. See [The code pane](#the-code-pane).
-3. **Run.** Eight ticks, each one simulated with the wave's traffic at that
-   point of the curve. The **on-call** has three points of attention a wave
+3. **Run: hold the line.** Eight ticks, each one simulated with the wave's
+   traffic at that point of the curve, and the run keeps going while you
+   act. Change the board as you would when planning and **ship it**: it goes
+   live after provisioning, a tick for scaling or removing a component, two
+   for new components or wires, and a cache that goes live mid-wave starts
+   cold (30%, then 70% of its usual hit ratio). Three live changes a wave;
+   one still provisioning when the wave ends is live for the next. The
+   **on-call** has three points of attention a wave
    (more with cards and perks), and each action spends one, from that tick to
    the end of the wave:
 
@@ -52,6 +58,9 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    | Warm the cache | $150 | A cold cache (a stampede) is warm again. |
    | Rate limit | 2 Trust | Turns away 15% of requests and every bot at the edge. |
    | Switch a feature off | 3 Trust | A use case gets no traffic: no load, no revenue, no limits checked. |
+
+   The on-call acts at once and costs overtime; a live change is free but
+   takes time. Pause stops the clock for those who need it.
 
 4. **Score and debrief.** Revenue, cost, interest, bonuses and the bounty. If anything
    broke, the debrief shows the bottleneck, the simulation's hint and the
@@ -558,7 +567,9 @@ and wrong designs. A run is a seed, an optional loadout and ascension, and a
 ```
 
 A play changes the board deployed last wave (`add`, `remove`, `set`, `wire`,
-`unwire`), may `loadtest`, take a `bounty` (an id, or `first`), call the
+`unwire`), may `loadtest`, take a `bounty` (an id, or `first`), ship `live` changes during the run
+(`[{"tick": 2, "set": {"api": {"replicas": 6}}}]`, each with the same
+`add`, `remove`, `set`, `wire` and `unwire` as a play), call the
 `oncall` (`[{"tick": 3, "node": "api"}]`, or with `"act"`: `reboot`, `warm`,
 `ratelimit` or `shed` with a `useCase`),
 `reroll`, `pick` the first card on offer from a list, sign a `contract`,

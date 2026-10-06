@@ -501,6 +501,8 @@ export type Action =
    * name a `node`; `shed` names a `useCase`.
    */
   | { t: 'oncall'; tick: number; node?: string; act?: OncallAct; useCase?: string }
+  /** During the run (hold the line): ship a changed board, live once it is provisioned (rules.ts LIVE_*). */
+  | { t: 'change'; tick: number; board: Board }
   /** Planning, Scale or Fail: take one of the wave's bounties on offer (index). */
   | { t: 'bounty'; pick: number }
   /** Take one of the offered cards (index), or none for cash. */

@@ -81,6 +81,17 @@ export const ONCALL_ACTS = {
   ratelimit: { attention: 1, cash: 0, trust: 2 },
   shed: { attention: 1, cash: 0, trust: 3 },
 } as const satisfies Record<string, { attention: number; cash: number; trust: number }>;
+/**
+ * Hold the line: a change shipped during the run goes live after this many
+ * ticks (scaling or removing a node; new components or wires take longer),
+ * a new cache starts cold (its share of the usual hit ratio, per tick live),
+ * and a wave takes this many live changes at most.
+ */
+export const LIVE_SCALE_TICKS = 1;
+export const LIVE_BUILD_TICKS = 2;
+export const COLD_START = [0.3, 0.7] as const;
+export const LIVE_CHANGES_PER_WAVE = 3;
+
 /** A rate limit keeps this share of real traffic and turns every bot away. */
 export const RATE_LIMIT_KEEP = 0.85;
 

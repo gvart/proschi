@@ -51,6 +51,8 @@ export interface Play {
   loadtest?: boolean;
   /** On-call actions during the run: `act` is replica (the default), reboot, warm, ratelimit or shed (with `useCase`). */
   oncall?: { tick: number; node?: string; act?: OncallAct; useCase?: string }[];
+  /** Hold the line: board changes shipped during the run, at a tick (0-based), applied to the board as it stands. */
+  live?: (Omit<Play, 'live' | 'oncall' | 'pick' | 'contract' | 'reroll' | 'loadtest' | 'migrate' | 'sunset' | 'diagnose' | 'bounty'> & { tick: number })[];
   /** A bounty id to take if it is on offer, before deploying; `first` takes the first on offer. */
   bounty?: string;
   /** Rerolls before picking. */
@@ -135,8 +137,15 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
     if (bounty >= 0 && s.bountyOffer[bounty]) game.apply({ t: 'bounty', pick: bounty });
     if (play.loadtest) game.apply({ t: 'loadtest', board });
     game.apply({ t: 'deploy', board });
-    for (const o of play.oncall ?? []) {
+    type During = { tick: number; oncall?: NonNullable<Play['oncall']>[number]; live?: NonNullable<Play['live']>[number] };
+    const during: During[] = [...(play.oncall ?? []).map((o) => ({ tick: o.tick, oncall: o })), ...(play.live ?? []).map((l) => ({ tick: l.tick, live: l }))].sort((a, b) => a.tick - b.tick);
+    for (const d of during) {
       if (s.phase !== 'run') break;
+      if (d.live) {
+        game.apply({ t: 'change', tick: d.tick, board: applyPlay(s.rollout?.board ?? s.board, d.live) });
+        continue;
+      }
+      const o = d.oncall!;
       game.apply({ t: 'oncall', tick: o.tick, ...(o.node ? { node: o.node } : {}), ...(o.act ? { act: o.act } : {}), ...(o.useCase ? { useCase: o.useCase } : {}) });
     }
     while (s.phase === 'run') game.advance();
