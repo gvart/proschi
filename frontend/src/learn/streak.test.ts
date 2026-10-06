@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 import type { CardReview } from './review';
 import {
   activityFromLog,
+  activityFromPlay,
   activityFromSolves,
+  byDay,
   addDays,
   computeStreak,
   DEFAULT_GOAL,
@@ -45,6 +47,54 @@ describe('goal', () => {
     expect(meetsGoal({ reviews: 0, solves: 1 })).toBe(true);
     expect(goalProgress({ reviews: 5, solves: 0 })).toBe(0.5);
     expect(goalProgress({ reviews: 50, solves: 0 })).toBe(1);
+  });
+});
+
+describe('any daily practice meets the goal', () => {
+  it('a completed daily challenge or a finished Arcade run meets any goal on its own', () => {
+    for (const goal of [goalFor(5), goalFor(10), goalFor(30)]) {
+      expect(meetsGoal({ reviews: 0, solves: 0, challenges: 1 }, goal)).toBe(true);
+      expect(meetsGoal({ reviews: 0, solves: 0, runs: 1 }, goal)).toBe(true);
+      expect(goalProgress({ reviews: 2, solves: 0, challenges: 1 }, goal)).toBe(1);
+      expect(goalProgress({ reviews: 0, solves: 0, runs: 3 }, goal)).toBe(1);
+    }
+    // Nothing played: as before.
+    expect(meetsGoal({ reviews: 9, solves: 0, challenges: 0, runs: 0 })).toBe(false);
+    expect(goalProgress({ reviews: 5, solves: 0, challenges: 0, runs: 0 })).toBe(0.5);
+  });
+
+  it('counts each kind of practice toward one streak, with freezes and milestones as before', () => {
+    const days: DayActivity[] = [
+      { day: addDays(T, -7), reviews: 10, solves: 0 }, // cards
+      { day: addDays(T, -6), reviews: 0, solves: 1 }, // a solve
+      ...activityFromPlay({ challenges: [addDays(T, -5), addDays(T, -3)], runs: [addDays(T, -4), addDays(T, -2), addDays(T, -2)] }),
+      { day: addDays(T, -1), reviews: 3, solves: 0, challenges: 1 }, // 3 cards would not do; the challenge does
+    ];
+    expect(computeStreak(days, T)).toMatchObject({ current: 7, longest: 7, freezes: 1, todayDone: false, todayProgress: 0 });
+    // Today's run keeps it going and crosses no milestone between 7 and 8.
+    const today = computeStreak([...days, ...activityFromPlay({ runs: [T] })], T);
+    expect(today).toMatchObject({ current: 8, todayDone: true, todayProgress: 1 });
+    expect(milestoneReached(7, today.current)).toBeUndefined();
+    // A missed day after it is covered by the freeze the 7 days earned.
+    expect(computeStreak([...days, ...activityFromPlay({ runs: [addDays(T, 1)] })], addDays(T, 1))).toMatchObject({ current: 8, frozen: [T] });
+  });
+
+  it('adds up challenges and runs by day, leaving them out of days without any', () => {
+    expect(activityFromPlay({ challenges: [T, 'not a day'], runs: [T, addDays(T, -1), T] })).toEqual([
+      { day: addDays(T, -1), reviews: 0, solves: 0, newCards: 0, runs: 1 },
+      { day: T, reviews: 0, solves: 0, newCards: 0, challenges: 1, runs: 2 },
+    ]);
+    expect([...byDay([{ day: T, reviews: 2, solves: 0 }, { day: T, reviews: 1, solves: 0, challenges: 0, runs: -3 }]).values()]).toEqual([
+      { day: T, reviews: 3, solves: 0, newCards: 0 },
+    ]);
+    expect(activityFromPlay({})).toEqual([]);
+  });
+
+  it('lists challenges and runs in the weekly recap', () => {
+    const monday = addDays(weekStart(T), -7);
+    const recap = weeklyRecap(activityFromPlay({ challenges: [monday], runs: [addDays(monday, 1), addDays(monday, 1)] }), T);
+    expect(recap).toMatchObject({ reviews: 0, solves: 0, challenges: 1, runs: 2, goalDays: 2 });
+    expect(recapIsEmpty(recap)).toBe(false);
   });
 });
 
@@ -190,7 +240,7 @@ describe('weekly recap', () => {
       { day: T, reviews: 30, solves: 0, newCards: 9 }, // this week: not in it
     ];
     const recap = weeklyRecap(activity, T);
-    expect(recap).toEqual({ start: '2026-10-12', end: '2026-10-18', reviews: 27, newCards: 8, solves: 1, goalDays: 3, streak: 1 });
+    expect(recap).toEqual({ start: '2026-10-12', end: '2026-10-18', reviews: 27, newCards: 8, solves: 1, challenges: 0, runs: 0, goalDays: 3, streak: 1 });
     expect(recapIsEmpty(recap)).toBe(false);
     expect(recapIsEmpty(weeklyRecap([], T))).toBe(true);
   });

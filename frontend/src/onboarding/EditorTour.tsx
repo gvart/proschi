@@ -157,7 +157,12 @@ export default function EditorTour(props: EditorTourProps) {
           stopPlaying();
           setMobilePane('diagram');
         },
-        body: (
+        body: hasTraffic ? (
+          <p>
+            The <Code>traffic</Code> and <Code>requirements</Code> blocks at the bottom feed a simulation of load, latency, availability and cost.{' '}
+            <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.
+          </p>
+        ) : (
           <p>
             Add <Code>traffic</Code>, <Code>requirements</Code> and <Code>test</Code> blocks and a simulation computes load, latency, availability and
             cost. <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.
@@ -176,7 +181,7 @@ export default function EditorTour(props: EditorTourProps) {
         body: (
           <>
             <p>
-              <strong>Share</strong> copies a link that holds the whole diagram; nothing is uploaded. Diagrams save in this browser: the diagrams menu
+              <strong>Share → Copy link</strong> copies a link that holds the whole diagram; nothing is uploaded. The same menu embeds it in other pages. Diagrams save in this browser: the diagrams menu
               (top left) has New, Open, Download and <strong>Export all (.zip)</strong> for a backup.
             </p>
             <p>
@@ -184,7 +189,7 @@ export default function EditorTour(props: EditorTourProps) {
             </p>
           </>
         ),
-        task: 'Press Share to copy a link.',
+        task: 'Press Share, then Copy link.',
         done: shared,
         doneText: 'Link copied. Paste it anywhere.',
       },

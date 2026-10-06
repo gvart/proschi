@@ -15,7 +15,9 @@ import {
   MetaError,
   readMeta,
   recordRun,
+  runTwists,
   scenarioOpen,
+  twistsAllowed,
   type Meta,
 } from '../../frontend/src/game/engine/meta';
 import { dailySeed } from '../../frontend/src/game/engine/rng';
@@ -30,6 +32,7 @@ import { now } from './env';
 import { gameFiles } from './game.gen';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { cached } from './stats';
+import { clientDay } from './activity';
 
 /**
  * Scale or Fail (docs/GAME.md, frontend/src/game/engine). The server never
@@ -147,6 +150,9 @@ export async function getGameMe(request: Request, ctx: Ctx): Promise<Response> {
  * player's progress; the scenario must be open and the ascension at most one
  * above the highest cleared. The daily run is today's scenario and seed at
  * ascension 0; starting it again answers the same run until it is submitted.
+ * Whether the run has the advanced twists comes from the stored progress too
+ * (`runTwists`: a normal run before the first Scale or Fail clear plays the
+ * basic rules; the daily run always has them), never from the request.
  */
 export async function postGameRun(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -164,7 +170,7 @@ export async function postGameRun(request: Request, ctx: Ctx): Promise<Response>
       if (existing.submitted_at !== null) throw new HttpError(409, "You played today's daily run; only the first counts");
       return json({ runId: existing.id, setup: JSON.parse(existing.setup) as RunSetup }, 200, NO_STORE);
     }
-    const setup: RunSetup = { scenario: d.scenario, seed: d.seed, ascension: 0, mode: 'daily', loadout: loadoutFor(meta, 0) };
+    const setup: RunSetup = { scenario: d.scenario, seed: d.seed, ascension: 0, mode: 'daily', loadout: loadoutFor(meta, 0), twists: runTwists(gameContent(), meta, 'daily') };
     await DB.prepare("INSERT OR IGNORE INTO game_runs (id, user_id, mode, board, day, scenario, ascension, setup, versions, started_at) VALUES (?, ?, 'daily', ?, ?, ?, 0, ?, ?, ?)")
       .bind(id, user.id, dailyBoard(d.day), d.day, d.scenario, JSON.stringify(setup), versionsOf(d.scenario), t)
       .run();
@@ -180,7 +186,7 @@ export async function postGameRun(request: Request, ctx: Ctx): Promise<Response>
   const ascension = body.ascension ?? 0;
   if (typeof ascension !== 'number' || !Number.isInteger(ascension) || ascension < 0 || ascension > MAX_ASCENSION) throw new HttpError(400, `ascension is 0 to ${MAX_ASCENSION}`);
   if (ascension > maxAscension(meta, scenario.id)) throw new HttpError(403, `Clear ascension ${ascension - 1} of ${scenario.title} first`);
-  const setup: RunSetup = { scenario: scenario.id, seed: randomSeed(), ascension, mode: 'normal', loadout: loadoutFor(meta, ascension) };
+  const setup: RunSetup = { scenario: scenario.id, seed: randomSeed(), ascension, mode: 'normal', loadout: loadoutFor(meta, ascension), twists: runTwists(gameContent(), meta, 'normal') };
   await DB.prepare("INSERT INTO game_runs (id, user_id, mode, board, scenario, ascension, setup, versions, started_at) VALUES (?, ?, 'normal', ?, ?, ?, ?, ?, ?)")
     .bind(id, user.id, scenarioBoard(scenario.id, ascension), scenario.id, ascension, JSON.stringify(setup), versionsOf(scenario.id), t)
     .run();
@@ -219,8 +225,9 @@ function bank(meta: Meta, setup: RunSetup, game: Game): { meta: Meta; blueprints
 }
 
 /**
- * POST /api/game/runs/<id>/submit {actions}: replays the run from its stored
- * setup and keeps the result once. Answers `{score, outcome, waves,
+ * POST /api/game/runs/<id>/submit {actions, day?}: replays the run from its
+ * stored setup and keeps the result once, with `day`, the player's local
+ * date (activity.ts's clientDay), for the daily streak. Answers `{score, outcome, waves,
  * blueprints, meta, rank, players}`. 409 for a run already submitted or one
  * started before the game, the scenario or the simulation changed.
  */
@@ -234,6 +241,8 @@ export async function postGameSubmit(request: Request, ctx: Ctx, runId: string):
   if (row.submitted_at !== null) throw new HttpError(409, 'This run was submitted already');
   if (row.versions !== versionsOf(row.scenario)) throw new HttpError(409, 'The game was updated since this run started, so it cannot be replayed; start a new one');
   const t = now();
+  // The player's local date, for the daily streak (a finished run meets the daily goal).
+  const localDay = clientDay(body.day, t);
   if (row.mode === 'daily') {
     const day = challengeDay(new Date(t * 1000));
     const late = row.day === addDays(day, -1) && t - Date.parse(`${day}T00:00:00Z`) / 1000 <= GRACE_SECONDS;
@@ -248,8 +257,8 @@ export async function postGameSubmit(request: Request, ctx: Ctx, runId: string):
   const banked = bank(await loadMeta(DB, user.id), setup, game);
   const [updated] = await DB.batch([
     DB.prepare(
-      'UPDATE game_runs SET submitted_at = ?, score = ?, waves = ?, outcome = ?, cleared = ?, blueprints = ?, actions = ? WHERE id = ? AND submitted_at IS NULL',
-    ).bind(t, s.score, s.history.length, s.outcome ?? 'over', s.cleared ? 1 : 0, banked.blueprints, JSON.stringify(actions), runId),
+      'UPDATE game_runs SET submitted_at = ?, score = ?, waves = ?, outcome = ?, cleared = ?, blueprints = ?, actions = ?, local_day = ? WHERE id = ? AND submitted_at IS NULL',
+    ).bind(t, s.score, s.history.length, s.outcome ?? 'over', s.cleared ? 1 : 0, banked.blueprints, JSON.stringify(actions), localDay, runId),
     saveMeta(DB, user.id, banked.meta),
   ]);
   if (!updated.meta.changes) throw new HttpError(409, 'This run was submitted already');
@@ -313,7 +322,7 @@ type SyncEvent = { t: 'run'; setup: RunSetup; actions: Action[] } | { t: 'buy'; 
  * their progress follows them: finished runs (`{t: 'run', setup, actions}`),
  * purchases (`{t: 'buy', id}`) and perks equipped (`{t: 'equip', perks}`).
  * Each run is replayed, must have been allowed by the progress at that point
- * (its loadout, scenario and ascension) and counts once; imported runs earn
+ * (its loadout, scenario, ascension and twists) and counts once; imported runs earn
  * progress but never appear on a leaderboard (their seed was the player's).
  * At most MAX_SYNC_RUNS runs a request: the answer `{meta, applied}` says how
  * many events were taken, and `error` why the next one was not.
@@ -346,7 +355,7 @@ export async function postGameSync(request: Request, ctx: Ctx): Promise<Response
           if (!open.open) throw new MetaError(open.reason);
           if (setup.ascension > maxAscension(meta, scenario.id)) throw new MetaError('That ascension was not open yet');
         }
-        const refused = setup.loadout && typeof setup.loadout === 'object' ? loadoutAllowed(meta, setup.loadout, setup.ascension) : 'A run needs its loadout';
+        const refused = (setup.loadout && typeof setup.loadout === 'object' ? loadoutAllowed(meta, setup.loadout, setup.ascension) : 'A run needs its loadout') ?? twistsAllowed(gameContent(), meta, setup);
         if (refused) throw new MetaError(refused);
         const actions = readActions(event.actions);
         const digest = await sha256(JSON.stringify([setup, actions]));
@@ -445,7 +454,7 @@ export async function getGameLeaderboard(request: Request, ctx: Ctx): Promise<Re
 export async function exportGame(DB: D1Database, userId: string): Promise<{ meta: Meta | null; runs: unknown[] }> {
   const [meta, runs] = await Promise.all([
     DB.prepare('SELECT meta FROM game_meta WHERE user_id = ?').bind(userId).first<{ meta: string }>(),
-    DB.prepare('SELECT id, mode, board, day, scenario, ascension, started_at, submitted_at, score, waves, outcome, cleared, blueprints FROM game_runs WHERE user_id = ? ORDER BY started_at')
+    DB.prepare('SELECT id, mode, board, day, scenario, ascension, started_at, submitted_at, local_day, score, waves, outcome, cleared, blueprints FROM game_runs WHERE user_id = ? ORDER BY started_at')
       .bind(userId)
       .all(),
   ]);

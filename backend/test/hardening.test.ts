@@ -251,6 +251,8 @@ describe('data export', () => {
           runsToSolve: 1,
           bestCostUsd: expect.any(Number),
           bestP99Ms: expect.any(Number),
+          bestCostAt: expect.any(Number),
+          bestP99At: expect.any(Number),
           simVersion: SIM_VERSION,
           problemVersion: 1,
         },
@@ -260,6 +262,7 @@ describe('data export', () => {
       achievements: [],
       challengeAttempts: [],
       game: { meta: null, runs: [] },
+      shares: [],
       documents: [],
     });
     expect(text).not.toContain(await sha256(token));

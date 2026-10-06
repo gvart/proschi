@@ -3,7 +3,7 @@ import { addDays, computeStreak, goalFor } from '../../frontend/src/learn/streak
 import { evaluate, utcDay } from './achievements';
 import { loadChallengeSummary } from './challenge';
 import type { Ctx } from './context';
-import { now } from './env';
+import { now, type Env } from './env';
 import { HttpError, json, rateLimit } from './http';
 import { findProblem, problemIds } from './verify';
 
@@ -47,19 +47,17 @@ const dayStart = (t: number) => Math.floor(t / DAY) * DAY;
 const notFound = () => new HttpError(404, 'No such profile');
 
 /**
- * GET /api/users/<id>/profile: the user's public profile when they opted in;
- * 404 otherwise, the same as for an id nobody has, so it does not tell
- * whether a private user exists. Read only: badges met for the first time are
- * stored when the user opens their own page, not here.
+ * The public profile of user `id` when they opted in; null otherwise, the
+ * same for an id nobody has. Read only: badges met for the first time are
+ * stored when the user opens their own page, not here. Also read by the
+ * profile's page and image (src/profilePage.ts).
  */
-export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> {
-  const { env } = ctx;
-  await rateLimit(env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
-  if (!ID.test(id)) throw notFound();
+export async function loadPublicProfile(env: Env, id: string): Promise<PublicProfile | null> {
+  if (!ID.test(id)) return null;
   const user = await env.DB.prepare('SELECT id, display_name, created_at, daily_goal FROM users WHERE id = ? AND public_profile = 1')
     .bind(id)
     .first<{ id: string; display_name: string; created_at: number; daily_goal: number }>();
-  if (!user) throw notFound();
+  if (!user) return null;
 
   const t = now();
   // A local date is at most a day ahead of the UTC one: count up to the day after, and keep the better of the two days' streaks.
@@ -74,7 +72,7 @@ export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> 
       await env.DB.prepare('SELECT problem_id FROM progress WHERE user_id = ? AND solved_at IS NOT NULL').bind(user.id).all<{ problem_id: string }>()
     ).results.map((r) => r.problem_id),
   );
-  const body: PublicProfile = {
+  return {
     id: user.id,
     displayName: user.display_name,
     memberSince: dayStart(user.created_at),
@@ -92,6 +90,17 @@ export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> 
     // Only badges the user has been awarded (stored), of those that still exist.
     badges: answer.achievements.filter((a) => earned[a.id]).map((a) => ({ id: a.id, earnedAt: dayStart(earned[a.id].earnedAt) })),
   };
+}
+
+/**
+ * GET /api/users/<id>/profile: the user's public profile when they opted in;
+ * 404 otherwise, the same as for an id nobody has, so it does not tell
+ * whether a private user exists.
+ */
+export async function getPublicProfile(ctx: Ctx, id: string): Promise<Response> {
+  await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
+  const body = await loadPublicProfile(ctx.env, id);
+  if (!body) throw notFound();
   // Not cached: turning the profile off must take effect at once.
   return json(body, 200, { 'Cache-Control': 'no-store' });
 }

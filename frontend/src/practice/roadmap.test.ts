@@ -132,10 +132,17 @@ describe('stepLock', () => {
     expect(stepLock(roadmapState(roadmap, solved('c')), 'c', 'open')).toEqual({ kind: 'open' });
   });
 
-  it('locks every step signed out, and waits while the account loads', () => {
+  it('opens the first stage signed out, in order, and locks the stages after it', () => {
+    const fresh = roadmapState(roadmap, {});
+    expect(stepLock(fresh, 'a', 'sign-in')).toEqual({ kind: 'open' });
+    expect(stepLock(fresh, 'b', 'sign-in')).toEqual({ kind: 'order', next: 'a' });
+    const state = roadmapState(roadmap, solved('a', 'b'));
+    expect(stepLock(state, 'c', 'sign-in')).toEqual({ kind: 'sign-in' });
+    expect(unlockHint(stepLock(state, 'c', 'sign-in'), title)).toBe('Sign in to continue past stage 1');
+  });
+
+  it('waits while the account loads', () => {
     const state = roadmapState(roadmap, solved('a'));
-    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
-    expect(unlockHint(stepLock(state, 'a', 'sign-in'), title)).toBe('Sign in to start the roadmap');
     expect(stepLock(state, 'a', 'checking')).toEqual({ kind: 'checking' });
   });
 

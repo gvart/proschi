@@ -52,6 +52,15 @@ async function answer(page: Page, n: number, of: number): Promise<void> {
 }
 
 test.describe('daily streak', () => {
+  test('a daily challenge and a finished Arcade run keep the streak like cards do', async ({ page }) => {
+    // Three days ago cards, two days ago an Arcade run, yesterday the daily challenge (kept before its local day was recorded: its UTC day counts).
+    const challenge = { day: dayFrom(-1), score: 100, maxScore: 600, correct: 1, perfect: false, totalMs: 1000, results: [{ cardId: 'x', answer: 0, ms: 1000, correct: true, points: 100, bonus: 0 }] };
+    await seed(page, { 'proschi.cards': seededReviews([-3], 10), 'proschi.game.days': { [dayFrom(-2)]: 1 }, 'proschi.challenge': { [dayFrom(-1)]: challenge } });
+    await page.goto('practice/#/roadmap');
+    await expect(streak(page)).toContainText('3-day streak');
+    await expect(streak(page)).toContainText('play the daily challenge or an Arcade run');
+  });
+
   test('a session that reaches a milestone celebrates it, and the streak shows after it', async ({ page }) => {
     // A goal of 5 cards, met yesterday and the day before.
     await seed(page, { 'proschi.goal': 5, 'proschi.cards': seededReviews([-2, -1], 5) });

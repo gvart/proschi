@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, apiEnabled } from '../../services/api';
 import { challengeDay } from '../../learn/challenge';
+import { localDay } from '../../learn/streak';
+import { recordLocalRun } from '../../practice/activity';
 import type { AccountState } from '../../practice/useAccount';
-import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, type Meta } from '../engine/meta';
+import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, runTwists, type Meta } from '../engine/meta';
 import { dailySeed } from '../engine/rng';
 import type { Game } from '../engine/run';
 import type { GameContent, RunSetup } from '../engine/types';
 import { loadLocalMeta, loadOutbox, pushOutbox, saveLocalMeta, shiftOutbox, type OutboxEvent } from './store';
+import { track } from '../../services/metrics';
 
 /**
  * Where the Arcade's progress lives. Signed out (or in a build without
@@ -65,7 +68,12 @@ function randomSeed(): string {
   return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-export function useArcade(content: GameContent, account: AccountState): Arcade {
+/**
+ * `onRunDone` is called once a finished run counts toward the daily streak:
+ * signed in, when the server has kept it; in a build without accounts, when
+ * its day is kept in this browser. Signed out there is no streak.
+ */
+export function useArcade(content: GameContent, account: AccountState, onRunDone?: () => void): Arcade {
   const signedIn = apiEnabled && account.status === 'signed-in';
   const [meta, setMeta] = useState<Meta>(() => loadLocalMeta());
   const [server, setServer] = useState<ServerMe | undefined>();
@@ -73,6 +81,9 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
   const [error, setError] = useState<string | undefined>();
   const metaRef = useRef(meta);
   metaRef.current = meta;
+  const doneRef = useRef(onRunDone);
+  doneRef.current = onRunDone;
+  const keptHere = account.status === 'off';
 
   const refresh = useCallback(async () => {
     const me = await api<ServerMe>('/api/game/me');
@@ -144,28 +155,33 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
 
   const start = useCallback(
     async ({ mode, scenario, ascension = 0 }: { mode: 'normal' | 'daily'; scenario?: string; ascension?: number }) => {
+      track('arcade_run_start');
       if (signedIn) return api<{ runId: string; setup: RunSetup }>('/api/game/runs', { method: 'POST', body: { mode, scenario, ascension } });
       if (mode === 'daily') {
         const day = challengeDay();
-        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0) } };
+        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0), twists: runTwists(content, metaRef.current, 'daily') } };
       }
-      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension) } };
+      // Signed out the same rule as the Worker's: the basic rules until the first clear.
+      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension), twists: runTwists(content, metaRef.current, 'normal') } };
     },
     [signedIn, content],
   );
 
   const finish = useCallback(
     async (game: Game, runId?: string): Promise<RunResult> => {
+      track('arcade_run_end');
       const before = metaRef.current;
       const first = firstClear(before, game.setup.scenario) && game.state.cleared;
       if (signedIn && runId) {
         try {
           const answer = await api<{ score: number; blueprints: number; meta: Meta; rank: number | null; players: number }>(`/api/game/runs/${runId}/submit`, {
             method: 'POST',
-            body: { actions: game.state.log },
+            // The local date: a finished run meets the daily goal.
+            body: { actions: game.state.log, day: localDay() },
           });
           setMeta(answer.meta);
           void refresh().catch(() => undefined);
+          doneRef.current?.();
           return { score: answer.score, blueprints: answer.blueprints, firstClear: first, rank: answer.rank, players: answer.players };
         } catch (e) {
           return { score: game.state.score, blueprints: 0, firstClear: false, error: e instanceof ApiError ? e.message : 'Could not reach the server to save this run.' };
@@ -177,6 +193,10 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
         recordRun(before, { scenario: game.setup.scenario, ascension: game.setup.ascension, reached: survived, cleared: game.state.cleared, blueprints, seen: game.seen() }),
         { t: 'run', setup: game.setup, actions: game.state.log },
       );
+      if (keptHere) {
+        recordLocalRun(localDay());
+        doneRef.current?.();
+      }
       if (game.setup.mode === 'daily') {
         try {
           localStorage.setItem(DAILY_KEY, JSON.stringify({ day: challengeDay(), score: game.state.score }));
@@ -186,7 +206,7 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
       }
       return { score: game.state.score, blueprints, firstClear: first };
     },
-    [signedIn, local, refresh],
+    [signedIn, local, refresh, keptHere],
   );
 
   const day = challengeDay();

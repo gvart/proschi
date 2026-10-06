@@ -3,7 +3,7 @@ import type { AchievementsAnswer, AchievementStatus } from '../../learn/achievem
 import type { PublicProfile } from '../../services/api';
 import { ACHIEVEMENTS } from '../achievementList';
 import type { ProblemListing } from '../listing';
-import { ownProfile, profileBadge, profileIdOf, publicProfile, solvedByDifficulty } from './profile';
+import { ownProfile, profileAddressOf, profileBadge, profileIdOf, publicProfile, solvedByDifficulty } from './profile';
 
 const problems = [
   { id: 'url-shortener', title: 'URL Shortener', difficulty: 'easy', tags: [] },
@@ -28,6 +28,14 @@ describe('profile routes', () => {
     expect(profileIdOf('u/a/b')).toBe('');
     expect(profileIdOf('me')).toBeUndefined();
     expect(profileIdOf('url-shortener')).toBeUndefined();
+  });
+
+  it('moves a profile’s own address to its practice route', () => {
+    expect(profileAddressOf('/u/3f2a-11')).toBe('/practice/#/u/3f2a-11');
+    expect(profileAddressOf('/u/3f2a-11/')).toBe('/practice/#/u/3f2a-11');
+    expect(profileAddressOf('/practice/')).toBeUndefined();
+    expect(profileAddressOf('/u/a%20b')).toBeUndefined();
+    expect(profileAddressOf('/proschi/practice/')).toBeUndefined();
   });
 });
 

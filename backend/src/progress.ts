@@ -1,15 +1,17 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import type { Problem } from '../../frontend/src/practice/types';
-import { daysBetween, isDay } from '../../frontend/src/learn/review';
 import { isGoalChoice, GOAL_CHOICES } from '../../frontend/src/learn/streak';
 import { cleanName, requireUser, sessionCookie } from './auth';
 import type { Ctx } from './context';
 import { now, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
+import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
 import { exportDocuments } from './documents';
+import { clientDay as runDay, utcDay } from './activity';
+import { exportShares } from './shares';
 
 /** The signed-in user's account and practice progress. */
 
@@ -107,7 +109,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game data and synced diagrams (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game progress, short links and synced diagrams (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -128,7 +130,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
-      `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, sim_version, problem_version
+      `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, best_cost_at, best_p99_at, sim_version, problem_version
        FROM progress WHERE user_id = ? ORDER BY problem_id`,
     ).bind(user.id),
     DB.prepare('SELECT id, card_id, card_version, rating, reviewed_at, duration_ms, day FROM card_reviews WHERE user_id = ? ORDER BY reviewed_at, id').bind(user.id),
@@ -136,7 +138,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       'SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ? ORDER BY card_id',
     ).bind(user.id),
     DB.prepare('SELECT achievement_id, earned_at, seen_at FROM achievements WHERE user_id = ? ORDER BY earned_at, achievement_id').bind(user.id),
-    DB.prepare('SELECT day, started_at, score, correct, perfect, total_ms, results, submitted_at FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(user.id),
+    DB.prepare('SELECT day, started_at, score, correct, perfect, total_ms, results, submitted_at, local_day FROM challenge_attempts WHERE user_id = ? ORDER BY day').bind(user.id),
   ]);
   type Row = Record<string, string | number | null>;
   const body = {
@@ -167,6 +169,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       runsToSolve: r.runs_to_solve,
       bestCostUsd: r.best_cost_usd,
       bestP99Ms: r.best_p99_ms,
+      bestCostAt: r.best_cost_at,
+      bestP99At: r.best_p99_at,
       simVersion: r.sim_version,
       problemVersion: r.problem_version,
     })),
@@ -200,8 +204,11 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       totalMs: r.total_ms,
       results: r.results === null ? null : (JSON.parse(String(r.results)) as unknown),
       submittedAt: r.submitted_at,
+      localDay: r.local_day,
     })),
     game: await exportGame(DB, user.id),
+    // Short links: the diagram of each; the preview image is at imageUrl.
+    shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).
     documents: await exportDocuments(DB, user.id),
   };
@@ -215,7 +222,9 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
  * were measured against what no longer exists. `day` (the user's local date)
  * is kept as the day of the first verified solve, for the streak; it is
  * history, so a version change does not reset it, and imported solves have
- * none.
+ * none. The best designs' cost and p99 only ever come from `verdict`, the
+ * server's own run of the tests, and keep when each was first reached (the
+ * per-problem boards' tie-break): a later design only replaces one it beats.
  */
 function upsertProgress(
   env: Env,
@@ -230,8 +239,8 @@ function upsertProgress(
   const t = now();
   const stale = '(NOT ?10 AND (sim_version <> excluded.sim_version OR problem_version <> excluded.problem_version))';
   return env.DB.prepare(
-    `INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at, runs_to_solve, best_cost_usd, best_p99_ms, sim_version, problem_version, solved_day)
-     VALUES (?1, ?2, 1, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?11, ?12, ?13)
+    `INSERT INTO progress (user_id, problem_id, runs, source, first_run_at, updated_at, solved_at, runs_to_solve, best_cost_usd, best_p99_ms, sim_version, problem_version, solved_day, best_cost_at, best_p99_at)
+     VALUES (?1, ?2, 1, ?3, ?4, ?4, ?5, ?6, ?7, ?8, ?11, ?12, ?13, CASE WHEN ?7 IS NULL THEN NULL ELSE ?4 END, CASE WHEN ?8 IS NULL THEN NULL ELSE ?4 END)
      ON CONFLICT (user_id, problem_id) DO UPDATE SET
        runs = CASE WHEN ${stale} THEN 1 ELSE runs + ?9 END,
        source = CASE WHEN ?10 THEN COALESCE(source, excluded.source) ELSE excluded.source END,
@@ -241,6 +250,10 @@ function upsertProgress(
          WHEN solved_at IS NULL AND excluded.solved_at IS NOT NULL AND NOT ?10 THEN runs + 1 ELSE runs_to_solve END,
        solved_at = CASE WHEN ${stale} THEN excluded.solved_at ELSE COALESCE(solved_at, excluded.solved_at) END,
        solved_day = CASE WHEN solved_at IS NULL THEN COALESCE(solved_day, excluded.solved_day) ELSE solved_day END,
+       best_cost_at = CASE WHEN ${stale} THEN excluded.best_cost_at
+         WHEN excluded.best_cost_usd IS NOT NULL AND (best_cost_usd IS NULL OR excluded.best_cost_usd < best_cost_usd) THEN excluded.updated_at ELSE best_cost_at END,
+       best_p99_at = CASE WHEN ${stale} THEN excluded.best_p99_at
+         WHEN excluded.best_p99_ms IS NOT NULL AND (best_p99_ms IS NULL OR excluded.best_p99_ms < best_p99_ms) THEN excluded.updated_at ELSE best_p99_at END,
        best_cost_usd = CASE WHEN ${stale} THEN excluded.best_cost_usd
          ELSE MIN(COALESCE(best_cost_usd, excluded.best_cost_usd), COALESCE(excluded.best_cost_usd, best_cost_usd)) END,
        best_p99_ms = CASE WHEN ${stale} THEN excluded.best_p99_ms
@@ -265,19 +278,6 @@ function upsertProgress(
   );
 }
 
-/** The UTC date of a Unix time, YYYY-MM-DD. */
-const utcDay = (t: number) => new Date(t * 1000).toISOString().slice(0, 10);
-
-/**
- * The client's local date of a run: `day` when it is within a day of the
- * server's UTC date (time zones run from UTC−12 to UTC+14), the UTC date
- * otherwise (no `day`, or a device clock far off). 400 when it is not a date.
- */
-function runDay(day: unknown, t: number): string {
-  if (day === undefined) return utcDay(t);
-  if (!isDay(day)) throw new HttpError(400, 'day must be a date written YYYY-MM-DD');
-  return Math.abs(daysBetween(utcDay(t), day)) <= 1 ? day : utcDay(t);
-}
 
 /**
  * POST /api/problems/<id>/runs {source, solved, imported?, day?}: records a
@@ -304,6 +304,10 @@ export async function recordRun(request: Request, ctx: Ctx, problemId: string): 
   const verdict: Verdict | undefined = body.solved ? verify(problem, body.source) : undefined;
   const row = await upsertProgress(ctx.env, user.id, problem, body.source, verdict, imported, day).first<Omit<ProgressRow, 'problem_id'>>();
   if (!row) throw new Error('progress upsert returned no row');
+  // A first verified solve counts as a usage metric: this run set
+  // runs_to_solve, so it equals the runs. Imported solves have none (the page
+  // counted them when they happened, signed out).
+  if (verdict?.solved && !imported && row.runs_to_solve !== null && row.runs_to_solve === row.runs) await countServerEvent(ctx, 'problem_solve');
   return json({ progress: entryOf(row), ...(verdict ? { verdict } : {}) }, 200, NO_STORE);
 }
 

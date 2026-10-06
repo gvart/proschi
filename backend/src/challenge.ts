@@ -22,6 +22,7 @@ import type { Ctx } from './context';
 import { now } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { cached } from './stats';
+import { clientDay } from './activity';
 
 /**
  * The daily challenge (frontend/src/learn/challenge.ts): five auto-graded
@@ -211,12 +212,13 @@ function attemptDay(raw: unknown, t: number): string {
 }
 
 /**
- * POST /api/challenge/today/attempt {answers: [{cardId, answer, ms}], day?}:
+ * POST /api/challenge/today/attempt {answers: [{cardId, answer, ms}], day?, localDay?}:
  * grades the answers to the day's cards (one each), scores them, keeps the
  * attempt and answers it with its rank and the challenge streak. 409 when the
  * user played that day already (with `attempt`, the one kept). `day`, the
  * challenge the client showed, may be yesterday's for GRACE_SECONDS after
- * midnight. After a start, answers whose times add up to more than the time
+ * midnight. `localDay`, the player's local date (activity.ts's clientDay),
+ * is the day the attempt counts on for the daily streak. After a start, answers whose times add up to more than the time
  * since (plus TIME_SLACK_SECONDS) are refused; an attempt without a start
  * (one played signed out, saved after signing in) starts and ends at once.
  */
@@ -227,6 +229,8 @@ export async function postChallengeAttempt(request: Request, ctx: Ctx): Promise<
   await rateLimit(ctx.env.CHALLENGE_LIMITER, user.id, 'Too many challenge attempts; wait a minute');
   const t = now();
   const day = attemptDay(body.day, t);
+  // The player's local date, for the daily streak (a completed challenge meets the daily goal).
+  const localDay = clientDay(body.localDay, t, 'localDay');
   const cards = challengeCards(day);
   if (cards.length === 0) throw new HttpError(503, 'No cards for a challenge');
   const read = readAttempt(cards, body.answers);
@@ -242,13 +246,13 @@ export async function postChallengeAttempt(request: Request, ctx: Ctx): Promise<
   }
   // Fills a started row, or adds one; never overwrites a sent attempt.
   const inserted = await DB.prepare(
-    `INSERT INTO challenge_attempts (user_id, day, started_at, score, correct, perfect, total_ms, results, submitted_at)
-     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?3)
+    `INSERT INTO challenge_attempts (user_id, day, started_at, score, correct, perfect, total_ms, results, submitted_at, local_day)
+     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?3, ?9)
      ON CONFLICT (user_id, day) DO UPDATE SET score = excluded.score, correct = excluded.correct, perfect = excluded.perfect,
-       total_ms = excluded.total_ms, results = excluded.results, submitted_at = excluded.submitted_at
+       total_ms = excluded.total_ms, results = excluded.results, submitted_at = excluded.submitted_at, local_day = excluded.local_day
      WHERE challenge_attempts.submitted_at IS NULL`,
   )
-    .bind(user.id, day, t, score.score, score.correct, isPerfect(score) ? 1 : 0, score.totalMs, JSON.stringify(results))
+    .bind(user.id, day, t, score.score, score.correct, isPerfect(score) ? 1 : 0, score.totalMs, JSON.stringify(results), localDay)
     .run();
   const [attempt, streak] = await Promise.all([loadAttempt(DB, user.id, day), loadStreak(DB, user.id, challengeDay(new Date(t * 1000)))]);
   if (!inserted.meta.changes) return json({ error: 'You already played this challenge; only the first attempt counts', attempt, streak }, 409, NO_STORE);

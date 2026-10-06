@@ -54,6 +54,6 @@ export async function signedInUser(name = `user${++users}`, publicProfile = fals
 }
 
 export async function resetDatabase(): Promise<void> {
-  await env.DB.batch(['documents', 'game_runs', 'game_meta', 'challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'app_auth_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
+  await env.DB.batch(['documents', 'shares', 'daily_counts', 'game_runs', 'game_meta', 'challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'app_auth_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
   await clearStatsCache();
 }

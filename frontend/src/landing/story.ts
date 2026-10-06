@@ -1,6 +1,5 @@
-// The landing page's scroll story, in plain DOM: the packet hopping between
-// the "how it works" cards, the request dying at the database, the tests
-// turning green with a burst. Each plays once as it comes into view (and on
+// The landing page's scroll story, in plain DOM: the request dying at the
+// database, the tests turning green with a burst. Each plays once as it comes into view (and on
 // a button after that), so nothing loops; under reduced motion CSS shows the
 // end state at once.
 
@@ -30,13 +29,6 @@ function replay(el: Element, cls: string): void {
 const CHECK_STAGGER_MS = 260;
 
 export function initStory(root: ParentNode): void {
-  // How it works: browsers with scroll-driven animations tie the packet to the
-  // scroll position in CSS; the others play it once when the cards come in.
-  const hop = root.querySelector('.hop');
-  if (hop && !(typeof CSS !== 'undefined' && CSS.supports('animation-timeline: view()'))) {
-    onceInView(hop, () => hop.classList.add('is-playing'), 0.4);
-  }
-
   // Break it on purpose.
   const crash = root.querySelector('#crash');
   const again = root.querySelector<HTMLButtonElement>('#break-again');
