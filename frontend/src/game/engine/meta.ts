@@ -1,7 +1,7 @@
 import type { GameStats } from '../../learn/achievements';
 import { ascensionRules, MAX_ASCENSION } from './rules';
 import type { IconName } from './icons';
-import type { CardDef, GameContent, Loadout, ScenarioDef } from './types';
+import type { CardDef, ComponentDef, GameContent, Loadout, ScenarioDef } from './types';
 
 /**
  * Progress between runs (docs/GAME.md, "Progression"): Blueprints earned by
@@ -70,6 +70,10 @@ export interface ShopItem {
   level?: number;
   maxLevel?: number;
   blocked?: string;
+  /** One line on what it does: a component's or feature's summary, a card's or perk's rules text. */
+  text: string;
+  /** For components: the role, whose icon the board draws. */
+  role?: ComponentDef['role'];
   /** For cards and perks: their icon, and a card's rarity. */
   icon?: IconName;
   rarity?: CardDef['rarity'];
@@ -81,13 +85,13 @@ export function shop(content: GameContent, meta: Meta): ShopItem[] {
   for (const c of content.components) {
     if (c.unlock === 0) continue;
     const missing = (c.requires ?? []).find((r) => !has.has(r) && (content.components.find((x) => x.id === r)?.unlock ?? 0) > 0);
-    items.push({ kind: 'component', id: c.id, name: c.name, cost: c.unlock, owned: has.has(c.id), ...(missing ? { blocked: `Unlock ${content.components.find((x) => x.id === missing)?.name ?? missing} first` } : {}) });
+    items.push({ kind: 'component', id: c.id, name: c.name, text: c.summary, role: c.role, cost: c.unlock, owned: has.has(c.id), ...(missing ? { blocked: `Unlock ${content.components.find((x) => x.id === missing)?.name ?? missing} first` } : {}) });
   }
-  for (const f of content.features) items.push({ kind: 'feature', id: f.id, name: f.name, cost: f.unlock, owned: has.has(f.id) });
-  for (const c of content.cards) if (c.unlock > 0) items.push({ kind: 'card', id: c.id, name: c.name, cost: c.unlock, owned: has.has(c.id), icon: c.icon, rarity: c.rarity });
+  for (const f of content.features) items.push({ kind: 'feature', id: f.id, name: f.name, text: f.summary, cost: f.unlock, owned: has.has(f.id) });
+  for (const c of content.cards) if (c.unlock > 0) items.push({ kind: 'card', id: c.id, name: c.name, text: c.text, cost: c.unlock, owned: has.has(c.id), icon: c.icon, rarity: c.rarity });
   for (const p of content.perks) {
     const level = meta.perks[p.id] ?? 0;
-    items.push({ kind: 'perk', id: p.id, name: p.name, cost: p.costs[level] ?? 0, owned: level >= p.costs.length, level, maxLevel: p.costs.length, icon: p.icon });
+    items.push({ kind: 'perk', id: p.id, name: p.name, text: p.text, cost: p.costs[level] ?? 0, owned: level >= p.costs.length, level, maxLevel: p.costs.length, icon: p.icon });
   }
   return items;
 }

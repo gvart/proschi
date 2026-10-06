@@ -203,6 +203,10 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- The Arcade shop shows an icon and a one-line description for every item:
+  components with the icon the board draws for them, features with their
+  own. Each tab (Components, Features, Rare cards, Perks) says what it sells,
+  under the tabs and as a tooltip.
 - The practice list's filters take one row on a phone: a search box and a
   "Filters" button that shows how many are on (for example "Filters · 2").
   It opens the difficulty, tag, company and status filters; Escape closes
@@ -214,6 +218,8 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- Arcade: a run, and each new wave, opens at the top of the page instead of
+  wherever the scenario list or the draft was scrolled to.
 - Daily review on a phone: after you answer a card, the next one scrolls
   into view with its topic, type and question below the site header, and
   keyboard focus moves to its heading. Showing an answer brings it into view

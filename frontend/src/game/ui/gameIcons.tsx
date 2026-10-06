@@ -144,11 +144,11 @@ export function GameIcon({ name, size = 16, className }: { name: IconName; size?
 const TILE_SIZE = { sm: 'h-5 w-5', md: 'h-7 w-7', lg: 'h-9 w-9' } as const;
 const ICON_SIZE = { sm: 12, md: 16, lg: 20 } as const;
 
-/** An icon in a small bordered tile, the look of the board's nodes. */
-export function IconTile({ name, tone, size = 'md', className = '' }: { name: IconName; tone: string; size?: keyof typeof TILE_SIZE; className?: string }) {
+/** An icon in a small bordered tile, the look of the board's nodes: a content icon by `name`, or a lucide `icon`. */
+export function IconTile({ name, icon: Icon, tone, size = 'md', className = '' }: { name?: IconName; icon?: LucideIcon; tone: string; size?: keyof typeof TILE_SIZE; className?: string }) {
   return (
     <span aria-hidden="true" className={`inline-flex flex-shrink-0 items-center justify-center rounded border-bw-1 border-ink ${TILE_SIZE[size]} ${tone} ${className}`}>
-      <GameIcon name={name} size={ICON_SIZE[size]} />
+      {Icon ? <Icon size={ICON_SIZE[size]} aria-hidden="true" /> : name && <GameIcon name={name} size={ICON_SIZE[size]} />}
     </span>
   );
 }

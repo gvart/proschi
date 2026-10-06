@@ -6,6 +6,9 @@ import {
   DoorOpen,
   Globe,
   Inbox,
+  LayoutGrid,
+  Maximize2,
+  MoveHorizontal,
   Search,
   Server,
   Shield,
@@ -17,7 +20,7 @@ import {
 } from 'lucide-react';
 import type { NodeRole } from '../engine/board';
 import type { Breach, WaveSummary } from '../engine/run';
-import type { CardDef, EventDef, GameMode, TicketKind, TicketSender } from '../engine/types';
+import type { CardDef, EventDef, FeatureDef, GameMode, TicketKind, TicketSender } from '../engine/types';
 import type { IconName } from '../engine/icons';
 
 /** How the board and the panels show things: icons, heat colours, money and rates. */
@@ -89,6 +92,15 @@ export const CATEGORY_TILE: Record<EventDef['category'], string> = {
   spike: 'bg-pop-pink/30 text-ink',
 };
 export const PERK_TILE = 'bg-pop-blue/20 text-ink';
+export const COMPONENT_TILE = 'bg-pop-yellow/30 text-ink';
+export const FEATURE_TILE = 'bg-pop-lilac/25 text-ink';
+
+/** Each shop feature's icon: a bigger box, more partitions, a longer lane. */
+export const FEATURE_ICON: Record<FeatureDef['id'], LucideIcon> = {
+  tiers: Maximize2,
+  shards: LayoutGrid,
+  'wide-lanes': MoveHorizontal,
+};
 
 /** Each ticket kind's icon, so an inbox reads at a glance. */
 export const TICKET_ICON: Record<TicketKind, IconName> = {
