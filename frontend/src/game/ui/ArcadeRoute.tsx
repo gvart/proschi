@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { CalendarDays, Gem, Lock, Play, ShoppingBag, Trophy } from 'lucide-react';
+import { Boxes, CalendarDays, Gem, Lock, Medal, Play, ShoppingBag, Sparkles, Trophy, Wrench, type LucideIcon } from 'lucide-react';
 import { api, apiEnabled } from '../../services/api';
 import type { Account } from '../../practice/useAccount';
 import { PROVIDER_LABEL } from '../../practice/account';
@@ -9,7 +9,7 @@ import { maxAscension, scenarioOpen, shop, type ShopItem } from '../engine/meta'
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
 import type { Action, RunSetup } from '../engine/types';
 import { IconTile } from './gameIcons';
-import { MODE_ICON, MODE_LABEL, PERK_TILE, RARITY_TILE } from './visual';
+import { COMPONENT_TILE, FEATURE_ICON, FEATURE_TILE, ICON, MODE_ICON, MODE_LABEL, PERK_TILE, RARITY_TILE } from './visual';
 import { Modal } from './Panels';
 import RunScreen from './RunScreen';
 import { loadRun, loadSettings, saveRun, saveSettings, type Settings } from './store';
@@ -260,15 +260,26 @@ function HowItWorks() {
   );
 }
 
+/** The shop's tabs: what each sells, for the tab's tooltip and the line under the tabs. */
+const SHOP_TABS: { kind: ShopItem['kind']; label: string; icon: LucideIcon; blurb: string }[] = [
+  { kind: 'component', label: 'Components', icon: Boxes, blurb: 'New building blocks for your board: caches, queues, CDNs and more. Each solves a problem the starting three cannot.' },
+  { kind: 'feature', label: 'Features', icon: Wrench, blurb: 'New ways to build: bigger instances, sharded databases and longer lanes.' },
+  { kind: 'card', label: 'Rare cards', icon: Sparkles, blurb: 'Powerful tech cards added to the draft pool between waves. Common and uncommon cards are in from the start.' },
+  { kind: 'perk', label: 'Perks', icon: Medal, blurb: 'Permanent bonuses for every run, such as more seed money or a free reroll. Buy them, then equip them.' },
+];
+
+/** A shop item's tile: the board's icon for a component or feature, the content icon for a card or perk. */
+function ShopTile({ item }: { item: ShopItem }) {
+  if (item.kind === 'component' && item.role) return <IconTile icon={ICON[item.role]} tone={COMPONENT_TILE} size="lg" />;
+  if (item.kind === 'feature' && item.id in FEATURE_ICON) return <IconTile icon={FEATURE_ICON[item.id as keyof typeof FEATURE_ICON]} tone={FEATURE_TILE} size="lg" />;
+  if (item.icon) return <IconTile name={item.icon} tone={item.rarity ? RARITY_TILE[item.rarity] : PERK_TILE} size="lg" />;
+  return null;
+}
+
 function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]; owned: Record<string, number>; onBuy: (id: string) => Promise<void>; onEquip: (perks: string[]) => Promise<void>; onClose: () => void }) {
   const [tab, setTab] = useState<ShopItem['kind']>('component');
   const slots = ascensionRules(0).perkSlots;
-  const tabs: [ShopItem['kind'], string][] = [
-    ['component', 'Components'],
-    ['feature', 'Features'],
-    ['card', 'Rare cards'],
-    ['perk', 'Perks'],
-  ];
+  const current = SHOP_TABS.find((t) => t.kind === tab) ?? SHOP_TABS[0];
   const items = props.items.filter((i) => i.kind === tab);
   return (
     <Modal title="Shop" onClose={props.onClose} wide>
@@ -276,54 +287,57 @@ function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]
         <Gem size={14} aria-hidden="true" className="inline text-pop-blue" /> <strong>{props.blueprints}</strong> Blueprints. Runs earn them: one per wave survived, three per boss, more for a high score and a first clear.
       </p>
       <div className="ps-tabs mt-3" role="tablist">
-        {tabs.map(([k, label]) => (
-          <button key={k} type="button" role="tab" className="ps-tab" aria-selected={tab === k} onClick={() => setTab(k)}>
-            {label}
+        {SHOP_TABS.map((t) => (
+          <button key={t.kind} type="button" role="tab" id={`shop-tab-${t.kind}`} aria-controls="shop-panel" className="ps-tab inline-flex items-center gap-1.5" aria-selected={tab === t.kind} title={t.blurb} onClick={() => setTab(t.kind)}>
+            <t.icon size={14} aria-hidden="true" className="hidden sm:inline" />
+            {t.label}
           </button>
         ))}
       </div>
-      {tab === 'perk' && (
+      <div id="shop-panel" role="tabpanel" aria-labelledby={`shop-tab-${tab}`}>
         <p className="mt-2 text-sm text-muted">
-          Equip up to {slots} perks; they apply to every run (from ascension 6, one fewer slot).
+          {current.blurb}
+          {tab === 'perk' && <> Equip up to {slots}; from ascension 6, one fewer slot.</>}
         </p>
-      )}
-      <ul className="mt-3 grid gap-2 sm:grid-cols-2">
-        {items.map((i) => {
-          const equipped = props.equipped.includes(i.id);
-          return (
-            <li key={i.id} className="rounded border-bw-1 border-ink bg-surface p-2 flex items-center justify-between gap-2">
-              {i.icon && <IconTile name={i.icon} tone={i.rarity ? RARITY_TILE[i.rarity] : PERK_TILE} size="lg" />}
-              <div className="min-w-0 flex-1">
-                <p className="font-semibold">
-                  {i.name}
-                  {i.maxLevel && i.maxLevel > 1 ? <span className="ml-1 text-xs text-muted">level {i.level}/{i.maxLevel}</span> : null}
-                </p>
-                {i.blocked && <p className="text-xs text-muted">{i.blocked}</p>}
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                {i.kind === 'perk' && (props.owned[i.id] ?? 0) > 0 && (
-                  <button
-                    type="button"
-                    className={equipped ? primaryButton : outlineButton}
-                    aria-pressed={equipped}
-                    disabled={!equipped && props.equipped.length >= slots}
-                    onClick={() => void props.onEquip(equipped ? props.equipped.filter((p) => p !== i.id) : [...props.equipped, i.id])}
-                  >
-                    {equipped ? 'Equipped' : 'Equip'}
-                  </button>
-                )}
-                {!i.owned ? (
-                  <button type="button" className={outlineButton} disabled={!!i.blocked || props.blueprints < i.cost} onClick={() => void props.onBuy(i.id)}>
-                    {i.cost} <Gem size={12} aria-hidden="true" />
-                  </button>
-                ) : (
-                  i.kind !== 'perk' && <span className="text-xs font-semibold text-pass">Owned</span>
-                )}
-              </div>
-            </li>
-          );
-        })}
-      </ul>
+        <ul className="mt-3 grid gap-2 sm:grid-cols-2">
+          {items.map((i) => {
+            const equipped = props.equipped.includes(i.id);
+            return (
+              <li key={i.id} className="rounded border-bw-1 border-ink bg-surface p-2 flex items-start justify-between gap-2">
+                <ShopTile item={i} />
+                <div className="min-w-0 flex-1">
+                  <p className="font-semibold leading-tight">
+                    {i.name}
+                    {i.maxLevel && i.maxLevel > 1 ? <span className="ml-1 text-xs text-muted">level {i.level}/{i.maxLevel}</span> : null}
+                  </p>
+                  <p className="mt-0.5 text-xs text-muted">{i.text}</p>
+                  {i.blocked && <p className="mt-0.5 text-xs font-semibold">{i.blocked}</p>}
+                </div>
+                <div className="flex gap-1 flex-shrink-0">
+                  {i.kind === 'perk' && (props.owned[i.id] ?? 0) > 0 && (
+                    <button
+                      type="button"
+                      className={equipped ? primaryButton : outlineButton}
+                      aria-pressed={equipped}
+                      disabled={!equipped && props.equipped.length >= slots}
+                      onClick={() => void props.onEquip(equipped ? props.equipped.filter((p) => p !== i.id) : [...props.equipped, i.id])}
+                    >
+                      {equipped ? 'Equipped' : 'Equip'}
+                    </button>
+                  )}
+                  {!i.owned ? (
+                    <button type="button" className={outlineButton} disabled={!!i.blocked || props.blueprints < i.cost} onClick={() => void props.onBuy(i.id)}>
+                      {i.cost} <Gem size={12} aria-hidden="true" />
+                    </button>
+                  ) : (
+                    i.kind !== 'perk' && <span className="text-xs font-semibold text-pass">Owned</span>
+                  )}
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      </div>
     </Modal>
   );
 }

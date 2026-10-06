@@ -135,10 +135,14 @@ export default function RunScreen(props: RunScreenProps) {
     [game, save, rerender],
   );
 
-  // A new wave: a fresh plan from the deployed board, and its stamp.
+  // A run starts (or resumes) with the page at the top, wherever the scenario list was scrolled to.
+  useEffect(() => window.scrollTo({ top: 0 }), []);
+
+  // A new wave: a fresh plan from the deployed board, its stamp, and the page back at the top (the forecast).
   const waveKey = `${s.wave}:${s.phase === 'plan'}`;
   useEffect(() => {
     if (s.phase !== 'plan') return;
+    window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
     setPlan(cloneBoard(s.board));
     setUndo([]);
     setRedo([]);

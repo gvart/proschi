@@ -14,8 +14,13 @@ const board = (page: Page) => page.getByRole('group', { name: 'Your architecture
 async function startShortly(page: Page) {
   await page.goto('practice/#/arcade');
   await expect(page.getByRole('heading', { level: 1, name: 'Scale or Fail' })).toBeVisible();
-  await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
+  const play = page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true });
+  await play.scrollIntoViewIfNeeded();
+  await page.mouse.wheel(0, 400);
+  await play.click();
   await expect(page.getByRole('heading', { level: 1, name: 'Shortly' })).toBeVisible();
+  // The run opens at the top, whatever the scenario list was scrolled to.
+  await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 1');
 }
 
@@ -78,9 +83,17 @@ test('the shop sells unlocks for Blueprints', async ({ page }) => {
   await page.goto('practice/#/arcade');
   await page.getByRole('button', { name: 'Shop' }).click();
   const shop = page.getByRole('dialog', { name: 'Shop' });
-  await shop.getByRole('listitem').filter({ hasText: 'Cache' }).getByRole('button', { name: /5/ }).click();
-  await expect(shop.getByRole('listitem').filter({ hasText: 'Cache' })).toContainText('Owned');
+  // Each tab says what it sells, and each item what it does.
+  await expect(shop.getByRole('tabpanel')).toContainText('New building blocks for your board');
+  const cache = shop.getByRole('listitem').filter({ has: page.getByText('Cache', { exact: true }) });
+  await expect(cache).toContainText('cache-aside');
+  await cache.getByRole('button', { name: /5/ }).click();
+  await expect(cache).toContainText('Owned');
   await expect(shop).toContainText('7 Blueprints');
+  await shop.getByRole('tab', { name: 'Perks' }).click();
+  await expect(shop.getByRole('tabpanel')).toContainText('Permanent bonuses for every run');
+  await expect(shop.getByRole('listitem').filter({ has: page.getByText('Friendly vendor', { exact: true }) })).toContainText('first reroll of every draft is free');
+  await shop.getByRole('tab', { name: 'Components' }).click();
   await shop.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
   await expect(page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: 'Cache' })).toBeEnabled();

@@ -229,6 +229,13 @@ describe('progress between runs', () => {
     expect(() => buy(content, m, 'seed-round')).toThrow(/costs 10/);
   });
 
+  it('describes every shop item, and gives each component its board role', () => {
+    const items = shop(content, emptyMeta());
+    expect(new Set(items.map((i) => i.kind))).toEqual(new Set(['component', 'feature', 'card', 'perk']));
+    for (const i of items) expect(i.text.length, i.id).toBeGreaterThan(10);
+    for (const i of items.filter((x) => x.kind === 'component')) expect(i.role, i.id).toBe(content.components.find((c) => c.id === i.id)?.role);
+  });
+
   it('equips owned perks and builds a loadout the server accepts', () => {
     let m = { ...emptyMeta(), blueprints: 100 };
     m = buy(content, buy(content, m, 'seed-round'), 'loyal-users');
