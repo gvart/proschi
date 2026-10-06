@@ -5,6 +5,6 @@
     { "id": "free-reroll", "icon": "dices", "name": "Friendly vendor", "text": "The first reroll of every draft is free.", "costs": [10], "effect": "free-reroll", "value": 1 },
     { "id": "starter-card", "icon": "graduation-cap", "name": "Tech lead", "text": "Start every run holding a random common card.", "costs": [12], "effect": "starter-card", "value": 1 },
     { "id": "load-lab", "icon": "flask-conical", "name": "Load lab", "text": "One free load test every wave.", "costs": [8], "effect": "loadtest", "value": 1 },
-    { "id": "second-pager", "icon": "bell-ring", "name": "Second pager", "text": "One more on-call action every wave.", "costs": [12], "effect": "oncall", "value": 1 }
+    { "id": "second-pager", "icon": "bell-ring", "name": "Second pager", "text": "One more hotfix every wave.", "costs": [12], "effect": "oncall", "value": 1 }
   ]
 }

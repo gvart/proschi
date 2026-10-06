@@ -10,6 +10,23 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A gentler first run in the Arcade.** Until your first clear of a Scale
+  or Fail scenario, runs play the basic rules: no mutators, bounties,
+  contracts or card sets, an exact forecast, no unannounced or cascading
+  incidents, and no live changes during a wave. In Shortly's first wave
+  Kernel walks you through it: place a load balancer, add a replica, load
+  test, deploy (skippable, shown once). After your first clear, Kernel
+  introduces the twists before your next run. The daily run always has
+  every twist, for everyone. The server decides the rules from your stored
+  progress, so ranked runs replay exactly. New leaderboards start with this
+  version.
+- **Anonymous usage counts.** proschi.app now counts, per day, how often a
+  few things happen (the editor opened, a first edit, tests run, a problem
+  solved, a sign-in, …) to see where people get stuck. Only the event's name
+  is sent, and the server keeps one number per day and event: no user id,
+  IP address, cookie or page address, kept for 400 days. Nothing is sent when
+  the browser asks not to be tracked (Do Not Track or Global Privacy
+  Control). The privacy page lists every count.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live
@@ -269,6 +286,8 @@ deployed from `main` and ships with the same changes.
 - **Example links**: `app/?example=<id>` opens that bundled example (`hello`,
   `ecommerce`, `serverless`, `login`, `events`, `url-shortener`), and the
   landing page's example cards use them.
+- The Arcade's per-wave "on-call" actions are now **Hotfixes**, so they
+  are no longer confused with the On-call mode (Dinnerbell).
 - The Arcade shop shows an icon and a one-line description for every item:
   components with the icon the board draws for them, features with their
   own. Each tab (Components, Features, Rare cards, Perks) says what it sells,
@@ -284,6 +303,9 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- The editor docs install `proschi` from npm (`npm install -g proschi` or
+  `npx proschi`) and the VS Code extension from the GitHub release, instead
+  of saying the packages are not published yet.
 - On phones, the on-screen keyboard no longer covers the field you are
   typing in.
 - Diagram selection actions no longer run under the Export and load buttons

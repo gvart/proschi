@@ -2,6 +2,8 @@ import { useEffect, useId, useMemo, useState } from 'react';
 import { primaryButton } from '../../components/Playground/ui';
 import { prefersReducedMotion } from '../../design/motion';
 import type { Briefing, Mood } from './briefing';
+import { Modal } from './Panels';
+import { TUTORIAL_STEPS, TUTORIAL_TEXT, type TutorialStep } from './tutorial';
 
 /** The mascot's name, said in the briefing's label. */
 export const MASCOT = 'Kernel';
@@ -156,5 +158,59 @@ export function MascotBriefing({ briefing, boss, onClose }: { briefing: Briefing
         </div>
       </div>
     </aside>
+  );
+}
+
+/**
+ * Kernel's first-wave tutorial: one step at a time, read off the plan, with
+ * the step's control pulsing on the page. Not modal: the board stays usable,
+ * and "Skip the tutorial" puts it away for good.
+ */
+export function MascotCoach({ step, onSkip }: { step: TutorialStep; onSkip: () => void }) {
+  const n = TUTORIAL_STEPS.indexOf(step) + 1;
+  return (
+    <aside aria-label={`${MASCOT}'s tutorial`} className="sf-brief rounded-brutal border-bw-2 border-ink bg-surface p-3 shadow-brutal-sm">
+      <div className="flex items-start gap-2 sm:gap-3">
+        <CatSre mood="happy" talking={false} className="h-12 w-12 sm:h-16 sm:w-16" />
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted">
+            Your first wave · step {n} of {TUTORIAL_STEPS.length}
+          </p>
+          <p className="sf-bubble relative mt-1 rounded-brutal border-bw-1 border-ink bg-paper p-2.5 text-sm" aria-live="polite">
+            {TUTORIAL_TEXT[step]}
+          </p>
+          <div className="mt-2 flex justify-end">
+            <button type="button" className="text-xs underline text-muted" onClick={onSkip}>
+              Skip the tutorial
+            </button>
+          </div>
+        </div>
+      </div>
+    </aside>
+  );
+}
+
+/** The one-time intro to the twists, the first time a run has them: before the mutator picker. */
+export function TwistsIntro({ briefing, onClose }: { briefing: Briefing; onClose: () => void }) {
+  const [first, ...rest] = briefing.lines;
+  return (
+    <Modal title="New: the twists">
+      <div className="flex items-start gap-3">
+        <CatSre mood={briefing.mood} talking={false} className="h-14 w-14 sm:h-20 sm:w-20" />
+        <div className="min-w-0 flex-1 text-sm">
+          <p className="font-semibold">{first}</p>
+          <ul className="mt-2 list-disc space-y-1 pl-5">
+            {rest.map((l) => (
+              <li key={l}>{l}</li>
+            ))}
+          </ul>
+        </div>
+      </div>
+      <div className="mt-3 flex justify-end">
+        <button type="button" className={primaryButton} onClick={onClose}>
+          Let’s go
+        </button>
+      </div>
+    </Modal>
   );
 }

@@ -77,6 +77,7 @@ import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { track } from '../../services/metrics';
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { useZenMode } from './useZenMode';
@@ -153,11 +154,16 @@ export default function Playground() {
   const source = current.source;
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
+  const typeSource = (next: string) => {
+    if (next !== source) track('editor_first_edit', { once: 'browser' });
+    setSource(next);
+  };
   /** Applies a canvas edit to the current document's text. */
-  const editSource = useCallback(
-    (edit: (source: string) => string) => setDocState((s) => updateCurrent(s, edit(currentDoc(s).source))),
-    [],
-  );
+  const editSource = useCallback((edit: (source: string) => string) => {
+    track('editor_first_edit', { once: 'browser' });
+    setDocState((s) => updateCurrent(s, edit(currentDoc(s).source)));
+  }, []);
 
   // A link may point at a use case step; open straight into playback there.
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
@@ -182,6 +188,8 @@ export default function Playground() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
   const keyboard = useKeyboardViewport();
+
+  useEffect(() => track('editor_open', { once: 'session' }), []);
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -263,6 +271,13 @@ export default function Playground() {
   );
   const [edges, setEdges] = useState<Edge[]>([]);
 
+  // Usage counts: the first look at the simulation's numbers (the Analysis or
+  // HLD tab, or the load overlay) and at the tests, once per session each.
+  useEffect(() => {
+    if (view === 'analysis' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'tests') track('test_run', { once: 'session', key: 'test_run:editor' });
+  }, [view, overlayOn, canOverlay]);
+
   // Edges are local state so selection works; keep it across re-parses.
   useEffect(() => {
     setEdges((previous) => {
@@ -309,6 +324,7 @@ export default function Playground() {
 
   const copyShareLink = async () => {
     const url = shareUrl(source, window.location, playback, imports);
+    track('share_link_created');
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -681,7 +697,7 @@ export default function Playground() {
           className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r-bw-2`}
         >
           <div className="flex-1 min-h-0">
-            <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+            <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
         </EditorZone>

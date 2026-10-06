@@ -27,6 +27,7 @@ import {
 import { autoRating, localDay, type CardReview } from '../../learn/review';
 import { addDays } from '../../learn/streak';
 import { celebrate } from '../../design/celebrate';
+import { track } from '../../services/metrics';
 import { api, ApiError, apiEnabled, type ChallengeAttemptAnswer, type ChallengeLeaderboard, type ChallengeStreakAnswer, type ChallengeToday } from '../../services/api';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
@@ -318,6 +319,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
 
   const finish = async (answers: ChallengeAnswerItem[]) => {
     const local = scoreLocally(day, cards, answers);
+    track('challenge_complete');
     clearChallengeProgress(owner);
     setSetup({ ...setup, resume: undefined });
     setView('intro');

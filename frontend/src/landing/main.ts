@@ -5,6 +5,7 @@ import { enhance } from '../design/enhance';
 import { prefersReducedMotion } from '../design/motion';
 import { highlightElement } from './highlight';
 import { initStory } from './story';
+import { track } from '../services/metrics';
 
 // Everything here is plain DOM and small; React and the editor load only with the demo, below.
 // The example links (`./app/?example=<id>`) and the practice list are in the HTML already (the list is
@@ -14,6 +15,7 @@ document.querySelectorAll<HTMLElement>('pre[data-proschi] code').forEach((code) 
 
 enhance();
 initStory(document);
+track('landing_view', { once: 'session' });
 
 /**
  * The hero's live demo: the poster in #live-demo is real markup (the code and

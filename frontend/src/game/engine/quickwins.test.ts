@@ -91,7 +91,7 @@ describe('unannounced incidents and cascades', () => {
   });
 });
 
-describe("the on-call's menu", () => {
+describe('hotfixes', () => {
   const running = () => {
     const g = new Game(content, setup());
     g.apply({ t: 'deploy', board: g.state.board });
@@ -131,7 +131,7 @@ describe("the on-call's menu", () => {
     expect(() => g.apply({ t: 'oncall', tick: 0, act: 'warm' })).toThrow(/no cache/);
     for (let i = 0; i < 3; i++) g.apply({ t: 'oncall', tick: i, node: 'api' });
     expect(g.state.oncallLeft).toBe(0);
-    expect(() => g.apply({ t: 'oncall', tick: 4, act: 'ratelimit' })).toThrow(/no attention/);
+    expect(() => g.apply({ t: 'oncall', tick: 4, act: 'ratelimit' })).toThrow(/No hotfixes left/);
     while (g.state.phase === 'run') g.advance();
     expect(g.state.tick).toBe(TICKS);
   });
