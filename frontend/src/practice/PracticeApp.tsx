@@ -54,7 +54,7 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
- * system design game, `#/challenge`
+ * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
  * the daily challenge, `#/progress` the skill map and badges, `#/me` the
  * account page and `#/u/<user id>` a public profile; hash routes work under
  * any sub-path. The roadmap, review, challenge and progress pages are the
@@ -129,7 +129,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
   const onChallenge = route === 'challenge';
-  const onArcade = route === 'arcade';
+  const onArcade = route === 'arcade' || route === 'arcade/daily';
   const onMe = route === 'me';
   const profileId = profileIdOf(route);
   const onProfile = onMe || profileId !== undefined;
@@ -216,7 +216,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
-                <ArcadeRoute account={account} />
+                <ArcadeRoute account={account} focusDaily={route === 'arcade/daily'} />
               </Suspense>
             ) : onChallenge ? (
               <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>
@@ -260,7 +260,11 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       </div>
       <Footer base="../" />
       {/* New badges are celebrated here, never over a problem's editor: a solve's badge shows on the way back. */}
-      <AchievementToast unseen={unseen} onSeen={achievements.markSeen} />
+      <AchievementToast
+        unseen={unseen}
+        onSeen={achievements.markSeen}
+        profileId={account.state.status === 'signed-in' && account.state.user.publicProfile ? account.state.user.id : undefined}
+      />
     </div>
   );
 }

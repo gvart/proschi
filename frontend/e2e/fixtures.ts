@@ -119,6 +119,24 @@ export async function nodesBox(page: Page): Promise<{ left: number; top: number;
   });
 }
 
+/**
+ * A clipboard that keeps what is copied (and no share sheet, so share buttons
+ * copy), for tests of share buttons; read it back with copiedText.
+ */
+export async function mockClipboard(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const copied: string[] = [];
+    Object.defineProperty(window, '__copied', { value: copied });
+    Object.defineProperty(navigator, 'share', { value: undefined, configurable: true });
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: async (text: string) => void copied.push(text) }, configurable: true });
+  });
+}
+
+/** The last text copied since mockClipboard, or '' for none. */
+export function copiedText(page: Page): Promise<string> {
+  return page.evaluate(() => (window as unknown as { __copied: string[] }).__copied.at(-1) ?? '');
+}
+
 /** Waits until every canvas node lies inside the visible canvas (the view is fitted), optionally above `bottomLimit`. */
 export async function expectDiagramFitted(page: Page, bottomLimit = Infinity): Promise<void> {
   await expect

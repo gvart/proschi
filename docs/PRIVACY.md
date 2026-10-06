@@ -48,6 +48,11 @@ signed out (`/embed/#code=…`).
 **Short links** (`/s/<id>`, signed in only) are different: the diagram is
 stored on the server, below.
 
+**Share buttons** (a daily run, a solve, a badge, a profile) only hand text
+to your device's share sheet or clipboard; nothing is sent to us or to
+anyone else until you paste it somewhere. A badge's share text links to your
+public profile, so it is offered only while your profile is public.
+
 ## No tracking
 
 No analytics, advertising or tracking scripts, no third-party cookies, and
@@ -185,8 +190,12 @@ toward the number of players and everyone's ranks, but your name is never
 shown.
 
 **Your public profile**: opting in also makes a public profile, linked from
-your name on either leaderboard, at an address with your user id. It shows
-exactly this, and nothing more:
+your name on either leaderboard, at an address with your user id
+(`proschi.app/u/<your id>`). That address can be shared and found by search
+engines, and its link preview (the page's title, description and a picture
+card) shows your display name, how many problems you solved, your badge
+count, your current streak and your interview-ready score, all from the
+list below. The profile shows exactly this, and nothing more:
 
 - your display name, and the month you joined;
 - the problems you solved (which ones and their difficulty, never your
@@ -202,7 +211,9 @@ Your designs, your daily goal, your card reviews and when you made them, how
 many cards you reviewed, your daily challenge answers, your test runs and
 their costs, your sign-in providers and your sessions are never on it. Turning the option off hides the profile at once:
 its address then answers "not found", the same as an address no user has, so
-nobody can tell whether you have an account.
+nobody can tell whether you have an account. Its picture card stops being
+served at once too, but link previews that a chat app or social network
+already fetched are kept by them, beyond our control.
 
 ## Your controls
 
