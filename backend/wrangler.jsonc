@@ -14,9 +14,9 @@
   // `wrangler dev` would otherwise rewrite requests to the route's host, so
   // OAuth callbacks and the same-origin check would see proschi.app.
   "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
-  // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth and
-  // /s (short links, src/shares.ts) and /u (public profile pages, src/profilePage.ts) are served
-  // straight from these files, without running the Worker.
+  // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth,
+  // /s (short links, src/shares.ts) and /u (public profile pages, src/profilePage.ts)
+  // are served straight from these files, without running the Worker.
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
