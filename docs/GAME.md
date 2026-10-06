@@ -21,7 +21,11 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    and the incidents coming (a boss wave opens with its own intro). The
    forecast panel then shows the traffic curve and its peak per use case, the
    requirements in force (as Proschi lines), and the incidents coming (with
-   their tick, below difficulty 1), and this wave's **bounty**. The cat
+   their tick, below difficulty 1), and this wave's three **bounties** to
+   choose from. In Scale or Fail the peak is a **range**: the real traffic
+   lands within 12% of the forecast either way (20% on a boss), drawn from
+   the seed, so a load test, which tests the middle, is a guide and headroom
+   is a choice. From wave 5 some incidents are **unannounced**. The cat
    button in the run's header turns the briefings off.
 2. **Plan.** Place, wire, scale out (replicas), scale up (sizes S, M, L),
    shard, remove. Nothing is timed. A **load test** shows the plan at the
@@ -37,8 +41,18 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    requirements, and after a load test (or during the run) a warning on each
    line that broke. See [The code pane](#the-code-pane).
 3. **Run.** Eight ticks, each one simulated with the wave's traffic at that
-   point of the curve. Once a wave you can page the **on-call** to add a
-   replica mid-run ($200).
+   point of the curve. The **on-call** has three points of attention a wave
+   (more with cards and perks), and each action spends one, from that tick to
+   the end of the wave:
+
+   | Action | Cost | What it does |
+   |---|---|---|
+   | One more replica | $200 | On the node you tap. |
+   | Bring it back | $100 | A node an incident took down (a lost zone, a dead primary) is back. |
+   | Warm the cache | $150 | A cold cache (a stampede) is warm again. |
+   | Rate limit | 2 Trust | Turns away 15% of requests and every bot at the edge. |
+   | Switch a feature off | 3 Trust | A use case gets no traffic: no load, no revenue, no limits checked. |
+
 4. **Score and debrief.** Revenue, cost, interest, bonuses and the bounty. If anything
    broke, the debrief shows the bottleneck, the simulation's hint and the
    review cards that explain it.
@@ -82,13 +96,15 @@ the daily run offers everyone the same ones.
   tick's points (×1.1 to ×1.3), the harder the more. Deploying without a pick
   plays it straight. The pick is an action like any other, so the Worker
   replays it.
-- **Bounties.** Every wave has one optional objective: every app server
+- **Bounties.** Every wave offers three optional objectives; take one before
+  deploying, or none. Met, it pays; missed, it costs a quarter of its cash.
+  The objectives: every app server
   under 50% at the peak, a cloud bill under 40% of revenue, a wave without a
   breach, the right-sized bonus, a clean wave without the on-call or without
   a load test, a lost zone survived, a boss without a dropped request. Met, it
   pays its cash at once and its points × the act. A bounty made for the wave
-  (its incident, its boss) is four times as likely, and no bounty comes twice
-  in a row.
+  (its announced incident, its boss) is four times as likely, and the one
+  taken last wave is not offered again.
 
 ### Cash, Trust and score
 
@@ -107,9 +123,29 @@ the daily run offers everyone the same ones.
   with anything worse. The streak grows by 0.1 per clean tick up to ×3, and
   any breach resets it. A wave where every compute and store node stays under
   75% at the peak, none could lose a replica and stay there, and something
-  works above 40% earns the **right-sized** bonus (+15%). Bosses add
+  works above 40% earns the **right-sized** bonus (+15%), and in Scale or
+  Fail a tenth of the wave's bill back in cash. Bosses add
   500 × the act, and a met bounty its points × the act. A mutator multiplies
   every tick's points. The end adds Trust × 10 and cash ÷ 10.
+
+### Cards with a price, and sets
+
+Some cards bend a rule and charge for it: Kubernetes autoscales but every app
+server costs 25% more, Read replicas everywhere takes 60% more reads at 35%
+more per database, Long TTLs raise every hit ratio but cost Trust. A card's
+`downside` is a second effect against you.
+
+Three cards of one topic (caching, resilience, estimation…) make a **set**:
+every tick's points ×1.1 per set held.
+
+### Incidents that cascade
+
+An incident with `then` sets off another when it broke something badly
+(dropped or failed requests, a lost zone it could not survive), at most once
+a wave: a lost cache node comes back cold (a stampede), a stampede knocks the
+database primary over, a dead primary brings a storm of retried writes. The
+next one starts the tick after, unannounced. Handle the first (or have the
+design for it) and there is no second.
 
 ### Progression
 
@@ -374,6 +410,12 @@ ids. The `effect` is one the engine implements:
 | `reserved`, `spot` | Cost multiplier on app servers (no scaling below today's for 3 waves) or workers (they lose a replica in any incident). |
 | `trust`, `cash`, `interest`, `oncall`, `loadtest`, `streak` | Paid once, or a per-wave allowance. |
 
+A card may have a **downside**: `downside` (one of `capacity`, `latency`,
+`cost`, `cache-hit`, `edge-hit`, `trust`, `interest`) with
+`downside-target`, `downside-stat` and `downside-value`, which must work
+against the player (a multiplier above 1 on cost or latency, a negative
+Trust). Say it in `## Text`.
+
 ### Events
 
 ```markdown
@@ -404,7 +446,8 @@ that write, or `target: async` for those with background work), `bots`
 matching `target`), `failover` (a SQL database), `cache-cold` (`values` per
 tick, a share of the usual hit ratio), `latency` (multiplier), `hot-key`
 (share), `external-slow` (latency in ms; `target` an external id or none for
-all). `from` fixes the first tick; otherwise the seed picks it. `requires`
+all). `from` fixes the first tick; otherwise the seed picks it. `then` names the
+event it sets off when it caused a breach (see above). `requires`
 lists roles the board must have for the pool to draw the event. `icon` is
 required, as for cards, and unique among the events; its tile is red for an
 incident and pink for a spike. All three sections are required: they are the
@@ -515,7 +558,9 @@ and wrong designs. A run is a seed, an optional loadout and ascension, and a
 ```
 
 A play changes the board deployed last wave (`add`, `remove`, `set`, `wire`,
-`unwire`), may `loadtest`, page the `oncall` (`[{"tick": 3, "node": "api"}]`),
+`unwire`), may `loadtest`, take a `bounty` (an id, or `first`), call the
+`oncall` (`[{"tick": 3, "node": "api"}]`, or with `"act"`: `reboot`, `warm`,
+`ratelimit` or `shed` with a `useCase`),
 `reroll`, `pick` the first card on offer from a list, sign a `contract`,
 `migrate` (`[{"id": "pets", "to": "next"}]`; `to` is `next`, `rollback` or
 `big-bang`) and `sunset` legacy use cases (`["book"]`).

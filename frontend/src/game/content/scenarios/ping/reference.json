@@ -252,7 +252,7 @@
       "set": {
         "api": {
           "replicas": 12,
-          "tier": 1
+          "tier": 2
         },
         "worker": {
           "replicas": 12,

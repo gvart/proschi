@@ -143,9 +143,10 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
         {forecast.peak.map((p, i) => (
           <span key={p.key}>
             {i > 0 && ', '}
-            <strong className="sf-count">{rps(p.rps)} rps</strong> {p.name}
+            <strong className="sf-count">{forecast.spread ? `${rps(p.low)}–${rps(p.high)}` : rps(p.rps)} rps</strong> {p.name}
           </span>
         ))}
+        {forecast.spread > 0 && <span className="text-muted"> (a forecast: the real peak lands within ±{Math.round(forecast.spread * 100)}%; a load test tests the middle)</span>}
         {forecast.global > 0 && <span> · {Math.round(forecast.global * 100)}% of users far away</span>}
       </p>
       {open && forecast.requirements.length > 0 && (
@@ -161,6 +162,12 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
             </li>
           ))}
         </ul>
+      )}
+      {open && forecast.surprises && (
+        <p className="mt-2 flex items-start gap-1.5 text-sm text-muted">
+          <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
+          Not every incident is on the forecast any more: some strike unannounced, and one that breaks something can set off another. Keep some headroom and on-call attention.
+        </p>
       )}
       {open && forecast.events.length > 0 && (
         <ul className="mt-2 space-y-1 text-sm">
@@ -249,7 +256,8 @@ export interface InspectorProps {
   onUnwire: (to: string) => void;
   onRemove: () => void;
   onClose: () => void;
-  oncall?: { left: number; cost: number; onPage: () => void };
+  /** During the run: the on-call's actions on this node (more replicas, bring it back). */
+  oncall?: { label: string; disabled: boolean; onClick: () => void }[];
   /** The phone's bottom sheet: the essentials first, the reading behind a tap. */
   compact?: boolean;
 }
@@ -395,11 +403,12 @@ export function Inspector(p: InspectorProps) {
             <Trash2 size={14} aria-hidden="true" /> Remove
           </button>
         )}
-        {p.oncall && !fixed && (
-          <button type="button" className={primaryButton} disabled={p.oncall.left <= 0} onClick={p.oncall.onPage}>
-            <Zap size={14} aria-hidden="true" /> Page on-call: +1 replica ({usd(p.oncall.cost)})
-          </button>
-        )}
+        {!fixed &&
+          p.oncall?.map((a) => (
+            <button key={a.label} type="button" className={primaryButton} disabled={a.disabled} onClick={a.onClick}>
+              <Zap size={14} aria-hidden="true" /> {a.label}
+            </button>
+          ))}
       </div>
       {c &&
         (p.compact ? (
@@ -457,6 +466,7 @@ export function WaveResult({ summary, scenario, events, onContinue, children }: 
     ['Revenue', summary.revenue],
     ['Cloud bill', -summary.cost],
     ['Interest', summary.interest],
+    ...(summary.leanCash ? ([['Right-sized refund', summary.leanCash]] as [string, number][]) : []),
   ];
   const debrief = summary.debrief ? scenario.sections[`Debrief: ${summary.debrief}`] : undefined;
   return (
@@ -498,6 +508,11 @@ export function WaveResult({ summary, scenario, events, onContinue, children }: 
           </dl>
         </div>
         <div className="space-y-3 text-sm">
+          {summary.demand !== undefined && Math.abs(summary.demand - 1) >= 0.01 && (
+            <p className="text-muted">
+              Real traffic was {Math.round(Math.abs(summary.demand - 1) * 100)}% {summary.demand > 1 ? 'above' : 'below'} the forecast.
+            </p>
+          )}
           {children}
           {summary.worst && <BreachCard breach={summary.worst} count={summary.breaches.filter((b) => b.kind === summary.worst!.kind).length} during={summary.events.map((e) => events.get(e.id)).filter((d): d is EventDef => !!d)} />}
           {summary.events.map((e) => {
@@ -509,6 +524,7 @@ export function WaveResult({ summary, scenario, events, onContinue, children }: 
                   <span className="inline-flex items-center gap-1.5 align-middle">
                     <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" />
                     {def.title}
+                    {e.chained ? <span className="text-xs font-normal text-fail">set off by the incident before it</span> : e.surprise ? <span className="text-xs font-normal text-muted">unannounced</span> : null}
                   </span>
                 </summary>
                 <p className="mt-1">{def.whatHappened}</p>

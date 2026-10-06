@@ -10,6 +10,16 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Scale or Fail is less of a solved puzzle.**
+  - **Forecasts are now ranges.** The real traffic lands within 12% of the forecast (20% on a boss), so a load test tests the middle and headroom is a choice.
+  - **Some incidents come unannounced** from wave 5.
+  - **Incidents can cascade.** One that broke something badly sets off the next (at most one a wave): a lost cache node comes back cold, a stampede knocks the database over, a dead primary brings a storm of retries.
+  - **The on-call has a menu**, paid in three points of attention a wave: one more replica, bring a lost node back, warm the cache, rate-limit at the edge, or switch a feature off.
+  - **Each wave offers three bounties.** Take one or none; missing it costs a quarter of its cash.
+  - **Six new cards bend a rule for a price.** Kubernetes autoscales at 25% more per app server, and Skip staging pays $600 and costs Trust.
+  - **Three cards of one topic make a set:** points ×1.1.
+  - **A right-sized wave refunds** a tenth of its bill.
+  - New leaderboards start with this version.
 - **The Arcade teaches Proschi as you play.** The code pane opens in steps:
   in Shortly it first watches the board, lighting up the line each change
   writes, and lets you type from wave 3; in Drop, act 3 is typed only (on a

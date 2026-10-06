@@ -7,7 +7,7 @@ import { readContent, type ContentError } from './content';
 import { isIconName } from './icons';
 import { BREACH_KINDS, Game, GameError, LEARN_IDS, mutatorsFor, parseRequirements, type BreachKind, type Outcome } from './run';
 import { MAX_ASCENSION, MUTATOR_OFFER, WAVES } from './rules';
-import { BOUNTY_KINDS, EVENT_EFFECTS, LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type RunSetup, type ScenarioDef } from './types';
+import { BOUNTY_KINDS, EVENT_EFFECTS, LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type OncallAct, type RunSetup, type ScenarioDef } from './types';
 
 /**
  * `proschi game check`: everything a content change can get wrong, checked
@@ -49,7 +49,10 @@ export interface Play {
   unwire?: [string, string][];
   /** Load test the plan first. */
   loadtest?: boolean;
-  oncall?: { tick: number; node: string }[];
+  /** On-call actions during the run: `act` is replica (the default), reboot, warm, ratelimit or shed (with `useCase`). */
+  oncall?: { tick: number; node?: string; act?: OncallAct; useCase?: string }[];
+  /** A bounty id to take if it is on offer, before deploying; `first` takes the first on offer. */
+  bounty?: string;
   /** Rerolls before picking. */
   reroll?: number;
   /** Card ids to take, in order of preference; the first one on offer is taken, else none. A new card in the pool changes the offers, so list a fallback. */
@@ -128,11 +131,13 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
       if ((s.phase as string) === 'over') break;
     }
     const board = applyPlay(s.board, play);
+    const bounty = play.bounty === 'first' ? 0 : play.bounty ? s.bountyOffer.indexOf(play.bounty) : -1;
+    if (bounty >= 0 && s.bountyOffer[bounty]) game.apply({ t: 'bounty', pick: bounty });
     if (play.loadtest) game.apply({ t: 'loadtest', board });
     game.apply({ t: 'deploy', board });
     for (const o of play.oncall ?? []) {
       if (s.phase !== 'run') break;
-      game.apply({ t: 'oncall', tick: o.tick, node: o.node });
+      game.apply({ t: 'oncall', tick: o.tick, ...(o.node ? { node: o.node } : {}), ...(o.act ? { act: o.act } : {}), ...(o.useCase ? { useCase: o.useCase } : {}) });
     }
     while (s.phase === 'run') game.advance();
     if (s.phase === 'draft') {
@@ -240,6 +245,13 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     if (!ctx.topics.has(c.topic)) v(f, `Unknown topic '${c.topic}'`);
     if (!targetOk(c.target)) v(f, `Unknown target '${c.target}'`);
     if (['capacity', 'latency', 'cost', 'payload', 'hot-key', 'reserved', 'spot'].includes(c.effect) && !(c.value > 0)) v(f, `A ${c.effect} card needs a positive multiplier in "value:"`);
+    const d = c.downside;
+    if (d) {
+      if (!targetOk(d.target)) v(f, `Unknown downside target '${d.target}'`);
+      const worse = ['capacity', 'cache-hit', 'edge-hit'].includes(d.effect) ? d.value < (d.effect === 'capacity' ? 1 : 0) : d.effect === 'trust' || d.effect === 'interest' ? d.value < 0 : d.value > 1;
+      if (!worse || (d.effect === 'capacity' && !(d.value > 0))) v(f, `A downside works against you: "downside-value: ${d.value}" helps (${d.effect})`);
+      if (!/downside|but|costs|cost /i.test(c.text)) v(f, 'Say the downside in "## Text"');
+    }
   }
   for (const e of content.events) {
     const f = `events/${e.id}.md`;
@@ -250,6 +262,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     if (['traffic', 'bots', 'latency', 'hot-key', 'external-slow', 'write-surge'].includes(e.effect) && !(e.value !== undefined && e.value > 0)) v(f, `A ${e.effect} event needs a positive "value:"`);
     if (!(e.duration >= 1 && e.duration <= 8)) v(f, 'duration is 1 to 8 ticks');
     for (const c of e.counters) if (!content.cards.some((x) => x.id === c)) v(f, `Counter '${c}' is not a card`);
+    if (e.then !== undefined && (e.then === e.id || !content.events.some((x) => x.id === e.then))) v(f, `"then: ${e.then}" names another event`);
   }
 
   // Mutators and bounties.

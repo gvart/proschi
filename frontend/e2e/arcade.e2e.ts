@@ -63,6 +63,12 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
 
   await page.getByRole('button', { name: 'Deploy wave 1' }).click();
   await expect(page.getByRole('status', { name: 'Run status' })).toContainText('tick');
+  // The on-call's menu: a rate limit costs a little Trust and one of three attention.
+  const oncall = page.getByRole('group', { name: 'On-call' });
+  await expect(oncall.getByLabel('On-call attention: 3 left')).toBeVisible();
+  await oncall.getByRole('button', { name: /^Rate limit/ }).click();
+  await expect(oncall.getByLabel('On-call attention: 2 left')).toBeVisible();
+  await expect(oncall.getByRole('button', { name: 'Rate-limited' })).toBeDisabled();
   await page.getByRole('button', { name: 'Skip' }).click();
   const result = page.getByRole('dialog', { name: /Wave 1/ });
   await expect(result).toContainText('Revenue');
@@ -130,14 +136,20 @@ test('the shop sells unlocks for Blueprints', async ({ page }) => {
   await shop.getByRole('tab', { name: 'Components' }).click();
   await shop.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
-  // Take the first mutator on offer: the forecast names it, with this wave's bounty.
+  // Take the first mutator on offer: the forecast names it, with this wave's bounties to choose from.
   const mutators = page.getByRole('dialog', { name: "Pick this run's mutator" });
   const first = mutators.getByRole('listitem').first();
   const name = (await first.locator('.font-display').textContent())!;
   await first.getByRole('button').click();
   const forecast = page.getByRole('region', { name: 'Forecast' });
   await expect(forecast).toContainText(name);
+  const bounties = forecast.getByRole('group', { name: 'Bounties' });
+  await expect(bounties.getByRole('button')).toHaveCount(3);
+  await bounties.getByRole('button').first().click();
   await expect(forecast.getByLabel('Bounty')).toContainText(/Bounty: .+ Pays \$\d+ and \d+ points\./);
+  await expect(bounties).toBeHidden();
+  // The peak is a range: the forecast is an estimate.
+  await expect(forecast).toContainText('the real peak lands within ±12%');
   await expect(page.getByRole('complementary', { name: "Kernel's briefing" })).toContainText(`This run's twist is ${name}`);
   await expect(page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: 'Cache' })).toBeEnabled();
 });

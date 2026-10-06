@@ -158,6 +158,10 @@ export const CARD_EFFECTS = [
 ] as const;
 export type CardEffect = (typeof CARD_EFFECTS)[number];
 
+/** The effects a card's downside may have. */
+export const DOWNSIDE_EFFECTS = ['capacity', 'latency', 'cost', 'cache-hit', 'edge-hit', 'trust', 'interest'] as const;
+export type DownsideEffect = (typeof DOWNSIDE_EFFECTS)[number];
+
 export const RARITIES = ['common', 'uncommon', 'rare', 'legendary'] as const;
 export type Rarity = (typeof RARITIES)[number];
 
@@ -178,7 +182,9 @@ export interface CardDef {
   value: number;
   /** Blueprints to add it to the draft pool; 0 means in the pool from the start. */
   unlock: number;
-  /** Short rules text: what it does in the game. */
+  /** The price of a rule-bending card: a second effect that works against you (a dearer bill, slower nodes, less Trust). */
+  downside?: { effect: DownsideEffect; target?: string; stat?: Stat; value: number };
+  /** Short rules text: what it does in the game, downside included. */
   text: string;
   /** Markdown: why this works in real systems. */
   why: string;
@@ -214,6 +220,8 @@ export interface EventDef {
   /** Component roles the board must have for the event to be drawn from a pool. */
   requires: Role[];
   minWave: number;
+  /** An incident it sets off when it caused a breach: that event starts the tick after it ends (a cascade). */
+  then?: string;
   whatHappened: string;
   why: string;
   senior: string;
@@ -487,8 +495,14 @@ export type Action =
   | { t: 'deploy'; board: Board }
   /** Analyse a plan at the forecast peak before deploying it; costs cash unless free. */
   | { t: 'loadtest'; board: Board }
-  /** During the run: one more replica on a node from tick `tick` on (0-based, the ticks already run). */
-  | { t: 'oncall'; tick: number; node: string }
+  /**
+   * During the run, from tick `tick` on (0-based, the ticks already run): an
+   * on-call action, paid in attention. `replica` (the default) and `reboot`
+   * name a `node`; `shed` names a `useCase`.
+   */
+  | { t: 'oncall'; tick: number; node?: string; act?: OncallAct; useCase?: string }
+  /** Planning, Scale or Fail: take one of the wave's bounties on offer (index). */
+  | { t: 'bounty'; pick: number }
   /** Take one of the offered cards (index), or none for cash. */
   | { t: 'pick'; card: number | null }
   | { t: 'reroll' }
@@ -505,5 +519,9 @@ export type Action =
   | { t: 'mutator'; pick: number | null }
   | { t: 'endless' }
   | { t: 'retire' };
+
+/** What the on-call can do mid-wave (rules.ts ONCALL_ACTS): scale a node out, bring a lost node back, warm the cache, rate-limit at the edge, or switch a use case off. */
+export const ONCALL_ACT_IDS = ['replica', 'reboot', 'warm', 'ratelimit', 'shed'] as const;
+export type OncallAct = (typeof ONCALL_ACT_IDS)[number];
 
 export type Phase = 'plan' | 'run' | 'draft' | 'contract' | 'cleared' | 'over';

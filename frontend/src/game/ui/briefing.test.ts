@@ -50,12 +50,13 @@ describe("Kernel's briefing", () => {
     expect(said.lines[0]).toMatch(/Product Hunt/);
   });
 
-  it("names the run's mutator on the first wave, and every wave's bounty with its pay", () => {
+  it("names the run's mutator on the first wave, the bounties on offer, and that forecasts are estimates", () => {
     const game = playScript(content, 'shortly', { ...reference('shortly'), mutator: 'lean-seed' }, 0);
     const f = game.forecast();
     const said = briefing(game.scenario, game.waveDef(), f);
     expect(said.lines).toContain(`This run's twist is Lean seed round: ${f.mutator!.text}`);
-    expect(said.lines.some((l) => l.startsWith(`Bounty, if you want it: ${f.bounty!.text} It pays $`))).toBe(true);
+    expect(said.lines.some((l) => l.startsWith(`${f.bountyOffer.length} bounties on offer this month`))).toBe(true);
+    expect(said.lines.some((l) => l.startsWith('Forecasts are estimates: the real peak lands within 12%'))).toBe(true);
   });
 
   it('applies the ascension to the requirements it reads out', () => {

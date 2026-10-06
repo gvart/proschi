@@ -10,6 +10,7 @@ duration: 2
 telegraph: The database primary's disk is showing errors.
 counters: [fast-failover]
 requires: [db]
+then: write-surge
 min-wave: 3
 ---
 
