@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A GitHub Action**, `gvart/proschi/action@<tag>`: checks and tests the
+  `.proschi` files in a repository (errors and failing requirements as
+  annotations; the job fails on them) and, on pull requests, keeps one
+  comment up to date with a row per changed diagram (nodes, tests passed,
+  requirements met, monthly cost, worst p99) and an *Open in Proschi* link.
+  Inputs `files`, `test`, `openapi`, `comment`, `render` and `version`; it
+  needs `pull-requests: write` for the comment and skips it on forks. See
+  [the GitHub Action](docs/EDITORS.md#github-action).
+- **`proschi share-link <file>`** prints the web editor's `#code=` share link
+  for a file, with the files it imports.
+- **The VS Code extension is published to the VS Code Marketplace and Open
+  VSX** on each tooling release, with an icon and a screenshot.
 - **One daily streak for any daily practice.** The daily goal is now met by
   your cards for the day, a solved problem, the daily challenge or a
   finished Arcade run (played to the end, not just started), with freezes
@@ -254,10 +266,11 @@ deployed from `main` and ships with the same changes.
   or challenge answers
   (`GET /api/users/<id>/profile`; docs/PRIVACY.md lists exactly what is
   shown).
-- 258 practice cards for daily review, from estimation and networking to
-  consistency, streaming and probabilistic data structures: one Markdown file
+- 311 practice cards for daily review, from estimation and networking to
+  consistency, streaming, security, observability, coordination and
+  probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
-  multiple-choice, estimate or fill-in-the-gap cards in 15 topics, with a
+  multiple-choice, estimate or fill-in-the-gap cards in 18 topics, with a
   32-card sample deck. `proschi cards check` validates them (fields,
   ids that are never deleted or reused, topics, related problems, phone-sized
   text and near-duplicate cards) and `proschi cards lock` records new ids.
@@ -287,7 +300,7 @@ deployed from `main` and ships with the same changes.
   weekly recap of last week's cards, solves and goal days on the review page.
   With reduced motion set, there is no animation, just the summary.
 - A progress page on the practice page (`practice/#/progress`): a skill map
-  that scores how well you know each of the 15 topics, from the cards you
+  that scores how well you know each of the 18 topics, from the cards you
   remember, how many of them you have seen, the related problems you solved
   and, for estimation, how often your numbers land; an "interview ready"
   score; and your three weakest topics, each with a "Train this topic"

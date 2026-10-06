@@ -70,6 +70,10 @@ test "Notes are stored before they are returned" {
   `analyze` and `problem` for CI; a language server for any LSP editor; a VS
   Code extension with a diagram preview. Use case steps can also be checked
   against OpenAPI specs. See [editor support](docs/EDITORS.md).
+- **GitHub Action**: `uses: gvart/proschi/action@<tag>` checks and tests your
+  diagrams and keeps one comment on each pull request with every changed
+  diagram's tests, cost and p99, and a link that opens it in the editor. See
+  [the GitHub Action](docs/EDITORS.md#github-action).
 
 ## Links
 
@@ -84,6 +88,7 @@ test "Notes are stored before they are returned" {
 | VS Code extension (`.vsix`) | [GitHub releases](https://github.com/gvart/proschi/releases) |
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |
 | Editor support, CLI, CI | [docs/EDITORS.md](docs/EDITORS.md) |
+| GitHub Action | [`gvart/proschi/action`](docs/EDITORS.md#github-action) |
 | Contributing (problems, cards, code) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Writing practice problems | [docs/PRACTICE.md](docs/PRACTICE.md) |
 | Design: HLDs and the practice platform | [docs/design/hld-and-practice.md](docs/design/hld-and-practice.md) |

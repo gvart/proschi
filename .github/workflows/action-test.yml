@@ -1,0 +1,87 @@
+name: Action
+
+# Runs the GitHub Action in action/ against the example files in action/test,
+# with the CLI built from this commit, and once with the CLI from npm.
+
+on:
+  pull_request:
+    paths: ['action/**', 'tooling/**', 'frontend/src/dsl/**', 'frontend/src/playground/share.ts', '.github/workflows/action-test.yml']
+  push:
+    branches: [main]
+    paths: ['action/**', '.github/workflows/action-test.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  local-cli:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write # the sticky comment
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: tooling/package-lock.json
+      - name: Build the CLI
+        working-directory: tooling
+        run: |
+          npm ci
+          npm run build
+
+      - name: Passing files
+        id: pass
+        uses: ./action
+        with:
+          cli: tooling/dist/cli.cjs
+          # shop.proschi is checked against its specs through the proschi.json next to it.
+          files: |
+            action/test/*.proschi
+            tooling/test/fixtures/openapi/shop.proschi
+
+      - name: The openapi input
+        id: openapi
+        uses: ./action
+        with:
+          cli: tooling/dist/cli.cjs
+          files: tooling/test/fixtures/openapi/shop.proschi
+          openapi: orders=tooling/test/fixtures/openapi/specs/orders-api.yaml
+          comment: false
+          render: false
+
+      - name: A failing file (expected to fail)
+        id: fail
+        continue-on-error: true
+        uses: ./action
+        with:
+          cli: tooling/dist/cli.cjs
+          files: action/test/failing/**/*.proschi
+          comment: false
+          render: false
+
+      - name: Check the outcomes
+        env:
+          PASS_CHECK: ${{ steps.pass.outputs.check-failed }}
+          PASS_TEST: ${{ steps.pass.outputs.test-failed }}
+          OPENAPI_CHECK: ${{ steps.openapi.outputs.check-failed }}
+          FAIL_OUTCOME: ${{ steps.fail.outcome }}
+          FAIL_TEST: ${{ steps.fail.outputs.test-failed }}
+        run: |
+          echo "pass: check-failed=$PASS_CHECK test-failed=$PASS_TEST; fail: outcome=$FAIL_OUTCOME test-failed=$FAIL_TEST"
+          test "$PASS_CHECK" = false && test "$PASS_TEST" = false && test "$OPENAPI_CHECK" = false
+          test "$FAIL_OUTCOME" = failure && test "$FAIL_TEST" = true
+          test -s "$RUNNER_TEMP/proschi/comment.md"
+
+  npm-cli:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      # The version in tooling/package.json, or the latest release when that one is not on npm yet.
+      - uses: ./action
+        with:
+          files: action/test/url-shortener.proschi
+          comment: false
