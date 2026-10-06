@@ -264,6 +264,9 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- The editor docs install `proschi` from npm (`npm install -g proschi` or
+  `npx proschi`) and the VS Code extension from the GitHub release, instead
+  of saying the packages are not published yet.
 - On phones, the on-screen keyboard no longer covers the field you are
   typing in.
 - Diagram selection actions no longer run under the Export and load buttons
