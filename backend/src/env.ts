@@ -12,6 +12,8 @@ export interface Env {
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
   GAME_LIMITER: RateLimit;
+  /** Synced editor diagrams listed, saved or deleted, per user. */
+  DOCS_LIMITER: RateLimit;
   /** Short links created, per user. */
   SHARE_LIMITER: RateLimit;
   /** POST /api/metrics, per IP (the IP is only the limiter's key, never stored). */

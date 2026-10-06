@@ -4,6 +4,8 @@ export interface BannerMessage {
   message: string;
   tone?: 'info' | 'warning';
   action?: { label: string; run: () => void };
+  /** A second choice, e.g. the "no" of a question. */
+  secondary?: { label: string; run: () => void };
 }
 
 /** A dismissible notice under the header: long share links, backup results, links that could not be opened. */
@@ -22,6 +24,11 @@ export default function Banner({ banner, onClose }: { banner: BannerMessage; onC
           className={`rounded-md border px-2.5 py-1 text-sm font-medium ${warning ? 'border-amber-300 dark:border-amber-700 hover:bg-amber-100 dark:hover:bg-amber-900/40' : 'border-pop-blue/40 hover:bg-pop-blue/15'}`}
         >
           {banner.action.label}
+        </button>
+      )}
+      {banner.secondary && (
+        <button type="button" onClick={banner.secondary.run} className="rounded-md px-2.5 py-1 text-sm font-medium hover:bg-ink/10">
+          {banner.secondary.label}
         </button>
       )}
       <button type="button" aria-label="Dismiss" onClick={onClose} className="rounded p-1 hover:bg-ink/10">

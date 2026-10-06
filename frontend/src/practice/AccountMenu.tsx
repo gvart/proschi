@@ -1,5 +1,6 @@
 import { Check, Download, Link, LogIn, LogOut, MonitorX, Pencil, Trash2, Unlink, UserRound } from 'lucide-react';
 import Menu, { MenuItem } from '../components/Playground/Menu';
+import { removeSyncedFromBrowser, syncedInBrowser } from '../playground/localDocs';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
@@ -122,6 +123,18 @@ export default function AccountMenu({ account }: { account: Account }) {
           >
             Sign out
           </MenuItem>
+          {syncedInBrowser() > 0 && (
+            <MenuItem
+              onSelect={() => {
+                close();
+                removeSyncedFromBrowser();
+                void account.signOut();
+              }}
+              icon={<LogOut size={14} />}
+            >
+              Sign out and remove synced diagrams from this browser
+            </MenuItem>
+          )}
           <MenuItem
             onSelect={() => {
               close();

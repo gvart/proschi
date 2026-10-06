@@ -23,8 +23,8 @@
     "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*"],
     "not_found_handling": "404-page"
   },
-  // Daily: delete expired sessions, abandoned game runs and usage counts older
-  // than 400 days (src/cron.ts).
+  // Daily: delete expired sessions, abandoned game runs, usage counts older
+  // than 400 days and old diagram tombstones (src/cron.ts).
   "triggers": { "crons": ["17 3 * * *"] },
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
   // (exact URIs, comma-separated; README "Mobile apps"). Empty: app sign-in is off.
@@ -39,7 +39,7 @@
     }
   ],
   // Per minute: test runs (they run the simulation), account changes,
-  // progress uploads, card review requests, daily challenge attempts and short links per user;
+  // progress uploads, card review requests, daily challenge attempts, short links and synced diagram requests per user;
   // sign-ins, stats and usage counts (POST /api/metrics) per IP.
   "ratelimits": [
     { "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
@@ -52,7 +52,8 @@
     { "name": "CHALLENGE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } },
     { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } },
     { "name": "METRICS_LIMITER", "namespace_id": "1010", "simple": { "limit": 30, "period": 60 } },
-    { "name": "SHARE_LIMITER", "namespace_id": "1011", "simple": { "limit": 10, "period": 60 } }
+    { "name": "SHARE_LIMITER", "namespace_id": "1011", "simple": { "limit": 10, "period": 60 } },
+    { "name": "DOCS_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -87,7 +88,8 @@
         { "name": "CHALLENGE_LIMITER", "namespace_id": "2008", "simple": { "limit": 10, "period": 60 } },
         { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } },
         { "name": "METRICS_LIMITER", "namespace_id": "2010", "simple": { "limit": 30, "period": 60 } },
-        { "name": "SHARE_LIMITER", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } }
+        { "name": "SHARE_LIMITER", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } },
+        { "name": "DOCS_LIMITER", "namespace_id": "2012", "simple": { "limit": 120, "period": 60 } }
       ]
     }
   }

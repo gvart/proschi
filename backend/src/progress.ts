@@ -9,6 +9,7 @@ import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
+import { exportDocuments } from './documents';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 
@@ -108,7 +109,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game progress and short links (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game progress, short links and synced diagrams (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -208,6 +209,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     game: await exportGame(DB, user.id),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
+    // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).
+    documents: await exportDocuments(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

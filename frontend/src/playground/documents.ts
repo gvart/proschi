@@ -25,6 +25,11 @@ export interface DocumentState {
 
 export const BLANK_SOURCE = 'title "Untitled"\n\n';
 
+/** Where the editor keeps its diagrams (DocumentState), in localStorage. */
+export const DOCS_KEY = 'proschi.docs';
+/** Cloud sync's state and setting (StoredSync in sync.ts), in localStorage. */
+export const SYNC_KEY = 'proschi.docs.sync';
+
 /**
  * One saved diagram read from storage or a backup: its id and source must be
  * strings; a bad date, file name or imports map is dropped, not fatal.
