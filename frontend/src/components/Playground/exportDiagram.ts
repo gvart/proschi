@@ -1,4 +1,5 @@
 import { getRectOfNodes, type Node } from 'reactflow';
+import { track } from '../../services/metrics';
 
 const PADDING = 32;
 
@@ -11,7 +12,9 @@ export function fileNameFor(title: string | undefined, extension: string): strin
   return `${base}.${extension}`;
 }
 
+/** Every download of the editor (images, .proschi files, the backup) goes through here, so it counts as an `export`. */
 export function downloadUrl(url: string, fileName: string) {
+  track('export');
   const link = document.createElement('a');
   link.href = url;
   link.download = fileName;

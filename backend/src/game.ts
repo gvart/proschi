@@ -15,7 +15,9 @@ import {
   MetaError,
   readMeta,
   recordRun,
+  runTwists,
   scenarioOpen,
+  twistsAllowed,
   type Meta,
 } from '../../frontend/src/game/engine/meta';
 import { dailySeed } from '../../frontend/src/game/engine/rng';
@@ -147,6 +149,9 @@ export async function getGameMe(request: Request, ctx: Ctx): Promise<Response> {
  * player's progress; the scenario must be open and the ascension at most one
  * above the highest cleared. The daily run is today's scenario and seed at
  * ascension 0; starting it again answers the same run until it is submitted.
+ * Whether the run has the advanced twists comes from the stored progress too
+ * (`runTwists`: a normal run before the first Scale or Fail clear plays the
+ * basic rules; the daily run always has them), never from the request.
  */
 export async function postGameRun(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
@@ -164,7 +169,7 @@ export async function postGameRun(request: Request, ctx: Ctx): Promise<Response>
       if (existing.submitted_at !== null) throw new HttpError(409, "You played today's daily run; only the first counts");
       return json({ runId: existing.id, setup: JSON.parse(existing.setup) as RunSetup }, 200, NO_STORE);
     }
-    const setup: RunSetup = { scenario: d.scenario, seed: d.seed, ascension: 0, mode: 'daily', loadout: loadoutFor(meta, 0) };
+    const setup: RunSetup = { scenario: d.scenario, seed: d.seed, ascension: 0, mode: 'daily', loadout: loadoutFor(meta, 0), twists: runTwists(gameContent(), meta, 'daily') };
     await DB.prepare("INSERT OR IGNORE INTO game_runs (id, user_id, mode, board, day, scenario, ascension, setup, versions, started_at) VALUES (?, ?, 'daily', ?, ?, ?, 0, ?, ?, ?)")
       .bind(id, user.id, dailyBoard(d.day), d.day, d.scenario, JSON.stringify(setup), versionsOf(d.scenario), t)
       .run();
@@ -180,7 +185,7 @@ export async function postGameRun(request: Request, ctx: Ctx): Promise<Response>
   const ascension = body.ascension ?? 0;
   if (typeof ascension !== 'number' || !Number.isInteger(ascension) || ascension < 0 || ascension > MAX_ASCENSION) throw new HttpError(400, `ascension is 0 to ${MAX_ASCENSION}`);
   if (ascension > maxAscension(meta, scenario.id)) throw new HttpError(403, `Clear ascension ${ascension - 1} of ${scenario.title} first`);
-  const setup: RunSetup = { scenario: scenario.id, seed: randomSeed(), ascension, mode: 'normal', loadout: loadoutFor(meta, ascension) };
+  const setup: RunSetup = { scenario: scenario.id, seed: randomSeed(), ascension, mode: 'normal', loadout: loadoutFor(meta, ascension), twists: runTwists(gameContent(), meta, 'normal') };
   await DB.prepare("INSERT INTO game_runs (id, user_id, mode, board, scenario, ascension, setup, versions, started_at) VALUES (?, ?, 'normal', ?, ?, ?, ?, ?, ?)")
     .bind(id, user.id, scenarioBoard(scenario.id, ascension), scenario.id, ascension, JSON.stringify(setup), versionsOf(scenario.id), t)
     .run();
@@ -313,7 +318,7 @@ type SyncEvent = { t: 'run'; setup: RunSetup; actions: Action[] } | { t: 'buy'; 
  * their progress follows them: finished runs (`{t: 'run', setup, actions}`),
  * purchases (`{t: 'buy', id}`) and perks equipped (`{t: 'equip', perks}`).
  * Each run is replayed, must have been allowed by the progress at that point
- * (its loadout, scenario and ascension) and counts once; imported runs earn
+ * (its loadout, scenario, ascension and twists) and counts once; imported runs earn
  * progress but never appear on a leaderboard (their seed was the player's).
  * At most MAX_SYNC_RUNS runs a request: the answer `{meta, applied}` says how
  * many events were taken, and `error` why the next one was not.
@@ -346,7 +351,7 @@ export async function postGameSync(request: Request, ctx: Ctx): Promise<Response
           if (!open.open) throw new MetaError(open.reason);
           if (setup.ascension > maxAscension(meta, scenario.id)) throw new MetaError('That ascension was not open yet');
         }
-        const refused = setup.loadout && typeof setup.loadout === 'object' ? loadoutAllowed(meta, setup.loadout, setup.ascension) : 'A run needs its loadout';
+        const refused = (setup.loadout && typeof setup.loadout === 'object' ? loadoutAllowed(meta, setup.loadout, setup.ascension) : 'A run needs its loadout') ?? twistsAllowed(gameContent(), meta, setup);
         if (refused) throw new MetaError(refused);
         const actions = readActions(event.actions);
         const digest = await sha256(JSON.stringify([setup, actions]));

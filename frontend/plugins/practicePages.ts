@@ -7,7 +7,11 @@ import { parseInline, parseMarkdown, safeHref, slugger, type Block, type Inline 
 import { compareProblems, readProblemMd, LESSON_MD, RESERVED_IDS, type ProblemMeta } from '../src/practice/problemFiles'
 import { readingMinutes } from '../src/practice/lesson'
 import { GUIDES, type Guide } from '../src/practice/guide/guides'
+import type { Card } from '../src/learn/cards'
 import { highlightProschi, SITE_ORIGIN } from './docsSite'
+import { questionText } from './cardText'
+import { BADGE_COLORS, ogPng, type OgCard } from './ogImages'
+import { readCards } from './practiceCards'
 
 /**
  * A static page per practice problem, practice/<id>/: the statement as plain
@@ -26,7 +30,15 @@ import { highlightProschi, SITE_ORIGIN } from './docsSite'
  * template.
  */
 
-export type PageProblem = Pick<ProblemMeta, 'title' | 'summary' | 'difficulty' | 'tags' | 'company' | 'order' | 'statement'> & { id: string; lesson?: string }
+export type PageProblem = Pick<ProblemMeta, 'title' | 'summary' | 'difficulty' | 'tags' | 'company' | 'order' | 'statement'> & { id: string; lesson?: string; cards?: RelatedCard[] }
+
+/** A review card whose `related:` names the problem, linked from its page to the card's (plugins/cardPages.ts). */
+export interface RelatedCard {
+  id: string
+  topic: string
+  /** The question as plain text. */
+  question: string
+}
 
 /** A guide with its Markdown, for its static page. */
 export type PageGuide = Guide & { text: string }
@@ -34,9 +46,11 @@ export type PageGuide = Guide & { text: string }
 const TEMPLATE = 'practice/problem/index.html'
 const PLACEHOLDER = /<!--problem:(head|page)-->/g
 
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 export const problemUrl = (id: string) => `${SITE_ORIGIN}practice/${id}/`
+/** The problem's Open Graph image, drawn at build time (plugins/ogImages.ts). */
+export const problemOgPath = (id: string) => `og/practice/${id}.png`
 
 /** Every problem folder with a readable problem.md, in list order. */
 export function readProblems(problemsDir: string): PageProblem[] {
@@ -62,7 +76,15 @@ export function readGuides(guideDir: string): PageGuide[] {
   })
 }
 
-function inlineHtml(nodes: Inline[]): string {
+/**
+ * Relative links in Markdown are written from the practice page (practice/),
+ * as card files are (`../docs/numbers/`); `base` is the way from the page
+ * being written back to practice/, prefixed to them, so they still land.
+ */
+const inlineHtmlAt = (nodes: Inline[], base: string) => inlineHtml(nodes, base)
+const rebase = (href: string, base: string) => (base && !/^([a-z]+:|#|\/)/i.test(href) ? `${base}${href}` : href)
+
+export function inlineHtml(nodes: Inline[], base = ''): string {
   return nodes
     .map((n) => {
       switch (n.kind) {
@@ -71,14 +93,14 @@ function inlineHtml(nodes: Inline[]): string {
         case 'code':
           return `<code>${escapeHtml(n.text)}</code>`
         case 'strong':
-          return `<strong>${inlineHtml(n.children)}</strong>`
+          return `<strong>${inlineHtml(n.children, base)}</strong>`
         case 'em':
-          return `<em>${inlineHtml(n.children)}</em>`
+          return `<em>${inlineHtml(n.children, base)}</em>`
         case 'link': {
           const href = safeHref(n.href)
-          if (!href) return inlineHtml(n.children)
+          if (!href) return inlineHtml(n.children, base)
           const external = /^https?:/i.test(href) ? ' rel="noopener"' : ''
-          return `<a href="${escapeHtml(href)}"${external}>${inlineHtml(n.children)}</a>`
+          return `<a href="${escapeHtml(rebase(href, base))}"${external}>${inlineHtml(n.children, base)}</a>`
         }
       }
     })
@@ -92,8 +114,10 @@ const align = (a: string | undefined) => (a ? ` class="align-${a}"` : '')
  * A statement's or lesson's Markdown as HTML, from the same reader the app
  * uses: only its elements, every text escaped. `anchors` gives headings
  * their ids and a `#` link (lessons and guides; the statement's stay plain).
+ * `base` rebases relative links written from practice/ (see rebase).
  */
-export function statementHtml(blocks: Block[], { anchors = false }: { anchors?: boolean } = {}): string {
+export function statementHtml(blocks: Block[], { anchors = false, base = '' }: { anchors?: boolean; base?: string } = {}): string {
+  const inlineHtml = (nodes: Inline[]) => inlineHtmlAt(nodes, base)
   return blocks
     .map((b) => {
       switch (b.kind) {
@@ -118,7 +142,7 @@ export function statementHtml(blocks: Block[], { anchors = false }: { anchors?: 
           return `<div class="table-wrap" tabindex="0"><table>\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows.join('\n')}\n</tbody>\n</table></div>`
         }
         case 'quote':
-          return `<blockquote>\n${statementHtml(b.children, { anchors })}\n</blockquote>`
+          return `<blockquote>\n${statementHtml(b.children, { anchors, base })}\n</blockquote>`
         case 'list': {
           const tag = b.ordered ? 'ol' : 'ul'
           const items = b.items.map((item) => {
@@ -135,7 +159,7 @@ export function statementHtml(blocks: Block[], { anchors = false }: { anchors?: 
 }
 
 /** The summary as plain text: front matter may hold inline Markdown. */
-const plain = (text: string) => inlineText(parseInline(text))
+export const plain = (text: string) => inlineText(parseInline(text))
 function inlineText(nodes: Inline[]): string {
   return nodes.map((n) => ('children' in n ? inlineText(n.children) : n.text)).join('')
 }
@@ -191,8 +215,12 @@ export function headHtml(p: PageProblem): string {
     `<meta property="og:title" content="${escapeHtml(`${p.title}: system design practice`)}" />`,
     `<meta property="og:description" content="${description}" />`,
     `<meta property="og:url" content="${url}" />`,
-    `<meta property="og:image" content="${SITE_ORIGIN}og.png" />`,
+    `<meta property="og:image" content="${SITE_ORIGIN}${problemOgPath(p.id)}" />`,
+    `<meta property="og:image:width" content="1200" />`,
+    `<meta property="og:image:height" content="630" />`,
+    `<meta property="og:image:alt" content="${escapeHtml(`${p.title}, a ${p.difficulty} system design problem on Proschi`)}" />`,
     `<meta name="twitter:card" content="summary_large_image" />`,
+    `<meta name="twitter:image" content="${SITE_ORIGIN}${problemOgPath(p.id)}" />`,
     structuredData(p),
   ].join('\n    ')
 }
@@ -204,7 +232,7 @@ export function companyHtml(p: Pick<PageProblem, 'company'>): string {
   return `<span class="ps-badge ps-badge--blue" title="Based on a system ${company} published"><span class="sr-only">Based on a system published by </span>${company}</span> `
 }
 
-const DIFFICULTY_BADGE: Record<string, string> = { easy: 'ps-badge--pass', medium: 'ps-badge--yellow', hard: 'ps-badge--pink' }
+export const DIFFICULTY_BADGE: Record<string, string> = { easy: 'ps-badge--pass', medium: 'ps-badge--yellow', hard: 'ps-badge--pink' }
 
 export function pageHtml(p: PageProblem, all: PageProblem[]): string {
   const solve = `../#/${encodeURIComponent(p.id)}`
@@ -230,13 +258,27 @@ ${statementHtml(parseMarkdown(p.statement))}
 <p>You write the design as text in Proschi. Tests run in your browser: a simulation of the traffic above checks latency, availability, cost and what happens when a machine fails. <a href="../../docs/model/">How the simulation works</a>.</p>
 <p class="problem-page__cta"><a class="ps-btn ps-btn--primary" href="${solve}">Start designing <span class="ps-btn__trail" aria-hidden="true">→</span></a></p>
 </article>
-${lessonHtml(p, solve)}<section class="problem-page__more" aria-labelledby="more-title">
+${lessonHtml(p, solve)}${relatedCardsHtml(p)}<section class="problem-page__more" aria-labelledby="more-title">
 <h2 id="more-title">More system design problems</h2>
 <ul>
 ${others}
 </ul>
 </section>
 </main>`
+}
+
+/** The review cards that prepare for the problem, each linked to its page, practice/cards/<topic>/<id>/. */
+export function relatedCardsHtml(p: Pick<PageProblem, 'id' | 'cards'>): string {
+  if (!p.cards?.length) return ''
+  const items = p.cards.map((c) => `<li><a href="../cards/${encodeURIComponent(c.topic)}/${encodeURIComponent(c.id)}/">${escapeHtml(c.question)}</a></li>`).join('\n')
+  return `<section class="problem-page__more problem-page__cards" aria-labelledby="cards-title">
+<h2 id="cards-title">Review cards for this problem</h2>
+<p>Short questions on the ideas it needs, from the <a href="../cards/">review cards</a>. <a href="../#/review">Review them daily</a> so they stick.</p>
+<ul>
+${items}
+</ul>
+</section>
+`
 }
 
 /** The lesson as an article under the statement: the concepts behind the problem, for readers and search engines. */
@@ -308,12 +350,39 @@ export function fillGuideTemplate(html: string, g: PageGuide): string {
   return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? guideHeadHtml(g) : guidePageHtml(g)))
 }
 
-export function practicePages(problemsDir: string, guideDir = join(problemsDir, '..', 'guide')): Plugin {
+/** Each problem with the live review cards whose `related:` names it. */
+export function withRelatedCards(problems: PageProblem[], cards: Card[]): PageProblem[] {
+  return problems.map((p) => {
+    const related = cards.filter((c) => !c.retired && c.related.includes(p.id)).map((c) => ({ id: c.id, topic: c.topic, question: questionText(c) }))
+    return related.length ? { ...p, cards: related } : p
+  })
+}
+
+/** What the problem's Open Graph image says (plugins/ogImages.ts). */
+export function problemOgCard(p: PageProblem): OgCard {
+  return {
+    kicker: 'System design practice',
+    title: p.title,
+    tagline: plain(p.summary),
+    badges: [{ label: p.difficulty, color: BADGE_COLORS[p.difficulty] }, ...(p.company ? [{ label: p.company, color: BADGE_COLORS.blue }] : [])],
+  }
+}
+
+export interface PracticePagesOptions {
+  /** The roadmap's guides, <id>.md; by default the problems folder's sibling guide/. */
+  guideDir?: string
+  /** The review cards (docs/CARDS.md), for each problem's related cards; by default the sibling cards/. */
+  cardsDir?: string
+  /** Draw each problem's Open Graph image into the build, og/practice/<id>.png. */
+  ogImages?: boolean
+}
+
+export function practicePages(problemsDir: string, { guideDir = join(problemsDir, '..', 'guide'), cardsDir = join(problemsDir, '..', 'cards'), ogImages = false }: PracticePagesOptions = {}): Plugin {
   const problems = () => {
     const all = readProblems(problemsDir)
     const clash = all.find((p) => RESERVED_IDS.includes(p.id))
     if (clash) throw new Error(`A practice problem cannot be called "${clash.id}": the name is taken by a practice page (${RESERVED_IDS.join(', ')})`)
-    return all
+    return existsSync(cardsDir) ? withRelatedCards(all, readCards(cardsDir).cards) : all
   }
   return {
     name: 'proschi-practice-pages',
@@ -338,7 +407,7 @@ export function practicePages(problemsDir: string, guideDir = join(problemsDir, 
     generateBundle: {
       // After Vite's HTML plugin has written the template, with its assets linked.
       order: 'post',
-      handler(_, bundle) {
+      async handler(_, bundle) {
         const template = bundle[TEMPLATE] as OutputAsset | undefined
         if (!template) return
         const html = String(template.source)
@@ -346,6 +415,10 @@ export function practicePages(problemsDir: string, guideDir = join(problemsDir, 
         const all = problems()
         for (const p of all) this.emitFile({ type: 'asset', fileName: `practice/${p.id}/index.html`, source: fillTemplate(html, p, all) })
         for (const g of readGuides(guideDir)) this.emitFile({ type: 'asset', fileName: `practice/${g.id}/index.html`, source: fillGuideTemplate(html, g) })
+        if (ogImages) {
+          const images = await Promise.all(all.map((p) => ogPng(problemOgCard(p))))
+          all.forEach((p, i) => this.emitFile({ type: 'asset', fileName: problemOgPath(p.id), source: images[i] }))
+        }
       },
     },
   }

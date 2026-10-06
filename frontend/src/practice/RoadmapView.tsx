@@ -2,7 +2,7 @@ import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from '
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
+import { SIGNED_OUT_STAGES, roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
@@ -15,7 +15,7 @@ interface RoadmapProps {
   stages: RoadmapStage[];
   problems: ProblemListing[];
   progress: Progress;
-  /** roadmapAccess: anyone sees the stages; starting them takes an account. */
+  /** roadmapAccess: anyone sees the stages and works through the first; the stages after it take an account. */
   access: RoadmapAccess;
   /** The sign-in providers on offer, for `access: 'sign-in'`. */
   providers: ProviderId[];
@@ -30,8 +30,11 @@ interface RoadmapProps {
 
 /** The interview prep roadmap, the hub's first tab: stages of problems, each unlocked once every problem before it is solved. */
 export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked }: RoadmapProps) {
-  const preview = access !== 'open';
+  const checking = access === 'checking';
+  const guest = access === 'sign-in';
   const state = roadmapState(stages, progress);
+  // Signed out, the next step past the first stage waits for a sign-in.
+  const nextLocked = !!state.next && guest && state.next.stage >= SIGNED_OUT_STAGES;
   const total = state.steps.length;
   const current = stages[state.currentStage];
 
@@ -45,8 +48,15 @@ export default function Roadmap({ stages, problems, progress, access, providers,
 
       {locked && <LockedNotice title={titleOf(problems, locked.id)} lock={locked.lock} problems={problems} />}
 
-      {preview ? (
-        <SignInToStart access={access} providers={providers} onSignIn={onSignIn} total={total} stages={stages.length} />
+      {checking ? (
+        <section aria-label="Start the roadmap" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+          <p className="font-semibold text-ink">
+            {total} problems in {stages.length} stages
+          </p>
+          <p role="status" className="mt-2 text-sm text-muted">
+            Checking your sign-in…
+          </p>
+        </section>
       ) : (
         <section aria-label="Your progress" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
           <div className="flex flex-wrap items-center gap-3">
@@ -61,7 +71,9 @@ export default function Roadmap({ stages, problems, progress, access, providers,
                 </span>
               </p>
             )}
-            {state.next ? (
+            {state.next && nextLocked ? (
+              <p className="sm:ml-auto text-sm font-semibold text-ink">Stage 1 done: sign in to continue</p>
+            ) : state.next ? (
               <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton}`}>
                 {state.solved === 0 ? 'Start' : 'Continue'}: {titleOf(problems, state.next.id)}
                 <ArrowRight size={14} />
@@ -86,6 +98,8 @@ export default function Roadmap({ stages, problems, progress, access, providers,
           </div>
         </section>
       )}
+
+      {guest && <SignInToKeep providers={providers} onSignIn={onSignIn} stages={stages.length} />}
 
       {guide && (
         <a
@@ -117,8 +131,8 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             index={i}
             state={state}
             problems={problems}
-            current={!preview && i === state.currentStage && !!state.next}
-            preview={preview}
+            current={!checking && !(guest && i >= SIGNED_OUT_STAGES) && i === state.currentStage && !!state.next}
+            preview={checking || (guest && i >= SIGNED_OUT_STAGES)}
             access={access}
             lessons={lessons}
           />
@@ -143,7 +157,7 @@ function StageSection({
   state: RoadmapState;
   problems: ProblemListing[];
   current: boolean;
-  /** Not started (signed out): every problem shows, none opens, nor do their lessons. */
+  /** Not open to the viewer (while the sign-in is checked, or signed out past the first stage): every problem shows, none opens, nor do their lessons. */
   preview: boolean;
   access: RoadmapAccess;
   lessons: Record<string, number>;
@@ -230,51 +244,33 @@ function LockedNotice({ title, lock, problems }: { title: string; lock: StepLock
       <Lock size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
       <span>
         <strong>{title}</strong> is locked on the roadmap, its lesson and challenge alike.{' '}
-        {lock.kind === 'order' ? `Solve ${titleOf(problems, lock.next)} first to open it.` : 'Sign in to start the roadmap; it opens one problem at a time.'}
+        {lock.kind === 'order'
+          ? `Solve ${titleOf(problems, lock.next)} first to open it.`
+          : 'Sign in to continue past stage 1; the progress you made signed out comes with you.'}
       </span>
     </p>
   );
 }
 
-/** In place of the progress, signed out: what the roadmap holds and the sign-in buttons. */
-function SignInToStart({
-  access,
-  providers,
-  onSignIn,
-  total,
-  stages,
-}: {
-  access: RoadmapAccess;
-  providers: ProviderId[];
-  onSignIn: (provider: ProviderId) => void;
-  total: number;
-  stages: number;
-}) {
+/** Signed out, under the progress: the first stage is open, and signing in keeps the progress and opens the rest. */
+function SignInToKeep({ providers, onSignIn, stages }: { providers: ProviderId[]; onSignIn: (provider: ProviderId) => void; stages: number }) {
   return (
-    <section aria-label="Start the roadmap" className="mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-      <p className="font-semibold text-ink">
-        {total} problems in {stages} stages
+    <section aria-label="Keep your progress" className="mt-4 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md">
+      <p className="max-w-2xl text-sm text-ink/80">
+        Stage 1 is open without an account; your progress stays in this browser. Sign in (optional) to keep it on every device and to continue
+        {stages > 1 ? ` with stages 2 to ${stages}` : ''}.
       </p>
-      {access === 'checking' ? (
-        <p role="status" className="mt-2 text-sm text-muted">
-          Checking your sign-in…
-        </p>
+      {providers.length > 0 ? (
+        <div className="mt-3 flex flex-wrap gap-2">
+          {providers.map((p) => (
+            <button key={p} type="button" onClick={() => onSignIn(p)} className={primaryButton}>
+              <LogIn size={14} />
+              Sign in with {PROVIDER_LABEL[p]}
+            </button>
+          ))}
+        </div>
       ) : (
-        <>
-          <p className="mt-2 max-w-2xl text-sm text-ink/80">Sign in to start the roadmap. It opens one problem at a time and keeps your place in your account.</p>
-          {providers.length > 0 ? (
-            <div className="mt-3 flex flex-wrap gap-2">
-              {providers.map((p) => (
-                <button key={p} type="button" onClick={() => onSignIn(p)} className={primaryButton}>
-                  <LogIn size={14} />
-                  Sign in with {PROVIDER_LABEL[p]} to start
-                </button>
-              ))}
-            </div>
-          ) : (
-            <p className="mt-2 text-sm text-muted">Sign-in is not available right now; try again later.</p>
-          )}
-        </>
+        <p className="mt-2 text-sm text-muted">Sign-in is not available right now; try again later.</p>
       )}
     </section>
   );

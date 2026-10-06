@@ -157,7 +157,12 @@ export default function EditorTour(props: EditorTourProps) {
           stopPlaying();
           setMobilePane('diagram');
         },
-        body: (
+        body: hasTraffic ? (
+          <p>
+            The <Code>traffic</Code> and <Code>requirements</Code> blocks at the bottom feed a simulation of load, latency, availability and cost.{' '}
+            <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.
+          </p>
+        ) : (
           <p>
             Add <Code>traffic</Code>, <Code>requirements</Code> and <Code>test</Code> blocks and a simulation computes load, latency, availability and
             cost. <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.

@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import { practiceListings } from './plugins/practiceListings'
 import { practiceCards } from './plugins/practiceCards'
 import { practicePages } from './plugins/practicePages'
+import { cardPages } from './plugins/cardPages'
 import { siteShell } from './plugins/siteShell'
 import { docsSite } from './plugins/docsSite'
 import { sitemap } from './plugins/sitemap'
@@ -33,8 +34,10 @@ export default defineConfig(async () => ({
   plugins: [
     react(),
     practiceListings(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
-    practicePages(fileURLToPath(new URL('./src/practice/problems', import.meta.url))),
+    // ogImages: each problem's and card topic's Open Graph image, drawn at build time (plugins/ogImages.ts).
+    practicePages(fileURLToPath(new URL('./src/practice/problems', import.meta.url)), { ogImages: true }),
     practiceCards(fileURLToPath(new URL('./src/practice/cards', import.meta.url))),
+    cardPages(fileURLToPath(new URL('./src/practice/cards', import.meta.url)), fileURLToPath(new URL('./src/practice/problems', import.meta.url)), { ogImages: true }),
     // Before siteShell: the docs pages' layout goes in first, the header and footer around it.
     docsSite({
       docsDir: fileURLToPath(new URL('../docs', import.meta.url)),
@@ -65,6 +68,10 @@ export default defineConfig(async () => ({
         problemPage: fileURLToPath(new URL('./practice/problem/index.html', import.meta.url)),
         // The read-only diagram other sites frame (src/embed/main.tsx).
         embed: fileURLToPath(new URL('./embed/index.html', import.meta.url)),
+        // The review cards' index, and the templates of each topic's and card's page (plugins/cardPages.ts).
+        cardsIndex: fileURLToPath(new URL('./practice/cards/index.html', import.meta.url)),
+        cardTopicPage: fileURLToPath(new URL('./practice/cards/_topic/index.html', import.meta.url)),
+        cardPage: fileURLToPath(new URL('./practice/cards/_topic/_card/index.html', import.meta.url)),
       },
       output: { manualChunks },
     },

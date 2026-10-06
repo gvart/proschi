@@ -622,6 +622,10 @@ of path to source), so the link renders the same for someone who has none of
 the files. Those files stay attached to the diagram opened from the link and
 win over saved diagrams of the same name. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.
 
+`app/?example=<id>` opens one of the bundled examples (`hello`, `ecommerce`,
+`serverless`, `login`, `events` or `url-shortener`); the address bar then turns
+into a `#code=…` link like any other.
+
 ## Grammar
 
 A summary in EBNF. The language is line-oriented: each statement takes one

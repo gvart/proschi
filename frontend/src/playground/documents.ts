@@ -69,7 +69,7 @@ interface InitialInput {
   stored: unknown;
   /** Source from the editor before named diagrams existed. */
   legacySource: unknown;
-  /** Source from a `#code=` share link. */
+  /** Source from a `#code=` share link, or from an example link (`?example=<id>`). */
   sharedSource: string | null;
   /** Imported files carried by the share link. */
   sharedImports?: Record<string, string>;

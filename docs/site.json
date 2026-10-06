@@ -103,6 +103,7 @@
       "title": "Practice",
       "items": [
         { "href": "practice/", "label": "Solving problems" },
+        { "href": "practice/cards/", "label": "Review cards" },
         { "page": "numbers" },
         { "page": "practice-authoring", "label": "Writing problems" },
         { "page": "cards-authoring", "label": "Writing cards" },

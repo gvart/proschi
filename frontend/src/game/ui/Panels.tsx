@@ -166,7 +166,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
       {open && forecast.surprises && (
         <p className="mt-2 flex items-start gap-1.5 text-sm text-muted">
           <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
-          Not every incident is on the forecast any more: some strike unannounced, and one that breaks something can set off another. Keep some headroom and on-call attention.
+          Not every incident is on the forecast any more: some strike unannounced, and one that breaks something can set off another. Keep some headroom, and a hotfix or two in hand.
         </p>
       )}
       {open && forecast.events.length > 0 && (
@@ -209,6 +209,7 @@ export function Palette({ items, placing, onPick, onDragStart, onPointerEnd }: {
           <button
             key={def.id}
             type="button"
+            data-component={def.id}
             disabled={!available || full}
             aria-pressed={placing === def.id}
             title={available ? `${def.summary} (e.g. ${def.examples})` : `Unlock for ${def.unlock} Blueprints in the shop`}

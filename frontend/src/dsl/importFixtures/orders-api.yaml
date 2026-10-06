@@ -1,0 +1,56 @@
+openapi: 3.0.3
+info:
+  title: Orders API
+  version: 1.4.0
+  description: |
+    Places and tracks orders.
+
+    More text that is not the summary.
+servers:
+  - url: https://api.shop.example/{basePath}
+    variables:
+      basePath:
+        default: v1
+tags:
+  - name: orders
+    description: Order lifecycle
+paths:
+  /orders:
+    get:
+      summary: List orders
+      tags: [orders]
+      responses:
+        '200':
+          description: Orders
+    post:
+      summary: Place an order
+      tags: [orders]
+      responses:
+        '201':
+          description: Created
+        '400':
+          description: Invalid
+  /orders/{orderId}:
+    get:
+      operationId: getOrder
+      tags: [orders]
+      responses:
+        2XX:
+          description: The order
+        '404':
+          description: Unknown
+    delete:
+      tags: [orders]
+      responses:
+        default:
+          description: Whatever happened
+    trace:
+      responses:
+        '200':
+          description: Echo
+webhooks:
+  orderShipped:
+    post:
+      responses:
+        '200':
+          description: OK

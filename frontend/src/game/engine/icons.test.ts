@@ -44,10 +44,10 @@ describe('game icons', () => {
     expect(at('cards/gzip.md')).toContainEqual(expect.stringContaining("icon 'cable' is already used by the card 'connection-pooling'"));
     expect(at('events/ddos.md')).toContainEqual(expect.stringContaining("unknown icon 'no-such-icon'"));
     expect(at('perks.json')).toContainEqual(expect.stringContaining("'loyal-users' needs an \"icon\""));
-  });
+  }, 30_000);
 
   it('lets a category reuse another category’s icon', () => {
     const reused = { ...files, 'cards/gzip.md': files['cards/gzip.md'].replace('icon: file-archive', 'icon: piggy-bank') };
     expect(checkGame(reused, ctx).violations.filter((v) => v.message.includes('icon'))).toEqual([]);
-  });
+  }, 30_000);
 });

@@ -172,6 +172,13 @@ reviews to the API in batches (backend/README.md) and the server replays
 them into the same states. Signed out, only the `sample` deck is offered and
 nothing is saved. A card whose `version` went up is new again for everyone.
 
+Each live card also gets a static page, `practice/cards/<topic>/<id>/`,
+with its question, answer, `## Why`, related problems and a link into daily
+review, under one page per topic (`practice/cards/<topic>/`) and an index
+(`practice/cards/`), all in the sitemap (`frontend/plugins/cardPages.ts`).
+Relative links in a card, like the one to Numbers to know, are written from
+the practice page as above; the build rewrites them for these pages.
+
 The build also publishes every card as `practice/cards.json`,
 `{format: 1, hash, topics, cards}`, for apps: `hash` changes with any
 content, and `format` only when a field changes meaning.

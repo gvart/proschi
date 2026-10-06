@@ -1,0 +1,28 @@
+title "Checkout"
+
+U "Shopper"      [Actor]
+W "Web App"      [Service]
+P "Payments API" [Payment Gateway]
+D "Orders"       [Database]
+
+U -> W
+W -> P
+W -> D
+
+usecase "Checkout" {
+  U -> W : POST /checkout {"cart": "c-1"}
+  W -> P : POST /charges
+  alt "Card accepted" {
+    P --> W : 201 {"chargeId": "ch_1"}
+    par {
+      W  -> D : INSERT order
+      W ->> U : OrderConfirmed
+    }
+    W --> U : 200
+  } alt "Card declined" {
+    P --> W : 402
+    W --> U : 402 {"error": "declined"}
+  }
+  W -> D : UPDATE stock
+  W -> D : AUDIT
+}

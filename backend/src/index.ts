@@ -7,7 +7,8 @@ import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun,
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
-import { purgeExpiredSessions } from './cron';
+import { dailyCron } from './cron';
+import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
@@ -66,6 +67,8 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
+ *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
+ *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -120,6 +123,8 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if ((method === 'GET' || method === 'HEAD') && parts.length === 2 && parts[0] === 's') {
     return parts[1].endsWith('.png') ? shareImage(request, ctx, parts[1].slice(0, -'.png'.length)) : sharePage(request, ctx, parts[1]);
   }
+  if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
+  if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
   return errorResponse(404, 'Not found');
 }
 
@@ -165,6 +170,6 @@ export default {
   },
 
   async scheduled(_controller, env): Promise<void> {
-    await purgeExpiredSessions(env);
+    await dailyCron(env);
   },
 } satisfies ExportedHandler<Env>;
