@@ -26,7 +26,7 @@ describe('proschi cards check', () => {
   it("passes the repository's cards and counts them", () => {
     const r = capture(['check', repoCards]);
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^\d+ cards in 15 topics \(.*flip.*; \d+ in the sample deck\): no violations$/m);
+    expect(r.out).toMatch(/^\d+ cards in 18 topics \(.*flip.*; \d+ in the sample deck\): no violations$/m);
   });
 
   it('finds the cards folder from inside the repository', () => {
