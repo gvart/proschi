@@ -10,7 +10,8 @@ import { expect, test } from './fixtures';
 
 test('a ranked run: the server starts it, and gets the actions to replay at the end', async ({ page }) => {
   await mockSignedIn(page);
-  const setup = { scenario: 'shortly', seed: 'e2e-seed', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} } };
+  // The server decides the rules from the stored progress: this player has the twists.
+  const setup = { scenario: 'shortly', seed: 'e2e-seed', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} }, twists: true };
   let submitted: { actions: { t: string }[] } | undefined;
   await page.route('**/api/game/runs', (route) => route.fulfill({ json: { runId: 'run-1', setup } }));
   await page.route('**/api/game/runs/run-1/submit', (route) => {
@@ -19,6 +20,7 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
   });
   await page.goto('practice/#/arcade');
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
+  await page.getByRole('dialog', { name: 'New: the twists' }).getByRole('button', { name: /Let.s go/ }).click();
   // Take a mutator: the pick is the run's first action, replayed by the Worker like the rest.
   await page.getByRole('dialog', { name: "Pick this run's mutator" }).getByRole('listitem').first().getByRole('button').click();
 

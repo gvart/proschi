@@ -60,6 +60,24 @@ describe('game runs', () => {
     expect(again.body.setup.seed).not.toBe(body.setup.seed);
   });
 
+  it('plays the basic rules until the first Scale or Fail clear, from the stored progress', async () => {
+    const user = await signedInUser();
+    const first = await start(user.token, { scenario: 'shortly', twists: true });
+    expect(first.body.setup.twists).toBe(false);
+    // What the replay plays is the stored setup: no mutator on offer, whatever the client sends.
+    await age(first.body.runId);
+    const mutator = await submit(user.token, first.body.runId, [{ t: 'mutator', pick: 0 }, ...play(first.body.setup).actions]);
+    expect(mutator.status).toBe(400);
+    expect(((await mutator.json()) as { error: string }).error).toMatch(/No mutator on offer/);
+    await setMeta(user.id, { scenarios: { pawprint: { reached: 6, cleared: 0 } } });
+    expect((await start(user.token, { scenario: 'shortly' })).body.setup.twists).toBe(false);
+    await setMeta(user.id, { scenarios: { shortly: { reached: 12, cleared: 0 } } });
+    expect((await start(user.token, { scenario: 'shortly', twists: false })).body.setup.twists).toBe(true);
+    // The daily run has every twist, for everyone.
+    const fresh = await signedInUser('newcomer');
+    expect((await start(fresh.token, { mode: 'daily' })).body.setup.twists).toBe(true);
+  });
+
   it('keeps locked scenarios and ascensions closed', async () => {
     const user = await signedInUser();
     expect((await start(user.token, { scenario: 'snapshots' })).response.status).toBe(403);
@@ -174,6 +192,19 @@ describe('progress', () => {
 
     const board = (await (await call('/api/game/leaderboard?scenario=shortly&ascension=0')).json()) as { players: number };
     expect(board.players).toBe(0);
+  });
+
+  it('imports first runs under the basic rules only before the first clear', async () => {
+    const user = await signedInUser();
+    const sync = (events: unknown[]) => call('/api/game/sync', { method: 'POST', token: user.token, body: { events } });
+    const setup: RunSetup = { scenario: 'shortly', seed: 'guest-basic', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} }, twists: false };
+    expect(((await (await sync([{ t: 'run', setup, actions: play(setup).actions }])).json()) as { applied: number }).applied).toBe(1);
+    const daily = { ...setup, seed: 'guest-daily', mode: 'daily' as const };
+    expect((await (await sync([{ t: 'run', setup: daily, actions: play(daily).actions }])).json()) as { applied: number; error: string }).toMatchObject({ applied: 0, error: 'The daily run plays every twist' });
+    await setMeta(user.id, { scenarios: { shortly: { reached: 12, cleared: 0 } } });
+    const late = { ...setup, seed: 'guest-late' };
+    const refused = (await (await sync([{ t: 'run', setup: late, actions: play(late).actions }])).json()) as { applied: number; error: string };
+    expect(refused).toMatchObject({ applied: 0, error: 'The basic rules are for runs before your first clear' });
   });
 
   it('is in the export', async () => {

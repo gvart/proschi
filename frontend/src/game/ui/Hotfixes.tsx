@@ -6,12 +6,13 @@ import type { Game } from '../engine/run';
 import type { OncallAct } from '../engine/types';
 
 /**
- * The on-call's menu during a wave's run: what to do while it is on fire,
- * paid in attention (a few actions a wave), and some in cash or Trust. Node
- * actions (one more replica, bring a lost node back) are in the node's
- * settings; these act on the whole system.
+ * Hotfixes: what to do during a wave's run while it is on fire, a few a wave
+ * (the engine's `oncallLeft`), and some paid in cash or Trust. They act at
+ * once, unlike a live change. Node hotfixes (one more replica, bring a lost
+ * node back) are in the node's settings; these act on the whole system. Not
+ * to be confused with the On-call mode (Dinnerbell), whose pages are tickets.
  */
-export function OncallBar({ game, compact, onAct }: { game: Game; compact?: boolean; onAct: (act: OncallAct, useCase?: string) => void }) {
+export function HotfixBar({ game, compact, onAct }: { game: Game; compact?: boolean; onAct: (act: OncallAct, useCase?: string) => void }) {
   const s = game.state;
   const m = s.mitigation;
   const [shedding, setShedding] = useState(false);
@@ -20,10 +21,10 @@ export function OncallBar({ game, compact, onAct }: { game: Game; compact?: bool
   const price = (act: OncallAct) => [ONCALL_ACTS[act].cash ? `$${ONCALL_ACTS[act].cash}` : '', ONCALL_ACTS[act].trust ? `−${ONCALL_ACTS[act].trust} Trust` : ''].filter(Boolean).join(', ');
   const live = s.useCases.filter((k) => !s.sunset.includes(k) && m.shed[k] === undefined);
   return (
-    <div className="space-y-1.5" role="group" aria-label="On-call">
+    <div className="space-y-1.5" role="group" aria-label="Hotfixes">
       <div className="flex flex-wrap items-center gap-1.5 text-xs sm:text-sm">
-        <span className="inline-flex items-center gap-1 font-semibold" aria-label={`On-call attention: ${s.oncallLeft} left`}>
-          <Zap size={14} aria-hidden="true" /> On-call
+        <span className="inline-flex items-center gap-1 font-semibold" aria-label={`Hotfixes: ${s.oncallLeft} left`}>
+          <Zap size={14} aria-hidden="true" /> Hotfixes
           <span className="inline-flex gap-0.5" aria-hidden="true">
             {Array.from({ length: Math.max(s.oncallLeft, 0) }, (_, i) => (
               <span key={i} className="inline-block h-2.5 w-2.5 rounded-full border border-ink bg-pop-yellow" />
