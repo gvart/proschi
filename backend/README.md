@@ -19,7 +19,8 @@ instead ([Mobile apps](#mobile-apps)).
 - **Sign-in** with GitHub or Google (OAuth 2 with PKCE). A signed, ten-minute
   state cookie ties the callback to the browser that started the sign-in. No
   email address or avatar is stored, only the provider's user id and a display
-  name.
+  name (an address the user gives for [email reminders](#email-reminders) is
+  the one exception).
 - **Personal stats**: per problem the number of test runs, the last design, the
   first solve, the runs it took, and the cheapest and fastest solving designs.
   Progress already in the browser is uploaded on first sign-in.
@@ -110,7 +111,8 @@ instead ([Mobile apps](#mobile-apps)).
   out everywhere, delete the account. Display names that pass for the site or
   its staff, or contain a slur, are refused (`src/moderation.ts`).
 - **Sessions** last 30 days and slide: one used in its second half is renewed
-  for 30 more. A daily cron (03:17 UTC) deletes expired ones, game runs
+  for 30 more. The cron runs hourly (at :17) for the
+  [email reminders](#email-reminders); its 03:17 UTC run also deletes expired ones, game runs
   started over 7 days ago and never submitted, usage counts older than
   400 days and the tombstones of synced diagrams deleted more than 30 days
   ago. It keeps every card review: FSRS replays the whole history to
@@ -130,8 +132,8 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs, its short links and its synced diagrams |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl`; `documents` the synced diagrams, tombstones included |
+| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs, its short links, its synced diagrams and its email reminders' address |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl`; `documents` the synced diagrams, tombstones included; `emailReminders` the reminders' address and settings (null without one; the unsubscribe secret left out) |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves, challenges?, runs?}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, challenges, runs, goalDays, streak}}`. A day with a daily challenge sent (`challenges`) or a game run submitted (`runs`, never imported ones) meets the goal whatever the cards. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
@@ -140,6 +142,12 @@ instead ([Mobile apps](#mobile-apps)).
 | `PUT /api/me/documents/<id> {name, source, imports?, baseVersion}` | Saves a diagram (`id` is the page's, unique per user). `baseVersion` is the version the page last had, 0 for a new one: `{document}`, its version one higher. 409 `{error, document}` with the server's copy when it changed since (or was deleted: saving on top of the tombstone's version restores it). 413 past 64 KiB (source plus imports). 409 `{error: 'document_limit', message, limit, used}` for a new diagram (or restoring a deleted one) when the account already keeps `limit` |
 | `DELETE /api/me/documents/<id>?baseVersion=<n>` | Leaves a tombstone (name, source and imports cleared): `{document}`. 409 `{error, document}` when it changed since `baseVersion`; 204 for one the account does not have |
 | `DELETE /api/me/documents` | "Delete my cloud copies": every synced diagram and tombstone of the user, at once: `{deleted}` |
+| `GET /api/me/email` | Email reminders ([below](#email-reminders)): `{email, confirmed, timeZone, streak, cards, recap, paused}`, or `{email: null}` |
+| `PUT /api/me/email {email, timeZone, streak?, cards?, recap?}` | Sets the address (`timeZone` the browser's IANA zone). A new address, or the same one still unconfirmed, gets a confirmation email: `confirmationSent: true`. 503 without the `EMAIL` binding, 502 when the send fails |
+| `PATCH /api/me/email {streak?, cards?, recap?, timeZone?, resume?}` | Which reminders; `resume: true` lifts a pause. 404 without an address |
+| `DELETE /api/me/email` | Deletes the address and its settings: 204 |
+| `GET /api/email/confirm?token=` / `POST` | The confirmation link: the GET page only shows a button, which POSTs to confirm. 400 for an expired or forged token, or an address changed since |
+| `GET /api/email/unsubscribe?token=` / `POST` | The unsubscribe link: the GET page shows a button; the POST (also mail apps' one-click, RFC 8058, without a session or Origin check) deletes the address; 200 either way |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user: cookies, apps' tokens and unused app sign-in codes |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
@@ -176,7 +184,7 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/metrics/summary?days=30` | With `X-Metrics-Token: <METRICS_TOKEN>`: `{from, to, events, days: [{day, counts: {<event>: n}}], totals: {<event>: n}}`, the last `days` UTC days (1–400) newest first. 404 without the secret set or with a wrong token |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases), 10 short links, 120 synced diagram requests (`DOCS_LIMITER`) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
+changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases), 10 short links, 120 synced diagram requests (`DOCS_LIMITER`), 3 reminder confirmation emails (`EMAIL_LIMITER`) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
 requests (the daily challenge's cards and leaderboard, the per-problem leaderboards,
 oEmbed and metrics summaries included), 30 usage count requests and 10 design reviews per IP.
 
@@ -338,6 +346,69 @@ which Workers do not have.
 - **Abuse**: only stored data of a public profile is drawn, never text from
   the request, and characters outside Archivo's Latin sets (other scripts, emoji) are
   drawn as boxes. A failed render redirects to the site's `/og.png`.
+
+### Email reminders
+
+Opt-in reminder emails for signed-in users (`src/reminders.ts`; what is kept
+is in [docs/PRIVACY.md](../docs/PRIVACY.md#email-reminders)):
+
+    GET    /api/me/email                    the address and settings ({email: null} without one)
+    PUT    /api/me/email {email, timeZone, streak?, cards?, recap?}
+    PATCH  /api/me/email {streak?, cards?, recap?, timeZone?, resume?}
+    DELETE /api/me/email
+    GET    /api/email/confirm?token=        a page with a Confirm button, which POSTs here
+    GET    /api/email/unsubscribe?token=    a page with an Unsubscribe button, which POSTs here
+    POST   /api/email/unsubscribe?token=    one-click unsubscribe (RFC 8058): no session, no Origin check
+
+- **Double opt-in.** `PUT` stores the address (in `email_prefs`, migration
+  0013) with the browser's IANA time zone and emails a confirmation link: a
+  token signed with `SESSION_SECRET` (a key of its own), naming the user and
+  the address, valid two days. Only `POST /api/email/confirm` confirms, and
+  only while the address is still the one the token names; the GET pages
+  change nothing, since mail scanners open links. Confirmation emails are
+  rate limited by `EMAIL_LIMITER` (3 a minute per user).
+- **When.** The cron runs hourly at :17 (`triggers` in `wrangler.jsonc`). It
+  first reads the distinct time zones of confirmed, unpaused rows and keeps
+  those where it is now 19:xx (or 09:xx on a Monday); with none, the run ends
+  after that one query. The matching users are read 100 at a time; each page
+  gets one D1 batch for cards due and the latest practice, and only users
+  with the streak reminder or the recap on have their activity loaded (the
+  same `loadActivity`, `computeStreak` and `weeklyRecap` as
+  `GET /api/me/activity`). At most 500 emails a run.
+- **What.** 19:xx local: *streak at risk* (current streak at least 1 and
+  today's goal not met), else *cards due* (at least 5 cards with `due_at`
+  passed in `card_state`). Monday 09:xx local: the *weekly recap* of last week
+  (skipped when it is empty).
+- **Caps.** At most one email per user per local day, whatever the kind
+  (`last_sent_day`). A reminder sent with no practice (card review, test run,
+  challenge, game run) since the previous one counts as ignored; the third in
+  a row says reminders are paused and sets `paused_at`. `PATCH {resume: true}`
+  (the account page's button) clears it.
+- **Every reminder** has a plain-text and an HTML part, `List-Unsubscribe:
+  <https://proschi.app/api/email/unsubscribe?token=…>` and
+  `List-Unsubscribe-Post: List-Unsubscribe=One-Click`, and a footer saying why
+  it was sent, with links to the account page and to unsubscribe.
+  Unsubscribing deletes the row. Links point at `https://proschi.app`
+  (`staging.proschi.app` on staging).
+- **Sending** goes through one adapter, `src/email.ts` (`sendEmail`), over
+  the `send_email` binding `EMAIL` of Cloudflare Email Service, from
+  `Proschi <reminders@proschi.app>`. Without the binding, `PUT` answers 503.
+  The run counts what it sent as the `email_reminder_sent` usage count.
+
+**Owner setup** (once):
+
+1. Cloudflare dashboard → Email Service (Compute & AI → Email Service, or the
+   zone's Email → Email Sending): onboard the sending domain `proschi.app`
+   and add the DNS records it lists (SPF, DKIM and the return-path/bounce
+   records) to the zone; wait until the domain shows as verified.
+2. Allow the sender `reminders@proschi.app` there if the dashboard asks for
+   sender addresses. The binding in `wrangler.jsonc` is restricted to it
+   (`allowed_sender_addresses`).
+3. Deploy as usual: the push to `main` applies migration 0013 and deploys the
+   hourly cron and the `EMAIL` binding. `SESSION_SECRET` must be set (it is,
+   for sign-in).
+4. Check: on `#/me`, enter your address, follow the confirmation link, and
+   watch the Worker's logs (`Sent reminders`) at your next local 19:17.
 
 ## Mobile apps
 
@@ -531,7 +602,8 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1011 in production and 2001–2011 in staging (1010/2010 is METRICS_LIMITER).
+1001–1013 in production and 2001–2013 in staging (1010/2010 is METRICS_LIMITER,
+1012/2012 DOCS_LIMITER, 1013/2013 EMAIL_LIMITER).
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.

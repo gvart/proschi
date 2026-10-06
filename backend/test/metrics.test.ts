@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { MAX_METRIC_BATCH } from '../../frontend/src/services/metricsEvents';
 import type { Env } from '../src/env';
 import worker from '../src/index';
-import { call, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
+import { call, dailyRun, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 const TOKEN = 'test-metrics-token-0123456789';
 const today = () => new Date().toISOString().slice(0, 10);
@@ -131,7 +131,7 @@ describe('retention', () => {
       env.DB.prepare("INSERT INTO daily_counts VALUES (?, 'export', 1)").bind(daysAgo(401)),
       env.DB.prepare("INSERT INTO daily_counts VALUES (?, 'export', 2)").bind(daysAgo(399)),
     ]);
-    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    await worker.scheduled(createScheduledController({ cron: '17 * * * *', scheduledTime: dailyRun() }), env);
     const { results } = await env.DB.prepare('SELECT day FROM daily_counts').all<{ day: string }>();
     expect(results).toEqual([{ day: daysAgo(399) }]);
   });

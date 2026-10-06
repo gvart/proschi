@@ -20,20 +20,23 @@ export const METRIC_EVENTS = [
   'arcade_run_start',
   'arcade_run_end',
   'sign_in',
+  'email_opt_in',
+  'email_reminder_sent',
 ] as const;
 
 export type MetricEvent = (typeof METRIC_EVENTS)[number];
 
 /**
  * Counted by the Worker itself, never sent by a page: a sign-in (the OAuth
- * callback). `problem_solve` is both: the Worker counts a signed-in user's
+ * callback) and the reminder emails the hourly cron sent (one count per run,
+ * backend/src/reminders.ts). `problem_solve` is both: the Worker counts a signed-in user's
  * first verified solve, and the page sends it only when signed out or on a
  * copy without accounts, so a solve counts once.
  */
-export const SERVER_ONLY_EVENTS: readonly MetricEvent[] = ['sign_in'];
+export const SERVER_ONLY_EVENTS: readonly MetricEvent[] = ['sign_in', 'email_reminder_sent'];
 
 /** The events a page may send. */
-export type ClientMetricEvent = Exclude<MetricEvent, 'sign_in'>;
+export type ClientMetricEvent = Exclude<MetricEvent, 'sign_in' | 'email_reminder_sent'>;
 
 /** At most this many events in one POST /api/metrics. */
 export const MAX_METRIC_BATCH = 20;

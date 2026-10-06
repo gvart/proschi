@@ -3,7 +3,7 @@ import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { FREE_DOCUMENT_LIMIT, MAX_DOCUMENT, TOMBSTONE_TTL_MS, type CloudDocument } from '../src/documents';
 import worker from '../src/index';
-import { call, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
+import { call, dailyRun, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 /** Cloud sync of the editor's diagrams: /api/me/documents. */
 
@@ -154,7 +154,7 @@ describe('synced documents', () => {
     await call('/api/me/documents/old', { method: 'DELETE', token });
     await call('/api/me/documents/recent', { method: 'DELETE', token });
     await env.DB.prepare("UPDATE documents SET deleted_at = ? WHERE id = 'old'").bind(Date.now() - TOMBSTONE_TTL_MS - 1000).run();
-    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    await worker.scheduled(createScheduledController({ cron: '17 * * * *', scheduledTime: dailyRun() }), env);
     const left = await env.DB.prepare('SELECT id FROM documents WHERE user_id = ? ORDER BY id').bind(id).all<{ id: string }>();
     expect(left.results.map((r) => r.id)).toEqual(['live', 'recent']);
   });

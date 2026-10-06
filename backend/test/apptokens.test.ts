@@ -6,7 +6,7 @@ import { SESSION_COOKIE } from '../src/auth';
 import { randomToken, sha256, timingSafeEqual } from '../src/crypto';
 import type { Env } from '../src/env';
 import worker from '../src/index';
-import { call, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
+import { call, dailyRun, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 const APP_URI = 'proschi://auth';
 const nowSeconds = () => Math.floor(Date.now() / 1000);
@@ -380,7 +380,7 @@ describe('app tokens', () => {
       env.DB.prepare('UPDATE sessions SET expires_at = ?').bind(nowSeconds() - 1),
       env.DB.prepare('UPDATE app_auth_codes SET expires_at = ?').bind(nowSeconds() - 1),
     ]);
-    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    await worker.scheduled(createScheduledController({ cron: '17 * * * *', scheduledTime: dailyRun() }), env);
     expect(await count('SELECT COUNT(*) AS n FROM sessions')).toBe(0);
     expect(await count('SELECT COUNT(*) AS n FROM app_auth_codes')).toBe(0);
   });

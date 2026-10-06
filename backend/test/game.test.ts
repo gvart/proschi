@@ -8,7 +8,7 @@ import type { Action, RunSetup } from '../../frontend/src/game/engine/types';
 import { ABANDONED_RUN_SECONDS, pruneAbandonedGameRuns } from '../src/cron';
 import { gameContent } from '../src/game';
 import worker from '../src/index';
-import { call, resetDatabase, signedInUser } from './helpers';
+import { call, dailyRun, resetDatabase, signedInUser } from './helpers';
 
 /**
  * Scale or Fail on the server: runs are started by the server, replayed from
@@ -239,7 +239,7 @@ describe('the daily cron', () => {
     await age(played.runId, 30 * 86_400);
     expect((await runIds(user.id)).length).toBe(5);
 
-    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    await worker.scheduled(createScheduledController({ cron: '17 * * * *', scheduledTime: dailyRun() }), env);
     expect(await runIds(user.id)).toEqual([fresh, recent, played.runId].sort());
     expect(await pruneAbandonedGameRuns(env)).toBe(0);
   });

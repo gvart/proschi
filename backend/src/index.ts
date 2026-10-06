@@ -7,7 +7,7 @@ import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun,
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
-import { dailyCron } from './cron';
+import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, listDocuments, putDocument } from './documents';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
@@ -15,6 +15,7 @@ import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders }
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { reviewDesign } from './review';
+import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
@@ -38,6 +39,12 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
  *   DELETE /api/me
  *   GET    /api/me/export                   everything stored about the user, as a download
  *   GET    /api/me/activity?day=YYYY-MM-DD  daily goal, streak, weekly recap and each day's activity
+ *   GET    /api/me/email                    email reminders: the address and settings ({email: null} without one)
+ *   PUT    /api/me/email {email, timeZone, streak?, cards?, recap?}   sets the address (a new one gets a confirmation email)
+ *   PATCH  /api/me/email {streak?, cards?, recap?, timeZone?, resume?}   which reminders; resume: true after a pause
+ *   DELETE /api/me/email                    removes the address
+ *   GET    /api/email/confirm?token=        the confirmation link's page; POST confirms
+ *   GET    /api/email/unsubscribe?token=    the unsubscribe link's page; POST unsubscribes (one-click, RFC 8058, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
@@ -85,10 +92,12 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
   const { env } = ctx;
-  assertSameOrigin(request);
   const method = request.method;
   const parts = pathname.split('/').filter(Boolean);
   const is = (m: string, ...path: string[]) => method === m && parts.length === path.length && path.every((p, i) => p === '*' || p === parts[i]);
+  // Mail clients send one-click unsubscribes (RFC 8058) from their own servers, with no session; the link's token is the only credential.
+  if (is('POST', 'api', 'email', 'unsubscribe')) return unsubscribe(request, ctx);
+  assertSameOrigin(request);
 
   if (is('GET', 'auth', 'providers')) return json({ providers: configuredProviders(env) }, 200, { 'Cache-Control': 'public, max-age=300' });
   if ((is('GET', 'auth', '*', 'start') || is('GET', 'auth', '*', 'callback')) && isProvider(parts[1])) {
@@ -103,6 +112,13 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('DELETE', 'api', 'me')) return deleteMe(request, ctx);
   if (is('GET', 'api', 'me', 'export')) return exportMe(request, ctx);
   if (is('GET', 'api', 'me', 'activity')) return getActivity(request, ctx);
+  if (is('GET', 'api', 'me', 'email')) return getEmailPrefs(request, ctx);
+  if (is('PUT', 'api', 'me', 'email')) return putEmail(request, ctx);
+  if (is('PATCH', 'api', 'me', 'email')) return patchEmail(request, ctx);
+  if (is('DELETE', 'api', 'me', 'email')) return deleteEmail(request, ctx);
+  if (is('GET', 'api', 'email', 'confirm')) return confirmPage(request, ctx);
+  if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
+  if (is('GET', 'api', 'email', 'unsubscribe')) return unsubscribePage(request, ctx);
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
@@ -197,7 +213,7 @@ export default {
     return withSecurityHeaders(response, ctx);
   },
 
-  async scheduled(_controller, env): Promise<void> {
-    await dailyCron(env);
+  async scheduled(controller, env): Promise<void> {
+    await hourlyCron(env, controller.scheduledTime);
   },
 } satisfies ExportedHandler<Env>;
