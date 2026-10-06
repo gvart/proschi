@@ -20,6 +20,13 @@ deployed from `main` and ships with the same changes.
   every twist, for everyone. The server decides the rules from your stored
   progress, so ranked runs replay exactly. New leaderboards start with this
   version.
+- **Anonymous usage counts.** proschi.app now counts, per day, how often a
+  few things happen (the editor opened, a first edit, tests run, a problem
+  solved, a sign-in, …) to see where people get stuck. Only the event's name
+  is sent, and the server keeps one number per day and event: no user id,
+  IP address, cookie or page address, kept for 400 days. Nothing is sent when
+  the browser asks not to be tracked (Do Not Track or Global Privacy
+  Control). The privacy page lists every count.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live
@@ -276,6 +283,9 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- The editor docs install `proschi` from npm (`npm install -g proschi` or
+  `npx proschi`) and the VS Code extension from the GitHub release, instead
+  of saying the packages are not published yet.
 - On phones, the on-screen keyboard no longer covers the field you are
   typing in.
 - Diagram selection actions no longer run under the Export and load buttons

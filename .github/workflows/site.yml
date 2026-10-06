@@ -11,9 +11,12 @@ on:
 permissions:
   contents: read
 
+# A newer push cancels a pull request's run, but never a run on main: that
+# could stop a production deploy between the D1 migration and the Worker
+# deploy. Runs on main queue instead.
 concurrency:
   group: site-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 jobs:
   # Whether to deploy to Cloudflare: when the CLOUDFLARE_API_TOKEN and
@@ -181,13 +184,33 @@ jobs:
           echo "  cd backend && npx wrangler rollback"
           echo "  and, only if the migration broke the data: npx wrangler d1 time-travel restore proschi --bookmark=$BOOKMARK"
 
-  # GitHub Pages (gvart.github.io/proschi/): the site itself until it is on
-  # Cloudflare; after that, pages-redirect/, which sends every old URL (with
-  # its #code= share fragment) to the same path on proschi.app.
-  pages:
-    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !cancelled() && (needs.cloudflare.result == 'success' || (needs.cloudflare.result == 'skipped' && needs.config.outputs.cloudflare != 'true' && needs.build.result == 'success' && needs.e2e.result == 'success'))
-    needs: [config, build, e2e, cloudflare]
+  # The pages-redirect/ artifact for GitHub Pages, once the site is on
+  # Cloudflare. Uploaded in its own job, not right before deploy-pages: the
+  # artifact list can lag a just-finalized upload, and deploy-pages then fails
+  # with "No artifacts named github-pages".
+  pages-artifact:
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && needs.config.outputs.cloudflare == 'true'
+    needs: config
     runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: pages-redirect
+
+  # GitHub Pages (gvart.github.io/proschi/): the site itself until it is on
+  # Cloudflare (the artifact from build); after that, pages-redirect/ (the
+  # artifact from pages-artifact), which sends every old URL (with its #code=
+  # share fragment) to the same path on proschi.app. It runs after production
+  # and never fails the run: the old URL must not hold up or mark a deploy.
+  pages:
+    if: >-
+      github.ref == 'refs/heads/main' && github.event_name != 'pull_request' && !cancelled() &&
+      ((needs.cloudflare.result == 'success' && needs.pages-artifact.result == 'success') ||
+      (needs.cloudflare.result == 'skipped' && needs.config.outputs.cloudflare != 'true' && needs.build.result == 'success' && needs.e2e.result == 'success'))
+    needs: [config, build, e2e, cloudflare, pages-artifact]
+    runs-on: ubuntu-latest
+    continue-on-error: true
     permissions:
       pages: write
       id-token: write
@@ -195,11 +218,5 @@ jobs:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - uses: actions/checkout@v7
-        if: needs.config.outputs.cloudflare == 'true'
-      - uses: actions/upload-pages-artifact@v5
-        if: needs.config.outputs.cloudflare == 'true'
-        with:
-          path: pages-redirect
       - id: deployment
         uses: actions/deploy-pages@v5

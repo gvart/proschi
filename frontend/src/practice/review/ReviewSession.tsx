@@ -9,6 +9,7 @@ import { TYPE_LABEL } from './labels';
 import Markdown, { InlineMarkdown } from '../Markdown';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { prefersReducedMotion } from '../../design/motion';
+import { track } from '../../services/metrics';
 
 /** One answered card of a session, for the summary. */
 export interface SessionResult {
@@ -37,8 +38,10 @@ export default function ReviewSession({ items, states, topics, onReview, onDone,
     onReview(item.card, rating, durationMs);
     const next = [...results, { cardId: item.card.id, rating }];
     setResults(next);
-    if (index + 1 >= items.length) onDone(next);
-    else setIndex(index + 1);
+    if (index + 1 >= items.length) {
+      track('card_review_session');
+      onDone(next);
+    } else setIndex(index + 1);
   };
 
   if (!item) return null;

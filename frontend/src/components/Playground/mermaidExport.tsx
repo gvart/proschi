@@ -1,5 +1,6 @@
 import type { Diagram } from '../../dsl';
 import { toMermaidArchitecture, toMermaidSequence } from '../../dsl/mermaid';
+import { track } from '../../services/metrics';
 import { MenuItem } from './Menu';
 
 /** What the "Copy Mermaid" items export: the diagram and the selected use case scenario, if any. */
@@ -10,6 +11,7 @@ export interface MermaidSource {
 }
 
 async function copy(text: string) {
+  track('export');
   try {
     await navigator.clipboard.writeText(text);
   } catch {

@@ -47,6 +47,21 @@ describe('progress', () => {
     expect(me.progress[ID]).toMatchObject({ status: 'solved', runs: 4, runsToSolve: 3, source: problem.starter });
   });
 
+  it('counts a first verified solve once as a usage metric, never an imported one', async () => {
+    const solves = async () => (await env.DB.prepare("SELECT COALESCE(SUM(count), 0) AS n FROM daily_counts WHERE event = 'problem_solve'").first<{ n: number }>())!.n;
+    const { token } = await signedInUser();
+    await run(token, { source: problem.starter, solved: true });
+    expect(await solves()).toBe(0);
+    await run(token, { source: problem.solution, solved: true });
+    await run(token, { source: problem.solution, solved: true });
+    expect(await solves()).toBe(1);
+
+    const other = await signedInUser();
+    await run(other.token, { source: problem.solution, solved: true, imported: true });
+    await run(other.token, { source: problem.solution, solved: true });
+    expect(await solves()).toBe(1);
+  });
+
   it('keeps the cheapest and the fastest solving designs', async () => {
     const { token } = await signedInUser();
     const first = (await (await run(token, { source: problem.solution, solved: true })).json()) as Record<string, any>;
