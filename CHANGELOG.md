@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A GitHub Action**, `gvart/proschi/action@<tag>`: checks and tests the
+  `.proschi` files in a repository (errors and failing requirements as
+  annotations; the job fails on them) and, on pull requests, keeps one
+  comment up to date with a row per changed diagram (nodes, tests passed,
+  requirements met, monthly cost, worst p99) and an *Open in Proschi* link.
+  Inputs `files`, `test`, `openapi`, `comment`, `render` and `version`; it
+  needs `pull-requests: write` for the comment and skips it on forks. See
+  [the GitHub Action](docs/EDITORS.md#github-action).
+- **`proschi share-link <file>`** prints the web editor's `#code=` share link
+  for a file, with the files it imports.
+- **The VS Code extension is published to the VS Code Marketplace and Open
+  VSX** on each tooling release, with an icon and a screenshot.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

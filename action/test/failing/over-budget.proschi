@@ -1,0 +1,30 @@
+# Fails on purpose: the self-test (.github/workflows/action-test.yml) checks
+# that the action reports it and fails the job.
+title "Over budget"
+
+client [Browser]
+api    [REST API]
+db     [PostgreSQL]
+
+client -> api
+api    -> db
+
+usecase "Read" {
+  client -> api    : GET /items
+  api    -> db     : SELECT * FROM items
+  db    --> api    : rows
+  api   --> client : 200
+}
+
+traffic {
+  "Read" 20k rps
+}
+
+requirements {
+  p99 < 5ms
+  cost <= 10 usd/month
+}
+
+test "Reads are cached" {
+  "Read" calls any cache
+}

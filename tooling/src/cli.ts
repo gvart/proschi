@@ -6,7 +6,8 @@
  * `proschi problem check|new` validates and scaffolds practice problems (see problem.ts);
  * `proschi cards check|lock` validates the practice cards (see cards.ts);
  * `proschi achievements check|lock` validates the practice achievements (see achievements.ts);
- * `proschi game check|lock|sim` validates and plays the Scale or Fail content (see game.ts).
+ * `proschi game check|lock|sim` validates and plays the Scale or Fail content (see game.ts);
+ * `proschi share-link` prints a web editor link for a file (see share.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -20,6 +21,7 @@ import { PROBLEM_HELP, PROBLEM_USAGE, runProblem } from './problem';
 import { CARDS_HELP, CARDS_USAGE, runCards } from './cards';
 import { ACHIEVEMENTS_HELP, ACHIEVEMENTS_USAGE, runAchievements } from './achievements';
 import { GAME_HELP, GAME_USAGE, runGame } from './game';
+import { SHARE_HELP, SHARE_USAGE, runShareLink } from './share';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -34,6 +36,7 @@ ${PROBLEM_USAGE}
 ${CARDS_USAGE}
 ${ACHIEVEMENTS_USAGE}
 ${GAME_USAGE}
+${SHARE_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
@@ -50,7 +53,8 @@ ${SIM_HELP}
 ${PROBLEM_HELP}
 ${CARDS_HELP}
 ${ACHIEVEMENTS_HELP}
-${GAME_HELP}`;
+${GAME_HELP}
+${SHARE_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -126,6 +130,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
   if (command === 'cards') return runCards(rest, out, err);
   if (command === 'achievements') return runAchievements(rest, out, err);
   if (command === 'game') return runGame(rest, out, err);
+  if (command === 'share-link') return runShareLink(rest, out, err);
 
   if (command === 'check') {
     let strict = false;

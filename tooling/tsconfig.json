@@ -14,7 +14,7 @@
     "noFallthroughCasesInSwitch": true,
     "resolveJsonModule": true,
     "jsx": "react-jsx",
-    // The renderer pulls frontend files (layout, icons) that import these; resolve
+    // The renderer (and share-link) pull frontend files (layout, icons, share links) that import these; resolve
     // them from tooling/node_modules so the tooling builds without frontend/node_modules.
     "paths": {
       "elkjs/*": ["./node_modules/elkjs/*"],
@@ -22,7 +22,8 @@
       "react/*": ["./node_modules/@types/react/*"],
       "react-dom/*": ["./node_modules/@types/react-dom/*"],
       "react-icons/*": ["./node_modules/react-icons/*"],
-      "lucide-react": ["./node_modules/lucide-react"]
+      "lucide-react": ["./node_modules/lucide-react"],
+      "lz-string": ["./node_modules/lz-string"]
     }
   },
   "include": ["src", "test", "vscode/src", "build.mjs", "vitest.config.ts"]

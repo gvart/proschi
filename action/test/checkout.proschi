@@ -1,0 +1,53 @@
+title "E-Commerce Platform"
+
+group vpc "AWS VPC" {
+  gateway "API Gateway"   [AWS API Gateway] @Platform
+  orders  "Order Service" [REST API]        @Orders   "Handles order processing"
+  users   "User Service"  [GraphQL]         @Platform
+}
+ordersDb "Orders DB"   [PostgreSQL] @Orders
+usersDb  "Users DB"    [PostgreSQL] @Platform
+events   "OrderEvents" [Kafka]      @Platform
+
+gateway -> orders   : HTTP
+gateway -> users    : GraphQL
+orders  -> users    : GraphQL
+orders  -> ordersDb : SQL
+users   -> usersDb  : SQL
+orders  -> events   : Publish
+
+# One use case, three scenarios: alt branches share the steps before them.
+usecase "Create order" "Complete flow for creating a new order" {
+  gateway -> orders : POST /api/orders json {
+    "userId": "user123",
+    "items": [{ "productId": "prod-1", "quantity": 2 }]
+  }
+  orders -> users : GET /api/users/user123
+
+  alt "Created" {
+    users --> orders : 200 {"verified": true}
+    par {
+      orders  -> ordersDb : INSERT order
+      orders ->> events   : OrderCreated {"orderId": "order-789"}
+    }
+    orders --> gateway : 201 {"orderId": "order-789", "status": "pending"}
+  } alt "Unknown user" {
+    users  --> orders  : 404
+    orders --> gateway : 422 {"error": "unknown_user"}
+  } alt "Database down" {
+    users  --> orders   : 200 {"verified": true}
+    orders  -x ordersDb : INSERT order # -x: the call never gets an answer
+    orders --> gateway  : 503 {"error": "try_again_later"}
+  }
+}
+
+usecase "Get order" {
+  gateway -> orders   : GET /api/orders/order-789
+  orders  -> ordersDb : SELECT order
+
+  alt "Found" {
+    orders --> gateway : 200 {"orderId": "order-789", "status": "pending"}
+  } alt "Not found" {
+    orders --> gateway : 404 {"error": "not_found"}
+  }
+}

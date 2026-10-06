@@ -26,8 +26,14 @@ On a phone, creating a GitHub release with that new tag (*Releases → Draft a
 new release*) does the same, and so does running the workflow by hand on
 `main` (*Actions → Release tooling → Run workflow*), which tags the version in
 `tooling/package.json`. The *Release tooling* workflow tests, publishes
-`proschi` to npm through Trusted Publishing (no token in the repository), and
-attaches the `.vsix` to the GitHub release, creating the release if needed.
+`proschi` to npm through Trusted Publishing (no token in the repository),
+attaches the `.vsix` to the GitHub release, creating the release if needed,
+and publishes the extension to the VS Code Marketplace and Open VSX. Those two
+need the repository secrets `VSCE_PAT` (an Azure DevOps token with the
+Marketplace *Manage* scope for the publisher `gvart`) and `OVSX_PAT` (an
+Open VSX access token, with the namespace `gvart` created once); while a
+secret is missing, its step is skipped with a notice. The tag also pins the
+[GitHub Action](#github-action).
 
 ## Install
 
@@ -131,6 +137,86 @@ warning) and 2 on bad usage. `--format json` prints machine-readable results.
 To keep files in the canonical layout, add `proschi fmt --check docs/` (see
 [Formatting](#formatting)). To hold designs to their requirements, add
 `proschi test --format github docs/` (see [Simulation and tests](#simulation-and-tests)).
+
+### GitHub Action
+
+`gvart/proschi/action` checks and tests the diagrams in a repository and, on
+pull requests, keeps one comment up to date with what the changed diagrams
+look like now:
+
+```yaml
+# .github/workflows/proschi.yml
+name: Proschi
+on:
+  pull_request:
+    paths: ['**/*.proschi', '.github/workflows/proschi.yml']
+  push:
+    branches: [main]
+    paths: ['**/*.proschi']
+
+permissions:
+  contents: read
+  pull-requests: write # the comment; leave it out (or set comment: false) for none
+
+jobs:
+  proschi:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: gvart/proschi/action@tooling-v0.9.0
+        with:
+          files: docs/**/*.proschi   # default **/*.proschi
+```
+
+It runs `proschi check --format github` and `proschi test --format github`
+on the matched files, so errors and failing requirements show up as
+annotations on their lines, and fails the job when a file has an error or a
+requirement or test fails. Warnings never fail it.
+
+On a pull request it posts one comment (found again by a hidden marker and
+edited on every push, never duplicated) with a row per changed `.proschi`
+file: nodes, tests passed, requirements met, the monthly cost and the worst
+p99 latency from `proschi analyze` (for documents with traffic), and an
+*Open in Proschi* link that opens the file, with the files it imports, in the
+web editor. The link is the same `#code=` link the editor's *Share* button
+copies (`proschi share-link <file>` prints it); nothing is uploaded. Below the
+table come the failing requirements and tests, and each diagram as Mermaid.
+The same summary goes to the job summary on every run, and the SVGs
+(architecture and one per scenario) to a workflow artifact.
+
+| Input | Default | |
+|---|---|---|
+| `files` | `**/*.proschi` | Globs, one per line or comma-separated; `!` excludes. Dot directories and `node_modules` are skipped |
+| `test` | `true` | Also run requirements and tests (`proschi test`) |
+| `openapi` | | `node=path/to/spec.yaml` per line, like `check --openapi` (a `proschi.json` next to the files works too, see [Checking against OpenAPI](#checking-against-openapi)) |
+| `comment` | `true` | Comment on pull requests |
+| `render` | `true` | Upload the changed diagrams as SVGs |
+| `version` | the release of the tag | The `proschi` npm version to run, e.g. `0.9.0` or `latest` |
+| `token` | `github.token` | The token for the comment |
+
+Outputs: `check-failed` and `test-failed` (`true`/`false`) and
+`artifact-url`.
+
+Permissions: the comment needs `pull-requests: write` on the job's
+`GITHUB_TOKEN`. Without it, and on pull requests from forks (whose token is
+always read-only), the action skips the comment with a notice and the summary
+stays in the job summary; the checks still run. It never pushes to the
+repository.
+
+The action is a folder of this repository, so it is referenced as
+`gvart/proschi/action@<ref>`; each `tooling-v<version>` tag pins the action
+and the `proschi` version it runs (a branch such as `@main` runs the
+version in `tooling/package.json` there, or the latest release while that
+one is not on npm yet).
+
+Elsewhere, call the CLI directly:
+
+```yaml
+- run: npx proschi check --format github docs/
+- run: npx proschi test --format github docs/
+```
+
+### Parsing
 
 `proschi parse diagram.proschi` prints `{"diagram": …, "diagnostics": […]}`. It
 matches the JSON Schema, so other tools can read nodes, edges, use cases and
@@ -430,12 +516,8 @@ The HLD's *Capacity estimates* table shows the same read/write split and
 egress. `--format json` prints the
 whole analysis (unlimited capacities come out as `null`).
 
-In CI, next to `check`:
-
-```yaml
-- run: npx proschi check --format github docs/
-- run: npx proschi test --format github docs/
-```
+In CI, the [GitHub Action](#github-action) runs `check` and `test` and
+comments the results on pull requests.
 
 ### Language server
 
