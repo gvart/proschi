@@ -278,16 +278,26 @@ test.describe('editor diagram on a phone', () => {
     await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
     await page.getByRole('tab', { name: 'Diagram' }).first().click();
     await page.locator('.react-flow__node').first().click();
-    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
+    await expect(page.getByRole('region', { name: /settings$/ })).toBeVisible();
   }
 
-  test('the selection actions do not run under the export tools', async ({ page }) => {
+  /** True when two boxes share any area. */
+  const overlap = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+    a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+  test('delete sits in the settings card, and in a bar of its own once the card is closed', async ({ page }) => {
     await selectNode(page);
-    const actions = (await page.getByRole('button', { name: 'Delete' }).locator('..').boundingBox())!;
-    for (const tool of [page.getByRole('button', { name: 'Export image' }), page.getByRole('button', { name: /load$/ })]) {
-      const box = (await tool.boundingBox())!;
-      const overlaps = box.x < actions.x + actions.width && actions.x < box.x + box.width && box.y < actions.y + actions.height && actions.y < box.y + box.height;
-      expect(overlaps, `${await tool.innerText()} overlaps Rename/Delete`).toBe(false);
+    const settings = page.getByRole('region', { name: /settings$/ });
+    await expect(settings.getByRole('button', { name: /^Delete / })).toBeVisible();
+    await expect(page.getByRole('toolbar', { name: 'Selection' })).toHaveCount(0);
+
+    await settings.getByRole('button', { name: 'Close settings' }).click();
+    const bar = page.getByRole('toolbar', { name: 'Selection' });
+    await expect(bar.getByRole('button', { name: 'Rename' })).toBeVisible();
+    await expect(bar.getByRole('button', { name: 'Delete' })).toBeVisible();
+    const box = (await bar.boundingBox())!;
+    for (const other of [page.getByRole('button', { name: 'Export image' }), page.getByRole('button', { name: 'Add component' }), page.locator('.react-flow__controls')]) {
+      expect(overlap(box, (await other.boundingBox())!), `the selection bar overlaps ${await other.getAttribute('class')}`).toBe(false);
     }
   });
 

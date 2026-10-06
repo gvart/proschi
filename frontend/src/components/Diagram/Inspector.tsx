@@ -1,5 +1,5 @@
 import { useEffect, useId, useState } from 'react';
-import { Minus, Plus, X } from 'lucide-react';
+import { Minus, Plus, Trash2, X } from 'lucide-react';
 import { componentCatalog } from '../../catalog/componentCatalog';
 import { isDataStore, kindOf } from '../../dsl/kinds';
 import {
@@ -28,6 +28,8 @@ interface InspectorProps {
   importedFrom?: string;
   /** Applies a text edit to the document. */
   onEdit: (edit: Edit) => void;
+  /** Deletes the node or connection from the text. */
+  onDelete: () => void;
   onClose: () => void;
 }
 
@@ -45,7 +47,7 @@ const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnl
  * The settings of the selected node or connection. Every change is a small
  * edit of the text, which stays the source of truth.
  */
-export default function Inspector({ node, edge, capacity, importedFrom, onEdit, onClose }: InspectorProps) {
+export default function Inspector({ node, edge, capacity, importedFrom, onEdit, onDelete, onClose }: InspectorProps) {
   const title = node ? node.name : edge ? `${edge.source} → ${edge.target}` : '';
   const readOnly = importedFrom !== undefined;
   return (
@@ -56,6 +58,15 @@ export default function Inspector({ node, edge, capacity, importedFrom, onEdit, 
     >
       <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{title}</h2>
+        <button
+          type="button"
+          aria-label={`Delete ${title}`}
+          title="Delete"
+          onClick={onDelete}
+          className={`${iconButton} text-red-700 dark:text-red-300`}
+        >
+          <Trash2 size={16} />
+        </button>
         <button type="button" aria-label="Close settings" onClick={onClose} className={iconButton}>
           <X size={16} />
         </button>
