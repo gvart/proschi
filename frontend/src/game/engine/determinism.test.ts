@@ -321,5 +321,5 @@ describe('determinism', () => {
       snapshot[c.name] = entry;
     }
     await expect(JSON.stringify(snapshot, null, 1) + '\n').toMatchFileSnapshot('./__snapshots__/determinism.json');
-  });
+  }, 120_000); // 93 full runs: well past the 5 s default on a CI runner.
 });
