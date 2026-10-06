@@ -36,7 +36,7 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
     await expect(result.or(over)).toBeVisible();
     if (await over.isVisible()) break;
     await result.getByRole('button', { name: 'Continue' }).click();
-    const skipCard = page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /Skip/ });
+    const skipCard = page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /^Skip \(/ });
     if (await skipCard.isVisible()) await skipCard.click();
     const noThanks = page.getByRole('dialog', { name: 'A contract is on the table' }).getByRole('button', { name: 'No thanks' });
     if (await noThanks.isVisible()) await noThanks.click();
