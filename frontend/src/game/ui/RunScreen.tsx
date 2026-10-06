@@ -6,7 +6,7 @@ import { eyebrow, outlineButton, primaryButton } from '../../components/Playgrou
 import { canWire, cloneBoard, roleOf } from '../engine/board';
 import { compile } from '../engine/compile';
 import { Game, GameError, type TickResult } from '../engine/run';
-import { LOADTEST_COST, ONCALL_ACTS, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
+import { LIVE_CHANGES_PER_WAVE, LOADTEST_COST, ONCALL_ACTS, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
 import GameCanvas from './GameCanvas';
 import { boardToDsl, dslToBoard } from '../engine/boardDsl';
@@ -37,7 +37,7 @@ import type { Arcade, RunResult } from './useArcade';
  * is won or lost. The engine does every rule; this only shows it.
  */
 
-const TICK_MS = 2200;
+const TICK_MS = 2800;
 const noop = () => {};
 
 export interface RunScreenProps {
@@ -110,6 +110,10 @@ export default function RunScreen(props: RunScreenProps) {
   const [code, setCode] = useState('');
   const [codeProblems, setCodeProblems] = useState<Diagnostic[]>([]);
   const typed = useRef<Board | undefined>(undefined);
+  /** Hold the line: the player changed the board during the run and has not shipped it yet. */
+  const [liveDirty, setLiveDirty] = useState(false);
+  /** On a phone during the run: the palette instead of the on-call menu. */
+  const [building, setBuilding] = useState(false);
   /** When the player last typed a change: a burst of typing is one undo step. */
   const lastTyped = useRef(0);
   const codeLevel = game.codeLevel();
@@ -168,6 +172,8 @@ export default function RunScreen(props: RunScreenProps) {
     setSelected(undefined);
     setPlacing(undefined);
     setWiring(false);
+    setLiveDirty(false);
+    setBuilding(false);
     if (codeOnly) setPane('code');
     const w = game.waveDef();
     setStamp(`Wave ${s.wave + 1}${w.name ? ` · ${w.name}` : w.ticket ? ' · new ticket' : ''}`);
@@ -186,17 +192,28 @@ export default function RunScreen(props: RunScreenProps) {
       const burst = typing && now - lastTyped.current < 1200;
       lastTyped.current = typing ? now : 0;
       if (!burst) setUndo((u) => [...u.slice(-40), plan]);
+      if (game.state.phase === 'run') setLiveDirty(true);
       setRedo([]);
       setPlan(next);
       setPreview(undefined);
     },
-    [plan],
+    [plan, game],
   );
+
+  // During the run, until the player changes something, the plan follows the board (and a change still provisioning).
+  const liveKey = `${s.phase}:${s.wave}:${s.tick}:${s.changes}:${s.paged}`;
+  useEffect(() => {
+    if (s.phase !== 'run' || liveDirty) return;
+    setPlan(cloneBoard(s.rollout?.board ?? s.board));
+    setUndo([]);
+    setRedo([]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveKey, liveDirty]);
 
   const ctx = useMemo(() => ({ components, scenario: game.scenario }), [components, game]);
 
   // The text follows the plan, except right after the player typed it (their formatting stays).
-  const shownBoard = s.phase === 'plan' ? plan : s.board;
+  const shownBoard = s.phase === 'plan' || liveDirty ? plan : s.board;
   useEffect(() => {
     if (pane !== 'code') return;
     if (typed.current === shownBoard) return;
@@ -206,7 +223,7 @@ export default function RunScreen(props: RunScreenProps) {
 
   const onCode = (text: string) => {
     setCode(text);
-    if (s.phase !== 'plan' || codeLevel === 'watch') return;
+    if ((s.phase !== 'plan' && s.phase !== 'run') || codeLevel === 'watch') return;
     const r = dslToBoard(text, { ...ctx, previous: plan, unlocked });
     setCodeProblems(r.diagnostics);
     if (r.board) {
@@ -240,7 +257,7 @@ export default function RunScreen(props: RunScreenProps) {
   );
 
   const wire = (from: string, to: string) => {
-    if (s.phase !== 'plan' || plan.edges.some(([a, b]) => a === from && b === to)) return;
+    if ((s.phase !== 'plan' && s.phase !== 'run') || plan.edges.some(([a, b]) => a === from && b === to)) return;
     const r = toggleWire(plan, from, to, ctx);
     if ('error' in r) {
       setMessage({ text: r.error, tone: 'error' });
@@ -254,7 +271,7 @@ export default function RunScreen(props: RunScreenProps) {
   };
 
   const onNode = (id: string) => {
-    if (s.phase === 'plan' && wiring && selected && selected !== id) {
+    if ((s.phase === 'plan' || s.phase === 'run') && wiring && selected && selected !== id) {
       const r = toggleWire(plan, selected, id, ctx);
       if ('error' in r) {
         setMessage({ text: r.error, tone: 'error' });
@@ -292,8 +309,8 @@ export default function RunScreen(props: RunScreenProps) {
   // Planning feedback: what the plan breaks, what it costs a month.
   const needsDiagnosis = s.phase === 'plan' && !!game.waveDef().diagnosis && !s.diagnosis;
   const problems = useMemo(
-    () => (s.phase === 'plan' ? [...(needsDiagnosis ? ['Name the root cause first: the fix depends on it.'] : []), ...game.problems(plan)] : []),
-    [s.phase, plan, game, needsDiagnosis],
+    () => (s.phase === 'plan' || liveDirty ? [...(needsDiagnosis ? ['Name the root cause first: the fix depends on it.'] : []), ...game.problems(plan)] : []),
+    [s.phase, plan, game, needsDiagnosis, liveDirty],
   );
   const broken = useMemo(() => {
     if (s.phase !== 'plan' || problems.length) return [];
@@ -442,13 +459,16 @@ export default function RunScreen(props: RunScreenProps) {
   };
   const forecast = game.forecast();
   const planning = s.phase === 'plan';
+  /** The board can be changed: planning, or holding the line during the run. */
+  const editing = planning || s.phase === 'run';
+  const drafting = planning || liveDirty;
   const codeHint =
     codeLevel === 'watch'
       ? `Watch: this is your board in Proschi, and each change you make on the board lights up its line. You can type here from wave ${game.scenario.code.edit}.`
       : codeOnly
         ? 'Code only: add components by typing them, e.g. cache "Cache" [Cache], then wire them: api -> cache. Ctrl+Space lists what you can place.'
         : 'Type to change the board: a line per component, a line per wire, sizes and shards in capacity. Ctrl+Space lists what you can place.';
-  const shown = planning ? plan : s.board;
+  const shown = drafting ? plan : s.board;
   const shownTick = planning ? preview : (last ?? s.ticks[s.ticks.length - 1]);
   const node = selected ? shown.nodes.find((n) => n.id === selected) : undefined;
   const mods = game.mods;
@@ -547,6 +567,49 @@ export default function RunScreen(props: RunScreenProps) {
       </button>
     </div>
   );
+  const delay = liveDirty ? game.provisioning(plan) : undefined;
+  const ship = () => {
+    if (problems.length) {
+      setMessage({ text: problems[0], tone: 'error' });
+      play('error');
+      return;
+    }
+    apply({ t: 'change', tick: s.tick, board: plan });
+    setLiveDirty(false);
+    setBuilding(false);
+    setSelected(undefined);
+    setWiring(false);
+    setPlacing(undefined);
+    play('deploy');
+  };
+  const left = LIVE_CHANGES_PER_WAVE - s.changes;
+  /** Hold the line: ship a change to the board while the wave runs. */
+  const shipBar = !planning && (
+    <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm" role="group" aria-label="Live change">
+      {liveDirty ? (
+        <>
+          <button type="button" className={primaryButton} disabled={delay === undefined || problems.length > 0 || left <= 0} onClick={ship}>
+            <Rocket size={14} aria-hidden="true" /> Ship it{delay !== undefined ? ` (live at tick ${s.tick + delay + 1})` : ''}
+          </button>
+          <button type="button" className={outlineButton} onClick={() => setLiveDirty(false)}>
+            Discard
+          </button>
+        </>
+      ) : (
+        <span className="text-muted">{left > 0 ? `Hold the line: change the board and ship it live (${left} left this wave). Scaling lands next tick, new parts in two.` : 'No live changes left this wave.'}</span>
+      )}
+      {s.rollout && (
+        <span className="font-semibold" role="status">
+          Provisioning: live at tick {s.rollout.at + 1}
+        </span>
+      )}
+      {narrow && (
+        <button type="button" className={outlineButton} aria-pressed={building} onClick={() => setBuilding((b) => !b)}>
+          {building ? 'On-call' : 'Build'}
+        </button>
+      )}
+    </div>
+  );
   const oncallBar = !planning && (
     <OncallBar
       game={game}
@@ -564,13 +627,13 @@ export default function RunScreen(props: RunScreenProps) {
           <BreachCard breach={callout} during={last?.events.map((id) => events.get(id)).filter((d) => d !== undefined)} />
         </div>
       )}
-      {message && planning && (
+      {message && drafting && (
         <p role="status" className={`text-sm ${message.tone === 'error' ? 'text-fail' : 'text-muted'}`}>
           {message.text}
         </p>
       )}
-      {planning && placing && <p className="text-sm text-muted">Tap the + in the {placeOf(placing)} row{narrow ? ', or hold the chip and drag it there' : ', or drag the chip onto the board'}.</p>}
-      {planning && (problems.length > 0 || broken.length > 0) && (
+      {editing && placing && <p className="text-sm text-muted">Tap the + in the {placeOf(placing)} row{narrow ? ', or hold the chip and drag it there' : ', or drag the chip onto the board'}.</p>}
+      {drafting && (problems.length > 0 || broken.length > 0) && (
         <ul className="text-sm text-fail list-disc pl-5">
           {[...problems, ...broken].slice(0, narrow ? 2 : 4).map((p) => (
             <li key={p}>{p}</li>
@@ -589,7 +652,7 @@ export default function RunScreen(props: RunScreenProps) {
       unlocked={unlocked}
       useCases={s.useCases}
       stats={shownTick?.nodes.find((n) => n.id === node.id)}
-      editable={planning}
+      editable={editing}
       wiring={wiring}
       compact={narrow}
       onChange={(patch) => edit(updateNode(plan, node.id, patch))}
@@ -608,7 +671,7 @@ export default function RunScreen(props: RunScreenProps) {
         !planning && components.has(node.component)
           ? [
               {
-                label: `+1 replica ($${ONCALL_ACTS.replica.cash})`,
+                label: `+1 replica now ($${ONCALL_ACTS.replica.cash})`,
                 disabled: s.oncallLeft < ONCALL_ACTS.replica.attention || s.cash < ONCALL_ACTS.replica.cash,
                 onClick: () => {
                   apply({ t: 'oncall', tick: s.tick, node: node.id, act: 'replica' });
@@ -686,10 +749,10 @@ export default function RunScreen(props: RunScreenProps) {
             selected={selected}
             wiringFrom={wiring ? selected : undefined}
             validTargets={validTargets}
-            placingRow={planning && placing ? placeOf(placing) : undefined}
+            placingRow={editing && placing ? placeOf(placing) : undefined}
             fresh={fresh}
             shake={shake}
-            editable={planning}
+            editable={editing}
             onNode={onNode}
             onGhost={onGhost}
             onBackground={onBackground}
@@ -702,7 +765,7 @@ export default function RunScreen(props: RunScreenProps) {
               {codeHint}
             </p>
             <Suspense fallback={<p className="p-3 text-sm text-muted">Loading the editor…</p>}>
-              <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} techs={techs} extensions={codeExtensions} readOnly={!planning || codeLevel === 'watch'} />
+              <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} techs={techs} extensions={codeExtensions} readOnly={!editing || codeLevel === 'watch'} />
             </Suspense>
             {codeProblems.length > 0 && (
               <ul className="border-t border-ink/15 px-3 py-1.5 text-xs text-fail">
@@ -840,7 +903,8 @@ export default function RunScreen(props: RunScreenProps) {
               ) : (
                 <>
                   {controls}
-                  {oncallBar}
+                  {shipBar}
+                  {building ? palette : oncallBar}
                 </>
               )}
             </div>
@@ -853,7 +917,9 @@ export default function RunScreen(props: RunScreenProps) {
             {planning ? (codeOnly ? typeInstead : palette) : (
               <>
                 {controls}
+                {shipBar}
                 {oncallBar}
+                {codeOnly ? typeInstead : palette}
               </>
             )}
             {feedback}
@@ -867,7 +933,7 @@ export default function RunScreen(props: RunScreenProps) {
                     ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
                     : planning
                     ? 'Pick a component below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
-                    : 'Watch the requests flow. Hot nodes turn yellow, then pink, then red. The on-call can rate-limit, warm the cache or switch a feature off below; tap a node for one more replica, or to bring a lost one back.'}
+                    : 'Hold the line: hot nodes turn yellow, then pink, then red. Change the board while it runs and ship it (scaling lands next tick, new parts in two, and a new cache starts cold), or use the on-call below: it acts at once.'}
                 </p>
                 {hand}
               </div>

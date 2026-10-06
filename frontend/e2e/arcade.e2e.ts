@@ -118,6 +118,26 @@ test('the board can be written as Proschi text, and the canvas follows', async (
   await expect(board(page).locator('.pc-node__stats').filter({ hasText: /\bM\b/ })).toBeVisible();
 });
 
+test('hold the line: change the board during the run and ship it live', async ({ page }) => {
+  await startShortly(page);
+  await page.getByRole('complementary', { name: "Kernel's briefing" }).getByRole('button', { name: 'Got it' }).click();
+  await page.getByRole('button', { name: 'Deploy wave 1' }).click();
+  await page.getByRole('button', { name: 'Pause' }).click();
+  const live = page.getByRole('group', { name: 'Live change' });
+  await expect(live).toContainText('3 left this wave');
+  await board(page).getByRole('button', { name: /^App Server/ }).click();
+  await page.getByRole('region', { name: 'App Server settings' }).getByRole('button', { name: 'More replicas' }).click();
+  await expect(board(page).getByRole('button', { name: /^App Server, 2 replicas/ })).toBeVisible();
+  await live.getByRole('button', { name: /^Ship it \(live at tick \d\)/ }).click();
+  await expect(live.getByRole('status')).toContainText(/Provisioning: live at tick \d/);
+  await expect(live).toContainText('2 left this wave');
+  await page.getByRole('button', { name: 'Skip' }).click();
+  await page.getByRole('dialog', { name: /Wave 1/ }).getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /Skip/ }).click();
+  // The change carries into the next wave's plan.
+  await expect(board(page).getByRole('button', { name: /^App Server, 2 replicas/ })).toBeVisible();
+});
+
 test('the shop sells unlocks for Blueprints', async ({ page }) => {
   await page.addInitScript(() => localStorage.setItem('proschi.game.meta', JSON.stringify({ v: 1, blueprints: 12, unlocked: [], perks: {}, equipped: [], scenarios: {}, seen: [], runs: 1 })));
   await page.goto('practice/#/arcade');

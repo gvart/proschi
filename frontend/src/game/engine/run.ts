@@ -52,6 +52,10 @@ import {
   LEAN_REFUND,
   ONCALL_ACTS,
   RATE_LIMIT_KEEP,
+  COLD_START,
+  LIVE_BUILD_TICKS,
+  LIVE_CHANGES_PER_WAVE,
+  LIVE_SCALE_TICKS,
   SURPRISE_CHANCE,
   SURPRISE_FROM_WAVE,
 } from './rules';
@@ -278,6 +282,12 @@ export interface RunState {
   demand: number;
   /** The on-call's actions this wave. */
   mitigation: Mitigation;
+  /** Hold the line: a change shipped during the run, and the tick (0-based) it goes live. */
+  rollout?: { board: Board; at: number };
+  /** Caches that went live during this wave's run, and the tick they did: they start cold. */
+  warming: Record<string, number>;
+  /** Changes shipped during this wave's run. */
+  changes: number;
   /** On-call pages and load tests this wave, for the bounties that forbid them. */
   paged: number;
   tested: boolean;
@@ -478,6 +488,8 @@ export class Game {
       bountyOffer: [],
       demand: 1,
       mitigation: { reboot: {}, shed: {} },
+      warming: {},
+      changes: 0,
     };
     if (perks.some((p) => p.def.effect === 'starter-card')) {
       const commons = this.pool().filter((c) => c.rarity === 'common');
@@ -633,7 +645,7 @@ export class Game {
   apply(action: Action): TickResult | undefined {
     const s = this.state;
     let result: TickResult | undefined;
-    if (s.phase === 'run' && action.t !== 'oncall') while (s.phase === 'run') this.advance();
+    if (s.phase === 'run' && action.t !== 'oncall' && action.t !== 'change') while (s.phase === 'run') this.advance();
     switch (action.t) {
       case 'deploy': {
         this.expect('plan');
@@ -680,6 +692,9 @@ export class Game {
             const { node } = nodeOf();
             if (node.replicas >= MAX_REPLICAS) throw new GameError(`'${node.id}' is at ${MAX_REPLICAS} replicas`);
             node.replicas++;
+            // A change still provisioning keeps the replica the on-call added.
+            const coming = s.rollout?.board.nodes.find((n) => n.id === node.id && n.component === node.component);
+            if (coming && coming.replicas < MAX_REPLICAS) coming.replicas++;
             break;
           }
           case 'reboot': {
@@ -713,6 +728,19 @@ export class Game {
           this.summarize();
           this.end('churned');
         }
+        break;
+      }
+      case 'change': {
+        this.expect('run');
+        if (!Number.isInteger(action.tick) || action.tick < s.tick || action.tick >= TICKS) throw new GameError('Live changes happen during the run');
+        while (s.tick < action.tick && s.phase === 'run') this.advance();
+        this.expect('run');
+        if (s.changes >= LIVE_CHANGES_PER_WAVE) throw new GameError(`At most ${LIVE_CHANGES_PER_WAVE} live changes a wave`);
+        this.checkBoard(action.board);
+        const delay = this.provisioning(action.board);
+        if (delay === undefined) throw new GameError('Nothing to ship: the board is the same');
+        s.rollout = { board: cloneBoard(action.board), at: s.tick + delay };
+        s.changes++;
         break;
       }
       case 'bounty': {
@@ -850,6 +878,7 @@ export class Game {
   advance(): TickResult {
     const s = this.state;
     this.expect('run');
+    this.land();
     const r = this.evaluate(s.board, s.tick, s.lag, false);
     s.lag = r.lag;
     s.cash += r.revenue - r.cost;
@@ -865,6 +894,39 @@ export class Game {
       this.end('churned');
     } else if (s.tick >= TICKS) this.endWave();
     return r;
+  }
+
+  /**
+   * How many ticks a live change takes to provision: none when nothing
+   * changed, longer when it adds components or wires than when it scales.
+   */
+  provisioning(board: Board): number | undefined {
+    const s = this.state;
+    const now = s.rollout?.board ?? s.board;
+    const key = (n: { id: string; component: string }) => `${n.id}:${n.component}`;
+    const before = new Map(now.nodes.map((n) => [key(n), n]));
+    const wires = (b: Board) => b.edges.map((e) => e.join('>')).sort().join(',');
+    const added = board.nodes.some((n) => !before.has(key(n)));
+    if (added || wires(board) !== wires(now)) return LIVE_BUILD_TICKS;
+    const removed = now.nodes.length !== board.nodes.length;
+    const scaled = board.nodes.some((n) => {
+      const b = before.get(key(n))!;
+      return n.replicas !== b.replicas || (n.tier ?? 0) !== (b.tier ?? 0) || (n.shards ?? 1) !== (b.shards ?? 1) || (n.handles ?? []).join() !== (b.handles ?? []).join();
+    });
+    return removed || scaled ? LIVE_SCALE_TICKS : undefined;
+  }
+
+  /** A live change whose tick has come replaces the board; the caches it adds start cold. */
+  private land(force = false) {
+    const s = this.state;
+    const r = s.rollout;
+    if (!r || (!force && s.tick < r.at)) return;
+    for (const n of r.board.nodes) {
+      const fresh = !s.board.nodes.some((b) => b.id === n.id && b.component === n.component);
+      if (fresh && this.index.components.get(n.component)?.role === 'cache') s.warming[n.id] = s.tick;
+    }
+    s.board = r.board;
+    delete s.rollout;
   }
 
   /** An incident that broke something badly and has a `then` sets that one off the tick after it ends, unannounced. */
@@ -910,6 +972,8 @@ export class Game {
     delete s.bounty;
     s.bountyOffer = this.drawBounties();
     s.mitigation = { reboot: {}, shed: {} };
+    s.warming = {};
+    s.changes = 0;
     const spread = this.spread();
     s.demand = spread ? 1 + spread * (2 * stream(this.setup.seed, `demand:${s.wave}`)() - 1) : 1;
     const traffic = s.useCases.reduce((a, key) => a + this.baseRps(key), 0);
@@ -1020,6 +1084,8 @@ export class Game {
 
   private endWave() {
     const s = this.state;
+    // A change still provisioning is live by the next wave.
+    this.land(true);
     const summary = this.summarize();
     if (summary.clean) s.trust = Math.min(s.maxTrust, s.trust + TRUST_CLEAN_WAVE);
     if (summary.boss) s.trust = Math.min(s.maxTrust, s.trust + TRUST_BOSS);
@@ -1384,6 +1450,11 @@ export class Game {
       writesDown.delete(id);
       partialWrites.delete(id);
       lost.delete(id);
+    }
+    // A cache that went live mid-wave starts empty.
+    for (const [id, t] of Object.entries(s.warming)) {
+      const i = tick - t;
+      if (i >= 0 && i < COLD_START.length && board.nodes.some((n) => n.id === id)) coldFactor *= COLD_START[i];
     }
     if (since(m.warm)) coldFactor = 1;
     const limited = since(m.ratelimit);
