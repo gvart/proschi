@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Eye, FlaskConical, GraduationCap, Lightbulb, Network, RotateCcw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, Network, RotateCcw, Timer } from 'lucide-react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
@@ -32,7 +32,13 @@ import { useZenMode } from '../components/Playground/useZenMode';
 import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
-import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
+import { eyebrow, field, iconButton, outlineButton, subBar, toolButton } from '../components/Playground/ui';
+import { parseInterview } from './modes/interviewFile';
+import { evaluateChecks, guidedReducer, parseGuided } from './modes/guidedFile';
+import { interviewReducer, startSession, summarize, type InterviewAction, type InterviewSession } from './modes/session';
+import { appendHistory, loadGuided, loadHistory, loadSession, saveGuided, saveSession, type GuidedState } from './modes/store';
+import InterviewPanel, { InterviewClock } from './modes/InterviewPanel';
+import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
@@ -118,6 +124,52 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   useEffect(() => track('problem_start', { once: 'session', key: `problem_start:${problem.id}` }), [problem.id]);
 
+  // Interview and guided mode: opt-in, one at a time, remembered in this browser (modes/store.ts).
+  const interview = useMemo(() => {
+    if (problem.interview === undefined) return undefined;
+    const read = parseInterview(problem.interview);
+    return read.issues.length === 0 ? read.interview : undefined;
+  }, [problem.interview]);
+  const guidedSteps = useMemo(() => {
+    if (problem.guided === undefined) return undefined;
+    const read = parseGuided(problem.guided);
+    return read.issues.length === 0 ? read.steps : undefined;
+  }, [problem.guided]);
+  const [session, setSession] = useState<InterviewSession | undefined>(() => (interview ? loadSession(problem.id) : undefined));
+  const [interviewOn, setInterviewOn] = useState(() => session !== undefined);
+  const [guidedState, setGuidedState] = useState<GuidedState>(() => (guidedSteps ? loadGuided(problem.id, guidedSteps.length) : { done: [], active: false }));
+  const guidedOn = !!guidedSteps && guidedState.active && !interviewOn;
+  const dispatchInterview = useCallback((a: InterviewAction) => setSession((s) => s && interviewReducer(s, a)), []);
+  useEffect(() => {
+    if (!interview) return;
+    saveSession(session, problem.id);
+    if (session?.finishedAt !== undefined && !loadHistory().some((h) => h.problem === session.problem && h.startedAt === session.startedAt)) {
+      appendHistory(summarize(session, interview, session.finishedAt));
+    }
+  }, [session, interview, problem.id]);
+  const updateGuided = useCallback(
+    (update: (g: GuidedState) => GuidedState) =>
+      setGuidedState((g) => {
+        const next = update(g);
+        saveGuided(problem.id, next);
+        return next;
+      }),
+    [problem.id],
+  );
+  const openInterview = () => {
+    updateGuided((g) => ({ ...g, active: false }));
+    setInterviewOn(true);
+    setPane('statement');
+  };
+  const exitInterview = () => {
+    setSession(undefined);
+    setInterviewOn(false);
+  };
+  const openGuided = () => {
+    updateGuided((g) => ({ ...g, active: true }));
+    setPane('statement');
+  };
+
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -148,6 +200,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       setFirstSolve({ runs: runs + 1, metrics: result.metrics, before: progress });
     }
     if (!result.blocked) {
+      if (interviewOn) dispatchInterview({ type: 'tests', passed: result.passed, total: result.results.length, solved: result.solved });
       onProgress((p) => withRun(p, problem, result.solved));
       // For a build without accounts' achievements; the reference solution runs once, on the first solve.
       recordRunStats(problem.id, result, () => runTests(parseSolution(problem, problem.solution), engine).metrics?.costUsd);
@@ -203,7 +256,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             <CompanyBadge company={problem.company} />
           </span>
         )}
-        <button onClick={reset} className={`ml-auto ${toolButton}`} title="Start over from the starter code">
+        {interviewOn && session && (
+          <span className="ml-auto">
+            <InterviewClock session={session} dispatch={dispatchInterview} />
+          </span>
+        )}
+        <button onClick={reset} className={`${interviewOn && session ? '' : 'ml-auto '}${toolButton}`} title="Start over from the starter code">
           <RotateCcw size={14} />
           <span className="hidden sm:inline">Reset</span>
         </button>
@@ -266,7 +324,62 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             </div>
           )}
           <div className={lessonShown ? 'hidden' : undefined}>
-            <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
+            {interviewOn && interview ? (
+              <InterviewPanel
+                problemId={problem.id}
+                statement={problem.statement}
+                interview={interview}
+                session={session}
+                dispatch={dispatchInterview}
+                onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
+                onExit={exitInterview}
+                onRestart={() => setSession(undefined)}
+              >
+                <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
+              </InterviewPanel>
+            ) : (
+              <>
+                {guidedOn && guidedSteps && (
+                  <GuidedPanel
+                    steps={guidedSteps}
+                    progress={guidedState}
+                    onCheck={(step) =>
+                      evaluateChecks(guidedSteps[step]?.checks ?? [], parseSolution(problem, source).diagram, () => {
+                        const r = runTests(parseSolution(problem, source), engine);
+                        return r.blocked ? undefined : r.results;
+                      })
+                    }
+                    onPass={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'pass', step }, guidedSteps.length) }))}
+                    onSkip={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'skip', step }, guidedSteps.length) }))}
+                    onRestart={() => updateGuided((g) => ({ ...g, done: [] }))}
+                    onExit={() => updateGuided((g) => ({ ...g, active: false }))}
+                  />
+                )}
+                <Statement
+                  problem={problem}
+                  solved={status === 'solved'}
+                  onUseSolution={() => setSource(problem.solution)}
+                  modes={
+                    (interview || (guidedSteps && !guidedOn)) && (
+                      <div className="flex flex-wrap items-center gap-2" aria-label="Practice modes" role="group">
+                        {interview && (
+                          <button type="button" onClick={openInterview} className={outlineButton} title="Practise the interview: clarify, estimate, design and wrap up against the clock">
+                            <Timer size={14} aria-hidden="true" />
+                            Interview mode
+                          </button>
+                        )}
+                        {guidedSteps && !guidedOn && (
+                          <button type="button" onClick={openGuided} className={outlineButton} title="Build the design step by step, with a check after each step">
+                            <Compass size={14} aria-hidden="true" />
+                            Guided walkthrough
+                          </button>
+                        )}
+                      </div>
+                    )
+                  }
+                />
+              </>
+            )}
           </div>
         </aside>
 
@@ -325,7 +438,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   );
 }
 
-function Statement({ problem, solved, onUseSolution }: { problem: Problem; solved: boolean; onUseSolution: () => void }) {
+function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem; solved: boolean; onUseSolution: () => void; /** The buttons that open interview or guided mode. */ modes?: ReactNode }) {
   const [hints, setHints] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
 
@@ -335,6 +448,7 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
 
   return (
     <div className="px-4 py-4 space-y-5">
+      {modes}
       {/* The header shows it from sm up. */}
       {problem.company && (
         <p className="sm:hidden">

@@ -215,6 +215,6 @@ test.describe('daily review', () => {
     const bundle = await response.json();
     expect(bundle).toMatchObject({ format: 1, hash: expect.stringMatching(/^[0-9a-f]{16}$/) });
     expect(bundle.cards.length).toBeGreaterThanOrEqual(32);
-    expect(bundle.topics.length).toBeGreaterThanOrEqual(15);
+    expect(bundle.topics.length).toBeGreaterThanOrEqual(18);
   });
 });

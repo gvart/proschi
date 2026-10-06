@@ -7,6 +7,7 @@
  * `proschi cards check|lock` validates the practice cards (see cards.ts);
  * `proschi achievements check|lock` validates the practice achievements (see achievements.ts);
  * `proschi game check|lock|sim` validates and plays the Scale or Fail content (see game.ts);
+ * `proschi share-link` prints a web editor link for a file (see share.ts).
  * `proschi import mermaid|openapi` converts other formats to Proschi (see importCommand.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
@@ -21,6 +22,7 @@ import { PROBLEM_HELP, PROBLEM_USAGE, runProblem } from './problem';
 import { CARDS_HELP, CARDS_USAGE, runCards } from './cards';
 import { ACHIEVEMENTS_HELP, ACHIEVEMENTS_USAGE, runAchievements } from './achievements';
 import { GAME_HELP, GAME_USAGE, runGame } from './game';
+import { SHARE_HELP, SHARE_USAGE, runShareLink } from './share';
 import { IMPORT_HELP, IMPORT_USAGE, runImport } from './importCommand';
 
 declare const PROSCHI_VERSION: string;
@@ -36,6 +38,7 @@ ${PROBLEM_USAGE}
 ${CARDS_USAGE}
 ${ACHIEVEMENTS_USAGE}
 ${GAME_USAGE}
+${SHARE_USAGE}
 ${IMPORT_USAGE}
   proschi --version
 
@@ -54,6 +57,7 @@ ${PROBLEM_HELP}
 ${CARDS_HELP}
 ${ACHIEVEMENTS_HELP}
 ${GAME_HELP}
+${SHARE_HELP}
 ${IMPORT_HELP}`;
 
 export interface CheckResult {
@@ -130,6 +134,7 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
   if (command === 'cards') return runCards(rest, out, err);
   if (command === 'achievements') return runAchievements(rest, out, err);
   if (command === 'game') return runGame(rest, out, err);
+  if (command === 'share-link') return runShareLink(rest, out, err);
   if (command === 'import') return runImport(rest, out, err);
 
   if (command === 'check') {

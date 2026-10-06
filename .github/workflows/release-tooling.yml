@@ -1,8 +1,10 @@
 name: Release tooling
 
 # Pushing a tag that starts with `tooling-v` (e.g. `tooling-v0.2.0`) publishes
-# the `proschi` npm package and attaches the VS Code extension to a GitHub
-# release for that tag. Creating the release on github.com with a new tag works
+# the `proschi` npm package, attaches the VS Code extension to a GitHub
+# release for that tag and publishes the extension to the VS Code Marketplace
+# and Open VSX. The tag also pins the GitHub Action (gvart/proschi/action@tooling-v0.2.0),
+# which runs the npm package of the same version. Creating the release on github.com with a new tag works
 # too (it pushes the tag); the workflow then adds the extension to it.
 # Running the workflow by hand on `main` releases the version in
 # tooling/package.json and creates the tag and release itself.
@@ -12,6 +14,16 @@ name: Release tooling
 # (release-tooling.yml) and the environment `npm`. Trusted Publishing only works
 # once the package exists, so the very first release may use an `NPM_TOKEN`
 # repository secret instead; delete the secret once Trusted Publishing is set up.
+#
+# The extension stores need tokens; each step is skipped (with a notice) while
+# its secret is missing, so releases work before they are set up:
+# - VSCE_PAT: an Azure DevOps personal access token with the Marketplace
+#   "Manage" scope (organization "All accessible organizations"), for the
+#   publisher `gvart` created at https://marketplace.visualstudio.com/manage.
+# - OVSX_PAT: an access token from https://open-vsx.org/user-settings/tokens;
+#   once, before the first release, sign the Eclipse publisher agreement there
+#   and run `npx ovsx create-namespace gvart -p <token>`.
+# Both stores skip a version they already have, so the workflow can be re-run.
 
 on:
   push:
@@ -82,3 +94,21 @@ jobs:
           gh release view "$VERSION" >/dev/null 2>&1 ||
             gh release create "$VERSION" --target "$GITHUB_SHA" --title "Proschi tooling ${VERSION#tooling-v}" --generate-notes
           gh release upload "$VERSION" "$file" --clobber
+      - name: Publish to the VS Code Marketplace
+        env:
+          VSCE_PAT: ${{ secrets.VSCE_PAT }}
+        run: |
+          if [ -z "$VSCE_PAT" ]; then
+            echo "::notice title=VS Code Marketplace::Skipped: the VSCE_PAT secret is not set"
+            exit 0
+          fi
+          npx @vscode/vsce publish --packagePath dist/proschi.vsix --skip-duplicate -p "$VSCE_PAT"
+      - name: Publish to Open VSX
+        env:
+          OVSX_PAT: ${{ secrets.OVSX_PAT }}
+        run: |
+          if [ -z "$OVSX_PAT" ]; then
+            echo "::notice title=Open VSX::Skipped: the OVSX_PAT secret is not set"
+            exit 0
+          fi
+          npx --yes ovsx@1 publish --packagePath dist/proschi.vsix --skip-duplicate -p "$OVSX_PAT"

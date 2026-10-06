@@ -117,7 +117,8 @@ export function decodeShareHash(hash: string): string | null {
 
 export function shareUrl(
   source: string,
-  location: Pick<Location, 'origin' | 'pathname' | 'search'>,
+  // Not Pick<Location, …>: the CLI (tooling, no DOM types) imports this module too.
+  location: { origin: string; pathname: string; search: string },
   playback?: PlaybackTarget,
   imports?: Record<string, string>,
 ): string {

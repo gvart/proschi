@@ -329,7 +329,7 @@ export function gradeCloze(card: ClozeCard, index: number, typed: string): boole
 }
 
 /** Whether an estimate is within the card's tolerance factor of its answer. */
-export function gradeEstimate(card: EstimateCard, value: number): boolean {
+export function gradeEstimate(card: Pick<EstimateCard, 'answer' | 'tolerance'>, value: number): boolean {
   if (!(value > 0) || !Number.isFinite(value)) return false;
   return value >= card.answer / card.tolerance && value <= card.answer * card.tolerance;
 }
