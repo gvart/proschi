@@ -149,6 +149,12 @@ everyone the same ones.
   (its announced incident, its boss) is four times as likely, and the one
   taken last wave is not offered again.
 
+Bounties and [contracts](#how-a-run-works) are both optional offers, but
+different decisions, so they stay apart: a bounty is a goal for one wave that
+pays if met and costs a little if missed, and changes nothing else; a
+contract changes the rest of the run (a new use case that grows each wave, a
+stricter requirement, or cash for a tighter SLA) and has no goal to meet.
+
 ### Cash, Trust and score
 
 - **Cash** starts at the scenario's seed round. Each tick adds the revenue of
@@ -221,6 +227,10 @@ draft, no rerolls, no boss names. Each wave a **ticket** lands in the inbox,
 from the product manager, the CTO, a customer, legal, finance or marketing,
 and asks for something real: a feature, a launch, an SLA, a law. The cash,
 Trust and score rules are the same, and so are the leaderboards.
+
+The Arcade home lists them apart from the Scale or Fail scenarios, under
+**Design challenges**: one scenario per mode, each card with a line on what
+its mode asks.
 
 **Chaotic Startup** (Pawprint) is about change. Besides scaling, it has:
 
