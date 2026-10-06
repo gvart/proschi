@@ -10,6 +10,8 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Favicon fallbacks**: a `favicon.ico` for browsers and search results
+  that skip SVG icons, and an Apple touch icon for home screens.
 - **Mutators and bounties** in Scale or Fail, so no two runs want the same
   design. A run starts with a choice of three mutators: users on another
   continent, a dearer SQL licence, a read storm, a write-heavy crowd, a
