@@ -77,8 +77,8 @@ times a day each of these happens:
 | `landing_view` | The home page is opened (once per browser tab session) |
 | `editor_open` | The editor is opened (once per session) |
 | `editor_first_edit` | The first edit in the editor (once per browser, ever) |
-| `simulation_run` | The editor's Analysis or HLD tab or the load overlay is first shown (once per session) |
-| `test_run` | The tests of a practice problem are run, or the editor's Tests tab is first shown in a session |
+| `simulation_run` | The editor's Results or HLD tab or the load overlay is first shown (once per session) |
+| `test_run` | The tests of a practice problem are run, or the editor's Results tab is first shown in a session |
 | `share_link_created` | A share link is copied |
 | `export` | A diagram is downloaded (image, `.proschi` file, backup) or copied as Mermaid |
 | `practice_open` | The practice page is opened (once per session) |

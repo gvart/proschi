@@ -2,6 +2,7 @@
 type: estimate
 difficulty: hard
 tags: [resilience]
+related: [web-crawler]
 answer: 1000
 unit: requests in flight
 tolerance: 1.5

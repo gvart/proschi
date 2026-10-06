@@ -2,6 +2,7 @@
 type: cloze
 difficulty: medium
 tags: [replication]
+related: [distributed-kv]
 distinct-from: [read-repair]
 ---
 

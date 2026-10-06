@@ -73,7 +73,7 @@ usecase "Create a note" {
   api --> user : 201 {"id": 42}
 }
 
-# How much load the use case gets: Analysis shows what it does to each node.
+# How much load the use case gets: Results shows what it does to each node.
 traffic {
   "Create a note" 200 rps
 }

@@ -392,15 +392,22 @@ only when a YAML spec is pasted.
 
 Diagrams can leave the editor as images, Mermaid source or a static page.
 
-**Web editor.** The *Export* menu on the diagram saves a PNG or SVG image of
-the canvas, and copies Mermaid source to the clipboard:
+**Web editor.** Everything that leaves the editor is in the *Export* menu, next
+to *Share* in the header (on narrow screens, the download icon):
 
+- *PNG image* and *SVG image*: the whole diagram, not just the part on screen.
+  From the *Results* or *HLD* tab (or the *Code* pane on a phone) the editor
+  switches back to the diagram to draw it.
 - *Copy Mermaid: architecture*: a `flowchart LR` with a `subgraph` per group
 - *Copy Mermaid: this scenario*: a `sequenceDiagram` of the use case and
   scenario picked in the editor (disabled when the document has no use case)
+- *Download Mermaid (.mmd)*: the architecture flowchart as a file
+- *Download .proschi file*: the current document
+- *Export all (.zip)*: every diagram saved in this browser and your practice
+  progress, as a backup; *Import backup…* in the Diagrams menu reads it back
 
-Paste either into a Markdown file on GitHub or GitLab inside a ` ```mermaid `
-block and it renders there.
+Paste the Mermaid source into a Markdown file on GitHub or GitLab inside a
+` ```mermaid ` block and it renders there.
 
 **Command line.** `proschi render` writes static files, for docs sites,
 READMEs and wikis:
@@ -551,14 +558,25 @@ CDN.
 
 ### Web editor
 
-Above the diagram, **Analysis** shows per-node utilisation bars (amber above
-70%, red when saturated; separate read and write load, capacity and
-utilisation for stores where they differ), latency percentiles per use case
-with a breakdown per scenario, availability, cost per node with its egress,
-the total cost (and how much of it is egress), single points of failure and
-warnings. **Tests** lists every requirement and test with ✅/❌, its message
-and hint; click one to jump to its line. Both recompute as you type. Without
-`traffic`, Analysis explains how to add it.
+Above the diagram, three tabs: **Diagram**, **Results** and **HLD**. The
+Results tab's badge counts the passing checks, and the tab itself reads from
+the top down:
+
+1. **Requirements and tests.** Failing ones first, each with its message and
+   the hint naming the lever; the passing ones are folded under *N passing*.
+   Click one to jump to its line.
+2. **The analysis.** Per-node utilisation bars (amber above 70%, red when
+   saturated; separate read and write load, capacity and utilisation for
+   stores where they differ), latency percentiles per use case with a
+   breakdown per scenario, availability, cost per node with its egress, the
+   total cost (and how much of it is egress), single points of failure and
+   warnings. Without `traffic`, it explains how to add it.
+3. **Review.** *Review my design* writes a review of the trade-offs from the
+   simulation and the test results.
+
+Everything recomputes as you type. Links that open the editor with
+`?view=results` (or the older `?view=analysis` and `?view=tests`) start on
+this tab; `?view=hld` starts on the HLD.
 
 ### Command line
 
@@ -616,9 +634,12 @@ The checks (pass/fail, load, latency, cost, single points of failure) come
 from the [simulation](#simulation-and-tests); a document without traffic,
 requirements or tests simply has no such rows.
 
-**Web editor.** The *HLD* tab above the diagram (next to *Diagram*,
-*Analysis* and *Tests*) shows the document; *Markdown* and *HTML* download it. The browser HTML lists
-each scenario's messages instead of drawing sequence diagrams.
+**Web editor.** The *HLD* tab above the diagram (next to *Diagram* and
+*Results*) shows the document; *Markdown* and *HTML* download it. A line on
+top sums up the checks and links to *Results*, where each one has its detail;
+the document keeps its own requirements tables, since they are part of what
+you download. The browser HTML lists each scenario's messages instead of
+drawing sequence diagrams.
 
 **Command line.**
 

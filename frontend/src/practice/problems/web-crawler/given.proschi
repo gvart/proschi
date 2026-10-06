@@ -1,0 +1,43 @@
+title "Web Crawler" "Crawls billions of pages a month without hammering any website"
+
+web "Websites" [Third Party API] "Millions of hosts; a fetch takes about 300 ms and returns about 100 KB of HTML"
+
+capacity {
+  web 100k rps latency 300ms
+}
+
+traffic {
+  "Crawl page"  2k rps mix "Host ready" 88%, "Fetch failed" 2%, "Host busy" 10%
+  "Parse links" 1.8k rps
+}
+
+requirements {
+  p99 "Crawl page" < 1500ms
+  p99 "Parse links" < 200ms
+  availability >= 99.9%
+  durable "Crawl page"
+  survive any node failure
+  cost <= 4000 usd/month
+}
+
+test "The frontier is a durable queue" {
+  "Crawl page" starts at any queue
+  "Parse links" starts at any queue
+}
+
+test "A host is asked before it is fetched" {
+  "Crawl page" calls any cache before web
+  "Crawl page" scenario "Host busy" never calls web
+  "Crawl page" scenario "Host busy" writes any queue before responding
+}
+
+test "A URL leaves the frontier only once its page is stored" {
+  "Crawl page" scenario "Host ready" writes any storage before responding
+  "Crawl page" handles failure of web
+  "Crawl page" scenario "Fetch failed" writes any queue before responding
+}
+
+test "Links are deduplicated before they reach the frontier" {
+  "Parse links" calls any cache or any database before any queue
+  "Parse links" never calls web
+}

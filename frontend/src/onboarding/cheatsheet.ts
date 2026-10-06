@@ -91,7 +91,7 @@ api  -> db    : SQL`,
   {
     id: 'hld',
     title: 'Traffic and requirements',
-    note: 'The simulation loads the design with this traffic and checks every requirement (Analysis and Tests tabs). `capacity` overrides a node\'s numbers, e.g. how long a failed call to it takes.',
+    note: 'The simulation loads the design with this traffic and checks every requirement (the Results tab). `capacity` overrides a node\'s numbers, e.g. how long a failed call to it takes.',
     ref: '#high-level-design',
     code: `traffic {
   "Get order"   2k rps mix "Cache hit" 90%, "Cache miss" 10%

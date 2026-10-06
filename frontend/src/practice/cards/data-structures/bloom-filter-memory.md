@@ -2,6 +2,7 @@
 type: estimate
 difficulty: medium
 tags: [estimation]
+related: [web-crawler]
 answer: 120
 unit: MB
 tolerance: 1.5

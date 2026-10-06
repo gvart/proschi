@@ -1,0 +1,43 @@
+title "Collaborative Docs" "Many people editing one document at once, every keystroke merged, stored and shown to the others"
+
+editor        "Editor"        [Browser] "The person typing; the browser keeps a WebSocket open while the document is open"
+collaborators "Collaborators" [Browser] "Everyone else who has the same document open"
+
+traffic {
+  "Edit"          4k rps
+  "Move cursor"   8k rps
+  "Open document" 500 rps
+  "Save snapshot" 40 rps
+}
+
+requirements {
+  p99 "Edit" < 100ms
+  p99 "Move cursor" < 60ms
+  p99 "Open document" < 400ms
+  availability "Edit" >= 99.95%
+  durable "Edit"
+  survive any node failure
+  cost <= 6500 usd/month
+}
+
+test "An edit is in the operation log before it is acknowledged" {
+  "Edit" starts at editor
+  "Edit" writes any database before responding
+}
+
+test "Collaborators get an edit after it is stored, through pub/sub" {
+  "Edit" never waits for collaborators
+  "Edit" calls collaborators after any database
+  "Edit" calls any queue before collaborators
+}
+
+test "Cursor moves are broadcast, never stored" {
+  "Move cursor" calls collaborators
+  "Move cursor" never waits for collaborators
+  "Move cursor" never calls any database or any storage
+}
+
+test "Opening a document starts from a snapshot" {
+  "Open document" calls any storage before any database
+  "Save snapshot" calls any storage after any database
+}

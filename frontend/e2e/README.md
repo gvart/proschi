@@ -29,8 +29,8 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 
 | File | Covers |
 |---|---|
-| `landing.e2e.ts` | Hero, hero player, practice list (26 problems), example links into the editor |
-| `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
+| `landing.e2e.ts` | Hero, hero player, practice list (29 problems), example links into the editor |
+| `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, Diagram / Results / HLD tabs and old `?view=` names, the Export menu (PNG from any tab, SVG, Mermaid, .proschi), phone Code/Diagram tabs, the compact header at 375 and 320px |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
 | `prep.e2e.ts` | The practice hub: the Today panel (streak, cards due, today's challenge and daily run, Continue) over the problem list, one bar of tabs with the header's Practice marked on every address, the Progress tab's level and sections, the account page with its compact badge grid, a public profile (API mocked) |

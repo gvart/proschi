@@ -3,6 +3,7 @@ type: choice
 difficulty: medium
 decks: [sample]
 tags: [replication]
+related: [distributed-kv]
 ---
 
 ## Question

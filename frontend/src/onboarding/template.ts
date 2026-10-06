@@ -22,5 +22,5 @@ usecase "Sign up" {
 }
 
 # Next: alt "…" { } scenarios, then traffic { }, requirements { } and
-# test "…" { } blocks bring the Analysis and Tests tabs to life.
+# test "…" { } blocks bring the Results tab to life.
 `;

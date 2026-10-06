@@ -12,7 +12,7 @@ export const EXAMPLE_PARAM = 'example';
 
 /**
  * What a first visit opens: small, with a use case to play and the traffic and
- * requirements the editor tour's "Will it scale?" step shows on Analysis and Tests.
+ * requirements the editor tour's "Will it scale?" step shows on Results.
  */
 export const FIRST_RUN_SOURCE = helloExample;
 

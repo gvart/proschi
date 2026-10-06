@@ -2,7 +2,7 @@
 type: flip
 difficulty: medium
 tags: [queues]
-related: [job-queue]
+related: [job-queue, web-crawler]
 distinct-from: [at-least-once-needs-idempotency]
 ---
 

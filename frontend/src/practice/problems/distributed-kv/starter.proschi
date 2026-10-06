@@ -1,0 +1,11 @@
+import "problem.proschi"
+
+# Add the coordinators, the connections and the use cases "Put" and "Get".
+coord "Coordinators" [Go]
+
+apps -> coord
+
+usecase "Get" {
+  apps   -> coord : GET /kv/cart:7
+  coord --> apps  : 200
+}

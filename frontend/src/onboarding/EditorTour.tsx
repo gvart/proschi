@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { DiagramNode } from '../dsl';
 import { renameNode } from '../dsl/edit';
-import type { View } from '../components/Analysis/ViewTabs';
+import type { View } from '../components/Analysis/view';
 import Tour, { type CoverBand, type TourStep } from './Tour';
 import { useIsPhone } from './layout';
 import { nameTarget, type NameTarget } from './nameTarget';
@@ -23,7 +23,7 @@ export interface EditorTourProps {
   /** Replaces the current document's text (undoable in the editor). */
   edit: (change: (source: string) => string) => void;
   selectInEditor: (line: number, col: number, length: number, focus: boolean) => void;
-  /** Opens the URL shortener HLD example on its Tests tab. */
+  /** Opens the URL shortener HLD example on its Results tab. */
   openHldExample: () => void;
   onClose: () => void;
   onCover?: (band: CoverBand | null) => void;
@@ -36,7 +36,7 @@ const q = (selector: string) => () => {
 
 const Code = ({ children }: { children: string }) => <code className="rounded bg-ink/5 px-1 py-0.5 font-mono text-[0.8125rem] text-ink">{children}</code>;
 
-/** The editor's first-run tour: text → diagram, edit, play, analysis/tests, share. */
+/** The editor's first-run tour: text → diagram, edit, play, results, share. */
 export default function EditorTour(props: EditorTourProps) {
   const { source, nodes, diagramKey, canPlay, playing, view, hasTraffic, copied, setMobilePane, stopPlaying, edit, selectInEditor, openHldExample, onClose, onCover } = props;
   const phone = useIsPhone();
@@ -160,16 +160,16 @@ export default function EditorTour(props: EditorTourProps) {
         body: hasTraffic ? (
           <p>
             The <Code>traffic</Code> and <Code>requirements</Code> blocks at the bottom feed a simulation of load, latency, availability and cost.{' '}
-            <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.
+            <strong>Results</strong> says what passes or fails and shows the numbers, <strong>HLD</strong> writes the design document.
           </p>
         ) : (
           <p>
             Add <Code>traffic</Code>, <Code>requirements</Code> and <Code>test</Code> blocks and a simulation computes load, latency, availability and
-            cost. <strong>Analysis</strong> shows the numbers, <strong>Tests</strong> says pass or fail, <strong>HLD</strong> writes the design document.
+            cost. <strong>Results</strong> says what passes or fails and shows the numbers, <strong>HLD</strong> writes the design document.
           </p>
         ),
-        task: 'Open Analysis or Tests.',
-        done: view === 'analysis' || view === 'tests',
+        task: 'Open Results.',
+        done: view === 'results',
         doneText: hasTraffic ? 'Every requirement becomes a check like these.' : 'No traffic here yet. The URL shortener HLD example has the whole set.',
         action: hasTraffic ? undefined : { label: 'Open an example', run: openHldExample },
       },
@@ -182,7 +182,7 @@ export default function EditorTour(props: EditorTourProps) {
           <>
             <p>
               <strong>Share → Copy link</strong> copies a link that holds the whole diagram; nothing is uploaded. The same menu embeds it in other pages. Diagrams save in this browser: the diagrams menu
-              (top left) has New, Open, Download and <strong>Export all (.zip)</strong> for a backup.
+              (top left) has New and Open, and <strong>Export</strong> next to Share saves an image, Mermaid, the file or <strong>Export all (.zip)</strong> for a backup.
             </p>
             <p>
               The <strong>?</strong> menu replays this tour and has a syntax cheat-sheet.

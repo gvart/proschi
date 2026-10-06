@@ -45,19 +45,19 @@ export const ROADMAP: RoadmapStage[] = [
     id: 'partitioning',
     title: 'Partitioning and replication',
     why: 'Once one database cannot hold the data or the writes, split it into shards and keep replicas in step. Comes after caching, which is cheaper and usually tried first.',
-    problems: ['notion-sharding', 'github-repo-replication', 'social-graph-cache'],
+    problems: ['notion-sharding', 'github-repo-replication', 'social-graph-cache', 'distributed-kv'],
   },
   {
     id: 'async',
     title: 'Queues and async work',
     why: 'Answer the user first and do slow or failure-prone work later: queues, workers and retries. The fan-out and streaming patterns that follow are built on them.',
-    problems: ['job-queue', 'file-storage', 'notification-fanout'],
+    problems: ['job-queue', 'file-storage', 'notification-fanout', 'web-crawler'],
   },
   {
     id: 'fan-out',
     title: 'Fan-out and real-time delivery',
     why: 'Deliver one write to many readers: precomputed feeds, chat over websockets and server push. Combines caching, queues and partitioning from the stages before.',
-    problems: ['news-feed', 'chat', 'push-gateway'],
+    problems: ['news-feed', 'chat', 'push-gateway', 'collaborative-docs'],
   },
   {
     id: 'streams',

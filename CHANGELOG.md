@@ -10,6 +10,15 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Three new practice problems**, each with a lesson, hints, an interview
+  mode and five known mistakes: **Web Crawler** (a durable frontier,
+  per-host politeness and a Bloom filter for seen URLs; in *Queues and async
+  work*), **Distributed Key-Value Store** (consistent hashing, N = 3 with
+  quorum reads and writes, hinted handoff and read repair; in *Partitioning
+  and replication*) and **Collaborative Docs** (one sequencer per document,
+  an operation log written before the ack, pub/sub fan-out of edits and
+  cursors, snapshots; in *Fan-out and real-time delivery*). 29 problems in
+  all.
 - **Failing tests teach.** When your design fails a problem's tests the way a
   known mistake does, the problem page names it under the tests (*Common
   mistake: …*), explains what breaks and what to do instead, links the lesson
@@ -396,6 +405,18 @@ deployed from `main` and ships with the same changes.
   are listed apart under **Design challenges**, each with a line on what its
   mode asks: migrations and API versions, naming the root cause, strangling a
   monolith, cutting the bill.
+- **Editor: one Results tab, one Export menu.** The Analysis and Tests tabs
+  are now a single **Results** tab: failing requirements and tests first with
+  their hints, the passing ones folded away, then the load, latency,
+  availability and cost per node, then *Review my design*. The views are
+  Diagram, Results and HLD; the HLD opens with a one-line summary of the
+  checks that links to Results, and `?view=analysis` or `?view=tests` links
+  open Results. **Export**, next to Share, now holds every way out: PNG and
+  SVG images (from any tab), Mermaid (copy, or download as `.mmd`), the
+  `.proschi` file and *Export all (.zip)*; the canvas's own Export menu is
+  gone and the Diagrams menu keeps New, Open, Import and Import backup. On
+  phones, Examples moves into the Diagrams menu so the header still fits at
+  320px.
 - **One practice hub.** The header has a single **Practice** link (next to
   Docs, GitHub and the editor) instead of Practice, Interview prep and
   Arcade. Practice opens on a **Today** panel: your streak and daily goal,
