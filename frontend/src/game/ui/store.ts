@@ -29,6 +29,8 @@ export interface Settings {
   sound: boolean;
   /** Ticks per 2.5 s: 1, 2 or 4. */
   speed: 1 | 2 | 4;
+  /** Kernel, the cat, briefs each wave. */
+  mascot: boolean;
 }
 
 const read = <T>(key: string): T | undefined => {
@@ -77,6 +79,6 @@ export const saveRun = (run: SavedRun | undefined) => write(RUN_KEY, run);
 
 export function loadSettings(): Settings {
   const s = read<Partial<Settings>>(SETTINGS_KEY) ?? {};
-  return { sound: s.sound === true, speed: s.speed === 2 || s.speed === 4 ? s.speed : 1 };
+  return { sound: s.sound === true, speed: s.speed === 2 || s.speed === 4 ? s.speed : 1, mascot: s.mascot !== false };
 }
 export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s);

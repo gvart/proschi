@@ -10,6 +10,13 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Kernel**, the Arcade's cat SRE lead: at the start of every wave it briefs
+  you in a speech bubble that types itself out. It says how traffic changed
+  since last month, which use cases go live, and the new requirements in
+  plain words ("Redirect must answer in under 200 ms for 99% of requests"),
+  plus the incidents coming. Boss waves open with their own intro and a
+  worried cat. Tap to show it all, "Got it" to put it away, and the cat
+  button in the run's header turns briefings off.
 - **Legacy rescue** and **Cost crunch**, the last two design-first Arcade
   modes. **Monolith** (8 waves): strangle a ten-year-old shop's monolith
   behind a gateway, extract search and a catalog API, split the orders table

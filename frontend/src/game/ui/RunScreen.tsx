@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Code2, FastForward, LayoutGrid, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ArrowLeft, Cat, Code2, FastForward, LayoutGrid, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
 import { celebrate } from '../../design/celebrate';
 import { prefersReducedMotion } from '../../design/motion';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
@@ -19,6 +19,8 @@ import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } f
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
 import { ChangesPanel, DiagnosisPanel, TicketCard } from './Modes';
+import { MascotBriefing, MASCOT } from './Mascot';
+import { briefing } from './briefing';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
 import type { Arcade, RunResult } from './useArcade';
@@ -89,6 +91,8 @@ export default function RunScreen(props: RunScreenProps) {
   const [callout, setCallout] = useState<TickResult['breaches'][number]>();
   const [showResult, setShowResult] = useState(false);
   const [stamp, setStamp] = useState<string>();
+  /** The wave whose briefing was put away. */
+  const [briefedWave, setBriefedWave] = useState(-1);
   const [result, setResult] = useState<RunResult>();
   const finished = useRef(false);
   const calloutShown = useRef(-1);
@@ -646,9 +650,24 @@ export default function RunScreen(props: RunScreenProps) {
         {setup.ascension > 0 && <span className="ml-1 text-sm text-pop-pink">A{setup.ascension}</span>}
         {setup.mode === 'daily' && <span className="ml-1 text-sm text-muted">daily</span>}
       </h1>
-      <button type="button" className={outlineButton} aria-pressed={settings.sound} aria-label={settings.sound ? 'Sound on' : 'Sound off'} onClick={() => props.onSettings({ ...settings, sound: !settings.sound })}>
-        {settings.sound ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
-      </button>
+      <div className="flex gap-1">
+        <button
+          type="button"
+          className={outlineButton}
+          aria-pressed={settings.mascot}
+          aria-label={`${MASCOT}'s briefings`}
+          title={settings.mascot ? `Hide ${MASCOT}'s briefings` : `Show ${MASCOT}'s briefings`}
+          onClick={() => {
+            if (!settings.mascot) setBriefedWave(-1);
+            props.onSettings({ ...settings, mascot: !settings.mascot });
+          }}
+        >
+          <Cat size={14} aria-hidden="true" className={settings.mascot ? '' : 'opacity-40'} />
+        </button>
+        <button type="button" className={outlineButton} aria-pressed={settings.sound} aria-label={settings.sound ? 'Sound on' : 'Sound off'} onClick={() => props.onSettings({ ...settings, sound: !settings.sound })}>
+          {settings.sound ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
+        </button>
+      </div>
     </div>
   );
   const stampEl = stamp && (
@@ -664,6 +683,9 @@ export default function RunScreen(props: RunScreenProps) {
       {top}
       {!narrow && hud}
       {stampEl}
+      {planning && settings.mascot && briefedWave !== s.wave && (
+        <MascotBriefing key={`brief-${s.wave}`} briefing={briefing(game.scenario, game.waveDef(), forecast)} boss={forecast.boss} onClose={() => setBriefedWave(s.wave)} />
+      )}
       {planning && forecast.ticket && <TicketCard ticket={forecast.ticket} key={`ticket-${s.wave}`} />}
       {planning && game.waveDef().diagnosis && (
         <DiagnosisPanel key={`diagnosis-${s.wave}`} diagnosis={game.waveDef().diagnosis!} picked={s.diagnosis} onPick={(pick) => apply({ t: 'diagnose', pick })} />

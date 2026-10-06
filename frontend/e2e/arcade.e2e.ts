@@ -26,6 +26,17 @@ async function startShortly(page: Page) {
 
 test('a first wave: place by tapping, scale, deploy, watch it run, then draft', async ({ page }) => {
   await startShortly(page);
+  // Kernel briefs the wave; tap to show it all, "Got it" puts it away, and the cat button brings briefings back.
+  const brief = page.getByRole('complementary', { name: "Kernel's briefing" });
+  await expect(brief).toContainText('Redirect must answer in under 200 ms for 99% of requests.');
+  await brief.getByRole('button', { name: 'Got it' }).click();
+  await expect(brief).toBeHidden();
+  const cat = page.getByRole('button', { name: "Kernel's briefings" });
+  await cat.click();
+  await expect(cat).toHaveAttribute('aria-pressed', 'false');
+  await cat.click();
+  await expect(brief).toBeVisible();
+  await brief.getByRole('button', { name: 'Got it' }).click();
   // Locked components say what they cost; the starters can be placed.
   await expect(page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: /Cache/ })).toBeDisabled();
 

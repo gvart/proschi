@@ -81,15 +81,15 @@
     { "name": "Soft launch", "traffic": { "browse": 200, "hold": 20, "checkout": 5 }, "curve": "day", "requirements": ["p99 \"Hold seat\" < 300ms", "durable \"Checkout\""] },
     { "traffic": { "browse": 350, "hold": 35, "checkout": 9 }, "curve": "day", "contract": true },
     { "traffic": { "browse": 600, "hold": 60, "checkout": 15 }, "curve": "ramp", "requirements": ["p99 \"Checkout\" < 1500ms", "availability \"Checkout\" >= 99.5%"] },
-    { "name": "Indie band on sale", "boss": true, "traffic": { "browse": 900, "hold": 120, "checkout": 25 }, "curve": "spike", "events": ["ddos"] },
+    { "name": "Indie band on sale", "brief": "An indie band's tickets go on sale. The fans are refreshing already. A few thousand seats, and no seat sold twice.", "boss": true, "traffic": { "browse": 900, "hold": 120, "checkout": 25 }, "curve": "spike", "events": ["ddos"] },
     { "name": "Growth", "traffic": { "browse": 1400, "hold": 250, "checkout": 40 }, "curve": "day", "contract": true, "requirements": ["p99 \"Checkout\" < 800ms"], "debrief": "async-receipt" },
     { "traffic": { "browse": 2100, "hold": 450, "checkout": 60 }, "curve": "double-peak", "requirements": ["survive any node failure"] },
     { "traffic": { "browse": 3000, "hold": 800, "checkout": 90 }, "curve": "day", "events": ["write-surge"], "debrief": "write-ceiling" },
-    { "name": "Stadium tour", "boss": true, "traffic": { "browse": 4500, "hold": 1300, "checkout": 140 }, "curve": "spike", "events": ["ddos", "db-failover"], "contract": true },
+    { "name": "Stadium tour", "brief": "A stadium tour goes on sale. Far more fans than seats, all hitting Buy in the same second. Keep checkout honest.", "boss": true, "traffic": { "browse": 4500, "hold": 1300, "checkout": 140 }, "curve": "spike", "events": ["ddos", "db-failover"], "contract": true },
     { "name": "Scale", "traffic": { "browse": 6500, "hold": 2000, "checkout": 200 }, "curve": "day", "requirements": ["availability \"Hold seat\" >= 99.9%", "p99 \"Hold seat\" < 120ms"] },
     { "traffic": { "browse": 9000, "hold": 3000, "checkout": 300 }, "curve": "double-peak", "global": 0.3, "requirements": ["p90 \"View event\" < 60ms", "p99 \"Hold seat\" < 300ms"] },
     { "traffic": { "browse": 12000, "hold": 4500, "checkout": 420 }, "curve": "day", "events": ["write-surge"] },
-    { "name": "The reunion tour", "boss": true, "traffic": { "browse": 16000, "hold": 6000, "checkout": 600 }, "curve": "spike", "events": ["ddos", "hot-key", "az-outage"] }
+    { "name": "The reunion tour", "brief": "The reunion tour. Millions in the queue for a few thousand seats. This is the one people will tweet about, good or bad.", "boss": true, "traffic": { "browse": 16000, "hold": 6000, "checkout": 600 }, "curve": "spike", "events": ["ddos", "hot-key", "az-outage"] }
   ],
   "eventPool": [
     { "id": "noisy-neighbor", "weight": 2 },
