@@ -4,24 +4,13 @@ import './home.css';
 import { enhance } from '../design/enhance';
 import { prefersReducedMotion } from '../design/motion';
 import { highlightElement } from './highlight';
-import { exampleLink } from './links';
-import { practiceListHtml } from './practiceList';
 import { initStory } from './story';
-import practiceProblems from 'virtual:practice-listings';
 
 // Everything here is plain DOM and small; React and the editor load only with the demo, below.
+// The example links (`./app/?example=<id>`) and the practice list are in the HTML already (the list is
+// rendered at build time, plugins/practiceListings.ts).
 
 document.querySelectorAll<HTMLElement>('pre[data-proschi] code').forEach((code) => highlightElement(code));
-
-// Example links carry the whole document in the URL fragment, like share links.
-document.querySelectorAll<HTMLAnchorElement>('a[data-example]').forEach((a) => {
-  const href = exampleLink(a.dataset.example ?? '');
-  if (href) a.href = href;
-});
-
-// The practice list comes from the problem folders, so it never falls behind them.
-const practiceList = document.querySelector<HTMLElement>('#practice-list');
-if (practiceList) practiceList.innerHTML = practiceListHtml(practiceProblems);
 
 enhance();
 initStory(document);

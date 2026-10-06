@@ -35,11 +35,12 @@ import {
   Archive,
   ArchiveRestore,
 } from 'lucide-react';
-import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
+import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
+import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
   addDoc,
@@ -114,21 +115,36 @@ const nodeTypes = {
 };
 
 function loadInitialState(): DocumentState {
+  // A share link wins over `?example=`: once an example is edited, the address bar holds the edits.
   const link = decodeShareLink(window.location.hash);
+  const example = link ? undefined : exampleFromSearch(window.location.search)?.example;
   return initialState({
     stored: loadJson<unknown>(DOCS_KEY, null),
     legacySource: loadJson<unknown>(LEGACY_SOURCE_KEY, null),
-    sharedSource: link?.source ?? null,
+    sharedSource: link?.source ?? example?.source ?? null,
     sharedImports: link?.imports,
-    fallbackSource: ecommerceExample,
+    fallbackSource: FIRST_RUN_SOURCE,
   });
 }
 
-/** The tour on a first visit; only a hint over a shared diagram or example link, which should be seen first. */
+/** Whether the page opened on a shared diagram or an example link (`?example=<id>`), which should be seen first. */
+function isDeepLink(): boolean {
+  return readShareLink(window.location.hash) !== null || exampleFromSearch(window.location.search) !== null;
+}
+
+/** Whether this browser has saved diagrams from an earlier visit. */
+function isReturning(): boolean {
+  return loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
+}
+
+/** The tour on a first visit; only a hint over a shared diagram or example link. */
 function initialTourMode(): StartMode {
-  const deepLink = readShareLink(window.location.hash) !== null || new URLSearchParams(window.location.search).has('example');
-  const returning = loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
-  return startMode('editor', { deepLink, returning });
+  return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
+}
+
+/** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
+function initialMobilePane(): 'code' | 'diagram' {
+  return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
 }
 
 export default function Playground() {
@@ -153,7 +169,7 @@ export default function Playground() {
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
   // Phones show one pane at a time.
-  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
   const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
   const [tour, setTour] = useState<StartMode>(initialTourMode);
@@ -194,7 +210,9 @@ export default function Playground() {
   // A link that could not be opened says so; the banner also carries long-link and backup messages.
   const [banner, setBanner] = useState<BannerMessage | null>(() => {
     const link = readShareLink(window.location.hash);
-    return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
+    if (link && 'error' in link) return { message: link.error, tone: 'warning' };
+    const example = link ? null : exampleFromSearch(window.location.search);
+    return example && !example.example ? { message: `There is no example called “${example.id}”; Examples in the top bar lists them all.`, tone: 'warning' } : null;
   });
   useEffect(() => {
     if (!notice) return;
@@ -214,6 +232,12 @@ export default function Playground() {
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
+
+  // An example link has done its job once the example is open: the address bar becomes a share link like any other.
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    if (exampleFromSearch(search) !== null) window.history.replaceState(null, '', `${pathname}${withoutExample(search)}${hash}`);
+  }, []);
 
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
   useEffect(() => {

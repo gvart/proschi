@@ -53,13 +53,14 @@ usecase "Get order" {
 }
 `;
 
-export const helloExample = `# A Proschi document: nodes, connections and a use case.
+export const helloExample = `# A Proschi document: nodes, connections, a use case,
+# and the traffic and requirements the simulation checks.
 title "Hello Proschi"
 
-# id "Display name" [Tech stack] @owner-team
+# id "Display name" [Tech stack] @owner-team x(replicas)
 user "User"      [Actor]
-api  "Notes API" [REST API]   @backend
-db   "Notes DB"  [PostgreSQL] @backend
+api  "Notes API" [REST API]   @backend x2
+db   "Notes DB"  [PostgreSQL] @backend x2
 
 user -> api : HTTPS
 api  -> db  : SQL
@@ -70,6 +71,19 @@ usecase "Create a note" {
   api  -> db   : INSERT note
   db  --> api  : 1 row
   api --> user : 201 {"id": 42}
+}
+
+# How much load the use case gets: Analysis shows what it does to each node.
+traffic {
+  "Create a note" 200 rps
+}
+
+# What must hold under that load: Tests checks each line.
+# Try removing an x2 above and watch availability fail.
+requirements {
+  p99 "Create a note" < 200ms
+  availability >= 99.9%
+  cost <= 1500 usd/month
 }
 `;
 
@@ -304,7 +318,7 @@ export interface Example {
 }
 
 export const examples: Example[] = [
-  { id: 'hello', name: 'Hello Proschi', description: 'The basics: nodes, connections and one use case.', source: helloExample },
+  { id: 'hello', name: 'Hello Proschi', description: 'The basics: nodes, connections, one use case, traffic and requirements.', source: helloExample },
   { id: 'ecommerce', name: 'E-commerce platform', description: 'Success and error scenarios per endpoint, multi-line payloads and parallel steps.', source: ecommerceExample },
   { id: 'serverless', name: 'Serverless pipeline', description: 'API Gateway, Lambda, S3 and SQS with async processing.', source: serverlessExample },
   { id: 'login', name: 'Login with sessions', description: 'Log in with success, wrong-password and outage scenarios, plus log out.', source: loginExample },

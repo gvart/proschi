@@ -26,12 +26,16 @@ export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
 export const DAILY_REVIEW_HREF = 'practice/#/review';
 /** The daily challenge: a route of the practice page (src/practice/challenge/). */
 export const DAILY_CHALLENGE_HREF = 'practice/#/challenge';
+/** The Arcade, Scale or Fail: a route of the practice page (src/game/ui/ArcadeRoute.tsx). */
+export const ARCADE_HREF = 'practice/#/arcade';
 
 /** The header's links; the editor is its call to action instead. */
 export const NAV: SiteLink[] = [
   { label: 'Docs', href: 'docs/', page: 'docs' },
   { label: 'Practice', href: 'practice/', page: 'practice' },
   { label: 'Interview prep', href: INTERVIEW_PREP_HREF, page: 'roadmap', accent: true },
+  // A tab of Interview prep, which stays the link marked current there.
+  { label: 'Arcade', href: ARCADE_HREF },
   { label: 'GitHub', href: GITHUB_URL },
 ];
 
@@ -46,6 +50,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       { label: 'Interview prep', href: INTERVIEW_PREP_HREF },
       { label: 'Daily review', href: DAILY_REVIEW_HREF },
       { label: 'Daily challenge', href: DAILY_CHALLENGE_HREF },
+      { label: 'Arcade: Scale or Fail', href: ARCADE_HREF },
     ],
   },
   {
