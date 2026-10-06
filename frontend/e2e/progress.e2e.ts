@@ -15,7 +15,7 @@ async function details(page: Page, id: string) {
   await badge(page, id).getByRole('button').click();
   return page.locator(`[data-achievement-detail="${id}"]`);
 }
-const prepTab = (page: Page, name: string) => page.getByRole('navigation', { name: 'Interview prep' }).getByRole('link', { name });
+const prepTab = (page: Page, name: string) => page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name });
 const toast = (page: Page) => page.getByRole('status', { name: 'New badge' });
 
 test.describe('progress page', () => {
@@ -86,7 +86,7 @@ test.describe('progress page', () => {
     await expect(toast(page)).toContainText('Clean run');
     await toast(page).getByRole('button', { name: 'Dismiss' }).click();
     await expect(toast(page)).toHaveCount(0);
-    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
     await prepTab(page, 'Progress').click();
     await expect(badge(page, 'first-solve')).toHaveAttribute('data-earned', 'true');
     await expect(badge(page, 'first-run-1')).toHaveAttribute('data-earned', 'true');

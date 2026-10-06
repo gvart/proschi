@@ -69,10 +69,10 @@ test.describe('landing page', () => {
     await context.close();
   });
 
-  test('the Arcade is linked from the page and the header', async ({ page }) => {
+  test('the Arcade is linked from the page and the footer', async ({ page }) => {
     const arcade = page.getByRole('region', { name: 'Scale or Fail' });
     await expect(arcade.getByRole('link', { name: /Play Scale or Fail/ })).toHaveAttribute('href', './practice/#/arcade');
-    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Arcade' }).first()).toHaveAttribute('href', './practice/#/arcade');
+    await expect(page.getByRole('contentinfo').getByRole('link', { name: 'Arcade: Scale or Fail' })).toHaveAttribute('href', './practice/#/arcade');
   });
 
   test('example links open the editor with that example', async ({ page }) => {
