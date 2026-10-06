@@ -44,11 +44,16 @@ export interface EstimateResult {
   direction: 'high' | 'low' | 'exact';
 }
 
-/** Whether an estimate is within the card's tolerance, and how far off it is. */
-export function gradeEstimateAnswer(card: EstimateCard, value: number): EstimateResult {
+/**
+ * Whether an estimate is within the card's tolerance, and how far off it is.
+ * A `range` (an interview estimate's accepted low and high) replaces the
+ * tolerance factor.
+ */
+export function gradeEstimateAnswer(card: Pick<EstimateCard, 'answer' | 'tolerance'>, value: number, range?: { low: number; high: number }): EstimateResult {
   const ratio = value / card.answer;
   const direction = ratio > 1 ? 'high' : ratio < 1 ? 'low' : 'exact';
-  return { correct: gradeEstimate(card, value), factor: ratio >= 1 ? ratio : 1 / ratio, direction };
+  const correct = range ? Number.isFinite(value) && value >= range.low && value <= range.high : gradeEstimate(card, value);
+  return { correct, factor: ratio >= 1 ? ratio : 1 / ratio, direction };
 }
 
 /** A factor for "about 3× too high": one decimal under 10, whole above, with thousands separators. */

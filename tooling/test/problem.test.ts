@@ -108,6 +108,96 @@ describe('proschi problem check', () => {
     expect(r.out).toMatch(/1 problem, \d wrong designs?: \d+ violation\(s\) in 1 problem$/);
   });
 
+  const INTERVIEW = [
+    '## Questions',
+    '',
+    '### How many fetches a second?',
+    '- kind: good',
+    '- fact: 1k rps',
+    '',
+    'About **1k a second**.',
+    '',
+    '### How fast must a fetch be?',
+    '- kind: good',
+    '- fact: p99 of fetching an item under 100 ms',
+    '',
+    'Under 100 ms at p99.',
+    '',
+    '### Is there a budget?',
+    '- kind: good',
+    '- fact: At most $2,000 / month',
+    '',
+    'At most $2,000 a month.',
+    '',
+    '### Which language?',
+    '- kind: weak',
+    '',
+    'An implementation detail.',
+    '',
+    '### Can I use Kubernetes?',
+    '- kind: weak',
+    '',
+    'Tooling, not design.',
+    '',
+    '## Estimates',
+    '',
+    '### How many fetches reach the database each second?',
+    '- answer: 100',
+    '- unit: reads/s',
+    '- range: 80 to 130',
+    '',
+    '1,000 × 10% = **100**.',
+    '',
+  ].join('\n');
+  const GUIDED = [
+    '## Add a database',
+    '- node: any database',
+    '- edge: any service -> any database',
+    '',
+    'Store the items.',
+    '',
+    '## Cache the reads',
+    '- node: any cache',
+    '- test: Items are read from the cache first',
+    '',
+    'Read the cache first.',
+    '',
+  ].join('\n');
+
+  it('accepts an interview and a walkthrough, and counts them', () => {
+    const dir = problemsWith((f) => {
+      writeFileSync(join(f, 'interview.md'), INTERVIEW);
+      writeFileSync(join(f, 'guided.md'), GUIDED);
+    });
+    const r = capture(['check', dir]);
+    expect(r.out).toMatch(/✓ echo: .*, interview \(5 questions, 1 estimate\), guided \(2 steps\)/);
+    expect(r.code).toBe(0);
+  });
+
+  it.each([
+    ['a good question whose fact is not in the statement', (s: string) => s.replace('- fact: 1k rps', '- fact: 5k rps'), /echo\/interview\.md:5: "How many fetches a second\?": the fact "5k rps" is not in problem\.md's Scale or Constraints section/],
+    ['a good question without a fact', (s: string) => s.replace('- fact: 1k rps\n', ''), /echo\/interview\.md:3: "How many fetches a second\?": a good question needs "- fact: …"/],
+    ['an estimate without a number', (s: string) => s.replace('- answer: 100', '- answer: lots'), /echo\/interview\.md:\d+: "How many fetches reach the database each second\?": "- answer: <number>" above 0 is required/],
+    ['a range that misses the answer', (s: string) => s.replace('- range: 80 to 130', '- range: 200 to 300'), /echo\/interview\.md:\d+: .*"- range: <low> to <high>" must be two numbers above 0 around the answer/],
+    ['too few weak questions', (s: string) => s.replace('- kind: weak\n\nTooling', '- kind: good\n- fact: 1k rps\n\nTooling'), /echo\/interview\.md:1: At least 2 weak questions/],
+  ])('fails on an interview with %s', (_name, edit, message) => {
+    const r = capture(['check', problemsWith((f) => writeFileSync(join(f, 'interview.md'), edit(INTERVIEW)))]);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(message);
+  });
+
+  it.each([
+    ['an unknown node id', (s: string) => s.replace('- node: any database', '- node: storage'), /echo\/guided\.md:1: "Add a database": no node "storage"/],
+    ['an unknown test', (s: string) => s.replace('- test: Items are read from the cache first', '- test: Items are fast'), /echo\/guided\.md:7: "Cache the reads": no requirement or test is named "Items are fast"/],
+    ['a check the solution fails', (s: string) => s.replace('- node: any cache', '- node: any queue'), /echo\/guided\.md:7: "Cache the reads": the reference solution fails the check "A node of kind queue"/],
+    ['a step without checks', (s: string) => s.replace('- node: any cache\n- test: Items are read from the cache first\n', ''), /echo\/guided\.md:7: "Cache the reads": a step needs at least one check/],
+    ['a bad replicas check', (s: string) => s.replace('- node: any cache', '- replicas: any cache x1'), /echo\/guided\.md:8: "Cache the reads": "- replicas:" takes "<node> x<n>"/],
+  ])('fails on a walkthrough with %s', (_name, edit, message) => {
+    const r = capture(['check', problemsWith((f) => writeFileSync(join(f, 'guided.md'), edit(GUIDED)))]);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(message);
+  });
+
   it('accepts a company', () => {
     const dir = problemsWith((f) => rewrite(join(f, 'problem.md'), (s) => s.replace('difficulty: easy', 'difficulty: easy\ncompany: Twitter')));
     const r = capture(['check', dir]);

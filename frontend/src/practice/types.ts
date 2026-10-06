@@ -39,6 +39,13 @@ export interface Problem {
    * read before trying it (lesson.ts has the required sections).
    */
   lesson?: string;
+  /**
+   * interview.md (Markdown): interview mode's clarifying questions and
+   * estimates (modes/interviewFile.ts reads it).
+   */
+  interview?: string;
+  /** guided.md (Markdown): guided mode's steps and checkpoints (modes/guidedFile.ts reads it). */
+  guided?: string;
   /** Plausible wrong designs from wrong/*.proschi, each failing the tests it names. */
   wrong?: WrongDesign[];
 }
