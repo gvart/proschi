@@ -16,6 +16,7 @@ import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from '
 import { reviewDesign } from './review';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
+import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
@@ -59,7 +60,14 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/game/equip {perks}          the perks to take into runs
  *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
  *   GET    /api/game/leaderboard?scenario=&ascension= | ?day=   top 20 who opted in (+ your rank, signed in)
+ *   POST   /api/shares {source, imports?, image?}   a short link to a diagram, with a preview PNG: {id, url, …}
+ *   GET    /api/shares/<id>                 a short link's diagram (no sign-in needed)
+ *   DELETE /api/shares/<id>                 the owner deletes one
+ *   GET    /api/me/shares                   the user's short links
+ *   GET    /api/oembed?url=                 oEmbed for a short link
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *   GET    /s/<id>                          a short link: preview meta tags, then the editor
+ *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
  *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
  *
@@ -113,6 +121,14 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
+  if (is('POST', 'api', 'shares')) return createShare(request, ctx);
+  if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
+  if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);
+  if (is('GET', 'api', 'me', 'shares')) return listShares(request, ctx);
+  if (is('GET', 'api', 'oembed')) return oembed(request, ctx);
+  if ((method === 'GET' || method === 'HEAD') && parts.length === 2 && parts[0] === 's') {
+    return parts[1].endsWith('.png') ? shareImage(request, ctx, parts[1].slice(0, -'.png'.length)) : sharePage(request, ctx, parts[1]);
+  }
   if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
   if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
   return errorResponse(404, 'Not found');
@@ -133,7 +149,7 @@ export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
     const page = pathname.startsWith('/u/');
-    if (!page && !/^\/(api|auth)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
+    if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();
     const ctx = createContext(request, env, exec);
     let response: Response;

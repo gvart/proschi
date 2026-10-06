@@ -34,7 +34,8 @@ export function withSecurityHeaders(response: Response, ctx: Ctx): Response {
   headers.set('X-Frame-Options', 'DENY');
   headers.set('Content-Security-Policy', "default-src 'none'; frame-ancestors 'none'");
   headers.set('Strict-Transport-Security', 'max-age=63072000; includeSubDomains');
-  headers.set('Cross-Origin-Resource-Policy', 'same-origin');
+  // A handler may allow other sites to load an answer (a short link's preview image).
+  if (!headers.has('Cross-Origin-Resource-Policy')) headers.set('Cross-Origin-Resource-Policy', 'same-origin');
   for (const cookie of ctx.setCookies) headers.append('Set-Cookie', cookie);
   return out;
 }

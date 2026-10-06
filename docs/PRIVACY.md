@@ -1,11 +1,11 @@
 # Privacy
 
-Short version: the editor never sends your diagrams anywhere, there are no
-analytics or tracking scripts, no cookies for counting and nothing that
-follows you; the site only counts, per day, how often a few things happen
-(say, "the editor was opened 412 times on 6 October"), with nothing about
-who. An account is optional and only for practice. The rest of this page
-lists exactly what is kept, where, and for how long.
+Short version: the editor never sends your diagrams anywhere unless you make
+a short link, there are no analytics or tracking scripts, no cookies for
+counting and nothing that follows you; the site only counts, per day, how often
+a few things happen (say, "the editor was opened 412 times on 6 October"), with
+nothing about who. An account is optional (for practice and short links). The
+rest of this page lists exactly what is kept, where, and for how long.
 
 ## In your browser
 
@@ -42,7 +42,11 @@ theme, the docs pages and their live examples store nothing.
 
 **Share links** carry the whole diagram in the part of the address after
 `#`, which browsers never send to a server. Whoever you give a link to can
-read the diagram; nobody else sees it.
+read the diagram; nobody else sees it. The same goes for an embed made
+signed out (`/embed/#code=…`).
+
+**Short links** (`/s/<id>`, signed in only) are different: the diagram is
+stored on the server, below.
 
 **Share buttons** (a daily run, a solve, a badge, a profile) only hand text
 to your device's share sheet or clipboard; nothing is sent to us or to
@@ -97,7 +101,8 @@ a local build) never send anything.
 ## With a practice account
 
 On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub or
-Google to keep practice progress across devices and see how others did.
+Google to keep practice progress across devices, see how others did and make
+short links to diagrams.
 Without signing in, nothing about you reaches the server (the usage counts
 above are about events, not about you).
 
@@ -144,6 +149,15 @@ above are about events, not about you).
   cards and incidents you have seen) and every run you submit: its scenario,
   seed, loadout, the moves you made, the score and when you played. Runs
   played signed out stay in your browser and are sent when you sign in.
+- Short links, each one you make with Share → Short link with preview (or
+  Share → Embed, signed in): the diagram's text and the files it imports,
+  its title, a PNG preview of the diagram that your browser rendered (none
+  if it could not), and when you made it. **Anyone with the link can open
+  the diagram and its preview**, without an account; the link's id is ten
+  random characters, so it can't be guessed, but treat it like the diagram
+  itself. Your name is not shown with it. Share → Your short links lists
+  and deletes them; a deleted link stops working at once, though chat apps
+  and link previews that already fetched the preview may keep their copy.
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
@@ -206,9 +220,11 @@ already fetched are kept by them, beyond our control.
 In the account menu on the practice page:
 
 - **Download my data** saves everything stored about you as JSON, every
-  session with its kind (the site or an app) but never the token hashes.
+  session with its kind (the site or an app) but never the token hashes;
+  short links come with their diagrams and the address of each preview.
 - **Delete account** removes your account, sessions (apps' too), progress, card
-  reviews, daily challenge results and badges from the server at once; the progress in your browser stays.
+  reviews, daily challenge results, badges, game progress and short links from
+  the server at once; the progress in your browser stays.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

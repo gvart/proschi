@@ -155,6 +155,14 @@ export function isBlank(source: string): boolean {
 }
 
 /** Diagram name from its `title` line, without parsing the whole document. */
+/**
+ * Opens a diagram that came from elsewhere (a short link): the saved copy
+ * with the same text, or a new diagram at the top, as a `#code=` link opens.
+ */
+export function openShared(state: DocumentState, source: string, imports?: Record<string, string>, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
+  return initialState({ stored: state, legacySource: null, sharedSource: source, sharedImports: imports, fallbackSource: source }, now, newId);
+}
+
 export function titleOf(source: string): string {
   const match = source.match(/^[ \t]*title[ \t]+(?:"((?:[^"\\]|\\.)*)"|([A-Za-z_]\w*))/m);
   const title = match ? (match[1] ?? match[2]).replace(/\\(.)/g, '$1').trim() : '';
