@@ -185,15 +185,22 @@ content, and `format` only when a field changes meaning.
 
 ### Daily goal and streak
 
-A day counts toward the streak when it meets the daily goal: 10 cards
-reviewed (5, 20 or 30 when the learner picks so) or a problem solved for the
-first time. Every 7 counting days in a row earn a freeze, up to 2, which
-covers a missed day automatically. The rules, the milestones (3, 7, 14, 30,
-50 and 100 days) and the weekly recap are `frontend/src/learn/streak.ts`,
+A day counts toward the streak when it meets the daily goal, which any
+daily practice does: 10 cards reviewed (5, 20 or 30 when the learner picks
+so), a problem solved for the first time, the daily challenge completed, or
+a Scale or Fail (Arcade) run finished (played to the end; a run only started
+does not count). Every 7 counting days in a row earn a freeze, up to 2,
+which covers a missed day automatically. The rules, the milestones (3, 7,
+14, 30, 50 and 100 days) and the weekly recap (which lists challenges and
+Arcade runs in weeks that had any) are `frontend/src/learn/streak.ts`,
 which the Worker runs too: signed in, `GET /api/me/activity` answers the
-streak from the reviews' and solves' local dates (backend/README.md); a
-build without accounts computes it from this browser's reviews and solves;
-signed out there is no streak.
+streak from the local dates of the reviews, the solves, the challenges sent
+and the game runs submitted (backend/README.md); challenges and runs from
+before their local date was kept count on the challenge's UTC day and the
+UTC date of the run, and runs played signed out (imported at sign-in) do
+not count, like imported solves. A build without accounts computes it from
+this browser's reviews, solves, challenge results and finished-run days;
+signed out there is no streak. The streak badges count the same streak.
 
 ### Daily challenge
 
@@ -223,15 +230,19 @@ the Worker runs too:
   leaderboard lists the top 20 of those who chose to appear on the
   leaderboard, each linked to their public profile; everyone else is counted
   but not named.
+- **The daily streak**: a completed challenge meets the daily goal by itself
+  (above), so it keeps the one daily streak, and every answer is also a
+  review of its card.
 - **The challenge streak**: days in a row with a completed challenge (UTC
-  days, no freezes), separate from the daily streak. A public profile and the account
-  page show it, the longest one and the best score.
-- Every answer is also a review of its card, so it counts toward the daily
-  goal and streak like any other.
+  days, no freezes). It is a sub-stat of the daily streak, not a second
+  streak: the challenge page shows it as "Challenge: 4 days in a row" (no
+  flame), and a public profile and the account page show it, the longest
+  one and the best score. The `challenge-streak` badges count it.
 
 Signed out, the challenge is scored in the browser and can be saved to an
 account after signing in; a copy of the site without accounts keeps every
-result and the challenge streak in the browser.
+result in the browser, from which it counts the challenge streak and the
+challenge's days for the daily streak.
 
 ## The check
 

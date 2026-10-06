@@ -125,6 +125,24 @@ export interface ProblemStats extends ProblemSummary {
   } | null;
 }
 
+/** A per-problem board's metric: the cheapest passing design (monthly cost) or the fastest (worst use case p99). */
+export type BoardMetric = 'cost' | 'p99';
+
+/**
+ * GET /api/problems/<id>/leaderboard?metric=: each solver's best verified
+ * design, lowest first (ties to whoever reached it first); the top 10 of
+ * those who opted in, ranked among every solver. `value` is USD a month or
+ * milliseconds; `at` when it was reached (Unix seconds).
+ */
+export interface ProblemBoard {
+  problem: string;
+  metric: BoardMetric;
+  players: number;
+  entries: { rank: number; id: string; displayName: string; value: number; at: number }[];
+  /** Signed in: your rank, or null before you solve it. */
+  you?: { rank: number; value: number; players: number } | null;
+}
+
 export interface Leaderboard {
   problems: number;
   /** `id`: the user's public id, for their profile (`#/u/<id>`, GET /api/users/<id>/profile). */

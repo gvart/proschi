@@ -22,7 +22,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
 | `proschi.solves` | On a copy of the site without accounts: the local date you first solved each problem, for the daily streak and its badges |
-| `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points) |
+| `proschi.challenge` | The daily challenge, on a copy of the site without accounts: each day's result (your answers, how long each took, the points, and your local date, for the daily streak) |
 | `proschi.challenge.guest` | The daily challenge, signed out: the last one you played (answers, times, points and the card reviews it made), so it can be saved to your account when you sign in |
 | `proschi.challenge.progress` | The daily challenge you are in the middle of: the day, your answers so far and how long each took, so a reload carries on where you were; removed when you finish |
 | `proschi.game.meta` | Scale or Fail, signed out: your progress (Blueprints, unlocks, perks, the furthest wave and highest difficulty per scenario, what you have seen) |
@@ -30,6 +30,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.game.run` | Scale or Fail: the run you are in the middle of (its setup and your moves so far), so a reload carries on; removed when it ends |
 | `proschi.game.daily` | Scale or Fail, signed out: the day and score of the last daily run you played |
 | `proschi.game.settings` | Scale or Fail: sound on or off, and the run's speed |
+| `proschi.game.days` | Scale or Fail, on a copy of the site without accounts: how many runs you finished on each local date (the last 400 days), for the daily streak |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
 | `proschi.onboarding` | Which first-run tours you have seen, the Arcade's first-wave tutorial and its intro to the twists included (in session storage when local storage is blocked) |
@@ -126,7 +127,8 @@ above are about events, not about you).
 - Practice progress, per problem: how many times you ran the tests, your
   latest design, when you first ran and last ran it, when you solved it and
   in how many runs and on which local date, the cost and p99 of your best
-  solving designs, and the simulation and problem versions it was recorded
+  solving designs (as the server measured them) and when each was reached,
+  and the simulation and problem versions it was recorded
   under. When you sign in,
   designs in your browser that your account lacks are uploaded to it, and the
   server re-runs their tests before it counts a solve.
@@ -136,18 +138,20 @@ above are about events, not about you).
   next and how well you know it). Reviews made signed out stay in the page
   and are gone when you close it.
 - Your daily goal (cards a day). The daily streak and the weekly recap are
-  computed from your card reviews and solve dates; nothing more is stored
-  for them.
+  computed from your card reviews, solve dates, daily challenges and game
+  runs (by the local date each was sent on, kept with them); nothing more is
+  stored for them.
 - The daily challenge, per day you play it: when you saw its first card,
   your answers to its five cards,
-  how long each took, which were right, the points, the score and when you
-  sent it. Your rank is computed from everyone's scores each time it is
+  how long each took, which were right, the points, the score, when you
+  sent it and your local date then. Your rank is computed from everyone's scores each time it is
   shown. A challenge played signed out stays in your browser until you sign
   in, when it is saved to your account.
 - Scale or Fail, the system design game: your progress (Blueprints,
   unlocks, perks, the furthest wave and highest difficulty per scenario, the
   cards and incidents you have seen) and every run you submit: its scenario,
-  seed, loadout, the moves you made, the score and when you played. Runs
+  seed, loadout, the moves you made, the score, when you played and your
+  local date then. Runs
   played signed out stay in your browser and are sent when you sign in.
 - Short links, each one you make with Share → Short link with preview (or
   Share → Embed, signed in): the diagram's text and the files it imports,
@@ -182,10 +186,12 @@ Cloudflare's retention period.
 **What others see**: practice statistics are aggregates over everyone, such
 as how many solved a problem and how your design's runs, cost and p99 compare.
 Your display name and number of solved problems appear on the leaderboard,
+your display name and the monthly cost and p99 of your best solving designs
+on each problem's leaderboards,
 your display name and daily challenge score on that day's challenge
 leaderboard, and your display name and best game score on the game's
 leaderboards, only if you opt in ("Show me on the leaderboard", in the account
-menu or on your profile page). Without it, your challenge score still counts
+menu or on your profile page). Without it, your challenge score and your best designs still count
 toward the number of players and everyone's ranks, but your name is never
 shown.
 

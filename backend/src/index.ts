@@ -17,7 +17,7 @@ import { reviewDesign } from './review';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
-import { getLeaderboard, getProblemStats, getStats } from './stats';
+import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
  * proschi.app: the site (frontend/dist, served as static assets without
@@ -43,6 +43,7 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
+ *   GET    /api/problems/<id>/leaderboard?metric=cost|p99   the problem's top 10 who opted in, by cheapest or fastest passing design (+ your rank, signed in)
  *   GET    /api/stats                       every problem's summary
  *   GET    /api/stats/<id>                  one problem's distributions (+ yours, signed in)
  *   GET    /api/leaderboard                 users who opted in, by problems solved (with their public ids)
@@ -51,11 +52,11 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/cards/reviews {reviews}     up to 200 card reviews; answers the cards' new states
  *   GET    /api/challenge/today             the daily challenge's cards (+ your attempt and challenge streak, signed in)
  *   POST   /api/challenge/today/start {day?}            records when the first card was shown (once per user and day)
- *   POST   /api/challenge/today/attempt {answers, day?}   grades, scores and keeps your first attempt of the day
+ *   POST   /api/challenge/today/attempt {answers, day?, localDay?}   grades, scores and keeps your first attempt of the day
  *   GET    /api/challenge/leaderboard?day=  the day's top 20 who opted in, with their public ids (+ your rank, signed in)
  *   GET    /api/game/me                     Scale or Fail: your progress, best scores and today's daily run
  *   POST   /api/game/runs {mode, scenario?, ascension?}   starts a ranked run: {runId, setup} (the server picks the seed)
- *   POST   /api/game/runs/<id>/submit {actions}   replays the run and keeps its score (once)
+ *   POST   /api/game/runs/<id>/submit {actions, day?}   replays the run and keeps its score (once)
  *   POST   /api/game/buy {id}               spends Blueprints on an unlock or a perk level
  *   POST   /api/game/equip {perks}          the perks to take into runs
  *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
@@ -103,6 +104,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
   if (is('DELETE', 'api', 'me', 'identities', '*')) return unlinkIdentity(request, ctx, parts[3]);
   if (is('POST', 'api', 'problems', '*', 'runs')) return recordRun(request, ctx, parts[2]);
+  if (is('GET', 'api', 'problems', '*', 'leaderboard')) return getProblemLeaderboard(request, ctx, parts[2]);
   if (is('GET', 'api', 'stats')) return getStats(ctx);
   if (is('GET', 'api', 'stats', '*')) return getProblemStats(request, ctx, parts[2]);
   if (is('GET', 'api', 'leaderboard')) return getLeaderboard(ctx);
