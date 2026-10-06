@@ -246,13 +246,67 @@ describe('DocSync', () => {
     expect(sync.getStatus()).toEqual({ kind: 'signed-out' });
   });
 
-  it('another account starts over, like a first sign-in', async () => {
+  it('another account: the previous one\'s synced diagrams leave, the rest wait for a yes', async () => {
     makeSync('u1').start();
     await settle();
+    // Signed out (keeping the diagrams), a diagram made, edits to another not yet sent.
     sync.stop();
+    store.set((s) => addDoc(s, 'title "Mine"\n', () => '2026-10-02T00:00:00.000Z', () => 'mine'));
+    const u1Docs = server.docs;
     server = new FakeServer();
+    server.write({ id: 'theirs', name: 'theirs.proschi', source: 'title "U2"\n', imports: null, version: 1, updatedAt: 0, deletedAt: null });
+    makeSync('u2').start();
+    await settle(PUSH_DELAY_MS * 2);
+    // u1's diagram is gone from this browser (it is in u1's account), u2's arrived, nothing uploaded.
+    expect(store.get().docs.map((d) => d.id).sort()).toEqual(['mine', 'theirs']);
+    expect(u1Docs.get('a')?.source).toBe('title "A"\n');
+    expect(server.calls).toEqual(['list null']);
+    expect(sync.askCount()).toBe(1);
+    expect(saved?.meta).toMatchObject({ userId: 'u2', held: ['mine'], ask: true });
+    // Edits to a held diagram stay in this browser too.
+    store.set((s) => updateCurrent({ ...s, currentId: 'mine' }, 'title "Mine 2"\n'));
+    await settle(PUSH_DELAY_MS);
+    expect(server.calls).toEqual(['list null']);
+    sync.answer(true);
+    await settle();
+    expect(server.docs.get('mine')?.source).toBe('title "Mine 2"\n');
+    expect(sync.askCount()).toBe(0);
+  });
+
+  it('another account: "keep in this browser only" never uploads them, and asks once', async () => {
+    saved = { meta: { userId: 'u1', cursor: 5, docs: { a: { version: 3, fp: 'edited-since' } }, refused: {} } };
     makeSync('u2').start();
     await settle();
-    expect(server.calls).toEqual(['list null', 'put a@0']);
+    // `a` had edits u1 never got: it stays, held back.
+    expect(store.get().docs.map((d) => d.id)).toEqual(['a']);
+    expect(sync.askCount()).toBe(1);
+    sync.answer(false);
+    expect(sync.askCount()).toBe(0);
+    expect(sync.heldCount()).toBe(1);
+    type('title "Still mine"\n');
+    await settle(PUSH_DELAY_MS);
+    sync.stop();
+    makeSync('u2').start();
+    await settle(PUSH_DELAY_MS);
+    expect(sync.askCount()).toBe(0);
+    expect(server.calls).toEqual(['list null', 'list 0']);
+    expect(server.docs.size).toBe(0);
+  });
+
+  it('signing out can remove the synced diagrams from this browser, keeping unsent edits', async () => {
+    store.set((s) => addDoc(s, 'title "B"\n', () => '2026-10-02T00:00:00.000Z', () => 'b'));
+    makeSync().start();
+    await settle();
+    server.online = false;
+    store.set((s) => updateCurrent({ ...s, currentId: 'b' }, 'title "B unsent"\n'));
+    expect(sync.forgetSynced()).toBe(1);
+    expect(store.get().docs.map((d) => d.id)).toEqual(['b']);
+    // Nothing is deleted from the account, and signing in again brings `a` back.
+    server.online = true;
+    makeSync().start();
+    await settle();
+    expect(server.docs.get('a')?.deletedAt).toBeNull();
+    expect(store.get().docs.map((d) => d.id).sort()).toEqual(['a', 'b']);
+    expect(server.docs.get('b')?.source).toBe('title "B unsent"\n');
   });
 });

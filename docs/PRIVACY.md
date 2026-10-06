@@ -13,7 +13,7 @@ server. What they remember stays in your browser's storage on this device:
 | Key | What it holds |
 |---|---|
 | `proschi.docs` | Your diagrams in the editor: their text, file names and which one is open |
-| `proschi.docs.sync` | Cloud sync, signed in: whether you turned it off, and per diagram the version your account has and a fingerprint of its content then, to tell what changed since |
+| `proschi.docs.sync` | Cloud sync, signed in: which account it syncs with, whether you turned it off, per diagram the version your account has and a fingerprint of its content then (to tell what changed since), and which diagrams in this browser you have not (yet) agreed to add to the account |
 | `proschi.playground.source` | A diagram saved by an older version of the editor, read once to carry it over |
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
@@ -110,6 +110,17 @@ Without signing in, nothing about you reaches the server.
   diagrams, 64 KiB each; larger ones stay in your browser only. Turning sync
   off keeps the copies in your account until you choose **Delete my cloud
   copies** in the same menu.
+
+  **Shared computers.** The browser remembers which account its diagrams
+  were synced with. When a different account signs in, the diagrams synced
+  with the previous one are removed from this browser (they are safe in that
+  account) and nothing of it is uploaded to the new one. Other diagrams in
+  the browser (never synced, or with edits the previous account never
+  received) stay, and are added to the new account only if you answer yes to
+  "Add N diagrams from this browser to your account?". Signing out gives you
+  the choice: **Sign out** keeps the synced diagrams in this browser (the
+  default, as before), **Sign out and remove synced diagrams from this
+  browser** removes them (edits not yet saved to your account stay).
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is

@@ -1,4 +1,4 @@
-import { Cloud, CloudOff, LogIn, RefreshCw, Trash2 } from 'lucide-react';
+import { Cloud, CloudOff, LogIn, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { MenuItem } from './Menu';
 import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
 
@@ -27,6 +27,17 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
             Sign in with {PROVIDER_LABEL[provider]}
           </MenuItem>
         ))}
+      {cloud.held > 0 && state.kind !== 'signed-out' && state.kind !== 'off' && (
+        <MenuItem
+          icon={<Upload size={14} />}
+          onSelect={() => {
+            cloud.answer(true);
+            close();
+          }}
+        >
+          Add {cloud.held} {cloud.held === 1 ? 'diagram' : 'diagrams'} from this browser to your account
+        </MenuItem>
+      )}
       {state.kind !== 'unavailable' && state.kind !== 'signed-out' && state.kind !== 'loading' && (
         <>
           {cloud.enabled ? (
@@ -61,6 +72,24 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
               </MenuItem>
             </>
           )}
+          <MenuItem
+            icon={<LogOut size={14} />}
+            onSelect={() => {
+              close();
+              void cloud.signOut(false);
+            }}
+          >
+            Sign out (keep diagrams in this browser)
+          </MenuItem>
+          <MenuItem
+            icon={<LogOut size={14} />}
+            onSelect={() => {
+              close();
+              void cloud.signOut(true);
+            }}
+          >
+            Sign out and remove synced diagrams from this browser
+          </MenuItem>
         </>
       )}
     </>

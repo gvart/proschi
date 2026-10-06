@@ -135,3 +135,29 @@ test('signed out, the menu offers to sign in to keep diagrams on every device', 
   await expect(menu.getByRole('menuitem', { name: 'Sign in with Google' })).toBeVisible();
   allowStatus(errors, 401);
 });
+
+test('another account signing in: diagrams already in the browser are only added after asking', async ({ page }) => {
+  const account = new Account();
+  await mockSignedIn(page);
+  await account.mock(page);
+  await page.addInitScript(() => {
+    const doc = (id: string, title: string) => ({ id, source: `title "${title}"\n\nweb "Web" [Service]\n`, fileName: `${id}.proschi`, updatedAt: '2026-10-01T00:00:00.000Z' });
+    localStorage.setItem('proschi.docs', JSON.stringify({ docs: [doc('theirs', 'Someone Else'), doc('here', 'Made Here')], currentId: 'theirs' }));
+    // "theirs" is synced with another account; its fingerprint is not known here, so it counts as edited: held back too.
+    localStorage.setItem('proschi.docs.sync', JSON.stringify({ meta: { userId: 'someone-else', cursor: 1, docs: { theirs: { version: 1, fp: 'not-this-content' } }, refused: {} } }));
+  });
+  await page.goto('app/');
+  await expect(codeEditor(page)).toBeVisible();
+  const prompt = page.getByRole('status').filter({ hasText: 'Add 2 diagrams from this browser to your account?' });
+  await expect(prompt).toBeVisible();
+  await page.waitForTimeout(2500);
+  expect(account.puts).toEqual([]);
+  await prompt.getByRole('button', { name: 'Keep in this browser only' }).click();
+  await expect(prompt).toBeHidden();
+  await page.waitForTimeout(2500);
+  expect(account.puts).toEqual([]);
+  const menu = await openMenu(page);
+  await expect(menu).toContainText('Made Here');
+  await menu.getByRole('menuitem', { name: 'Add 2 diagrams from this browser to your account' }).click();
+  await expect.poll(() => account.docs.size).toBe(2);
+});

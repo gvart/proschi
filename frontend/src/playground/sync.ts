@@ -38,6 +38,13 @@ export interface SyncMeta {
   docs: Record<string, { version: number; fp: string }>;
   /** Diagrams the server refused (too large, account full), with their fingerprint then: not sent again until they change. */
   refused: Record<string, string>;
+  /**
+   * Diagrams found in this browser when another account signed in: never
+   * uploaded to this one unless the user says so (`ask` until they answer).
+   */
+  held?: string[];
+  /** Whether to ask "Add N diagrams from this browser to your account?". */
+  ask?: boolean;
 }
 
 /** What `proschi.docs.sync` holds. */
@@ -69,7 +76,8 @@ export function readStoredSync(value: unknown): StoredSync {
     const refused: SyncMeta['refused'] = {};
     if (isRecord(meta.refused)) for (const [id, fp] of Object.entries(meta.refused)) if (isSafeKey(id) && typeof fp === 'string') refused[id] = fp;
     const cursor = typeof meta.cursor === 'number' && Number.isFinite(meta.cursor) ? meta.cursor : null;
-    out.meta = { userId: meta.userId, cursor, docs, refused };
+    const held = Array.isArray(meta.held) ? meta.held.filter((id): id is string => typeof id === 'string') : [];
+    out.meta = { userId: meta.userId, cursor, docs, refused, ...(held.length ? { held } : {}), ...(meta.ask === true && held.length ? { ask: true } : {}) };
   }
   return out;
 }
@@ -163,6 +171,7 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
   let currentId = state.currentId;
   const known: SyncMeta['docs'] = { ...meta.docs };
   const conflicts: string[] = [];
+  const held = [...(meta.held ?? [])];
   let changed = false;
 
   for (const remote of remotes) {
@@ -200,6 +209,8 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
       }
     } else {
       const copy = conflictCopy(local, newId(), now());
+      // A copy of a diagram held back from this account is held back too.
+      if (meta.held?.includes(remote.id)) held.push(copy.id);
       docs.splice(i, 1, toLocal(remote), copy);
       if (currentId === remote.id) currentId = copy.id;
       conflicts.push(titleOf(copy.source));
@@ -220,7 +231,7 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
     }
   }
 
-  const nextMeta = { ...meta, docs: known };
+  const nextMeta: SyncMeta = { ...meta, docs: known, ...(held.length ? { held } : {}) };
   if (!changed) return { state, meta: nextMeta, conflicts };
   if (docs.length === 0) docs.push({ id: newId(), source: BLANK_SOURCE, fileName: 'untitled.proschi', updatedAt: now() });
   if (!docs.some((d) => d.id === currentId)) currentId = docs[0].id;
@@ -230,8 +241,11 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
 /** The writes waiting to be sent: diagrams edited or made here (oldest first), then those deleted here. */
 export function pendingOps(state: DocumentState, meta: SyncMeta): SyncOp[] {
   const ops: SyncOp[] = [];
+  const held = new Set(meta.held ?? []);
   const edited = state.docs.filter((d) => {
-    if (!isSafeKey(d.id)) return false;
+    if (!isSafeKey(d.id) || held.has(d.id)) return false;
+    // A new diagram nobody has typed into yet waits until it holds something.
+    if (!Object.hasOwn(meta.docs, d.id) && d.source === BLANK_SOURCE) return false;
     const fp = fingerprint(d);
     return fp !== meta.docs[d.id]?.fp && meta.refused[d.id] !== fp;
   });
@@ -266,4 +280,51 @@ export function afterDelete(meta: SyncMeta, id: string): SyncMeta {
 /** After the server refused a put for good (413): not sent again until the diagram changes. */
 export function afterRefused(meta: SyncMeta, op: Extract<SyncOp, { kind: 'put' }>): SyncMeta {
   return { ...meta, refused: { ...meta.refused, [op.id]: op.fp } };
+}
+
+/** The diagrams held back from the account (another account's, or there before it) still in this browser. */
+export function heldDocs(state: DocumentState, meta: SyncMeta): SavedDiagram[] {
+  const held = new Set(meta.held ?? []);
+  return state.docs.filter((d) => held.has(d.id));
+}
+
+/** The user's answer to "Add N diagrams from this browser to your account?". */
+export function answerAsk(meta: SyncMeta, add: boolean): SyncMeta {
+  const next = { ...meta };
+  delete next.ask;
+  if (add) delete next.held;
+  return next;
+}
+
+/**
+ * Removes from this browser the diagrams synced with `meta`'s account and
+ * unchanged since (they are safe in the account); those with edits not yet
+ * sent stay. The account's sync starts over (no cursor) so signing in again
+ * brings them back, and their entries go, so nothing is deleted from the
+ * account. Null state when no diagram is left.
+ */
+export function forgetSynced(state: DocumentState, meta: SyncMeta): { state: DocumentState | null; meta: SyncMeta; removed: number } {
+  const clean = new Set(state.docs.filter((d) => Object.hasOwn(meta.docs, d.id) && meta.docs[d.id].fp === fingerprint(d)).map((d) => d.id));
+  const docs = state.docs.filter((d) => !clean.has(d.id));
+  const known: SyncMeta['docs'] = {};
+  for (const d of docs) if (Object.hasOwn(meta.docs, d.id)) known[d.id] = meta.docs[d.id];
+  const next: SyncMeta = { ...meta, cursor: null, docs: known };
+  if (docs.length === 0) return { state: null, meta: next, removed: clean.size };
+  return { state: { docs, currentId: docs.some((d) => d.id === state.currentId) ? state.currentId : docs[0].id }, meta: next, removed: clean.size };
+}
+
+/**
+ * Another account signed in on a browser synced with `previous`'s: the
+ * previous account's synced diagrams leave this browser (they are safe in
+ * that account), and every diagram left (never synced, or with edits not yet
+ * sent) is held back from the new account until the user agrees to add it.
+ * The new account starts with a fresh sync state.
+ */
+export function switchAccount(state: DocumentState, previous: SyncMeta, userId: string, now = defaultClock, newId = defaultIds): { state: DocumentState; meta: SyncMeta } {
+  const forgotten = forgetSynced(state, previous);
+  const next = forgotten.state ?? { docs: [{ id: newId(), source: BLANK_SOURCE, fileName: 'untitled.proschi', updatedAt: now() }], currentId: '' };
+  const docs = next.docs;
+  const currentId = docs.some((d) => d.id === next.currentId) ? next.currentId : docs[0].id;
+  const held = docs.filter((d) => d.source !== BLANK_SOURCE).map((d) => d.id);
+  return { state: { docs, currentId }, meta: { ...emptyMeta(userId), ...(held.length ? { held, ask: true } : {}) } };
 }

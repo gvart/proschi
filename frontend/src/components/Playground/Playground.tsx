@@ -42,6 +42,7 @@ import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
 import {
   BLANK_SOURCE,
+  DOCS_KEY,
   addDoc,
   addFile,
   currentDoc,
@@ -105,7 +106,6 @@ const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
 const TourHint = lazy(() => import('../../onboarding/TourHint'));
 const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
-const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', analysis: 'Analysis', tests: 'Tests', hld: 'HLD' };
@@ -647,6 +647,16 @@ export default function Playground() {
         </div>
         </Header>
         {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
+        {cloud.ask > 0 && (
+          <Banner
+            banner={{
+              message: `Add ${cloud.ask} ${cloud.ask === 1 ? 'diagram' : 'diagrams'} from this browser to your account?`,
+              action: { label: 'Add to my account', run: () => cloud.answer(true) },
+              secondary: { label: 'Keep in this browser only', run: () => cloud.answer(false) },
+            }}
+            onClose={() => cloud.answer(false)}
+          />
+        )}
 
         <div data-tour="panes" className="md:hidden bg-surface">
           <Tabs

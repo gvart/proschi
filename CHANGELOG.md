@@ -21,7 +21,10 @@ deployed from `main` and ships with the same changes.
   <date>)". The Diagrams menu shows where your work is saved, and cloud sync
   can be turned off there; **Delete my cloud copies** removes them from your
   account. Synced diagrams are in **Download my data** and go with the
-  account (docs/PRIVACY.md).
+  account (docs/PRIVACY.md). On a shared computer another account never gets
+  your diagrams: they leave the browser when it signs in, diagrams already
+  there are only added after asking, and signing out can remove the synced
+  ones from the browser.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

@@ -79,7 +79,9 @@ instead ([Mobile apps](#mobile-apps)).
   was based on; a stale one gets 409 with the server's copy, and the page
   keeps both (its own renamed "<name> (conflict <date>)"). Deleting leaves a
   tombstone, so other devices delete their copy too; the daily cron prunes
-  tombstones after 30 days. At most 200 diagrams a user, 64 KiB each.
+  tombstones after 30 days. At most 200 diagrams a user, 64 KiB each. The
+  page never uploads another account's diagrams: on an account switch it
+  drops them from the browser and asks before adding any others.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or

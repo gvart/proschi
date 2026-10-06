@@ -3,9 +3,7 @@ import { api, ApiError, apiEnabled, loginUrl, type ProviderId } from '../../serv
 import { loadJson, saveJson } from '../../services/storage';
 import type { DocStore } from '../../playground/docStore';
 import type { DocSync, SyncStatus } from '../../playground/cloudSync';
-
-/** The sync state and settings, in localStorage (sync.ts StoredSync). */
-export const SYNC_KEY = 'proschi.docs.sync';
+import { SYNC_KEY } from '../../playground/documents';
 
 export type CloudState =
   /** A build without accounts: the editor saves in this browser only. */
@@ -19,6 +17,14 @@ export interface CloudSync {
   signIn: (provider: ProviderId) => void;
   setEnabled: (on: boolean) => void;
   deleteCloudCopies: () => Promise<void>;
+  /** "Add N diagrams from this browser to your account?": N, 0 when not asking. */
+  ask: number;
+  /** Diagrams in this browser held back from the account. */
+  held: number;
+  /** Adds the held diagrams to the account (true), or keeps them in this browser only. */
+  answer: (add: boolean) => void;
+  /** Signs out; `removeSynced` also removes the account's synced diagrams from this browser. */
+  signOut: (removeSynced: boolean) => Promise<void>;
 }
 
 /**
@@ -30,7 +36,10 @@ export interface CloudSync {
 export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => void): CloudSync {
   const [state, setState] = useState<CloudState>(apiEnabled ? { kind: 'loading' } : { kind: 'unavailable' });
   const [enabled, setEnabledState] = useState(true);
+  const [ask, setAsk] = useState(0);
+  const [held, setHeld] = useState(0);
   const syncRef = useRef<DocSync | null>(null);
+  const signedOutRef = useRef<() => Promise<void>>(async () => undefined);
   const onConflictRef = useRef(onConflict);
   onConflictRef.current = onConflict;
 
@@ -42,6 +51,7 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
       const { providers } = await api<{ providers: ProviderId[] }>('/auth/providers').catch(() => ({ providers: [] as ProviderId[] }));
       if (!cancelled) setState({ kind: 'signed-out', providers });
     };
+    signedOutRef.current = signedOut;
 
     const boot = async () => {
       let userId: string;
@@ -68,12 +78,17 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
       });
       syncRef.current = sync;
       setEnabledState(sync.enabled);
+      const live = sync;
       sync.onStatus((status) => {
         if (status.kind !== 'signed-out') setState(status);
+        setAsk(live.askCount());
+        setHeld(live.heldCount());
       });
       const first = sync.getStatus();
       if (first.kind !== 'signed-out') setState(first);
       sync.start();
+      setAsk(sync.askCount());
+      setHeld(sync.heldCount());
     };
     void boot();
 
@@ -117,7 +132,23 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
     }
   }, []);
 
-  return { state, enabled, signIn, setEnabled, deleteCloudCopies };
+  const answer = useCallback((add: boolean) => {
+    syncRef.current?.answer(add);
+    setAsk(0);
+  }, []);
+
+  const signOut = useCallback(async (removeSynced: boolean) => {
+    const sync = syncRef.current;
+    if (removeSynced) sync?.forgetSynced();
+    else sync?.stop();
+    syncRef.current = null;
+    setAsk(0);
+    setHeld(0);
+    await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
+    await signedOutRef.current();
+  }, []);
+
+  return { state, enabled, signIn, setEnabled, deleteCloudCopies, ask, held, answer, signOut };
 }
 
 /** The sync status in words, for the Diagrams menu. */

@@ -1,5 +1,21 @@
 import type { DocStore } from './docStore';
-import { afterDelete, afterPut, afterRefused, applyRemote, emptyMeta, pendingOps, readStoredSync, type RemoteDoc, type StoredSync, type SyncMeta } from './sync';
+import { BLANK_SOURCE, defaultClock, defaultIds } from './documents';
+import {
+  afterDelete,
+  afterPut,
+  afterRefused,
+  answerAsk,
+  applyRemote,
+  emptyMeta,
+  forgetSynced,
+  heldDocs,
+  pendingOps,
+  readStoredSync,
+  switchAccount,
+  type RemoteDoc,
+  type StoredSync,
+  type SyncMeta,
+} from './sync';
 
 /**
  * Cloud sync of the editor's diagrams, the moving part (sync.ts has the
@@ -89,12 +105,49 @@ export class DocSync {
   private failures = 0;
   private stopped = false;
   private unsubscribe?: () => void;
+  /** The sync state of another account found in this browser, dealt with on start. */
+  private previous?: SyncMeta;
 
   constructor(options: DocSyncOptions) {
     this.o = { timers: browserTimers, ...options };
     const stored = readStoredSync(options.storage.load());
     this.off = stored.off === true;
     this.meta = stored.meta && stored.meta.userId === options.userId ? stored.meta : emptyMeta(options.userId);
+    if (stored.meta && stored.meta.userId !== options.userId) this.previous = stored.meta;
+  }
+
+  /** "Add N diagrams from this browser to your account?": N, or 0 when there is nothing to ask. */
+  askCount(): number {
+    return this.meta.ask ? heldDocs(this.o.store.get(), this.meta).length : 0;
+  }
+
+  /** Diagrams in this browser held back from the account (to offer adding them later). */
+  heldCount(): number {
+    return heldDocs(this.o.store.get(), this.meta).length;
+  }
+
+  /** The answer to askCount's question: add them to the account, or keep them in this browser only. */
+  answer(add: boolean): void {
+    this.meta = answerAsk(this.meta, add);
+    this.persist();
+    this.setStatus(this.status);
+    if (add) void this.flush();
+  }
+
+  /**
+   * Signing out and removing the account's diagrams from this browser: those
+   * synced and unchanged go (they are safe in the account), the rest stay.
+   * Stops syncing; answers how many were removed.
+   */
+  forgetSynced(): number {
+    const { store } = this.o;
+    const result = forgetSynced(store.get(), this.meta);
+    this.meta = result.meta;
+    this.persist();
+    this.stop();
+    const id = (this.o.newId ?? defaultIds)();
+    store.set(result.state ?? { docs: [{ id, source: BLANK_SOURCE, fileName: 'untitled.proschi', updatedAt: (this.o.now ?? defaultClock)() }], currentId: id });
+    return result.removed;
   }
 
   getStatus(): SyncStatus {
@@ -112,6 +165,14 @@ export class DocSync {
 
   /** Starts syncing: a pull and push now, then pushes after edits. */
   start(): void {
+    if (this.previous) {
+      // Another account's: its synced diagrams leave this browser, the rest wait for the user's answer.
+      const switched = switchAccount(this.o.store.get(), this.previous, this.o.userId, this.o.now, this.o.newId);
+      this.previous = undefined;
+      this.o.store.set(switched.state);
+      this.meta = switched.meta;
+      this.persist();
+    }
     this.unsubscribe = this.o.store.subscribe(() => this.changed());
     if (this.off) this.setStatus({ kind: 'off' });
     else void this.sync();

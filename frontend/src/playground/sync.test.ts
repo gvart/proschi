@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentState, SavedDiagram } from './documents';
-import { afterDelete, afterPut, applyRemote, conflictCopy, emptyMeta, fingerprint, pendingOps, readStoredSync, remoteFingerprint, retitle, type RemoteDoc, type SyncMeta } from './sync';
+import { BLANK_SOURCE } from './documents';
+import { afterDelete, afterPut, answerAsk, applyRemote, conflictCopy, emptyMeta, fingerprint, forgetSynced, pendingOps, readStoredSync, remoteFingerprint, retitle, switchAccount, type RemoteDoc, type SyncMeta } from './sync';
 
 const NOW = '2026-10-06T14:05:00.000Z';
 const clock = () => NOW;
@@ -160,5 +161,51 @@ describe('cloud sync merge', () => {
     expect(readStoredSync({ off: true })).toEqual({ off: true });
     const stored = readStoredSync({ meta: { userId: 'u', cursor: 'x', docs: { a: { version: 1, fp: 'f' }, b: { version: 'x' }, ['__proto__']: { version: 1, fp: 'f' } }, refused: 4 } });
     expect(stored.meta).toEqual({ userId: 'u', cursor: null, docs: { a: { version: 1, fp: 'f' } }, refused: {} });
+  });
+
+  it('account switch: drops the previous account\'s synced diagrams, holds back the rest', () => {
+    const synced1 = local('s1', 'title "Synced"\n');
+    const edited = local('s2', 'title "Edited"\n');
+    const never = local('n1', 'title "Never synced"\n');
+    const blank = { ...local('blank', BLANK_SOURCE) };
+    const previous = { ...synced([synced1, edited]), userId: 'u1' };
+    const editedNow = { ...edited, source: 'title "Edited later"\n' };
+    const result = switchAccount(state(synced1, editedNow, never, blank), previous, 'u2', clock, ids);
+    expect(result.state.docs.map((d) => d.id)).toEqual(['s2', 'n1', 'blank']);
+    expect(result.meta).toEqual({ ...emptyMeta('u2'), held: ['s2', 'n1'], ask: true });
+    expect(pendingOps(result.state, result.meta)).toEqual([]);
+    expect(pendingOps(result.state, answerAsk(result.meta, false))).toEqual([]);
+    expect(pendingOps(result.state, answerAsk(result.meta, true)).map((o) => o.id)).toEqual(['s2', 'n1']);
+  });
+
+  it('account switch with only synced diagrams leaves a blank one, and asks nothing', () => {
+    const a = local('a', 'A');
+    const result = switchAccount(state(a), { ...synced([a]), userId: 'u1' }, 'u2', clock, ids);
+    expect(result.state.docs).toEqual([expect.objectContaining({ source: BLANK_SOURCE })]);
+    expect(result.meta).toEqual(emptyMeta('u2'));
+  });
+
+  it('a conflict copy of a held diagram is held too', () => {
+    const mine = local('x', 'mine');
+    const meta = { ...emptyMeta('u2'), held: ['x'] };
+    const result = applyRemote(state(mine), meta, [remote('x', 'theirs', 1)], clock, ids);
+    const copy = result.state.docs.find((d) => d.id !== 'x')!;
+    expect(result.meta.held).toEqual(['x', copy.id]);
+    expect(pendingOps(result.state, result.meta)).toEqual([]);
+  });
+
+  it('forgetting the synced diagrams keeps unsent edits and resets the cursor', () => {
+    const a = local('a', 'A');
+    const b = local('b', 'B');
+    const meta = synced([a, b], 2);
+    const result = forgetSynced(state(a, { ...b, source: 'B2' }), meta);
+    expect(result.removed).toBe(1);
+    expect(result.state?.docs.map((d) => d.id)).toEqual(['b']);
+    expect(result.meta).toEqual({ ...meta, cursor: null, docs: { b: meta.docs.b } });
+    expect(forgetSynced(state(a), synced([a])).state).toBeNull();
+  });
+
+  it('a new blank diagram is not uploaded until something is typed', () => {
+    expect(pendingOps(state(local('n', BLANK_SOURCE)), emptyMeta('u'))).toEqual([]);
   });
 });
