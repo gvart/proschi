@@ -39,7 +39,7 @@ describe('the first-run document', () => {
     expect(diagram.useCases[0]?.scenarios[0]?.steps.length).toBeGreaterThan(0);
   });
 
-  it('has traffic and requirements, so the tour can show Analysis and Tests, and they pass', () => {
+  it('has traffic and requirements, so the tour can show Results, and they pass', () => {
     expect(diagram.traffic?.length).toBeGreaterThan(0);
     const results = defaultEngine.runTests(diagram, defaultEngine.analyze(diagram));
     expect(results.length).toBeGreaterThanOrEqual(2);
