@@ -2,7 +2,7 @@
 type: cloze
 difficulty: medium
 tags: [consistency]
-related: [chat]
+related: [chat, collaborative-docs]
 ---
 
 ## Text

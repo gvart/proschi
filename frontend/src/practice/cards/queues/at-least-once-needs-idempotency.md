@@ -3,7 +3,7 @@ type: flip
 difficulty: medium
 decks: [sample]
 tags: [resilience]
-related: [job-queue, payments]
+related: [job-queue, payments, web-crawler]
 ---
 
 ## Front

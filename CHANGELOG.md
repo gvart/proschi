@@ -10,6 +10,15 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Three new practice problems**, each with a lesson, hints, an interview
+  mode and five known mistakes: **Web Crawler** (a durable frontier,
+  per-host politeness and a Bloom filter for seen URLs; in *Queues and async
+  work*), **Distributed Key-Value Store** (consistent hashing, N = 3 with
+  quorum reads and writes, hinted handoff and read repair; in *Partitioning
+  and replication*) and **Collaborative Docs** (one sequencer per document,
+  an operation log written before the ack, pub/sub fan-out of edits and
+  cursors, snapshots; in *Fan-out and real-time delivery*). 29 problems in
+  all.
 - **Failing tests teach.** When your design fails a problem's tests the way a
   known mistake does, the problem page names it under the tests (*Common
   mistake: …*), explains what breaks and what to do instead, links the lesson

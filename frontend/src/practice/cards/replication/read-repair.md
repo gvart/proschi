@@ -2,6 +2,7 @@
 type: cloze
 difficulty: medium
 tags: [data-structures]
+related: [distributed-kv]
 ---
 
 ## Text

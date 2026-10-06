@@ -2,7 +2,7 @@
 type: flip
 difficulty: hard
 tags: [replication]
-related: [shopping-cart]
+related: [shopping-cart, distributed-kv]
 ---
 
 ## Front

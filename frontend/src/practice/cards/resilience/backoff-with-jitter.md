@@ -3,6 +3,7 @@ type: flip
 difficulty: medium
 decks: [sample]
 tags: [queues]
+related: [web-crawler]
 ---
 
 ## Front
