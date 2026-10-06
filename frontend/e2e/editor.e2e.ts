@@ -117,6 +117,9 @@ test.describe('editor', () => {
     await expect(stepLabel(page)).toHaveText(/^Step 3 of \d+$/);
 
     await page.getByRole('button', { name: 'Share', exact: true }).click();
+    // No accounts in this build: no short links, and no sign-in hint either.
+    await expect(page.getByRole('menuitem', { name: 'Short link with preview' })).toHaveCount(0);
+    await page.getByRole('menuitem', { name: 'Copy link to this step' }).click();
     await expect(page.getByRole('button', { name: 'Copied' })).toBeVisible();
     const url = await page.evaluate(() => navigator.clipboard.readText());
     expect(url).toMatch(/\/proschi\/app\/#code=.*&uc=create-order&alt=database-down&step=3/);

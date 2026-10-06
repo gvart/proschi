@@ -1,0 +1,59 @@
+/* The embed page: the docs' live example (src/docs/live.css) filling the
+   iframe, with a border so it reads as a frame on any page. */
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  overflow: hidden;
+}
+
+.embed {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  overflow: hidden;
+  background: rgb(var(--c-surface));
+}
+
+.embed .live__island {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.embed .live__stage,
+.embed .live__stage--playing {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+}
+
+.embed .live__title {
+  min-width: 0;
+  max-width: 45%;
+  margin: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 800 var(--fs-14) / 1.2 var(--font-sans);
+  color: rgb(var(--c-ink));
+}
+
+.embed--message {
+  align-items: flex-start;
+  justify-content: center;
+  gap: 12px;
+  padding: 20px;
+  font-family: var(--font-sans);
+}
+
+.embed--message p {
+  margin: 0;
+}

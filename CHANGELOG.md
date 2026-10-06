@@ -10,6 +10,17 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Short links with a preview, and embeds.** The editor's Share button is a
+  menu now. Signed in, **Short link with preview** stores the diagram on
+  proschi.app and copies `https://proschi.app/s/<id>`: short whatever the
+  diagram's size, and link previews in chat apps show its title and an
+  image of the diagram. **Embed** copies an `<iframe>` of a new read-only
+  page (`/embed/`): the diagram, its use cases to play and **Open in
+  Proschi**, with `theme=light|dark`; short links also answer oEmbed.
+  **Your short links** lists and deletes yours; they are in Download my
+  data and go with the account. Signed out, links work as before, and the
+  long-link warning points to short links. See
+  [Sharing and embedding](docs/SHARING.md).
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

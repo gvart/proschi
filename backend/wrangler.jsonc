@@ -12,12 +12,12 @@
   // `wrangler dev` would otherwise rewrite requests to the route's host, so
   // OAuth callbacks and the same-origin check would see proschi.app.
   "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
-  // The built site: `npm run build` in frontend/ first. Paths outside /api and /auth
-  // are served straight from these files, without running the Worker.
+  // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth and
+  // /s (short links, src/shares.ts) are served straight from these files, without running the Worker.
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*"],
+    "run_worker_first": ["/api/*", "/auth/*", "/s/*"],
     "not_found_handling": "404-page"
   },
   // Daily: delete expired sessions (src/cron.ts).
@@ -35,7 +35,7 @@
     }
   ],
   // Per minute: test runs (they run the simulation), account changes,
-  // progress uploads, card review requests and daily challenge attempts per user;
+  // progress uploads, card review requests, daily challenge attempts and short links per user;
   // sign-ins and stats per IP.
   "ratelimits": [
     { "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
@@ -46,7 +46,8 @@
     { "name": "REVIEW_LIMITER", "namespace_id": "1006", "simple": { "limit": 10, "period": 60 } },
     { "name": "CARD_LIMITER", "namespace_id": "1007", "simple": { "limit": 60, "period": 60 } },
     { "name": "CHALLENGE_LIMITER", "namespace_id": "1008", "simple": { "limit": 10, "period": 60 } },
-    { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } }
+    { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } },
+    { "name": "SHARE_LIMITER", "namespace_id": "1010", "simple": { "limit": 10, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -79,7 +80,8 @@
         { "name": "REVIEW_LIMITER", "namespace_id": "2006", "simple": { "limit": 10, "period": 60 } },
         { "name": "CARD_LIMITER", "namespace_id": "2007", "simple": { "limit": 60, "period": 60 } },
         { "name": "CHALLENGE_LIMITER", "namespace_id": "2008", "simple": { "limit": 10, "period": 60 } },
-        { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } }
+        { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } },
+        { "name": "SHARE_LIMITER", "namespace_id": "2010", "simple": { "limit": 10, "period": 60 } }
       ]
     }
   }

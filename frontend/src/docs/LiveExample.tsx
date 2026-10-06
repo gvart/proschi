@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { parse } from '../dsl';
+import { filesResolver } from '../playground/imports';
 import { encodeShareHash, type PlaybackTarget } from '../playground/share';
 import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
@@ -10,15 +11,31 @@ interface LiveExampleProps {
   source: string;
   /** The way from this page to the site root, for the editor link. */
   siteRoot: string;
+  /** Imported files (path → source) the source reads. */
+  imports?: Record<string, string>;
+  /** Where the editor link goes instead of the source in a `#code=` link (e.g. a short link). */
+  editorHref?: string;
+  /** The editor link's text. */
+  openLabel?: string;
+  /** Open the editor in a new tab (from inside an iframe). */
+  newTab?: boolean;
+  /** A heading at the start of the bar (the embed page's diagram title). */
+  title?: string;
 }
+
+/** The root file name imports resolve against, as a top-level file of the editor's. */
+const ROOT_PATH = 'embedded.proschi';
 
 /**
  * A docs example come alive: the diagram the code above it draws, a picker for
  * its scenarios, Play to run one over the diagram, and a link that opens the
  * code in the editor. Nothing is saved: the editor gets the code in the link.
  */
-export default function LiveExample({ source, siteRoot }: LiveExampleProps) {
-  const diagram = useMemo(() => parse(source).diagram, [source]);
+export default function LiveExample({ source, siteRoot, imports, editorHref, openLabel = 'Open in editor', newTab, title }: LiveExampleProps) {
+  const diagram = useMemo(
+    () => parse(source, imports ? { path: ROOT_PATH, resolve: filesResolver(imports, ROOT_PATH) } : undefined).diagram,
+    [source, imports],
+  );
   const { nodes, edges, settled } = useDiagramLayout(diagram);
   const scenarios = useMemo(
     () =>
@@ -39,12 +56,13 @@ export default function LiveExample({ source, siteRoot }: LiveExampleProps) {
   const [run, setRun] = useState(0);
   const current = scenarios[Math.min(selected, scenarios.length - 1)];
   const playing = run > 0 && current;
-  const editor = `${siteRoot}app/${encodeShareHash(source, playing ? current.target : undefined)}`;
+  const editor = editorHref ?? `${siteRoot}app/${encodeShareHash(source, playing ? current.target : undefined, imports)}`;
   const label = `Diagram of the example${playing ? `, playing ${current.label}` : ''}`;
 
   return (
     <div className="live__island">
       <div className="live__bar">
+        {title && <h1 className="live__title">{title}</h1>}
         {scenarios.length > 1 && (
           <label className="live__pick">
             <span className="live__pick-label">Scenario</span>
@@ -73,8 +91,8 @@ export default function LiveExample({ source, siteRoot }: LiveExampleProps) {
             {playing ? 'Replay' : 'Play'}
           </button>
         )}
-        <a className="ps-btn ps-btn--sm" href={editor}>
-          Open in editor
+        <a className="ps-btn ps-btn--sm" href={editor} {...(newTab ? { target: '_blank', rel: 'noopener' } : {})}>
+          {openLabel}
           <svg className="ps-icon" viewBox="0 0 24 24" aria-hidden="true">
             <path d="M4 12h15M13 6l6 6-6 6" />
           </svg>
