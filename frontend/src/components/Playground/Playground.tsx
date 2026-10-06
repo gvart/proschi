@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -38,6 +38,8 @@ import {
   Network,
   Archive,
   ArchiveRestore,
+  Cloud,
+  CloudOff,
   Import,
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
@@ -48,6 +50,7 @@ import { loadJson, saveJson } from '../../services/storage';
 import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
+  DOCS_KEY,
   addDoc,
   addFile,
   currentDoc,
@@ -62,6 +65,7 @@ import {
   updateCurrent,
   type DocumentState,
 } from '../../playground/documents';
+import { createDocStore } from '../../playground/docStore';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
@@ -93,6 +97,8 @@ import { useZenMode } from './useZenMode';
 import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
+import CloudSection, { CloudIcon } from './CloudStatus';
+import { useCloudSync } from './useCloudSync';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
 import Tabs from '../../design/Tabs';
 import HelpMenu from '../../onboarding/HelpMenu';
@@ -116,7 +122,6 @@ const TourHint = lazy(() => import('../../onboarding/TourHint'));
 const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
 const noop = () => {};
-const DOCS_KEY = 'proschi.docs';
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', analysis: 'Analysis', tests: 'Tests', hld: 'HLD' };
@@ -165,21 +170,27 @@ function initialMobilePane(): 'code' | 'diagram' {
 }
 
 export default function Playground() {
-  const [docState, setDocState] = useState(loadInitialState);
+  // An external store, so cloud sync can merge into the latest diagrams (src/playground/docStore.ts).
+  const [docStore] = useState(() => createDocStore(loadInitialState()));
+  const docState = useSyncExternalStore(docStore.subscribe, docStore.get);
+  const setDocState = docStore.set;
   const current = currentDoc(docState);
   const source = current.source;
   const rootPath = fileNameOf(current);
-  const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
   /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
   const typeSource = (next: string) => {
     if (next !== source) track('editor_first_edit', { once: 'browser' });
     setSource(next);
   };
   /** Applies a canvas edit to the current document's text. */
-  const editSource = useCallback((edit: (source: string) => string) => {
-    track('editor_first_edit', { once: 'browser' });
-    setDocState((s) => updateCurrent(s, edit(currentDoc(s).source)));
-  }, []);
+  const editSource = useCallback(
+    (edit: (source: string) => string) => {
+      track('editor_first_edit', { once: 'browser' });
+      setDocState((s) => updateCurrent(s, edit(currentDoc(s).source)));
+    },
+    [setDocState],
+  );
 
   // A link may point at a use case step; open straight into playback there.
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
@@ -245,6 +256,12 @@ export default function Playground() {
     const example = link ? null : exampleFromSearch(window.location.search);
     return example && !example.example ? { message: `There is no example called “${example.id}”; Examples in the top bar lists them all.`, tone: 'warning' } : null;
   });
+  const cloud = useCloudSync(docStore, (titles) =>
+    setBanner({
+      message: `Changed on another device as well, so both versions are kept: yours is now ${titles.map((t) => `"${t}"`).join(', ')}.`,
+      tone: 'warning',
+    }),
+  );
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4000);
@@ -577,16 +594,19 @@ export default function Playground() {
             trigger={
               <>
                 <span className="max-w-[7.5rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
+                <CloudIcon state={cloud.state} />
                 <ChevronDown size={14} />
               </>
             }
           >
             {(close) => (
               <>
-                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>Saved in this browser</div>
+                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>{cloud.state.kind === 'saved' || cloud.state.kind === 'saving' ? 'Your diagrams' : 'Saved in this browser'}</div>
                 <ul className="max-h-72 overflow-y-auto">
                   {sortedDocs.map((doc) => {
                     const title = titleOf(doc.source);
+                    const syncing = cloud.enabled && (cloud.state.kind === 'saved' || cloud.state.kind === 'saving');
+                    const browserOnly = syncing && cloud.local.has(doc.id);
                     return (
                       <li key={doc.id} className="group flex items-center">
                         <button
@@ -599,9 +619,37 @@ export default function Playground() {
                         >
                           <span className="block truncate">{title}</span>
                           <span className="block truncate text-xs font-normal text-muted">
+                            {browserOnly && (
+                              <span data-testid="browser-only" className="mr-1 rounded bg-ink/10 px-1 text-ink/80">
+                                This browser only
+                              </span>
+                            )}
                             {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
                           </span>
                         </button>
+                        {syncing &&
+                          (browserOnly ? (
+                            <button
+                              aria-label={`Keep ${title} in your account`}
+                              title={cloud.canKeep ? 'Keep in cloud' : 'Cloud full: move another diagram to this browser only first'}
+                              disabled={!cloud.canKeep}
+                              onClick={() => cloud.keepInCloud(doc.id)}
+                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10 disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                              <Cloud size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              aria-label={`Move ${title} to this browser only`}
+                              title="Move to this browser only (frees a cloud slot)"
+                              onClick={() => {
+                                if (window.confirm(`Move "${title}" to this browser only? It is removed from your account and your other devices, and stays here.`)) cloud.moveToBrowser(doc.id);
+                              }}
+                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
+                            >
+                              <CloudOff size={14} />
+                            </button>
+                          ))}
                         <button
                           aria-label={`Rename file ${fileNameOf(doc)}`}
                           title="Rename the file imports refer to"
@@ -686,7 +734,7 @@ export default function Playground() {
                 >
                   Import backup…
                 </MenuItem>
-                <p className="px-3 pt-0.5 pb-1 text-xs text-muted">Saved in this browser only — export a backup.</p>
+                <CloudSection cloud={cloud} close={close} />
               </>
             )}
           </Menu>
@@ -853,6 +901,18 @@ export default function Playground() {
         </div>
         </Header>
         {banner && <Banner banner={banner} onClose={() => setBanner(null)} />}
+        {cloud.ask > 0 && (
+          <Banner
+            banner={{
+              message:
+                `Add ${cloud.ask} ${cloud.ask === 1 ? 'diagram' : 'diagrams'} from this browser to your account?` +
+                (cloud.limit !== null ? ` Your account keeps up to ${cloud.limit}; the most recently edited go first, any others stay here.` : ''),
+              action: { label: 'Add to my account', run: () => cloud.answer(true) },
+              secondary: { label: 'Keep in this browser only', run: () => cloud.answer(false) },
+            }}
+            onClose={() => cloud.answer(false)}
+          />
+        )}
 
         <div data-tour="panes" className="md:hidden bg-surface">
           <Tabs

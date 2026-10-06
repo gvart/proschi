@@ -24,6 +24,24 @@ deployed from `main` and ships with the same changes.
   is the first step of the roadmap, recommended and open without signing in,
   but optional: it locks nothing and stage completion and badges do not
   count it.
+- **Your diagrams on every device.** Signed in on proschi.app, the editor
+  keeps your diagrams in your account as well as in the browser: edits are
+  saved about two seconds after you stop typing (and when you leave the
+  page), changes from your other devices arrive when you open or return to
+  the editor, and the diagrams already in your browser are uploaded the
+  first time you sign in. Editing never waits for the network: offline, the
+  editor says so and catches up later. A diagram changed on two devices is
+  never overwritten: both versions are kept, yours as "<name> (conflict
+  <date>)". The Diagrams menu shows where your work is saved, and cloud sync
+  can be turned off there; **Delete my cloud copies** removes them from your
+  account. Your account keeps up to 5 diagrams for now: the others stay in
+  the browser, marked "This browser only" in the Diagrams menu, which says
+  how full the account is ("Saved to your account (3 of 5)") and lets you
+  swap a diagram in or out of the cloud. Synced diagrams are in **Download
+  my data** and go with the account (docs/PRIVACY.md). On a shared computer another account never gets
+  your diagrams: they leave the browser when it signs in, diagrams already
+  there are only added after asking, and signing out can remove the synced
+  ones from the browser.
 - **A GitHub Action**, `gvart/proschi/action@<tag>`: checks and tests the
   `.proschi` files in a repository (errors and failing requirements as
   annotations; the job fails on them) and, on pull requests, keeps one

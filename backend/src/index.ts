@@ -8,6 +8,7 @@ import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postC
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
 import { dailyCron } from './cron';
+import { deleteAllDocuments, deleteDocument, listDocuments, putDocument } from './documents';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
@@ -40,6 +41,10 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
+ *   GET    /api/me/documents?since=<ms>     the editor's synced diagrams changed since (tombstones too), {documents, cursor}
+ *   PUT    /api/me/documents/<id> {name, source, imports?, baseVersion}   saves one (409 {document} when it changed since)
+ *   DELETE /api/me/documents/<id>?baseVersion=   leaves a tombstone (409 {document} when it changed since)
+ *   DELETE /api/me/documents                 every synced diagram of the account
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
@@ -101,6 +106,10 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
+  if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);
+  if (is('DELETE', 'api', 'me', 'documents')) return deleteAllDocuments(request, ctx);
+  if (is('PUT', 'api', 'me', 'documents', '*')) return putDocument(request, ctx, parts[3]);
+  if (is('DELETE', 'api', 'me', 'documents', '*')) return deleteDocument(request, ctx, parts[3]);
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
   if (is('DELETE', 'api', 'me', 'identities', '*')) return unlinkIdentity(request, ctx, parts[3]);
   if (is('POST', 'api', 'problems', '*', 'runs')) return recordRun(request, ctx, parts[2]);
