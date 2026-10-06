@@ -79,6 +79,7 @@ import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDi
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { useZenMode } from './useZenMode';
+import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
@@ -164,6 +165,7 @@ export default function Playground() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
+  const keyboard = useKeyboardViewport();
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -411,7 +413,12 @@ export default function Playground() {
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
+    <div
+      className="h-[100dvh] flex flex-col bg-paper text-ink"
+      style={keyboard.style}
+      data-zen={zen.zen || undefined}
+      data-keyboard={keyboard.open || undefined}
+    >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
@@ -913,6 +920,9 @@ function DiagramView({
   const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
   const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
   const showSettings = single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
+  const selectionCount = selection.nodes.length + selection.edges.length;
+  const hasSelection = selectionCount > 0;
+  const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
@@ -1050,7 +1060,7 @@ function DiagramView({
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false} />
-        <Panel position="top-left" className="flex items-start gap-1">
+        <Panel position="top-left">
           <div className="relative">
             <button
               type="button"
@@ -1077,38 +1087,43 @@ function DiagramView({
               </div>
             )}
           </div>
-        {(selection.nodes.length > 0 || selection.edges.length > 0) && (
-          <div className="flex items-center gap-1 rounded border-bw-1 border-ink bg-surface p-1 shadow-brutal-sm">
-            <span className="hidden px-2 text-xs text-muted sm:inline">
-              {selection.nodes.length === 1 && selection.edges.length === 0
-                ? (selection.nodes[0].data?.name ?? selection.nodes[0].id)
-                : `${selection.nodes.length + selection.edges.length} selected`}
-            </span>
-            {selection.nodes.length === 1 && selection.edges.length === 0 && (
-              <button
-                onClick={() => promptRename(selection.nodes[0])}
-                className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm font-semibold text-ink hover:bg-ink/10"
-              >
-                <Pencil size={14} />
-                Rename
-              </button>
-            )}
-            <button
-              onClick={deleteSelection}
-              className="inline-flex items-center gap-1 rounded px-2.5 py-2 sm:py-1 text-sm font-semibold text-red-700 dark:text-red-300 hover:bg-fail/10"
-            >
-              <Trash2 size={14} />
-              Delete
-            </button>
-          </div>
-        )}
         </Panel>
-        {notice && (
-          <Panel position="bottom-center" role="status" className="rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
-            {notice}
+        {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
+        {(notice || (hasSelection && !showSettings)) && (
+          <Panel position="bottom-center" className="flex flex-col items-center gap-2">
+            {notice && (
+              <p role="status" className="rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
+                {notice}
+              </p>
+            )}
+            {hasSelection && !showSettings && (
+              <div role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
+                <span className="max-w-[10rem] truncate pr-1 text-sm font-semibold text-ink">
+                  {singleNode ? (singleNode.data?.name ?? singleNode.id) : `${selectionCount} selected`}
+                </span>
+                {singleNode && (
+                  <button
+                    type="button"
+                    onClick={() => promptRename(singleNode)}
+                    className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-ink hover:bg-ink/10"
+                  >
+                    <Pencil size={14} />
+                    Rename
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={deleteSelection}
+                  className="inline-flex items-center gap-1 rounded-full px-3 py-2 text-sm font-semibold text-red-700 dark:text-red-300 hover:bg-fail/10"
+                >
+                  <Trash2 size={14} />
+                  Delete
+                </button>
+              </div>
+            )}
           </Panel>
         )}
-        {nodes.length > 0 && (
+        {nodes.length > 0 && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
             Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
@@ -1175,7 +1190,7 @@ function DiagramView({
         )}
       </ReactFlow>
       {showSettings && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
           <Inspector
             key={single.id}
             node={selectedNode}
@@ -1183,6 +1198,7 @@ function DiagramView({
             capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
             importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
             onEdit={onEdit}
+            onDelete={deleteSelection}
             onClose={() => setClosedSettings(single.id)}
           />
         </div>

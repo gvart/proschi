@@ -10,6 +10,8 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Favicon fallbacks**: a `favicon.ico` for browsers and search results
+  that skip SVG icons, and an Apple touch icon for home screens.
 - **Mutators and bounties** in Scale or Fail, so no two runs want the same
   design. A run starts with a choice of three mutators: users on another
   continent, a dearer SQL licence, a read storm, a write-heavy crowd, a
@@ -235,6 +237,12 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- On phones, the on-screen keyboard no longer covers the field you are
+  typing in.
+- Diagram selection actions no longer run under the Export and load buttons
+  on narrow screens: Delete is in the settings card's header, and with the
+  card closed or several items selected, Rename and Delete show in a bar at
+  the bottom of the diagram.
 - Arcade: a run, and each new wave, opens at the top of the page instead of
   wherever the scenario list or the draft was scrolled to.
 - Daily review on a phone: after you answer a card, the next one scrolls
