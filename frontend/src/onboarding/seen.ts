@@ -8,7 +8,8 @@
  * it (and the hint), for testing and for links in docs.
  */
 
-export type TourId = 'editor' | 'practice';
+/** `arcade`: Kernel's first-wave tutorial in Scale or Fail; `arcade-twists`: its intro to the twists. */
+export type TourId = 'editor' | 'practice' | 'arcade' | 'arcade-twists';
 
 /** Start the full tour, show a small non-blocking hint, or nothing. */
 export type StartMode = 'tour' | 'hint' | null;

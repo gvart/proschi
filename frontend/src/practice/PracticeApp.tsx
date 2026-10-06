@@ -25,6 +25,7 @@ import AchievementToast from './skills/AchievementToast';
 import PrepHub from './prep/PrepHub';
 import { prepTabOf } from './prep/tabs';
 import { profileIdOf } from './profile/profile';
+import { track } from '../services/metrics';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -92,6 +93,7 @@ async function importProgress(items: { problemId: string; source: string; solved
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const route = useHashRoute();
   const [progress, setProgress] = useState<Progress>(loadProgress);
+  useEffect(() => track('practice_open', { once: 'session' }), []);
   const updateProgress = useCallback((update: (p: Progress) => Progress) => {
     setProgress((p) => {
       const next = update(p);
@@ -115,7 +117,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // Starting the roadmap takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
+  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
   // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
   // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
   const access = roadmapAccess(account.state);

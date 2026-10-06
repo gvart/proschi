@@ -5,7 +5,7 @@ import type { Account } from '../../practice/useAccount';
 import { PROVIDER_LABEL } from '../../practice/account';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { gameContent } from '../content';
-import { maxAscension, scenarioOpen, shop, type ShopItem } from '../engine/meta';
+import { maxAscension, scenarioOpen, shop, twistsOpen, type ShopItem } from '../engine/meta';
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
 import type { Action, RunSetup } from '../engine/types';
 import { IconTile } from './gameIcons';
@@ -187,6 +187,11 @@ export default function ArcadeRoute({ account }: { account: Account }) {
 
       <section>
         <h3 className="font-display text-2xl font-extrabold">Scenarios</h3>
+        {!twistsOpen(content, meta) && (
+          <p className="mt-1 text-sm text-muted">
+            Your first runs play the basic rules, and Kernel walks you through Shortly's first wave. Clear a Scale or Fail scenario to unlock the twists: mutators, bounties, forecast ranges, live changes and more.
+          </p>
+        )}
         <ul className="mt-3 grid gap-4 sm:grid-cols-2">
           {content.scenarios.map((s) => {
             const open = scenarioOpen(s, meta, (id) => content.scenarios.find((x) => x.id === id)?.title ?? id);
@@ -253,8 +258,9 @@ function HowItWorks() {
         <li>Twelve waves in three acts. Each wave, read the forecast, plan the board, and deploy: eight ticks of real simulated traffic follow.</li>
         <li>Cash pays the cloud bill; requests that succeed earn it. Trust is your lives: missed latency or availability targets, dropped requests and outages cost it.</li>
         <li>The score is revenue × quality × your uptime streak. Running every node between 40% and 75% at the peak earns the right-sized bonus; over-provisioning burns cash.</li>
-        <li>Each run starts with a choice of three mutators: twists like users on another continent or three times the writes, which change the winning design and multiply your points. Every wave also has an optional bounty that pays cash and points.</li>
-        <li>Between waves, take a tech card. Every few waves, a contract adds a use case. Waves 4, 8 and 12 are bosses.</li>
+        <li>Your first clear unlocks the twists. Each run then starts with a choice of three mutators, like users on another continent or three times the writes, which change the winning design and multiply your points; every wave offers optional bounties; forecasts become ranges; and you can change the board while a wave runs. The daily run always has them.</li>
+        <li>During a wave, a few hotfixes act at once: one more replica, a rate limit, a warm cache, a feature switched off.</li>
+        <li>Between waves, take a tech card. With the twists, every few waves a contract adds a use case. Waves 4, 8 and 12 are bosses.</li>
         <li>Runs earn Blueprints for the shop: new components, rare cards and perks, which you keep. Clear a scenario to open the next difficulty.</li>
       </ul>
     </details>
