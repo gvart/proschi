@@ -13,8 +13,9 @@ cards, incidents and components are plain files in
 
 ## How a run works
 
-A run is twelve **waves** in three acts. It starts with a choice of three
-**mutators** (below), and each wave is a month of traffic:
+A run is twelve **waves** in three acts. Once the twists are open (see
+[First runs](#first-runs)) it starts with a choice of three **mutators**
+(below), and each wave is a month of traffic:
 
 1. **Forecast.** Kernel, the cat SRE lead, briefs the wave in plain words:
    how traffic changed since last month, the new use cases and requirements,
@@ -22,10 +23,10 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    forecast panel then shows the traffic curve and its peak per use case, the
    requirements in force (as Proschi lines), and the incidents coming (with
    their tick, below difficulty 1), and this wave's three **bounties** to
-   choose from. In Scale or Fail the peak is a **range**: the real traffic
+   choose from. With the twists, the peak is a **range**: the real traffic
    lands within 12% of the forecast either way (20% on a boss), drawn from
    the seed, so a load test, which tests the middle, is a guide and headroom
-   is a choice. From wave 5 some incidents are **unannounced**. The cat
+   is a choice, and from wave 5 some incidents are **unannounced**. The cat
    button in the run's header turns the briefings off.
 2. **Plan.** Place, wire, scale out (replicas), scale up (sizes S, M, L),
    shard, remove. Nothing is timed. A **load test** shows the plan at the
@@ -42,16 +43,16 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    line that broke. See [The code pane](#the-code-pane).
 3. **Run: hold the line.** Eight ticks, each one simulated with the wave's
    traffic at that point of the curve, and the run keeps going while you
-   act. Change the board as you would when planning and **ship it**: it goes
+   act. With the twists, change the board as you would when planning and
+   **ship it**: it goes
    live after provisioning, a tick for scaling or removing a component, two
    for new components or wires, and a cache that goes live mid-wave starts
    cold (30%, then 70% of its usual hit ratio). Three live changes a wave;
-   one still provisioning when the wave ends is live for the next. The
-   **on-call** has three points of attention a wave
-   (more with cards and perks), and each action spends one, from that tick to
-   the end of the wave:
+   one still provisioning when the wave ends is live for the next. And
+   there are three **hotfixes** a wave (more with cards and perks), each from
+   that tick to the end of the wave:
 
-   | Action | Cost | What it does |
+   | Hotfix | Cost | What it does |
    |---|---|---|
    | One more replica | $200 | On the node you tap. |
    | Bring it back | $100 | A node an incident took down (a lost zone, a dead primary) is back. |
@@ -59,20 +60,52 @@ A run is twelve **waves** in three acts. It starts with a choice of three
    | Rate limit | 2 Trust | Turns away 15% of requests and every bot at the edge. |
    | Switch a feature off | 3 Trust | A use case gets no traffic: no load, no revenue, no limits checked. |
 
-   The on-call acts at once and costs overtime; a live change is free but
-   takes time. Pause stops the clock for those who need it.
+   A hotfix acts at once and costs overtime; a live change is free but
+   takes time. Pause stops the clock for those who need it. (Hotfixes are
+   not the [On-call mode](#design-first-modes), whose pages are tickets.)
 
 4. **Score and debrief.** Revenue, cost, interest, bonuses and the bounty. If anything
    broke, the debrief shows the bottleneck, the simulation's hint and the
    review cards that explain it.
 5. **Draft.** Take one of three **tech cards**, or skip it for $100.
-   Rerolls cost $150, then $50 more each. After waves 2, 5 and 8, choose one
-   of three **contracts**: a new use case for more revenue, stricter
-   requirements for a multiplier, or cash now.
+   Rerolls cost $150, then $50 more each. With the twists, after waves 2, 5
+   and 8, choose one of three **contracts**: a new use case for more revenue,
+   stricter requirements for a multiplier, or cash now.
 
 Waves 4, 8 and 12 are **bosses**: a launch, a holiday, a Super Bowl ad. After
 wave 12 you can bank the score or keep going in **Endless** (traffic ×1.3 a
 wave, two incidents, up to wave 24).
+
+### First runs
+
+So that a first run is not a dozen ideas at once, a new player plays the
+**basic rules** until their first clear of a Scale or Fail scenario
+(Shortly, for nearly everyone; clearing a design-first mode does not count):
+
+- no mutators and no bounties;
+- an exact forecast instead of a range, and no unannounced or cascading
+  incidents;
+- no live changes: the board deployed is the board of the whole wave
+  (hotfixes still work);
+- no card sets and no contracts.
+
+In Shortly's first wave, after the briefing, Kernel walks through a short
+**tutorial**: place a load balancer, add a replica, load test, deploy. Each
+step is read off the board (undo steps back), its control pulses, and "Skip
+the tutorial" puts it away. The first run with the twists opens with
+Kernel's one-time **intro** to them, before the mutator picker. Both are
+remembered in the browser (`proschi.onboarding`, `arcade` and
+`arcade-twists`).
+
+The gate is part of the run's setup (`twists: false` in `RunSetup`; absent
+means on), decided from the player's progress when the run starts
+(`runTwists` in `engine/meta.ts`), so a replay plays the same rules. The
+Worker starts a ranked run with it from the stored progress, never from the
+request, and takes an imported run's basic rules only while the progress at
+that point had no clear (`twistsAllowed`). The **daily run always has every
+twist**, for everyone, so its board compares one game. Basic runs score on
+the scenario's ordinary board: they can only be ascension 0, they lose the
+mutator, bounty and set bonuses, and they gain an exact forecast.
 
 ### The code pane
 
@@ -93,9 +126,10 @@ nothing in the score.
 
 ### Mutators and bounties
 
-So that no two runs want the same design, a Scale or Fail run (not the
-design-first modes) has two kinds of twist, both seeded like everything else:
-the daily run offers everyone the same ones.
+So that no two runs want the same design, a Scale or Fail run with the
+twists (not the design-first modes, nor [first runs](#first-runs)) has two
+kinds of twist, both seeded like everything else: the daily run offers
+everyone the same ones.
 
 - **Mutators.** Before the first deploy, pick one of three, or play it
   straight. A mutator changes the whole run: 60% of users on another
@@ -109,7 +143,7 @@ the daily run offers everyone the same ones.
   deploying, or none. Met, it pays; missed, it costs a quarter of its cash.
   The objectives: every app server
   under 50% at the peak, a cloud bill under 40% of revenue, a wave without a
-  breach, the right-sized bonus, a clean wave without the on-call or without
+  breach, the right-sized bonus, a clean wave without a hotfix or without
   a load test, a lost zone survived, a boss without a dropped request. Met, it
   pays its cash at once and its points × the act. A bounty made for the wave
   (its announced incident, its boss) is four times as likely, and the one
@@ -144,12 +178,12 @@ server costs 25% more, Read replicas everywhere takes 60% more reads at 35%
 more per database, Long TTLs raise every hit ratio but cost Trust. A card's
 `downside` is a second effect against you.
 
-Three cards of one topic (caching, resilience, estimation…) make a **set**:
-every tick's points ×1.1 per set held.
+With the twists, three cards of one topic (caching, resilience,
+estimation…) make a **set**: every tick's points ×1.1 per set held.
 
 ### Incidents that cascade
 
-An incident with `then` sets off another when it broke something badly
+With the twists, an incident with `then` sets off another when it broke something badly
 (dropped or failed requests, a lost zone it could not survive), at most once
 a wave: a lost cache node comes back cold (a stampede), a stampede knocks the
 database primary over, a dead primary brings a storm of retried writes. The
@@ -495,7 +529,8 @@ never offer it. `text` says what changes, `why` the design it pushes toward.
 `kind` is the test: `max-utilization` (every node of `role` under `value` at
 the peak), `budget` (the bill under `value` × revenue), `clean`,
 `no-breach` (no breach of kind `breach` all wave), `right-sized`,
-`no-oncall` and `no-loadtest` (a clean wave without them). `event` (an event
+`no-oncall` and `no-loadtest` (a clean wave without a hotfix, or without a
+load test). `event` (an event
 effect) and `boss` limit it to waves that have that incident, or a boss.
 `cash` is paid at once, `points` × the act.
 
@@ -544,8 +579,8 @@ one with `"diagnose": "<id>"` (the first option when it says nothing).
 ## Reference and wrong runs
 
 Every scenario ships with scripted runs, like a problem's reference solution
-and wrong designs. A run is a seed, an optional loadout and ascension, and a
-**play** per wave:
+and wrong designs. A run is a seed, an optional loadout and ascension (and `"twists": false`
+for the basic rules of a first run), and a **play** per wave:
 
 ```json
 {
@@ -570,8 +605,8 @@ A play changes the board deployed last wave (`add`, `remove`, `set`, `wire`,
 `unwire`), may `loadtest`, take a `bounty` (an id, or `first`), ship `live` changes during the run
 (`[{"tick": 2, "set": {"api": {"replicas": 6}}}]`, each with the same
 `add`, `remove`, `set`, `wire` and `unwire` as a play), call the
-`oncall` (`[{"tick": 3, "node": "api"}]`, or with `"act"`: `reboot`, `warm`,
-`ratelimit` or `shed` with a `useCase`),
+`oncall` for a hotfix (`[{"tick": 3, "node": "api"}]`, or with `"act"`:
+`reboot`, `warm`, `ratelimit` or `shed` with a `useCase`),
 `reroll`, `pick` the first card on offer from a list, sign a `contract`,
 `migrate` (`[{"id": "pets", "to": "next"}]`; `to` is `next`, `rollback` or
 `big-bang`) and `sunset` legacy use cases (`["book"]`).
@@ -585,6 +620,10 @@ Waves past the list keep the board and skip every choice.
   shows.
 - The check also plays "do nothing" (the start board, every wave), which must
   lose by wave 8 (or the wave before the last, in a shorter scenario).
+- And it plays the reference under the basic rules of a first run (no
+  bounty or contract, and its `live` changes made before the deploy): it
+  must clear Shortly, the scenario new players learn on, and get past act 1
+  in the other Scale or Fail scenarios.
 
 ## Balancing
 
@@ -594,6 +633,7 @@ npm run build
 node dist/cli.cjs game sim shortly                 # the reference run, wave by wave
 node dist/cli.cjs game sim shortly --seed other    # the same plays with other incidents
 node dist/cli.cjs game sim shortly --run my.json --ascension 5
+node dist/cli.cjs game sim shortly --basic          # the basic rules of a first run
 ```
 
 `sim` prints each wave's cost, revenue, points, Trust and what broke. Good
@@ -623,8 +663,10 @@ For every mutator a Scale or Fail scenario offers, it also plays the
 reference with that mutator through act 1, which it must survive: a twist
 may force a new design later, but should not end a sound one at once. And it
 flags a far-user mutator in a scenario with a latency limit the ocean alone
-breaks (a use case no edge can answer, under 120 ms): exclude it there. The
-frontend tests run the same check.
+breaks (a use case no edge can answer, under 120 ms): exclude it there. It
+plays the reference under the basic rules of a first run too (see
+[Reference and wrong runs](#reference-and-wrong-runs)). The frontend tests
+run the same check.
 
 ## Checklist
 

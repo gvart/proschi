@@ -10,6 +10,16 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A gentler first run in the Arcade.** Until your first clear of a Scale
+  or Fail scenario, runs play the basic rules: no mutators, bounties,
+  contracts or card sets, an exact forecast, no unannounced or cascading
+  incidents, and no live changes during a wave. In Shortly's first wave
+  Kernel walks you through it: place a load balancer, add a replica, load
+  test, deploy (skippable, shown once). After your first clear, Kernel
+  introduces the twists before your next run. The daily run always has
+  every twist, for everyone. The server decides the rules from your stored
+  progress, so ranked runs replay exactly. New leaderboards start with this
+  version.
 - **Anonymous usage counts.** proschi.app now counts, per day, how often a
   few things happen (the editor opened, a first edit, tests run, a problem
   solved, a sign-in, …) to see where people get stuck. Only the event's name
@@ -256,6 +266,8 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- The Arcade's per-wave "on-call" actions are now **Hotfixes**, so they
+  are no longer confused with the On-call mode (Dinnerbell).
 - The Arcade shop shows an icon and a one-line description for every item:
   components with the icon the board draws for them, features with their
   own. Each tab (Components, Features, Rare cards, Perks) says what it sells,

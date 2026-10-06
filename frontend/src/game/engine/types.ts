@@ -482,6 +482,14 @@ export interface RunSetup {
   mode: Mode;
   /** Unlocked components, features and cards; perks with their levels. Buffs count on the leaderboard. */
   loadout: Loadout;
+  /**
+   * The advanced twists (docs/GAME.md, "First runs"): mutators, bounties,
+   * forecast ranges, unannounced and cascading incidents, live changes, card
+   * sets and contracts. `false` plays the basic rules, which a player's runs
+   * have until their first Scale or Fail clear (meta.ts `runTwists`); absent
+   * means on. Part of the setup, so a replay plays the same rules.
+   */
+  twists?: boolean;
 }
 
 export interface Loadout {

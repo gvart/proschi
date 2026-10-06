@@ -32,7 +32,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.game.settings` | Scale or Fail: sound on or off, and the run's speed |
 | `proschi.goal` | On a copy of the site without accounts: your daily goal, in cards a day |
 | `proschi.recap` | The week of the last weekly recap you dismissed, so it is not shown again |
-| `proschi.onboarding` | Which first-run tours you have seen (in session storage when local storage is blocked) |
+| `proschi.onboarding` | Which first-run tours you have seen, the Arcade's first-wave tutorial and its intro to the twists included (in session storage when local storage is blocked) |
 | `proschi.theme` | Light, dark, or following your system |
 | `proschi.chunkReloadAt` | Session storage only: when the page last reloaded itself after a site update, so it never loops |
 | `proschi.metrics.once` | Which usage counts this browser has already sent where one counts only once (below): in local storage for the first edit and a first solve signed out (with the problem's id), in session storage for the rest. Never sent anywhere |

@@ -253,3 +253,28 @@
     background: rgb(var(--c-yellow) / 0.3);
   }
 }
+
+/* Kernel's first-wave tutorial (tutorial.ts): the control the step is about
+   pulses. The page sets data-coach-step on the run's root. */
+[data-coach-step='lb'] [data-component='lb'],
+[data-coach-step='replica'] .sf-canvas .sf-role-app .pc-node,
+[data-coach-step='replica'] section[aria-label='App Server settings'] button[aria-label='More replicas'],
+[data-coach-step='loadtest'] [data-coach='loadtest'],
+[data-coach-step='deploy'] [data-coach='deploy'] {
+  outline: 3px solid rgb(var(--c-pink));
+  outline-offset: 3px;
+  animation: sf-coach 1.2s ease-in-out infinite;
+}
+@keyframes sf-coach {
+  50% {
+    outline-color: rgb(var(--c-pink) / 0.25);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-coach-step] [data-component],
+  [data-coach-step] .pc-node,
+  [data-coach-step] button,
+  [data-coach-step] [data-coach] {
+    animation: none;
+  }
+}

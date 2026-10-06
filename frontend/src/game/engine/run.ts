@@ -443,6 +443,7 @@ export class Game {
     if (!scenario) throw new GameError(`Unknown scenario '${setup.scenario}'`);
     this.scenario = scenario;
     if (!Number.isInteger(setup.ascension) || setup.ascension < 0 || setup.ascension > 10) throw new GameError('Ascension is 0 to 10');
+    if (setup.twists !== undefined && typeof setup.twists !== 'boolean') throw new GameError('twists is true or false');
     this.rules = ascensionRules(setup.ascension);
     const perks = this.perks();
     if (perks.length > this.rules.perkSlots) throw new GameError(`At most ${this.rules.perkSlots} perks`);
@@ -482,7 +483,7 @@ export class Game {
       sunset: [],
       bigBang: [],
       news: { useCases: [], requirements: [] },
-      mutatorOffer: scenario.mode === 'scale' ? shuffled(stream(setup.seed, 'mutators'), mutatorsFor(content, scenario.id)).slice(0, MUTATOR_OFFER).map((m) => m.id) : [],
+      mutatorOffer: scenario.mode === 'scale' && setup.twists !== false ? shuffled(stream(setup.seed, 'mutators'), mutatorsFor(content, scenario.id)).slice(0, MUTATOR_OFFER).map((m) => m.id) : [],
       paged: 0,
       tested: false,
       bountyOffer: [],
@@ -508,12 +509,22 @@ export class Game {
 
   // ---- What the page reads ----
 
+  /** Whether the run plays the advanced twists (`RunSetup.twists`); a player's first runs play the basic rules. */
+  get twists(): boolean {
+    return this.setup.twists !== false;
+  }
+
   get mods(): Mods {
     const m = computeMods(
       this.state.hand.map((id) => this.index.cards.get(id)!),
       this.perks(),
       { streakStep: STREAK_STEP, interestCap: INTEREST_CAP },
     );
+    // Card sets are a twist: the basic rules have none.
+    if (!this.twists) {
+      m.sets = [];
+      m.setBonus = 1;
+    }
     const mu = this.mutatorDef;
     if (mu) {
       for (const c of mu.cost ?? []) m.cost.push({ target: c.target, mult: c.mult });
@@ -573,7 +584,7 @@ export class Game {
         return { id: e.id, title: def.title, telegraph: def.telegraph, ...(this.rules.hiddenTicks ? {} : { from: e.from }), duration: e.duration };
       }),
       global: this.state.global,
-      contract: !!w.contract && this.state.wave < this.scenario.waves.length - 1,
+      contract: !!w.contract && this.twists && this.state.wave < this.scenario.waves.length - 1,
       ...(w.ticket ? { ticket: { ...w.ticket, text: this.scenario.sections[`Ticket: ${w.ticket.id}`] ?? '' } } : {}),
       news: this.state.news,
       ...(this.mutatorDef ? { mutator: this.mutatorDef } : {}),
@@ -585,15 +596,15 @@ export class Game {
     };
   }
 
-  /** The share a Scale or Fail wave's real traffic may differ from the forecast by; 0 in the design-first modes. */
+  /** The share a Scale or Fail wave's real traffic may differ from the forecast by; 0 in the design-first modes and the basic rules. */
   spread(): number {
-    if (this.scenario.mode !== 'scale') return 0;
+    if (this.scenario.mode !== 'scale' || !this.twists) return 0;
     return this.waveDef().boss ? DEMAND_SPREAD_BOSS : DEMAND_SPREAD;
   }
 
   /** Whether an incident may come unannounced this wave. */
   surprises(): boolean {
-    return this.scenario.mode === 'scale' && this.state.wave + 1 >= SURPRISE_FROM_WAVE;
+    return this.scenario.mode === 'scale' && this.twists && this.state.wave + 1 >= SURPRISE_FROM_WAVE;
   }
 
 
@@ -672,14 +683,14 @@ export class Game {
       }
       case 'oncall': {
         this.expect('run');
-        if (!Number.isInteger(action.tick) || action.tick < s.tick || action.tick >= TICKS) throw new GameError('On-call actions happen during the run');
+        if (!Number.isInteger(action.tick) || action.tick < s.tick || action.tick >= TICKS) throw new GameError('Hotfixes happen during the run');
         while (s.tick < action.tick && s.phase === 'run') this.advance();
         this.expect('run');
         const act = action.act ?? 'replica';
         const price = ONCALL_ACTS[act];
-        if (!price) throw new GameError(`No on-call action '${act}'`);
-        if (s.oncallLeft < price.attention) throw new GameError('The on-call has no attention left this wave');
-        if (s.cash < price.cash) throw new GameError('Not enough cash for that on-call action');
+        if (!price) throw new GameError(`No hotfix '${act}'`);
+        if (s.oncallLeft < price.attention) throw new GameError('No hotfixes left this wave');
+        if (s.cash < price.cash) throw new GameError('Not enough cash for that hotfix');
         const m = s.mitigation;
         const nodeOf = () => {
           const node = s.board.nodes.find((n) => n.id === action.node);
@@ -735,6 +746,7 @@ export class Game {
         if (!Number.isInteger(action.tick) || action.tick < s.tick || action.tick >= TICKS) throw new GameError('Live changes happen during the run');
         while (s.tick < action.tick && s.phase === 'run') this.advance();
         this.expect('run');
+        if (!this.twists) throw new GameError('Live changes open after your first clear: deploy the board for the whole wave');
         if (s.changes >= LIVE_CHANGES_PER_WAVE) throw new GameError(`At most ${LIVE_CHANGES_PER_WAVE} live changes a wave`);
         this.checkBoard(action.board);
         const delay = this.provisioning(action.board);
@@ -933,7 +945,7 @@ export class Game {
   private cascade(r: TickResult) {
     const s = this.state;
     // Only what users felt hard (a dropped or failed request), and one cascade a wave.
-    if (!r.breaches.some((b) => CASCADE_BREACHES.includes(b.kind)) || s.events.some((e) => e.chained)) return;
+    if (!this.twists || !r.breaches.some((b) => CASCADE_BREACHES.includes(b.kind)) || s.events.some((e) => e.chained)) return;
     for (const { def, i } of this.active(s.tick)) {
       const inst = s.events.find((e) => e.id === def.id);
       if (!def.then || !inst || i !== inst.duration - 1) continue;
@@ -1037,7 +1049,7 @@ export class Game {
   /** Scale or Fail: the wave's bounties on offer, drawn from those that fit it (its announced incidents, its boss), never the last wave's. */
   private drawBounties(): string[] {
     const s = this.state;
-    if (this.scenario.mode !== 'scale') return [];
+    if (this.scenario.mode !== 'scale' || !this.twists) return [];
     const w = this.waveDef();
     const effects = new Set(s.events.filter((e) => !e.surprise).map((e) => this.index.events.get(e.id)?.effect));
     const last = s.history[s.history.length - 1]?.bounty?.id;
@@ -1180,7 +1192,7 @@ export class Game {
   private afterDraft() {
     const s = this.state;
     const w = this.waveDef();
-    if (w.contract && !s.endless) {
+    if (w.contract && !s.endless && this.twists) {
       const open = this.scenario.contracts.filter((c) => !s.contracts.includes(c.id));
       s.contractOffer = shuffled(stream(this.setup.seed, `contracts:${s.wave}`), open)
         .slice(0, 3)

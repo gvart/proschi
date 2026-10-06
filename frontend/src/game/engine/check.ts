@@ -75,6 +75,12 @@ export interface ScriptedRun {
   loadout?: Loadout;
   /** A mutator to play with (any of mutators.json, offered or not). */
   mutator?: string;
+  /**
+   * `false` plays the basic rules of a first run (`RunSetup.twists`): no
+   * bounty or contract is offered, and `live` changes are made before the
+   * deploy instead, since there are none during the run.
+   */
+  twists?: boolean;
   /** One per wave, from the first; waves past the list keep the board and skip every choice. */
   plays: Play[];
   /**
@@ -112,6 +118,7 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
     ascension: run.ascension ?? 0,
     mode: 'normal',
     loadout: run.loadout ?? { unlocked: allUnlocks(content), perks: {} },
+    ...(run.twists === false ? { twists: false } : {}),
   };
   const game = new Game(content, setup);
   const s = game.state;
@@ -132,13 +139,14 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
       game.apply({ t: 'diagnose', pick: play.diagnose ?? game.waveDef().diagnosis!.options[0].id });
       if ((s.phase as string) === 'over') break;
     }
-    const board = applyPlay(s.board, play);
+    // The basic rules have no live changes: the same changes are planned up front.
+    const board = (game.twists ? [] : (play.live ?? [])).reduce(applyPlay, applyPlay(s.board, play));
     const bounty = play.bounty === 'first' ? 0 : play.bounty ? s.bountyOffer.indexOf(play.bounty) : -1;
     if (bounty >= 0 && s.bountyOffer[bounty]) game.apply({ t: 'bounty', pick: bounty });
     if (play.loadtest) game.apply({ t: 'loadtest', board });
     game.apply({ t: 'deploy', board });
     type During = { tick: number; oncall?: NonNullable<Play['oncall']>[number]; live?: NonNullable<Play['live']>[number] };
-    const during: During[] = [...(play.oncall ?? []).map((o) => ({ tick: o.tick, oncall: o })), ...(play.live ?? []).map((l) => ({ tick: l.tick, live: l }))].sort((a, b) => a.tick - b.tick);
+    const during: During[] = [...(play.oncall ?? []).map((o) => ({ tick: o.tick, oncall: o })), ...(game.twists ? (play.live ?? []) : []).map((l) => ({ tick: l.tick, live: l }))].sort((a, b) => a.tick - b.tick);
     for (const d of during) {
       if (s.phase !== 'run') break;
       if (d.live) {
@@ -175,6 +183,8 @@ export function allUnlocks(content: GameContent): string[] {
 /** The ids content publishes, as ids.lock lists them (`kind:id`). */
 /** Waves in act 1: a mutator must leave the reference standing through them. */
 const ACT_ONE = 4;
+/** The scenario a new player learns on: its reference must clear under the basic rules too. */
+export const FIRST_SCENARIO = 'shortly';
 
 export function publishedIds(content: GameContent): string[] {
   return [
@@ -453,6 +463,21 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
         } catch (e) {
           v(`${dir}/reference.json`, `With the mutator '${m.id}': ${e instanceof GameError ? e.message : String(e)}`);
         }
+      }
+    }
+
+    // The basic rules of a first run (no twists): the reference must clear in the scenario players learn on, and survive act 1 in the rest.
+    if (s.mode === 'scale' && files[`${dir}/reference.json`]) {
+      const started = performance.now();
+      try {
+        const reference = JSON.parse(files[`${dir}/reference.json`]!) as ScriptedRun;
+        const first = s.id === FIRST_SCENARIO;
+        const st = playScript(content, s.id, { ...reference, twists: false }, first ? WAVES : ACT_ONE + 1).state;
+        runs.push({ scenario: s.id, name: 'reference, basic rules', outcome: st.outcome, waves: st.history.length, score: st.score, ms: performance.now() - started });
+        if (first && !st.cleared) v(`${dir}/reference.json`, `Under the basic rules of a first run the reference does not clear (${st.outcome ?? 'stopped'} in wave ${st.history.length}): the scenario new players learn on must be winnable without the twists`);
+        else if (!first && st.outcome && st.history.length <= ACT_ONE) v(`${dir}/reference.json`, `Under the basic rules of a first run the reference falls in act 1 (${st.outcome} in wave ${st.history.length})`);
+      } catch (e) {
+        v(`${dir}/reference.json`, `Under the basic rules: ${e instanceof GameError ? e.message : e instanceof SyntaxError ? 'not JSON' : String(e)}`);
       }
     }
 

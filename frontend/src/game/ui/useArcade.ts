@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, apiEnabled } from '../../services/api';
 import { challengeDay } from '../../learn/challenge';
 import type { AccountState } from '../../practice/useAccount';
-import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, type Meta } from '../engine/meta';
+import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, runTwists, type Meta } from '../engine/meta';
 import { dailySeed } from '../engine/rng';
 import type { Game } from '../engine/run';
 import type { GameContent, RunSetup } from '../engine/types';
@@ -149,9 +149,10 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
       if (signedIn) return api<{ runId: string; setup: RunSetup }>('/api/game/runs', { method: 'POST', body: { mode, scenario, ascension } });
       if (mode === 'daily') {
         const day = challengeDay();
-        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0) } };
+        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0), twists: runTwists(content, metaRef.current, 'daily') } };
       }
-      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension) } };
+      // Signed out the same rule as the Worker's: the basic rules until the first clear.
+      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension), twists: runTwists(content, metaRef.current, 'normal') } };
     },
     [signedIn, content],
   );
