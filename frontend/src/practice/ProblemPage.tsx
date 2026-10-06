@@ -28,6 +28,7 @@ import AccountMenu from './AccountMenu';
 import CommunityStats from './CommunityStats';
 import { useProblemStats } from './useCommunity';
 import { useZenMode } from '../components/Playground/useZenMode';
+import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
 import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
@@ -100,6 +101,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   };
   const editorRef = useRef<CodeEditorHandle>(null);
   const zen = useZenMode();
+  const keyboard = useKeyboardViewport();
   const status = statusOf(progress, problem.id);
   // Someone who has worked on problems before is not a first-time visitor.
   const [tour, setTour] = useState<StartMode>(() => startMode('practice', { returning: Object.keys(progress).length > 0 }));
@@ -172,7 +174,12 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const lessonShown = hasLesson && aside === 'lesson';
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
+    <div
+      className="h-[100dvh] flex flex-col bg-paper text-ink"
+      style={keyboard.style}
+      data-zen={zen.zen || undefined}
+      data-keyboard={keyboard.open || undefined}
+    >
       <ZenCollapse zen={zen.zen}>
       <Header base="../" current="practice" compact>
         <a href={back.href} className={toolButton}>

@@ -79,6 +79,7 @@ import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDi
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { useZenMode } from './useZenMode';
+import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
@@ -164,6 +165,7 @@ export default function Playground() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
+  const keyboard = useKeyboardViewport();
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -411,7 +413,12 @@ export default function Playground() {
   const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
-    <div className="h-[100dvh] flex flex-col bg-paper text-ink" data-zen={zen.zen || undefined}>
+    <div
+      className="h-[100dvh] flex flex-col bg-paper text-ink"
+      style={keyboard.style}
+      data-zen={zen.zen || undefined}
+      data-keyboard={keyboard.open || undefined}
+    >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
@@ -1050,7 +1057,8 @@ function DiagramView({
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
         {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false} />
-        <Panel position="top-left" className="flex items-start gap-1">
+        {/* Selection actions sit under Add, not beside it: side by side they ran under the top-right tools on narrow panes. */}
+        <Panel position="top-left" className="flex flex-col items-start gap-1">
           <div className="relative">
             <button
               type="button"
@@ -1175,7 +1183,7 @@ function DiagramView({
         )}
       </ReactFlow>
       {showSettings && (
-        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
+        <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
           <Inspector
             key={single.id}
             node={selectedNode}

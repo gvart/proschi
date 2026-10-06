@@ -268,3 +268,47 @@ for (const width of [320, 400, 470]) {
     });
   });
 }
+
+test.describe('editor diagram on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  /** Opens the URL shortener example on the Diagram pane and selects its first component. */
+  async function selectNode(page: Page): Promise<void> {
+    await page.goto('./');
+    await page.goto((await page.locator('a[data-example="url-shortener"]').getAttribute('href'))!);
+    await page.getByRole('tab', { name: 'Diagram' }).first().click();
+    await page.locator('.react-flow__node').first().click();
+    await expect(page.getByRole('button', { name: 'Delete' })).toBeVisible();
+  }
+
+  test('the selection actions do not run under the export tools', async ({ page }) => {
+    await selectNode(page);
+    const actions = (await page.getByRole('button', { name: 'Delete' }).locator('..').boundingBox())!;
+    for (const tool of [page.getByRole('button', { name: 'Export image' }), page.getByRole('button', { name: /load$/ })]) {
+      const box = (await tool.boundingBox())!;
+      const overlaps = box.x < actions.x + actions.width && actions.x < box.x + box.width && box.y < actions.y + actions.height && actions.y < box.y + box.height;
+      expect(overlaps, `${await tool.innerText()} overlaps Rename/Delete`).toBe(false);
+    }
+  });
+
+  test('a settings field stays above the on-screen keyboard', async ({ page }) => {
+    // Chromium has no keyboard here; stand in for iOS Safari, whose visual viewport shrinks while the layout one does not.
+    await page.addInitScript(() => {
+      const fake = Object.assign(new EventTarget(), { height: 844, width: 390, offsetTop: 0, offsetLeft: 0, pageTop: 0, pageLeft: 0, scale: 1 });
+      Object.defineProperty(window, 'visualViewport', { value: fake });
+      (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard = (px) => {
+        fake.height = document.documentElement.clientHeight - px;
+        fake.dispatchEvent(new Event('resize'));
+      };
+    });
+    await selectNode(page);
+    const settings = page.getByRole('region', { name: /settings$/ });
+    const field = settings.locator('input, textarea').last();
+    await field.focus();
+    await page.evaluate(() => (window as unknown as { showKeyboard: (px: number) => void }).showKeyboard(400));
+    const visible = 844 - 400;
+    await expect.poll(async () => (await field.boundingBox())!.y + (await field.boundingBox())!.height).toBeLessThanOrEqual(visible);
+    expect((await field.boundingBox())!.y).toBeGreaterThanOrEqual(0);
+    await expect(page.locator('[data-keyboard]')).toHaveCount(1);
+  });
+});

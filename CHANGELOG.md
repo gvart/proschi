@@ -237,6 +237,9 @@ deployed from `main` and ships with the same changes.
   sent, they count once.
 
 ### Fixed
+- On phones, the on-screen keyboard no longer covers the field you are
+  typing in, and Rename and Delete for a selected component no longer run
+  under the diagram's Export and load buttons.
 - Arcade: a run, and each new wave, opens at the top of the page instead of
   wherever the scenario list or the draft was scrolled to.
 - Daily review on a phone: after you answer a card, the next one scrolls
