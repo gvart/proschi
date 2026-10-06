@@ -68,6 +68,8 @@ test('a daily run: opened from a shared link, then shared with a square per wave
   const daily = page.getByRole('region', { name: 'Today’s daily run' });
   await expect(daily).toBeFocused();
   await daily.getByRole('button', { name: 'Play today’s run' }).click();
+  // The daily run always has the twists, so a first daily opens with Kernel's intro to them.
+  await page.getByRole('dialog', { name: 'New: the twists' }).getByRole('button', { name: /Let.s go/ }).click();
   await page.getByRole('dialog', { name: "Pick this run's mutator" }).getByRole('button', { name: /Play it straight/ }).click();
 
   await playUntilOver(page);
