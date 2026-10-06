@@ -23,7 +23,8 @@ function copy(edit: (dir: string) => void): string {
   return dir;
 }
 
-describe('proschi game check', () => {
+// The check plays every scripted run: seconds of CPU, more on a busy machine.
+describe('proschi game check', { timeout: 30_000 }, () => {
   it("passes the repository's content and plays its scripted runs", () => {
     const { code, out } = capture(['check']);
     expect(code).toBe(0);
@@ -72,11 +73,17 @@ describe('proschi game check', () => {
   });
 });
 
-describe('proschi game sim', () => {
+describe('proschi game sim', { timeout: 30_000 }, () => {
   it("prints every wave of a scenario's reference run", () => {
     const { code, out } = capture(['sim', 'ping']);
     expect(code).toBe(0);
     expect(out.split('\n').filter((l) => /^\d+ /.test(l))).toHaveLength(12);
+    expect(out).toMatch(/retired: score \d+/);
+  });
+
+  it('plays the basic rules of a first run with --basic: Shortly still clears', () => {
+    const { code, out } = capture(['sim', 'shortly', '--basic']);
+    expect(code).toBe(0);
     expect(out).toMatch(/retired: score \d+/);
   });
 

@@ -7,13 +7,16 @@ import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun,
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { createContext, type Ctx } from './context';
-import { purgeExpiredSessions } from './cron';
+import { dailyCron } from './cron';
+import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { reviewDesign } from './review';
 import { getPublicProfile } from './profile';
+import { servePublicProfile } from './profilePage';
+import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
@@ -58,7 +61,21 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
  *   POST   /api/game/equip {perks}          the perks to take into runs
  *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
  *   GET    /api/game/leaderboard?scenario=&ascension= | ?day=   top 20 who opted in (+ your rank, signed in)
+ *   POST   /api/shares {source, imports?, image?}   a short link to a diagram, with a preview PNG: {id, url, …}
+ *   GET    /api/shares/<id>                 a short link's diagram (no sign-in needed)
+ *   DELETE /api/shares/<id>                 the owner deletes one
+ *   GET    /api/me/shares                   the user's short links
+ *   GET    /api/oembed?url=                 oEmbed for a short link
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *   GET    /s/<id>                          a short link: preview meta tags, then the editor
+ *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
+ *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
+ *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
+ *
+ * and, outside the API, public profiles at addresses of their own (src/profilePage.ts):
+ *
+ *   GET    /u/<id>                          the practice page showing the profile, with its title and image in the meta tags
+ *   GET    /u/<id>.png                      the profile's Open Graph card (1200×630)
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -106,6 +123,16 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
+  if (is('POST', 'api', 'shares')) return createShare(request, ctx);
+  if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
+  if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);
+  if (is('GET', 'api', 'me', 'shares')) return listShares(request, ctx);
+  if (is('GET', 'api', 'oembed')) return oembed(request, ctx);
+  if ((method === 'GET' || method === 'HEAD') && parts.length === 2 && parts[0] === 's') {
+    return parts[1].endsWith('.png') ? shareImage(request, ctx, parts[1].slice(0, -'.png'.length)) : sharePage(request, ctx, parts[1]);
+  }
+  if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
+  if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
   return errorResponse(404, 'Not found');
 }
 
@@ -123,13 +150,19 @@ async function health(ctx: Ctx): Promise<Response> {
 export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (!/^\/(api|auth)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
+    const page = pathname.startsWith('/u/');
+    if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();
     const ctx = createContext(request, env, exec);
     let response: Response;
     let error: string | undefined;
+    /** A page or image of the site's (src/profilePage.ts), with the headers of one, not an API answer. */
+    let pageResponse = false;
     try {
-      response = await route(request, ctx, pathname);
+      if (page) {
+        response = await servePublicProfile(request, ctx);
+        pageResponse = true;
+      } else response = await route(request, ctx, pathname);
     } catch (e) {
       if (e instanceof HttpError) response = errorResponse(e.status, e.message, e.headers);
       else {
@@ -147,10 +180,15 @@ export default {
       ...(ctx.userId ? { userId: ctx.userId } : {}),
       ...(error ? { error } : {}),
     });
+    if (pageResponse) {
+      const out = new Response(response.body, response);
+      out.headers.set('X-Request-Id', ctx.requestId);
+      return out;
+    }
     return withSecurityHeaders(response, ctx);
   },
 
   async scheduled(_controller, env): Promise<void> {
-    await purgeExpiredSessions(env);
+    await dailyCron(env);
   },
 } satisfies ExportedHandler<Env>;

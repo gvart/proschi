@@ -31,7 +31,18 @@ attaches the `.vsix` to the GitHub release, creating the release if needed.
 
 ## Install
 
-Until the packages are published, build them from the repository:
+The command-line tool and the language server are the `proschi` package on
+npm (Node 18 or newer):
+
+```sh
+npm install -g proschi     # puts `proschi` and `proschi-language-server` on PATH
+npx proschi check docs/    # or run it without installing
+```
+
+The VS Code extension is `proschi-<version>.vsix`, attached to every
+[GitHub release](https://github.com/gvart/proschi/releases).
+
+To build both from the repository instead:
 
 ```sh
 cd tooling
@@ -43,8 +54,9 @@ npm run package:vscode     # dist/proschi.vsix
 
 ## VS Code
 
-Install `tooling/dist/proschi.vsix` (Extensions view → `…` → *Install from
-VSIX…*, or `code --install-extension tooling/dist/proschi.vsix`). It bundles
+Install `proschi-<version>.vsix` from the latest release, or the
+`tooling/dist/proschi.vsix` you built (Extensions view → `…` → *Install from
+VSIX…*, or `code --install-extension proschi-<version>.vsix`). It bundles
 the grammar and the language server; nothing else is needed.
 
 ## IntelliJ IDEA and other JetBrains IDEs
@@ -221,6 +233,74 @@ resolved from the file system, relative to the importing file.
   from imported files, hover and go to definition work for nodes declared in
   another file, and the import path is a link to the file. Files that change on
   disk while closed are picked up the next time the importing document changes.
+
+## Importing from Mermaid and OpenAPI
+
+Existing diagrams and API specs can become Proschi documents, as a starting
+point to edit rather than a perfect copy.
+
+**Web editor.** *Diagrams › Import Mermaid or OpenAPI…* opens a dialog with
+a tab per format: paste the text or choose a file, check the Proschi it turns
+into and any warnings, then *Open as new diagram*.
+
+**Command line.**
+
+```sh
+proschi import mermaid architecture.mmd > architecture.proschi
+proschi import openapi specs/orders.yaml -o orders.proschi
+```
+
+The result goes to stdout (or `-o`), warnings to stderr; the exit code is 0
+unless the file cannot be read.
+
+### Mermaid
+
+| Mermaid | Proschi |
+|---|---|
+| `flowchart` / `graph` (any direction) | the architecture |
+| `A[Label]`, `A(Label)` and other shapes | a node; the tech comes from the label (`Orders DB (Postgres)` → `[PostgreSQL]`, `Billing Store` → `[Database]`, `Customer` → `[Actor]`), else from the shape |
+| `[(cylinder)]`, `[[subroutine]]`, `@{ shape: docs }`, `((circle))`, `>flag]` | `[Database]`, `[Message Queue]`, `[Object Storage]`, `[Actor]`, `[Text Note]` when the label names nothing else |
+| `subgraph id [Title] … end` | `group id "Title" { … }` (nested too) |
+| `-->`, `---`, `-.->`, `==>`, `--o`, `--x`, `<-->`, `A & B --> C` | connections (`<-->` gives one each way); `~~~` only places nodes |
+| `-->\|label\|`, `-- label -->` | the connection label |
+| `sequenceDiagram` | a use case, named by its `title` |
+| `participant` / `actor` (and `box … end`) | nodes (`actor` is `[Actor]`; a box is a group) |
+| `->>`, `->` / `-)` / `-x` | a call `->` / one-way `->>` / failed `-x` |
+| `-->>`, `-->` | the answer to the open call it replies to (one-way when it replies to none) |
+| `alt … else … end`, `opt`, `critical … option` | `alt` branches (`opt` adds an empty *Otherwise* branch) |
+| `par … and … end` | `par { … }` |
+| `loop`, `rect`, `break` | their steps, once (with a warning for `loop` and `break`) |
+
+Markdown with several ` ```mermaid ` blocks, such as `proschi render --format
+md` writes, is read as one document: flowcharts give the architecture,
+sequence diagrams the use cases, and the per-scenario diagrams of one use case
+are merged back into its `alt` branches. Calls between nodes that no flowchart
+link joins add the connection. Styling (`style`, `classDef`, `class`,
+`linkStyle`, `click`), notes and other diagram types are left out with a
+warning, and so is a step payload that Mermaid's export cut short. Ids are
+made valid Proschi ids (`api-gw` → `api_gw`, `group` → `group_`).
+
+### OpenAPI
+
+An OpenAPI 3.0/3.1 spec (YAML or JSON; Swagger 2.0 paths are read too, with a
+warning) becomes a starter design: a `client` actor, an `api` node named after
+`info.title`, and a use case per operation, named by its `summary` (else its
+`operationId`, else method and path):
+
+```proschi fragment
+usecase "Place an order" {
+  client -> api    : POST /v1/orders
+  api   --> client : 201
+}
+```
+
+The path carries the path of `servers[0].url`, as [`proschi check
+--openapi`](#checking-against-openapi) expects, so `proschi check --openapi
+api=spec.yaml` passes on the result. The status is the first 2xx response
+(`2XX` gives 200), else the first documented code. With more than 20
+operations, each tag becomes one use case with a scenario per operation (at
+most 20 tags and 32 operations a tag). In the web editor the YAML parser loads
+only when a YAML spec is pasted.
 
 ## Rendering and export
 

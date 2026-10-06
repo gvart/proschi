@@ -70,7 +70,7 @@ export function briefing(scenario: ScenarioDef, wave: WaveDef, forecast: Forecas
   if (forecast.contract) lines.push('After this wave a client offers us a contract. More revenue, if we can carry it.');
   if (forecast.bountyOffer.length) lines.push(`${forecast.bountyOffer.length} bounties on offer this month: take one if you like. Met, it pays; missed, it costs a little.`);
   if (first && forecast.spread) lines.push(`Forecasts are estimates: the real peak lands within ${Math.round(forecast.spread * 100)}% either way. Leave some headroom.`);
-  if (forecast.surprises && news.surprises) lines.push('From now on not every incident is on the forecast, and one that breaks something can set off another. The on-call can rate-limit, warm the cache, switch a feature off or bring a node back.');
+  if (forecast.surprises && news.surprises) lines.push('From now on not every incident is on the forecast, and one that breaks something can set off another. Hotfixes can rate-limit, warm the cache, switch a feature off or bring a node back.');
   // The code pane, as the scenario opens it up (watch, then type, then type only).
   const waveNo = forecast.wave + 1;
   const { edit, only } = scenario.code;

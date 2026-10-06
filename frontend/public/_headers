@@ -1,7 +1,7 @@
 # Response headers for the static site on Cloudflare (backend/wrangler.jsonc serves
 # frontend/dist as Workers static assets); the API sets its own (backend/src/http.ts).
 # The pages' Content-Security-Policy is a <meta> tag, which cannot say
-# frame-ancestors, so framing is refused here. Ignored by `vite preview`.
+# frame-ancestors, so framing is refused here (except for /embed/, below). Ignored by `vite preview`.
 /*
   Strict-Transport-Security: max-age=63072000; includeSubDomains
   X-Content-Type-Options: nosniff
@@ -10,6 +10,13 @@
   Referrer-Policy: strict-origin-when-cross-origin
   Cross-Origin-Opener-Policy: same-origin
   Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=(), usb=()
+
+# The embed page (src/embed/main.tsx) is made to be framed by any site, so it alone
+# drops the framing ban. It shows a diagram read-only and holds nothing of the reader's.
+/embed/*
+  ! X-Frame-Options
+  ! Content-Security-Policy
+  Content-Security-Policy: frame-ancestors *
 
 # Vite names these by content hash, so they never change.
 /assets/*

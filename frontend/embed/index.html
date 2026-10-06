@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). Styles allow 'unsafe-inline' only because the
+         diagram (React Flow) sets inline styles; scripts stay 'self' only. frame-ancestors cannot be set from a meta tag:
+         public/_headers lets any site frame this page, and only this page. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self'; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="robots" content="noindex" />
+    <!-- ?theme=light or dark, else the system's; before first paint. -->
+    <script src="../embed-theme.js"></script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <title>Proschi diagram</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript><p>This embedded Proschi diagram needs JavaScript.</p></noscript>
+    <script type="module" src="../src/embed/main.tsx"></script>
+  </body>
+</html>

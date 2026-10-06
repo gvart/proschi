@@ -27,6 +27,8 @@ import {
 import { autoRating, localDay, type CardReview } from '../../learn/review';
 import { addDays } from '../../learn/streak';
 import { celebrate } from '../../design/celebrate';
+import { copyText } from '../../services/share';
+import { track } from '../../services/metrics';
 import { api, ApiError, apiEnabled, type ChallengeAttemptAnswer, type ChallengeLeaderboard, type ChallengeStreakAnswer, type ChallengeToday } from '../../services/api';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
@@ -114,30 +116,6 @@ function useNow(ms = 30_000): number {
     return () => clearInterval(id);
   }, [ms]);
   return now;
-}
-
-/** Copies text, with a fallback for pages where the Clipboard API is not allowed. */
-async function copyText(text: string): Promise<boolean> {
-  try {
-    await navigator.clipboard.writeText(text);
-    return true;
-  } catch {
-    const area = document.createElement('textarea');
-    area.value = text;
-    area.setAttribute('readonly', '');
-    area.style.position = 'fixed';
-    area.style.opacity = '0';
-    document.body.append(area);
-    area.select();
-    let ok = false;
-    try {
-      ok = document.execCommand('copy');
-    } catch {
-      ok = false;
-    }
-    area.remove();
-    return ok;
-  }
 }
 
 export default function ChallengeRoute({ account, activity }: { account: Account; activity: Activity }) {
@@ -322,6 +300,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
 
   const finish = async (answers: ChallengeAnswerItem[]) => {
     const local = scoreLocally(day, cards, answers);
+    track('challenge_complete');
     clearChallengeProgress(owner);
     setSetup({ ...setup, resume: undefined });
     setView('intro');

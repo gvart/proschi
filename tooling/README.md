@@ -13,6 +13,7 @@ proschi fmt docs/                   # format files in place (--check: only repor
 proschi render checkout.proschi --out diagrams   # SVG diagrams (also --format md|html|hld-md|hld-html)
 proschi test docs/                  # run requirements and tests (exit 1 on a failure)
 proschi analyze shortener.proschi   # load, latency, availability and cost per node
+proschi import mermaid arch.mmd     # Mermaid flowchart/sequence diagram to Proschi (also: import openapi spec.yaml)
 proschi problem check               # validate practice problem folders (see docs/PRACTICE.md)
 proschi problem new seat-map        # scaffold a practice problem
 proschi-language-server --stdio     # for any editor with an LSP client
