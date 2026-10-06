@@ -10,6 +10,16 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Every review card has a page of its own** at `practice/cards/<topic>/<id>/`:
+  the question, the answer with why (every option of a choice card with the
+  right one marked, the full sentence of a fill-in-the-blank, the worked
+  estimate), the problems it prepares for, the previous and next card of its
+  topic and a way into daily review. `practice/cards/` lists the topics and
+  each topic has a page listing its cards. All are in the sitemap, and a
+  problem's page now links to the cards that prepare for it.
+- **Shared links show what they are about**: each problem page and card topic
+  has its own preview image (title, difficulty, a line about it) instead of
+  the site-wide one.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

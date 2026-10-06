@@ -24,6 +24,8 @@ export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-id
 export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
 /** Daily review of the practice cards: a route of the practice page (src/practice/review/). */
 export const DAILY_REVIEW_HREF = 'practice/#/review';
+/** The review cards' static pages, one per topic and card (plugins/cardPages.ts). */
+export const REVIEW_CARDS_HREF = 'practice/cards/';
 /** The daily challenge: a route of the practice page (src/practice/challenge/). */
 export const DAILY_CHALLENGE_HREF = 'practice/#/challenge';
 
@@ -55,6 +57,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       { label: 'Language reference', href: 'docs/language/' },
       { label: 'How the simulation works', href: 'docs/model/' },
       { label: 'Editor support', href: 'docs/editors/' },
+      { label: 'Review cards', href: REVIEW_CARDS_HREF },
     ],
   },
   {
