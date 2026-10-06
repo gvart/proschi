@@ -5,6 +5,7 @@ import { prefersReducedMotion } from '../../design/motion';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { canWire, cloneBoard, roleOf } from '../engine/board';
 import { compile } from '../engine/compile';
+import { twistsOpen } from '../engine/meta';
 import { Game, GameError, type TickResult } from '../engine/run';
 import { LIVE_CHANGES_PER_WAVE, LOADTEST_COST, ONCALL_ACTS, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
@@ -21,9 +22,11 @@ import { placeComponent, removeNode, rowOf, toggleWire, updateNode, type Row } f
 import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, WaveResult, type PaletteItem } from './Panels';
 import Report from './Report';
 import { ChangesPanel, DiagnosisPanel, TicketCard } from './Modes';
-import { MascotBriefing, MASCOT } from './Mascot';
+import { MascotBriefing, MascotCoach, MASCOT, TwistsIntro } from './Mascot';
+import { hasSeen, markSeen } from '../../onboarding/seen';
+import { TUTORIAL_SCENARIO, tutorialStep, twistsIntro } from './tutorial';
 import { BountyChoice, BountyLine, BountyResult, MutatorChip, MutatorPicker } from './Twists';
-import { OncallBar } from './Oncall';
+import { HotfixBar } from './Hotfixes';
 import { briefing } from './briefing';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
@@ -32,7 +35,7 @@ import type { Arcade, RunResult } from './useArcade';
 /**
  * One run: plan the board (tap or drag components from the palette, tap a
  * node to scale it, wire it or remove it), deploy, watch the wave's eight
- * ticks (requests flowing, nodes heating up, the on-call to page), then the
+ * ticks (requests flowing, nodes heating up, a hotfix to reach for), then the
  * wave's result and debrief, the card draft and the contracts, until the run
  * is won or lost. The engine does every rule; this only shows it.
  */
@@ -99,6 +102,10 @@ export default function RunScreen(props: RunScreenProps) {
   /** The wave whose briefing was put away. */
   const [briefedWave, setBriefedWave] = useState(-1);
   const [result, setResult] = useState<RunResult>();
+  /** Kernel's first-wave tutorial: a first run of Shortly under the basic rules, until it is done or skipped. */
+  const [tutorial, setTutorial] = useState(() => setup.scenario === TUTORIAL_SCENARIO && !game.twists && !hasSeen('arcade'));
+  /** The one-time intro to the twists, the first time a Scale or Fail run has them. */
+  const [intro, setIntro] = useState(() => game.twists && game.scenario.mode === 'scale' && !hasSeen('arcade-twists'));
   const finished = useRef(false);
   const calloutShown = useRef(-1);
   const dropRow = useRef<(x: number, y: number) => Row | undefined>(undefined);
@@ -112,7 +119,7 @@ export default function RunScreen(props: RunScreenProps) {
   const typed = useRef<Board | undefined>(undefined);
   /** Hold the line: the player changed the board during the run and has not shipped it yet. */
   const [liveDirty, setLiveDirty] = useState(false);
-  /** On a phone during the run: the palette instead of the on-call menu. */
+  /** On a phone during the run: the palette instead of the hotfixes. */
   const [building, setBuilding] = useState(false);
   /** When the player last typed a change: a burst of typing is one undo step. */
   const lastTyped = useRef(0);
@@ -370,6 +377,10 @@ export default function RunScreen(props: RunScreenProps) {
       return;
     }
     apply({ t: 'deploy', board: plan });
+    if (tutorial) {
+      markSeen('arcade');
+      setTutorial(false);
+    }
     setSelected(undefined);
     setWiring(false);
     setPlacing(undefined);
@@ -460,8 +471,10 @@ export default function RunScreen(props: RunScreenProps) {
   };
   const forecast = game.forecast();
   const planning = s.phase === 'plan';
-  /** The board can be changed: planning, or holding the line during the run. */
-  const editing = planning || s.phase === 'run';
+  /** The board can be changed: planning, or holding the line during the run (a twist: the basic rules have no live changes). */
+  const editing = planning || (s.phase === 'run' && game.twists);
+  const coaching = tutorial && planning && s.wave === 0 && settings.mascot && briefedWave === 0 ? tutorialStep(plan, s.tested, components) : undefined;
+  const introOpen = intro && planning && s.wave === 0 && s.history.length === 0;
   const drafting = planning || liveDirty;
   const codeHint =
     codeLevel === 'watch'
@@ -508,12 +521,12 @@ export default function RunScreen(props: RunScreenProps) {
     </>
   );
   const loadTestButton = (
-    <button type="button" className={`${outlineButton} justify-center`} aria-label={`Load test the peak (${s.loadtestsFree > 0 ? `${s.loadtestsFree} free` : `$${LOADTEST_COST}`})`} disabled={problems.length > 0 || (s.loadtestsFree === 0 && s.cash < LOADTEST_COST)} onClick={loadTest}>
+    <button type="button" data-coach="loadtest" className={`${outlineButton} justify-center`} aria-label={`Load test the peak (${s.loadtestsFree > 0 ? `${s.loadtestsFree} free` : `$${LOADTEST_COST}`})`} disabled={problems.length > 0 || (s.loadtestsFree === 0 && s.cash < LOADTEST_COST)} onClick={loadTest}>
       <FlaskConical size={14} aria-hidden="true" /> {narrow ? 'Test' : `Load test the peak (${s.loadtestsFree > 0 ? `${s.loadtestsFree} free` : `$${LOADTEST_COST}`})`}
     </button>
   );
   const deployButton = (
-    <button type="button" className={`${primaryButton} justify-center ${narrow ? '' : 'text-base py-3'}`} onClick={deploy} disabled={problems.length > 0}>
+    <button type="button" data-coach="deploy" className={`${primaryButton} justify-center ${narrow ? '' : 'text-base py-3'}`} onClick={deploy} disabled={problems.length > 0}>
       <Rocket size={16} aria-hidden="true" /> Deploy wave {s.wave + 1}
     </button>
   );
@@ -585,7 +598,7 @@ export default function RunScreen(props: RunScreenProps) {
   };
   const left = LIVE_CHANGES_PER_WAVE - s.changes;
   /** Hold the line: ship a change to the board while the wave runs. */
-  const shipBar = !planning && (
+  const shipBar = !planning && game.twists && (
     <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm" role="group" aria-label="Live change">
       {liveDirty ? (
         <>
@@ -606,13 +619,13 @@ export default function RunScreen(props: RunScreenProps) {
       )}
       {narrow && (
         <button type="button" className={outlineButton} aria-pressed={building} onClick={() => setBuilding((b) => !b)}>
-          {building ? 'On-call' : 'Build'}
+          {building ? 'Hotfixes' : 'Build'}
         </button>
       )}
     </div>
   );
   const oncallBar = !planning && (
-    <OncallBar
+    <HotfixBar
       game={game}
       compact={narrow}
       onAct={(act, useCase) => {
@@ -672,7 +685,7 @@ export default function RunScreen(props: RunScreenProps) {
         !planning && components.has(node.component)
           ? [
               {
-                label: `+1 replica now ($${ONCALL_ACTS.replica.cash})`,
+                label: `Hotfix: +1 replica ($${ONCALL_ACTS.replica.cash})`,
                 disabled: s.oncallLeft < ONCALL_ACTS.replica.attention || s.cash < ONCALL_ACTS.replica.cash,
                 onClick: () => {
                   apply({ t: 'oncall', tick: s.tick, node: node.id, act: 'replica' });
@@ -682,7 +695,7 @@ export default function RunScreen(props: RunScreenProps) {
               ...(shownTick?.nodes.find((n) => n.id === node.id)?.down && s.mitigation.reboot[node.id] === undefined
                 ? [
                     {
-                      label: `Bring it back ($${ONCALL_ACTS.reboot.cash})`,
+                      label: `Hotfix: bring it back ($${ONCALL_ACTS.reboot.cash})`,
                       disabled: s.oncallLeft < ONCALL_ACTS.reboot.attention || s.cash < ONCALL_ACTS.reboot.cash,
                       onClick: () => {
                         apply({ t: 'oncall', tick: s.tick, node: node.id, act: 'reboot' });
@@ -715,7 +728,7 @@ export default function RunScreen(props: RunScreenProps) {
           Sets: {mods.sets.join(', ')}: points ×{Number(mods.setBonus.toFixed(2))}
         </p>
       )}
-      {mods.sets.length === 0 && s.hand.length >= 2 && <p className="mt-1 text-xs text-muted">Three cards of one topic make a set: points ×1.1.</p>}
+      {game.twists && mods.sets.length === 0 && s.hand.length >= 2 && <p className="mt-1 text-xs text-muted">Three cards of one topic make a set: points ×1.1.</p>}
     </>
   );
   const tabs = (
@@ -845,12 +858,21 @@ export default function RunScreen(props: RunScreenProps) {
   );
 
   return (
-    <div className={`max-w-5xl mx-auto px-3 sm:px-4 py-4 space-y-3 ${narrow ? 'pb-56' : ''}`}>
+    <div className={`max-w-5xl mx-auto px-3 sm:px-4 py-4 space-y-3 ${narrow ? 'pb-56' : ''}`} data-coach-step={coaching}>
       {top}
       {!narrow && hud}
       {stampEl}
       {planning && settings.mascot && briefedWave !== s.wave && (
         <MascotBriefing key={`brief-${s.wave}`} briefing={briefing(game.scenario, game.waveDef(), forecast)} boss={forecast.boss} onClose={() => setBriefedWave(s.wave)} />
+      )}
+      {coaching && (
+        <MascotCoach
+          step={coaching}
+          onSkip={() => {
+            markSeen('arcade');
+            setTutorial(false);
+          }}
+        />
       )}
       {planning && forecast.ticket && <TicketCard ticket={forecast.ticket} key={`ticket-${s.wave}`} />}
       {planning && game.waveDef().diagnosis && (
@@ -920,7 +942,7 @@ export default function RunScreen(props: RunScreenProps) {
                 {controls}
                 {shipBar}
                 {oncallBar}
-                {codeOnly ? typeInstead : palette}
+                {game.twists && (codeOnly ? typeInstead : palette)}
               </>
             )}
             {feedback}
@@ -934,7 +956,9 @@ export default function RunScreen(props: RunScreenProps) {
                     ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
                     : planning
                     ? 'Pick a component below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
-                    : 'Hold the line: hot nodes turn yellow, then pink, then red. Change the board while it runs and ship it (scaling lands next tick, new parts in two, and a new cache starts cold), or use the on-call below: it acts at once.'}
+                    : game.twists
+                    ? 'Hold the line: hot nodes turn yellow, then pink, then red. Change the board while it runs and ship it (scaling lands next tick, new parts in two, and a new cache starts cold), or reach for a hotfix below: it acts at once.'
+                    : 'Watch it run: hot nodes turn yellow, then pink, then red. If something is about to break, reach for a hotfix below: it acts at once. Changing the board during the run unlocks after your first clear.'}
                 </p>
                 {hand}
               </div>
@@ -969,7 +993,16 @@ export default function RunScreen(props: RunScreenProps) {
           {lastSummary.bounty && <BountyResult result={lastSummary.bounty} def={content.bounties.find((b) => b.id === lastSummary.bounty!.id)} />}
         </WaveResult>
       )}
-      {!showResult && planning && s.mutatorOffer.length > 0 && (
+      {!showResult && introOpen && (
+        <TwistsIntro
+          briefing={twistsIntro(setup.mode === 'daily' && !twistsOpen(content, arcade.meta))}
+          onClose={() => {
+            markSeen('arcade-twists');
+            setIntro(false);
+          }}
+        />
+      )}
+      {!showResult && !introOpen && planning && s.mutatorOffer.length > 0 && (
         <MutatorPicker
           offer={s.mutatorOffer.map((id) => content.mutators.find((m) => m.id === id)!).filter(Boolean)}
           daily={setup.mode === 'daily'}

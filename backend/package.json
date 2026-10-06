@@ -27,6 +27,7 @@
     "deploy:staging": "wrangler d1 migrations apply proschi-staging --remote --env staging && wrangler deploy --env staging",
     "backup": "node scripts/backup.mjs proschi",
     "smoke": "node scripts/smoke.mjs",
+    "metrics": "node scripts/metrics.mjs",
     "migrate:local": "wrangler d1 migrations apply proschi --local"
   },
   "dependencies": {

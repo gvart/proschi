@@ -12,6 +12,8 @@ export interface Env {
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
   GAME_LIMITER: RateLimit;
+  /** POST /api/metrics, per IP (the IP is only the limiter's key, never stored). */
+  METRICS_LIMITER: RateLimit;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */
@@ -28,6 +30,11 @@ export interface Env {
    * separated by commas or whitespace. Empty or unset, app sign-in is off.
    */
   APP_REDIRECT_URIS?: string;
+  /**
+   * The shared secret of GET /api/metrics/summary (header X-Metrics-Token),
+   * at least 16 characters. Unset, the summary answers 404.
+   */
+  METRICS_TOKEN?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

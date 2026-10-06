@@ -100,6 +100,9 @@ export default function Report(props: {
         </p>
       )}
       {result?.firstClear && <p className="text-sm text-pass">First clear of {game.scenario.title}: +5 Blueprints.</p>}
+      {result?.firstClear && !game.twists && game.scenario.mode === 'scale' && (
+        <p className="text-sm font-semibold">Twists unlocked: from your next run, mutators, bounties, forecast ranges, live changes and more. Kernel will brief you.</p>
+      )}
       {result?.error && <p className="text-sm text-fail">{result.error}</p>}
       {share && (
         <section aria-label="Share your daily run" className="rounded-brutal border-bw-1 border-ink bg-surface p-3">
