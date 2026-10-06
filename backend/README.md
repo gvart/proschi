@@ -394,6 +394,16 @@ is in [docs/PRIVACY.md](../docs/PRIVACY.md#email-reminders)):
   the `send_email` binding `EMAIL` of Cloudflare Email Service, from
   `Proschi <reminders@proschi.app>`. Without the binding, `PUT` answers 503.
   The run counts what it sent as the `email_reminder_sent` usage count.
+- **The look.** `src/emails.ts` says what each email says (subject, preview
+  text, headline, numbers, button, Kernel's one-liner) and
+  `src/emailLayout.ts` draws it in the site's neo-brutalist style: a table
+  layout with every style inline, 560px wide, 3px ink borders, hard offset
+  shadows made of table cells, padded-cell buttons (they work in Outlook), the
+  system fonts, and no images or other requests. The confirm and unsubscribe
+  pages use the same look (inline styles only, which their CSP allows; no
+  scripts). To see every email and page with sample data, run
+  `node scripts/email-preview.mjs`: it writes `email-previews/*.html` (and
+  the plain-text parts as `*.txt`, gitignored) to open in a browser.
 
 **Owner setup** (once):
 

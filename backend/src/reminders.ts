@@ -1,9 +1,12 @@
-import { computeStreak, goalFor, recapIsEmpty, weeklyRecap, type Streak, type WeeklyRecap } from '../../frontend/src/learn/streak';
+import { computeStreak, goalFor, recapIsEmpty, weeklyRecap } from '../../frontend/src/learn/streak';
 import { loadActivity } from './activity';
 import { requireUser } from './auth';
+import { cardTopics, findCard } from './cards';
 import type { Ctx } from './context';
 import { decodeJson, encodeJson, randomToken, sign, unsign } from './crypto';
-import { render, sendEmail, emailConfigured, type Block } from './email';
+import { sendEmail, emailConfigured } from './email';
+import { pageHtml, type Accent } from './emailLayout';
+import { confirmationEmail, reminderEmail, PAUSE_AFTER, type Kind, type ReminderData } from './emails';
 import { now, secretOk, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
@@ -43,8 +46,8 @@ export const REMINDER_HOUR = 19;
 export const RECAP_HOUR = 9;
 /** A cards-due reminder needs at least this many cards due. */
 export const DUE_CARDS_MIN = 5;
-/** Reminders in a row without practice before they pause. */
-export const PAUSE_AFTER = 3;
+/** Reminders in a row without practice before they pause (defined with the emails, which say so). */
+export { PAUSE_AFTER };
 /** Users read per query in the cron, and the most emails one cron run sends. */
 const PAGE = 100;
 export const MAX_PER_RUN = 500;
@@ -152,15 +155,8 @@ async function readConfirmToken(env: Env, token: string | null): Promise<{ u: st
 /** Sends the confirmation email for the address in `row`. */
 async function sendConfirmation(env: Env & { SESSION_SECRET: string }, userId: string, email: string): Promise<void> {
   const link = `${siteOrigin(env)}/api/email/confirm?token=${encodeURIComponent(await confirmToken(env, userId, email))}`;
-  const { text, html } = render(
-    [
-      'Confirm your email address to get Proschi reminders: a nudge when your streak is at risk or cards are due, and a weekly recap. At most one email a day.',
-      { link, label: 'Confirm my address' },
-      'The link works for two days.',
-    ],
-    ["You got this because someone entered this address on their Proschi account page. If that wasn't you, ignore this email: nothing is sent to an unconfirmed address."],
-  );
-  await sendEmail(env, { to: email, subject: 'Confirm your Proschi reminders', text, html });
+  const { subject, text, html } = confirmationEmail(link);
+  await sendEmail(env, { to: email, subject, text, html });
 }
 
 function readFlag(body: Record<string, unknown>, key: string): boolean | undefined {
@@ -300,19 +296,18 @@ export async function exportEmailPrefs(DB: D1Database, userId: string) {
 
 // ---- The pages behind the links in emails ----
 
-const escapeHtml = (text: string) => text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
+/** How each page looks: its colour, badge emoji and Kernel's line. */
+const LOOKS = {
+  expired: { accent: 'red', emoji: '⌛', kernel: 'Kernel checked the logs: this token timed out. Happens to the best of us. Grab a fresh one.' },
+  confirm: { accent: 'blue', emoji: '✉', kernel: 'One click, and Kernel starts guarding your streak. Kernel takes this job very seriously.' },
+  confirmed: { accent: 'green', emoji: '✅', kernel: 'Deployed to production. Kernel is now on call for your streak. 🐾' },
+  unsubscribe: { accent: 'pink', emoji: '👋', kernel: 'Kernel will miss paging you, but respects a clean rollback.' },
+  gone: { accent: 'lilac', emoji: '💤', kernel: 'Pager muted. Kernel has gone back to napping on the warm rack. 😴' },
+} as const satisfies Record<string, { accent: Accent; emoji: string; kernel: string }>;
 
 /** A small standalone page (no scripts): a heading, a message, and a form button or a link back. */
-function page(title: string, message: string, action?: { label: string; url: string }, status = 200): Response {
-  const body = `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="robots" content="noindex"><title>${escapeHtml(title)} · Proschi</title>
-<style>body{margin:0;padding:48px 16px;font:16px/1.5 -apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:#fffdf6;color:#111}
-main{max-width:520px;margin:0 auto}h1{font-size:28px;margin:0 0 12px}button,a.b{display:inline-block;margin-top:16px;padding:10px 16px;border:2px solid #111;border-radius:6px;background:#111;color:#fff;font:inherit;font-weight:600;text-decoration:none;cursor:pointer}
-@media (prefers-color-scheme:dark){body{background:#151515;color:#eee}button,a.b{background:#eee;color:#111;border-color:#eee}}</style></head>
-<body><main><h1>${escapeHtml(title)}</h1><p>${escapeHtml(message)}</p>
-${action ? `<form method="post" action="${escapeHtml(action.url)}"><button type="submit">${escapeHtml(action.label)}</button></form>` : '<a class="b" href="/practice/#/me">Go to your account</a>'}
-</main></body></html>`;
-  return new Response(body, {
+function page(look: keyof typeof LOOKS, title: string, message: string, action?: { label: string; url: string }, status = 200): Response {
+  return new Response(pageHtml({ title, message, action, ...LOOKS[look] }), {
     status,
     headers: {
       'Content-Type': 'text/html; charset=utf-8',
@@ -332,21 +327,21 @@ const selfUrl = (request: Request) => {
 export async function confirmPage(request: Request, ctx: Ctx): Promise<Response> {
   await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   const claim = await readConfirmToken(ctx.env, tokenOf(request));
-  if (!claim) return page('This link has expired', 'Confirmation links work for two days. Enter your address again on your account page for a new one.', undefined, 400);
-  return page('Confirm your address', `Get Proschi reminders at ${claim.e}?`, { label: 'Confirm my address', url: selfUrl(request) });
+  if (!claim) return page('expired', 'This link has expired', 'Confirmation links work for two days. Enter your address again on your account page for a new one.', undefined, 400);
+  return page('confirm', 'Confirm your address', `Get Proschi reminders at ${claim.e}?`, { label: 'Confirm my address', url: selfUrl(request) });
 }
 
 /** POST /api/email/confirm?token=: confirms the address when it is still the one the token names. */
 export async function confirmEmail(request: Request, ctx: Ctx): Promise<Response> {
   await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   const claim = await readConfirmToken(ctx.env, tokenOf(request));
-  if (!claim) return page('This link has expired', 'Confirmation links work for two days. Enter your address again on your account page for a new one.', undefined, 400);
+  if (!claim) return page('expired', 'This link has expired', 'Confirmation links work for two days. Enter your address again on your account page for a new one.', undefined, 400);
   const t = now();
   const result = await ctx.env.DB.prepare('UPDATE email_prefs SET confirmed_at = COALESCE(confirmed_at, ?), updated_at = ? WHERE user_id = ? AND email = ?')
     .bind(t, t, claim.u, claim.e)
     .run();
-  if (!result.meta.changes) return page('This link is no longer valid', 'The address was changed or removed since. Check your account page.', undefined, 400);
-  return page('Address confirmed', `Reminders will go to ${claim.e}. Change which ones, or turn them off, on your account page.`);
+  if (!result.meta.changes) return page('expired', 'This link is no longer valid', 'The address was changed or removed since. Check your account page.', undefined, 400);
+  return page('confirmed', 'Address confirmed', `Reminders will go to ${claim.e}. Change which ones, or turn them off, on your account page.`);
 }
 
 /** GET /api/email/unsubscribe?token= */
@@ -354,8 +349,8 @@ export async function unsubscribePage(request: Request, ctx: Ctx): Promise<Respo
   await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   const token = tokenOf(request);
   const row = token ? await ctx.env.DB.prepare('SELECT email FROM email_prefs WHERE unsubscribe_token = ?').bind(token).first<{ email: string }>() : null;
-  if (!row) return page('Already unsubscribed', 'This address gets no Proschi emails.');
-  return page('Unsubscribe', `Stop all Proschi reminders to ${row.email} and delete the address?`, { label: 'Unsubscribe', url: selfUrl(request) });
+  if (!row) return page('gone', 'Already unsubscribed', 'This address gets no Proschi emails.');
+  return page('unsubscribe', 'Unsubscribe', `Stop all Proschi reminders to ${row.email} and delete the address?`, { label: 'Unsubscribe', url: selfUrl(request) });
 }
 
 /**
@@ -367,62 +362,29 @@ export async function unsubscribe(request: Request, ctx: Ctx): Promise<Response>
   await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   const token = tokenOf(request);
   if (token) await ctx.env.DB.prepare('DELETE FROM email_prefs WHERE unsubscribe_token = ?').bind(token).run();
-  return page('Unsubscribed', 'You will get no more Proschi reminders, and the address was deleted. You can sign up again on your account page.');
+  return page('gone', 'Unsubscribed', 'You will get no more Proschi reminders, and the address was deleted. You can sign up again on your account page.');
 }
 
 // ---- The hourly cron ----
-
-type Kind = 'streak' | 'cards' | 'recap';
 
 interface Candidate extends PrefsRow {
   daily_goal: number;
 }
 
-const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
-
-/** The subject and blocks of a reminder. */
-function compose(kind: Kind, origin: string, data: { streak?: Streak; due?: number; recap?: WeeklyRecap }): { subject: string; blocks: Block[] } {
-  if (kind === 'streak') {
-    const s = data.streak!;
-    return {
-      subject: `Your ${s.current}-day streak ends tonight`,
-      blocks: [
-        `You're on a ${plural(s.current, 'day')} streak, and today's goal isn't met yet. A few cards, the daily challenge or an Arcade run keeps it going.`,
-        { link: `${origin}/practice/#/review`, label: 'Review cards' },
-      ],
-    };
+/** The titles of the topics most of `userId`'s due cards are from (at most three), for the cards-due email. */
+async function dueTopics(DB: D1Database, userId: string, t: number): Promise<string[]> {
+  const rows = (await DB.prepare('SELECT card_id FROM card_state WHERE user_id = ? AND due_at <= ? LIMIT 500').bind(userId, t).all<{ card_id: string }>()).results;
+  const counts = new Map<string, number>();
+  for (const { card_id } of rows) {
+    const topic = findCard(card_id)?.topic;
+    if (topic) counts.set(topic, (counts.get(topic) ?? 0) + 1);
   }
-  if (kind === 'cards') {
-    return {
-      subject: `${data.due} cards are due for review`,
-      blocks: [
-        `${plural(data.due!, 'card')} ${data.due === 1 ? 'is' : 'are'} due today. Reviewing them now, before you forget, is what makes them stick.`,
-        { link: `${origin}/practice/#/review`, label: 'Review cards' },
-      ],
-    };
-  }
-  const r = data.recap!;
-  const parts = [
-    plural(r.reviews, 'card') + ' reviewed',
-    ...(r.newCards ? [`${r.newCards} new`] : []),
-    plural(r.solves, 'problem') + ' solved',
-    ...(r.challenges ? [plural(r.challenges, 'daily challenge')] : []),
-    ...(r.runs ? [plural(r.runs, 'Arcade run')] : []),
-  ];
-  return {
-    subject: `Your Proschi week: ${plural(r.goalDays, 'goal day')}`,
-    blocks: [
-      `Last week (${r.start} to ${r.end}): ${parts.join(', ')}. You met your daily goal on ${plural(r.goalDays, 'day')} of 7${r.streak ? `, and your streak was ${plural(r.streak, 'day')} on Sunday` : ''}.`,
-      { link: `${origin}/practice/#/progress`, label: 'See your progress' },
-    ],
-  };
+  const titles = new Map(cardTopics().map((topic) => [topic.id, topic.title]));
+  return [...counts]
+    .sort((x, y) => y[1] - x[1] || x[0].localeCompare(y[0]))
+    .slice(0, 3)
+    .map(([id]) => titles.get(id) ?? id);
 }
-
-const WHY: Record<Kind, string> = {
-  streak: 'You got this because you turned on streak reminders on your Proschi account page.',
-  cards: 'You got this because you turned on cards-due reminders on your Proschi account page.',
-  recap: 'You got this because you turned on the weekly recap on your Proschi account page.',
-};
 
 /** Lists `ids` as `?, ?, …` for an IN clause. */
 const marks = (n: number) => Array.from({ length: n }, () => '?').join(', ');
@@ -513,16 +475,16 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
     const goal = goalFor(row.daily_goal);
     const dueCards = dueBy.get(row.user_id) ?? 0;
     let kind: Kind | undefined;
-    let data: Parameters<typeof compose>[2] = {};
+    let data: ReminderData = {};
     if (isRecap) {
       const recap = weeklyRecap(await loadActivity(DB, row.user_id, day), day, goal);
       if (!recapIsEmpty(recap)) [kind, data] = ['recap', { recap }];
     } else {
       if (row.streak_on === 1) {
         const streak = computeStreak(await loadActivity(DB, row.user_id, day), day, goal);
-        if (streak.current >= 1 && !streak.todayDone) [kind, data] = ['streak', { streak }];
+        if (streak.current >= 1 && !streak.todayDone) [kind, data] = ['streak', { streak, goal }];
       }
-      if (!kind && row.cards_on === 1 && dueCards >= DUE_CARDS_MIN) [kind, data] = ['cards', { due: dueCards }];
+      if (!kind && row.cards_on === 1 && dueCards >= DUE_CARDS_MIN) [kind, data] = ['cards', { due: dueCards, topics: await dueTopics(DB, row.user_id, t) }];
     }
     if (!kind) continue;
 
@@ -531,18 +493,7 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
     const ignored = (active ? 0 : row.ignored_count) + 1;
     const pause = ignored >= PAUSE_AFTER;
     const unsubscribeUrl = `${origin}/api/email/unsubscribe?token=${encodeURIComponent(row.unsubscribe_token)}`;
-    const { subject, blocks } = compose(kind, origin, data);
-    if (pause) {
-      blocks.push(
-        `We haven't seen you practice since our last ${plural(PAUSE_AFTER - 1, 'email')}, so we paused your reminders: this is the last one until you turn them back on.`,
-        { link: `${origin}/practice/#/me`, label: 'Resume reminders' },
-      );
-    }
-    const { text, html } = render(blocks, [
-      WHY[kind],
-      { link: `${origin}/practice/#/me`, label: 'Change which emails you get' },
-      { link: unsubscribeUrl, label: 'Unsubscribe from all Proschi emails' },
-    ]);
+    const { subject, text, html } = reminderEmail(kind, data, { origin, unsubscribeUrl, paused: pause });
     try {
       await sendEmail(env, {
         to: row.email,
