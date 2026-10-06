@@ -1,10 +1,13 @@
+import { createScheduledController } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { challengeDay } from '../../frontend/src/learn/challenge';
 import { emptyMeta, type Meta } from '../../frontend/src/game/engine/meta';
 import { Game } from '../../frontend/src/game/engine/run';
 import type { Action, RunSetup } from '../../frontend/src/game/engine/types';
+import { ABANDONED_RUN_SECONDS, pruneAbandonedGameRuns } from '../src/cron';
 import { gameContent } from '../src/game';
+import worker from '../src/index';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /**
@@ -181,5 +184,32 @@ describe('progress', () => {
     await setMeta(user.id, { blueprints: 7 });
     const data = (await (await call('/api/me/export', { token: user.token })).json()) as { game: { meta: Meta } };
     expect(data.game.meta.blueprints).toBe(7);
+  });
+});
+
+describe('the daily cron', () => {
+  beforeEach(resetDatabase);
+
+  const runIds = async (userId: string) =>
+    (await env.DB.prepare('SELECT id FROM game_runs WHERE user_id = ?').bind(userId).all<{ id: string }>()).results.map((r) => r.id).sort();
+
+  it('prunes runs started over a week ago and never submitted', async () => {
+    const user = await signedInUser();
+    const fresh = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const recent = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const abandoned = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const daily = (await start(user.token, { mode: 'daily' })).body.runId;
+    const played = (await start(user.token, { scenario: 'shortly' })).body;
+    await age(played.runId);
+    expect((await submit(user.token, played.runId, play(played.setup).actions)).status).toBe(200);
+    await age(recent, 6 * 86_400);
+    await age(abandoned, ABANDONED_RUN_SECONDS + 60);
+    await age(daily, ABANDONED_RUN_SECONDS + 60);
+    await age(played.runId, 30 * 86_400);
+    expect((await runIds(user.id)).length).toBe(5);
+
+    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    expect(await runIds(user.id)).toEqual([fresh, recent, played.runId].sort());
+    expect(await pruneAbandonedGameRuns(env)).toBe(0);
   });
 });
