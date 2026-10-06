@@ -2,7 +2,7 @@
 type: flip
 difficulty: medium
 tags: [consistency]
-related: [shopping-cart]
+related: [shopping-cart, distributed-kv]
 ---
 
 ## Front

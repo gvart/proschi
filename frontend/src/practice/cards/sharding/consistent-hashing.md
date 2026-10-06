@@ -3,7 +3,7 @@ type: flip
 difficulty: medium
 decks: [sample]
 tags: [caching]
-related: [cdn-tiered-cache]
+related: [cdn-tiered-cache, distributed-kv]
 ---
 
 ## Front

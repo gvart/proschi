@@ -1,0 +1,39 @@
+title "Distributed Key-Value Store" "A Dynamo-style store: partitioned by consistent hashing, three replicas, quorum reads and writes"
+
+apps  "Application Servers" [Actor]          "The services that store sessions, carts and profiles in the store"
+nodes "Storage Nodes"       [NoSQL Database] x3 @storage "Commodity servers with local SSDs; every key lives on three of them"
+
+traffic {
+  "Put" 10k rps mix "All replicas up" 99.8%, "Replica down" 0.2%
+  "Get" 30k rps mix "Replicas agree" 98%, "Stale replica" 2%
+}
+
+requirements {
+  p99 "Put" < 60ms
+  p99 "Get" < 60ms
+  availability >= 99.99%
+  durable "Put"
+  survive any node failure
+  cost <= 9500 usd/month
+}
+
+test "Clients reach the storage nodes through the coordinators" {
+  "Put" starts at apps
+  "Get" starts at apps
+  no path from apps to nodes
+}
+
+test "A write survives a replica that is down" {
+  "Put" has scenario "Replica down"
+  "Put" handles failure of nodes
+  "Put" scenario "Replica down" responds 2xx
+}
+
+test "A read repairs a stale replica" {
+  "Get" has scenario "Stale replica"
+  "Get" scenario "Stale replica" writes nodes before responding
+}
+
+test "Reads come from the replicas, not a cache" {
+  "Get" never calls any cache
+}

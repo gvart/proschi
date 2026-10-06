@@ -3,7 +3,7 @@ type: choice
 difficulty: hard
 decks: [sample]
 tags: [queues]
-related: [chat, discord-messages]
+related: [chat, discord-messages, collaborative-docs]
 ---
 
 ## Question

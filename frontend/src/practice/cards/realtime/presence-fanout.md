@@ -1,7 +1,7 @@
 ---
 type: choice
 difficulty: hard
-related: [chat]
+related: [chat, collaborative-docs]
 ---
 
 ## Question

@@ -54,10 +54,10 @@ test.describe('landing page', () => {
     await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
   });
 
-  test('practice list shows 26 problems', async ({ page }) => {
+  test('practice list shows 29 problems', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
-    await expect(practice.getByRole('listitem')).toHaveCount(26);
-    await expect(practice.getByText('26 system design problems.')).toBeVisible();
+    await expect(practice.getByRole('listitem')).toHaveCount(29);
+    await expect(practice.getByText('29 system design problems.')).toBeVisible();
     await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
   });
 
@@ -65,7 +65,7 @@ test.describe('landing page', () => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
     await page.goto('./');
-    await expect(page.getByRole('region', { name: 'Practice system design' }).getByRole('listitem')).toHaveCount(26);
+    await expect(page.getByRole('region', { name: 'Practice system design' }).getByRole('listitem')).toHaveCount(29);
     await context.close();
   });
 

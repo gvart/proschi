@@ -2,7 +2,7 @@
 type: estimate
 difficulty: hard
 tags: [replication, estimation]
-related: [discord-messages, github-repo-replication]
+related: [discord-messages, github-repo-replication, distributed-kv]
 answer: 90000
 unit: replica operations/s
 tolerance: 1.5
