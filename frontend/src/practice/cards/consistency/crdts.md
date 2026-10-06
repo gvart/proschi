@@ -2,7 +2,7 @@
 type: cloze
 difficulty: medium
 tags: [replication]
-related: [shopping-cart]
+related: [shopping-cart, collaborative-docs]
 ---
 
 ## Text

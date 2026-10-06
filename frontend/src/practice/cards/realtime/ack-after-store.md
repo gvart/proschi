@@ -2,7 +2,7 @@
 type: flip
 difficulty: medium
 tags: [consistency]
-related: [chat]
+related: [chat, collaborative-docs]
 ---
 
 ## Front

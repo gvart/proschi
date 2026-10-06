@@ -2,6 +2,7 @@
 type: choice
 difficulty: hard
 tags: [data-structures]
+related: [distributed-kv]
 distinct-from: [consistent-hashing]
 ---
 

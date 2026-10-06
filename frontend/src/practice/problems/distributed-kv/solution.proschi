@@ -1,0 +1,67 @@
+import "problem.proschi"
+
+coord "Coordinators" [Go] x30 @storage "Hash each key onto the ring and talk to its three replicas"
+
+capacity {
+  nodes shards 4
+}
+
+apps  -> coord : key-value API
+coord -> nodes : replica reads and writes
+
+entity Item in nodes "One value; each key lives on the three nodes that follow its hash on the ring" {
+  key         string key
+  value       bytes
+  vectorClock json
+  writtenAt   time
+}
+
+decision "Consistent hashing with virtual nodes" {
+  because "Each key belongs to the next nodes clockwise from its hash; adding a node takes over small slices from all the others instead of reshuffling every key, and many virtual nodes per machine spread the load evenly"
+  rejected "hash(key) mod number of nodes" "Adding a twelfth node would move almost every key to another node"
+}
+decision "Three replicas, W = 2 and R = 2" {
+  because "R + W > N, so every read quorum overlaps the last write quorum; and a write or read still succeeds with one of the three replicas down"
+  rejected "W = 3" "One replica down or slow fails or stalls every write to its keys"
+  rejected "R = 3" "Reads are three quarters of the traffic: a third more read load means more shards, over the budget"
+  rejected "R = 1 and W = 1" "Faster and cheaper, but a read can miss the latest acknowledged write"
+}
+decision "Four shards of three nodes" {
+  because "30k reads and 10k writes a second fan out to 60k replica reads and 30k replica writes, 38% of twelve nodes; a replica group that loses a node stays near 56% and inside the latency limits"
+  rejected "Three shards" "50% busy is fine until one node of a group fails; the two left run at 75% and Put misses its p99"
+}
+decision "Sloppy quorum with hinted handoff" because "When a replica is down, the write is acknowledged by the other two and a copy goes to the next healthy node with a hint; it is handed back when the replica returns"
+decision "Repair on read" because "A quorum read that finds an older version writes the newer one back before answering, so a stale replica is fixed as soon as anyone reads the key; anti-entropy with Merkle trees catches the keys nobody reads"
+decision "Vector clocks, not timestamps" because "Concurrent writes from two clients are both kept and returned to the reader to merge, instead of one being silently dropped by a clock that runs fast"
+
+usecase "Put" "Store a value under a key" {
+  apps -> coord : PUT /kv/cart:7 json {"items": 3}
+
+  alt "All replicas up" when "the key's three replicas answer" {
+    coord  -> nodes : x3 PUT cart:7 with vector clock
+    nodes --> coord : two acks (W = 2)
+    coord --> apps  : 204
+  } alt "Replica down" when "one of the key's three replicas is down" {
+    coord  -> nodes : x2 PUT cart:7 with vector clock
+    nodes --> coord : two acks (W = 2)
+    coord --> apps  : 204
+    coord  -x nodes : PUT cart:7 to the third replica
+    coord  -> nodes : PUT cart:7 with a hint for the third replica, on the next node of the ring
+  }
+}
+
+usecase "Get" "Read the value under a key" {
+  apps -> coord : GET /kv/cart:7
+
+  alt "Replicas agree" when "both replicas return the same version" {
+    coord  -> nodes : x2 GET cart:7
+    nodes --> coord : the same version twice (R = 2)
+    coord --> apps  : 200 {"items": 3}
+  } alt "Stale replica" when "one replica returns an older version" {
+    coord  -> nodes : x2 GET cart:7
+    nodes --> coord : two versions, one older
+    coord  -> nodes : PUT cart:7 newer version to the stale replica
+    nodes --> coord : ok
+    coord --> apps  : 200 {"items": 3}
+  }
+}

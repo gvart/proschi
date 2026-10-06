@@ -2,7 +2,7 @@
 type: flip
 difficulty: hard
 tags: [replication, availability]
-related: [shopping-cart]
+related: [shopping-cart, distributed-kv]
 distinct-from: [quorum-read-size]
 ---
 

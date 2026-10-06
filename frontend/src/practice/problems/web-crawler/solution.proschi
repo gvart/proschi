@@ -1,0 +1,90 @@
+import "problem.proschi"
+
+frontier "URL Frontier"  [Kafka]  x3 @crawl "URLs to crawl, partitioned by host so one fetcher owns each host"
+fetchers "Fetchers"      [Go]     x4 @crawl "Download pages, one host at a time per partition"
+hosts    "Host State"    [Redis]  x2 @crawl "Per host: robots.txt rules and the earliest time of the next fetch"
+pages    "Page Store"    [AWS S3] x3 @crawl "Every fetched page, compressed, keyed by URL hash"
+fetched  "Fetched Pages" [Kafka]  x2 @crawl "One event per stored page, for the parsers"
+parsers  "Parsers"       [Go]     x3 @crawl "Extract links, normalise them and drop the ones already seen"
+seen     "Seen URLs"     [Redis]  x3 @crawl "A Bloom filter and a set of URL hashes, sharded by hash"
+
+frontier -> fetchers : next URL of a host
+fetchers -> hosts    : politeness and robots.txt
+fetchers -> web      : HTTP GET
+fetchers -> pages    : store page
+fetchers -> fetched  : PageFetched
+fetchers -> frontier : re-enqueue
+fetched  -> parsers  : PageFetched
+parsers  -> pages    : read page
+parsers  -> seen     : check and add
+parsers  -> frontier : enqueue new URLs
+
+entity HostState in hosts "What the crawler knows about one host" {
+  host        string key
+  robotsRules json
+  nextFetchAt time
+  crawlDelay  int
+}
+
+entity Page in pages "One fetched page" {
+  urlHash   string key
+  url       string
+  fetchedAt time
+  status    int
+  html      bytes
+}
+
+decision "Partition the frontier by host" {
+  because "All URLs of one host land in one partition, read by one fetcher, so no two fetchers ever hit the same host at once"
+  rejected "One shared FIFO queue" "Links cluster by host: a page with 50 links to its own site would send 50 fetchers to it at the same moment"
+}
+decision "Check the host before every fetch" {
+  because "robots.txt and a crawl delay per host keep the crawler polite; a URL whose host is not ready goes back to the frontier with a due time"
+  rejected "Fetch as fast as the fetchers allow" "Small sites see thousands of requests a second and block the crawler, or go down"
+}
+decision "Deduplicate URLs before they enter the frontier" {
+  because "A page links to about 50 URLs and almost all were seen before; checking 90k links a second against an in-memory Bloom filter keeps the frontier to new URLs only"
+  rejected "Deduplicate at fetch time" "The frontier fills with duplicates, and fetchers spend their time looking them up"
+  rejected "A database table of seen URLs" "90k lookups and inserts a second need many database nodes; the filter's memory is cheaper"
+}
+decision "Store before acknowledging the URL" because "A fetcher that crashes mid-page leaves the URL in the frontier, so it is fetched again instead of lost"
+
+usecase "Crawl page" "A fetcher takes the next URL of a host and downloads it, if the host is ready" {
+  frontier -> fetchers : URL https://example.com/a (host example.com)
+  fetchers -> hosts    : GET host:example.com robots rules and next fetch time
+
+  alt "Host ready" when "the host's crawl delay has passed and robots.txt allows the URL" {
+    hosts    --> fetchers : allowed, due
+    fetchers  -> hosts    : SET host:example.com next fetch = now + crawl delay
+    fetchers  -> web      : ~100KB GET https://example.com/a
+    web      --> fetchers : 200 text/html
+    fetchers  -> pages    : ~100KB PUT pages/3f9a1c
+    pages    --> fetchers : ok
+    fetchers  -> fetched  : PUBLISH PageFetched 3f9a1c
+    fetched  --> fetchers : ack
+    fetchers --> frontier : commit offset
+  } alt "Fetch failed" when "the host times out or refuses the connection" {
+    hosts    --> fetchers : allowed, due
+    fetchers  -> hosts    : SET host:example.com next fetch = now + backoff
+    fetchers  -x web      : GET https://example.com/a
+    fetchers  -> frontier : ENQUEUE https://example.com/a retry 3 of 5, due after backoff
+    frontier --> fetchers : ack
+    fetchers --> frontier : commit offset
+  } alt "Host busy" when "the host was fetched less than its crawl delay ago" {
+    hosts    --> fetchers : next fetch in 4 s
+    fetchers  -> frontier : ENQUEUE https://example.com/a due in 4 s
+    frontier --> fetchers : ack
+    fetchers --> frontier : commit offset
+  }
+}
+
+usecase "Parse links" "A parser extracts the links of a stored page and queues the new ones" {
+  fetched   -> parsers  : PageFetched 3f9a1c
+  parsers   -> pages    : ~100KB GET pages/3f9a1c
+  pages    --> parsers  : html
+  parsers   -> seen     : x50 SADD seen url hash (Bloom filter check)
+  seen     --> parsers  : 3 of 50 are new
+  parsers   -> frontier : x3 ENQUEUE new URL, partitioned by host
+  frontier --> parsers  : ack
+  parsers  --> fetched  : commit offset
+}

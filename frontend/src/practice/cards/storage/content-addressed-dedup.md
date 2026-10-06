@@ -2,7 +2,7 @@
 type: flip
 difficulty: medium
 tags: [data-structures]
-related: [file-storage]
+related: [file-storage, web-crawler]
 ---
 
 ## Front

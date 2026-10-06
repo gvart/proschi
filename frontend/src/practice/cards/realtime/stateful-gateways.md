@@ -2,7 +2,7 @@
 type: flip
 difficulty: medium
 tags: [availability]
-related: [chat, push-gateway]
+related: [chat, push-gateway, collaborative-docs]
 ---
 
 ## Front

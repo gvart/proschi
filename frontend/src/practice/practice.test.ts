@@ -15,7 +15,7 @@ const cardIds = new Set(Object.keys(import.meta.glob('./cards/*/*.md')).map((pat
 describe('problem catalog', () => {
   it('reads every problem folder', () => {
     expect(catalogErrors.map((e) => e.message)).toEqual([]);
-    expect(problems.length).toBeGreaterThanOrEqual(26);
+    expect(problems.length).toBeGreaterThanOrEqual(29);
   });
 
   it('has unique ids and finds problems by id', () => {
@@ -51,7 +51,10 @@ describe('problem catalog', () => {
       'cdn-tiered-cache',
       'trending-topics',
       'view-counting',
+      'web-crawler',
+      'collaborative-docs',
       'discord-messages',
+      'distributed-kv',
       'flash-sale',
       'metrics-ingest',
       'payments',

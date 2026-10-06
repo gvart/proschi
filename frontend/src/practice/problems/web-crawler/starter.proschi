@@ -1,0 +1,15 @@
+import "problem.proschi"
+
+# Add the components, connections and the use cases "Crawl page" and "Parse links".
+frontier "URL Frontier" [Kafka]
+fetchers "Fetchers"     [Go]
+
+frontier -> fetchers
+fetchers -> web
+
+usecase "Crawl page" {
+  frontier  -> fetchers : URL https://example.com/a
+  fetchers  -> web      : GET https://example.com/a
+  web      --> fetchers : 200 text/html
+  fetchers --> frontier : commit offset
+}
