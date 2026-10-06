@@ -11,7 +11,7 @@ import { expect, test } from './fixtures';
 test('a ranked run: the server starts it, and gets the actions to replay at the end', async ({ page }) => {
   await mockSignedIn(page);
   const setup = { scenario: 'shortly', seed: 'e2e-seed', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} } };
-  let submitted: { actions: { t: string }[] } | undefined;
+  let submitted: { actions: { t: string }[]; day?: string } | undefined;
   await page.route('**/api/game/runs', (route) => route.fulfill({ json: { runId: 'run-1', setup } }));
   await page.route('**/api/game/runs/run-1/submit', (route) => {
     submitted = route.request().postDataJSON();
@@ -34,7 +34,7 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
     await expect(result.or(over)).toBeVisible();
     if (await over.isVisible()) break;
     await result.getByRole('button', { name: 'Continue' }).click();
-    const skipCard = page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /Skip/ });
+    const skipCard = page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /^Skip \(/ });
     if (await skipCard.isVisible()) await skipCard.click();
     const noThanks = page.getByRole('dialog', { name: 'A contract is on the table' }).getByRole('button', { name: 'No thanks' });
     if (await noThanks.isVisible()) await noThanks.click();
@@ -42,5 +42,7 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
   await expect(page.getByText('Rank #3 of 10 on this leaderboard.')).toBeVisible();
   expect(submitted?.actions[0]).toEqual({ t: 'mutator', pick: 0 });
   expect(submitted?.actions[1].t).toBe('deploy');
+  // With the local date: a finished run meets the daily goal and keeps the streak.
+  expect(submitted?.day).toMatch(/^\d{4}-\d{2}-\d{2}$/);
   await expect(page.getByRole('link', { name: 'Open your design in the editor' })).toHaveAttribute('href', /^\.\.\/app\/#/);
 });

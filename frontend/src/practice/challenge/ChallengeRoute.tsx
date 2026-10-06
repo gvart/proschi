@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowRight, Check, Copy, Flame, LogIn, PartyPopper, RotateCcw, Trophy, X, Zap } from 'lucide-react';
+import { ArrowRight, Check, Copy, LogIn, PartyPopper, RotateCcw, Trophy, X, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { clozeWithAnswers } from '../../learn/cards';
@@ -157,10 +157,14 @@ export default function ChallengeRoute({ account, activity }: { account: Account
     document.title = 'Daily challenge · Proschi practice';
   }, []);
 
-  /** Signed in: sends answers; the result kept (also when one was kept already), or the error. */
-  const submit = useCallback(async (day: string, answers: ChallengeAnswerItem[]): Promise<ChallengeAttemptAnswer> => {
+  /**
+   * Signed in: sends answers, with the local date they were given on (for
+   * the daily streak); the result kept (also when one was kept already), or
+   * the error.
+   */
+  const submit = useCallback(async (day: string, answers: ChallengeAnswerItem[], playedOn: string = localDay(new Date())): Promise<ChallengeAttemptAnswer> => {
     try {
-      return await api<ChallengeAttemptAnswer>('/api/challenge/today/attempt', { method: 'POST', body: { day, answers } });
+      return await api<ChallengeAttemptAnswer>('/api/challenge/today/attempt', { method: 'POST', body: { day, answers, localDay: playedOn } });
     } catch (e) {
       if (e instanceof ApiError && e.status === 409 && e.body && typeof e.body === 'object' && 'attempt' in e.body && (e.body as ChallengeAttemptAnswer).attempt) {
         return e.body as ChallengeAttemptAnswer;
@@ -281,7 +285,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
       }
       clearChallengeProgress(owner);
       try {
-        const saved = await submit(today.day, guestToday.answers);
+        const saved = await submit(today.day, guestToday.answers, guestToday.result.localDay);
         if (store) for (const review of guestToday.reviews) store.add(review);
         clearGuestChallenge();
         afterwards();
@@ -426,14 +430,20 @@ function NextReset({ endsAt }: { endsAt: number }) {
   );
 }
 
+/**
+ * The challenge streak, as a sub-stat: the daily streak (the flame at the
+ * top of interview prep) is the one streak, and a completed challenge keeps
+ * it like any other practice. This counts only challenge days in a row (UTC
+ * days, no freezes), for the challenge badges and the profile.
+ */
 function ChallengeStreakLine({ streak }: { streak?: ChallengeStreakAnswer }) {
   if (!streak) return null;
+  const days = (n: number) => `${n} ${n === 1 ? 'day' : 'days'}`;
   return (
-    <div role="group" aria-label="Challenge streak" className="mt-3 inline-flex max-w-full flex-wrap items-center gap-x-2 rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold text-ink">
-      <Flame size={16} aria-hidden="true" className={streak.current > 0 ? 'text-orange-600 dark:text-orange-400' : 'text-muted'} />
-      {streak.current > 0 ? `${streak.current}-day challenge streak` : 'No challenge streak yet'}
-      {streak.longest > streak.current && <span className="font-normal text-muted">· best {streak.longest}</span>}
-    </div>
+    <p role="group" aria-label="Challenge streak" className="mt-3 text-sm text-ink/80">
+      <span className="font-semibold text-ink">Challenge:</span> {streak.current > 0 ? `${days(streak.current)} in a row` : 'no days in a row yet'}
+      {streak.longest > streak.current && <span className="text-muted"> · best {days(streak.longest)}</span>}
+    </p>
   );
 }
 
@@ -463,9 +473,9 @@ function Intro({
           {POINTS_CORRECT} points for each right answer, plus up to {SPEED_BONUS_MAX} for speed: all of it within {SPEED_FULL_MS / 1000} s, fading to none at{' '}
           {SPEED_ZERO_MS / 1000} s. At most {MAX_SCORE} points.
         </li>
-        <li>Each answer also counts as a review of its card, toward your daily goal.</li>
+        <li>Finishing it meets your daily goal and keeps your streak, and each answer also counts as a review of its card.</li>
         {mode === 'guest' && <li>Signed out, your score stays in this browser; sign in afterwards to save it and join the leaderboard.</li>}
-        {mode === 'local' && <li>Your score and challenge streak are kept in this browser.</li>}
+        {mode === 'local' && <li>Your scores are kept in this browser.</li>}
       </ul>
       <div className="mt-3">
         <NextReset endsAt={endsAt} />
@@ -695,7 +705,7 @@ function Result({
         <section aria-label="Sign in to save your score" className="mt-6 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md">
           <p className="font-semibold text-ink">Save your score</p>
           <p className="mt-1 text-sm text-ink/80">
-            This score is kept in this browser only. Sign in to save it to your account, appear on today’s leaderboard and keep a challenge streak.
+            This score is kept in this browser only. Sign in to save it to your account, appear on today’s leaderboard and keep your daily streak.
           </p>
           {providers.length > 0 && (
             <div className="mt-3 flex flex-wrap gap-2">

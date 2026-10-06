@@ -30,6 +30,7 @@ import { now } from './env';
 import { gameFiles } from './game.gen';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { cached } from './stats';
+import { clientDay } from './activity';
 
 /**
  * Scale or Fail (docs/GAME.md, frontend/src/game/engine). The server never
@@ -219,8 +220,9 @@ function bank(meta: Meta, setup: RunSetup, game: Game): { meta: Meta; blueprints
 }
 
 /**
- * POST /api/game/runs/<id>/submit {actions}: replays the run from its stored
- * setup and keeps the result once. Answers `{score, outcome, waves,
+ * POST /api/game/runs/<id>/submit {actions, day?}: replays the run from its
+ * stored setup and keeps the result once, with `day`, the player's local
+ * date (activity.ts's clientDay), for the daily streak. Answers `{score, outcome, waves,
  * blueprints, meta, rank, players}`. 409 for a run already submitted or one
  * started before the game, the scenario or the simulation changed.
  */
@@ -234,6 +236,8 @@ export async function postGameSubmit(request: Request, ctx: Ctx, runId: string):
   if (row.submitted_at !== null) throw new HttpError(409, 'This run was submitted already');
   if (row.versions !== versionsOf(row.scenario)) throw new HttpError(409, 'The game was updated since this run started, so it cannot be replayed; start a new one');
   const t = now();
+  // The player's local date, for the daily streak (a finished run meets the daily goal).
+  const localDay = clientDay(body.day, t);
   if (row.mode === 'daily') {
     const day = challengeDay(new Date(t * 1000));
     const late = row.day === addDays(day, -1) && t - Date.parse(`${day}T00:00:00Z`) / 1000 <= GRACE_SECONDS;
@@ -248,8 +252,8 @@ export async function postGameSubmit(request: Request, ctx: Ctx, runId: string):
   const banked = bank(await loadMeta(DB, user.id), setup, game);
   const [updated] = await DB.batch([
     DB.prepare(
-      'UPDATE game_runs SET submitted_at = ?, score = ?, waves = ?, outcome = ?, cleared = ?, blueprints = ?, actions = ? WHERE id = ? AND submitted_at IS NULL',
-    ).bind(t, s.score, s.history.length, s.outcome ?? 'over', s.cleared ? 1 : 0, banked.blueprints, JSON.stringify(actions), runId),
+      'UPDATE game_runs SET submitted_at = ?, score = ?, waves = ?, outcome = ?, cleared = ?, blueprints = ?, actions = ?, local_day = ? WHERE id = ? AND submitted_at IS NULL',
+    ).bind(t, s.score, s.history.length, s.outcome ?? 'over', s.cleared ? 1 : 0, banked.blueprints, JSON.stringify(actions), localDay, runId),
     saveMeta(DB, user.id, banked.meta),
   ]);
   if (!updated.meta.changes) throw new HttpError(409, 'This run was submitted already');
@@ -445,7 +449,7 @@ export async function getGameLeaderboard(request: Request, ctx: Ctx): Promise<Re
 export async function exportGame(DB: D1Database, userId: string): Promise<{ meta: Meta | null; runs: unknown[] }> {
   const [meta, runs] = await Promise.all([
     DB.prepare('SELECT meta FROM game_meta WHERE user_id = ?').bind(userId).first<{ meta: string }>(),
-    DB.prepare('SELECT id, mode, board, day, scenario, ascension, started_at, submitted_at, score, waves, outcome, cleared, blueprints FROM game_runs WHERE user_id = ? ORDER BY started_at')
+    DB.prepare('SELECT id, mode, board, day, scenario, ascension, started_at, submitted_at, local_day, score, waves, outcome, cleared, blueprints FROM game_runs WHERE user_id = ? ORDER BY started_at')
       .bind(userId)
       .all(),
   ]);

@@ -1,7 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CardReview } from '../learn/review';
 import { computeStreak, DEFAULT_GOAL, type DayActivity } from '../learn/streak';
-import { withOutbox } from './activity';
+import { localActivity, recordLocalRun, RUN_DAYS_KEY, withOutbox } from './activity';
+import { CHALLENGE_KEY, type ChallengeResult } from './challenge/store';
 import { accountStore, CARDS_OUTBOX_KEY } from './review/store';
 
 const api = vi.hoisted(() => vi.fn());
@@ -75,5 +76,45 @@ describe('the streak with the outbox (signed in)', () => {
     // The server's counts now hold them; the outbox adds nothing.
     const after = [server[0], { ...server[1], reviews: 8 }];
     expect(withOutbox(after, 'u1')).toBe(after);
+  });
+});
+
+describe('the streak in a build without accounts', () => {
+  const result = (day: string, localDay?: string): ChallengeResult => ({
+    day,
+    score: 100,
+    maxScore: 600,
+    correct: 1,
+    perfect: false,
+    totalMs: 1000,
+    results: [{ cardId: 'policy', answer: 1, ms: 1000, correct: true, points: 100, bonus: 0 }],
+    ...(localDay ? { localDay } : {}),
+  });
+
+  it('counts the daily challenges kept in this browser on the day they were played, older results on their UTC day', () => {
+    // Played late on the 19th in a time zone behind UTC, where it was already the 20th's challenge; and one kept before the local day was recorded.
+    storage.set(CHALLENGE_KEY, JSON.stringify({ [TODAY]: result(TODAY, YESTERDAY), '2026-10-17': result('2026-10-17') }));
+    expect(localActivity()).toEqual([
+      { day: '2026-10-17', reviews: 0, solves: 0, newCards: 0, challenges: 1 },
+      { day: YESTERDAY, reviews: 0, solves: 0, newCards: 0, challenges: 1 },
+    ]);
+    expect(computeStreak(localActivity(), TODAY)).toMatchObject({ current: 1, todayDone: false });
+  });
+
+  it('counts finished Arcade runs by day, forgetting days the streak no longer looks at', () => {
+    recordLocalRun(TODAY);
+    recordLocalRun(TODAY);
+    recordLocalRun('not a day');
+    expect(localActivity()).toEqual([{ day: TODAY, reviews: 0, solves: 0, newCards: 0, runs: 2 }]);
+    expect(computeStreak(localActivity(), TODAY)).toMatchObject({ current: 1, todayDone: true, todayProgress: 1 });
+    storage.set(RUN_DAYS_KEY, JSON.stringify({ '2024-01-01': 1, [TODAY]: 2, bad: 'x' }));
+    recordLocalRun(TODAY);
+    expect(JSON.parse(storage.get(RUN_DAYS_KEY)!)).toEqual({ [TODAY]: 3 });
+  });
+
+  it('survives malformed storage', () => {
+    storage.set(RUN_DAYS_KEY, '[1, 2]');
+    storage.set(CHALLENGE_KEY, '"nope"');
+    expect(localActivity()).toEqual([]);
   });
 });

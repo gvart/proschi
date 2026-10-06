@@ -4,7 +4,8 @@
  * from the same history.
  *
  * A day **counts** when it meets the daily goal: `goal.reviews` cards
- * reviewed, or `goal.solves` problems solved. The streak is the run of
+ * reviewed, `goal.solves` problems solved, the daily challenge completed, or
+ * a Scale or Fail (Arcade) run finished: any daily practice. The streak is the run of
  * counting days up to today (today may still be in progress: a streak that
  * counted yesterday is still alive). Every `FREEZE_EVERY` counting days in a
  * row earn a **freeze**, up to `MAX_FREEZES` held at once; a missed day uses
@@ -31,6 +32,10 @@ export interface DayActivity {
   solves: number;
   /** Of `reviews`, the first reviews of a card (or of its new version): cards learned that day. */
   newCards?: number;
+  /** Daily challenges completed that day (at most one a day; the challenge's own day is UTC, this is the local day it was sent). */
+  challenges?: number;
+  /** Scale or Fail runs finished that day (played to the end, not just started). */
+  runs?: number;
 }
 
 export interface DailyGoal {
@@ -38,9 +43,9 @@ export interface DailyGoal {
   solves: number;
 }
 
-/** 10 cards or 1 problem a day. */
+/** 10 cards or 1 problem a day (or the daily challenge, or an Arcade run: meetsGoal). */
 export const DEFAULT_GOAL: DailyGoal = { reviews: 10, solves: 1 };
-/** Goals a user can pick, by cards per day; any solve also meets each of them. */
+/** Goals a user can pick, by cards per day; any solve, daily challenge or finished Arcade run also meets each of them. */
 export const GOAL_CHOICES = [5, 10, 20, 30];
 export const FREEZE_EVERY = 7;
 export const MAX_FREEZES = 2;
@@ -92,11 +97,18 @@ export function addDays(day: Day, n: number): Day {
   return d.toISOString().slice(0, 10);
 }
 
-export function meetsGoal(activity: Pick<DayActivity, 'reviews' | 'solves'>, goal: DailyGoal = DEFAULT_GOAL): boolean {
-  return activity.reviews >= goal.reviews || (goal.solves > 0 && activity.solves >= goal.solves);
+type GoalActivity = Pick<DayActivity, 'reviews' | 'solves' | 'challenges' | 'runs'>;
+
+/** Whether a day had practice that meets any goal by itself: the daily challenge completed or an Arcade run finished. */
+const playedToday = (activity: GoalActivity) => (activity.challenges ?? 0) > 0 || (activity.runs ?? 0) > 0;
+
+/** Whether a day meets the goal: enough cards, enough solves, the daily challenge or a finished Arcade run. */
+export function meetsGoal(activity: GoalActivity, goal: DailyGoal = DEFAULT_GOAL): boolean {
+  return activity.reviews >= goal.reviews || (goal.solves > 0 && activity.solves >= goal.solves) || playedToday(activity);
 }
 
-export function goalProgress(activity: Pick<DayActivity, 'reviews' | 'solves'>, goal: DailyGoal = DEFAULT_GOAL): number {
+export function goalProgress(activity: GoalActivity, goal: DailyGoal = DEFAULT_GOAL): number {
+  if (playedToday(activity)) return 1;
   const cards = goal.reviews > 0 ? activity.reviews / goal.reviews : 0;
   const solves = goal.solves > 0 ? activity.solves / goal.solves : 0;
   return Math.min(1, Math.max(cards, solves));
@@ -104,17 +116,24 @@ export function goalProgress(activity: Pick<DayActivity, 'reviews' | 'solves'>, 
 
 const count = (n: number | undefined) => Math.max(0, (n ?? 0) | 0);
 
-/** Sums activity by day (several entries for one day add up), dropping malformed days. */
+/** A day with nothing done yet. */
+export const emptyDay = (day: Day): DayActivity => ({ day, reviews: 0, solves: 0, newCards: 0 });
+
+/** Sums activity by day (several entries for one day add up), dropping malformed days. `challenges` and `runs` are left out of days without any. */
 export function byDay(activity: DayActivity[]): Map<Day, DayActivity> {
   const out = new Map<Day, DayActivity>();
   for (const a of activity) {
     if (!isDay(a.day)) continue;
-    const prev = out.get(a.day) ?? { day: a.day, reviews: 0, solves: 0, newCards: 0 };
+    const prev = out.get(a.day) ?? emptyDay(a.day);
+    const challenges = count(prev.challenges) + count(a.challenges);
+    const runs = count(prev.runs) + count(a.runs);
     out.set(a.day, {
       day: a.day,
       reviews: prev.reviews + count(a.reviews),
       solves: prev.solves + count(a.solves),
       newCards: (prev.newCards ?? 0) + count(a.newCards),
+      ...(challenges ? { challenges } : {}),
+      ...(runs ? { runs } : {}),
     });
   }
   return out;
@@ -126,7 +145,7 @@ export function byDay(activity: DayActivity[]): Map<Day, DayActivity> {
  */
 export function computeStreak(activity: DayActivity[], today: Day, goal: DailyGoal = DEFAULT_GOAL): Streak {
   const days = byDay(activity);
-  const todayActivity = days.get(today) ?? { day: today, reviews: 0, solves: 0, newCards: 0 };
+  const todayActivity = days.get(today) ?? emptyDay(today);
   const todayDone = meetsGoal(todayActivity, goal);
   const counting = [...days.values()].filter((a) => a.day <= today && meetsGoal(a, goal)).map((a) => a.day).sort();
 
@@ -213,6 +232,10 @@ export interface WeeklyRecap {
   /** Cards reviewed for the first time. */
   newCards: number;
   solves: number;
+  /** Daily challenges completed. */
+  challenges: number;
+  /** Scale or Fail runs finished. */
+  runs: number;
   /** Days that met the goal. */
   goalDays: number;
   /** The streak as of the Sunday. */
@@ -230,13 +253,15 @@ export function weeklyRecap(activity: DayActivity[], today: Day, goal: DailyGoal
     reviews: week.reduce((n, a) => n + a.reviews, 0),
     newCards: week.reduce((n, a) => n + (a.newCards ?? 0), 0),
     solves: week.reduce((n, a) => n + a.solves, 0),
+    challenges: week.reduce((n, a) => n + (a.challenges ?? 0), 0),
+    runs: week.reduce((n, a) => n + (a.runs ?? 0), 0),
     goalDays: week.filter((a) => meetsGoal(a, goal)).length,
     streak: computeStreak(activity, end, goal).current,
   };
 }
 
 /** Whether a recap has anything to show. */
-export const recapIsEmpty = (r: WeeklyRecap) => r.reviews === 0 && r.solves === 0 && r.streak === 0;
+export const recapIsEmpty = (r: WeeklyRecap) => r.reviews === 0 && r.solves === 0 && !r.challenges && !r.runs && r.streak === 0;
 
 /**
  * Each day's reviews and new cards from a whole review log (a review is new
@@ -260,4 +285,15 @@ export function activityFromLog(log: readonly CardReview[]): DayActivity[] {
 /** Each day's solves from the day each problem was first solved, `{[problem id]: day}`. */
 export function activityFromSolves(solvedOn: Record<string, Day>): DayActivity[] {
   return [...byDay(Object.values(solvedOn).map((day) => ({ day, reviews: 0, solves: 1 }))).values()].sort((a, b) => a.day.localeCompare(b.day));
+}
+
+/**
+ * Each day's daily challenges and finished Arcade runs from the local days
+ * they happened on, one entry per challenge or run (a day listed twice
+ * counts twice).
+ */
+export function activityFromPlay({ challenges = [], runs = [] }: { challenges?: readonly Day[]; runs?: readonly Day[] }): DayActivity[] {
+  return [
+    ...byDay([...challenges.map((day) => ({ day, reviews: 0, solves: 0, challenges: 1 })), ...runs.map((day) => ({ day, reviews: 0, solves: 0, runs: 1 }))]).values(),
+  ].sort((a, b) => a.day.localeCompare(b.day));
 }

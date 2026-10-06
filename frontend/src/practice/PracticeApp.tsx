@@ -214,7 +214,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
-                <ArcadeRoute account={account} />
+                <ArcadeRoute account={account} activity={activity} />
               </Suspense>
             ) : onChallenge ? (
               <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>

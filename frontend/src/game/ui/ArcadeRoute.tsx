@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Boxes, CalendarDays, Gem, Lock, Medal, Play, ShoppingBag, Sparkles, Trophy, Wrench, type LucideIcon } from 'lucide-react';
 import { api, apiEnabled } from '../../services/api';
 import type { Account } from '../../practice/useAccount';
+import type { Activity } from '../../practice/activity';
+import { notifyActivity } from '../../practice/skills/activity';
 import { PROVIDER_LABEL } from '../../practice/account';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { gameContent } from '../content';
@@ -31,9 +33,15 @@ interface Playing {
   key: number;
 }
 
-export default function ArcadeRoute({ account }: { account: Account }) {
+export default function ArcadeRoute({ account, activity }: { account: Account; activity?: Activity }) {
   const { content, errors } = gameContent();
-  const arcade = useArcade(content, account.state);
+  const refreshActivity = activity?.refresh;
+  // A finished run meets the daily goal: the streak at the top, and badges, again.
+  const onRunDone = useCallback(() => {
+    refreshActivity?.();
+    notifyActivity();
+  }, [refreshActivity]);
+  const arcade = useArcade(content, account.state, onRunDone);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [playing, setPlaying] = useState<Playing>();
   const [saved, setSaved] = useState(() => loadRun());
