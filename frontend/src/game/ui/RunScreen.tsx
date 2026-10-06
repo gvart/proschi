@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Cat, Code2, FastForward, LayoutGrid, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ArrowLeft, Cat, Code2, FastForward, FileCode2, LayoutGrid, SquareTerminal, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
 import { celebrate } from '../../design/celebrate';
 import { prefersReducedMotion } from '../../design/motion';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
@@ -10,6 +10,8 @@ import { LOADTEST_COST, ONCALL_COST, SLOTS, WAVES, WIDE_SLOTS } from '../engine/
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
 import GameCanvas from './GameCanvas';
 import { boardToDsl, dslToBoard } from '../engine/boardDsl';
+import { flashChanges, lockedLines } from './codeExtensions';
+import { breachDiagnostics, exportSource } from './exportSource';
 import type { Diagnostic } from '../../dsl/types';
 import { IconTile } from './gameIcons';
 import { RARITY_TILE } from './visual';
@@ -35,6 +37,7 @@ import type { Arcade, RunResult } from './useArcade';
  */
 
 const TICK_MS = 2200;
+const noop = () => {};
 
 export interface RunScreenProps {
   content: GameContent;
@@ -102,10 +105,18 @@ export default function RunScreen(props: RunScreenProps) {
   const hold = useRef<number | undefined>(undefined);
   const narrow = useNarrow();
   /** The board as Proschi text: a second way to edit the plan, for those who would rather type. */
-  const [pane, setPane] = useState<'board' | 'code'>('board');
+  const [pane, setPane] = useState<'board' | 'code' | 'compiled'>('board');
   const [code, setCode] = useState('');
   const [codeProblems, setCodeProblems] = useState<Diagnostic[]>([]);
   const typed = useRef<Board | undefined>(undefined);
+  /** When the player last typed a change: a burst of typing is one undo step. */
+  const lastTyped = useRef(0);
+  const codeLevel = game.codeLevel();
+  /** New components are typed, not placed: the scenario's last act, or the player's own choice (never on a phone). */
+  const codeOnly = !narrow && (codeLevel === 'only' || !!settings.codeOnly);
+  const fixedIds = useMemo(() => s.board.nodes.filter((n) => !components.has(n.component)).map((n) => n.id), [s.board, components]);
+  const codeExtensions = useMemo(() => [lockedLines(fixedIds, 'Fixed by the scenario: it stays on the board. Wire it below.'), flashChanges()], [fixedIds]);
+  const techs = useMemo(() => content.components.filter((c) => c.unlock === 0 || unlocked.has(c.id)).map((c) => ({ tech: c.tech, detail: c.name })), [content, unlocked]);
 
   useEffect(() => setSound(settings.sound), [settings.sound]);
 
@@ -156,6 +167,7 @@ export default function RunScreen(props: RunScreenProps) {
     setSelected(undefined);
     setPlacing(undefined);
     setWiring(false);
+    if (codeOnly) setPane('code');
     const w = game.waveDef();
     setStamp(`Wave ${s.wave + 1}${w.name ? ` · ${w.name}` : w.ticket ? ' · new ticket' : ''}`);
     if (w.boss) {
@@ -168,8 +180,11 @@ export default function RunScreen(props: RunScreenProps) {
   }, [waveKey]);
 
   const edit = useCallback(
-    (next: Board) => {
-      setUndo((u) => [...u.slice(-40), plan]);
+    (next: Board, typing = false) => {
+      const now = Date.now();
+      const burst = typing && now - lastTyped.current < 1200;
+      lastTyped.current = typing ? now : 0;
+      if (!burst) setUndo((u) => [...u.slice(-40), plan]);
       setRedo([]);
       setPlan(next);
       setPreview(undefined);
@@ -190,12 +205,12 @@ export default function RunScreen(props: RunScreenProps) {
 
   const onCode = (text: string) => {
     setCode(text);
-    if (s.phase !== 'plan') return;
+    if (s.phase !== 'plan' || codeLevel === 'watch') return;
     const r = dslToBoard(text, { ...ctx, previous: plan, unlocked });
     setCodeProblems(r.diagnostics);
     if (r.board) {
       typed.current = r.board;
-      edit(r.board);
+      edit(r.board, true);
     }
   };
   const slots = wide ? WIDE_SLOTS : SLOTS;
@@ -392,6 +407,18 @@ export default function RunScreen(props: RunScreenProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drag?.id, place]);
 
+  // The whole document the simulation reads, with what broke on its lines.
+  const compiledTick = s.phase === 'plan' ? preview : (last ?? s.ticks[s.ticks.length - 1]);
+  const compiled = useMemo(() => {
+    if (pane !== 'compiled' || (s.phase !== 'plan' && s.phase !== 'run')) return { source: '', diagnostics: [] };
+    try {
+      const source = exportSource(game, content, shownBoard, `# ${game.scenario.title}, wave ${s.wave + 1}: what the simulation runs. Read-only: change the board or the Code tab.`);
+      return { source, diagnostics: breachDiagnostics(source, compiledTick?.breaches ?? [], (key) => game.scenario.useCases[key]?.name) };
+    } catch {
+      return { source: '# Fix the problems listed below the board first.', diagnostics: [] };
+    }
+  }, [pane, s.phase, s.wave, game, content, shownBoard, compiledTick]);
+
   if (s.phase === 'over' || s.phase === 'cleared') {
     return (
       <Report
@@ -414,6 +441,12 @@ export default function RunScreen(props: RunScreenProps) {
   };
   const forecast = game.forecast();
   const planning = s.phase === 'plan';
+  const codeHint =
+    codeLevel === 'watch'
+      ? `Watch: this is your board in Proschi, and each change you make on the board lights up its line. You can type here from wave ${game.scenario.code.edit}.`
+      : codeOnly
+        ? 'Code only: add components by typing them, e.g. cache "Cache" [Cache], then wire them: api -> cache. Ctrl+Space lists what you can place.'
+        : 'Type to change the board: a line per component, a line per wire, sizes and shards in capacity. Ctrl+Space lists what you can place.';
   const shown = planning ? plan : s.board;
   const shownTick = planning ? preview : (last ?? s.ticks[s.ticks.length - 1]);
   const node = selected ? shown.nodes.find((n) => n.id === selected) : undefined;
@@ -485,6 +518,18 @@ export default function RunScreen(props: RunScreenProps) {
       }}
       onPointerEnd={() => window.clearTimeout(hold.current)}
     />
+  );
+  /** Code only: the palette's place, pointing at the code pane. */
+  const typeInstead = (
+    <div className="flex flex-wrap items-center gap-2 rounded-brutal border-bw-1 border-dashed border-ink/50 p-2 text-sm text-muted">
+      <SquareTerminal size={16} aria-hidden="true" />
+      <span className="flex-1">{codeLevel === 'only' ? 'From this wave new components are typed, not placed.' : 'Code only is on: type new components in the code pane.'}</span>
+      {pane !== 'code' && (
+        <button type="button" className={outlineButton} onClick={() => setPane('code')}>
+          <Code2 size={14} aria-hidden="true" /> Open the code
+        </button>
+      )}
+    </div>
   );
   const controls = (
     <div className="flex flex-wrap items-center gap-2">
@@ -587,6 +632,7 @@ export default function RunScreen(props: RunScreenProps) {
         [
           ['board', 'Board', LayoutGrid],
           ['code', 'Code', Code2],
+          ['compiled', 'Compiled', FileCode2],
         ] as const
       ).map(([id, label, Icon]) => (
         <button key={id} type="button" role="tab" aria-selected={pane === id} className={pane === id ? primaryButton : outlineButton} onClick={() => setPane(id)}>
@@ -622,10 +668,13 @@ export default function RunScreen(props: RunScreenProps) {
             onWire={wire}
             rowAt={(fn) => (dropRow.current = fn)}
           />
-        ) : (
+        ) : pane === 'code' ? (
           <div className="h-[min(60vh,480px)] flex flex-col">
+            <p className="border-b border-ink/15 px-3 py-1.5 text-xs text-muted" data-testid="code-hint">
+              {codeHint}
+            </p>
             <Suspense fallback={<p className="p-3 text-sm text-muted">Loading the editor…</p>}>
-              <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} readOnly={!planning} />
+              <CodeEditor value={code} onChange={onCode} diagnostics={codeProblems} nodeIds={shown.nodes.map((n) => n.id)} techs={techs} extensions={codeExtensions} readOnly={!planning || codeLevel === 'watch'} />
             </Suspense>
             {codeProblems.length > 0 && (
               <ul className="border-t border-ink/15 px-3 py-1.5 text-xs text-fail">
@@ -636,6 +685,15 @@ export default function RunScreen(props: RunScreenProps) {
                 ))}
               </ul>
             )}
+          </div>
+        ) : (
+          <div className="h-[min(60vh,480px)] flex flex-col">
+            <p className="border-b border-ink/15 px-3 py-1.5 text-xs text-muted">
+              What the simulation runs: your {planning ? 'plan' : 'board'}, the scenario's use cases, the traffic at the forecast peak and the requirements. {shownTick?.breaches.length ? 'Lines with a warning are what broke' : planning ? 'Load test the peak to see what breaks' : 'Nothing broke this tick'}.
+            </p>
+            <Suspense fallback={<p className="p-3 text-sm text-muted">Loading the editor…</p>}>
+              <CodeEditor value={compiled.source} onChange={noop} diagnostics={compiled.diagnostics} nodeIds={[]} readOnly />
+            </Suspense>
           </div>
         )}
       </div>
@@ -665,6 +723,21 @@ export default function RunScreen(props: RunScreenProps) {
         >
           <Cat size={14} aria-hidden="true" className={settings.mascot ? '' : 'opacity-40'} />
         </button>
+        {!narrow && (
+          <button
+            type="button"
+            className={outlineButton}
+            aria-pressed={!!settings.codeOnly}
+            aria-label="Code only"
+            title={settings.codeOnly ? 'Place components from the palette again' : 'Code only: type new components instead of placing them'}
+            onClick={() => {
+              props.onSettings({ ...settings, codeOnly: !settings.codeOnly });
+              if (!settings.codeOnly) setPane('code');
+            }}
+          >
+            <SquareTerminal size={14} aria-hidden="true" className={settings.codeOnly ? '' : 'opacity-40'} />
+          </button>
+        )}
         <button type="button" className={outlineButton} aria-pressed={settings.sound} aria-label={settings.sound ? 'Sound on' : 'Sound off'} onClick={() => props.onSettings({ ...settings, sound: !settings.sound })}>
           {settings.sound ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
         </button>
@@ -745,7 +818,7 @@ export default function RunScreen(props: RunScreenProps) {
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-2">
             {boardView}
-            {planning ? palette : controls}
+            {planning ? (codeOnly ? typeInstead : palette) : controls}
             {feedback}
           </div>
           <div className="min-w-0 space-y-3">
@@ -753,7 +826,9 @@ export default function RunScreen(props: RunScreenProps) {
               <div className="rounded-brutal border-bw-1 border-dashed border-ink/50 p-3 text-sm text-muted">
                 <p className={eyebrow}>How to play</p>
                 <p className="mt-1">
-                  {planning
+                  {planning && codeOnly
+                    ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
+                    : planning
                     ? 'Pick a component below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
                     : 'Watch the requests flow. Hot nodes turn yellow, then pink, then red. Tap a node to page the on-call for one more replica.'}
                 </p>

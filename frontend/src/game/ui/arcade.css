@@ -231,3 +231,25 @@
     transform: translateY(-2px) rotate(-1.5deg);
   }
 }
+
+/* The code pane (codeExtensions.ts): lines the scenario fixes, and lines the board just wrote. */
+.proschi-editor .cm-sf-locked {
+  background: rgb(var(--c-ink) / 0.06);
+}
+.proschi-editor .cm-sf-fresh {
+  animation: sf-fresh 1600ms var(--e-out) both;
+}
+@keyframes sf-fresh {
+  from {
+    background: rgb(var(--c-yellow) / 0.55);
+  }
+  to {
+    background: rgb(var(--c-yellow) / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .proschi-editor .cm-sf-fresh {
+    animation: none;
+    background: rgb(var(--c-yellow) / 0.3);
+  }
+}

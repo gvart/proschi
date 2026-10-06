@@ -59,6 +59,7 @@ import {
   type UseCaseDef,
   type Board,
   type CardDef,
+  type CodeLevel,
   type ComponentDef,
   type ContractDef,
   type Curve,
@@ -515,6 +516,13 @@ export class Game {
         return b ? { bounty: { ...b, pays: this.pays(b) } } : {};
       })(),
     };
+  }
+
+  /** How the code pane teaches on a wave (0-based; this wave by default): watch, edit or only. */
+  codeLevel(w = this.state.wave): CodeLevel {
+    const { edit, only } = this.scenario.code;
+    if (only !== undefined && w + 1 >= only) return 'only';
+    return w + 1 >= edit ? 'edit' : 'watch';
   }
 
   /** Problems with a plan; empty when it can be deployed. */

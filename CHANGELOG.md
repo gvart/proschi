@@ -10,6 +10,17 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **The Arcade teaches Proschi as you play.** The code pane opens in steps:
+  in Shortly it first watches the board, lighting up the line each change
+  writes, and lets you type from wave 3; in Drop, act 3 is typed only (on a
+  wide screen). Completion inside `[ ]` offers only the components you can
+  place, Users and the externals cannot be typed away, and a burst of typing
+  is one undo step. A new **Compiled** tab shows the whole document the
+  simulation runs (your board, the use cases, the peak traffic and the
+  requirements), with a warning on every line that broke after a load test
+  or during the run. Which use cases an app server handles can be typed as
+  `# handles: book, pay`, and a **Code only** button in a run's header lets
+  you type every scenario. "Open in editor" now keeps instance sizes.
 - **Favicon fallbacks**: a `favicon.ico` for browsers and search results
   that skip SVG icons, and an Apple touch icon for home screens.
 - **Mutators and bounties** in Scale or Fail, so no two runs want the same

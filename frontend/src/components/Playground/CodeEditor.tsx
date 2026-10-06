@@ -7,7 +7,7 @@ import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
 import { format, formattedOffset } from '../../dsl/format';
-import { proschiCompletions, proschiLanguage, toCmDiagnostics } from './proschiLanguage';
+import { proschiCompletions, proschiLanguage, toCmDiagnostics, type TechChoice } from './proschiLanguage';
 import { editorLayout, focusThemeFor } from './editorThemes';
 import { useEditorTheme } from './useEditorTheme';
 
@@ -24,6 +24,8 @@ interface CodeEditorProps {
   onChange: (value: string) => void;
   diagnostics: Diagnostic[];
   nodeIds: string[];
+  /** The techs to offer inside [ ]; every catalog tech when absent. */
+  techs?: readonly TechChoice[];
   ref?: Ref<CodeEditorHandle>;
   /** Shows the text without letting anyone change it (e.g. while a demo types it). */
   readOnly?: boolean;
@@ -50,7 +52,7 @@ function formatDocument(view: EditorView): boolean {
 
 const readOnlyState = (readOnly: boolean) => [EditorState.readOnly.of(readOnly), EditorView.editable.of(!readOnly)];
 
-export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref, readOnly = false, autoFocus = false, theme, extensions }: CodeEditorProps) {
+export default function CodeEditor({ value, onChange, diagnostics, nodeIds, techs, ref, readOnly = false, autoFocus = false, theme, extensions }: CodeEditorProps) {
   const hostRef = useRef<HTMLDivElement>(null);
   const viewRef = useRef<EditorView | null>(null);
   const mode = useEditorTheme();
@@ -59,10 +61,12 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
   const [readOnlyConf, themeConf, extraConf] = useMemo(() => [new Compartment(), new Compartment(), new Compartment()], []);
   const onChangeRef = useRef(onChange);
   const nodeIdsRef = useRef(nodeIds);
+  const techsRef = useRef(techs);
 
   useEffect(() => {
     onChangeRef.current = onChange;
     nodeIdsRef.current = nodeIds;
+    techsRef.current = techs;
   });
 
   // The editor owns its document; it is created once and fed external changes below.
@@ -75,7 +79,7 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
           basicSetup,
           keymap.of([indentWithTab, { key: 'Shift-Alt-f', run: formatDocument, preventDefault: true }]),
           proschiLanguage,
-          autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current)] }),
+          autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current, () => techsRef.current)] }),
           lintGutter(),
           editorLayout,
           readOnlyConf.of(readOnlyState(readOnly)),
@@ -107,7 +111,8 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, ref,
       endCurrent--;
       endValue--;
     }
-    view.dispatch({ changes: { from: start, to: endCurrent, insert: value.slice(start, endValue) } });
+    // Not the reader's edit: no change filter (a page's locked lines) may refuse it.
+    view.dispatch({ changes: { from: start, to: endCurrent, insert: value.slice(start, endValue) }, filter: false });
   }, [value]);
 
   useEffect(() => {

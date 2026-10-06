@@ -48,6 +48,18 @@ describe('boardToDsl and dslToBoard', () => {
     expect(message(`${base}usecase "U" {\n  users -> api\n}\n`)).toMatch(/Use cases come from the scenario/);
     expect(message(`${base}capacity {\n  db latency 2ms\n}\n`)).toMatch(/Only size and shards/);
     expect(dslToBoard(`${base}api ->\n`, ctx).board).toBeUndefined();
+    expect(message(base.replace('[Service]', '[Service]  # handles: nope'))).toMatch(/No use case 'nope'/);
+    expect(message(base.replace('[Database]', '[Database]  # handles: redirect'))).toMatch(/Only app servers/);
+  });
+
+  it('writes and reads which use cases an app server handles as a comment', () => {
+    const keys = Object.keys(shortly.useCases).slice(0, 1);
+    const board: Board = { ...shortly.start.board, nodes: shortly.start.board.nodes.map((n) => (n.id === 'api' ? { ...n, handles: keys } : n)) };
+    const text = boardToDsl(board, ctx);
+    expect(text).toContain(`# handles: ${keys[0]}`);
+    expect(dslToBoard(text, ctx).board!.nodes.find((n) => n.id === 'api')!.handles).toEqual(keys);
+    // Without the comment it serves everything again.
+    expect(dslToBoard(text.replace(/ +# handles:.*$/m, ''), ctx).board!.nodes.find((n) => n.id === 'api')!.handles).toBeUndefined();
   });
 });
 

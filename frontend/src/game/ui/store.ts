@@ -31,6 +31,8 @@ export interface Settings {
   speed: 1 | 2 | 4;
   /** Kernel, the cat, briefs each wave. */
   mascot: boolean;
+  /** Add components by typing them in the code pane: no palette (on a wide screen). */
+  codeOnly?: boolean;
 }
 
 const read = <T>(key: string): T | undefined => {
@@ -79,6 +81,6 @@ export const saveRun = (run: SavedRun | undefined) => write(RUN_KEY, run);
 
 export function loadSettings(): Settings {
   const s = read<Partial<Settings>>(SETTINGS_KEY) ?? {};
-  return { sound: s.sound === true, speed: s.speed === 2 || s.speed === 4 ? s.speed : 1, mascot: s.mascot !== false };
+  return { sound: s.sound === true, speed: s.speed === 2 || s.speed === 4 ? s.speed : 1, mascot: s.mascot !== false, codeOnly: s.codeOnly === true };
 }
 export const saveSettings = (s: Settings) => write(SETTINGS_KEY, s);

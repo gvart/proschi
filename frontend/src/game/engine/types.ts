@@ -413,7 +413,21 @@ export interface ScenarioDef {
   /** How it plays; `scale` when absent. */
   mode: GameMode;
   migrations: MigrationDef[];
+  /** How the code pane teaches Proschi in this scenario (docs/GAME.md); typing from the first wave when absent. */
+  code: CodeLevels;
 }
+
+/**
+ * The code pane's levels, by 1-based wave: before `edit` it is read-only and
+ * shows what each board edit writes ("watch"); from `edit` the player may
+ * type; from `only` the palette is gone on a wide screen and new components
+ * are typed ("only").
+ */
+export interface CodeLevels {
+  edit: number;
+  only?: number;
+}
+export type CodeLevel = 'watch' | 'edit' | 'only';
 
 export interface GameContent {
   components: ComponentDef[];
