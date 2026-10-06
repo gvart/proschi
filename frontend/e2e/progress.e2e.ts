@@ -28,9 +28,9 @@ test.describe('progress page', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Your progress' })).toBeVisible();
     await expect(page.getByTestId('readiness')).toHaveText('0%');
     await expect(page.getByRole('img', { name: /^Topic mastery, from 0 to 100%/ })).toBeVisible();
-    // The table for screen readers has every topic.
+    // The table for screen readers has every topic: a header row and 18 topics.
     const table = page.getByRole('table', { name: 'Mastery per topic' });
-    await expect(table.getByRole('row')).toHaveCount(16);
+    await expect(table.getByRole('row')).toHaveCount(19);
     await expect(table.getByRole('row', { name: /Estimation 0%/ })).toHaveCount(1);
     // Three weakest topics, each with a way to train it.
     const train = page.getByRole('link', { name: /^Train this topic: / });
