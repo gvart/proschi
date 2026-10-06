@@ -355,7 +355,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
 
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
-      {/* The interview prep hub's tabs lead to daily review and the rest. */}
+      {/* The practice hub's tabs lead to daily review and the rest. */}
       <Heading day={day} />
       {submitting ? (
         <PaneLoading label="Scoring your answers…" />

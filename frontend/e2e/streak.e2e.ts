@@ -68,7 +68,7 @@ test.describe('daily streak', () => {
     await page.goto('practice/#/roadmap');
     await expect(streak(page)).toContainText('2-day streak');
 
-    await page.getByRole('navigation', { name: 'Interview prep' }).getByRole('link', { name: 'Daily review' }).click();
+    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Review', exact: true }).click();
     await expect(streak(page)).toContainText('2-day streak');
     await expect(streak(page)).toContainText('0 of 5 cards today, or solve a problem');
     await expect(page.getByRole('radio', { name: '5 cards a day' })).toHaveAttribute('aria-checked', 'true');
@@ -156,7 +156,7 @@ test.describe('solve celebration', () => {
 
     // The solve meets today's goal.
     await page.getByRole('link', { name: /Problems/ }).click();
-    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
     await expect(streak(page)).toContainText('1-day streak');
     // A second solve of the same problem is not a first one.
     await page.goto('practice/#/url-shortener');

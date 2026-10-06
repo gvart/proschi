@@ -37,6 +37,8 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/leaderboard$/, { problems: 0, entries: [] }],
     [/^\/api\/problems\/[^/]+\/leaderboard$/, { problem: '', metric: 'cost', players: 0, entries: [], you: null }],
     [/^\/api\/game\/me$/, GAME_ME],
+    // Today's challenge, not played yet (the practice hub's Today panel reads it; challenge.accounts.e2e.ts mocks a real one).
+    [/^\/api\/challenge\/today$/, { day: new Date().toISOString().slice(0, 10), cardIds: [], endsAt: 0, maxScore: 600, attempt: null }],
     [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
     // Cloud sync of the editor's diagrams: an empty account (editor.accounts.e2e.ts mocks a real one).
     [/^\/api\/me\/documents$/, { documents: [], cursor: 0, limit: 5, used: 0 }],

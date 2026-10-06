@@ -10,6 +10,7 @@ import type { Game } from '../engine/run';
 import type { GameContent, RunSetup } from '../engine/types';
 import { loadLocalMeta, loadOutbox, pushOutbox, saveLocalMeta, shiftOutbox, type OutboxEvent } from './store';
 import { track } from '../../services/metrics';
+import { DAILY_KEY, localDaily } from './daily';
 
 /**
  * Where the Arcade's progress lives. Signed out (or in a build without
@@ -51,16 +52,6 @@ export interface Arcade {
   start: (opts: { mode: 'normal' | 'daily'; scenario?: string; ascension?: number }) => Promise<{ setup: RunSetup; runId?: string }>;
   /** Banks a finished run. */
   finish: (game: Game, runId?: string) => Promise<RunResult>;
-}
-
-const DAILY_KEY = 'proschi.game.daily';
-
-function localDaily(): { day: string; score: number } | undefined {
-  try {
-    return JSON.parse(localStorage.getItem(DAILY_KEY) ?? 'null') ?? undefined;
-  } catch {
-    return undefined;
-  }
 }
 
 function randomSeed(): string {

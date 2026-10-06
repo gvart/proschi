@@ -3,75 +3,115 @@ import { expect, test } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
 /**
- * Practice and interview prep: the problem list is only problems (with one
- * small link to interview prep), and interview prep is a hub with tabs for
- * the roadmap, daily review, the daily challenge and progress, the streak at
- * its top. Then the
- * account page (`#/me`, this browser's data in a build without accounts)
- * and a public profile (`#/u/<id>`), whose API answer is mocked here: this
- * build has no API.
+ * The practice hub: one page whose home (`#/`) is the Today panel (the
+ * streak and goal, the cards due, today's challenge and daily run, and
+ * "Continue") above the problem list, and one bar of tabs for the problems,
+ * the roadmap, daily review, the daily challenge, the Arcade and progress,
+ * with the header's Practice link marked on every one. Then the account page
+ * (`#/me`, this browser's data in a build without accounts) and a public
+ * profile (`#/u/<id>`), whose API answer is mocked here: this build has no API.
  */
 
-const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Interview prep' });
-/** The header's "Interview prep" link (the desktop nav's). */
-const headerPrep = (page: Page) => page.locator('.ps-nav__link', { hasText: 'Interview prep' });
+const hubNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
+/** The header's "Practice" link (the desktop nav's). */
+const headerPractice = (page: Page) => page.locator('.ps-nav__link', { hasText: 'Practice' });
+const today = (page: Page) => page.getByRole('region', { name: 'Today', exact: true });
 
-test.describe('practice and interview prep', () => {
-  test('the problem list shows only problems, with one link to interview prep', async ({ page }) => {
+test.describe('practice hub', () => {
+  test('the home is the Today panel over the problem list, each part linking to its tab', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      // Today's daily run, played in this browser.
+      localStorage.setItem('proschi.game.daily', JSON.stringify({ day: new Date().toISOString().slice(0, 10), score: 4321 }));
+    });
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
-    const main = page.getByRole('main');
-    await expect(main.getByRole('group', { name: 'Daily streak' })).toHaveCount(0);
-    await expect(main.getByRole('link', { name: /Start (interview prep|daily review)|Continue interview prep|Your progress/ })).toHaveCount(0);
-    await expect(main.getByRole('heading', { name: /Daily review|Interview prep roadmap/ })).toHaveCount(0);
-    await expect(main.getByRole('radiogroup', { name: 'Daily goal' })).toHaveCount(0);
-    await expect(main.getByRole('link', { name: 'Play today’s challenge' })).toHaveCount(0);
-    await expect(prepNav(page)).toHaveCount(0);
-    await expect(page.locator('.ps-nav__link', { hasText: 'Practice' })).toHaveAttribute('aria-current', 'page');
+    await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
+    await expect(hubNav(page).getByRole('link')).toHaveText(['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']);
+    await expect(hubNav(page).getByRole('link', { name: 'Problems' })).toHaveAttribute('aria-current', 'page');
 
-    const link = main.getByRole('link', { name: /Interview prep/ });
-    await expect(link).toHaveCount(1);
-    await expect(link).toContainText('a daily challenge');
-    await link.click();
-    await expect(page).toHaveURL(/#\/roadmap$/);
+    const panel = today(page);
+    await expect(panel.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
+    await expect(panel.getByTestId('today-due')).toHaveText(/^\d+ cards for today$/);
+    await expect(panel.getByRole('region', { name: 'Daily challenge status' })).toContainText('Not played yet');
+    await expect(panel.getByRole('region', { name: 'Arcade daily run status' })).toContainText('4,321');
+    await expect(panel.getByRole('link', { name: 'See the daily run' })).toHaveAttribute('href', '#/arcade/daily');
+    // Nothing opened yet: Continue leads to the roadmap's first step.
+    await expect(panel.getByRole('region', { name: 'Continue' })).toContainText('Next on the roadmap');
+    await expect(panel.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
+
+    await panel.getByRole('link', { name: 'Take the challenge' }).click();
+    await expect(page).toHaveURL(/#\/challenge$/);
+    await expect(hubNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
+    await expect(today(page)).toHaveCount(0);
+
+    await hubNav(page).getByRole('link', { name: 'Problems' }).click();
+    await today(page).getByRole('link', { name: 'Review now' }).click();
+    await expect(page).toHaveURL(/#\/review$/);
+
+    // A problem opened and left unsolved is what Continue picks up.
+    await page.goto('practice/#/pastebin');
+    await expect(page.getByRole('link', { name: 'Problems' }).first()).toBeVisible();
+    await page.goto('practice/');
+    await expect(today(page).getByRole('region', { name: 'Continue' })).toContainText('Pick up where you left off');
+    await expect(today(page).getByRole('region', { name: 'Continue' })).toContainText('Pastebin');
+    await expect(today(page).getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '#/pastebin');
   });
 
-  test('the hub’s tabs, the streak on each, and the header marking it on every address', async ({ page }) => {
+  test('the hub’s tabs, the streak on each, and the header marking Practice on every address', async ({ page }) => {
     await page.goto('practice/#/roadmap');
-    await expect(headerPrep(page)).toHaveAttribute('aria-current', 'page');
-    await expect(page.locator('.ps-nav__link', { hasText: 'Practice' })).not.toHaveAttribute('aria-current', 'page');
-    await expect(prepNav(page).getByRole('link')).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Arcade', 'Progress']);
-    await expect(prepNav(page).getByRole('link', { name: 'Roadmap' })).toHaveAttribute('aria-current', 'page');
+    await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
+    await expect(hubNav(page).getByRole('link', { name: 'Roadmap' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('0 of 10 cards today');
 
     const tabs: [string, RegExp, string][] = [
-      ['Daily review', /#\/review$/, 'Daily review'],
+      ['Review', /#\/review$/, 'Daily review'],
       ['Challenge', /#\/challenge$/, 'Daily challenge'],
       ['Arcade', /#\/arcade$/, 'Scale or Fail'],
       ['Progress', /#\/progress$/, 'Your progress'],
       ['Roadmap', /#\/roadmap$/, 'Interview prep roadmap'],
+      ['Problems', /#\/$/, 'System design practice'],
     ];
     for (const [tab, url, heading] of tabs) {
-      await prepNav(page).getByRole('link', { name: tab }).click();
+      await hubNav(page).getByRole('link', { name: tab, exact: true }).click();
       await expect(page).toHaveURL(url);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
-      await expect(prepNav(page).getByRole('link', { name: tab })).toHaveAttribute('aria-current', 'page');
-      await expect(prepNav(page).locator('[aria-current="page"]')).toHaveCount(1);
+      await expect(hubNav(page).getByRole('link', { name: tab, exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(hubNav(page).locator('[aria-current="page"]')).toHaveCount(1);
       await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(1);
-      await expect(headerPrep(page)).toHaveAttribute('aria-current', 'page');
+      await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
 
     // Older addresses open inside the hub, on their tab.
     const inside: [string, string][] = [
-      ['practice/#/review/caching', 'Daily review'],
+      ['practice/#/review/caching', 'Review'],
       ['practice/#/roadmap/approach', 'Roadmap'],
+      ['practice/#/arcade/daily', 'Arcade'],
     ];
     for (const [path, tab] of inside) {
       await page.goto(path);
-      await expect(prepNav(page).getByRole('link', { name: tab })).toHaveAttribute('aria-current', 'page');
-      await expect(headerPrep(page)).toHaveAttribute('aria-current', 'page');
+      await expect(hubNav(page).getByRole('link', { name: tab, exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
+  });
+
+  test('the progress tab reads as one system: the level first, then skills, the roadmap and badges', async ({ page }) => {
+    await page.addInitScript(() => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('proschi.practice', JSON.stringify({ 'url-shortener': { status: 'solved' } }));
+    });
+    await page.goto('practice/#/progress');
+    // One solve: 100 XP, level 2 (src/learn/level.ts).
+    await expect(page.getByTestId('level')).toHaveText('Level 2');
+    await expect(page.getByTestId('xp')).toHaveText('100 XP');
+    await expect(page.getByRole('progressbar', { name: 'Progress to level 3' })).toHaveAttribute('aria-valuenow', '100');
+    const headings = await page.getByRole('main').getByRole('heading', { level: 2 }).allTextContents();
+    expect(headings.slice(0, 3)).toEqual(['Your level', 'Skills and mastery', 'Roadmap']);
+    expect(headings.some((h) => /Badges/.test(h))).toBe(true);
+    await expect(page.getByRole('region', { name: 'Roadmap' }).getByRole('progressbar', { name: 'Roadmap progress' })).toHaveAttribute('aria-valuenow', '1');
   });
 
   test('the account page, from this browser’s progress, with a compact badge grid', async ({ page }) => {

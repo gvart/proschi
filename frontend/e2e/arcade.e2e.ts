@@ -2,8 +2,8 @@ import type { Page } from '@playwright/test';
 import { appendCode, expect, test } from './fixtures';
 
 /**
- * Scale or Fail, signed out (the build without accounts): the Arcade tab of
- * Interview prep, a first run under the basic rules with Kernel's tutorial (a
+ * Scale or Fail, signed out (the build without accounts): the Arcade tab of the
+ * practice hub, a first run under the basic rules with Kernel's tutorial (a
  * load balancer placed and wired for you, an app server scaled, a load test,
  * the deploy), its result and the draft, a run that survives a reload, the
  * twists once a scenario is cleared, and the shop. On a phone nothing scrolls
