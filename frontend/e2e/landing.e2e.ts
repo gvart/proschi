@@ -13,7 +13,9 @@ test.describe('landing page', () => {
   test('loads with the hero and the live demo', async ({ page }) => {
     await expect(page).toHaveTitle(/Proschi/);
     await expect(page.getByRole('heading', { level: 1, name: /Draw systems by\s*typing/ })).toBeVisible();
-    await expect(page.getByRole('main').getByRole('link', { name: /Open the editor/ })).toHaveAttribute('href', './app/');
+    // Two equally weighted ways in.
+    await expect(page.getByRole('main').getByRole('link', { name: /Design a system/ })).toHaveAttribute('href', './app/');
+    await expect(page.getByRole('main').getByRole('link', { name: /Prepare for interviews/ })).toHaveAttribute('href', './practice/#/roadmap');
     // The island replaced the poster: the real editor and canvas.
     await expect(demo(page).locator('.cm-content')).toBeVisible();
     await waitForCanvas(page, 4);
@@ -55,11 +57,27 @@ test.describe('landing page', () => {
   test('practice list shows 26 problems', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
     await expect(practice.getByRole('listitem')).toHaveCount(26);
+    await expect(practice.getByText('26 system design problems.')).toBeVisible();
     await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
+  });
+
+  test('the practice list is in the page without JavaScript', async ({ browser }) => {
+    const context = await browser.newContext({ javaScriptEnabled: false });
+    const page = await context.newPage();
+    await page.goto('./');
+    await expect(page.getByRole('region', { name: 'Practice system design' }).getByRole('listitem')).toHaveCount(26);
+    await context.close();
+  });
+
+  test('the Arcade is linked from the page and the header', async ({ page }) => {
+    const arcade = page.getByRole('region', { name: 'Scale or Fail' });
+    await expect(arcade.getByRole('link', { name: /Play Scale or Fail/ })).toHaveAttribute('href', './practice/#/arcade');
+    await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Arcade' }).first()).toHaveAttribute('href', './practice/#/arcade');
   });
 
   test('example links open the editor with that example', async ({ page }) => {
     const examples = page.getByRole('region', { name: 'Examples' });
+    await expect(examples.getByRole('link', { name: /URL shortener HLD/ })).toHaveAttribute('href', './app/?example=url-shortener');
     await examples.getByRole('link', { name: /URL shortener HLD/ }).click();
     await expect(page).toHaveURL(/\/proschi\/app\/#code=/);
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');

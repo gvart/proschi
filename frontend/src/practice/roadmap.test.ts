@@ -134,20 +134,31 @@ describe('stepLock', () => {
     expect(stepLock(roadmapState(roadmap, solved('c')), 'c', 'open')).toEqual({ kind: 'open' });
   });
 
-  it('locks every step signed out, and waits while the account loads', () => {
+  it('opens the first stage signed out, in order, and locks the stages after it', () => {
+    const fresh = roadmapState(roadmap, {});
+    expect(stepLock(fresh, 'a', 'sign-in')).toEqual({ kind: 'open' });
+    expect(stepLock(fresh, 'b', 'sign-in')).toEqual({ kind: 'order', next: 'a' });
+    const state = roadmapState(roadmap, solved('a', 'b'));
+    expect(stepLock(state, 'c', 'sign-in')).toEqual({ kind: 'sign-in' });
+    expect(unlockHint(stepLock(state, 'c', 'sign-in'), title)).toBe('Sign in to continue past stage 1');
+  });
+
+  it('waits while the account loads', () => {
     const state = roadmapState(roadmap, solved('a'));
-    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
-    expect(unlockHint(stepLock(state, 'a', 'sign-in'), title)).toBe('Sign in to start the roadmap');
     expect(stepLock(state, 'a', 'checking')).toEqual({ kind: 'checking' });
   });
 
   it('opens the tutorial signed out: the first step, which teaches the language', () => {
     expect(OPTIONAL_STEPS).toEqual(['hello-proschi']);
     expect(ROADMAP[0].problems[0]).toBe('hello-proschi');
-    const state = roadmapState(stages(['hello-proschi', 'a']), {});
+    const state = roadmapState(stages(['hello-proschi', 'a'], ['b']), {});
     expect(stepLock(state, 'hello-proschi', 'sign-in')).toEqual({ kind: 'open' });
     expect(stepLock(state, 'hello-proschi', 'checking')).toEqual({ kind: 'checking' });
-    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
+    // The unsolved tutorial locks nothing: the rest of the first stage is open signed out too, the stages after it take an account.
+    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'open' });
+    expect(stepLock(state, 'b', 'sign-in')).toEqual({ kind: 'sign-in' });
+    // Wherever it sits, the tutorial opens signed out.
+    expect(stepLock(roadmapState(stages(['a'], ['hello-proschi']), {}), 'hello-proschi', 'sign-in')).toEqual({ kind: 'open' });
   });
 
   it('never locks anything behind the tutorial: an existing learner keeps stage 2 open and stage 1 complete', () => {

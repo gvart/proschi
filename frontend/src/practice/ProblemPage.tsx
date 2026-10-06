@@ -26,12 +26,14 @@ import { startMode, type StartMode } from '../onboarding/seen';
 import type { Account } from './useAccount';
 import AccountMenu from './AccountMenu';
 import CommunityStats from './CommunityStats';
+import ProblemBoards from './ProblemBoards';
 import { useProblemStats } from './useCommunity';
 import { useZenMode } from '../components/Playground/useZenMode';
 import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
 import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Playground/ui';
+import { track } from '../services/metrics';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 // Loaded on a problem's first solve, with the related cards.
@@ -123,6 +125,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [firstSolve, setFirstSolve] = useState<{ runs: number; metrics?: DesignMetrics; before: Progress }>();
   const community = useProblemStats(statsRefresh > 0 ? problem.id : undefined, account.state.status === 'signed-in', statsRefresh);
 
+  useEffect(() => track('problem_start', { once: 'session', key: `problem_start:${problem.id}` }), [problem.id]);
+
   // Re-parse and remember the source shortly after typing stops.
   useEffect(() => {
     const timer = setTimeout(() => {
@@ -143,8 +147,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
     setRuns((n) => n + 1);
+    track('test_run');
     const day = localDay();
     if (result.solved && status !== 'solved' && !firstSolve) {
+      // Signed in, the server counts the solve once it has verified it (backend/src/progress.ts).
+      if (account.state.status !== 'signed-in') track('problem_solve', { once: 'browser', key: `problem_solve:${problem.id}` });
       // Without accounts the streak counts this browser's solves; signed in, the server keeps the day.
       if (account.state.status === 'off') recordLocalSolve(problem.id, day);
       setFirstSolve({ runs: runs + 1, metrics: result.metrics, before: progress });
@@ -316,6 +323,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
                   <>
                     {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
                     {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
+                    {community && <ProblemBoards problemId={problem.id} signedIn={account.state.status === 'signed-in'} refresh={statsRefresh} />}
                   </>
                 ) : undefined
               }

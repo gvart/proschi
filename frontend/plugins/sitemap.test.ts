@@ -27,6 +27,13 @@ describe('sitemap', () => {
     expect(urls).toHaveLength(5 + site.pages.length)
   })
 
+  it('lists the review cards\' pages after the guides', () => {
+    const cards = ['https://proschi.app/practice/cards/', 'https://proschi.app/practice/cards/caching/']
+    const urls = sitemapUrls(site, ['url-shortener'], ['approach'], cards)
+    expect(urls.slice(5, 7)).toEqual(cards)
+    expect(urls).toHaveLength(7 + site.pages.length)
+  })
+
   it('is a valid urlset', () => {
     const xml = sitemapXml(['https://proschi.app/'])
     expect(xml).toMatch(/^<\?xml version="1.0" encoding="UTF-8"\?>\n<urlset xmlns="http:\/\/www.sitemaps.org\/schemas\/sitemap\/0.9">/)

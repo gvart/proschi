@@ -21,7 +21,7 @@ const streakLabel = (days: number) => (days > 0 ? `${days}-day streak` : 'No str
 /** What today still needs, or that it is done. */
 function goalLabel(streak: Streak, goal: DailyGoal): string {
   if (streak.todayDone) return 'Today’s goal is met';
-  return `${streak.today.reviews} of ${goal.reviews} cards today${goal.solves > 0 ? ', or solve a problem' : ''}`;
+  return `${streak.today.reviews} of ${goal.reviews} cards today, or ${goal.solves > 0 ? 'solve a problem, ' : ''}play the daily challenge or an Arcade run`;
 }
 
 /** A ring filling up toward today's goal, around `children`. */
@@ -81,7 +81,7 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
   );
 }
 
-/** Picks the daily goal, cards a day; a solved problem meets any of them. */
+/** Picks the daily goal, cards a day; a solved problem, the daily challenge or a finished Arcade run meets any of them. */
 export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: number) => void }) {
   return (
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
@@ -106,7 +106,7 @@ export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: 
           );
         })}
       </div>
-      <span className="text-xs text-muted">cards a day, or one problem solved</span>
+      <span className="text-xs text-muted">cards a day, or a problem solved, the daily challenge or an Arcade run</span>
     </div>
   );
 }
@@ -140,6 +140,9 @@ export function WeeklyRecapCard({ recap, onDismiss }: { recap: WeeklyRecap; onDi
     ['Cards reviewed', recap.reviews],
     ['New cards learned', recap.newCards],
     ['Problems solved', recap.solves],
+    // Only weeks that had them: most weeks keep the familiar five.
+    ...(recap.challenges ? [['Daily challenges', recap.challenges] as [string, number]] : []),
+    ...(recap.runs ? [['Arcade runs', recap.runs] as [string, number]] : []),
     ['Goal days', `${recap.goalDays} of 7`],
     ['Streak', streakLabel(recap.streak).replace('No streak yet', '0 days')],
   ];
@@ -161,7 +164,7 @@ export function WeeklyRecapCard({ recap, onDismiss }: { recap: WeeklyRecap; onDi
             <X size={16} aria-hidden="true" />
           </button>
         </div>
-        <dl className="mt-3 grid grid-cols-2 gap-x-6 gap-y-2 sm:grid-cols-5">
+        <dl className={`mt-3 grid grid-cols-2 gap-x-6 gap-y-2 ${items.length > 5 ? 'sm:grid-cols-4' : 'sm:grid-cols-5'}`}>
           {items.map(([label, value]) => (
             <div key={label}>
               <dt className={eyebrow}>{label}</dt>
@@ -179,7 +182,7 @@ export function WeeklyRecapCard({ recap, onDismiss }: { recap: WeeklyRecap; onDi
 function recapLine(recap: WeeklyRecap): string {
   if (recap.goalDays === 7) return 'Every day of the week met your goal. Keep it going.';
   if (recap.goalDays >= 4) return 'Most days met your goal: steady practice is what makes it stick.';
-  if (recap.reviews > 0 || recap.solves > 0) return 'A start. A few cards a day keep what you learned fresh.';
+  if (recap.reviews > 0 || recap.solves > 0 || recap.challenges > 0 || recap.runs > 0) return 'A start. A few cards a day keep what you learned fresh.';
   return 'A quiet week. Today is a good day to start again.';
 }
 

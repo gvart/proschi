@@ -179,8 +179,8 @@ test.describe('practice', () => {
     const mistake = page.getByRole('region', { name: 'Common mistake' });
     await expect(mistake.getByRole('heading')).toHaveText('Common mistake: Cache misses that never fill the cache');
     await expect(mistake).toContainText('After a miss, SET the code in the cache.');
-    // The cards that train it lead to their topic in the review.
-    await expect(mistake.getByRole('link', { name: /cache-aside pattern/ })).toHaveAttribute('href', '#/review/caching');
+    // The cards that train it lead to their card pages (practice/cards/<topic>/<id>/).
+    await expect(mistake.getByRole('link', { name: /cache-aside pattern/ })).toHaveAttribute('href', 'cards/caching/cache-aside/');
     await expect(mistake.getByRole('link')).toHaveCount(3);
 
     // The lesson opens at the section that teaches the fix.

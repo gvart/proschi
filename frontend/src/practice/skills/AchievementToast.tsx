@@ -2,6 +2,8 @@ import { useEffect, useRef, useState } from 'react';
 import { ArrowRight, X } from 'lucide-react';
 import type { AchievementStatus } from '../../learn/achievements';
 import { eyebrow, iconButton } from '../../components/Playground/ui';
+import ShareButton from '../../components/ShareButton';
+import { badgeShareText } from '../../learn/share';
 import { celebrationWait } from '../celebrating';
 import AchievementIcon from './AchievementIcon';
 
@@ -14,9 +16,10 @@ const SHOW_MS = 8000;
  * another device does not celebrate them again. A celebration that just
  * appeared (a session's summary, celebrating.ts) goes first: the toast waits
  * for it. It pops in only when the reader has not asked for reduced motion,
- * and stays while hovered or focused.
+ * and stays while hovered or focused. With a public profile (`profileId`,
+ * the user's id), the badge can be shared with a link to it.
  */
-export default function AchievementToast({ unseen, onSeen }: { unseen: AchievementStatus[]; onSeen: (ids: string[]) => void }) {
+export default function AchievementToast({ unseen, onSeen, profileId }: { unseen: AchievementStatus[]; onSeen: (ids: string[]) => void; profileId?: string }) {
   // What is shown stays put while the parent's list is marked seen.
   const [shown, setShown] = useState<AchievementStatus[]>([]);
   const [held, setHeld] = useState(false);
@@ -68,10 +71,13 @@ export default function AchievementToast({ unseen, onSeen }: { unseen: Achieveme
             {first.description}
             {more.length > 0 && ` And ${more.map((a) => a.title).join(', ')}.`}
           </p>
-          <a href="#/progress" onClick={() => setShown([])} className="mt-1.5 inline-flex items-center gap-1 text-sm font-semibold text-ink underline underline-offset-2">
-            See your badges
-            <ArrowRight size={14} aria-hidden="true" />
-          </a>
+          <div className="mt-1.5 flex flex-wrap items-center gap-x-3 gap-y-1.5">
+            <a href="#/progress" onClick={() => setShown([])} className="inline-flex items-center gap-1 text-sm font-semibold text-ink underline underline-offset-2">
+              See your badges
+              <ArrowRight size={14} aria-hidden="true" />
+            </a>
+            {profileId && <ShareButton label="Share" text={badgeShareText({ title: first.title, userId: profileId })} />}
+          </div>
         </div>
         <button type="button" onClick={() => setShown([])} className={`-mr-1 -mt-1 ${iconButton}`} aria-label="Dismiss">
           <X size={16} aria-hidden="true" />

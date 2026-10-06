@@ -37,6 +37,7 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 | `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
 | `challenge.e2e.ts` | Daily challenge (no accounts): the hub's Challenge tab, play, score, share, one attempt, resume after a reload, confetti, the next card's focus and scroll on a phone |
 | `challenge.accounts.e2e.ts` | Signed in (API mocked): the challenge as the hub's tab, its leaderboard rows linking to public profiles, the challenge streak and best score on `#/me` and a public profile, every page at 320px and 360px |
+| `problem-board.accounts.e2e.ts` | Signed in (API mocked): a problem's cheapest and lowest-p99 boards after a run, their rows linking to profiles, and your rank |
 | `header.accounts.e2e.ts` | Signed in (API mocked): the header with the account and help menus fits a 320px and 390px phone on every practice page, and their panels open inside the screen; the desktop header keeps the account name and the editor button |
 | `shell.e2e.ts` | Shared header and footer on every page, theme toggle persists and follows the system, phone menu |
 | `focus.e2e.ts` | Editor focus theme (dark by default, light when chosen, kept after a reload), zen mode (Ctrl+., Escape, button, practice), the solve celebration and its absence under reduced motion |

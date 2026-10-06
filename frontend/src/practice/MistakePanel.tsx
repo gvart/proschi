@@ -71,7 +71,7 @@ export default function MistakePanel({ problem, engine, results, onLesson }: Mis
           <ul className="mt-1 space-y-1">
             {cards.map((card) => (
               <li key={card.id}>
-                <a href={`#/review/${card.topic}`} className="flex items-start gap-2 text-sm text-ink hover:underline">
+                <a href={`cards/${card.topic}/${card.id}/`} className="flex items-start gap-2 text-sm text-ink hover:underline">
                   <Layers size={14} className="mt-0.5 flex-shrink-0 text-muted" aria-hidden="true" />
                   <span>
                     {shortPrompt(card)} <span className="text-xs text-muted">· {topicTitle(card.topic)}</span>

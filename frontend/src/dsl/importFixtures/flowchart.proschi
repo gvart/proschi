@@ -1,0 +1,30 @@
+title "Photo sharing"
+
+user "Mobile user"   [Actor]
+cdn  "CloudFront"    [AWS CloudFront]
+lb   "Load balancer" [Load Balancer]
+group core "Core services" {
+  api  "Photo API"    [REST API]
+  feed "Feed Service" [Service]
+}
+group data "Data layer" {
+  photos "Photos DB"   [Database]
+  cache  "Redis"       [Redis]
+  blobs  "Photo files" [Object Storage]
+}
+uploads "Upload events"                      [Message Queue]
+thumbs  "Thumbnail worker"                   [Worker]
+note    "Thumbnails are made asynchronously" [Text Note]
+
+user    -> cdn
+user    -> lb
+lb      -> api   : HTTPS
+api     -> cache : reads
+api     -> photos
+api     -> uploads
+uploads -> thumbs
+uploads -> feed
+thumbs  -> blobs
+feed    -> photos
+api     -> feed
+feed    -> api

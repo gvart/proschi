@@ -58,18 +58,29 @@
             <p class="hero__sub">
               Write services and use cases as text. Proschi draws the diagram and plays every request through it.
             </p>
-            <div class="hero__ctas">
-              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./app/">Open the editor <span class="ps-btn__trail" aria-hidden="true">→</span></a>
-              <a class="ps-btn ps-btn--secondary ps-btn--lg" href="./docs/quickstart/">2-minute quickstart</a>
-            </div>
-            <a class="hero__prep" href="#interview-prep">
-              <span class="ps-badge ps-badge--yellow">Interview prep</span>
-              <span class="hero__prep-text"><!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages</span>
-              <span class="hero__prep-go" aria-hidden="true">→</span>
-            </a>
+            <!-- Two ways in, equally weighted. The counts come from src/practice/roadmap.ts at build time (src/landing/prep.ts). -->
+            <ul class="paths" aria-label="Two ways to start">
+              <li>
+                <a class="ps-card ps-card--yellow ps-card--interactive path" href="./app/">
+                  <span class="path__kicker">Build</span>
+                  <span class="path__title">Design a system</span>
+                  <span class="path__desc">Type it, see the diagram, play the requests, test load and cost.</span>
+                  <span class="path__go">Open the editor <span aria-hidden="true">→</span></span>
+                </a>
+              </li>
+              <li>
+                <a class="ps-card ps-card--pink ps-card--interactive path" href="./practice/#/roadmap">
+                  <span class="path__kicker">Practice</span>
+                  <span class="path__title">Prepare for interviews</span>
+                  <span class="path__desc"><!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages, each with a lesson, tests and a review.</span>
+                  <span class="path__go">Start the roadmap <span aria-hidden="true">→</span></span>
+                </a>
+              </li>
+            </ul>
+            <p class="hero__more">New to Proschi? <a href="./docs/quickstart/">2-minute quickstart</a> · <a href="#interview-prep">How the roadmap works</a></p>
             <ul class="hero__facts" aria-label="In short">
               <li>Free &amp; open source</li>
-              <li>No account</li>
+              <li>No account needed</li>
               <li>Runs in your browser</li>
             </ul>
           </div>
@@ -135,95 +146,10 @@ usecase "Place order" {
         </div>
       </section>
 
-      <!-- The stages and counts come from src/practice/roadmap.ts at build time (src/landing/prep.ts). -->
-      <section class="prep" id="interview-prep" aria-labelledby="prep-title">
-        <div class="ps-wrap prep__wrap">
-          <div class="prep__text" data-reveal>
-            <p class="prep__kicker"><span class="ps-badge ps-badge--pink">For system design interviews</span></p>
-            <h2 id="prep-title" class="prep__title">Interview prep roadmap</h2>
-            <p class="prep__lede">
-              <!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages, from a URL shortener to ride matching.
-              Each stage builds on the one before, the way interviewers expect you to reason.
-            </p>
-            <ul class="prep__parts">
-              <li class="ps-card ps-card--yellow prep__part">
-                <b>Lesson</b>
-                <span>Explains the concepts the problem needs before you start.</span>
-              </li>
-              <li class="ps-card ps-card--blue prep__part">
-                <b>Challenge</b>
-                <span>Design it hands-on; a simulation checks load, latency, failures and cost.</span>
-              </li>
-              <li class="ps-card ps-card--pink prep__part">
-                <b>Review</b>
-                <span>Feedback on your design: what holds up and what to improve.</span>
-              </li>
-            </ul>
-            <div class="prep__ctas">
-              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./practice/#/roadmap">Start interview prep <span class="ps-btn__trail" aria-hidden="true">→</span></a>
-            </div>
-            <p class="prep__note">Sign in to start; browse the stages and lessons any time.</p>
-          </div>
-          <div class="prep__map" data-reveal>
-            <p class="prep__map-title" id="prep-stages-title">The stages</p>
-            <ol class="prep__stages" aria-labelledby="prep-stages-title">
-<!--roadmap:stages-->
-            </ol>
-          </div>
-        </div>
-      </section>
-
-      <section class="story story--how" id="how" aria-labelledby="how-title">
-        <div class="ps-wrap">
-          <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">01</p>
-            <h2 id="how-title">How it works</h2>
-            <p class="story__lede">Three steps. The first one is typing.</p>
-          </header>
-
-          <div class="hop">
-            <div class="hop__wire" aria-hidden="true"><span class="hop__packet"></span></div>
-            <ol class="hop__cards">
-              <li class="ps-card ps-card--yellow hop__card" data-reveal>
-                <p class="hop__n" aria-hidden="true">1</p>
-                <h3>Write it</h3>
-                <p>Services, databases and queues: one line each. Arrows say who calls whom.</p>
-                <pre class="snip" data-proschi><code>api "Order API" [REST API]
-db  "Orders DB" [PostgreSQL]
-
-api -&gt; db : SQL</code></pre>
-              </li>
-              <li class="ps-card ps-card--blue hop__card" data-reveal data-reveal-delay="1">
-                <p class="hop__n" aria-hidden="true">2</p>
-                <h3>See it</h3>
-                <p>Auto layout draws the diagram as you type. No boxes to drag.</p>
-                <svg class="mini" viewBox="0 0 220 96" aria-hidden="true">
-                  <path class="mini__edge" d="M78 48 H142" />
-                  <rect class="mini__node" x="6" y="26" width="72" height="44" rx="6" />
-                  <text x="42" y="53" text-anchor="middle">API</text>
-                  <path class="mini__node mini__node--db" d="M142 32 a36 7 0 0 1 72 0 v32 a36 7 0 0 1 -72 0 z" />
-                  <path class="mini__line" d="M142 32 a36 7 0 0 0 72 0" />
-                  <text x="178" y="58" text-anchor="middle">DB</text>
-                </svg>
-              </li>
-              <li class="ps-card ps-card--pink hop__card" data-reveal data-reveal-delay="2">
-                <p class="hop__n" aria-hidden="true">3</p>
-                <h3>Play it</h3>
-                <p>Press play. The request hops through the diagram: the happy path and every failure, step by step.</p>
-                <p class="hop__steps" aria-hidden="true">
-                  <span class="ps-badge ps-badge--pass">201 Placed</span>
-                  <span class="ps-badge ps-badge--fail">503 DB down</span>
-                </p>
-              </li>
-            </ol>
-          </div>
-        </div>
-      </section>
-
       <section class="story story--break" aria-labelledby="break-title">
         <div class="ps-wrap story__split">
           <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">02</p>
+            <p class="story__no" aria-hidden="true">01</p>
             <h2 id="break-title">Break it on purpose.</h2>
             <p class="story__lede">
               Every <code>alt</code> is a way your system fails. Watch the packet die at the database, not in production.
@@ -274,7 +200,7 @@ api -&gt; db : SQL</code></pre>
       <section class="story story--test" aria-labelledby="test-title">
         <div class="ps-wrap story__split story__split--flip">
           <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">03</p>
+            <p class="story__no" aria-hidden="true">02</p>
             <h2 id="test-title">Test your design.</h2>
             <p class="story__lede">Requirements, traffic and capacity, checked in your browser. Green means it holds&nbsp;up.</p>
             <button type="button" class="ps-btn ps-btn--primary" id="run-tests" hidden>Run the tests again</button>
@@ -307,61 +233,120 @@ requirements {
         </div>
       </section>
 
-      <section class="story story--practice" id="practice" aria-labelledby="practice-title">
-        <div class="ps-wrap">
-          <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">04</p>
-            <h2 id="practice-title">Practice system design</h2>
-            <p class="story__lede">26 system design problems. Tests, not opinions.</p>
-          </header>
-          <!-- Filled from frontend/src/practice/problems/*/problem.md by src/landing/main.ts. -->
-          <ul class="tiles tiles--practice" id="practice-list"></ul>
-          <noscript>
-            <p class="story__lede">See every problem on the <a href="./practice/">practice page</a>.</p>
-          </noscript>
-          <p class="story__more">
-            <a class="ps-btn ps-btn--secondary" href="./practice/">All problems <span class="ps-btn__trail" aria-hidden="true">→</span></a>
-          </p>
-        </div>
-      </section>
-
       <section class="story story--examples" aria-labelledby="examples-title">
         <div class="ps-wrap">
           <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">05</p>
+            <p class="story__no" aria-hidden="true">03</p>
             <h2 id="examples-title">Examples</h2>
             <p class="story__lede">Open one, break it, make it yours.</p>
           </header>
           <ul class="tiles tiles--examples">
             <li data-reveal>
-              <a class="ps-card ps-card--yellow ps-card--interactive tile" data-example="ecommerce" href="./app/">
+              <a class="ps-card ps-card--yellow ps-card--interactive tile" data-example="ecommerce" href="./app/?example=ecommerce">
                 <span class="tile__name">E-commerce platform</span>
                 <span class="tile__desc">Success and error scenarios per endpoint, parallel steps.</span>
                 <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
             <li data-reveal data-reveal-delay="1">
-              <a class="ps-card ps-card--pink ps-card--interactive tile" data-example="login" href="./app/">
+              <a class="ps-card ps-card--pink ps-card--interactive tile" data-example="login" href="./app/?example=login">
                 <span class="tile__name">Login with sessions</span>
                 <span class="tile__desc">Wrong password, outage and log out.</span>
                 <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
             <li data-reveal data-reveal-delay="2">
-              <a class="ps-card ps-card--blue ps-card--interactive tile" data-example="events" href="./app/">
+              <a class="ps-card ps-card--blue ps-card--interactive tile" data-example="events" href="./app/?example=events">
                 <span class="tile__name">Event-driven checkout</span>
                 <span class="tile__desc">Kafka fan-out to several consumers.</span>
                 <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
             <li data-reveal data-reveal-delay="3">
-              <a class="ps-card ps-card--lilac ps-card--interactive tile" data-example="url-shortener" href="./app/">
+              <a class="ps-card ps-card--lilac ps-card--interactive tile" data-example="url-shortener" href="./app/?example=url-shortener">
                 <span class="tile__name">URL shortener HLD</span>
                 <span class="tile__desc">Traffic, requirements, capacity and tests.</span>
                 <span class="tile__go" aria-hidden="true">Open →</span>
               </a>
             </li>
           </ul>
+        </div>
+      </section>
+
+      <!-- The stages and counts come from src/practice/roadmap.ts at build time (src/landing/prep.ts). -->
+      <section class="prep" id="interview-prep" aria-labelledby="prep-title">
+        <div class="ps-wrap prep__wrap">
+          <div class="prep__text" data-reveal>
+            <p class="prep__kicker"><span class="ps-badge ps-badge--pink">For system design interviews</span></p>
+            <h2 id="prep-title" class="prep__title">Interview prep roadmap</h2>
+            <p class="prep__lede">
+              <!--roadmap:problem-count--> system design problems in <!--roadmap:stage-count--> stages, from a URL shortener to ride matching.
+              Each stage builds on the one before, the way interviewers expect you to reason.
+            </p>
+            <ul class="prep__parts">
+              <li class="ps-card ps-card--yellow prep__part">
+                <b>Lesson</b>
+                <span>Explains the concepts the problem needs before you start.</span>
+              </li>
+              <li class="ps-card ps-card--blue prep__part">
+                <b>Challenge</b>
+                <span>Design it hands-on; a simulation checks load, latency, failures and cost.</span>
+              </li>
+              <li class="ps-card ps-card--pink prep__part">
+                <b>Review</b>
+                <span>Feedback on your design: what holds up and what to improve.</span>
+              </li>
+            </ul>
+            <div class="prep__ctas">
+              <a class="ps-btn ps-btn--primary ps-btn--lg" data-magnetic href="./practice/#/roadmap">Start interview prep <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+            </div>
+            <p class="prep__note">No account needed to start: browse every stage and work through the first one in your browser. Sign in if you want to keep your progress and go on.</p>
+          </div>
+          <div class="prep__map" data-reveal>
+            <p class="prep__map-title" id="prep-stages-title">The stages</p>
+            <ol class="prep__stages" aria-labelledby="prep-stages-title">
+<!--roadmap:stages-->
+            </ol>
+          </div>
+        </div>
+      </section>
+
+      <section class="story story--practice" id="practice" aria-labelledby="practice-title">
+        <div class="ps-wrap">
+          <header class="story__head" data-reveal>
+            <p class="story__no" aria-hidden="true">04</p>
+            <h2 id="practice-title">Practice system design</h2>
+            <p class="story__lede"><!--practice:problem-count--> system design problems. Tests, not opinions.</p>
+          </header>
+          <!-- Rendered at build time from frontend/src/practice/problems/*/problem.md (src/landing/practiceList.ts). -->
+          <ul class="tiles tiles--practice" id="practice-list">
+<!--practice:list-->
+          </ul>
+          <p class="story__more">
+            <a class="ps-btn ps-btn--secondary" href="./practice/">All problems <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+          </p>
+        </div>
+      </section>
+
+      <section class="story story--arcade" id="arcade" aria-labelledby="arcade-title">
+        <div class="ps-wrap">
+          <div class="ps-card ps-card--lilac arcade" data-reveal>
+            <div class="arcade__text">
+              <p class="story__no" aria-hidden="true">05</p>
+              <p><span class="ps-badge ps-badge--yellow">Arcade</span></p>
+              <h2 id="arcade-title">Scale or Fail</h2>
+              <p class="story__lede">
+                The system design game. Place components, then keep the system up while traffic grows, new use cases arrive and things break.
+                Every number comes from the simulation, and every failure says why.
+              </p>
+            </div>
+            <ul class="arcade__facts" aria-label="A run">
+              <li><b>12</b> waves in three acts</li>
+              <li><b>Incidents</b> that cascade</li>
+              <li><b>Code</b> pane in Proschi text</li>
+            </ul>
+            <a class="ps-btn ps-btn--primary arcade__cta" href="./practice/#/arcade">Play Scale or Fail <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+          </div>
         </div>
       </section>
 

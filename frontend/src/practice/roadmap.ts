@@ -105,10 +105,11 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
 }
 
 /**
- * Whether the viewer may start the roadmap: `open`, `checking` while the
- * account loads, or `sign-in`. Anyone can see the stages; working through them
- * takes an account. This is the one place to put a paid plan later (an
- * `upgrade` answer for an account without one).
+ * Whether the viewer may work through the roadmap: `open`, `checking` while
+ * the account loads, or `sign-in`. Anyone can see the stages and work through
+ * the first one signed out, with progress kept in this browser; the stages
+ * after it take an account (see stepLock). This is the one place to put a paid
+ * plan later (an `upgrade` answer for an account without one).
  *
  * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e
  * build, forks) has nothing to sign in to, so the roadmap is open there.
@@ -138,19 +139,25 @@ export function roadmapTarget(route: string): { id: string; lesson: boolean } | 
 
 /**
  * Whether a roadmap step may be opened, lesson and challenge alike: `open`;
- * `checking` while the account loads; `sign-in` signed out (the roadmap takes
- * an account); or `order` while an earlier problem is unsolved (`next` is the
- * one to solve). A problem that is not on the roadmap is only gated by the
+ * `checking` while the account loads; `sign-in` signed out past the first
+ * stage (the first stage is open to everyone, with progress kept in this
+ * browser); or `order` while an earlier problem is unsolved (`next` is the one
+ * to solve). A problem that is not on the roadmap is only gated by the
  * account. Lessons opened from the problem list (`#/<id>/lesson`) are not
  * gated at all; only the roadmap's progression is. The OPTIONAL_STEPS (the
  * tutorial) open signed out too.
  */
 export type StepLock = { kind: 'open' } | { kind: 'checking' } | { kind: 'sign-in' } | { kind: 'order'; next: string };
 
+/** The stages a signed-out viewer may work through: the first. */
+export const SIGNED_OUT_STAGES = 1;
+
 export function stepLock(state: RoadmapState, id: string, access: RoadmapAccess): StepLock {
-  if (access === 'sign-in' && OPTIONAL_STEPS.includes(id)) return { kind: 'open' };
-  if (access !== 'open') return { kind: access };
+  if (access === 'checking') return { kind: 'checking' };
+  // The OPTIONAL_STEPS (the tutorial) are open signed out wherever they sit.
+  if (OPTIONAL_STEPS.includes(id) && access === 'sign-in') return { kind: 'open' };
   const step = state.steps.find((s) => s.id === id);
+  if (access === 'sign-in' && (!step || step.stage >= SIGNED_OUT_STAGES)) return { kind: 'sign-in' };
   if (step?.locked && state.blocker) return { kind: 'order', next: state.blocker.id };
   return { kind: 'open' };
 }
@@ -161,7 +168,7 @@ export function unlockHint(lock: StepLock, title: (id: string) => string): strin
     case 'order':
       return `Solve ${title(lock.next)} first`;
     case 'sign-in':
-      return 'Sign in to start the roadmap';
+      return 'Sign in to continue past stage 1';
     case 'checking':
       return 'Checking your sign-in';
     case 'open':

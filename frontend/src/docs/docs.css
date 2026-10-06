@@ -672,70 +672,7 @@
 .live__slot {
   border-top: var(--bw-2) solid rgb(var(--c-ink));
 }
-.live__bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  padding: 12px 14px;
-  background: rgb(var(--c-paper));
-  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
-  font-family: var(--font-sans);
-}
-.live__pick {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  max-width: 100%;
-}
-.live__pick-label {
-  font: 800 var(--fs-12) / 1 var(--font-sans);
-  font-stretch: 112%;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: rgb(var(--c-muted));
-}
-.live__single {
-  color: rgb(var(--c-ink));
-  text-transform: none;
-  letter-spacing: 0;
-  font-size: var(--fs-14);
-}
-.live__pick select {
-  min-width: 0;
-  max-width: 100%;
-  min-height: 38px;
-  padding: 0 10px;
-  background: rgb(var(--c-surface));
-  color: rgb(var(--c-ink));
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-sm);
-  font: 600 var(--fs-14) / 1 var(--font-sans);
-}
-.live__spacer {
-  flex: 1;
-}
-.live__stage {
-  position: relative;
-  height: 340px;
-  background: rgb(var(--c-paper));
-}
-.live__stage--playing {
-  height: 560px;
-}
-/* The player's minimap is for big diagrams; here it would crowd the small canvas. */
-.live__stage .react-flow__minimap {
-  display: none !important;
-}
-@media (max-width: 639px) {
-  .live__stage {
-    height: 300px;
-  }
-  .live__stage--playing {
-    height: 600px;
-  }
-}
+/* The bar and the stage are in live.css, which the island (and the embed page) loads. */
 
 /* ---------- tables ---------- */
 
