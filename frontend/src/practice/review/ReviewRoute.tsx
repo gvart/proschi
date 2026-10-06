@@ -193,7 +193,7 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
 
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
-      {/* The interview prep hub's tabs lead to the roadmap and the skill map; a topic leads back to every topic. */}
+      {/* The practice hub's tabs lead to the roadmap and the skill map; a topic leads back to every topic. */}
       {topic && (
         <a href="#/review" className={`-ml-2.5 ${toolButton}`}>
           All topics
@@ -210,7 +210,7 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
 
       {signedOut && <SignInInvite account={account} sample={stats.total} />}
 
-      {/* The streak itself is at the top of the interview prep hub. */}
+      {/* The streak itself is at the top of the practice hub. */}
       {ready && view.kind === 'home' && (
         <div className="mt-6">
           <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />

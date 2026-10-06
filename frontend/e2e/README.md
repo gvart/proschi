@@ -33,8 +33,8 @@ npm run e2e          # or: npm run e2e:build (both builds, then test)
 | `editor.e2e.ts` | Canvas, typing updates the diagram, diagnostics, Play and stepping, scenario tabs, share link round trip, Format code, HLD / Analysis / Tests tabs, PNG export, phone Code/Diagram tabs |
 | `onboarding.e2e.ts` | First-run tours: shown on a first visit, Esc/X skip, interactive steps, not over share links (hint only), `?tour=` params, replay from Help, phone layout, storage blocked; cheat-sheet; starter for new diagrams |
 | `practice.e2e.ts` | Problem list and its "Contribute a problem" links, url-shortener: starter fails, reference solution solves it, progress survives a reload, phone tab layout |
-| `prep.e2e.ts` | The Practice list without prep widgets, the interview prep hub's tabs and streak, the account page with its compact badge grid, a public profile (API mocked) |
-| `roadmap.e2e.ts` | Interview prep roadmap: entry from the list, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
+| `prep.e2e.ts` | The practice hub: the Today panel (streak, cards due, today's challenge and daily run, Continue) over the problem list, one bar of tabs with the header's Practice marked on every address, the Progress tab's level and sections, the account page with its compact badge grid, a public profile (API mocked) |
+| `roadmap.e2e.ts` | Interview prep roadmap: entry from the hub's Roadmap tab, locked problems, Start, the banner on a problem, unlocking the next one after a solve, the list stays open |
 | `challenge.e2e.ts` | Daily challenge (no accounts): the hub's Challenge tab, play, score, share, one attempt, resume after a reload, confetti, the next card's focus and scroll on a phone |
 | `challenge.accounts.e2e.ts` | Signed in (API mocked): the challenge as the hub's tab, its leaderboard rows linking to public profiles, the challenge streak and best score on `#/me` and a public profile, every page at 320px and 360px |
 | `problem-board.accounts.e2e.ts` | Signed in (API mocked): a problem's cheapest and lowest-p99 boards after a run, their rows linking to profiles, and your rank |

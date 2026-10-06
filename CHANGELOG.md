@@ -390,6 +390,21 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **One practice hub.** The header has a single **Practice** link (next to
+  Docs, GitHub and the editor) instead of Practice, Interview prep and
+  Arcade. Practice opens on a **Today** panel: your streak and daily goal,
+  the cards due with **Review now**, today's challenge, today's Arcade daily
+  run and **Continue** (the last problem you opened, or the roadmap's next
+  step). Under it one bar of tabs, Problems, Roadmap, Review, Challenge,
+  Arcade and Progress, which scrolls sideways on a phone. Every old address
+  (`#/roadmap`, `#/review`, `#/challenge`, `#/arcade`, `#/arcade/daily`,
+  `#/me`, `#/u/<id>`) still works, and the footer groups the practice links
+  under Practice.
+- **Progress reads as one system.** The Progress tab leads with your
+  **level** and XP: 100 XP per problem solved, 20 per card mastered and 10
+  per day of your longest streak, level *L* starting at 50 × (*L* − 1)² XP.
+  Your skill map and interview-ready score, your roadmap progress and your
+  badges follow as sections under it.
 - **A shorter landing page with two ways in.** The hero offers "Design a
   system" (the editor) and "Prepare for interviews" (the roadmap) side by
   side, next to the live demo. "How it works" is gone (the demo plays the

@@ -1,7 +1,6 @@
 import { useMemo, useState, type ReactNode } from 'react';
 import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import ContributeCard from './ContributeCard';
-import { PrepBanner } from './prep/PrepHub';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
 import ProblemFilters from './ProblemFilters';
@@ -37,8 +36,8 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
   const solved = problems.filter((p) => statusOf(progress, p.id) === 'solved').length;
 
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
-      <h1 className="font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">System design practice</h1>
+    <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
+      <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">System design practice</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         Each problem gives use cases, traffic and requirements. Design the system in Proschi; the tests run in your browser and explain what holds up and
         what does not.
@@ -49,8 +48,6 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
           {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
         </p>
       </div>
-
-      <PrepBanner />
 
       <ProblemFilters query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} tags={tags} companies={companies} />
 
