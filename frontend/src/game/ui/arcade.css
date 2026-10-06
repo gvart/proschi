@@ -154,22 +154,22 @@
   overflow: visible;
 }
 .sf-cat-eyes {
-  transform-origin: 60px 52px;
+  transform-origin: 60px 54px;
   animation: sf-cat-blink 4.2s infinite;
 }
 .sf-cat-ear--right {
-  transform-origin: 80px 40px;
+  transform-origin: 80px 42px;
   animation: sf-cat-twitch 5.5s 1.2s infinite;
 }
 .sf-cat-ears {
   transition: transform var(--d-2) var(--e-out);
-  transform-origin: 60px 44px;
+  transform-origin: 60px 46px;
 }
 .sf-cat-ears--back {
   transform: scaleY(0.82) translateY(6px);
 }
 .sf-cat--talking .sf-cat-mouth {
-  transform-origin: 60px 72px;
+  transform-origin: 60px 74px;
   animation: sf-cat-talk 180ms infinite alternate;
 }
 .sf-cat--talking {

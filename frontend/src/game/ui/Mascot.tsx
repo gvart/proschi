@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useState } from 'react';
 import { primaryButton } from '../../components/Playground/ui';
 import { prefersReducedMotion } from '../../design/motion';
 import type { Briefing, Mood } from './briefing';
@@ -7,60 +7,90 @@ import type { Briefing, Mood } from './briefing';
 export const MASCOT = 'Kernel';
 
 /**
- * Kernel, the cat SRE lead: an inline SVG in the theme's colours. It blinks
- * and twitches an ear while idle and moves its mouth while `talking`; the
- * mood sets the eyes and the ears. Decorative: the briefing says everything.
+ * Kernel's own colours, the same in both themes: a sticker on a light disc,
+ * so the cat reads on a dark page as well as a light one. Only the disc's
+ * ring follows the theme's ink, like every other border.
+ */
+const CAT = {
+  line: '#1f1b16',
+  fur: '#f6b23c',
+  stripe: '#d98a1c',
+  ear: '#f59ab4',
+  hoodie: '#a78bfa',
+  headset: '#2c2a35',
+  white: '#fffdf7',
+  disc: '#fdf0cf',
+  sweat: '#5aa9ff',
+} as const;
+
+/**
+ * Kernel, the cat SRE lead: an inline SVG avatar. It blinks and twitches an
+ * ear while idle and moves its mouth while `talking`; the mood sets the eyes
+ * and the ears. Decorative: the briefing says everything.
  */
 export function CatSre({ mood, talking, className = 'h-24 w-24' }: { mood: Mood; talking: boolean; className?: string }) {
+  const clip = `sf-cat-disc-${useId().replace(/:/g, '')}`;
   const ears = mood === 'alarmed' ? 'sf-cat-ears sf-cat-ears--back' : 'sf-cat-ears';
   return (
     <svg viewBox="0 0 120 120" aria-hidden="true" className={`sf-cat flex-shrink-0 ${className} ${talking ? 'sf-cat--talking' : ''}`}>
-      <g stroke="rgb(var(--c-ink))" strokeWidth="3" strokeLinejoin="round" strokeLinecap="round">
-        {/* Hoodie. */}
-        <path d="M22 118 C22 92 38 84 60 84 C82 84 98 92 98 118 Z" fill="rgb(var(--c-lilac))" />
-        <path d="M48 86 L52 100 M72 86 L68 100" fill="none" />
+      <defs>
+        <clipPath id={clip}>
+          <circle cx="60" cy="62" r="56" />
+        </clipPath>
+      </defs>
+      <circle cx="60" cy="62" r="56" fill={CAT.disc} />
+      <g stroke={CAT.line} strokeWidth="3" strokeLinejoin="round" strokeLinecap="round">
+        {/* Hoodie, inside the disc. */}
+        <g clipPath={`url(#${clip})`}>
+          <path d="M20 122 C20 94 38 86 60 86 C82 86 100 94 100 122 Z" fill={CAT.hoodie} />
+          <path d="M48 88 L52 102 M72 88 L68 102" fill="none" />
+        </g>
+        {/* The disc's ring, in the theme's ink like every other border; the ears overlap it. */}
+        <circle cx="60" cy="62" r="56" fill="none" stroke="rgb(var(--c-ink))" />
         {/* Ears. */}
         <g className={ears}>
-          <path className="sf-cat-ear sf-cat-ear--left" d="M30 44 L28 12 L54 30 Z" fill="rgb(var(--c-yellow))" />
-          <path className="sf-cat-ear sf-cat-ear--right" d="M90 44 L92 12 L66 30 Z" fill="rgb(var(--c-yellow))" />
-          <path d="M33 36 L32 20 L46 30 Z M87 36 L88 20 L74 30 Z" fill="rgb(var(--c-pink))" strokeWidth="0" />
+          <path className="sf-cat-ear sf-cat-ear--left" d="M30 46 L28 14 L54 32 Z" fill={CAT.fur} />
+          <path className="sf-cat-ear sf-cat-ear--right" d="M90 46 L92 14 L66 32 Z" fill={CAT.fur} />
+          <path d="M33 38 L32 22 L46 32 Z M87 38 L88 22 L74 32 Z" fill={CAT.ear} strokeWidth="0" />
         </g>
-        {/* Head. */}
-        <ellipse cx="60" cy="56" rx="34" ry="30" fill="rgb(var(--c-yellow))" />
-        <path d="M50 28 L52 36 M60 26 L60 35 M70 28 L68 36" fill="none" strokeWidth="2.5" />
+        {/* Head and stripes. */}
+        <ellipse cx="60" cy="58" rx="34" ry="30" fill={CAT.fur} />
+        <path d="M50 30 L52 38 M60 28 L60 37 M70 30 L68 38" fill="none" stroke={CAT.stripe} strokeWidth="3" />
         {/* Headset: band, cups and the mic boom. */}
-        <path d="M24 54 C24 14 96 14 96 54" fill="none" strokeWidth="4" />
-        <rect x="18" y="48" width="10" height="18" rx="4" fill="rgb(var(--c-ink))" />
-        <rect x="92" y="48" width="10" height="18" rx="4" fill="rgb(var(--c-ink))" />
-        <path d="M23 66 C26 80 38 82 46 78" fill="none" strokeWidth="2.5" />
-        <circle cx="47" cy="77" r="3" fill="rgb(var(--c-ink))" />
+        <path d="M24 56 C24 16 96 16 96 56" fill="none" stroke={CAT.headset} strokeWidth="4.5" />
+        <rect x="17" y="49" width="11" height="19" rx="4" fill={CAT.headset} />
+        <rect x="92" y="49" width="11" height="19" rx="4" fill={CAT.headset} />
+        <path d="M23 68 C26 82 38 84 46 80" fill="none" stroke={CAT.headset} strokeWidth="2.5" />
+        <circle cx="47" cy="79" r="3.5" fill={CAT.headset} />
         {/* Eyes. */}
         <g className="sf-cat-eyes">
           {mood === 'happy' ? (
-            <path d="M40 54 Q46 46 52 54 M68 54 Q74 46 80 54" fill="none" strokeWidth="3.5" />
+            <path d="M40 56 Q46 48 52 56 M68 56 Q74 48 80 56" fill="none" strokeWidth="3.5" />
           ) : mood === 'alarmed' ? (
             <>
-              <circle cx="46" cy="52" r="7" fill="rgb(var(--c-surface))" />
-              <circle cx="74" cy="52" r="7" fill="rgb(var(--c-surface))" />
-              <circle cx="46" cy="52" r="3" fill="rgb(var(--c-ink))" strokeWidth="0" />
-              <circle cx="74" cy="52" r="3" fill="rgb(var(--c-ink))" strokeWidth="0" />
+              <circle cx="46" cy="54" r="7.5" fill={CAT.white} strokeWidth="2.5" />
+              <circle cx="74" cy="54" r="7.5" fill={CAT.white} strokeWidth="2.5" />
+              <circle cx="46" cy="54" r="3" fill={CAT.line} strokeWidth="0" />
+              <circle cx="74" cy="54" r="3" fill={CAT.line} strokeWidth="0" />
             </>
           ) : (
             <>
-              <ellipse cx="46" cy="52" rx="4" ry="6" fill="rgb(var(--c-ink))" strokeWidth="0" />
-              <ellipse cx="74" cy="52" rx="4" ry="6" fill="rgb(var(--c-ink))" strokeWidth="0" />
+              <ellipse cx="46" cy="54" rx="4.5" ry="6" fill={CAT.line} strokeWidth="0" />
+              <ellipse cx="74" cy="54" rx="4.5" ry="6" fill={CAT.line} strokeWidth="0" />
+              <circle cx="47.5" cy="51.5" r="1.5" fill={CAT.white} strokeWidth="0" />
+              <circle cx="75.5" cy="51.5" r="1.5" fill={CAT.white} strokeWidth="0" />
             </>
           )}
         </g>
         {/* Nose, whiskers, mouth. */}
-        <path d="M57 62 L63 62 L60 66 Z" fill="rgb(var(--c-pink))" strokeWidth="2" />
-        <path d="M30 62 L44 64 M30 70 L44 68 M90 62 L76 64 M90 70 L76 68" fill="none" strokeWidth="2" />
+        <path d="M57 64 L63 64 L60 68 Z" fill={CAT.ear} strokeWidth="2" />
+        <path d="M30 64 L44 66 M30 72 L44 70 M90 64 L76 66 M90 72 L76 70" fill="none" strokeWidth="2" />
         {talking ? (
-          <ellipse className="sf-cat-mouth" cx="60" cy="72" rx="5" ry="4" fill="rgb(var(--c-ink))" strokeWidth="0" />
+          <ellipse className="sf-cat-mouth" cx="60" cy="74" rx="5" ry="4" fill={CAT.line} strokeWidth="0" />
         ) : (
-          <path d="M52 70 Q56 75 60 70 Q64 75 68 70" fill="none" strokeWidth="2.5" />
+          <path d="M52 72 Q56 77 60 72 Q64 77 68 72" fill="none" strokeWidth="2.5" />
         )}
-        {mood === 'alarmed' && <path d="M98 30 C94 38 94 42 98 44 C102 42 102 38 98 30 Z" fill="rgb(var(--c-blue))" strokeWidth="2" />}
+        {mood === 'alarmed' && <path d="M99 30 C95 38 95 42 99 44 C103 42 103 38 99 30 Z" fill={CAT.sweat} strokeWidth="2" />}
       </g>
     </svg>
   );
