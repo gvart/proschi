@@ -2,7 +2,7 @@
 // `siteHref` prefixes them with the page's way back to it ('./' or '../'),
 // so the links work under any sub-path, like the rest of the build.
 
-export type SitePage = 'home' | 'editor' | 'practice' | 'roadmap' | 'docs';
+export type SitePage = 'home' | 'editor' | 'practice' | 'docs';
 
 export interface SiteLink {
   label: string;
@@ -20,24 +20,27 @@ export const CONTRIBUTING_URL = `${GITHUB_URL}/blob/main/CONTRIBUTING.md`;
 export const CONTRIBUTE_PROBLEM_URL = `${CONTRIBUTING_URL}#adding-a-new-problem`;
 /** A new issue from .github/ISSUE_TEMPLATE/problem-idea.md, for an idea without the code. */
 export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-idea.md`;
-/** The interview prep roadmap: a route of the practice page (src/practice/roadmap.ts). */
-export const INTERVIEW_PREP_HREF = 'practice/#/roadmap';
-/** Daily review of the practice cards: a route of the practice page (src/practice/review/). */
+/** The practice hub: the Today panel and the problem list, with the hub's tabs (src/practice/hub/). */
+export const PRACTICE_HREF = 'practice/';
+/** The interview prep roadmap: a tab of the practice hub (src/practice/roadmap.ts). */
+export const ROADMAP_HREF = 'practice/#/roadmap';
+/** Daily review of the practice cards: a tab of the practice hub (src/practice/review/). */
 export const DAILY_REVIEW_HREF = 'practice/#/review';
 /** The review cards' static pages, one per topic and card (plugins/cardPages.ts). */
 export const REVIEW_CARDS_HREF = 'practice/cards/';
-/** The daily challenge: a route of the practice page (src/practice/challenge/). */
+/** The daily challenge: a tab of the practice hub (src/practice/challenge/). */
 export const DAILY_CHALLENGE_HREF = 'practice/#/challenge';
-/** The Arcade, Scale or Fail: a route of the practice page (src/game/ui/ArcadeRoute.tsx). */
+/** The Arcade, Scale or Fail: a tab of the practice hub (src/game/ui/ArcadeRoute.tsx). */
 export const ARCADE_HREF = 'practice/#/arcade';
 
-/** The header's links; the editor is its call to action instead. */
+/**
+ * The header's links; the editor is its call to action instead. Practice is
+ * one hub (the problems, the roadmap, daily review, the challenge, the Arcade
+ * and progress are its tabs), marked current on every one of its addresses.
+ */
 export const NAV: SiteLink[] = [
   { label: 'Docs', href: 'docs/', page: 'docs' },
-  { label: 'Practice', href: 'practice/', page: 'practice' },
-  { label: 'Interview prep', href: INTERVIEW_PREP_HREF, page: 'roadmap', accent: true },
-  // A tab of Interview prep, which stays the link marked current there.
-  { label: 'Arcade', href: ARCADE_HREF },
+  { label: 'Practice', href: PRACTICE_HREF, page: 'practice', accent: true },
   { label: 'GitHub', href: GITHUB_URL },
 ];
 
@@ -45,24 +48,24 @@ export const EDITOR_LINK: SiteLink = { label: 'Open the editor', href: 'app/', p
 
 export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
   {
-    title: 'Make',
+    title: 'Practice',
     links: [
-      { label: 'Editor', href: 'app/' },
-      { label: 'Practice', href: 'practice/' },
-      { label: 'Interview prep', href: INTERVIEW_PREP_HREF },
+      { label: 'Problems', href: PRACTICE_HREF },
+      { label: 'Interview roadmap', href: ROADMAP_HREF },
       { label: 'Daily review', href: DAILY_REVIEW_HREF },
       { label: 'Daily challenge', href: DAILY_CHALLENGE_HREF },
       { label: 'Arcade: Scale or Fail', href: ARCADE_HREF },
+      { label: 'Review cards', href: REVIEW_CARDS_HREF },
     ],
   },
   {
     title: 'Learn',
     links: [
+      { label: 'Editor', href: 'app/' },
       { label: 'Quickstart', href: 'docs/quickstart/' },
       { label: 'Language reference', href: 'docs/language/' },
       { label: 'How the simulation works', href: 'docs/model/' },
       { label: 'Editor support', href: 'docs/editors/' },
-      { label: 'Review cards', href: REVIEW_CARDS_HREF },
     ],
   },
   {

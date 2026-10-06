@@ -22,6 +22,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.playground.source` | A diagram saved by an older version of the editor, read once to carry it over |
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
+| `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
 | `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |

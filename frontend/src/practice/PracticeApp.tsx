@@ -22,8 +22,10 @@ import Footer from '../design/Footer';
 import Header from '../design/Header';
 import { useAchievements } from './skills/useAchievements';
 import AchievementToast from './skills/AchievementToast';
-import PrepHub from './prep/PrepHub';
-import { prepTabOf } from './prep/tabs';
+import PracticeHub from './hub/PracticeHub';
+import TodayPanel from './hub/TodayPanel';
+import { hubTabOf } from './hub/tabs';
+import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
 import { track } from '../services/metrics';
 
@@ -57,8 +59,9 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
  * the daily challenge, `#/progress` the skill map and badges, `#/me` the
  * account page and `#/u/<user id>` a public profile; hash routes work under
- * any sub-path. The roadmap, review, challenge and progress pages are the
- * interview prep hub's tabs (prep/tabs.ts); the list is Practice.
+ * any sub-path. The list (with the Today panel above it), the roadmap,
+ * review, challenge, Arcade and progress pages are the practice hub's tabs
+ * (hub/tabs.ts).
  */
 function useHashRoute(): string {
   const read = () => window.location.hash.replace(/^#\/?/, '');
@@ -124,7 +127,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
   const target = guide ? undefined : roadmapTarget(route);
-  const lock = target ? stepLock(roadmapState(roadmap, progress), target.id, access) : undefined;
+  const roadmapNow = roadmapState(roadmap, progress);
+  const lock = target ? stepLock(roadmapNow, target.id, access) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
@@ -146,9 +150,17 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   ) : activity.state.status === 'sign-in' ? (
     <StreakInvite account={account} compact />
   ) : undefined;
+  // The Today panel's: the same, with the sign-in invitation saying what a streak needs.
+  const streakFull = activity.state.status === 'sign-in' ? <StreakInvite account={account} /> : streak;
   const achievements = useAchievements(account.state, progress);
-  // The interview prep hub's tab: the roadmap (with its guides), daily review, the challenge or the skill map.
-  const prepTab = onRoadmap || guide || onReview || onChallenge || onArcade || onProgress ? prepTabOf(route) : undefined;
+  // The practice hub's tab: the list (also under an unknown problem's address), the roadmap (with its guides), daily review, the challenge, the Arcade or progress.
+  const hubTab = onRoadmap || guide || onReview || onChallenge || onArcade || onProgress ? hubTabOf(route) : onProfile ? undefined : 'problems';
+  // "Continue" on the Today panel: the last problem opened here, while unsolved, else the roadmap's next step.
+  const problemOpen = problem?.id;
+  useEffect(() => {
+    if (problemOpen) saveLastProblem({ id: problemOpen, roadmap: fromRoadmap });
+  }, [problemOpen, fromRoadmap]);
+  const next = hubTab === 'problems' ? continueTarget({ last: loadLastProblem(), progress, known: new Set(problems.map((p) => p.id)), roadmap: roadmapNow, access }) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
@@ -189,7 +201,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     <div className="min-h-[100dvh] flex flex-col bg-paper">
       <Header
         base="../"
-        current={prepTab ? 'roadmap' : onProfile ? undefined : 'practice'}
+        current={onProfile ? undefined : 'practice'}
         actions={
           <>
             <AccountMenu account={account} />
@@ -208,11 +220,23 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
-        {prepTab ? (
-          <PrepHub tab={prepTab} streak={streak}>
-            {onProgress ? (
+        {hubTab ? (
+          <PracticeHub
+            tab={hubTab}
+            streak={streak}
+            today={
+              hubTab === 'problems' ? (
+                <TodayPanel account={account} streak={streakFull} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} />
+              ) : undefined
+            }
+          >
+            {hubTab === 'problems' ? (
+              <ProblemList problems={problems} progress={progress} stats={stats}>
+                {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
+              </ProblemList>
+            ) : onProgress ? (
               <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
-                <ProgressRoute account={account} achievements={achievements} />
+                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} />
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
@@ -243,19 +267,17 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
               />
             )}
-          </PrepHub>
+          </PracticeHub>
         ) : onMe ? (
           <Suspense fallback={<PaneLoading label="Loading your profile…" />}>
             <AccountRoute account={account} activity={activity} achievements={achievements} progress={progress} />
           </Suspense>
-        ) : profileId !== undefined ? (
-          <Suspense fallback={<PaneLoading label="Loading the profile…" />}>
-            <PublicProfileRoute id={profileId} />
-          </Suspense>
         ) : (
-          <ProblemList problems={problems} progress={progress} stats={stats}>
-            {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
-          </ProblemList>
+          profileId !== undefined && (
+            <Suspense fallback={<PaneLoading label="Loading the profile…" />}>
+              <PublicProfileRoute id={profileId} />
+            </Suspense>
+          )
         )}
       </div>
       <Footer base="../" />
