@@ -115,7 +115,8 @@ describe('opting in', () => {
     expect(await opened.text()).toContain('Confirm my address');
     expect((await row(id))!.confirmed_at).toBeNull();
 
-    const confirmed = await callWith(mail.env, link, { method: 'POST' });
+    // As a browser sends the confirm page's form: its Referrer-Policy is no-referrer, so the Origin is "null".
+    const confirmed = await callWith(mail.env, link, { method: 'POST', headers: { Origin: 'null', 'Content-Type': 'application/x-www-form-urlencoded' } });
     expect(confirmed.status).toBe(200);
     expect(await confirmed.text()).toContain('Address confirmed');
     const got = (await (await callWith(mail.env, '/api/me/email', { token })).json()) as Record<string, unknown>;
