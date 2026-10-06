@@ -1,0 +1,162 @@
+name: Proschi
+description: Check and test Proschi architecture diagrams, and comment a summary with links to the diagrams on pull requests.
+author: gvart
+branding:
+  icon: layers
+  color: blue
+
+# Usage (see docs/EDITORS.md, "GitHub Action"):
+#
+#   permissions:
+#     contents: read
+#     pull-requests: write   # the sticky comment; leave out for no comment
+#   steps:
+#     - uses: actions/checkout@v5
+#     - uses: gvart/proschi/action@tooling-v0.9.0
+#
+# The action lives in a folder of the Proschi repository, so it is referenced
+# as gvart/proschi/action@<ref>; the tooling-v* release tags pin both the
+# action and, by default, the proschi version it runs.
+
+inputs:
+  files:
+    description: Globs of the files to check, separated by newlines or commas; `!` excludes. Dot directories and node_modules are skipped.
+    default: '**/*.proschi'
+  test:
+    description: Also run the requirements and test blocks (`proschi test`); failures fail the job.
+    default: 'true'
+  openapi:
+    description: Node-to-spec mappings for `proschi check --openapi`, one `node=path/to/spec.yaml` per line (relative to the working directory). A proschi.json next to the files works too.
+    default: ''
+  comment:
+    description: >-
+      On pull requests, post one comment (updated on every push) with a summary
+      of the changed files and a link to open each in the web editor. Needs
+      `pull-requests: write`; skipped when the token is read-only (pull requests from forks).
+    default: 'true'
+  render:
+    description: Render the changed files to SVG (architecture and one per scenario) and upload them as a workflow artifact.
+    default: 'true'
+  version:
+    description: The proschi npm version to run (e.g. 0.9.0 or latest). Default, the version released with this action.
+    default: ''
+  cli:
+    description: Path to a built proschi CLI (dist/cli.cjs) to run instead of the npm package, e.g. to test an unreleased build.
+    default: ''
+  token:
+    description: Token for listing the pull request's files and writing the comment (with the GitHub CLI, `gh`, which GitHub-hosted runners have).
+    default: ${{ github.token }}
+
+outputs:
+  check-failed:
+    description: '`true` when a file has errors.'
+    value: ${{ steps.run.outputs.check-failed }}
+  test-failed:
+    description: '`true` when a requirement or test fails.'
+    value: ${{ steps.run.outputs.test-failed }}
+  artifact-url:
+    description: Link to the artifact with the rendered SVGs, when there is one.
+    value: ${{ steps.upload.outputs.artifact-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install proschi
+      shell: bash
+      env:
+        INPUT_VERSION: ${{ inputs.version }}
+        INPUT_CLI: ${{ inputs.cli }}
+      run: |
+        if [ -n "$INPUT_CLI" ]; then
+          cli="$(realpath "$INPUT_CLI")"
+        else
+          version="$INPUT_VERSION"
+          if [ -z "$version" ]; then
+            # The tooling package next to this action is the release the action came with.
+            version="$(node -p "require(process.argv[1]).version" "$GITHUB_ACTION_PATH/../tooling/package.json" 2>/dev/null || true)"
+            if [ -z "$version" ] || ! npm view "proschi@$version" version >/dev/null 2>&1; then
+              echo "::notice title=proschi::proschi ${version:-?} is not on npm (yet); using the latest release"
+              version=latest
+            fi
+          fi
+          dir="$RUNNER_TEMP/proschi-cli"
+          npm install --prefix "$dir" --no-save --no-audit --no-fund --loglevel=error "proschi@$version"
+          cli="$dir/node_modules/proschi/dist/cli.cjs"
+        fi
+        echo "PROSCHI_CLI=$cli" >> "$GITHUB_ENV"
+        echo "PROSCHI_OUT=$RUNNER_TEMP/proschi" >> "$GITHUB_ENV"
+        node "$cli" --version
+
+    - name: Check and test
+      id: run
+      shell: bash
+      env:
+        INPUT_FILES: ${{ inputs.files }}
+        INPUT_TEST: ${{ inputs.test }}
+        INPUT_OPENAPI: ${{ inputs.openapi }}
+        INPUT_RENDER: ${{ inputs.render }}
+        GITHUB_TOKEN: ${{ inputs.token }}
+      run: node "$GITHUB_ACTION_PATH/run.mjs"
+
+    - name: Upload the rendered diagrams
+      id: upload
+      if: steps.run.outputs.rendered == 'true'
+      uses: actions/upload-artifact@v7
+      with:
+        name: proschi-diagrams-${{ github.job }}
+        path: ${{ env.PROSCHI_OUT }}/diagrams
+        if-no-files-found: ignore
+        overwrite: true
+
+    - name: Skip the comment on a pull request from a fork
+      if: >-
+        inputs.comment == 'true' && github.event_name == 'pull_request' &&
+        github.event.pull_request.head.repo.full_name != github.repository
+      shell: bash
+      run: echo "::notice title=proschi::Pull request from a fork; its token is read-only, so the summary is in the job summary instead of a comment"
+
+    # One comment per pull request, found again by the marker its body starts
+    # with. A new one is only posted when there is something to say; an
+    # existing one is always brought up to date.
+    - name: Comment on the pull request
+      if: >-
+        inputs.comment == 'true' && steps.run.outputs.files != '0' &&
+        (github.event_name == 'pull_request_target' ||
+         (github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository))
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        PR: ${{ github.event.pull_request.number }}
+        ARTIFACT_URL: ${{ steps.upload.outputs.artifact-url }}
+        NOTEWORTHY: ${{ steps.run.outputs.noteworthy }}
+      run: |
+        body="$PROSCHI_OUT/comment.md"
+        link=""
+        [ -n "$ARTIFACT_URL" ] && link="Rendered SVGs (architecture and every scenario): [proschi-diagrams artifact]($ARTIFACT_URL)."
+        LINK="$link" node -e '
+          const fs = require("fs");
+          const text = fs.readFileSync(process.argv[1], "utf8").replace("<!-- proschi-artifact -->", process.env.LINK);
+          fs.writeFileSync(process.argv[2], JSON.stringify({ body: text }));
+        ' "$body" "$PROSCHI_OUT/comment.json"
+        warn() { echo "::warning title=proschi::Could not write the pull request comment; the job needs 'pull-requests: write' (the summary is in the job summary)"; exit 0; }
+        id="$(gh api --paginate "repos/$GITHUB_REPOSITORY/issues/$PR/comments" \
+          --jq '.[] | select(.body | startswith("<!-- proschi-action -->")) | .id' | sed -n 1p)" || warn
+        if [ -n "$id" ]; then
+          gh api -X PATCH "repos/$GITHUB_REPOSITORY/issues/comments/$id" --input "$PROSCHI_OUT/comment.json" >/dev/null || warn
+          echo "Updated $GITHUB_SERVER_URL/$GITHUB_REPOSITORY/pull/$PR#issuecomment-$id"
+        elif [ "$NOTEWORTHY" = true ]; then
+          gh api -X POST "repos/$GITHUB_REPOSITORY/issues/$PR/comments" --input "$PROSCHI_OUT/comment.json" --jq .html_url || warn
+        else
+          echo "No changed .proschi files and nothing failed; no comment"
+        fi
+
+    - name: Fail on errors and failed tests
+      if: steps.run.outputs.check-failed == 'true' || steps.run.outputs.test-failed == 'true'
+      shell: bash
+      env:
+        CHECK_FAILED: ${{ steps.run.outputs.check-failed }}
+        TEST_FAILED: ${{ steps.run.outputs.test-failed }}
+      run: |
+        [ "$CHECK_FAILED" = true ] && echo "::error title=proschi::Some files have errors (see the annotations)"
+        [ "$TEST_FAILED" = true ] && echo "::error title=proschi::Some requirements or tests fail (see the annotations)"
+        exit 1
