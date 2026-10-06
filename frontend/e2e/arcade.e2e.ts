@@ -3,17 +3,25 @@ import { appendCode, expect, test } from './fixtures';
 
 /**
  * Scale or Fail, signed out (the build without accounts): the Arcade tab of
- * Interview prep, a first wave planned by tapping (a load balancer placed and
- * wired for you, an app server scaled), deployed and run, its result and the
- * draft, a run that survives a reload, and the shop. On a phone nothing
- * scrolls sideways.
+ * Interview prep, a first run under the basic rules with Kernel's tutorial (a
+ * load balancer placed and wired for you, an app server scaled, a load test,
+ * the deploy), its result and the draft, a run that survives a reload, the
+ * twists once a scenario is cleared, and the shop. On a phone nothing scrolls
+ * sideways.
  */
 
 const board = (page: Page) => page.getByRole('group', { name: 'Your architecture' });
 
-async function startShortly(page: Page) {
+/** Progress with a first clear of Shortly: the twists are open. */
+const CLEARED = { v: 1, blueprints: 12, unlocked: [], perks: {}, equipped: [], scenarios: { shortly: { reached: 12, cleared: 0 } }, seen: [], runs: 1 };
+const withProgress = (page: Page, meta: object) => page.addInitScript((m) => localStorage.setItem('proschi.game.meta', JSON.stringify(m)), meta);
+
+/** Starts Shortly. A new player plays the basic rules; with `twists` (a cleared Shortly), Kernel introduces them and the run is played straight. */
+async function startShortly(page: Page, { twists = false } = {}) {
+  if (twists) await withProgress(page, CLEARED);
   await page.goto('practice/#/arcade');
   await expect(page.getByRole('heading', { level: 1, name: 'Scale or Fail' })).toBeVisible();
+  await expect(page.getByText('Your first runs play the basic rules')).toHaveCount(twists ? 0 : 1);
   const play = page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true });
   await play.scrollIntoViewIfNeeded();
   await page.mouse.wheel(0, 400);
@@ -21,15 +29,26 @@ async function startShortly(page: Page) {
   await expect(page.getByRole('heading', { level: 1, name: 'Shortly' })).toBeVisible();
   // The run opens at the top, whatever the scenario list was scrolled to.
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
-  // Three mutators are on offer; these tests play it straight.
   const mutators = page.getByRole('dialog', { name: "Pick this run's mutator" });
-  await expect(mutators.getByRole('listitem')).toHaveCount(3);
-  await mutators.getByRole('button', { name: /Play it straight/ }).click();
-  await expect(mutators).toBeHidden();
+  if (twists) {
+    // The first run with the twists: Kernel says what is new, once, then three mutators are on offer; these tests play it straight.
+    const intro = page.getByRole('dialog', { name: 'New: the twists' });
+    await expect(intro).toContainText('Mutators');
+    await intro.getByRole('button', { name: /Let.s go/ }).click();
+    await expect(mutators.getByRole('listitem')).toHaveCount(3);
+    await mutators.getByRole('button', { name: /Play it straight/ }).click();
+    await expect(mutators).toBeHidden();
+  } else {
+    // The basic rules: no mutator, no bounties, and an exact forecast.
+    await expect(page.getByRole('region', { name: 'Forecast' })).toBeVisible();
+    await expect(mutators).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Forecast' })).not.toContainText('the real peak lands within');
+    await expect(page.getByRole('group', { name: 'Bounties' })).toHaveCount(0);
+  }
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 1');
 }
 
-test('a first wave: place by tapping, scale, deploy, watch it run, then draft', async ({ page }) => {
+test("a first wave with Kernel's tutorial: place by tapping, scale, load test, deploy, watch it run, then draft", async ({ page }) => {
   await startShortly(page);
   // Kernel briefs the wave; tap to show it all, "Got it" puts it away, and the cat button brings briefings back.
   const brief = page.getByRole('complementary', { name: "Kernel's briefing" });
@@ -42,6 +61,10 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await cat.click();
   await expect(brief).toBeVisible();
   await brief.getByRole('button', { name: 'Got it' }).click();
+  // Then Kernel walks through the first wave, a step at a time, read off the board.
+  const coach = page.getByRole('complementary', { name: "Kernel's tutorial" });
+  await expect(coach).toContainText('step 1 of 4');
+  await expect(coach).toContainText('Pick Load Balancer below');
   // Locked components say what they cost; the starters can be placed.
   await expect(page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: /Cache/ })).toBeDisabled();
 
@@ -49,11 +72,15 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await board(page).getByRole('button', { name: /Place it in the edge row/ }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Load Balancer placed and wired (2 wires)' })).toBeVisible();
   await expect(board(page).getByRole('button', { name: /^Load Balancer, 1 replica/ })).toBeVisible();
+  await expect(coach).toContainText('step 2 of 4');
 
   await board(page).getByRole('button', { name: /^App Server/ }).click();
   const inspector = page.getByRole('region', { name: 'App Server settings' });
   await inspector.getByRole('button', { name: 'More replicas' }).click();
   await expect(board(page).getByRole('button', { name: /^App Server, 2 replicas/ })).toBeVisible();
+  await expect(coach).toContainText('step 3 of 4');
+  await page.getByRole('button', { name: /^Load test the peak/ }).click();
+  await expect(coach).toContainText('step 4 of 4');
 
   // A wire that makes no sense is refused with the reason.
   await board(page).getByRole('button', { name: /^Users/ }).click();
@@ -62,20 +89,22 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await expect(page.getByText("Clients don't call data stores directly")).toBeVisible();
 
   await page.getByRole('button', { name: 'Deploy wave 1' }).click();
+  await expect(coach).toBeHidden();
   await expect(page.getByRole('status', { name: 'Run status' })).toContainText('tick');
-  // The on-call's menu: a rate limit costs a little Trust and one of three attention.
-  const oncall = page.getByRole('group', { name: 'On-call' });
-  await expect(oncall.getByLabel('On-call attention: 3 left')).toBeVisible();
-  await oncall.getByRole('button', { name: /^Rate limit/ }).click();
-  await expect(oncall.getByLabel('On-call attention: 2 left')).toBeVisible();
-  await expect(oncall.getByRole('button', { name: 'Rate-limited' })).toBeDisabled();
+  // Hotfixes: a rate limit costs a little Trust and one of three hotfixes. No live changes under the basic rules.
+  const hotfixes = page.getByRole('group', { name: 'Hotfixes' });
+  await expect(hotfixes.getByLabel('Hotfixes: 3 left')).toBeVisible();
+  await expect(page.getByRole('group', { name: 'Live change' })).toHaveCount(0);
+  await hotfixes.getByRole('button', { name: /^Rate limit/ }).click();
+  await expect(hotfixes.getByLabel('Hotfixes: 2 left')).toBeVisible();
+  await expect(hotfixes.getByRole('button', { name: 'Rate-limited' })).toBeDisabled();
   await page.getByRole('button', { name: 'Skip' }).click();
   const result = page.getByRole('dialog', { name: /Wave 1/ });
   await expect(result).toContainText('Revenue');
   await result.getByRole('button', { name: 'Continue' }).click();
   const draft = page.getByRole('dialog', { name: 'Pick a tech card' });
   await expect(draft.getByRole('listitem')).toHaveCount(3);
-  await draft.getByRole('button', { name: /Skip/ }).click();
+  await draft.getByRole('button', { name: /^Skip \(/ }).click();
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 2');
 
   // The run survives a reload.
@@ -84,11 +113,15 @@ test('a first wave: place by tapping, scale, deploy, watch it run, then draft', 
   await page.getByRole('button', { name: 'Carry on' }).click();
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 2');
   await expect(board(page).getByRole('button', { name: /^Load Balancer/ })).toBeVisible();
+  await expect(page.getByRole('complementary', { name: "Kernel's tutorial" })).toHaveCount(0);
 });
 
 test('in Shortly the code pane first watches the board: each change writes its line', async ({ page }) => {
   await startShortly(page);
   await page.getByRole('complementary', { name: "Kernel's briefing" }).getByRole('button', { name: 'Got it' }).click();
+  // The tutorial can be skipped.
+  await page.getByRole('complementary', { name: "Kernel's tutorial" }).getByRole('button', { name: 'Skip the tutorial' }).click();
+  await expect(page.getByRole('complementary', { name: "Kernel's tutorial" })).toHaveCount(0);
   await page.getByRole('tab', { name: 'Code' }).click();
   await expect(page.getByTestId('code-hint')).toContainText('You can type here from wave 3');
   await expect(page.locator('.cm-content')).toHaveAttribute('contenteditable', 'false');
@@ -119,7 +152,7 @@ test('the board can be written as Proschi text, and the canvas follows', async (
 });
 
 test('hold the line: change the board during the run and ship it live', async ({ page }) => {
-  await startShortly(page);
+  await startShortly(page, { twists: true });
   await page.getByRole('complementary', { name: "Kernel's briefing" }).getByRole('button', { name: 'Got it' }).click();
   await page.getByRole('button', { name: 'Deploy wave 1' }).click();
   await page.getByRole('button', { name: 'Pause' }).click();
@@ -133,13 +166,13 @@ test('hold the line: change the board during the run and ship it live', async ({
   await expect(live).toContainText('2 left this wave');
   await page.getByRole('button', { name: 'Skip' }).click();
   await page.getByRole('dialog', { name: /Wave 1/ }).getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /Skip/ }).click();
+  await page.getByRole('dialog', { name: 'Pick a tech card' }).getByRole('button', { name: /^Skip \(/ }).click();
   // The change carries into the next wave's plan.
   await expect(board(page).getByRole('button', { name: /^App Server, 2 replicas/ })).toBeVisible();
 });
 
 test('the shop sells unlocks for Blueprints', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('proschi.game.meta', JSON.stringify({ v: 1, blueprints: 12, unlocked: [], perks: {}, equipped: [], scenarios: {}, seen: [], runs: 1 })));
+  await withProgress(page, CLEARED);
   await page.goto('practice/#/arcade');
   await page.getByRole('button', { name: 'Shop' }).click();
   const shop = page.getByRole('dialog', { name: 'Shop' });
@@ -156,6 +189,10 @@ test('the shop sells unlocks for Blueprints', async ({ page }) => {
   await shop.getByRole('tab', { name: 'Components' }).click();
   await shop.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
+  // Kernel introduces the twists, once.
+  const intro = page.getByRole('dialog', { name: 'New: the twists' });
+  await expect(intro).toContainText('You cleared your first run');
+  await intro.getByRole('button', { name: /Let.s go/ }).click();
   // Take the first mutator on offer: the forecast names it, with this wave's bounties to choose from.
   const mutators = page.getByRole('dialog', { name: "Pick this run's mutator" });
   const first = mutators.getByRole('listitem').first();

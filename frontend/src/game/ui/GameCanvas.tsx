@@ -180,6 +180,7 @@ function Canvas(props: GameCanvasProps) {
         connectable: !!editable,
         className: [
           'sf-canvas-node',
+          c ? `sf-role-${c.role}` : '',
           fresh?.has(node.id) ? 'sf-node--new' : '',
           validTargets?.has(node.id) ? 'sf-target' : '',
           wiringFrom === node.id ? 'sf-wiring' : '',

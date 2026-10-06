@@ -34,6 +34,7 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/stats$/, { problems: {}, solvers: 0 }],
     [/^\/api\/stats\/[^/]+$/, { attempted: 0, solved: 0, medianRunsToSolve: null, costUsd: null, p99Ms: null, you: null }],
     [/^\/api\/leaderboard$/, { problems: 0, entries: [] }],
+    [/^\/api\/problems\/[^/]+\/leaderboard$/, { problem: '', metric: 'cost', players: 0, entries: [], you: null }],
     [/^\/api\/game\/me$/, GAME_ME],
     [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
   ];

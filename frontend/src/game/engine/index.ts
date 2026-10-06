@@ -9,6 +9,6 @@ export { Game, GameError, mergeRequirements, parseRequirements, type Breach, typ
 export { boardProblems, canWire, cloneBoard, laneOf, nextId, roleOf, type NodeRole } from './board';
 export { compile, USERS, WAN, type Compiled } from './compile';
 export { readContent, ContentError, type ContentRead } from './content';
-export { buy, dailyScenario, emptyMeta, equip, firstClear, loadoutAllowed, loadoutFor, maxAscension, MetaError, readMeta, recordRun, scenarioOpen, shop, type Meta, type RunRecord, type ShopItem } from './meta';
+export { buy, dailyScenario, emptyMeta, equip, firstClear, loadoutAllowed, loadoutFor, maxAscension, MetaError, readMeta, recordRun, runTwists, scenarioOpen, shop, twistsAllowed, twistsOpen, type Meta, type RunRecord, type ShopItem } from './meta';
 export { computeMods, type Mods } from './mods';
 export { dailySeed } from './rng';

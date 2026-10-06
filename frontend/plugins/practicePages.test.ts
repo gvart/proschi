@@ -1,7 +1,8 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parseMarkdown } from '../src/practice/markdown.ts'
-import { fillGuideTemplate, fillTemplate, guideHeadHtml, headHtml, pageDescription, pageHtml, readGuides, readProblems, statementHtml, type PageProblem } from './practicePages'
+import { readCards } from './practiceCards'
+import { fillGuideTemplate, fillTemplate, guideHeadHtml, headHtml, pageDescription, pageHtml, problemOgCard, readGuides, readProblems, statementHtml, withRelatedCards, type PageProblem } from './practicePages'
 
 const problems = readProblems(fileURLToPath(new URL('../src/practice/problems', import.meta.url)))
 const shortener = problems.find((p) => p.id === 'url-shortener')!
@@ -21,6 +22,28 @@ describe('problem pages', () => {
     const json = JSON.parse(/<script type="application\/ld\+json">(.*)<\/script>/.exec(head)![1])
     expect(json[0]).toMatchObject({ '@type': 'LearningResource', educationalLevel: 'easy', url: 'https://proschi.app/practice/url-shortener/' })
     expect(json[1].itemListElement).toHaveLength(3)
+  })
+
+  it('give each problem its own Open Graph image', () => {
+    const head = headHtml(shortener)
+    expect(head).toContain('<meta property="og:image" content="https://proschi.app/og/practice/url-shortener.png" />')
+    expect(head).toContain('<meta name="twitter:image" content="https://proschi.app/og/practice/url-shortener.png" />')
+    expect(problemOgCard(shortener)).toMatchObject({ title: 'URL Shortener', badges: [{ label: 'easy' }] })
+    const snowflake = problems.find((p) => p.id === 'snowflake-ids')!
+    expect(problemOgCard(snowflake).badges.map((b) => b.label)).toEqual([snowflake.difficulty, 'Twitter'])
+  })
+
+  it('link the review cards whose related names the problem to their pages', () => {
+    const { cards } = readCards(fileURLToPath(new URL('../src/practice/cards', import.meta.url)))
+    const withCards = withRelatedCards(problems, cards)
+    const p = withCards.find((q) => q.id === 'url-shortener')!
+    const related = cards.filter((c) => !c.retired && c.related.includes('url-shortener'))
+    expect(related.length).toBeGreaterThan(0)
+    expect(p.cards).toHaveLength(related.length)
+    const html = pageHtml(p, withCards)
+    expect(html).toContain('<h2 id="cards-title">Review cards for this problem</h2>')
+    for (const c of related) expect(html).toContain(`href="../cards/${c.topic}/${c.id}/"`)
+    expect(pageHtml(shortener, problems)).not.toContain('cards-title')
   })
 
   it('keep descriptions short enough for search results', () => {

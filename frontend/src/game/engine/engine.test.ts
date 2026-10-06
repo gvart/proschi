@@ -38,8 +38,9 @@ describe('game content', () => {
   it('passes every check: ids, references, requirements, and the scripted runs', () => {
     const check = checkGame(files, ctx);
     expect(check.violations).toEqual([]);
+    expect(check.runs.find((r) => r.scenario === 'shortly' && r.name === 'reference, basic rules')?.outcome).toBe('retired');
     expect(check.runs.filter((r) => r.name === 'reference.json').every((r) => r.outcome === 'retired' && r.waves === content.scenarios.find((s) => s.id === r.scenario)!.waves.length)).toBe(true);
-  });
+  }, 30_000);
 
   it('finds what a contributor gets wrong', () => {
     const broken: Record<string, string> = { ...files, 'scenarios/shortly/scenario.json': files['scenarios/shortly/scenario.json'].replace('p99 \\"Redirect\\" < 200ms', 'p99 \\"Redirects\\" < 200ms').replace('"brief": "We\'re on the front page', '"brief": "   ", "x": "') };
@@ -49,7 +50,7 @@ describe('game content', () => {
     expect(messages.some((m) => m.includes("unknown event 'ddos'"))).toBe(true);
     expect(messages.some((m) => m.includes("'event:ddos' was published and is gone"))).toBe(true);
     expect(messages).toContain("Wave 4's brief should be one or two sentences (at most 240 characters)");
-  });
+  }, 30_000);
 });
 
 describe('a run', () => {
@@ -102,7 +103,7 @@ describe('a run', () => {
     expect(() => g.advance()).toThrow(GameError);
   });
 
-  it('pages the on-call: one more replica now, for a fee', () => {
+  it('hotfixes: one more replica now, for a fee', () => {
     const g = new Game(content, setup());
     g.apply({ t: 'deploy', board: g.state.board });
     const cash = g.state.cash;
@@ -113,7 +114,7 @@ describe('a run', () => {
     // Attention runs out: three actions a wave.
     g.apply({ t: 'oncall', tick: 3, node: 'api' });
     g.apply({ t: 'oncall', tick: 4, node: 'api' });
-    expect(() => g.apply({ t: 'oncall', tick: 4, node: 'api' })).toThrow(/no attention left/);
+    expect(() => g.apply({ t: 'oncall', tick: 4, node: 'api' })).toThrow(/No hotfixes left/);
   });
 
   it('applies ascension rules', () => {

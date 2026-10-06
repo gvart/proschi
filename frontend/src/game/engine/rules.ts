@@ -7,7 +7,7 @@ import type { Role } from './types';
  */
 
 /** Part of every leaderboard key: a new version starts new boards. */
-export const GAME_VERSION = 3;
+export const GAME_VERSION = 4;
 
 /** Samples of a wave (a month of traffic). */
 export const TICKS = 8;

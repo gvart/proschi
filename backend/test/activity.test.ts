@@ -106,7 +106,7 @@ describe('GET /api/me/activity', () => {
       goal: { reviews: 10, solves: 1 },
       days: [],
       streak: { current: 0, longest: 0, freezes: 0, frozen: [], todayDone: false, today: { day: t, reviews: 0, solves: 0, newCards: 0 }, todayProgress: 0 },
-      recap: { start: addDays(weekStart(t), -7), end: addDays(weekStart(t), -1), reviews: 0, newCards: 0, solves: 0, goalDays: 0, streak: 0 },
+      recap: { start: addDays(weekStart(t), -7), end: addDays(weekStart(t), -1), reviews: 0, newCards: 0, solves: 0, challenges: 0, runs: 0, goalDays: 0, streak: 0 },
     });
   });
 

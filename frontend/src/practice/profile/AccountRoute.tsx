@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { ExternalLink, LogIn, RotateCcw, UserRound } from 'lucide-react';
 import problems from 'virtual:practice-listings';
 import PaneLoading from '../../components/PaneLoading';
+import ShareButton from '../../components/ShareButton';
+import { profileShareText } from '../../learn/share';
 import { challengeDay, challengeSummary, type ChallengeSummary } from '../../learn/challenge';
 import { api, type ChallengeToday } from '../../services/api';
 import { localResults } from '../challenge/store';
@@ -125,10 +127,13 @@ export default function AccountRoute({ account, activity, achievements, progress
             hide your profile at once.
           </p>
           {user.publicProfile && (
-            <a href={`#/u/${user.id}`} className={`mt-3 ${primaryButton}`}>
-              <ExternalLink size={14} aria-hidden="true" />
-              See your public profile
-            </a>
+            <div className="mt-3 flex flex-wrap items-center gap-2">
+              <a href={`#/u/${user.id}`} className={primaryButton}>
+                <ExternalLink size={14} aria-hidden="true" />
+                See your public profile
+              </a>
+              <ShareButton label="Share your profile" text={profileShareText({ displayName: user.displayName, userId: user.id, own: true })} />
+            </div>
           )}
         </section>
       )}

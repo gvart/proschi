@@ -32,6 +32,12 @@
       "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, on the command line and in CI: checking, formatting, OpenAPI, rendering and tests."
     },
     {
+      "slug": "sharing",
+      "title": "Sharing and embedding",
+      "source": "SHARING.md",
+      "description": "Share a Proschi diagram as a link, as a short link with a preview image, or embed it read-only in a blog post, a wiki or docs with an iframe or oEmbed."
+    },
+    {
       "slug": "numbers",
       "title": "Numbers to know",
       "source": "NUMBERS.md",
@@ -89,13 +95,15 @@
         { "page": "editors", "anchor": "ci", "label": "CLI and CI" },
         { "page": "editors", "anchor": "formatting", "label": "Formatting" },
         { "page": "editors", "anchor": "checking-against-openapi", "label": "OpenAPI" },
-        { "page": "editors", "anchor": "rendering-and-export", "label": "Export" }
+        { "page": "editors", "anchor": "rendering-and-export", "label": "Export" },
+        { "page": "sharing", "label": "Sharing and embedding" }
       ]
     },
     {
       "title": "Practice",
       "items": [
         { "href": "practice/", "label": "Solving problems" },
+        { "href": "practice/cards/", "label": "Review cards" },
         { "page": "numbers" },
         { "page": "practice-authoring", "label": "Writing problems" },
         { "page": "cards-authoring", "label": "Writing cards" },

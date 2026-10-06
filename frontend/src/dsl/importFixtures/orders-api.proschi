@@ -1,0 +1,26 @@
+title "Orders API" "Places and tracks orders."
+
+client "Client"     [Actor]
+api    "Orders API" [REST API] "Version 1.4.0"
+
+client -> api : HTTPS
+
+usecase "List orders" {
+  client -> api    : GET /v1/orders
+  api   --> client : 200
+}
+
+usecase "Place an order" {
+  client -> api    : POST /v1/orders
+  api   --> client : 201
+}
+
+usecase "getOrder" {
+  client -> api    : GET /v1/orders/{orderId}
+  api   --> client : 200
+}
+
+usecase "DELETE /v1/orders/{orderId}" {
+  client -> api : DELETE /v1/orders/{orderId}
+  api   --> client
+}

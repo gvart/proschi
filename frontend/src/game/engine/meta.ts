@@ -1,7 +1,7 @@
 import type { GameStats } from '../../learn/achievements';
 import { ascensionRules, MAX_ASCENSION } from './rules';
 import type { IconName } from './icons';
-import type { CardDef, ComponentDef, GameContent, Loadout, ScenarioDef } from './types';
+import type { CardDef, ComponentDef, GameContent, Loadout, Mode, RunSetup, ScenarioDef } from './types';
 
 /**
  * Progress between runs (docs/GAME.md, "Progression"): Blueprints earned by
@@ -146,6 +146,35 @@ export function loadoutAllowed(meta: Meta, loadout: Loadout, ascension: number):
   const perks = Object.entries(loadout.perks);
   if (perks.length > ascensionRules(ascension).perkSlots) return 'Too many perks for this ascension';
   for (const [id, level] of perks) if (!meta.perks[id] || meta.perks[id] < level) return `Perk '${id}' at level ${level} is not owned`;
+  return undefined;
+}
+
+/**
+ * Whether the player has met the advanced twists' milestone: a clear of any
+ * Scale or Fail scenario (Shortly, for nearly everyone). Before it, runs play
+ * the basic rules (docs/GAME.md, "First runs").
+ */
+export const twistsOpen = (content: Pick<GameContent, 'scenarios'>, meta: Meta): boolean =>
+  content.scenarios.some((s) => s.mode === 'scale' && (meta.scenarios[s.id]?.cleared ?? -1) >= 0);
+
+/**
+ * The `twists` a run starts with: the daily run always has them (everyone
+ * plays the same rules), a normal run once `twistsOpen`. The page and the
+ * Worker both start runs with this.
+ */
+export const runTwists = (content: Pick<GameContent, 'scenarios'>, meta: Meta, mode: Mode): boolean => mode === 'daily' || twistsOpen(content, meta);
+
+/**
+ * Whether a run's `twists` is one `meta` allows (the Worker checks an
+ * imported run with this, like its loadout): the basic rules are for a
+ * normal run before the milestone; the twists are always allowed, since they
+ * only make a run harder to survive.
+ */
+export function twistsAllowed(content: Pick<GameContent, 'scenarios'>, meta: Meta, setup: Pick<RunSetup, 'mode' | 'twists'>): string | undefined {
+  if (setup.twists !== undefined && typeof setup.twists !== 'boolean') return 'twists is true or false';
+  if (setup.twists !== false) return undefined;
+  if (setup.mode === 'daily') return 'The daily run plays every twist';
+  if (twistsOpen(content, meta)) return 'The basic rules are for runs before your first clear';
   return undefined;
 }
 
