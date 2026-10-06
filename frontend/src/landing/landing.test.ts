@@ -7,10 +7,11 @@ import { urlShortenerExample } from '../dsl/examples';
 import { defaultEngine } from '../hld/engine';
 import { problems } from '../practice/catalog';
 import { decodeShareLink } from '../playground/share';
+import { exampleFromSearch } from '../playground/exampleLink';
 import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
 import { APP_PATH, editorLink, exampleLink } from './links';
-import { listingsFrom, practiceListHtml } from './practiceList';
+import { fillPracticePlaceholders, listingsFrom, practiceListHtml } from './practiceList';
 import { fillPrepPlaceholders, prepStagesHtml } from './prep';
 import { ROADMAP, roadmapFor } from '../practice/roadmap';
 import prebuiltListings from 'virtual:practice-listings';
@@ -59,6 +60,27 @@ describe('landing page hero', () => {
     expect(decodeShareLink(link.slice(APP_PATH.length))).toEqual({ source: DEMO_SOURCE });
   });
 
+  it('offers two equally weighted paths: design a system, prepare for interviews', () => {
+    const built = fillPrepPlaceholders(landingHtml, roadmapFor(ROADMAP, prebuiltListings.map((p) => p.id)));
+    const hero = built.slice(built.indexOf('<section class="hero"'), built.indexOf('</section>'));
+    const paths = [...hero.matchAll(/<a class="ps-card ps-card--\w+ ps-card--interactive path" href="([^"]+)">[\s\S]*?<span class="path__title">([^<]+)<\/span>/g)].map((m) => [m[2], m[1]]);
+    expect(paths).toEqual([
+      ['Design a system', './app/'],
+      ['Prepare for interviews', './practice/#/roadmap'],
+    ]);
+    expect(hero).not.toContain('<!--roadmap:');
+    // The live demo stays.
+    expect(hero).toContain('id="live-demo"');
+  });
+
+  it('has no "How it works" section repeating the demo', () => {
+    expect(landingHtml).not.toMatch(/How it works|class="hop/);
+  });
+
+  it('links the Arcade', () => {
+    expect(landingHtml).toMatch(/<section class="story story--arcade"[\s\S]*href="\.\/practice\/#\/arcade"/);
+  });
+
   it('loads the demo island lazily, after a static first paint', () => {
     expect(mainSource).toMatch(/import\('\.\/LandingDemo'\)/);
     // Nothing React in the page's own bundle.
@@ -95,7 +117,7 @@ describe('test results on the page', () => {
 describe('landing page snippets', () => {
   it('only use syntax the parser accepts', () => {
     const all = snippets();
-    expect(all.length).toBeGreaterThanOrEqual(3);
+    expect(all.length).toBeGreaterThanOrEqual(2);
     for (const source of all) {
       if (source.startsWith('traffic {')) continue; // checked against the example above
       // Use cases are written against the demo's architecture.
@@ -154,18 +176,19 @@ describe('landing page snippets', () => {
 });
 
 describe('example links', () => {
-  it.each(examples.map((e) => [e.id, e.source]))('%s decodes back to the example source', (id, source) => {
+  it.each(examples.map((e) => [e.id, e.source]))('%s opens the editor on the example (?example=)', (id, source) => {
     const link = exampleLink(id);
-    expect(link).not.toBeNull();
-    expect(link!.startsWith(`${APP_PATH}#code=`)).toBe(true);
-    expect(decodeShareLink(link!.slice(APP_PATH.length))?.source).toBe(source);
+    expect(link).toBe(`${APP_PATH}?example=${id}`);
+    expect(exampleFromSearch(link!.slice(APP_PATH.length))?.example?.source).toBe(source);
   });
 
-  it('the page shows four of the examples', () => {
-    const ids = [...landingHtml.matchAll(/data-example="([^"]+)"/g)].map((m) => m[1]);
-    expect(ids).toHaveLength(4);
-    for (const id of ids) expect(examples.map((e) => e.id)).toContain(id);
+  it('the page shows four of the examples, linked in the HTML itself', () => {
+    const tiles = [...landingHtml.matchAll(/data-example="([^"]+)" href="([^"]+)"/g)];
+    expect(tiles).toHaveLength(4);
+    for (const [, id, href] of tiles) expect(href).toBe(exampleLink(id));
     expect(exampleLink('nope')).toBeNull();
+    // Nothing rewrites them at runtime, so the page bundle carries no example sources.
+    expect(mainSource).not.toMatch(/from '\.\/links'|dsl\/examples/);
   });
 });
 
@@ -186,11 +209,21 @@ describe('practice section', () => {
   const files = import.meta.glob<string>('../practice/problems/*/problem.md', { query: '?raw', import: 'default', eager: true });
   const listings = listingsFrom(Object.fromEntries(Object.entries(files).map(([path, text]) => [path.replace('../practice/problems/', ''), text])));
 
-  it('has a container the list is rendered into, and a static link to the practice page', () => {
-    expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list"><\/ul>/);
-    expect(landingHtml).toMatch(/<noscript>[\s\S]*href="\.\/practice\/"[\s\S]*<\/noscript>/);
-    // Problems link to their static pages (practice/<id>/); only the roadmap is a hash route.
-    expect(landingHtml).not.toMatch(/href="\.\/practice\/#\/(?!roadmap")/);
+  const built = fillPracticePlaceholders(landingHtml, prebuiltListings);
+  const section = built.slice(built.indexOf('<section class="story story--practice"'), built.indexOf('</section>', built.indexOf('<section class="story story--practice"')));
+
+  it('is rendered at build time: every problem and their count, with no placeholder left', () => {
+    expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list">\s*<!--practice:list-->\s*<\/ul>/);
+    const ids = [...section.matchAll(/href="\.\/practice\/([^"/]+)\/"/g)].map((m) => m[1]);
+    expect(ids).toEqual(problems.map((p) => p.id));
+    expect(section).toContain(`<p class="story__lede">${problems.length} system design problems. Tests, not opinions.</p>`);
+    expect(section).toMatch(/href="\.\/practice\/"/);
+    expect(built).not.toContain('<!--practice:');
+    expect(() => fillPracticePlaceholders('<!--practice:nope-->', [])).toThrow(/unknown placeholder/);
+    // No hard-coded count.
+    expect(landingHtml).not.toMatch(/\b\d+ system design problems/);
+    // Problems link to their static pages (practice/<id>/); only the roadmap and the arcade are hash routes.
+    expect(landingHtml).not.toMatch(/href="\.\/practice\/#\/(?!roadmap"|arcade")/);
   });
 
   it('lists every practice problem from its folder, in catalog order', () => {
@@ -227,10 +260,9 @@ describe('interview prep section', () => {
   const built = fillPrepPlaceholders(landingHtml, stages);
   const section = built.slice(built.indexOf('<section class="prep"'), built.indexOf('</section>', built.indexOf('<section class="prep"')));
 
-  it('comes right after the hero, with the hero linking to it', () => {
-    expect(landingHtml.indexOf('<section class="prep"')).toBeGreaterThan(landingHtml.indexOf('<section class="hero"'));
-    expect(landingHtml.indexOf('<section class="prep"')).toBeLessThan(landingHtml.indexOf('<section class="story'));
-    expect(landingHtml).toMatch(/<a class="hero__prep" href="#interview-prep">/);
+  it('comes after the examples, with the hero linking to it', () => {
+    expect(landingHtml.indexOf('<section class="prep"')).toBeGreaterThan(landingHtml.indexOf('<section class="story story--examples"'));
+    expect(landingHtml).toMatch(/<a href="#interview-prep">/);
     expect(landingHtml).toContain('id="interview-prep"');
   });
 
@@ -248,9 +280,11 @@ describe('interview prep section', () => {
     expect(() => fillPrepPlaceholders('<!--roadmap:nope-->', stages)).toThrow(/unknown placeholder/);
   });
 
-  it('starts the roadmap, and says what it takes without promising a price', () => {
+  it('starts the roadmap without an account, offers sign-in as optional, and promises no price', () => {
     expect(section).toMatch(/<a class="ps-btn ps-btn--primary ps-btn--lg"[^>]* href="\.\/practice\/#\/roadmap">Start interview prep/);
-    expect(section).toContain('Sign in to start; browse the stages and lessons any time.');
+    expect(section).toContain('No account needed to start');
+    expect(section).toContain('Sign in if you want to keep your progress');
+    expect(section).not.toMatch(/Sign in to start/);
     expect(section).not.toMatch(/\bfree\b/i);
   });
 

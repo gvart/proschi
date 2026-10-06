@@ -36,11 +36,12 @@ import {
   ArchiveRestore,
   Import,
 } from 'lucide-react';
-import { ecommerceExample, examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
+import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
+import { FIRST_RUN_SOURCE, exampleFromSearch, withoutExample } from '../../playground/exampleLink';
 import {
   BLANK_SOURCE,
   addDoc,
@@ -77,6 +78,7 @@ import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
 import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor } from './exportDiagram';
+import { track } from '../../services/metrics';
 import Banner, { type BannerMessage } from './Banner';
 import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
 import { useZenMode } from './useZenMode';
@@ -116,21 +118,36 @@ const nodeTypes = {
 };
 
 function loadInitialState(): DocumentState {
+  // A share link wins over `?example=`: once an example is edited, the address bar holds the edits.
   const link = decodeShareLink(window.location.hash);
+  const example = link ? undefined : exampleFromSearch(window.location.search)?.example;
   return initialState({
     stored: loadJson<unknown>(DOCS_KEY, null),
     legacySource: loadJson<unknown>(LEGACY_SOURCE_KEY, null),
-    sharedSource: link?.source ?? null,
+    sharedSource: link?.source ?? example?.source ?? null,
     sharedImports: link?.imports,
-    fallbackSource: ecommerceExample,
+    fallbackSource: FIRST_RUN_SOURCE,
   });
 }
 
-/** The tour on a first visit; only a hint over a shared diagram or example link, which should be seen first. */
+/** Whether the page opened on a shared diagram or an example link (`?example=<id>`), which should be seen first. */
+function isDeepLink(): boolean {
+  return readShareLink(window.location.hash) !== null || exampleFromSearch(window.location.search) !== null;
+}
+
+/** Whether this browser has saved diagrams from an earlier visit. */
+function isReturning(): boolean {
+  return loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
+}
+
+/** The tour on a first visit; only a hint over a shared diagram or example link. */
 function initialTourMode(): StartMode {
-  const deepLink = readShareLink(window.location.hash) !== null || new URLSearchParams(window.location.search).has('example');
-  const returning = loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
-  return startMode('editor', { deepLink, returning });
+  return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
+}
+
+/** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
+function initialMobilePane(): 'code' | 'diagram' {
+  return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
 }
 
 export default function Playground() {
@@ -139,11 +156,16 @@ export default function Playground() {
   const source = current.source;
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
+  const typeSource = (next: string) => {
+    if (next !== source) track('editor_first_edit', { once: 'browser' });
+    setSource(next);
+  };
   /** Applies a canvas edit to the current document's text. */
-  const editSource = useCallback(
-    (edit: (source: string) => string) => setDocState((s) => updateCurrent(s, edit(currentDoc(s).source))),
-    [],
-  );
+  const editSource = useCallback((edit: (source: string) => string) => {
+    track('editor_first_edit', { once: 'browser' });
+    setDocState((s) => updateCurrent(s, edit(currentDoc(s).source)));
+  }, []);
 
   // A link may point at a use case step; open straight into playback there.
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
@@ -156,7 +178,7 @@ export default function Playground() {
   const [showExamples, setShowExamples] = useState(false);
   const [showImport, setShowImport] = useState(false);
   // Phones show one pane at a time.
-  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>('diagram');
+  const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
   const [view, setView] = useState<View>('diagram');
   const [copied, setCopied] = useState(false);
   const [tour, setTour] = useState<StartMode>(initialTourMode);
@@ -169,6 +191,8 @@ export default function Playground() {
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
   const keyboard = useKeyboardViewport();
+
+  useEffect(() => track('editor_open', { once: 'session' }), []);
 
   // Re-parse and save shortly after typing stops.
   useEffect(() => {
@@ -197,7 +221,9 @@ export default function Playground() {
   // A link that could not be opened says so; the banner also carries long-link and backup messages.
   const [banner, setBanner] = useState<BannerMessage | null>(() => {
     const link = readShareLink(window.location.hash);
-    return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
+    if (link && 'error' in link) return { message: link.error, tone: 'warning' };
+    const example = link ? null : exampleFromSearch(window.location.search);
+    return example && !example.example ? { message: `There is no example called “${example.id}”; Examples in the top bar lists them all.`, tone: 'warning' } : null;
   });
   useEffect(() => {
     if (!notice) return;
@@ -217,6 +243,12 @@ export default function Playground() {
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
     [useCase, scenario],
   );
+
+  // An example link has done its job once the example is open: the address bar becomes a share link like any other.
+  useEffect(() => {
+    const { pathname, search, hash } = window.location;
+    if (exampleFromSearch(search) !== null) window.history.replaceState(null, '', `${pathname}${withoutExample(search)}${hash}`);
+  }, []);
 
   // Keep the address bar a shareable link to the diagram, and to the current step while playing.
   useEffect(() => {
@@ -241,6 +273,13 @@ export default function Playground() {
     [nodes, overlay],
   );
   const [edges, setEdges] = useState<Edge[]>([]);
+
+  // Usage counts: the first look at the simulation's numbers (the Analysis or
+  // HLD tab, or the load overlay) and at the tests, once per session each.
+  useEffect(() => {
+    if (view === 'analysis' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'tests') track('test_run', { once: 'session', key: 'test_run:editor' });
+  }, [view, overlayOn, canOverlay]);
 
   // Edges are local state so selection works; keep it across re-parses.
   useEffect(() => {
@@ -288,6 +327,7 @@ export default function Playground() {
 
   const copyShareLink = async () => {
     const url = shareUrl(source, window.location, playback, imports);
+    track('share_link_created');
     try {
       await navigator.clipboard.writeText(url);
       setCopied(true);
@@ -669,7 +709,7 @@ export default function Playground() {
           className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r-bw-2`}
         >
           <div className="flex-1 min-h-0">
-            <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+            <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
           </div>
           <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
         </EditorZone>

@@ -1,10 +1,13 @@
+import { createScheduledController } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { challengeDay } from '../../frontend/src/learn/challenge';
 import { emptyMeta, type Meta } from '../../frontend/src/game/engine/meta';
 import { Game } from '../../frontend/src/game/engine/run';
 import type { Action, RunSetup } from '../../frontend/src/game/engine/types';
+import { ABANDONED_RUN_SECONDS, pruneAbandonedGameRuns } from '../src/cron';
 import { gameContent } from '../src/game';
+import worker from '../src/index';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /**
@@ -58,6 +61,24 @@ describe('game runs', () => {
     expect(body.setup.seed).toMatch(/^[0-9a-f]{16}$/);
     const again = await start(user.token, { scenario: 'shortly' });
     expect(again.body.setup.seed).not.toBe(body.setup.seed);
+  });
+
+  it('plays the basic rules until the first Scale or Fail clear, from the stored progress', async () => {
+    const user = await signedInUser();
+    const first = await start(user.token, { scenario: 'shortly', twists: true });
+    expect(first.body.setup.twists).toBe(false);
+    // What the replay plays is the stored setup: no mutator on offer, whatever the client sends.
+    await age(first.body.runId);
+    const mutator = await submit(user.token, first.body.runId, [{ t: 'mutator', pick: 0 }, ...play(first.body.setup).actions]);
+    expect(mutator.status).toBe(400);
+    expect(((await mutator.json()) as { error: string }).error).toMatch(/No mutator on offer/);
+    await setMeta(user.id, { scenarios: { pawprint: { reached: 6, cleared: 0 } } });
+    expect((await start(user.token, { scenario: 'shortly' })).body.setup.twists).toBe(false);
+    await setMeta(user.id, { scenarios: { shortly: { reached: 12, cleared: 0 } } });
+    expect((await start(user.token, { scenario: 'shortly', twists: false })).body.setup.twists).toBe(true);
+    // The daily run has every twist, for everyone.
+    const fresh = await signedInUser('newcomer');
+    expect((await start(fresh.token, { mode: 'daily' })).body.setup.twists).toBe(true);
   });
 
   it('keeps locked scenarios and ascensions closed', async () => {
@@ -176,10 +197,50 @@ describe('progress', () => {
     expect(board.players).toBe(0);
   });
 
+  it('imports first runs under the basic rules only before the first clear', async () => {
+    const user = await signedInUser();
+    const sync = (events: unknown[]) => call('/api/game/sync', { method: 'POST', token: user.token, body: { events } });
+    const setup: RunSetup = { scenario: 'shortly', seed: 'guest-basic', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} }, twists: false };
+    expect(((await (await sync([{ t: 'run', setup, actions: play(setup).actions }])).json()) as { applied: number }).applied).toBe(1);
+    const daily = { ...setup, seed: 'guest-daily', mode: 'daily' as const };
+    expect((await (await sync([{ t: 'run', setup: daily, actions: play(daily).actions }])).json()) as { applied: number; error: string }).toMatchObject({ applied: 0, error: 'The daily run plays every twist' });
+    await setMeta(user.id, { scenarios: { shortly: { reached: 12, cleared: 0 } } });
+    const late = { ...setup, seed: 'guest-late' };
+    const refused = (await (await sync([{ t: 'run', setup: late, actions: play(late).actions }])).json()) as { applied: number; error: string };
+    expect(refused).toMatchObject({ applied: 0, error: 'The basic rules are for runs before your first clear' });
+  });
+
   it('is in the export', async () => {
     const user = await signedInUser();
     await setMeta(user.id, { blueprints: 7 });
     const data = (await (await call('/api/me/export', { token: user.token })).json()) as { game: { meta: Meta } };
     expect(data.game.meta.blueprints).toBe(7);
+  });
+});
+
+describe('the daily cron', () => {
+  beforeEach(resetDatabase);
+
+  const runIds = async (userId: string) =>
+    (await env.DB.prepare('SELECT id FROM game_runs WHERE user_id = ?').bind(userId).all<{ id: string }>()).results.map((r) => r.id).sort();
+
+  it('prunes runs started over a week ago and never submitted', async () => {
+    const user = await signedInUser();
+    const fresh = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const recent = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const abandoned = (await start(user.token, { scenario: 'shortly' })).body.runId;
+    const daily = (await start(user.token, { mode: 'daily' })).body.runId;
+    const played = (await start(user.token, { scenario: 'shortly' })).body;
+    await age(played.runId);
+    expect((await submit(user.token, played.runId, play(played.setup).actions)).status).toBe(200);
+    await age(recent, 6 * 86_400);
+    await age(abandoned, ABANDONED_RUN_SECONDS + 60);
+    await age(daily, ABANDONED_RUN_SECONDS + 60);
+    await age(played.runId, 30 * 86_400);
+    expect((await runIds(user.id)).length).toBe(5);
+
+    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    expect(await runIds(user.id)).toEqual([fresh, recent, played.runId].sort());
+    expect(await pruneAbandonedGameRuns(env)).toBe(0);
   });
 });

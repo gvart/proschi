@@ -4,6 +4,7 @@ import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './cry
 import { now, secretOk, type Env } from './env';
 import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
 import { errorText, log } from './log';
+import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
 
 /**
@@ -264,6 +265,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
     const userId = await upsertUser(env, provider, profile);
     ctx.userId = userId;
     const appCode = await issueAppCode(env, userId, app);
+    await countServerEvent(ctx, 'sign_in');
     return redirect(appRedirect(app.redirectUri, { code: appCode, state: app.state }), [clearState]);
   }
 
@@ -283,6 +285,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
   await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind) VALUES (?, ?, ?, ?, 'web')")
     .bind(await sha256(token), userId, t + SESSION_TTL, t)
     .run();
+  await countServerEvent(ctx, 'sign_in');
   return redirect(login.returnTo, [clearState, ['Set-Cookie', sessionCookie(token, SESSION_TTL)]]);
 }
 

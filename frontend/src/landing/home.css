@@ -632,39 +632,62 @@ h3 {
   }
 }
 
-/* ---------- interview prep: the roadmap, right under the hero ---------- */
+/* ---------- the hero's two ways in: design a system, prepare for interviews ---------- */
 
-.hero__prep {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-  max-width: 100%;
-  min-height: 44px;
-  margin-top: 24px;
-  padding: 8px 14px 8px 8px;
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-md);
-  background: rgb(var(--c-surface));
-  color: rgb(var(--c-ink));
-  box-shadow: var(--sh-sm);
-  font-weight: 700;
+.paths {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 210px), 1fr));
+  gap: 16px;
+  margin-top: 32px;
+}
+.paths > li {
+  display: flex;
+}
+.path {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  width: 100%;
+}
+.path__kicker {
   font-size: var(--fs-14);
-  text-decoration: none;
-  transition:
-    transform var(--d-spring) var(--e-spring),
-    box-shadow var(--d-2) var(--e-out);
+  font-weight: 700;
+  font-stretch: 110%;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgb(var(--c-muted));
 }
-.hero__prep:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: var(--sh-md);
+.path__title {
+  font: 800 var(--fs-20) / 1.15 var(--font-display);
+  letter-spacing: -0.01em;
 }
-.hero__prep-text {
-  min-width: 0;
-  line-height: 1.3;
+.path__desc {
+  flex: 1;
+  color: rgb(var(--c-ink) / 0.8);
+  font-size: var(--fs-14);
+  line-height: 1.4;
 }
-.hero__prep-go {
+.path__go {
+  margin-top: 6px;
   font-weight: 800;
+  font-stretch: 110%;
+  transition: transform var(--d-spring) var(--e-spring);
 }
+.path:hover .path__go {
+  transform: translateX(6px);
+}
+.hero__more {
+  margin-top: 18px;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+.hero__more a {
+  color: rgb(var(--c-ink));
+  text-underline-offset: 3px;
+}
+
+/* ---------- interview prep: the roadmap ---------- */
 
 .prep {
   position: relative;
@@ -862,200 +885,7 @@ h3 {
   }
 }
 
-/* ---------- 01 how it works: three cards and a packet hopping across ---------- */
-
-.hop {
-  --rail: 26px;
-  position: relative;
-  margin-top: 56px;
-  view-timeline: --hop block;
-}
-.hop__cards {
-  display: grid;
-  /* minmax(0, …): an implicit auto column grows to the widest code line and pushes the cards off a phone screen. */
-  grid-template-columns: minmax(0, 1fr);
-  gap: 28px;
-  padding-left: 44px;
-}
-.hop__card h3 {
-  font-size: var(--fs-h3);
-}
-.hop__card > p:not(.hop__n):not(.hop__steps) {
-  margin-top: 8px;
-  color: rgb(var(--c-ink) / 0.82);
-}
-.hop__card .snip,
-.hop__card .mini,
-.hop__steps {
-  margin-top: 18px;
-}
-.hop__n {
-  position: absolute;
-  top: -22px;
-  right: 18px;
-  display: grid;
-  place-items: center;
-  width: 48px;
-  height: 48px;
-  background: rgb(var(--c-ink));
-  color: rgb(var(--c-paper));
-  border-radius: 50%;
-  font: 800 1.5rem / 1 var(--font-display);
-}
-.hop__steps {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-.mini {
-  display: block;
-  width: 100%;
-  max-width: 260px;
-  height: auto;
-  overflow: visible;
-}
-.mini__edge,
-.mini__line {
-  fill: none;
-  stroke: rgb(var(--c-ink));
-  stroke-width: 3;
-}
-.mini__node {
-  fill: rgb(var(--c-paper));
-  stroke: rgb(var(--c-ink));
-  stroke-width: 3;
-}
-.mini__node--db {
-  fill: rgb(var(--c-lilac) / 0.5);
-}
-.mini text {
-  fill: rgb(var(--c-ink));
-  font: 800 15px var(--font-sans);
-}
-
-/* The rail: down the left on phones, along the top on wide screens. */
-.hop__wire {
-  position: absolute;
-  left: 16px;
-  top: 10px;
-  bottom: 10px;
-  width: 0;
-  border-left: var(--bw-2) dashed rgb(var(--c-ink));
-}
-.hop__packet {
-  position: absolute;
-  left: 0;
-  top: 100%;
-  width: 20px;
-  height: 20px;
-  background: rgb(var(--c-pink));
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: 4px;
-  box-shadow: 2px 2px 0 rgb(var(--c-ink));
-  translate: -50% -50%;
-}
-@media (min-width: 900px) {
-  .hop__cards {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 32px;
-    padding: 64px 0 0;
-  }
-  .hop__wire {
-    left: calc((100% - 64px) / 6);
-    right: calc((100% - 64px) / 6);
-    top: 18px;
-    bottom: auto;
-    width: auto;
-    height: 0;
-    border-left: 0;
-    border-top: var(--bw-2) dashed rgb(var(--c-ink));
-  }
-  .hop__packet {
-    left: 100%;
-    top: 0;
-  }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .hop__packet {
-    animation: hop-y linear both;
-  }
-  @supports (animation-timeline: view()) {
-    .hop__packet {
-      animation-timeline: --hop;
-      animation-range: entry 70% cover 55%;
-    }
-  }
-  @supports not (animation-timeline: view()) {
-    .hop__packet {
-      animation-duration: 2.6s;
-      animation-play-state: paused;
-    }
-    .hop.is-playing .hop__packet {
-      animation-play-state: running;
-    }
-  }
-  @media (min-width: 900px) {
-    .hop__packet {
-      animation-name: hop-x;
-    }
-  }
-}
-@keyframes hop-x {
-  0% {
-    left: 0%;
-    translate: -50% -50%;
-    rotate: 0deg;
-  }
-  14% {
-    left: 25%;
-    translate: -50% -260%;
-  }
-  28%,
-  42% {
-    left: 50%;
-    translate: -50% -50%;
-    rotate: 180deg;
-  }
-  56% {
-    left: 75%;
-    translate: -50% -260%;
-  }
-  70%,
-  100% {
-    left: 100%;
-    translate: -50% -50%;
-    rotate: 360deg;
-  }
-}
-@keyframes hop-y {
-  0% {
-    top: 0%;
-    translate: -50% -50%;
-    rotate: 0deg;
-  }
-  14% {
-    top: 25%;
-    translate: 40% -50%;
-  }
-  28%,
-  42% {
-    top: 50%;
-    translate: -50% -50%;
-    rotate: 180deg;
-  }
-  56% {
-    top: 75%;
-    translate: 40% -50%;
-  }
-  70%,
-  100% {
-    top: 100%;
-    translate: -50% -50%;
-    rotate: 360deg;
-  }
-}
-
-/* ---------- 02 break it on purpose: a dark slab, a request that dies ---------- */
+/* ---------- 01 break it on purpose: a dark slab, a request that dies ---------- */
 
 .story--break {
   background: rgb(var(--c-slab));
@@ -1280,7 +1110,7 @@ h3 {
   }
 }
 
-/* ---------- 03 test your design: checks turning green ---------- */
+/* ---------- 02 test your design: checks turning green ---------- */
 
 .checks {
   display: grid;
@@ -1415,7 +1245,7 @@ h3 {
   }
 }
 
-/* ---------- 04, 05 practice and examples ---------- */
+/* ---------- 03, 04 examples and practice ---------- */
 
 .story--practice {
   background: rgb(var(--c-lilac) / 0.18);
@@ -1460,6 +1290,40 @@ h3 {
 }
 .tiles--examples .tile {
   grid-template-columns: 1fr;
+}
+
+/* ---------- 05 the Arcade: Scale or Fail ---------- */
+
+.story--arcade {
+  background: rgb(var(--c-yellow) / 0.12);
+}
+.arcade {
+  display: grid;
+  gap: 24px;
+  align-items: center;
+}
+.arcade::before {
+  grid-column: 1 / -1;
+}
+@media (min-width: 900px) {
+  .arcade {
+    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  }
+}
+.arcade__text h2 {
+  margin-top: 12px;
+}
+.arcade__facts {
+  display: grid;
+  gap: 10px;
+  font-weight: 600;
+}
+.arcade__facts b {
+  font-family: var(--font-display);
+  font-weight: 800;
+}
+.arcade__cta {
+  justify-self: start;
 }
 
 /* ---------- closer ---------- */

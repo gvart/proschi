@@ -2,11 +2,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { api, ApiError, apiEnabled } from '../../services/api';
 import { challengeDay } from '../../learn/challenge';
 import type { AccountState } from '../../practice/useAccount';
-import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, type Meta } from '../engine/meta';
+import { buy as buyLocal, dailyScenario, equip as equipLocal, firstClear, loadoutFor, MetaError, recordRun, runTwists, type Meta } from '../engine/meta';
 import { dailySeed } from '../engine/rng';
 import type { Game } from '../engine/run';
 import type { GameContent, RunSetup } from '../engine/types';
 import { loadLocalMeta, loadOutbox, pushOutbox, saveLocalMeta, shiftOutbox, type OutboxEvent } from './store';
+import { track } from '../../services/metrics';
 
 /**
  * Where the Arcade's progress lives. Signed out (or in a build without
@@ -144,18 +145,21 @@ export function useArcade(content: GameContent, account: AccountState): Arcade {
 
   const start = useCallback(
     async ({ mode, scenario, ascension = 0 }: { mode: 'normal' | 'daily'; scenario?: string; ascension?: number }) => {
+      track('arcade_run_start');
       if (signedIn) return api<{ runId: string; setup: RunSetup }>('/api/game/runs', { method: 'POST', body: { mode, scenario, ascension } });
       if (mode === 'daily') {
         const day = challengeDay();
-        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0) } };
+        return { setup: { scenario: dailyScenario(content, day).id, seed: dailySeed(day), ascension: 0, mode: 'daily' as const, loadout: loadoutFor(metaRef.current, 0), twists: runTwists(content, metaRef.current, 'daily') } };
       }
-      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension) } };
+      // Signed out the same rule as the Worker's: the basic rules until the first clear.
+      return { setup: { scenario: scenario!, seed: randomSeed(), ascension, mode: 'normal' as const, loadout: loadoutFor(metaRef.current, ascension), twists: runTwists(content, metaRef.current, 'normal') } };
     },
     [signedIn, content],
   );
 
   const finish = useCallback(
     async (game: Game, runId?: string): Promise<RunResult> => {
+      track('arcade_run_end');
       const before = metaRef.current;
       const first = firstClear(before, game.setup.scenario) && game.state.cleared;
       if (signedIn && runId) {

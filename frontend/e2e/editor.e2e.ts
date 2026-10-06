@@ -2,11 +2,12 @@ import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
-/** The default document (the e-commerce example) has six components and a group. */
+/** The e-commerce example has six components and a group. */
 const DEFAULT_NODES = 6;
 
+/** Opens the editor on the e-commerce example (an example link; a first visit opens the smaller hello example). */
 async function openEditor(page: Page) {
-  await page.goto('app/');
+  await page.goto('app/?example=ecommerce');
   await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, DEFAULT_NODES);
 }
@@ -26,7 +27,7 @@ test.describe('editor', () => {
     await openEditor(page);
   });
 
-  test('renders the default example on the canvas', async ({ page }) => {
+  test('renders the example from the link on the canvas', async ({ page }) => {
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('E-Commerce Platform');
     for (const name of ['API Gateway', 'Order Service', 'Orders DB', 'OrderEvents']) {
       await expect(canvasNodes(page).filter({ hasText: name })).toBeVisible();
@@ -202,11 +203,52 @@ test.describe('editor', () => {
   });
 });
 
+test.describe('first visit and example links', () => {
+  test('a first visit opens a small design with traffic and requirements that pass', async ({ page }) => {
+    await page.goto('app/');
+    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Hello Proschi');
+    await waitForCanvas(page, 3);
+    await expect(page.getByText('No problems')).toBeVisible();
+    const views = page.getByRole('tablist', { name: 'Diagram view' });
+    await views.getByRole('tab', { name: /Tests/ }).click();
+    await expect(page.getByText('p99 of Create a note < 200 ms')).toBeVisible();
+    await expect(page.getByText(/^All \d+ passing$/)).toBeVisible();
+  });
+
+  test('?example=<id> opens that example, once however often it is opened', async ({ page }) => {
+    await page.goto('app/?example=login');
+    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Login with Sessions');
+    await waitForCanvas(page);
+    // The address bar turns into a share link.
+    await expect(page).toHaveURL(/\/proschi\/app\/#code=/);
+    await page.goto('app/?example=url-shortener');
+    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');
+    await page.goto('app/?example=login');
+    await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Login with Sessions');
+    await page.getByRole('button', { name: 'Diagrams' }).click();
+    await expect(page.getByRole('menu').getByText('Login with Sessions')).toHaveCount(1);
+  });
+
+  test('an unknown example says so and opens the editor as usual', async ({ page }) => {
+    await page.goto('app/?example=nope');
+    await expect(page.getByText('There is no example called “nope”')).toBeVisible();
+    await waitForCanvas(page);
+  });
+});
+
 test.describe('editor on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('Code and Diagram tabs switch panes', async ({ page }) => {
+  test('a first visit opens on the Code pane', async ({ page }) => {
     await page.goto('app/');
+    const panes = page.getByRole('tablist', { name: 'View', exact: true });
+    await expect(panes.getByRole('tab', { name: /Code/ })).toHaveAttribute('aria-selected', 'true');
+    await expect(codeEditor(page)).toBeVisible();
+    await expect(codeEditor(page)).toContainText('title "Hello Proschi"');
+  });
+
+  test('Code and Diagram tabs switch panes; a link opens on the Diagram', async ({ page }) => {
+    await page.goto('app/?example=ecommerce');
     const panes = page.getByRole('tablist', { name: 'View', exact: true });
     const codeTab = panes.getByRole('tab', { name: /Code/ });
     const diagramTab = panes.getByRole('tab', { name: /Diagram/ });
@@ -227,7 +269,7 @@ test.describe('editor on a phone', () => {
   });
 
   test('the diagram is fitted again after switching back from Code', async ({ page }) => {
-    await page.goto('app/');
+    await page.goto('app/?example=ecommerce');
     const panes = page.getByRole('tablist', { name: 'View', exact: true });
     await waitForCanvas(page, DEFAULT_NODES);
     await expectDiagramFitted(page);

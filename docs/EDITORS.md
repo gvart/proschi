@@ -31,7 +31,18 @@ attaches the `.vsix` to the GitHub release, creating the release if needed.
 
 ## Install
 
-Until the packages are published, build them from the repository:
+The command-line tool and the language server are the `proschi` package on
+npm (Node 18 or newer):
+
+```sh
+npm install -g proschi     # puts `proschi` and `proschi-language-server` on PATH
+npx proschi check docs/    # or run it without installing
+```
+
+The VS Code extension is `proschi-<version>.vsix`, attached to every
+[GitHub release](https://github.com/gvart/proschi/releases).
+
+To build both from the repository instead:
 
 ```sh
 cd tooling
@@ -43,8 +54,9 @@ npm run package:vscode     # dist/proschi.vsix
 
 ## VS Code
 
-Install `tooling/dist/proschi.vsix` (Extensions view → `…` → *Install from
-VSIX…*, or `code --install-extension tooling/dist/proschi.vsix`). It bundles
+Install `proschi-<version>.vsix` from the latest release, or the
+`tooling/dist/proschi.vsix` you built (Extensions view → `…` → *Install from
+VSIX…*, or `code --install-extension proschi-<version>.vsix`). It bundles
 the grammar and the language server; nothing else is needed.
 
 ## IntelliJ IDEA and other JetBrains IDEs

@@ -6,6 +6,7 @@ import { cleanName, requireUser, sessionCookie } from './auth';
 import type { Ctx } from './context';
 import { now, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
+import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
@@ -301,6 +302,10 @@ export async function recordRun(request: Request, ctx: Ctx, problemId: string): 
   const verdict: Verdict | undefined = body.solved ? verify(problem, body.source) : undefined;
   const row = await upsertProgress(ctx.env, user.id, problem, body.source, verdict, imported, day).first<Omit<ProgressRow, 'problem_id'>>();
   if (!row) throw new Error('progress upsert returned no row');
+  // A first verified solve counts as a usage metric: this run set
+  // runs_to_solve, so it equals the runs. Imported solves have none (the page
+  // counted them when they happened, signed out).
+  if (verdict?.solved && !imported && row.runs_to_solve !== null && row.runs_to_solve === row.runs) await countServerEvent(ctx, 'problem_solve');
   return json({ progress: entryOf(row), ...(verdict ? { verdict } : {}) }, 200, NO_STORE);
 }
 
