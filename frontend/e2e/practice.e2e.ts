@@ -1,3 +1,4 @@
+import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
 import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
 
@@ -7,11 +8,11 @@ const problemList = (page: Page) => page.getByRole('main').getByRole('list').fir
 const passedCount = (page: Page) => page.getByText(/^\d+ \/ \d+ passed/);
 
 test.describe('practice', () => {
-  test('lists 25 problems', async ({ page }) => {
+  test('lists 26 problems', async ({ page }) => {
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
-    await expect(problemList(page).getByRole('link')).toHaveCount(25);
-    await expect(page.getByText('0 of 25 solved')).toBeVisible();
+    await expect(problemList(page).getByRole('link')).toHaveCount(26);
+    await expect(page.getByText('0 of 26 solved')).toBeVisible();
   });
 
   test('ends with links to contribute a problem or suggest one, in a new tab', async ({ page }) => {
@@ -158,8 +159,71 @@ test.describe('practice', () => {
     await expect.poll(() => editorText(page)).toBe(solution);
 
     await page.getByRole('link', { name: /Problems/ }).click();
-    await expect(page.getByText('1 of 25 solved')).toBeVisible();
+    await expect(page.getByText('1 of 26 solved')).toBeVisible();
     await expect(problemList(page).getByRole('link', { name: /URL shortener/i }).getByRole('img', { name: 'Solved' })).toBeVisible();
+  });
+
+  test('a failed run names the common mistake it makes, opens its lesson section and adds its cards to the review', async ({ page }) => {
+    // The known wrong design, as if the learner had written it.
+    const source = await readFile(new URL('../src/practice/problems/url-shortener/wrong/miss-never-fills-cache.proschi', import.meta.url), 'utf8');
+    await page.addInitScript((src) => {
+      if (sessionStorage.getItem('seeded')) return;
+      sessionStorage.setItem('seeded', '1');
+      localStorage.setItem('proschi.practice', JSON.stringify({ 'url-shortener': { status: 'attempted', source: src } }));
+    }, source);
+    await page.goto('practice/#/url-shortener');
+    await waitForCanvas(page);
+    await page.getByRole('button', { name: 'Run tests' }).click();
+    await expect(passedCount(page)).toBeVisible();
+
+    const mistake = page.getByRole('region', { name: 'Common mistake' });
+    await expect(mistake.getByRole('heading')).toHaveText('Common mistake: Cache misses that never fill the cache');
+    await expect(mistake).toContainText('After a miss, SET the code in the cache.');
+    // The cards that train it lead to their topic in the review.
+    await expect(mistake.getByRole('link', { name: /cache-aside pattern/ })).toHaveAttribute('href', '#/review/caching');
+    await expect(mistake.getByRole('link')).toHaveCount(3);
+
+    // The lesson opens at the section that teaches the fix.
+    await mistake.getByRole('button', { name: 'Lesson: Cache-aside (lazy loading)' }).click();
+    const lesson = page.getByRole('article', { name: 'Lesson' });
+    await expect(lesson.getByRole('heading', { level: 3, name: 'Cache-aside (lazy loading)' })).toBeInViewport();
+
+    // Its cards go to the review, due now and first in the queue.
+    await mistake.getByRole('button', { name: 'Add these cards to my review' }).click();
+    await expect(mistake.getByRole('status')).toContainText('Added to your review, due now.');
+    await mistake.getByRole('link', { name: 'Review them' }).click();
+    await expect(page).toHaveURL(/#\/review$/);
+    const today = page.getByRole('region', { name: 'Today' });
+    await expect(today).toContainText('3 cards from a mistake you made come first, due now.');
+    await today.getByRole('button', { name: /^Start review/ }).click();
+    await expect(page.getByRole('article', { name: /^Card 1 of / })).toContainText('A cache hit takes 1 ms');
+  });
+
+  test('Hello, Proschi: the language tutorial comes first, and its reference solution solves it', async ({ page }) => {
+    await page.goto('practice/');
+    const first = problemList(page).getByRole('link').first();
+    await expect(first).toContainText('Hello, Proschi');
+    await first.click();
+    await expect(page).toHaveURL(/#\/hello-proschi$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('Hello, Proschi');
+    await waitForCanvas(page);
+
+    // The starter fails every check, one per idea, and points at the name the traffic uses.
+    const run = page.getByRole('button', { name: 'Run tests' });
+    await run.click();
+    await expect(passedCount(page)).toHaveText(/^0 \/ 6 passed/);
+    for (const name of ['A service answers the user', 'Say hello answers with 200', 'The greeting is read from a database', 'Every component has a spare']) {
+      await expect(page.locator('[data-tour="tests"]').getByText(name).first()).toBeVisible();
+    }
+    await expect(page.getByRole('region', { name: 'Common mistake' })).toContainText('A use case name that does not match the traffic');
+
+    page.on('dialog', (dialog) => dialog.accept());
+    await page.getByRole('button', { name: 'Show reference solution' }).click();
+    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await run.click();
+    await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
+    await expect(passedCount(page)).toHaveText(/^6 \/ 6 passed$/);
+    await expect(page.getByRole('region', { name: 'Common mistake' })).toHaveCount(0);
   });
 });
 

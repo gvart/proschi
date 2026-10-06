@@ -1,4 +1,8 @@
 # expect-fail: Transcoding is queued, never in the request path
+# mistake: Handing transcode jobs straight to the transcoder
+# explain: When every worker is busy or one crashes the job is simply lost, and the API cannot tell. Put jobs on a durable queue for the workers to take them from.
+# lesson: transcoding-pipelines
+# cards: queue-load-levelling, long-running-operations
 # The API hands jobs to the transcoder directly, without a queue.
 import "problem.proschi"
 

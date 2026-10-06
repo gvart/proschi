@@ -106,7 +106,7 @@ describe('achievements', () => {
     }
     expect(badge(answer, 'reviews-100')).toMatchObject({ earned: false, current: 20, target: 100 });
     expect(badge(answer, 'streak-3')).toMatchObject({ earned: false, current: 2, target: 3 });
-    expect(badge(answer, 'stage-foundations')).toMatchObject({ earned: false, current: 2, target: 4 });
+    expect(badge(answer, 'stage-foundations')).toMatchObject({ earned: false, current: 2, target: 5 });
     expect(badge(answer, 'first-run-5')).toMatchObject({ current: 1, target: 5 });
     expect(answer.skills.readiness).toBeGreaterThan(0);
     const earnedAt = badge(answer, 'first-card').earnedAt;

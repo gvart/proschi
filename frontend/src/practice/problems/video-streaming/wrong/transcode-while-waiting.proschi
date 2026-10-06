@@ -1,4 +1,8 @@
 # expect-fail: Transcoding is queued, never in the request path
+# mistake: Transcoding while the creator waits
+# explain: A minute-long call sits inside the upload request, which times out, and a burst of uploads needs a fleet sized for the peak. Answer the upload and queue the transcode.
+# lesson: transcoding-pipelines
+# cards: long-running-operations, queue-load-levelling
 # Transcodes while the creator waits.
 import "problem.proschi"
 

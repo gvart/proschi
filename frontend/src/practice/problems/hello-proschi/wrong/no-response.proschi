@@ -1,0 +1,19 @@
+# expect-fail: Say hello answers with 200
+# mistake: A request that never gets its response
+# explain: The use case sends GET /hello but never answers the user, so there is no status to check and no end to measure. Close every request with a response arrow, api --> user : 200, after the work it waits for.
+# lesson: use-cases-requests-and-responses
+# cards: round-trip-latencies, retryable-status
+# The API reads the database but never answers the user.
+import "problem.proschi"
+
+api "Greeting API" [REST API]   x2 "Answers GET /hello"
+db  "Greetings DB" [PostgreSQL] x2 "Stores the greeting text"
+
+user -> api : HTTPS
+api  -> db  : SQL
+
+usecase "Say hello" "Greet the user with the stored greeting" {
+  user -> api : GET /hello
+  api  -> db  : SELECT greeting
+  db  --> api : "Hello"
+}

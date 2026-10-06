@@ -1,5 +1,9 @@
 # expect-fail: An id is made without a round trip to shared storage
 # expect-fail: p99 of Get ID < 40 ms
+# mistake: A ticket table on one MySQL primary
+# explain: Every id is an auto-increment write on one primary, which saturates at this rate, and read replicas add no write capacity. Make ids without a round trip to shared storage.
+# lesson: the-usual-alternatives
+# cards: replicas-do-not-scale-writes, snowflake-id-layout
 # The classic ticket server: every id is an auto-increment row in one MySQL primary.
 import "problem.proschi"
 

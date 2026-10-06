@@ -1,4 +1,8 @@
 # expect-fail: Each generator claims its worker id once, at startup
+# mistake: Asking ZooKeeper on every id
+# explain: Coordination lands on the hot path: each id waits for a ZooKeeper round trip, and any hiccup there stalls id generation. Claim the worker id once at startup and make ids locally.
+# lesson: coordinate-once-at-startup
+# cards: snowflake-id-layout, odd-cluster-size
 # The generator checks its worker id with ZooKeeper on every request.
 import "problem.proschi"
 

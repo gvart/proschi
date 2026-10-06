@@ -1,6 +1,10 @@
 # expect-fail: Ingest never waits for storage
 # expect-fail: p99 of Emit metrics < 40 ms
 # expect-fail: Only aggregates reach storage
+# mistake: Writing every raw datapoint to storage
+# explain: Hosts write their batches straight into the cluster, which takes several times the volume it can, so ingest waits on a saturated store. Aggregate and downsample first, and store only the aggregates.
+# lesson: pre-aggregation-and-downsampling
+# cards: pre-aggregate-counts, metrics-ingest-rate, lsm-write-path
 # Every host writes its raw datapoints straight into M3DB and downsampling happens later: the cluster takes the full volume.
 import "problem.proschi"
 

@@ -1,5 +1,9 @@
 # expect-fail: Location updates are writes to the live map, never the database
 # expect-fail: p99 of Update location < 50 ms
+# mistake: Writing driver locations to the relational database
+# explain: Every location update is a write on a primary built for a fraction of that rate, which saturates and slows both use cases that touch it. Keep live positions in an in-memory geo index and the database for trips.
+# lesson: ephemeral-state-versus-the-record
+# cards: geohash-prefix, replicas-do-not-scale-writes
 # Fails location updates written to the relational database: one primary cannot take them.
 import "problem.proschi"
 

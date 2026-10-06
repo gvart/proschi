@@ -1,4 +1,8 @@
 # expect-fail: A strong store, not the cache, decides who holds a seat
+# mistake: Seat holds in an eventually consistent store
+# explain: Who holds a seat must be read and written consistently, and a store that is eventual by default can let two fans hold the same seat. Keep holds in a strong store with conditional writes.
+# lesson: optimistic-versus-pessimistic-locking-and-why-not-redis
+# cards: when-eventual-is-fine, conditional-stock-update
 # Holds in DynamoDB (eventually consistent).
 import "problem.proschi"
 

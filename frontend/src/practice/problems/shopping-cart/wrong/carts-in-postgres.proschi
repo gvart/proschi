@@ -1,5 +1,9 @@
 # expect-fail: Adds go to an eventually consistent store that is always writable
 # expect-fail: availability of Add to cart ≥ 99.999%
+# mistake: Carts in a relational database
+# explain: Every add needs the one primary of its shard, so a failover or a maintenance window rejects adds and the cart misses five nines. Use an eventually consistent store that is always writable.
+# lesson: availability-vs-consistency
+# cards: never-reject-an-add, cap-during-a-partition, leaderless-replication
 # Carts in a relational database: every add needs the one primary.
 import "problem.proschi"
 

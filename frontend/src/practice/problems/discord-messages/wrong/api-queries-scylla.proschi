@@ -1,4 +1,8 @@
 # expect-fail: Every query goes through the data services
+# mistake: The API queries the database directly
+# explain: It works for ordinary channels, but during a ping storm every client's read of the busy channel goes to the same three replicas and saturates them. A data-service layer routed by channel can merge those reads into one query.
+# lesson: hot-partitions
+# cards: hot-partition-key, quorum-replica-load, hot-key-replicas
 # The API monolith queries ScyllaDB itself: every client that opens the busy channel sends its own read to the same three replicas.
 import "problem.proschi"
 

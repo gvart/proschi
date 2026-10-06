@@ -1,4 +1,8 @@
 # expect-fail: Recording a view never waits for counting
+# mistake: Counting the view before answering
+# explain: Page latency is now tied to Redis: a slow counter cluster slows view recording, spikes hit it directly, and the bot filter is skipped. Write the event to the log and count behind it.
+# lesson: a-durable-log-first-the-work-later
+# cards: queue-load-levelling, pre-aggregate-counts
 # The collector counts the view itself before answering: every page view waits for Redis.
 import "problem.proschi"
 

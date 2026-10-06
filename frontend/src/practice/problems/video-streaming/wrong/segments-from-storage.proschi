@@ -1,4 +1,8 @@
 # expect-fail: cost ≤ $2,500,000/month
+# mistake: Viewers reading segments straight from storage
+# explain: Latency is similar, but every byte is billed at the storage egress rate, millions over the budget. A CDN caches the immutable segments near viewers and cuts the bill.
+# lesson: cdns-for-immutable-segments
+# cards: egress-bill, hls-segments-cache
 # Viewers read segments straight from storage: egress blows the budget.
 import "problem.proschi"
 

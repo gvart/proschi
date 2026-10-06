@@ -1,4 +1,8 @@
 # expect-fail: The index is rebuilt offline from the query log
+# mistake: Triggering the index rebuild from search requests
+# explain: User traffic now starts heavy batch work: a spike becomes a rebuild storm, and quiet hours mean no rebuilds at all. Rebuild on a schedule, offline, from the query log.
+# lesson: logging-off-the-request-path-rebuilding-in-batch
+# cards: batch-is-fine, trie-top-k
 # Fails a rebuild triggered by the search API instead of the scheduler.
 import "problem.proschi"
 

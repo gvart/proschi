@@ -1,5 +1,9 @@
 # expect-fail: The throttle keeps the crowd out of checkout
 # expect-fail: p99 of Checkout scenario Order placed < 150 ms
+# mistake: Letting the whole crowd into checkout
+# explain: More app servers can take the crowd, but the shop's database cannot: thousands of writes a second land on the same hot rows and the pod saturates. Admit buyers through a waiting room at the rate checkout can take.
+# lesson: admission-control-and-virtual-waiting-rooms
+# cards: load-shedding, backpressure, queue-load-levelling
 # No throttle: every buyer goes into checkout, and more app servers take them, but the shop's database cannot.
 import "problem.proschi"
 

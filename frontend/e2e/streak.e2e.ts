@@ -131,6 +131,8 @@ test.describe('solve celebration', () => {
   }
 
   test('a first solve shows what it took next to the reference, and where to go next', async ({ page }) => {
+    // The roadmap's tutorial is done, so the next step after URL Shortener is Pastebin.
+    await seed(page, { 'proschi.practice': { 'hello-proschi': { status: 'solved' } } });
     await page.goto('practice/#/url-shortener');
     await solveWithReference(page);
     // The verdict and the results stay in view.
@@ -158,7 +160,7 @@ test.describe('solve celebration', () => {
 
   test('solving the last problem of a roadmap stage completes it', async ({ page }) => {
     const solved = { status: 'solved' };
-    await seed(page, { 'proschi.practice': { 'url-shortener': solved, pastebin: solved, 'shopping-cart': solved } });
+    await seed(page, { 'proschi.practice': { 'hello-proschi': solved, 'url-shortener': solved, pastebin: solved, 'shopping-cart': solved } });
     await page.goto('practice/#/roadmap/snowflake-ids');
     await page.getByRole('button', { name: 'Start the challenge' }).first().click();
     await solveWithReference(page);

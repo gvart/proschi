@@ -8,11 +8,11 @@ import { expect, test, waitForCanvas } from './fixtures';
 test.describe('lessons', () => {
   test('a roadmap step opens on its lesson, then the challenge; revisits open the challenge', async ({ page }) => {
     await page.goto('practice/#/roadmap');
-    const step = page.getByRole('listitem', { name: /^Stage 1: / }).getByRole('link', { name: /URL Shortener/ });
+    const step = page.getByRole('listitem', { name: /^Stage 1: / }).getByRole('link', { name: /Hello, Proschi/ });
     await expect(step).toContainText('Lesson · Challenge');
     await expect(step).toContainText(/\d+ min read/);
     await step.click();
-    await expect(page).toHaveURL(/#\/roadmap\/url-shortener$/);
+    await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
 
     const lesson = page.getByRole('article', { name: 'Lesson' });
     await expect(lesson).toBeVisible();

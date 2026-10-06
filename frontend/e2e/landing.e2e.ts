@@ -52,9 +52,9 @@ test.describe('landing page', () => {
     await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
   });
 
-  test('practice list shows 25 problems', async ({ page }) => {
+  test('practice list shows 26 problems', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
-    await expect(practice.getByRole('listitem')).toHaveCount(25);
+    await expect(practice.getByRole('listitem')).toHaveCount(26);
     await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
   });
 

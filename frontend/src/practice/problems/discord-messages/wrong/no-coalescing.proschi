@@ -1,4 +1,8 @@
 # expect-fail: Concurrent reads of one channel share one query
+# mistake: Data services that pass every request through
+# explain: The layer adds a hop, but each request still runs its own query, so the hot partition still sees every read. Concurrent requests for the same channel must share one in-flight query.
+# lesson: request-coalescing
+# cards: cache-stampede, hot-key-replicas
 # Data services in front of ScyllaDB, but each request runs its own query: the busy partition gets every read.
 import "problem.proschi"
 

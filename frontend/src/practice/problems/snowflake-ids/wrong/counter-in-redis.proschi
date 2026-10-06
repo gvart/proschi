@@ -1,4 +1,8 @@
 # expect-fail: An id is made without a round trip to shared storage
+# mistake: One shared counter in Redis
+# explain: The numbers pass, but every id is a round trip to one shared key, and a failover before replication can hand out an id twice. Compose ids locally from time, worker and sequence.
+# lesson: composite-ids-time--worker--sequence
+# cards: snowflake-id-layout, async-failover-loss
 # One shared counter in Redis: fast, but every id is still a round trip to it.
 import "problem.proschi"
 

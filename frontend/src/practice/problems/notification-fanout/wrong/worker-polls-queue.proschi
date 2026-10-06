@@ -1,4 +1,8 @@
 # expect-fail: Workers take events from the queue
+# mistake: Modelling the worker as polling the queue
+# explain: When the flow starts with the worker calling the queue, the model reads it as the worker writing to it, and delivery no longer starts at the queue. Model the queue handing the event to the worker instead.
+# lesson: queue-based-load-levelling
+# cards: competing-consumers, visibility-timeout
 # A worker that polls the queue does not start delivery at the queue.
 import "problem.proschi"
 

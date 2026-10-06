@@ -15,12 +15,18 @@ export interface RoadmapStage {
   problems: string[];
 }
 
+/**
+ * Roadmap steps open to everyone, signed in or not: the tutorial that teaches
+ * the language comes before the roadmap asks for an account.
+ */
+export const OPEN_STEPS: readonly string[] = ['hello-proschi'];
+
 export const ROADMAP: RoadmapStage[] = [
   {
     id: 'foundations',
     title: 'Foundations',
-    why: 'Redundancy, durability and a clean read path: two of everything, data that survives a node, and IDs without a single coordinator. Every later design assumes these.',
-    problems: ['url-shortener', 'pastebin', 'shopping-cart', 'snowflake-ids'],
+    why: 'The language first, then redundancy, durability and a clean read path: two of everything, data that survives a node, and IDs without a single coordinator. Every later design assumes these.',
+    problems: ['hello-proschi', 'url-shortener', 'pastebin', 'shopping-cart', 'snowflake-ids'],
   },
   {
     id: 'caching',

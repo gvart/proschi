@@ -1,5 +1,9 @@
 # expect-fail: Suggestions are served by the CDN, then the cache
 # expect-fail: cost ≤ $5,500/month
+# mistake: Serving every keystroke from the servers
+# explain: Without a CDN every keystroke reaches the suggest service, which needs about a hundred replicas, and the budget breaks. The same few thousand prefixes repeat, so cache their answers at the edge.
+# lesson: caching-at-the-edge
+# cards: cdn-cache-control, trie-top-k, choosing-a-ttl
 # Fails suggestions without a CDN: every keystroke reaches the servers.
 import "problem.proschi"
 

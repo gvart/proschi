@@ -1,4 +1,8 @@
 # expect-fail: Uploads are finished without the client
+# mistake: The client marks its own upload complete
+# explain: If the phone loses signal after the upload and before the completion call, the file stays pending forever. Let the bucket's upload event finish the file, so completion never depends on the client.
+# lesson: event-driven-completion
+# cards: upload-completion-events, presigned-upload
 # Fails a client that marks its own upload complete.
 import "problem.proschi"
 

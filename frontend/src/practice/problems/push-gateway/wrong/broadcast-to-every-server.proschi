@@ -1,6 +1,10 @@
 # expect-fail: Messages go to the one push server that holds the connection
 # expect-fail: A connection registers its push server in the registry
 # expect-fail: p99 of Connect < 60 ms
+# mistake: Broadcasting every message to every push server
+# explain: Without a registry each message goes to the whole fleet, so the load grows with the number of servers, exactly backwards, and the push servers saturate. Register each connection's server and send to that one.
+# lesson: a-connection-registry-two-level-lookup
+# cards: routing-to-a-websocket, stateful-gateways
 # No registry: every message goes to all 14 push servers and the one holding the connection delivers it.
 import "problem.proschi"
 

@@ -113,7 +113,10 @@ usecase "Fetch item" "Return one item" {
 }
 `,
     'wrong/database-only.proschi': `# expect-fail: Items are read from the cache first
-# TODO A plausible wrong design (here: no cache) and the tests it must fail.
+# mistake: Every read goes to the database
+# explain: TODO Two or three sentences for a learner whose run fails like this design: what breaks, and what to do instead. Without a cache, every read waits for the database, which takes the full read load.
+# cards: cache-aside, hit-rate-to-db-load
+# TODO A plausible wrong design (here: no cache), the tests it must fail and the mistake it makes.
 import "problem.proschi"
 
 lb  "Load Balancer" [AWS Load Balancer] x2

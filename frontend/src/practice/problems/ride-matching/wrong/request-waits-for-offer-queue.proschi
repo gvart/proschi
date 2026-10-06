@@ -1,4 +1,8 @@
 # expect-fail: The driver's offer never holds up the rider
+# mistake: The ride request waits for the offer queue
+# explain: A synchronous publish ties the rider's request to the queue's latency and health. Publish the offer without waiting and answer the rider.
+# lesson: asynchronous-hand-off-with-a-queue
+# cards: queue-load-levelling, timeouts-on-every-call
 # Fails a ride request that waits for the offer queue.
 import "problem.proschi"
 

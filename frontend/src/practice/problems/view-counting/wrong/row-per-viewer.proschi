@@ -1,4 +1,8 @@
 # expect-fail: Unique viewers go into a HyperLogLog in Redis, not a database
+# mistake: A database row for every viewer of every post
+# explain: It is exact, but it is a write per counted view and billions of rows that never shrink. A HyperLogLog counts distinct viewers in a few kilobytes per post.
+# lesson: hyperloglog-counting-distinct-things-in-fixed-memory
+# cards: hyperloglog, bloom-filter-memory
 # Every counted view is also stored as a row per viewer and post: exact, but a write per view that grows forever.
 import "problem.proschi"
 

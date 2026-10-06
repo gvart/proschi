@@ -1,6 +1,6 @@
 import { statusOf, type Progress, type Status } from './progress';
 import type { AccountState } from './useAccount';
-import type { RoadmapStage } from './roadmapStages';
+import { OPEN_STEPS, type RoadmapStage } from './roadmapStages';
 
 /**
  * The interview prep roadmap: the practice problems as a guided path, in
@@ -14,7 +14,7 @@ import type { RoadmapStage } from './roadmapStages';
  * design needs everything before it.
  */
 
-export { ROADMAP, type RoadmapStage } from './roadmapStages';
+export { OPEN_STEPS, ROADMAP, type RoadmapStage } from './roadmapStages';
 
 /** The practice URL of a problem opened from the roadmap: the problem page then shows where it is on the roadmap. */
 export const roadmapHref = (id: string) => `#/roadmap/${id}`;
@@ -131,11 +131,13 @@ export function roadmapTarget(route: string): { id: string; lesson: boolean } | 
  * an account); or `order` while an earlier problem is unsolved (`next` is the
  * one to solve). A problem that is not on the roadmap is only gated by the
  * account. Lessons opened from the problem list (`#/<id>/lesson`) are not
- * gated at all; only the roadmap's progression is.
+ * gated at all; only the roadmap's progression is. The OPEN_STEPS (the
+ * tutorial) open signed out too.
  */
 export type StepLock = { kind: 'open' } | { kind: 'checking' } | { kind: 'sign-in' } | { kind: 'order'; next: string };
 
 export function stepLock(state: RoadmapState, id: string, access: RoadmapAccess): StepLock {
+  if (access === 'sign-in' && OPEN_STEPS.includes(id)) return { kind: 'open' };
   if (access !== 'open') return { kind: access };
   const step = state.steps.find((s) => s.id === id);
   if (step?.locked && state.next) return { kind: 'order', next: state.next.id };

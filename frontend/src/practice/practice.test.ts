@@ -9,10 +9,13 @@ import { CAPACITY_MESSAGE, PROBLEM_FILE, parseSolution, problemResolver, runTest
 import { validateProblem } from './validate';
 import type { Problem } from './types';
 
+/** Every review card id, from the file names: a wrong design's `# cards:` must name them. */
+const cardIds = new Set(Object.keys(import.meta.glob('./cards/*/*.md')).map((path) => path.replace(/^.*\/(.*)\.md$/, '$1')));
+
 describe('problem catalog', () => {
   it('reads every problem folder', () => {
     expect(catalogErrors.map((e) => e.message)).toEqual([]);
-    expect(problems.length).toBeGreaterThanOrEqual(25);
+    expect(problems.length).toBeGreaterThanOrEqual(26);
   });
 
   it('has unique ids and finds problems by id', () => {
@@ -29,6 +32,7 @@ describe('problem catalog', () => {
 
   it('lists problems by difficulty, then order, then title', () => {
     expect(problems.map((p) => p.id)).toEqual([
+      'hello-proschi',
       'shopping-cart',
       'pastebin',
       'rate-limiter',
@@ -72,7 +76,8 @@ describe('problem catalog', () => {
 
   // validate.ts is the definition `proschi problem check` uses too.
   it.each(problems.map((p) => [p.id, p] as const))('%s is a valid problem', (_id, p: Problem) => {
-    expect(validateProblem(p, defaultEngine).violations).toEqual([]);
+    expect(cardIds.size).toBeGreaterThan(100);
+    expect(validateProblem(p, defaultEngine, { cardIds }).violations).toEqual([]);
   });
 
   const wrong = problems.flatMap((p) => (p.wrong ?? []).map((w) => [`${p.id}/wrong/${w.name}`, p, w.name] as const));

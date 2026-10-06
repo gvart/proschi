@@ -20,13 +20,15 @@ interface TestPanelProps {
   review?: ReactNode;
   /** A first solve's celebration (SolveCelebration), under the verdict and above the results. */
   celebration?: ReactNode;
+  /** After a failed run, the known mistake it matches (MistakePanel), under the results. */
+  mistake?: ReactNode;
 }
 
 const viewButton = (on: boolean) =>
   `inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review, celebration }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review, celebration, mistake }: TestPanelProps) {
   const [view, setView] = useState<'tests' | 'review'>('tests');
   // A new run brings the tests back into view.
   const [shownRun, setShownRun] = useState(run);
@@ -144,6 +146,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
             ))}
           </ul>
         )}
+        {mistake}
         {diagnostics.length > 0 && (
           <ul className="border-t border-ink/10 bg-paper text-xs">
             {diagnostics.map((d, i) => (

@@ -1,4 +1,8 @@
 # expect-fail: A message is stored before the sender hears back
+# mistake: Answering the sender before the message is stored
+# explain: A crash between the answer and the write loses a message the sender already saw as sent. Write the message to ScyllaDB first and answer once the write has succeeded.
+# lesson: common-mistakes
+# cards: ack-after-store, write-ahead-log
 # The data service answers the sender first and writes ScyllaDB afterwards: a crash in between loses a message the sender saw as sent.
 import "problem.proschi"
 

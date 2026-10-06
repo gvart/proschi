@@ -1,5 +1,9 @@
 # expect-fail: The throttle keeps the crowd out of checkout
 # expect-fail: p99 of View product < 50 ms
+# mistake: Throttling buyers inside the app
+# explain: The idea is right but the place is wrong: every buyer turned away still costs an app request, so thousands of rejections a second swamp the app tier and product pages queue behind them. Turn buyers away at the edge, before the app.
+# lesson: admission-control-and-virtual-waiting-rooms
+# cards: load-shedding, api-gateway-scope
 # The app decides who waits: every buyer turned away still costs an app request, and the app tier is swamped.
 import "problem.proschi"
 

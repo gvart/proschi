@@ -1,4 +1,8 @@
 # expect-fail: survive any node failure
+# mistake: Reading every replica on every fetch
+# explain: Comparing all three copies gives correct answers but triples the read load on the file servers, so a set that loses one server cannot carry the reads. Read one replica that the metadata says is up to date.
+# lesson: version-metadata-for-safe-reads
+# cards: quorum-replica-load, quorum-read-size
 # Every fetch reads all three replicas and compares them: three times the read load on the file servers.
 import "problem.proschi"
 

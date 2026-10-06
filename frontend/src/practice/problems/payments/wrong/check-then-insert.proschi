@@ -1,4 +1,8 @@
 # expect-fail: Checkout is durable
+# mistake: Checking for the key, then inserting it
+# explain: Two concurrent retries can both see no row and both charge; in the model a replay only reads, so checkout is not durable on every path. Insert the key under a unique constraint and let the database pick the one winner.
+# lesson: idempotency-keys-under-a-unique-constraint
+# cards: idempotency-key-design, concurrent-idempotency-keys, unique-username
 # Check-then-insert: a replay only reads, so it is not durable.
 import "problem.proschi"
 

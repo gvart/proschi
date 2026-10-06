@@ -1,4 +1,8 @@
 # expect-fail: Misses fill the cache
+# mistake: Cache misses that never fill the cache
+# explain: The miss reads the database and answers but never writes the code into the cache, so the hit rate decays toward zero and the database takes the full read load. After a miss, SET the code in the cache.
+# lesson: cache-aside-lazy-loading
+# cards: cache-aside, hit-rate-to-db-load, average-latency-with-cache
 # A cache miss that never fills the cache.
 import "problem.proschi"
 

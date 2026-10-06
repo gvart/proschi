@@ -1,4 +1,8 @@
 # expect-fail: A purge clears the upper tier before the edge
+# mistake: Purging the edge before the upper tier
+# explain: Between the two purges an edge miss can refill the old asset from the upper tier, which still has it, so the stale copy survives the purge. Purge from the origin outward: the upper tier first, then the edges.
+# lesson: purge-ordering-in-a-hierarchy
+# cards: cdn-cache-control, fingerprinted-assets
 # The edge is purged first: an edge miss before the upper tier is purged refills the old asset from it.
 import "problem.proschi"
 

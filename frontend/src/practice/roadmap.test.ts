@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock, unlockHint, validateRoadmap, type RoadmapStage } from './roadmap';
+import { OPEN_STEPS, ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock, unlockHint, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 
 /**
@@ -137,6 +137,15 @@ describe('stepLock', () => {
     expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
     expect(unlockHint(stepLock(state, 'a', 'sign-in'), title)).toBe('Sign in to start the roadmap');
     expect(stepLock(state, 'a', 'checking')).toEqual({ kind: 'checking' });
+  });
+
+  it('opens the tutorial signed out: the first step, which teaches the language', () => {
+    expect(OPEN_STEPS).toEqual(['hello-proschi']);
+    expect(ROADMAP[0].problems[0]).toBe('hello-proschi');
+    const state = roadmapState(stages(['hello-proschi', 'a']), {});
+    expect(stepLock(state, 'hello-proschi', 'sign-in')).toEqual({ kind: 'open' });
+    expect(stepLock(state, 'hello-proschi', 'checking')).toEqual({ kind: 'checking' });
+    expect(stepLock(state, 'a', 'sign-in')).toEqual({ kind: 'sign-in' });
   });
 
   it('leaves a problem that is not on the roadmap to the account alone', () => {

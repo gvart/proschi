@@ -1,0 +1,19 @@
+import "problem.proschi"
+
+api "Greeting API" [REST API]   x2 "Answers GET /hello"
+db  "Greetings DB" [PostgreSQL] x2 "Stores the greeting text"
+
+user -> api : HTTPS
+api  -> db  : SQL
+
+decision "Two of everything" {
+  because "One replica of the API or the database is a single point of failure, and the availability target is 99.9%"
+  rejected "One replica each" "Each replica is down for a few hours a month, and both are on every request"
+}
+
+usecase "Say hello" "Greet the user with the stored greeting" {
+  user -> api  : GET /hello
+  api  -> db   : SELECT greeting
+  db  --> api  : "Hello"
+  api --> user : 200 {"message": "Hello, Ada"}
+}

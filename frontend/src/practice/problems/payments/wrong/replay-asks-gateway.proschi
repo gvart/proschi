@@ -1,4 +1,8 @@
 # expect-fail: p99 of Checkout scenario Replay < 100 ms
+# mistake: Answering a replay by asking the gateway
+# explain: A replay pays for a slow third-party call on what should be a fast path, and adds gateway load just when clients are retrying. Return the stored result instead.
+# lesson: idempotency-keys-under-a-unique-constraint
+# cards: idempotency-key-design, retry-amplification
 # A replay asks the gateway for the charge instead of the stored result (slow).
 import "problem.proschi"
 

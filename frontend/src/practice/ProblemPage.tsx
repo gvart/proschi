@@ -36,6 +36,8 @@ import { eyebrow, field, iconButton, subBar, toolButton } from '../components/Pl
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 // Loaded on a problem's first solve, with the related cards.
 const SolveCelebration = lazy(() => import('./SolveCelebration'));
+// Loaded after a failed run, with the cards of the mistake it matches.
+const MistakePanel = lazy(() => import('./MistakePanel'));
 
 const PARSE_DELAY_MS = 150;
 
@@ -100,6 +102,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     }
   };
   const editorRef = useRef<CodeEditorHandle>(null);
+  const lessonRef = useRef<HTMLDivElement>(null);
+  /** Opens the lesson at a heading, e.g. from a mistake's link. */
+  const openLessonAt = (id: string) => {
+    setPane('lesson');
+    // Once the lesson is shown.
+    requestAnimationFrame(() => lessonRef.current?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' }));
+  };
   const zen = useZenMode();
   const keyboard = useKeyboardViewport();
   const status = statusOf(progress, problem.id);
@@ -254,7 +263,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           )}
           {/* Both stay mounted, so the hints already shown survive switching. */}
           {hasLesson && (
-            <div className={`${lessonShown ? '' : 'hidden'} px-4 py-4`}>
+            <div ref={lessonRef} className={`${lessonShown ? '' : 'hidden'} px-4 py-4`}>
               <LessonView source={problem.lesson!} onStart={startChallenge} />
             </div>
           )}
@@ -287,6 +296,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               onRun={runNow}
               onSelect={goTo}
               review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
+              mistake={
+                run && !run.result.blocked && !run.result.solved && problem.wrong?.length ? (
+                  <Suspense fallback={null}>
+                    <MistakePanel problem={problem} engine={engine} results={run.result.results} onLesson={openLessonAt} />
+                  </Suspense>
+                ) : undefined
+              }
               celebration={
                 firstSolve && run?.result.solved ? (
                   <Suspense fallback={null}>

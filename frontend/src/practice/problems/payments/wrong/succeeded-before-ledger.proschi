@@ -1,4 +1,8 @@
 # expect-fail: The payment is marked succeeded only once the money is booked
+# mistake: Marking a payment succeeded before booking the ledger
+# explain: A crash in between leaves a payment that replays as succeeded with no money booked, and nothing will ever retry it. Order the writes so every crash is recoverable: book the ledger, then mark the payment succeeded.
+# lesson: order-the-writes-so-every-crash-is-recoverable
+# cards: saga-isolation, transactional-outbox
 # Marks the payment succeeded before booking the ledger.
 import "problem.proschi"
 

@@ -2,7 +2,7 @@ import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from '
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
+import { OPEN_STEPS, roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
@@ -143,13 +143,15 @@ function StageSection({
   state: RoadmapState;
   problems: ProblemListing[];
   current: boolean;
-  /** Not started (signed out): every problem shows, none opens, nor do their lessons. */
+  /** Not started (signed out): every problem shows, none opens but the OPEN_STEPS (the tutorial), nor do their lessons. */
   preview: boolean;
   access: RoadmapAccess;
   lessons: Record<string, number>;
 }) {
   // A preview shows the problems without the viewer's progress.
-  const steps = state.steps.filter((s) => s.stage === index).map((s) => (preview ? { ...s, status: 'todo' as const, locked: true } : s));
+  const steps = state.steps
+    .filter((s) => s.stage === index)
+    .map((s) => (preview ? { ...s, status: 'todo' as const, locked: !(access === 'sign-in' && OPEN_STEPS.includes(s.id)) } : s));
   const solved = steps.filter((s) => s.status === 'solved').length;
   return (
     <li aria-label={`Stage ${index + 1}: ${stage.title}`}>

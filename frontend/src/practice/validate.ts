@@ -3,6 +3,8 @@ import { parse } from '../dsl/parser';
 import type { Diagnostic } from '../dsl/types';
 import { defaultEngine, type Engine } from '../hld/engine';
 import { lessonIssues } from './lesson';
+import { headingIds } from './markdown';
+import { readMistake } from './mistakes';
 import { GIVEN, LESSON_MD, PROBLEM_MD, SOLUTION, STARTER, WRONG_DIR, expectFailLines } from './problemFiles';
 import type { Problem } from './types';
 import { PROBLEM_FILE, parseSolution, runTests } from './workspace';
@@ -32,6 +34,8 @@ export interface WrongReport {
   missing: string[];
   /** Tests it fails without naming them (informational). */
   alsoFails: string[];
+  /** The title of the mistake it makes (its `# mistake:` line). */
+  mistake?: string;
 }
 
 export interface ProblemReport {
@@ -58,7 +62,15 @@ function firstCodeLine(source: string): { text: string; line: number } {
   return i < 0 ? { text: '', line: lines.length } : { text: lines[i], line: i + 1 };
 }
 
-export function validateProblem(problem: Problem, engine: Engine = defaultEngine): ProblemReport {
+export interface ValidateOptions {
+  /**
+   * Every review card id (frontend/src/practice/cards): a wrong design's
+   * `# cards:` must name existing cards. Without it the ids are not checked.
+   */
+  cardIds?: ReadonlySet<string>;
+}
+
+export function validateProblem(problem: Problem, engine: Engine = defaultEngine, options: ValidateOptions = {}): ProblemReport {
   const violations: Violation[] = [];
   const add = (file: string, message: string, line?: number) => violations.push({ file, message, ...(line ? { line } : {}) });
   const fileOf = (d: Diagnostic, own: string) => (d.file === PROBLEM_FILE ? GIVEN : own);
@@ -105,11 +117,27 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
   const starterFails = starterRun.results.filter((r) => !r.passed).map((r) => r.name);
   if (!starterRun.blocked && starterFails.length === 0) add(STARTER, 'The starter passes every test; it must leave something to solve');
 
-  // wrong/*.proschi: parse without errors and fail every test they name.
+  // wrong/*.proschi: parse without errors, fail every test they name, and say which mistake they make.
+  const lessonIds = problem.lesson === undefined ? undefined : new Set(headingIds(problem.lesson));
   const wrong: WrongReport[] = (problem.wrong ?? []).map((w) => {
     const file = `${WRONG_DIR}/${w.name}.proschi`;
     const expectFail = w.expectFail.length ? w.expectFail : expectFailLines(w.source);
     if (expectFail.length === 0) add(file, 'Start the file with one or more "# expect-fail: <test name>" lines', 1);
+    const { mistake, issues } = readMistake(w.source);
+    for (const issue of issues) add(file, issue.message, issue.line);
+    const fieldLine = (field: string) => w.source.split('\n').findIndex((l) => l.startsWith(`# ${field}:`)) + 1 || undefined;
+    if (!mistake) add(file, 'Name the mistake: add "# mistake: <one-line title>" and "# explain: <two or three sentences>" lines under the "# expect-fail:" lines', 1);
+    else {
+      if (!mistake.explain) add(file, 'Explain the mistake: add an "# explain: <two or three sentences>" line', fieldLine('mistake'));
+      if (problem.lesson !== undefined && mistake.lesson === undefined) add(file, 'Link the lesson: add a "# lesson: <heading id>" line naming the lesson section that teaches the fix', fieldLine('mistake'));
+      if (mistake.lesson !== undefined && !lessonIds) add(file, `"# lesson: ${mistake.lesson}" links to a lesson, but the problem has no ${LESSON_MD}`, fieldLine('lesson'));
+      else if (mistake.lesson !== undefined && lessonIds && !lessonIds.has(mistake.lesson)) {
+        add(file, `The lesson has no heading with the id "${mistake.lesson}" (ids: ${[...lessonIds].join(', ')})`, fieldLine('lesson'));
+      }
+      for (const card of mistake.cards) {
+        if (options.cardIds && !options.cardIds.has(card)) add(file, `No review card "${card}" (a file cards/<topic>/${card}.md)`, fieldLine('cards'));
+      }
+    }
     const code = firstCodeLine(w.source);
     if (code.text !== IMPORT_LINE) add(file, `After the comment lines the file must start with ${IMPORT_LINE}`, code.line);
     const parsed = parseSolution(problem, w.source);
@@ -130,7 +158,7 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
         }
       }
     }
-    return { name: w.name, file, expectFail, failed, missing, alsoFails: failed.filter((n) => !expectFail.includes(n)) };
+    return { name: w.name, file, expectFail, failed, missing, alsoFails: failed.filter((n) => !expectFail.includes(n)), ...(mistake ? { mistake: mistake.title } : {}) };
   });
 
   return { id: problem.id, tests: solutionRun.results.length, starterFails, wrong, violations };

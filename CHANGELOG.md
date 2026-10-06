@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Failing tests teach.** When your design fails a problem's tests the way a
+  known mistake does, the problem page names it under the tests (*Common
+  mistake: …*), explains what breaks and what to do instead, links the lesson
+  section that teaches the fix and lists the review cards that train it.
+  **Add these cards to my review** puts them first in your daily review, due
+  now. Every one of the 90 wrong designs names its mistake, and
+  `proschi problem check` checks the new `# mistake:`, `# explain:`,
+  `# lesson:` and `# cards:` lines.
+- **Hello, Proschi**, a tutorial problem for the language: nodes,
+  connections, a use case with its request and response, the traffic, a
+  requirement, and a replica that fixes availability, one test per idea. It
+  is the first step of the roadmap and opens without signing in.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

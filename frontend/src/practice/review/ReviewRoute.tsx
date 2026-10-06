@@ -3,7 +3,7 @@ import { ArrowRight, Flame, Layers, LogIn, PartyPopper, RotateCcw, Target } from
 import deck from 'virtual:practice-cards';
 import type { Card } from '../../learn/cards';
 import { nextState, type Rating } from '../../learn/fsrs';
-import { buildSession, isNew, localDay, NEW_PER_DAY, overview, SESSION_SIZE, type CardReview, type CardStates, type DayCounts, type SessionItem } from '../../learn/review';
+import { buildSession, focusedCards, isNew, localDay, pruneFocus, NEW_PER_DAY, overview, SESSION_SIZE, type CardReview, type CardStates, type DayCounts, type SessionItem } from '../../learn/review';
 import { computeStreak, milestoneReached, recapIsEmpty, withActivity, type DailyGoal, type Streak } from '../../learn/streak';
 import type { Account } from '../useAccount';
 import { dismissRecap, recapDismissed, summarize, type Activity } from '../activity';
@@ -11,6 +11,7 @@ import { Celebration, GoalPicker, StreakWidget, WeeklyRecapCard } from '../Strea
 import { PROVIDER_LABEL } from '../account';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton, toolButton } from '../../components/Playground/ui';
+import { loadFocus, saveFocus } from './focus';
 import { accountStore, localStore, memoryStore, pendingReviews, reviewId, signedOutError, type CardStore } from './store';
 import ReviewSession, { type SessionResult } from './ReviewSession';
 import { notifyActivity } from '../skills/activity';
@@ -74,6 +75,8 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
   const [load, setLoad] = useState<Load>({ status: 'loading' });
   const [attempt, setAttempt] = useState(0);
   const [view, setView] = useState<View>({ kind: 'home' });
+  // Cards added from a mistake on a problem page (./focus.ts): first in the queue, due now.
+  const [focus, setFocus] = useState(loadFocus);
   // The weekly recap, once dismissed here (storage keeps it dismissed for the rest of the week).
   const [recapHidden, setRecapHidden] = useState(false);
 
@@ -89,6 +92,10 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
         if (cancelled) return;
         setStates(loaded.states);
         setToday(loaded.today);
+        // Cards reviewed since they were added (on this device or another) leave the queue.
+        const pruned = pruneFocus(loadFocus(), deck.cards, loaded.states);
+        saveFocus(pruned);
+        setFocus(pruned);
         setLoad({ status: 'ready' });
         if (hadPending) refreshActivity();
       },
@@ -141,7 +148,8 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
   const scope = topic ? stats.topics.find((t) => t.topic.id === topic.id) : undefined;
   // Training one topic is asked for: its new cards are not held to the daily allowance.
   const newLimit = topic ? SESSION_SIZE : Math.max(0, NEW_PER_DAY - today.new);
-  const items = buildSession(deck.cards, states, deck.topics, { now, topic: topic?.id, deck: sampleOnly, newLimit });
+  const items = buildSession(deck.cards, states, deck.topics, { now, topic: topic?.id, deck: sampleOnly, newLimit, focus });
+  const focused = focusedCards(deck.cards, states, focus, { topic: topic?.id }).length;
 
   useEffect(() => {
     document.title = topic ? `Review: ${topic.title} · Proschi practice` : 'Daily review · Proschi practice';
@@ -247,6 +255,12 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
             <Count label="Reviewed today" value={today.reviews} />
             <Count label={topic ? 'Cards in this topic' : 'Cards'} value={(scope ?? stats).total} />
           </dl>
+          {focused > 0 && (
+            <p className="mt-3 flex items-center gap-2 text-sm text-ink">
+              <Target size={14} aria-hidden="true" />
+              {focused === 1 ? '1 card' : `${focused} cards`} from a mistake you made {focused === 1 ? 'comes' : 'come'} first, due now.
+            </p>
+          )}
           {items.length > 0 ? (
             <button type="button" onClick={() => setView({ kind: 'session', items })} className={`mt-4 w-full justify-center min-h-[48px] sm:w-auto ${primaryButton}`}>
               Start review · {items.length} {items.length === 1 ? 'card' : 'cards'}

@@ -1,4 +1,8 @@
 # expect-fail: Divergent versions are merged and written back
+# mistake: Resolving conflicts with last write wins
+# explain: When two tabs add items at the same moment, keeping the newest version silently drops the other add, and clock skew makes 'newest' unreliable anyway. Merge divergent versions and write the merge back.
+# lesson: versioning-and-merge-on-read
+# cards: last-write-wins-loss, version-vectors, crdts
 # Divergent versions are resolved by keeping the newest one: a concurrent add is lost.
 import "problem.proschi"
 

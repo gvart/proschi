@@ -1,5 +1,9 @@
 # expect-fail: p99 of Edit block < 70 ms
 # expect-fail: p99 of Load page < 70 ms
+# mistake: Keeping one database and adding replicas
+# explain: Replicas add read capacity, but every edit still lands on the one primary, which takes a small fraction of the write rate. Split the data into shards so many primaries share the writes.
+# lesson: replicas-scale-reads-shards-scale-writes
+# cards: replicas-do-not-scale-writes, shards-for-write-rate
 # Keep the monolith and add replicas: every edit still lands on its one primary.
 import "problem.proschi"
 

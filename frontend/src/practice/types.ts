@@ -49,6 +49,20 @@ export interface WrongDesign {
   source: string;
   /** Names of the tests it must fail, from its `# expect-fail: <name>` lines. */
   expectFail: string[];
+  /** The mistake it makes, from its `# mistake:`, `# explain:`, `# lesson:` and `# cards:` lines (mistakes.ts). */
+  mistake?: Mistake;
+}
+
+/** A known mistake: what a learner whose run fails like a wrong design is shown. */
+export interface Mistake {
+  /** One line, e.g. "Cache misses that never fill the cache". */
+  title: string;
+  /** Two or three sentences: what breaks, and what to do instead. */
+  explain: string;
+  /** The id of a heading in the problem's lesson, e.g. cache-aside-lazy-loading. */
+  lesson?: string;
+  /** Ids of review cards that train the idea. */
+  cards: string[];
 }
 
 export const DIFFICULTIES: Problem['difficulty'][] = ['easy', 'medium', 'hard'];

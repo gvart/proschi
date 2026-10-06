@@ -1,4 +1,8 @@
 # expect-fail: Downloads are served by the CDN
+# mistake: A load balancer where the CDN should be
+# explain: A load balancer spreads requests but caches nothing, so every download still reaches the origin and egress is billed at the full rate. Large downloads belong behind a CDN.
+# lesson: cdns-for-large-downloads
+# cards: egress-bill, l4-vs-l7-load-balancer
 # Fails downloads through a load balancer instead of a CDN.
 import "problem.proschi"
 

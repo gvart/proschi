@@ -1,4 +1,8 @@
 # expect-fail: The pod's database decides the stock and records the order
+# mistake: Stock counted in Redis, orders written to MySQL
+# explain: Two stores decide one thing: a crash or a failover between the DECR and the order leaves units sold with no order, or more orders than units. Decrement the stock and record the order in one transaction in the pod's database.
+# lesson: the-stock-decision-one-store-one-transaction
+# cards: cache-cannot-decide, conditional-stock-update, write-back-risk
 # The stock is a Redis counter (DECR) and the order goes to MySQL: two stores that a crash between the calls leaves disagreeing.
 import "problem.proschi"
 

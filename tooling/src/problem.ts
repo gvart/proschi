@@ -19,7 +19,10 @@ export const PROBLEM_HELP = `problem Practice problems, one folder each (docs/PR
         frontend/src/practice/problems when run inside it): front matter, the
         given (no errors, canonical format), the solution (no diagnostics,
         canonical, passes every test), the starter (fails a test) and each
-        wrong/ design (fails every test its "# expect-fail:" lines name).
+        wrong/ design (fails every test its "# expect-fail:" lines name, and
+        names its mistake: "# mistake:" and "# explain:", a "# lesson:"
+        heading that exists, "# cards:" that exist in the sibling cards
+        folder).
         Exits with 1 on any violation.
         new scaffolds a folder that already passes check, with TODOs.`;
 
@@ -57,8 +60,26 @@ export interface FolderReport extends ProblemReport {
   loaded: boolean;
 }
 
+/**
+ * The review card ids of the cards folder next to a problems folder
+ * (frontend/src/practice/cards, docs/CARDS.md): the file names of its
+ * `<topic>/<id>.md`. Undefined when there is no such folder, and wrong designs'
+ * `# cards:` lines are then not checked.
+ */
+export function siblingCardIds(problemsDir: string): Set<string> | undefined {
+  const cards = join(problemsDir, '..', 'cards');
+  if (!existsSync(join(cards, 'tags.json'))) return undefined;
+  const ids = new Set<string>();
+  for (const topic of readdirSync(cards, { withFileTypes: true })) {
+    if (!topic.isDirectory()) continue;
+    for (const file of readdirSync(join(cards, topic.name))) if (file.endsWith('.md')) ids.add(file.slice(0, -'.md'.length));
+  }
+  return ids;
+}
+
 /** Checks every problem folder below `dir`, sorted by folder name. */
 export function checkProblems(dir: string): FolderReport[] {
+  const cardIds = siblingCardIds(dir);
   return readdirSync(dir, { withFileTypes: true })
     .filter((e) => e.isDirectory() && !e.name.startsWith('.') && e.name !== 'node_modules')
     .map((e) => e.name)
@@ -67,7 +88,7 @@ export function checkProblems(dir: string): FolderReport[] {
       const folder = displayPath(join(dir, id));
       try {
         const problem = problemFromFiles(id, readProblemFolder(join(dir, id)));
-        return { folder, loaded: true, ...validateProblem(problem) };
+        return { folder, loaded: true, ...validateProblem(problem, undefined, { cardIds }) };
       } catch (e) {
         if (!(e instanceof ProblemFolderError)) throw e;
         const violation: Violation = { file: e.file ?? '.', message: e.detail, ...(e.line ? { line: e.line } : {}) };
@@ -94,7 +115,7 @@ export function formatProblemReports(dir: string, reports: FolderReport[], style
     for (const v of r.violations) lines.push(`    ${where(r, v)}${v.line ? `:${v.line}` : ''}: ${v.message}`);
     for (const w of r.wrong) {
       if (w.missing.length) continue; // reported above
-      lines.push(`    ${WRONG_DIR}/${w.name}: fails ${quote(w.expectFail)}${w.alsoFails.length ? `; also fails ${quote(w.alsoFails)}` : ''}`);
+      lines.push(`    ${WRONG_DIR}/${w.name}: fails ${quote(w.expectFail)}${w.alsoFails.length ? `; also fails ${quote(w.alsoFails)}` : ''}${w.mistake ? ` (${w.mistake})` : ''}`);
     }
   }
   if (style === 'text') {
@@ -197,7 +218,8 @@ It already passes \`proschi problem check\`; now make it your problem:
      a small valid start that fails at least one.
   4. Calibrate: set the latency, cost and availability limits between the
      reference design and brute-force designs, and prove it with wrong/
-     designs that start with "# expect-fail: <test name>".
+     designs that start with "# expect-fail: <test name>", then name the
+     mistake each makes ("# mistake:", "# explain:", "# lesson:", "# cards:").
   5. Run: proschi problem check ${displayPath(dir)}`);
   return 0;
 }

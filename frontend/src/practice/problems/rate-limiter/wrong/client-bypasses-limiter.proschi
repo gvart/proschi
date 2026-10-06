@@ -1,4 +1,8 @@
 # expect-fail: Rejected calls never reach the Orders API
+# mistake: A path around the limiter
+# explain: A direct connection from the client to the Orders API lets abusive clients skip the limiter, which then protects nothing. Remove every route to the backend that does not pass through the limiter.
+# lesson: placement-no-bypass-and-failing-open
+# cards: api-gateway-scope, fail-open-or-closed
 # A direct connection from the client to the Orders API bypasses the limiter.
 import "problem.proschi"
 

@@ -1,0 +1,16 @@
+# expect-fail: The greeting is read from a database
+# mistake: Keeping the greeting inside the API
+# explain: The API answers from its own memory, so a restart or a second replica has no shared greeting to read, and changing it means redeploying. Put the data in a database node and read it in the use case before answering.
+# lesson: connections
+# cards: when-relational, block-file-object
+# The API answers on its own; there is no database.
+import "problem.proschi"
+
+api "Greeting API" [REST API] x2 "Answers GET /hello with a greeting kept in memory"
+
+user -> api : HTTPS
+
+usecase "Say hello" "Greet the user" {
+  user -> api  : GET /hello
+  api --> user : 200 {"message": "Hello, Ada"}
+}

@@ -87,6 +87,11 @@ export function lessonToc(blocks: Block[]): { id: string; text: string }[] {
   return blocks.flatMap((b) => (b.kind === 'heading' && b.level === 2 ? [{ id: b.id, text: inlineText(b.children) }] : []));
 }
 
+/** The ids of every heading of a Markdown text, as the page gives them: what a link to a section of a lesson points at. */
+export function headingIds(source: string): string[] {
+  return parseMarkdown(source).flatMap((b) => (b.kind === 'heading' ? [b.id] : []));
+}
+
 /**
  * Heading ids, GitHub style (as the docs pages make them, plugins/docsSite.ts):
  * lowercase, punctuation dropped, spaces to `-`, a repeat gets `-1`, `-2`.

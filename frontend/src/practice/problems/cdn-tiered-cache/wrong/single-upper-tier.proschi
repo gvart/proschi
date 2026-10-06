@@ -1,4 +1,8 @@
 # expect-fail: survive any node failure
+# mistake: One upper-tier data center and no fallback
+# explain: Every edge miss depends on a single upper-tier node. When it fails no miss can be filled: an outage for everything not already cached at the edge. Give the upper tier a second data center to fail over to.
+# lesson: failover-without-stampedes
+# cards: correlated-failures, three-replicas-parallel, surviving-a-zone
 # One upper-tier data center and no fallback: when it is down, no edge miss can be filled.
 import "problem.proschi"
 

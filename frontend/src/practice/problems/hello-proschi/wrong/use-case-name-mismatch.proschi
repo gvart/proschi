@@ -1,0 +1,22 @@
+# expect-fail: A service answers the user
+# expect-fail: Say hello answers with 200
+# expect-fail: The greeting is read from a database
+# mistake: A use case name that does not match the traffic
+# explain: The traffic, requirements and tests refer to the use case by its exact name, "Say hello". A use case called anything else gets no traffic and no test finds it, so they fail even though the flow is right. Copy the name from the traffic block.
+# lesson: traffic
+# cards: qps-from-daily-users, seconds-in-a-day
+# The flow is right, but the use case is called "Hello".
+import "problem.proschi"
+
+api "Greeting API" [REST API]   x2 "Answers GET /hello"
+db  "Greetings DB" [PostgreSQL] x2 "Stores the greeting text"
+
+user -> api : HTTPS
+api  -> db  : SQL
+
+usecase "Hello" "Greet the user with the stored greeting" {
+  user -> api  : GET /hello
+  api  -> db   : SELECT greeting
+  db  --> api  : "Hello"
+  api --> user : 200 {"message": "Hello, Ada"}
+}

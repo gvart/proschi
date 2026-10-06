@@ -1,5 +1,9 @@
 # expect-fail: p99 of Connect < 60 ms
 # expect-fail: survive any node failure
+# mistake: The connection registry in PostgreSQL
+# explain: Every connect is a write and the connect rate is more than one primary takes; read replicas do not help, and rows never expire. Keep the registry in a fast in-memory store with a TTL on each route.
+# lesson: a-connection-registry-two-level-lookup
+# cards: replicas-do-not-scale-writes, presence-heartbeats
 # The registry in PostgreSQL: every connection is a write, and 5.5k a second is more than one primary takes. Rows do not expire either.
 import "problem.proschi"
 

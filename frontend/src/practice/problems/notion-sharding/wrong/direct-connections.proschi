@@ -1,4 +1,8 @@
 # expect-fail: Queries go through PgBouncer
+# mistake: Every API server connecting to every database
+# explain: Hundreds of API processes times dozens of databases is thousands of Postgres connections, each a backend process with its own memory. Put a connection pooler such as PgBouncer between them.
+# lesson: logical-shards-and-the-routing-layer
+# cards: connection-pooler, connection-pool-size
 # Every API server opens its own connections to all 32 databases: thousands of Postgres connections, each a process on the server.
 import "problem.proschi"
 

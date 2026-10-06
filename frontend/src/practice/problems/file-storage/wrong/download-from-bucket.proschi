@@ -1,5 +1,9 @@
 # expect-fail: Downloads are served by the CDN
 # expect-fail: cost ≤ $45,000/month
+# mistake: Downloads served straight from the bucket
+# explain: Signed bucket URLs are correct, but every byte leaves at the bucket's egress rate, which puts the bill far over the budget. A CDN in front of the bucket serves the bytes closer to users at a lower rate.
+# lesson: cdns-for-large-downloads
+# cards: egress-bill, object-vs-block-storage
 # Fails downloads straight from the bucket: the egress breaks the budget.
 import "problem.proschi"
 

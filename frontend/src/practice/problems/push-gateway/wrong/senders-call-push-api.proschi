@@ -1,6 +1,10 @@
 # expect-fail: Senders hand messages to Kafka and never call push servers
 # expect-fail: p99 of Send < 30 ms
 # expect-fail: Send is durable
+# mistake: Senders calling a push API and waiting for delivery
+# explain: Each sender waits for the lookup and the delivery, a burst hits the fleet directly, and nothing is stored before the answer. Senders hand messages to Kafka, and delivery happens behind it.
+# lesson: a-queue-between-many-senders-and-the-delivery-fleet
+# cards: queue-load-levelling, push-is-best-effort, store-before-fanout
 # No queue: senders call a push API that looks up the connection and delivers before answering, so every sender waits for delivery.
 import "problem.proschi"
 

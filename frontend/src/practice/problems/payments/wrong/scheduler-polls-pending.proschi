@@ -1,4 +1,8 @@
 # expect-fail: Pending charges are retried from a queue with the same key
+# mistake: A scheduler polling for pending payments
+# explain: Sweeping the table works, but it gives up the queue's delivery guarantees and adds polling load and lock contention. Put ambiguous charges on a queue and retry them with the same idempotency key.
+# lesson: ambiguous-failures-and-queue-driven-retries
+# cards: delayed-retries, at-least-once-needs-idempotency, transactional-outbox
 # A scheduler polls for pending payments instead of a queue.
 import "problem.proschi"
 

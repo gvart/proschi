@@ -1,5 +1,9 @@
 # expect-fail: Product pages are served from the edge cache
 # expect-fail: cost ≤ $2,000/month
+# mistake: Rendering every product page in the app
+# explain: Every view becomes an app request and a database read, so the app needs dozens of replicas and the budget breaks. Product pages are the same for every buyer and belong in the edge cache.
+# lesson: caching-at-the-edge
+# cards: cdn-cache-control, choosing-a-ttl
 # Every product page is rendered by the app: forty times the app servers, and every view reads the database.
 import "problem.proschi"
 

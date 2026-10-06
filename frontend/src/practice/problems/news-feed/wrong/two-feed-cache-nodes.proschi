@@ -1,4 +1,8 @@
 # expect-fail: survive any node failure
+# mistake: Two feed cache nodes for a 200x fan-out
+# explain: With both nodes up each is about half busy; lose one and the survivor needs more than its whole capacity, so feeds stop updating. Size the cache to carry the fan-out writes with a node down.
+# lesson: common-mistakes
+# cards: fanout-write-amplification, surviving-a-zone
 # Two feed cache nodes cannot take the 200x fan-out when one fails.
 import "problem.proschi"
 

@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { cpSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -71,7 +71,7 @@ describe('proschi problem check', () => {
   it('passes the repository problems', () => {
     const r = capture(['check', repoProblems]);
     expect(r.code).toBe(0);
-    expect(r.out).toMatch(/^25 problems, \d+ wrong designs: no violations$/m);
+    expect(r.out).toMatch(/^26 problems, \d+ wrong designs: no violations$/m);
     expect(capture(['check'], __dirname).out).toBe(r.out);
   });
 
@@ -98,7 +98,9 @@ describe('proschi problem check', () => {
     ['a wrong design that passes', (f: string) => writeFileSync(join(f, 'wrong', 'fine.proschi'), `# expect-fail: Items are read from the cache first\n${readFileSync(join(f, 'solution.proschi'), 'utf8')}`), /echo\/wrong\/fine\.proschi:1: Expected to fail "Items are read from the cache first", but it passes/],
     ['a wrong design naming no test', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace('# expect-fail: Items are read from the cache first', '# expect-fail: Items are fast')), /echo\/wrong\/database-only\.proschi:1: No test or requirement is named "Items are fast"/],
     ['a wrong design without expect-fail', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace('# expect-fail: Items are read from the cache first\n', '')), /echo\/wrong\/database-only\.proschi:1: Start the file with one or more "# expect-fail: <test name>" lines/],
-    ['a wrong design without the import', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace('import "problem.proschi"\n', '')), /echo\/wrong\/database-only\.proschi:3: After the comment lines the file must start with import "problem.proschi"/],
+    ['a wrong design without a mistake', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace(/^# (mistake|explain):.*\n/gm, '')), /echo\/wrong\/database-only\.proschi:1: Name the mistake: add "# mistake: <one-line title>"/],
+    ['a mistake linking a lesson the problem lacks', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace('# cards:', '# lesson: concepts\n# cards:')), /echo\/wrong\/database-only\.proschi:4: "# lesson: concepts" links to a lesson, but the problem has no lesson\.md/],
+    ['a wrong design without the import', (f: string) => rewrite(join(f, 'wrong', 'database-only.proschi'), (s) => s.replace('import "problem.proschi"\n', '')), /echo\/wrong\/database-only\.proschi:6: After the comment lines the file must start with import "problem.proschi"/],
   ])('fails on %s', (_name, edit, message) => {
     const dir = problemsWith(edit);
     const r = capture(['check', dir]);
@@ -106,6 +108,22 @@ describe('proschi problem check', () => {
     expect(r.out).toMatch(message);
     expect(r.out).toMatch(/✗ echo/);
     expect(r.out).toMatch(/1 problem, \d wrong designs?: \d+ violation\(s\) in 1 problem$/);
+  });
+
+  it("checks a wrong design's cards against the cards folder next to the problems", () => {
+    const base = mkdtempSync(join(root, 'repo-'));
+    const dir = join(base, 'problems');
+    expect(capture(['new', 'echo', '--dir', dir]).code).toBe(0);
+    // No cards folder: the ids are not checked.
+    expect(capture(['check', dir]).code).toBe(0);
+    mkdirSync(join(base, 'cards', 'caching'), { recursive: true });
+    writeFileSync(join(base, 'cards', 'tags.json'), '[]');
+    writeFileSync(join(base, 'cards', 'caching', 'cache-aside.md'), '');
+    const r = capture(['check', dir]);
+    expect(r.code).toBe(1);
+    expect(r.out).toMatch(/echo\/wrong\/database-only\.proschi:4: No review card "hit-rate-to-db-load" \(a file cards\/<topic>\/hit-rate-to-db-load\.md\)/);
+    writeFileSync(join(base, 'cards', 'caching', 'hit-rate-to-db-load.md'), '');
+    expect(capture(['check', dir]).out).toMatch(/wrong\/database-only: fails "Items are read from the cache first" \(Every read goes to the database\)/);
   });
 
   it('accepts a company', () => {

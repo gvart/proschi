@@ -1,4 +1,8 @@
 # expect-fail: Add to cart is durable
+# mistake: Carts kept only in Redis
+# explain: A cache keeps data in memory: a restart, an eviction or a failover can drop adds the shopper already saw confirmed. Write carts to a durable, always-writable store.
+# lesson: leaderless-replication-and-quorums
+# cards: write-back-risk, leaderless-replication
 # Carts kept only in Redis: fast and always writable, until a node restarts.
 import "problem.proschi"
 

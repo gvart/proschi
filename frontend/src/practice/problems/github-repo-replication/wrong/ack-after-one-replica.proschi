@@ -1,4 +1,8 @@
 # expect-fail: A push commits on a quorum of replicas
+# mistake: Acknowledging a push after one replica
+# explain: The other replicas copy the push afterwards, so a push acknowledged by the primary alone is lost if it dies first, and pushes stop while it is down. Commit on a quorum of replicas before answering.
+# lesson: quorums
+# cards: sync-vs-async-replication, async-failover-loss, quorum-read-size
 # A primary replica takes the push and answers; the other two copy it
 # afterwards. When the primary is down, pushes fail until another takes over,
 # and a push acknowledged by the primary alone dies with it.

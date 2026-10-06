@@ -1,4 +1,8 @@
 # expect-fail: Delivery happens after the ack
+# mistake: Delivering to the recipient before acking the sender
+# explain: The ack then waits for the recipient's connection, so the sender's latency depends on someone else's phone and a stuck connection stalls the sender. Store the message, ack the sender, then deliver.
+# lesson: the-ack-is-a-promise-store-first
+# cards: ack-after-store, delivery-receipts
 # Delivering before the ack holds up the sender.
 import "problem.proschi"
 

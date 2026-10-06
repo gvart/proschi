@@ -7,8 +7,12 @@ import {
   buildSession,
   dayCounts,
   daysBetween,
+  focusedCards,
   formatInterval,
   isDay,
+  isFocused,
+  pruneFocus,
+  withFocus,
   isDue,
   isNew,
   localDay,
@@ -96,6 +100,34 @@ describe('which cards to review', () => {
     expect(buildSession(cards, states, topics, { now: NOW, newLimit: -3 }).every((s) => !s.isNew)).toBe(true);
     expect(buildSession(cards, states, topics, { now: NOW, topic: 'queues' }).map((s) => s.card.id)).toEqual(['r-medium']);
     expect(buildSession(cards, {}, topics, { now: NOW, deck: 'sample' }).map((s) => s.card.id)).toEqual(['e-easy', 'c-easy']);
+  });
+
+  it('puts focused cards first, due now, until they are reviewed after they were asked for', () => {
+    const states: CardStates = {
+      'r-medium': nextState(undefined, 3, NOW - 10 * DAY), // due 7 days ago
+      'a-hard': nextState(undefined, 4, NOW - DAY), // not due for two weeks
+    };
+    // Asked for from a mistake: a card not due yet, a new card outside the sample deck and a retired card.
+    const focus = withFocus(withFocus({}, ['a-hard'], NOW - 60), ['b-medium', 'q-old'], NOW - 30);
+    expect(focus).toEqual({ 'a-hard': NOW - 60, 'b-medium': NOW - 30, 'q-old': NOW - 30 });
+    const session = buildSession(cards, states, topics, { now: NOW, newLimit: 1, focus });
+    expect(session.map((s) => [s.card.id, s.isNew])).toEqual([
+      ['a-hard', false],
+      ['b-medium', true],
+      ['r-medium', false],
+      ['e-easy', true],
+    ]);
+    // Outside the deck filter (signed out, the sample deck) and the new-card allowance; within a topic filter.
+    expect(buildSession(cards, {}, topics, { now: NOW, deck: 'sample', newLimit: 0, focus }).map((s) => s.card.id)).toEqual(['a-hard', 'b-medium']);
+    expect(buildSession(cards, {}, topics, { now: NOW, topic: 'queues', focus }).map((s) => s.card.id)).toEqual(['r-medium']);
+    expect(focusedCards(cards, states, focus).map((c) => c.id)).toEqual(['a-hard', 'b-medium']);
+    // Reviewed after it was asked for: back to its schedule, and pruned from the queue.
+    const reviewed = { ...states, 'a-hard': nextState(states['a-hard'], 3, NOW) };
+    expect(isFocused(cards[1], reviewed['a-hard'], focus['a-hard'])).toBe(false);
+    expect(isFocused(cards[1], states['a-hard'], focus['a-hard'])).toBe(true);
+    expect(isFocused(cards[1], states['a-hard'], undefined)).toBe(false);
+    expect(buildSession(cards, reviewed, topics, { now: NOW, newLimit: 0, focus }).map((s) => s.card.id)).toEqual(['b-medium', 'r-medium']);
+    expect(pruneFocus({ ...focus, gone: NOW }, cards, reviewed)).toEqual({ 'b-medium': NOW - 30 });
   });
 
   it('counts due, new and total cards overall and per topic, with the next due time', () => {

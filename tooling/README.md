@@ -37,7 +37,8 @@ node hovers. The model and its default numbers:
 
 `problem check [--format text|github|json] [dir]` validates the practice
 problems, one folder each (front matter, given, starter, reference solution
-and the `wrong/` designs that must fail), with the same rules as the practice
+and the `wrong/` designs that must fail, each naming the mistake it makes,
+its lesson section and review cards), with the same rules as the practice
 page's test suite; `problem new <id> [--dir <dir>]` scaffolds one. Inside the
 repository both default to `frontend/src/practice/problems`. The format and
 the rules: [docs/PRACTICE.md](https://github.com/gvart/proschi/blob/main/docs/PRACTICE.md).
