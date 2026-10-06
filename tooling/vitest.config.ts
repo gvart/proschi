@@ -6,7 +6,7 @@ const modules = fileURLToPath(new URL('./node_modules/', import.meta.url));
 
 export default defineConfig({
   resolve: {
-    alias: [{ find: /^(elkjs|react|react-dom|react-icons|lucide-react)(\/.*)?$/, replacement: `${modules}$1$2` }],
+    alias: [{ find: /^(elkjs|react|react-dom|react-icons|lucide-react|lz-string)(\/.*)?$/, replacement: `${modules}$1$2` }],
   },
   esbuild: { jsx: 'automatic' },
 });

@@ -22,7 +22,10 @@ export const PROBLEM_HELP = `problem Practice problems, one folder each (docs/PR
         wrong/ design (fails every test its "# expect-fail:" lines name, and
         names its mistake: "# mistake:" and "# explain:", a "# lesson:"
         heading that exists, "# cards:" that exist in the sibling cards
-        folder).
+        folder), interview.md (each good question's fact is in the
+        statement's Scale or Constraints; estimates are numbers with a
+        range) and guided.md (valid checks that the reference solution
+        passes).
         Exits with 1 on any violation.
         new scaffolds a folder that already passes check, with TODOs.`;
 
@@ -111,7 +114,9 @@ export function formatProblemReports(dir: string, reports: FolderReport[], style
     }
     const ok = r.violations.length === 0;
     const wrong = r.wrong.length === 1 ? '1 wrong design' : `${r.wrong.length} wrong designs`;
-    lines.push(`${ok ? '✓' : '✗'} ${r.id}${r.loaded ? `: ${r.tests} tests, the starter fails ${r.starterFails.length}, ${wrong}` : ''}`);
+    const n = (count: number, word: string) => `${count} ${word}${count === 1 ? '' : 's'}`;
+    const modes = `${r.interview ? `, interview (${n(r.interview.questions, 'question')}, ${n(r.interview.estimates, 'estimate')})` : ''}${r.guided !== undefined ? `, guided (${n(r.guided, 'step')})` : ''}`;
+    lines.push(`${ok ? '✓' : '✗'} ${r.id}${r.loaded ? `: ${r.tests} tests, the starter fails ${r.starterFails.length}, ${wrong}${modes}` : ''}`);
     for (const v of r.violations) lines.push(`    ${where(r, v)}${v.line ? `:${v.line}` : ''}: ${v.message}`);
     for (const w of r.wrong) {
       if (w.missing.length) continue; // reported above

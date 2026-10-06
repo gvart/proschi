@@ -24,6 +24,18 @@ deployed from `main` and ships with the same changes.
   is the first step of the roadmap, recommended and open without signing in,
   but optional: it locks nothing and stage completion and badges do not
   count it.
+- **A GitHub Action**, `gvart/proschi/action@<tag>`: checks and tests the
+  `.proschi` files in a repository (errors and failing requirements as
+  annotations; the job fails on them) and, on pull requests, keeps one
+  comment up to date with a row per changed diagram (nodes, tests passed,
+  requirements met, monthly cost, worst p99) and an *Open in Proschi* link.
+  Inputs `files`, `test`, `openapi`, `comment`, `render` and `version`; it
+  needs `pull-requests: write` for the comment and skips it on forks. See
+  [the GitHub Action](docs/EDITORS.md#github-action).
+- **`proschi share-link <file>`** prints the web editor's `#code=` share link
+  for a file, with the files it imports.
+- **The VS Code extension is published to the VS Code Marketplace and Open
+  VSX** on each tooling release, with an icon and a screenshot.
 - **One daily streak for any daily practice.** The daily goal is now met by
   your cards for the day, a solved problem, the daily challenge or a
   finished Arcade run (played to the end, not just started), with freezes
@@ -81,6 +93,20 @@ deployed from `main` and ships with the same changes.
 - **Shared links show what they are about**: each problem page and card topic
   has its own preview image (title, difficulty, a line about it) instead of
   the site-wide one.
+- **Interview mode** on every practice problem, off unless you turn it on:
+  a 30, 45 or 60 minute clock you can pause, and four phases. *Clarify*
+  hides the scale and constraints until you ask good questions (weak ones
+  get told why); *Estimate* grades back-of-the-envelope numbers against a
+  range and shows the worked answer; *Design* is the usual editor and
+  tests; *Wrap-up* is a self-review and a summary of time per phase,
+  questions, estimates and tests. Everything stays in your browser.
+- **Guided walkthrough** for the roadmap's first stage (URL Shortener,
+  Pastebin, Always-writable Shopping Cart, Snowflake IDs): a side panel of
+  short steps, each unlocked by a checkpoint on your design. Skippable, and
+  it remembers where you were.
+- `proschi problem check` validates `interview.md` (good questions must
+  reveal facts from the statement; estimates need a number and a range) and
+  `guided.md` (valid checks that the reference solution passes).
 - **A gentler first run in the Arcade.** Until your first clear of a Scale
   or Fail scenario, runs play the basic rules: no mutators, bounties,
   contracts or card sets, an exact forecast, no unannounced or cascading
@@ -254,10 +280,11 @@ deployed from `main` and ships with the same changes.
   or challenge answers
   (`GET /api/users/<id>/profile`; docs/PRIVACY.md lists exactly what is
   shown).
-- 258 practice cards for daily review, from estimation and networking to
-  consistency, streaming and probabilistic data structures: one Markdown file
+- 311 practice cards for daily review, from estimation and networking to
+  consistency, streaming, security, observability, coordination and
+  probabilistic data structures: one Markdown file
   per card in `frontend/src/practice/cards/<topic>/<id>.md`, as flip,
-  multiple-choice, estimate or fill-in-the-gap cards in 15 topics, with a
+  multiple-choice, estimate or fill-in-the-gap cards in 18 topics, with a
   32-card sample deck. `proschi cards check` validates them (fields,
   ids that are never deleted or reused, topics, related problems, phone-sized
   text and near-duplicate cards) and `proschi cards lock` records new ids.
@@ -287,7 +314,7 @@ deployed from `main` and ships with the same changes.
   weekly recap of last week's cards, solves and goal days on the review page.
   With reduced motion set, there is no animation, just the summary.
 - A progress page on the practice page (`practice/#/progress`): a skill map
-  that scores how well you know each of the 15 topics, from the cards you
+  that scores how well you know each of the 18 topics, from the cards you
   remember, how many of them you have seen, the related problems you solved
   and, for estimation, how often your numbers land; an "interview ready"
   score; and your three weakest topics, each with a "Train this topic"

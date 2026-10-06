@@ -11,6 +11,8 @@ import { DIFFICULTIES, type Problem, type WrongDesign } from './types';
  *   <id>/starter.proschi
  *   <id>/solution.proschi
  *   <id>/lesson.md           optional: the lesson shown before the problem
+ *   <id>/interview.md        optional: interview mode's questions and estimates
+ *   <id>/guided.md           optional: guided mode's steps (the roadmap's first stage)
  *   <id>/wrong/<name>.proschi
  */
 
@@ -19,9 +21,11 @@ export const GIVEN = 'given.proschi';
 export const STARTER = 'starter.proschi';
 export const SOLUTION = 'solution.proschi';
 export const LESSON_MD = 'lesson.md';
+export const INTERVIEW_MD = 'interview.md';
+export const GUIDED_MD = 'guided.md';
 export const WRONG_DIR = 'wrong';
 const REQUIRED = [PROBLEM_MD, GIVEN, STARTER, SOLUTION];
-const OPTIONAL = [LESSON_MD];
+const OPTIONAL = [LESSON_MD, INTERVIEW_MD, GUIDED_MD];
 const ID = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 
 /**
@@ -144,6 +148,8 @@ export function problemFromFiles(id: string, files: Record<string, string>): Pro
     starter: files[STARTER],
     solution: files[SOLUTION],
     ...(files[LESSON_MD] !== undefined ? { lesson: files[LESSON_MD] } : {}),
+    ...(files[INTERVIEW_MD] !== undefined ? { interview: files[INTERVIEW_MD] } : {}),
+    ...(files[GUIDED_MD] !== undefined ? { guided: files[GUIDED_MD] } : {}),
     ...(wrong.length ? { wrong } : {}),
   };
 }

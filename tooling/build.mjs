@@ -38,7 +38,8 @@ const externalRenderer = {
     b.onResolve({ filter: /^\.\/render\/command$/ }, () => ({ path: './render.cjs', external: true }));
   },
 };
-await build({ ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', banner: { js: '#!/usr/bin/env node' }, plugins: [markdownReader, externalRenderer] });
+// share-link encodes with lz-string, which frontend/src/playground/share.ts imports.
+await build({ ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', banner: { js: '#!/usr/bin/env node' }, plugins: [markdownReader, externalRenderer], alias: { 'lz-string': './node_modules/lz-string' } });
 await build({ ...common, entryPoints: ['src/render/command.ts'], outfile: 'dist/render.cjs', alias: renderAlias, minify: true });
 await build({ ...common, entryPoints: ['src/server.ts'], outfile: 'dist/server.cjs', banner: { js: '#!/usr/bin/env node' } });
 chmodSync('dist/cli.cjs', 0o755);

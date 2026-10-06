@@ -5,24 +5,37 @@
   "license": "MIT",
   "version": "0.8.0",
   "publisher": "gvart",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#f4f1ea",
+    "theme": "light"
+  },
   "repository": {
     "type": "git",
     "url": "https://github.com/gvart/proschi.git",
     "directory": "tooling/vscode"
   },
   "homepage": "https://proschi.app/",
+  "bugs": {
+    "url": "https://github.com/gvart/proschi/issues"
+  },
+  "qna": false,
   "engines": {
     "vscode": "^1.91.0"
   },
   "categories": [
     "Programming Languages",
-    "Linters"
+    "Linters",
+    "Formatters",
+    "Visualization"
   ],
   "keywords": [
     "architecture",
     "diagram",
     "microservices",
     "sequence",
+    "system design",
+    "simulation",
     "proschi"
   ],
   "main": "./dist/extension.cjs",

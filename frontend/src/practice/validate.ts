@@ -5,7 +5,9 @@ import { defaultEngine, type Engine } from '../hld/engine';
 import { lessonIssues } from './lesson';
 import { headingIds } from './markdown';
 import { readMistake } from './mistakes';
-import { GIVEN, LESSON_MD, PROBLEM_MD, SOLUTION, STARTER, WRONG_DIR, expectFailLines } from './problemFiles';
+import { guidedIssues, parseGuided } from './modes/guidedFile';
+import { interviewIssues, parseInterview } from './modes/interviewFile';
+import { GIVEN, GUIDED_MD, INTERVIEW_MD, LESSON_MD, PROBLEM_MD, SOLUTION, STARTER, WRONG_DIR, expectFailLines } from './problemFiles';
 import type { Problem } from './types';
 import { PROBLEM_FILE, parseSolution, runTests } from './workspace';
 
@@ -46,6 +48,10 @@ export interface ProblemReport {
   starterFails: string[];
   wrong: WrongReport[];
   violations: Violation[];
+  /** interview.md, when there is one: how many questions and estimates it has. */
+  interview?: { questions: number; estimates: number };
+  /** guided.md, when there is one: how many steps it has. */
+  guided?: number;
 }
 
 const IMPORT_LINE = `import "${PROBLEM_FILE}"`;
@@ -109,6 +115,13 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
     for (const r of solutionRun.results.filter((r) => !r.passed)) add(SOLUTION, `Fails "${r.name}": ${r.message}`, r.loc?.file === undefined ? r.loc?.line : undefined);
   }
 
+  // interview.md and guided.md, when there are: their format, facts that are in the statement, checks the solution passes.
+  if (problem.interview !== undefined) for (const issue of interviewIssues(problem.statement, problem.interview)) add(INTERVIEW_MD, issue.message, issue.line);
+  if (problem.guided !== undefined) {
+    const tests = solutionRun.blocked ? undefined : solutionRun.results;
+    for (const issue of guidedIssues(problem.guided, solution.diagram, tests)) add(GUIDED_MD, issue.message, issue.line);
+  }
+
   // starter.proschi: no errors of its own, fails at least one test.
   if (!problem.starter.startsWith(`${IMPORT_LINE}\n`)) add(STARTER, `Must start with ${IMPORT_LINE}`, 1);
   const starter = parseSolution(problem, problem.starter);
@@ -161,5 +174,14 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
     return { name: w.name, file, expectFail, failed, missing, alsoFails: failed.filter((n) => !expectFail.includes(n)), ...(mistake ? { mistake: mistake.title } : {}) };
   });
 
-  return { id: problem.id, tests: solutionRun.results.length, starterFails, wrong, violations };
+  const interview = problem.interview !== undefined ? parseInterview(problem.interview).interview : undefined;
+  return {
+    id: problem.id,
+    tests: solutionRun.results.length,
+    starterFails,
+    wrong,
+    violations,
+    ...(interview ? { interview: { questions: interview.questions.length, estimates: interview.estimates.length } } : {}),
+    ...(problem.guided !== undefined ? { guided: parseGuided(problem.guided).steps.length } : {}),
+  };
 }

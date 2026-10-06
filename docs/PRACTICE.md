@@ -20,6 +20,8 @@ frontend/src/practice/problems/<id>/
   starter.proschi       starts with: import "problem.proschi"
   solution.proschi      the reference solution; starts with the same import
   lesson.md             optional: the lesson shown before the problem
+  interview.md          optional: interview mode's questions and estimates
+  guided.md             optional: guided mode's steps (roadmap stage 1 only)
   wrong/<name>.proschi  optional: plausible wrong designs that must fail
 ```
 
@@ -145,6 +147,91 @@ example):
 - Prefer short paragraphs, tables for numbers and a `>` callout for the one
   sentence to remember.
 
+## `interview.md`
+
+Interview mode is an opt-in toggle on the problem page. It runs a timed
+interview (30, 45 or 60 minutes, pausable) in four phases: **Clarify** (the
+statement without its `## Scale` and `## Constraints` sections, and a list
+of clarifying questions to pick from), **Estimate** (back-of-the-envelope
+questions graded against a range, then the worked answer), **Design** (the
+normal editor and tests, the clock still running) and **Wrap-up** (a
+self-review checklist and a summary). The session, time per phase and the
+summaries stay in the browser; nothing is sent to the server.
+
+Every problem has an `interview.md` (`interviewFile.test.ts` fails without
+one). It holds exactly two sections, each item a `### ` heading opened by
+`- key: value` lines and followed by Markdown:
+
+```markdown
+## Questions
+
+### How many redirects a second at peak?
+- kind: good
+- fact: Redirects: 10k rps
+
+About **10k redirects a second**: reads outnumber writes 100 to 1.
+
+### Can I use Kubernetes?
+- kind: weak
+
+Deployment tooling is not what is assessed; ask about load and constraints.
+
+## Estimates
+
+### If the cache answers 95% of redirects, how many reach the database each second?
+- answer: 500
+- unit: reads/s
+- range: 400 to 650
+
+10,000 × 5% = **500 reads a second**.
+```
+
+- **Questions**: up to 12, at least 3 `good` and 2 `weak` (aim for about 5
+  and 3). A good question's `fact` is words copied from the statement's
+  Scale or Constraints section (compared ignoring case, spaces and `*`, `_`,
+  `` ` ``); its text is the interviewer's answer. A weak question has no
+  `fact`; its text says why it is weak and what to ask instead. The page
+  shows the questions in a fixed shuffled order.
+- **Estimates**: 1 to 4 (aim for 2 or 3). `answer` is a number above 0
+  (`2300`, `2.3k`, `5M`, `1.6T`), `unit` says what it counts, and `range:
+  <low> to <high>` gives the accepted answers around it; `tolerance: <factor>`
+  (1.1 to 10) may replace the range, and without either the answer within a
+  factor of 2 counts. The text is the worked answer, from the statement's
+  numbers. The phase links the Numbers to know page.
+
+## `guided.md`
+
+Guided mode is an optional side panel on the roadmap's first stage
+(`ROADMAP[0]` in `roadmapStages.ts`): each of those problems has a
+`guided.md`, and no other problem does (`guidedFile.test.ts`). Each step is
+a `## ` heading, its checkpoint as `- key: value` lines, then a short
+explanation in Markdown:
+
+```markdown
+## Store every code in a database
+- node: any database
+- edge: any service -> any database
+- test: Codes are stored before they are returned
+
+A code that only lives in the API's memory is gone when that machine restarts…
+```
+
+Checks, any number per step and at least one, all of which must pass:
+
+| Check | Passes when |
+| --- | --- |
+| `- node: <node>` | a node matches |
+| `- edge: <node> -> <node>` | a connection or a use case step goes from one to the other |
+| `- usecase: <name>` | the design defines that use case |
+| `- replicas: <node> x<n>` | a node matches, and every match has at least n replicas (n ≥ 2) |
+| `- test: <name>` | that requirement or test passes (runs the simulation) |
+
+A `<node>` is an id (`visitor`) or `any <kind>` (`any cache`), as in tests.
+"Check my design" runs the current step's checks on the editor's design and
+unlocks the next step when all pass; a step can be skipped. Progress is
+kept in the browser. Write 2 to 10 steps that build from the starter to the
+reference solution, the last ones usually the requirements.
+
 ## The Proschi files
 
 **`given.proschi`** is the problem as Proschi. The editor resolves
@@ -243,6 +330,13 @@ defined once in `frontend/src/practice/validate.ts`:
   `## Functional requirements` section.
 - **lesson.md**, when there is one: the eight sections in order, not empty,
   links to http(s) addresses only.
+- **interview.md**, when there is one: only `## Questions` and
+  `## Estimates`; enough good and weak questions, each good one with a
+  `fact` found in the statement's Scale or Constraints; each estimate with a
+  numeric `answer`, a `unit`, a range around the answer and a worked answer.
+- **guided.md**, when there is one: 2 to 10 steps, each with valid checks
+  and an explanation; ids, use cases and tests the problem has; and every
+  check passing on the reference solution.
 - Every use case in the given's `traffic` is named in bold in the statement
   and defined (`usecase "…"`) by the solution.
 - **given**: no `import`, parses without errors, in canonical format
@@ -267,7 +361,7 @@ proschi problem check --format json                   # every report, with what 
 ```
 
 ```
-✓ url-shortener: 10 tests, the starter fails 8, 1 wrong design
+✓ url-shortener: 10 tests, the starter fails 8, 1 wrong design, interview (9 questions, 3 estimates), guided (6 steps)
     wrong/miss-never-fills-cache: fails "Misses fill the cache" (Cache misses that never fill the cache)
 …
 26 problems, 90 wrong designs: no violations
@@ -379,7 +473,8 @@ To change the path, edit that list:
    template is a small complete problem that already passes the check.
 2. **Write `problem.md`**: title, summary, difficulty, tags, hints and the
    statement; name every use case in bold and spell out the scenario names.
-   Then write [`lesson.md`](#lessonmd).
+   Then write [`lesson.md`](#lessonmd) and [`interview.md`](#interviewmd)
+   (and [`guided.md`](#guidedmd) if it joins the first roadmap stage).
 3. **Write `given.proschi`**: the fixed nodes, the traffic, the requirements,
    any capacity the problem needs, and the tests that encode the key insight.
 4. **Write the solution and the starter**, then calibrate (above) and replace
