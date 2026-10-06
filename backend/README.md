@@ -140,7 +140,7 @@ requests (the daily challenge's cards and leaderboard included, and oEmbed) and 
 Share links put the whole diagram in the address after `#`, which no server
 sees: link previews can only show `/og.png`, long diagrams make links chat
 apps cut, and nothing can be embedded. Short links fix that for signed-in
-users (`src/shares.ts`, `migrations/0009_shares.sql`, docs/SHARING.md):
+users (`src/shares.ts`, `migrations/0010_shares.sql`, docs/SHARING.md):
 
 - **Creating** needs a session (the content and the image are user-hosted,
   so every share has an accountable owner), the same-origin check of every
@@ -427,7 +427,7 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1010 in production and 2001–2010 in staging.
+1001–1011 in production and 2001–2011 in staging (1010/2010 is METRICS_LIMITER).
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.
