@@ -19,7 +19,7 @@ import { useArcade } from './useArcade';
 import './arcade.css';
 
 /**
- * The Arcade tab of Interview prep (`#/arcade`): Scale or Fail. The home
+ * The Arcade tab of the practice hub (`#/arcade`): Scale or Fail. The home
  * screen has today's daily run, the scenarios (locked ones say what opens
  * them, cleared ones offer the next difficulty), the shop where Blueprints
  * buy components, cards and perks, and the leaderboards. A run in progress

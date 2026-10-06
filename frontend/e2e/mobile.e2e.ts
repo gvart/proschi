@@ -77,7 +77,7 @@ test.describe('no sideways scrolling on a phone', () => {
     const menu = page.locator('.ps-header details.ps-menu');
     await menu.locator('summary').click();
     const links = menu.getByRole('link');
-    await expect(links.filter({ hasText: 'Interview prep' })).toBeVisible();
+    await expect(links.filter({ hasText: 'Practice' })).toBeVisible();
     // Tap targets in the menu are at least 44px tall.
     for (const box of await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(box).toBeGreaterThanOrEqual(44);
     await expectNoHorizontalOverflow(page, './ with the menu open');
@@ -187,10 +187,24 @@ test.describe('no sideways scrolling on a phone', () => {
     await expectNoHorizontalOverflow(page, 'progress with a badge earned');
   });
 
-  test('interview prep hub: every tab, the streak on top', async ({ page }) => {
-    for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/roadmap/approach']) {
+  test('practice hub: every tab, the Today panel or the streak on top', async ({ page }) => {
+    for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/roadmap/approach']) {
       await visit(page, path);
-      await expect(page.getByRole('navigation', { name: 'Interview prep' })).toBeVisible();
+      await expect(page.getByRole('navigation', { name: 'Practice sections' })).toBeVisible();
+    }
+  });
+
+  test('practice hub on the narrowest phone: the bar scrolls, the page does not', async ({ page }) => {
+    await page.setViewportSize({ width: 320, height: 640 });
+    for (const path of ['practice/', 'practice/#/progress']) {
+      await visit(page, path);
+      const bar = page.getByRole('navigation', { name: 'Practice sections' });
+      await expect(bar).toBeVisible();
+      // The tabs scroll sideways inside the bar: the last one is reachable.
+      const last = bar.getByRole('link', { name: 'Progress' });
+      await last.scrollIntoViewIfNeeded();
+      await expect(last).toBeInViewport();
+      await expectNoHorizontalOverflow(page, `${path} at 320px`);
     }
   });
 
@@ -245,7 +259,7 @@ test.describe('no sideways scrolling on a phone', () => {
 test.describe('on the narrowest phone (320px)', () => {
   test.use({ viewport: { width: 320, height: 640 }, isMobile: true, hasTouch: true });
 
-  test('interview prep hub, the account page and a public profile', async ({ page }) => {
+  test('practice hub, the account page and a public profile', async ({ page }) => {
     for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/progress', 'practice/#/me']) await visit(page, path);
     await mockProfile(page);
     await visit(page, `practice/#/u/${PROFILE.id}`);

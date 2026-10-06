@@ -5,7 +5,7 @@ import { PROFILE } from './profile';
 
 /**
  * The daily challenge signed in (the build with accounts, API mocked): it is
- * the interview prep hub's Challenge tab, its leaderboard's rows open the
+ * the practice hub's Challenge tab, its leaderboard's rows open the
  * players' public profiles, and the account page and a public profile show
  * the challenge streak and best score. On a phone none of these pages
  * scrolls sideways.
@@ -48,7 +48,7 @@ async function mockChallenge(page: Page, request: APIRequestContext): Promise<vo
   await page.route(`**/api/users/${CHALLENGER.id}/profile`, (route) => route.fulfill({ json: CHALLENGER, headers: { 'Cache-Control': 'no-store' } }));
 }
 
-const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Interview prep' });
+const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
 
 async function expectNoSideways(page: Page, where: string): Promise<void> {
   const { scrollWidth, width } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, width: document.documentElement.clientWidth }));
@@ -60,7 +60,7 @@ test('the challenge is the hub’s Challenge tab, and its leaderboard links to p
   // Not on the problem list: the list links to interview prep only.
   await page.goto('practice/');
   await expect(page.getByRole('main').getByRole('link', { name: 'Play today’s challenge' })).toHaveCount(0);
-  await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+  await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
   await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
   await expect(page).toHaveURL(/#\/challenge$/);
   await expect(prepNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
@@ -103,7 +103,7 @@ for (const width of [320, 360]) {
       // Every tab of the hub can be reached in its strip (it scrolls sideways inside itself, never the page).
       await page.goto('practice/#/progress');
       const tabs = prepNav(page).getByRole('link');
-      await expect(tabs).toHaveText(['Roadmap', 'Daily review', 'Challenge', 'Arcade', 'Progress']);
+      await expect(tabs).toHaveText(['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']);
       for (const tab of await tabs.all()) {
         await tab.scrollIntoViewIfNeeded();
         await expect(tab).toBeInViewport();
