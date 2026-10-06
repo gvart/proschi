@@ -1,4 +1,8 @@
 # expect-fail: Every call is counted before it is let through
+# mistake: Incrementing the counter after deciding
+# explain: Concurrent requests read the same value and all pass, and rejected calls are never counted. Increment atomically first, then decide on the count it returns.
+# lesson: shared-counters-and-atomic-increments
+# cards: shared-rate-limit-counter, token-bucket, sliding-window-counter
 # Reading the counter and incrementing it after the decision is not counting.
 import "problem.proschi"
 

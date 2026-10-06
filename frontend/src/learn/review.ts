@@ -110,8 +110,48 @@ function interleave(cards: readonly Card[], topics: readonly Topic[]): Card[] {
   return out;
 }
 
+/**
+ * Cards the learner asked to review now, such as the cards of a mistake their
+ * design made (docs/CARDS.md, "Cards from a mistake"): card id → when it was
+ * asked for, Unix seconds. A card stays focused until it is reviewed after
+ * that time, whether it was new or not due yet.
+ */
+export type FocusQueue = Record<string, number>;
+
+/** Whether `card` waits in the focus queue: asked for at `addedAt`, and not reviewed since. */
+export function isFocused(card: Pick<Card, 'version'>, state: CardState | undefined, addedAt: number | undefined): boolean {
+  return addedAt !== undefined && (isNew(card, state) || state!.lastReview < addedAt);
+}
+
+/** The queue with `ids` asked for at `now` (a card asked for again moves to the back). */
+export function withFocus(queue: FocusQueue, ids: readonly string[], now: number): FocusQueue {
+  const out: FocusQueue = { ...queue };
+  for (const id of ids) out[id] = now;
+  return out;
+}
+
+/** The queue without the cards reviewed since they were asked for, or that no longer exist. */
+export function pruneFocus(queue: FocusQueue, cards: readonly Card[], states: CardStates): FocusQueue {
+  const byId = new Map(cards.map((c) => [c.id, c]));
+  return Object.fromEntries(
+    Object.entries(queue).filter(([id, addedAt]) => {
+      const card = byId.get(id);
+      return !!card && !card.retired && isFocused(card, states[id], addedAt);
+    }),
+  );
+}
+
+/** The cards waiting in the focus queue, the earliest asked for first. */
+export function focusedCards(cards: readonly Card[], states: CardStates, queue: FocusQueue, { topic }: Pick<CardFilter, 'topic'> = {}): Card[] {
+  return reviewable(cards, { topic })
+    .filter((c) => isFocused(c, states[c.id], queue[c.id]))
+    .sort((a, b) => queue[a.id] - queue[b.id] || a.id.localeCompare(b.id));
+}
+
 export interface SessionOptions extends CardFilter {
   now: number;
+  /** Cards asked for: they come first, due now whatever their schedule, outside the deck filter and the new-card allowance. */
+  focus?: FocusQueue;
   /** New cards to add at most: what is left of the day's allowance. */
   newLimit?: number;
   /** Cards in the session at most. */
@@ -124,13 +164,14 @@ export interface SessionItem {
 }
 
 /**
- * A session's queue: the due cards first, the most overdue (earliest due)
- * first, then new cards in newCardOrder, up to `newLimit` of them and `max`
- * in all.
+ * A session's queue: the focused cards first (see FocusQueue), then the due
+ * cards, the most overdue (earliest due) first, then new cards in
+ * newCardOrder, up to `newLimit` of them and `max` in all.
  */
 export function buildSession(cards: readonly Card[], states: CardStates, topics: readonly Topic[], options: SessionOptions): SessionItem[] {
-  const { now, newLimit = NEW_PER_DAY, max = SESSION_SIZE } = options;
-  const pool = reviewable(cards, options);
+  const { now, newLimit = NEW_PER_DAY, max = SESSION_SIZE, focus = {} } = options;
+  const focused = focusedCards(cards, states, focus, options).map((card) => ({ card, isNew: isNew(card, states[card.id]) }));
+  const pool = reviewable(cards, options).filter((c) => !isFocused(c, states[c.id], focus[c.id]));
   const due = pool
     .filter((c) => isDue(c, states[c.id], now))
     .sort((a, b) => states[a.id].due - states[b.id].due || a.id.localeCompare(b.id))
@@ -141,7 +182,7 @@ export function buildSession(cards: readonly Card[], states: CardStates, topics:
   )
     .slice(0, Math.max(0, newLimit))
     .map((card) => ({ card, isNew: true }));
-  return [...due, ...fresh].slice(0, Math.max(0, max));
+  return [...focused, ...due, ...fresh].slice(0, Math.max(0, max));
 }
 
 export interface Counts {

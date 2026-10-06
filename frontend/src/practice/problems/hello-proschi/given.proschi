@@ -1,0 +1,31 @@
+title "Hello, Proschi" "A greeting service: your first design in Proschi"
+
+user "User" [Actor]
+
+traffic {
+  "Say hello" 200 rps
+}
+
+requirements {
+  p99 "Say hello" < 100ms
+  availability "Say hello" >= 99.9%
+}
+
+test "A service answers the user" {
+  user calls any service
+  "Say hello" starts at user
+}
+
+test "Say hello answers with 200" {
+  "Say hello" responds 200
+}
+
+test "The greeting is read from a database" {
+  "Say hello" calls any database
+  "Say hello" calls any service before any database
+}
+
+test "Every component has a spare" {
+  any service has replicas >= 2
+  any database has replicas >= 2
+}

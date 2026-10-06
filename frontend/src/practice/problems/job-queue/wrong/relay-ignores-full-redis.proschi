@@ -1,4 +1,8 @@
 # expect-fail: A full Redis leaves the job in Kafka
+# mistake: A relay that assumes Redis always takes the job
+# explain: When Redis refuses a job and the relay moves on anyway, the job is gone from Kafka's point of view and never reached Redis: silent loss. Commit the offset only once Redis has the job, and leave it in Kafka otherwise.
+# lesson: at-least-once-delivery-commit-after-the-side-effect
+# cards: offset-commit-timing, at-least-once-needs-idempotency
 # The relay assumes Redis always takes the job: nothing says what happens when it is full.
 import "problem.proschi"
 

@@ -1,4 +1,8 @@
 # expect-fail: The Order Service never waits for a provider
+# mistake: Calling the provider before answering the Order Service
+# explain: The queue is there, but the caller still waits for a slow third party, and every provider outage becomes an order-processing outage. Answer once the event is queued and let workers call the provider.
+# lesson: queue-based-load-levelling
+# cards: queue-load-levelling, beat-your-dependency, timeouts-on-every-call
 # A notifier that queues the event and then calls the provider makes the Order Service wait.
 import "problem.proschi"
 

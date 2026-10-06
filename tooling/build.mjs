@@ -2,9 +2,20 @@
 // inlined), the VS Code extension, and regenerates the JSON Schema.
 import { build } from 'esbuild';
 import { chmodSync, copyFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 const { version } = JSON.parse(readFileSync('package.json', 'utf8'));
+
+// frontend/src/practice has both markdown.ts (the reader) and Markdown.tsx (its
+// React view); esbuild's resolver can pick the .tsx for "./markdown", so name the file.
+const markdownReader = {
+  name: 'markdown-reader',
+  setup(b) {
+    b.onResolve({ filter: /^\.\/markdown$/ }, (args) => ({ path: join(args.resolveDir, 'markdown.ts') }));
+  },
+};
 const common = {
+  plugins: [markdownReader],
   bundle: true,
   platform: 'node',
   target: 'node18',
@@ -28,7 +39,7 @@ const externalRenderer = {
   },
 };
 // share-link encodes with lz-string, which frontend/src/playground/share.ts imports.
-await build({ ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', banner: { js: '#!/usr/bin/env node' }, plugins: [externalRenderer], alias: { 'lz-string': './node_modules/lz-string' } });
+await build({ ...common, entryPoints: ['src/cli.ts'], outfile: 'dist/cli.cjs', banner: { js: '#!/usr/bin/env node' }, plugins: [markdownReader, externalRenderer], alias: { 'lz-string': './node_modules/lz-string' } });
 await build({ ...common, entryPoints: ['src/render/command.ts'], outfile: 'dist/render.cjs', alias: renderAlias, minify: true });
 await build({ ...common, entryPoints: ['src/server.ts'], outfile: 'dist/server.cjs', banner: { js: '#!/usr/bin/env node' } });
 chmodSync('dist/cli.cjs', 0o755);

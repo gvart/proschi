@@ -1,6 +1,10 @@
 # expect-fail: Reads are answered by the follower tier
 # expect-fail: Only the leader tier talks to MySQL
 # expect-fail: The leader updates the other followers after the commit
+# mistake: One cache tier in front of MySQL
+# explain: Every cache server reads and writes the database, which invites stale sets after races, thundering herds on hot keys and a database serving every server's misses. Put a leader tier between the followers and MySQL.
+# lesson: look-aside-caching-and-its-problems-at-scale
+# cards: cache-stampede, stale-set-race, cache-aside
 # One cache tier in front of MySQL, memcache style: every cache server reads and writes the database.
 import "problem.proschi"
 

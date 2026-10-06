@@ -1,6 +1,10 @@
 # expect-fail: Edge misses go to the upper tier, not the origin
 # expect-fail: Only the upper tier talks to the origin
 # expect-fail: p99 of Fetch asset < 150 ms
+# mistake: Every edge fills its cache from the origin
+# explain: Without an upper tier, each edge data center misses on its own and goes to the origin, so the origin sees every edge's misses instead of one tier's. Here 5k rps of misses saturate a 4k-rps origin, and a purge or a deploy that empties the caches makes it worse.
+# lesson: cache-hierarchies-and-origin-shielding
+# cards: cdn-helps-on-miss, cold-cache-restart, hit-rate-to-db-load
 # A flat CDN: every edge data center fills its own cache from the origin, so
 # what an upper tier would have answered reaches the origin too.
 import "problem.proschi"

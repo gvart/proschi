@@ -1,4 +1,8 @@
 # expect-fail: No message cache to keep in sync
+# mistake: A cache of recent messages in front of the database
+# explain: The cache absorbs the reads, but every edit, delete and reaction must now keep it in sync, and a stale cache shows deleted messages. Request coalescing protects the database without a second copy to maintain.
+# lesson: why-not-a-cache
+# cards: delete-on-write, stale-set-race
 # A Redis cache of recent messages takes the busy channel's reads, and every edit, delete and reaction must now invalidate it.
 import "problem.proschi"
 

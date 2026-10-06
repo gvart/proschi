@@ -1,5 +1,9 @@
 # expect-fail: Trends are ranked ahead of time and served from a cache
 # expect-fail: survive any node failure
+# mistake: Counting recent tweets on every trends request
+# explain: The work grows with readers instead of with locations, and the tweet store becomes hot. Rank trends ahead of time and serve them from a cache.
+# lesson: precompute-and-serve-from-a-cache
+# cards: pre-aggregate-counts, top-k-heap
 # Every trends request counts recent tweets in the tweet store, so readers pay for the counting.
 import "problem.proschi"
 

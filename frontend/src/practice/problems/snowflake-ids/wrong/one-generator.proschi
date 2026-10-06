@@ -1,4 +1,8 @@
 # expect-fail: survive any node failure
+# mistake: A single generator process
+# explain: Every id depends on one machine: a single point of failure that is saturated at this rate anyway. Run several generators, each with its own worker id.
+# lesson: composite-ids-time--worker--sequence
+# cards: three-replicas-parallel, snowflake-throughput
 # A single generator process: every id depends on one machine.
 import "problem.proschi"
 

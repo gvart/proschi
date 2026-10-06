@@ -120,9 +120,12 @@ const files = (extra: Record<string, string> = {}): Record<string, string> => ({
   ...extra,
 });
 
+/** A wrong design's mistake lines (mistakes.ts). */
+const MISTAKE = '# mistake: Talking to itself\n# explain: The client never calls the API.\n';
+
 describe('problem folders', () => {
   it('build a Problem from plain files', () => {
-    const p = problemFromFiles('echo', files({ 'wrong/no-api.proschi': `# expect-fail: Echo goes through the API\n# Talks to itself.\n${STARTER}` }));
+    const p = problemFromFiles('echo', files({ 'wrong/no-api.proschi': `# expect-fail: Echo goes through the API\n${MISTAKE}# cards: cache-aside,  rest-vs-grpc\n# Talks to itself.\n${STARTER}` }));
     expect(p).toMatchObject({ id: 'echo', title: 'Echo', summary: 'Says it back.', difficulty: 'easy', tags: ['basics'], hints: ['Connect the client to the API.'], given: GIVEN, starter: STARTER, solution: SOLUTION });
     expect(p.statement).toBe(MD.slice(MD.indexOf('Echo the request.')).trimEnd());
     expect(p.order).toBeUndefined();
@@ -131,7 +134,15 @@ describe('problem folders', () => {
     expect(p.company).toBeUndefined();
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: Twitter\ntags:') })).company).toBe('Twitter');
     expect(problemFromFiles('echo', files({ 'problem.md': MD.replace('tags:', 'company: "Example, Inc."\ntags:') })).company).toBe('Example, Inc.');
-    expect(p.wrong).toEqual([{ name: 'no-api', source: expect.stringContaining('# expect-fail'), expectFail: ['Echo goes through the API'] }]);
+    expect(p.wrong).toEqual([
+      {
+        name: 'no-api',
+        source: expect.stringContaining('# expect-fail'),
+        expectFail: ['Echo goes through the API'],
+        mistake: { title: 'Talking to itself', explain: 'The client never calls the API.', cards: ['cache-aside', 'rest-vs-grpc'] },
+      },
+    ]);
+    expect(problemFromFiles('echo', files({ 'wrong/no-api.proschi': `# expect-fail: Echo goes through the API\n${STARTER}` })).wrong?.[0].mistake).toBeUndefined();
   });
 
   it('read the optional lesson.md', () => {
@@ -189,7 +200,7 @@ describe('problem folders', () => {
 });
 
 describe('validateProblem', () => {
-  const valid = problemFromFiles('echo', files({ 'wrong/no-api.proschi': `# expect-fail: Echo goes through the API\n${STARTER}` }));
+  const valid = problemFromFiles('echo', files({ 'wrong/no-api.proschi': `# expect-fail: Echo goes through the API\n${MISTAKE}${STARTER}` }));
   const check = (p: Partial<Problem>) => validateProblem({ ...valid, ...p }, defaultEngine);
   const messages = (p: Partial<Problem>) => check(p).violations.map((v) => `${v.file}${v.line ? `:${v.line}` : ''}: ${v.message}`);
 
@@ -198,7 +209,7 @@ describe('validateProblem', () => {
     expect(report.violations).toEqual([]);
     expect(report.tests).toBe(1);
     expect(report.starterFails).toEqual(['Echo goes through the API']);
-    expect(report.wrong).toEqual([{ name: 'no-api', file: 'wrong/no-api.proschi', expectFail: ['Echo goes through the API'], failed: ['Echo goes through the API'], missing: [], alsoFails: [] }]);
+    expect(report.wrong).toEqual([{ name: 'no-api', file: 'wrong/no-api.proschi', expectFail: ['Echo goes through the API'], failed: ['Echo goes through the API'], missing: [], alsoFails: [], mistake: 'Talking to itself' }]);
   });
 
   it('reports statement and use case mismatches', () => {
@@ -225,10 +236,10 @@ describe('validateProblem', () => {
 
   it('reports a lesson without its sections in order, or with links off the web', () => {
     const lesson = LESSON_HEADINGS.map((h) => `## ${h}\n\nText.\n`).join('\n');
-    expect(messages({ lesson })).toEqual([]);
-    expect(messages({ lesson: lesson.replace('## Concepts\n', '') })).toEqual([expect.stringMatching(/^lesson\.md: The lesson needs a "## Concepts" section/)]);
-    expect(messages({ lesson: `${lesson}\nSee [the docs](/docs/).\n` })).toEqual(['lesson.md:33: Links in a lesson must go to an http(s) address, not "/docs/"']);
-    expect(messages({ lesson: '' })).toEqual(['lesson.md: The lesson is empty']);
+    expect(messages({ lesson, wrong: undefined })).toEqual([]);
+    expect(messages({ lesson: lesson.replace('## Concepts\n', ''), wrong: undefined })).toEqual([expect.stringMatching(/^lesson\.md: The lesson needs a "## Concepts" section/)]);
+    expect(messages({ lesson: `${lesson}\nSee [the docs](/docs/).\n`, wrong: undefined })).toEqual(['lesson.md:33: Links in a lesson must go to an http(s) address, not "/docs/"']);
+    expect(messages({ lesson: '', wrong: undefined })).toEqual(['lesson.md: The lesson is empty']);
   });
 
   it('reports a starter that already passes, or has errors', () => {
@@ -238,10 +249,10 @@ describe('validateProblem', () => {
 
   it('reports wrong designs that pass what they name, name no test, lack the header or have errors', () => {
     const wrong = (source: string, expectFail = expectFailLines(source)) => messages({ wrong: [{ name: 'w', source, expectFail }] });
-    expect(wrong(`# expect-fail: Echo goes through the API\n${SOLUTION}`)).toEqual(['wrong/w.proschi:1: Expected to fail "Echo goes through the API", but it passes']);
-    expect(wrong(`# expect-fail: Echo is fast\n${STARTER}`)).toEqual(['wrong/w.proschi:1: No test or requirement is named "Echo is fast" (names: "Echo goes through the API")']);
-    expect(wrong(STARTER)).toEqual(['wrong/w.proschi:1: Start the file with one or more "# expect-fail: <test name>" lines']);
-    expect(wrong(`# expect-fail: Echo goes through the API\n\n${STARTER}`)).toEqual(['wrong/w.proschi:2: After the comment lines the file must start with import "problem.proschi"']);
-    expect(wrong(`# expect-fail: Echo goes through the API\n${STARTER}capacity {\n  client 1 rps\n}\n`)).toEqual([expect.stringMatching(/^wrong\/w\.proschi:\d+: error: capacity is set by the problem/)]);
+    expect(wrong(`# expect-fail: Echo goes through the API\n${MISTAKE}${SOLUTION}`)).toEqual(['wrong/w.proschi:1: Expected to fail "Echo goes through the API", but it passes']);
+    expect(wrong(`# expect-fail: Echo is fast\n${MISTAKE}${STARTER}`)).toEqual(['wrong/w.proschi:1: No test or requirement is named "Echo is fast" (names: "Echo goes through the API")']);
+    expect(wrong(`${MISTAKE}${STARTER}`)).toEqual(['wrong/w.proschi:1: Start the file with one or more "# expect-fail: <test name>" lines']);
+    expect(wrong(`# expect-fail: Echo goes through the API\n${MISTAKE}\n${STARTER}`)).toEqual(['wrong/w.proschi:4: After the comment lines the file must start with import "problem.proschi"']);
+    expect(wrong(`# expect-fail: Echo goes through the API\n${MISTAKE}${STARTER}capacity {\n  client 1 rps\n}\n`)).toEqual([expect.stringMatching(/^wrong\/w\.proschi:\d+: error: capacity is set by the problem/)]);
   });
 });

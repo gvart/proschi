@@ -1,4 +1,8 @@
 # expect-fail: Only the relay moves jobs from Kafka to Redis
+# mistake: Rewriting the workers to read Kafka
+# explain: It deletes a component, but it is a big-bang migration of every job type, and the problem keeps the workers as they are. Only the relay should move jobs from Kafka into Redis.
+# lesson: a-durable-log-as-a-buffer
+# cards: log-vs-queue, competing-consumers
 # The workers are rewritten to read Kafka directly; the relay and Redis are bypassed.
 import "problem.proschi"
 

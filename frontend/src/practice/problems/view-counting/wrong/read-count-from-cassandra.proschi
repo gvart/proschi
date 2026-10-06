@@ -1,4 +1,8 @@
 # expect-fail: Redis serves the counts; the database is a backup written in batches
+# mistake: Reading counts from the backup database
+# explain: The database copy is up to 10 seconds behind Redis, every read hits the slower store, and the backup becomes a read-path dependency. Serve counts from Redis.
+# lesson: cache-as-primary-database-as-periodic-backup
+# cards: write-back-risk, when-eventual-is-fine
 # The count is read from Cassandra, which is up to 10 seconds behind Redis.
 import "problem.proschi"
 

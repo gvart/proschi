@@ -1,4 +1,8 @@
 # expect-fail: p99 of Read paste < 100 ms
+# mistake: Reading every paste from object storage
+# explain: The CDN does nothing: even popular reads wait for the API, the database and S3, and object storage carries the full read rate. Let the CDN answer popular pastes and go to the origin only on a miss.
+# lesson: pull-cdns-and-cache-lifetimes
+# cards: cdn-helps-on-miss, metadata-vs-content
 # Reading every paste from object storage: each read waits for the API, the database and S3.
 import "problem.proschi"
 

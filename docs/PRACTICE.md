@@ -279,6 +279,47 @@ panel shows, such as `p99 of Redirect < 100 ms`, `cost ≤ $3,000/month` or
 `survive any node failure` (`proschi problem check` prints each wrong
 design's failures, which is the easiest way to copy them).
 
+### Known mistakes
+
+Failing tests teach: when a solver's run fails, the problem page finds the
+wrong design whose failures it shows and, under the tests, names the mistake
+(*Common mistake: …*), explains it, links the lesson section that teaches the
+fix and lists the review cards that train it, with **Add these cards to my
+review**, which puts them first in the daily review, due now
+([CARDS.md](CARDS.md#cards-from-a-mistake)). So each wrong design says which
+mistake it makes, in comment lines under its `# expect-fail:` lines:
+
+```proschi fragment
+# expect-fail: Misses fill the cache
+# mistake: Cache misses that never fill the cache
+# explain: The miss reads the database and answers but never writes the code into the cache, so the hit rate decays toward zero and the database takes the full read load. After a miss, SET the code in the cache.
+# lesson: cache-aside-lazy-loading
+# cards: cache-aside, hit-rate-to-db-load, average-latency-with-cache
+# A cache miss that never fills the cache.
+import "problem.proschi"
+```
+
+| Line | Required | Meaning |
+|---|---|---|
+| `# mistake:` | yes | The mistake in one line, shown after *Common mistake:* |
+| `# explain:` | yes | Two or three sentences: what breaks, and what to do instead. Several `# explain:` lines are joined with spaces |
+| `# lesson:` | when there is a lesson | The id of a heading of `lesson.md` that teaches the fix, GitHub style (`### Cache-aside (lazy loading)` is `cache-aside-lazy-loading`); usually a subsection of *Concepts*, or `common-mistakes` |
+| `# cards:` | no (the repository's designs all have them) | Review card ids, comma-separated, from `frontend/src/practice/cards` |
+
+Write the explanation for a learner whose design merely fails the same way,
+not for the author of the wrong file: they have not seen it.
+
+**Matching** (`matchMistake` in `frontend/src/practice/mistakes.ts`): a wrong
+design matches a run when the run fails every test its `# expect-fail:` lines
+name, or, short of that, at least one of its `test` blocks (a requirement
+such as `survive any node failure` alone has too many causes to name one).
+Full matches win; then the design whose failures, all of them, are most like
+the run's (the page runs each wrong design once to know them); then the one
+sharing the most named failures. The page shows the best match only, and
+nothing for a run of the untouched starter. The
+tests check that a run of each wrong design is matched to its own mistake,
+or to one of a design that fails exactly the same tests.
+
 ## What `problem check` enforces
 
 `proschi problem check` and the frontend test suite apply the same rules,
@@ -306,7 +347,11 @@ defined once in `frontend/src/practice/validate.ts`:
   test.
 - **each wrong design**: has at least one `# expect-fail:` line, the import
   right after the comments, no errors, and fails every test it names. Tests
-  it fails without naming them are listed, not violations.
+  it fails without naming them are listed, not violations. It names its
+  [mistake](#known-mistakes): `# mistake:` and `# explain:`, a `# lesson:`
+  that is a heading id of the lesson (required when there is a lesson), and
+  `# cards:` that exist (checked when a `cards` folder sits next to the
+  problems folder, as in the repository).
 
 ```sh
 proschi problem check                                 # inside the repository: frontend/src/practice/problems
@@ -317,9 +362,9 @@ proschi problem check --format json                   # every report, with what 
 
 ```
 ✓ url-shortener: 10 tests, the starter fails 8, 1 wrong design, interview (9 questions, 3 estimates), guided (6 steps)
-    wrong/miss-never-fills-cache: fails "Misses fill the cache"
+    wrong/miss-never-fills-cache: fails "Misses fill the cache" (Cache misses that never fill the cache)
 …
-25 problems, 86 wrong designs: no violations
+26 problems, 90 wrong designs: no violations
 ```
 
 It exits with 1 on any violation. `npm test` in `frontend/` runs the same
@@ -363,7 +408,8 @@ do not, and the limits in `requirements` decide that:
    change the scale (traffic, payload sizes) until the key idea makes a clear
    difference.
 4. Prove it: add each brute-force design as `wrong/<name>.proschi` with the
-   tests it must fail in `# expect-fail:` lines. Flow tests catch the designs
+   tests it must fail in `# expect-fail:` lines and the
+   [mistake](#known-mistakes) it makes. Flow tests catch the designs
    numbers cannot (the cache read after the database, a call that waits for
    a queue).
 
@@ -396,7 +442,13 @@ and, once solved, a link to the next one.
 Anyone can see the stages, but starting the roadmap takes an account: signed
 out, the page lists the problems without links and offers the sign-in buttons,
 and `practice/#/roadmap/<id>` shows the roadmap instead of the problem (sign-in
-returns to that address). The rule is `roadmapAccess` in `roadmap.ts`, the one
+returns to that address). The exception is `OPTIONAL_STEPS` in `roadmapStages.ts`:
+the first step, `hello-proschi`, a tutorial that teaches the language one
+idea per test (nodes, connections, a use case's request and response, the
+traffic, requirements, a replica), opens signed out too. It is optional:
+recommended first to a learner who has solved nothing, but unsolved it locks
+no later step, keeps no stage from counting as complete and is in no badge's
+target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`, the one
 place to change when the roadmap moves behind a paid plan. A build without
 accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.

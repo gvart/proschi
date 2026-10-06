@@ -1,5 +1,9 @@
 # expect-fail: Location updates are writes to the live map, never the database
 # expect-fail: cost ≤ $10,000/month
+# mistake: Sharding the database to fit location writes
+# explain: Enough shards make the writes fit, but the design costs well over the budget for data nobody needs to keep. Positions are ephemeral and belong in an in-memory live map.
+# lesson: ephemeral-state-versus-the-record
+# cards: shards-for-write-rate, geohash-prefix
 # Fails the same design sharded enough for the writes: it costs too much.
 import "problem.proschi"
 

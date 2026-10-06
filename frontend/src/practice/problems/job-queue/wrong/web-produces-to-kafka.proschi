@@ -1,4 +1,8 @@
 # expect-fail: The web app enqueues through a stateless gateway
+# mistake: The web app producing to Kafka directly
+# explain: Every short-lived PHP request opens its own broker connections and must know the cluster layout. A stateless gateway keeps long-lived producer connections and gives the web app one simple call.
+# lesson: a-stateless-gateway-in-front-of-a-broker
+# cards: connection-reuse, api-gateway-scope
 # Every PHP request opens its own connection to the Kafka brokers.
 import "problem.proschi"
 

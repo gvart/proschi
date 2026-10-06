@@ -1,0 +1,8 @@
+import "problem.proschi"
+
+# Step 1: a node is an id, a name in quotes and a tech in brackets.
+api "Greeting API" [REST API]
+
+# Step 2: connect the user to the API with "user -> api".
+# Step 3: write usecase "Say hello" { … } with a request and its response.
+# Step 4: add the database, read the greeting from it, and give every node a spare (x2).

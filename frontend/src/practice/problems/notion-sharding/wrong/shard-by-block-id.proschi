@@ -1,4 +1,8 @@
 # expect-fail: p99 of Load page < 70 ms
+# mistake: Sharding by block id
+# explain: Writes spread evenly, but a page's blocks land on every shard, so each page load asks all 32 and waits for the slowest. Shard by workspace so a page lives on one shard.
+# lesson: choosing-a-partition-key
+# cards: workspace-partition-key, scatter-gather, good-partition-key
 # 32 shards keyed by block id: edits spread nicely, but a page's blocks are on every shard, so loading one asks all 32.
 import "problem.proschi"
 

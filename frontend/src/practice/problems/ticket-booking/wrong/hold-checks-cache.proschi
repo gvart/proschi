@@ -1,4 +1,8 @@
 # expect-fail: A strong store, not the cache, decides who holds a seat
+# mistake: Checking the cached seat map before holding
+# explain: The cache can be seconds stale, and it puts an eventually consistent store on the hold path. Let a conditional write in a strong store decide who holds the seat.
+# lesson: conditional-writes-let-the-database-pick-the-winner
+# cards: cache-cannot-decide, conditional-stock-update
 # The hold checks the seat map cache before writing.
 import "problem.proschi"
 

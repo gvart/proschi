@@ -1,5 +1,9 @@
 # expect-fail: File bytes never pass through your servers
 # expect-fail: p99 of Upload < 220 ms
+# mistake: Proxying the upload through the API
+# explain: Every byte crosses your servers on the way to the bucket, so each large upload pins an API connection and the fleet scales with bandwidth instead of requests. Hand the client a pre-signed URL and let it upload straight to object storage.
+# lesson: object-storage-and-pre-signed-urls
+# cards: presigned-upload, multipart-upload
 # Fails an upload proxied through the API: the bytes pass a server, and the extra hops miss the latency.
 import "problem.proschi"
 

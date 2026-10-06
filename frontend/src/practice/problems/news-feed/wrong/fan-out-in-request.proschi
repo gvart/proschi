@@ -1,4 +1,8 @@
 # expect-fail: Fan-out runs behind a queue
+# mistake: Fanning out inside the publish request
+# explain: The author waits for the graph lookup and every feed write, even with the event queued, and an author with many followers would wait much longer. Store the post, queue the event, answer, and let workers fan out.
+# lesson: store-first-then-fan-out-through-a-queue
+# cards: store-before-fanout, fanout-write-vs-read, fanout-write-amplification
 # Fanning out inside the request waits for the graph, even with the event queued first.
 import "problem.proschi"
 

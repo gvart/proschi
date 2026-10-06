@@ -1,4 +1,8 @@
 # expect-fail: The payment is recorded in a strong store before the card is charged
+# mistake: Idempotency keys in Redis
+# explain: Redis replicates asynchronously and evicts memory, so a failover or an eviction forgets keys and the next retry charges again. Record the payment and its key in a strong store before calling the gateway.
+# lesson: idempotency-keys-under-a-unique-constraint
+# cards: idempotency-key-design, write-back-risk, async-failover-loss
 # Idempotency keys in Redis instead of a strong store.
 import "problem.proschi"
 

@@ -1,5 +1,9 @@
 # expect-fail: p99 of Read paste scenario Cached < 30 ms
 # expect-fail: Popular pastes are served by the CDN
+# mistake: A Redis cache instead of a CDN
+# explain: Popular reads still cross the load balancer and the API, so they miss the cached-read limit, and the load balancer sends every byte at the internet egress rate. A CDN serves them from the edge.
+# lesson: pull-cdns-and-cache-lifetimes
+# cards: egress-bill, cdn-cache-control
 # A Redis cache behind the API is too slow for popular pastes and is not the CDN.
 import "problem.proschi"
 

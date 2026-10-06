@@ -15,7 +15,7 @@ import type { CardState, Rating } from '../../frontend/src/learn/fsrs';
 import type { ProblemInfo } from '../../frontend/src/learn/mastery';
 import { daysBetween, isDay } from '../../frontend/src/learn/review';
 import { addDays, goalFor, type DayActivity } from '../../frontend/src/learn/streak';
-import { ROADMAP } from '../../frontend/src/practice/roadmapStages';
+import { ROADMAP, requiredStages } from '../../frontend/src/practice/roadmapStages';
 import raw from '../../frontend/src/practice/achievements.json';
 import { loadActivity } from './activity';
 import { requireUser } from './auth';
@@ -52,7 +52,8 @@ function catalog(): AchievementContext {
       return p ? [{ id, difficulty: p.difficulty, tags: p.tags }] : [];
     });
     // A stage counts only the problems this Worker has (ruleProgress drops the others).
-    context = { problems, stages: ROADMAP };
+    // Optional steps (the tutorial) are in no badge's target.
+    context = { problems, stages: requiredStages(ROADMAP) };
   }
   return context;
 }

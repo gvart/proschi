@@ -1,4 +1,8 @@
 # expect-fail: Searches feed the query log without waiting for it
+# mistake: Waiting for the query log before answering
+# explain: Every Kafka hiccup becomes search latency and a broker outage a search outage, for data no user is waiting for. Send the query to the log without waiting.
+# lesson: logging-off-the-request-path-rebuilding-in-batch
+# cards: queue-load-levelling, timeouts-on-every-call
 # Fails a search that waits for the query log.
 import "problem.proschi"
 

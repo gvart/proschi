@@ -1,4 +1,8 @@
 # expect-fail: The leader updates the other followers after the commit
+# mistake: Updating only the writer's follower
+# explain: The writer sees the change, but every other follower serves the old list until it expires. After the commit, the leader updates the other followers.
+# lesson: invalidation-and-read-your-writes
+# cards: delete-on-write, read-your-writes
 # Writes update the caller's follower only: every other follower keeps serving the old list until it expires.
 import "problem.proschi"
 

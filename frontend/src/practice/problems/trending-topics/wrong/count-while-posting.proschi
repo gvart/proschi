@@ -1,5 +1,9 @@
 # expect-fail: Posting a tweet never waits for counting
 # expect-fail: p99 of Post tweet < 80 ms
+# mistake: Counting terms while the tweet is posted
+# explain: Each post waits for a dozen counter writes, and a spike of tweets becomes a spike of Redis writes that saturates it. Count in a stream consumer, off the posting path.
+# lesson: sliding-windows-and-baselines-in-memory
+# cards: pre-aggregate-counts, queue-load-levelling
 # The Tweet Service bumps a counter per term and location before answering: every post waits for Redis.
 import "problem.proschi"
 

@@ -1,4 +1,8 @@
 # expect-fail: Only the leader tier talks to MySQL
+# mistake: Followers writing MySQL themselves
+# explain: Two tiers now update the same rows and keys, and the leader's ordering guarantee is gone. Send writes through the shard's leader, the only tier that talks to MySQL.
+# lesson: read-through-and-write-through-with-a-leader-per-shard
+# cards: stale-set-race, delete-on-write
 # Followers write MySQL themselves and only tell the leader afterwards: two tiers race to update the same keys.
 import "problem.proschi"
 

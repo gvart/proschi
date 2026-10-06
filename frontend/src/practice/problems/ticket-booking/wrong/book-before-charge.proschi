@@ -1,4 +1,8 @@
 # expect-fail: A seat is booked only once it is paid
+# mistake: Booking the seat before charging
+# explain: When the card is declined you have a booked seat nobody paid for, and the compensating write can itself fail. Hold the seat, charge, and book it only once it is paid.
+# lesson: holds-that-expire-by-themselves
+# cards: saga-over-2pc, saga-isolation
 # Books the seat first, then charges.
 import "problem.proschi"
 

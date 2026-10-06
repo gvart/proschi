@@ -1,4 +1,8 @@
 # expect-fail: survive any node failure
+# mistake: Too few shards to lose a replica
+# explain: Everything passes with every replica up, but a shard that loses a replica sends all its misses to one MySQL server running near saturation, and the read p99 breaks. Add shards until each survives losing a replica.
+# lesson: common-mistakes
+# cards: surviving-a-zone, shards-for-write-rate
 # Two shards: fine while every replica is up, but a shard that loses its replica cannot take its misses.
 import "problem.proschi"
 

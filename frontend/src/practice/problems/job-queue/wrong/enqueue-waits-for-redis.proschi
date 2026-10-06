@@ -1,4 +1,8 @@
 # expect-fail: Enqueuing never touches Redis
+# mistake: Writing the job to Redis before answering
+# explain: The enqueue waits for Redis again, so a full Redis fails it exactly as before, and the relay pushes a duplicate later. Answer once Kafka has the job; moving it to Redis is the relay's work.
+# lesson: back-pressure-belongs-in-the-right-place
+# cards: backpressure, queue-load-levelling
 # Kafkagate also pushes the job to Redis before answering, so a full Redis fails the enqueue again.
 import "problem.proschi"
 

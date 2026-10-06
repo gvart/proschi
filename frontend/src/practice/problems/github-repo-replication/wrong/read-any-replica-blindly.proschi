@@ -1,4 +1,8 @@
 # expect-fail: A fetch reads one replica that is up to date
+# mistake: Fetching from any replica without checking it is current
+# explain: A replica that missed a push serves old refs, so a developer can push and then not see their own commit. Check the version metadata first and read a replica that is up to date.
+# lesson: version-metadata-for-safe-reads
+# cards: read-your-writes, monotonic-reads
 # Fetches go to the nearest replica without checking that it is up to date: one that missed a push serves old refs.
 import "problem.proschi"
 

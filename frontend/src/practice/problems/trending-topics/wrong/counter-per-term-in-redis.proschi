@@ -1,6 +1,10 @@
 # expect-fail: Tweets are counted in the stream, in memory
 # expect-fail: survive any node failure
 # expect-fail: p99 of Get trends < 50 ms
+# mistake: A Redis counter for every term
+# explain: A dozen writes per tweet hammer the shared cache that readers also use, so reads slow down and the cache cannot lose a node. Count in the stream processor's memory with a sketch and a top-k.
+# lesson: count-min-sketch-and-top-k
+# cards: count-min-sketch, top-k-heap
 # A sorted set per location in Redis, bumped for every term of every tweet: a dozen writes per tweet on a shared store.
 import "problem.proschi"
 

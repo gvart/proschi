@@ -17,19 +17,21 @@ test.describe('interview prep roadmap', () => {
     await expect(progress(page).getByText(/^0 of \d+ solved$/)).toBeVisible();
     await expect(progress(page)).toContainText('Current stage 1. Foundations');
 
-    // Only the first problem is open; the rest show a lock and what to solve first.
+    // The language tutorial comes first and is recommended, but optional: the first required problem is open
+    // too, and the rest show a lock and what to solve first.
     const foundations = stage(page, 'Foundations');
-    await expect(challenges(foundations)).toHaveCount(1);
+    await expect(challenges(foundations)).toHaveCount(2);
+    await expect(foundations.getByRole('link', { name: /Hello, Proschi/ })).toBeVisible();
     await expect(foundations.getByRole('link', { name: /URL Shortener/ })).toBeVisible();
     await expect(challenges(foundations).filter({ hasText: 'Pastebin' })).toHaveCount(0);
-    const pastebin = foundations.getByRole('listitem').filter({ hasText: 'Pastebin' });
-    await expect(pastebin.getByRole('img', { name: 'Locked' })).toBeVisible();
-    await expect(pastebin).toContainText('Solve URL Shortener first');
+    const pastebinStep = foundations.getByRole('listitem').filter({ hasText: 'Pastebin' });
+    await expect(pastebinStep.getByRole('img', { name: 'Locked' })).toBeVisible();
+    await expect(pastebinStep).toContainText('Solve URL Shortener first');
     await expect(challenges(stage(page, 'Caching and the edge'))).toHaveCount(0);
 
     // Start opens the first problem with the roadmap's banner.
-    await progress(page).getByRole('link', { name: 'Start: URL Shortener' }).click();
-    await expect(page).toHaveURL(/#\/roadmap\/url-shortener$/);
+    await progress(page).getByRole('link', { name: 'Start: Hello, Proschi' }).click();
+    await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
     const banner = page.getByRole('region', { name: 'Roadmap' });
     await expect(banner).toContainText(/Stage 1 of \d+: Foundations · 1 of \d+/);
     await expect(banner.getByRole('link', { name: /Next in roadmap/ })).toHaveCount(0);
@@ -45,18 +47,18 @@ test.describe('interview prep roadmap', () => {
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
 
-    await banner.getByRole('link', { name: 'Next in roadmap: Pastebin' }).click();
-    await expect(page).toHaveURL(/#\/roadmap\/pastebin$/);
-    await expect(page.getByRole('heading', { level: 1 })).toContainText('Pastebin');
+    await banner.getByRole('link', { name: 'Next in roadmap: URL Shortener' }).click();
+    await expect(page).toHaveURL(/#\/roadmap\/url-shortener$/);
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
 
-    // Back on the roadmap, Pastebin is open and the next one is locked behind it.
+    // Back on the roadmap, URL Shortener is open and the next one is locked behind it.
     await page.getByRole('region', { name: 'Roadmap' }).getByRole('link', { name: 'Roadmap' }).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(progress(page).getByText(/^1 of \d+ solved$/)).toBeVisible();
-    await expect(progress(page).getByRole('link', { name: 'Continue: Pastebin' })).toBeVisible();
+    await expect(progress(page).getByRole('link', { name: 'Continue: URL Shortener' })).toBeVisible();
     await expect(challenges(foundations)).toHaveCount(2);
-    await expect(foundations.getByRole('link', { name: /URL Shortener/ }).getByRole('img', { name: 'Solved' })).toBeVisible();
-    await expect(foundations.getByRole('listitem').filter({ hasText: 'Always-writable Shopping Cart' })).toContainText('Solve Pastebin first');
+    await expect(foundations.getByRole('link', { name: /Hello, Proschi/ }).getByRole('img', { name: 'Solved' })).toBeVisible();
+    await expect(foundations.getByRole('listitem').filter({ hasText: 'Pastebin' })).toContainText('Solve URL Shortener first');
 
     // The problem list is not gated.
     await page.getByRole('link', { name: 'Practice', exact: true }).first().click();
@@ -90,7 +92,7 @@ test.describe('interview prep roadmap', () => {
     }
 
     // An open step's lesson address opens on the lesson, with the roadmap's banner.
-    await page.goto('practice/#/roadmap/url-shortener/lesson');
+    await page.goto('practice/#/roadmap/hello-proschi/lesson');
     await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
     await expect(page.getByRole('region', { name: 'Roadmap' })).toContainText('Stage 1 of');
 

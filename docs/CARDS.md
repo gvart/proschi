@@ -179,6 +179,18 @@ review, under one page per topic (`practice/cards/<topic>/`) and an index
 Relative links in a card, like the one to Numbers to know, are written from
 the practice page as above; the build rewrites them for these pages.
 
+### Cards from a mistake
+
+When a run on a problem page fails like one of the problem's known wrong
+designs, the page shows the mistake with the cards that train it
+([PRACTICE.md](PRACTICE.md#known-mistakes)), and **Add these cards to my
+review** puts them in the focus queue (`FocusQueue` in
+`frontend/src/learn/review.ts`): due now, first in the next session, whether
+they are new, not due yet or outside the sample deck, and outside the daily
+allowance of new cards. A card leaves the queue once it is reviewed after it
+was added. The queue is kept in the browser (`proschi.cards.focus`); the
+reviews themselves are stored like any other, on the server when signed in.
+
 The build also publishes every card as `practice/cards.json`,
 `{format: 1, hash, topics, cards}`, for apps: `hash` changes with any
 content, and `format` only when a field changes meaning.

@@ -1,4 +1,8 @@
 # expect-fail: The file goes straight to object storage, never through a server
+# mistake: Uploading the file through the API
+# explain: Servers spend their bandwidth copying files, the request lasts minutes, and a single failure restarts the upload. Upload straight to object storage with a pre-signed URL.
+# lesson: direct-uploads-with-presigned-urls
+# cards: presigned-upload, object-vs-block-storage
 # Uploads the file through the API.
 import "problem.proschi"
 

@@ -1,4 +1,8 @@
 # expect-fail: Segments are served by a CDN, with storage as its origin
+# mistake: A load balancer instead of a CDN
+# explain: It caches nothing: storage still serves every segment, and every byte goes through the load balancer at the expensive rate. Serve segments from a CDN with storage as its origin.
+# lesson: cdns-for-immutable-segments
+# cards: hls-segments-cache, egress-bill
 # A load balancer, not a CDN, in front of storage.
 import "problem.proschi"
 

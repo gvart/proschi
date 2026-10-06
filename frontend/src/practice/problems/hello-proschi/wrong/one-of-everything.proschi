@@ -1,0 +1,21 @@
+# expect-fail: availability of Say hello ≥ 99.9%
+# expect-fail: Every component has a spare
+# mistake: One replica of every component
+# explain: With one API and one database, the request needs both to be up, and each is down for some hours a month: together they fall short of 99.9%. Add a second replica (x2) to each, so a spare takes over when one fails.
+# lesson: replicas-and-availability
+# cards: availability-in-series, three-replicas-parallel, three-nines-downtime
+# The design works, but every node is a single point of failure.
+import "problem.proschi"
+
+api "Greeting API" [REST API]   "Answers GET /hello"
+db  "Greetings DB" [PostgreSQL] "Stores the greeting text"
+
+user -> api : HTTPS
+api  -> db  : SQL
+
+usecase "Say hello" "Greet the user with the stored greeting" {
+  user -> api  : GET /hello
+  api  -> db   : SELECT greeting
+  db  --> api  : "Hello"
+  api --> user : 200 {"message": "Hello, Ada"}
+}

@@ -1,4 +1,8 @@
 # expect-fail: A quorum write survives a replica that is down
+# mistake: Waiting for every replica on each write
+# explain: With one replica down every flush to its shard fails, and in a real cluster some replica is always restarting or being replaced. Write to a quorum, two of three, so one replica down does not stop ingest.
+# lesson: quorum-writes
+# cards: quorum-read-size, semi-synchronous, sync-vs-async-replication
 # Writes wait for all three replicas: one replica down fails every flush to its shard.
 import "problem.proschi"
 

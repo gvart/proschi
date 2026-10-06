@@ -15,12 +15,25 @@ export interface RoadmapStage {
   problems: string[];
 }
 
+/**
+ * Optional roadmap steps: the tutorial that teaches the language. It is shown
+ * first and recommended to a learner who has solved nothing yet, and it opens
+ * signed out, but unsolved it locks no later step, keeps no stage from
+ * counting as complete and is not part of any badge's target.
+ */
+export const OPTIONAL_STEPS: readonly string[] = ['hello-proschi'];
+
+/** The stages without the OPTIONAL_STEPS: what stage completion and badges count. */
+export function requiredStages<S extends { problems: string[] }>(stages: readonly S[]): S[] {
+  return stages.map((s) => ({ ...s, problems: s.problems.filter((id) => !OPTIONAL_STEPS.includes(id)) }));
+}
+
 export const ROADMAP: RoadmapStage[] = [
   {
     id: 'foundations',
     title: 'Foundations',
-    why: 'Redundancy, durability and a clean read path: two of everything, data that survives a node, and IDs without a single coordinator. Every later design assumes these.',
-    problems: ['url-shortener', 'pastebin', 'shopping-cart', 'snowflake-ids'],
+    why: 'The language first, then redundancy, durability and a clean read path: two of everything, data that survives a node, and IDs without a single coordinator. Every later design assumes these.',
+    problems: ['hello-proschi', 'url-shortener', 'pastebin', 'shopping-cart', 'snowflake-ids'],
   },
   {
     id: 'caching',

@@ -1,4 +1,8 @@
 # expect-fail: Queries go through the query tier
+# mistake: Dashboards querying the storage cluster directly
+# explain: Every dashboard needs the shard layout and a query engine of its own, and nothing stands between an expensive query and the storage nodes. Send queries through a query tier.
+# lesson: a-query-tier-in-front-of-storage
+# cards: reverse-proxy-roles, scatter-gather
 # Grafana reads M3DB with its own client: every dashboard has to know the cluster layout and compute the query itself.
 import "problem.proschi"
 

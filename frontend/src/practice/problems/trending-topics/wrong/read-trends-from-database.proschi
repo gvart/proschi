@@ -1,5 +1,9 @@
 # expect-fail: Trends are ranked ahead of time and served from a cache
 # expect-fail: survive any node failure
+# mistake: Reading trends from the database
+# explain: The cache is written but never read, so every trends request hits MySQL, which runs hot and cannot lose a replica. Read the precomputed lists from the cache.
+# lesson: precompute-and-serve-from-a-cache
+# cards: cache-aside, hit-rate-to-db-load
 # The API reads every trends list from MySQL; the cache is written but never read.
 import "problem.proschi"
 

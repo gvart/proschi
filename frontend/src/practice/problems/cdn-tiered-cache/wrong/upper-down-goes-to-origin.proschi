@@ -1,4 +1,8 @@
 # expect-fail: Only the upper tier talks to the origin
+# mistake: Falling back to the origin when the upper tier is down
+# explain: It sounds resilient, but the origin then takes every edge miss, the very overload the upper tier exists to prevent, and it can no longer restrict who talks to it. Fail over to another upper-tier data center instead.
+# lesson: failover-without-stampedes
+# cards: cache-stampede, cold-cache-restart, graceful-degradation
 # One upper-tier data center; when it is down, every edge falls back to the
 # origin, which then takes all the misses the upper tier used to absorb.
 import "problem.proschi"

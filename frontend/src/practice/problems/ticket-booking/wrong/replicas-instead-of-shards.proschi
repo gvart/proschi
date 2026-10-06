@@ -1,4 +1,8 @@
 # expect-fail: p99 of Hold seat < 130 ms
+# mistake: Read replicas instead of shards
+# explain: Every write still goes to one primary, which runs well over capacity, and a saturated node fails every latency limit it touches. Shard the holds so several primaries share the writes.
+# lesson: sharding-for-writes
+# cards: replicas-do-not-scale-writes, shards-for-write-rate
 # Scales the relational database with read replicas instead of shards.
 import "problem.proschi"
 

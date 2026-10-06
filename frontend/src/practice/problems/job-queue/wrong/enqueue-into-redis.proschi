@@ -1,5 +1,9 @@
 # expect-fail: Enqueuing never touches Redis
 # expect-fail: The web app enqueues through a stateless gateway
+# mistake: The web app still enqueues straight into Redis
+# explain: This is the original outage waiting to happen again: when workers slow down Redis fills up, and the web app's enqueues fail. Enqueue into Kafka through a stateless gateway and let a relay feed Redis.
+# lesson: a-durable-log-as-a-buffer
+# cards: backpressure, log-vs-queue
 # The old architecture: the web app pushes jobs straight into Redis, which refuses them once it is full.
 import "problem.proschi"
 

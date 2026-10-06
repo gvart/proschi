@@ -1,5 +1,5 @@
 import { statusOf, type Progress } from './progress';
-import { roadmapState, type RoadmapStage } from './roadmap';
+import { requiredStages, roadmapState, type RoadmapStage } from './roadmap';
 
 /**
  * What a problem's first solve shows (SolveCelebration.tsx): how the design
@@ -29,7 +29,9 @@ export function roadmapAfterSolve(stages: RoadmapStage[], id: string, before: Pr
   const index = stages.findIndex((s) => s.problems.includes(id));
   if (index < 0) return {};
   const firstSolve = statusOf(before, id) !== 'solved';
-  const completed = firstSolve && stages[index].problems.every((p) => p === id || statusOf(before, p) === 'solved');
+  // Optional steps (the tutorial) neither complete a stage nor keep it open.
+  const required = requiredStages(stages)[index].problems;
+  const completed = firstSolve && required.includes(id) && required.every((p) => p === id || statusOf(before, p) === 'solved');
   const next = roadmapState(stages, { ...before, [id]: { ...before[id], status: 'solved' } }).next;
   return { ...(completed ? { completed: index } : {}), ...(next ? { next: next.id } : {}) };
 }

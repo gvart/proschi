@@ -1,4 +1,8 @@
 # expect-fail: Trips are stored strongly before the rider hears back
+# mistake: Trips in an eventually consistent table
+# explain: A lagging read can show a driver as free right after another rider got them, so one driver ends up with two trips. Store trips in a strongly consistent store before answering.
+# lesson: ephemeral-state-versus-the-record
+# cards: when-eventual-is-fine, linearizability
 # Fails trips kept in an eventually consistent NoSQL table.
 import "problem.proschi"
 

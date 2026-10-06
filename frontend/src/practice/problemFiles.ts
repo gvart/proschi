@@ -1,4 +1,5 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from './frontMatter';
+import { readMistake } from './mistakes';
 import { DIFFICULTIES, type Problem, type WrongDesign } from './types';
 
 /**
@@ -136,7 +137,10 @@ export function problemFromFiles(id: string, files: Record<string, string>): Pro
   const wrong: WrongDesign[] = Object.keys(files)
     .filter((name) => name.startsWith(`${WRONG_DIR}/`))
     .sort()
-    .map((name) => ({ name: name.slice(WRONG_DIR.length + 1, -'.proschi'.length), source: files[name], expectFail: expectFailLines(files[name]) }));
+    .map((name) => {
+      const { mistake } = readMistake(files[name]);
+      return { name: name.slice(WRONG_DIR.length + 1, -'.proschi'.length), source: files[name], expectFail: expectFailLines(files[name]), ...(mistake ? { mistake } : {}) };
+    });
   return {
     id,
     ...meta,

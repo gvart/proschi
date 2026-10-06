@@ -1,4 +1,8 @@
 # expect-fail: p99 of Upload video < 1000 ms
+# mistake: The upload request carries the whole file
+# explain: The design is otherwise right, but 2 GB on the first POST puts minutes of transfer on the critical path. Ask for an upload URL first, then send the bytes straight to storage.
+# lesson: direct-uploads-with-presigned-urls
+# cards: presigned-upload, multipart-upload
 # Uploads through the API: the upload request carries 2 GB.
 import "problem.proschi"
 

@@ -1,5 +1,9 @@
 # expect-fail: Every repository lives on three file servers behind a proxy
 # expect-fail: A push commits on a quorum of replicas
+# mistake: An active file server with a disk-level standby
+# explain: The standby only mirrors the disk: it serves no reads, and pushes fail while the active server fails over. Replicating at the application level to three servers lets any two of them take a push and every one serve fetches.
+# lesson: disk-replication-versus-application-level-replication
+# cards: disk-vs-app-replication, active-active-vs-active-passive
 # GitHub's design before DGit: each repository on an active file server with a
 # DRBD standby next to it. The standby only mirrors the disk and serves no
 # reads; pushes stop while the active server fails over.

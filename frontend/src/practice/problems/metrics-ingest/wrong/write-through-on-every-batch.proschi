@@ -1,5 +1,9 @@
 # expect-fail: Ingest never waits for storage
 # expect-fail: p99 of Emit metrics < 40 ms
+# mistake: Writing each raw batch through to storage
+# explain: The aggregator answers only after a quorum write of the raw batch, so hosts wait for storage and the cluster takes the raw volume again. Answer the host at once and flush only aggregates.
+# lesson: pre-aggregation-and-downsampling
+# cards: pre-aggregate-counts, queue-load-levelling
 # The aggregator also writes each raw batch to M3DB before answering: hosts wait for a quorum write, and storage takes the raw volume again.
 import "problem.proschi"
 

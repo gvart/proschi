@@ -1,4 +1,8 @@
 # expect-fail: p99 of Edit block < 70 ms
+# mistake: Few shards with many replicas each
+# explain: Plenty of machines but only four primaries: the edits saturate them however many replicas sit behind them. Count primaries, not machines.
+# lesson: replicas-scale-reads-shards-scale-writes
+# cards: replicas-do-not-scale-writes, shards-for-write-rate
 # Four shards with eight replicas each: plenty of read capacity, but only four primaries to take the edits.
 import "problem.proschi"
 

@@ -140,7 +140,10 @@ is the checklist.
    the brute-force designs a candidate would try, and set each limit between
    them ([calibrating](docs/PRACTICE.md#calibrating-a-problem)). Replace the
    example `wrong/database-only.proschi` with those designs, each starting
-   with `# expect-fail:` lines naming the requirements or tests it must fail.
+   with `# expect-fail:` lines naming the requirements or tests it must fail,
+   then the mistake it makes for the learners whose runs fail the same way:
+   `# mistake:`, `# explain:`, `# lesson:` and `# cards:`
+   ([known mistakes](docs/PRACTICE.md#known-mistakes)).
 
 5. **Check it:**
 
@@ -155,23 +158,23 @@ is the checklist.
 
 6. **Update the hard-coded problem counts.** A few tests and pages state the
    number of problems; each must go up by one:
-   - the landing page, `frontend/index.html`: "25 system design problems";
-   - the e2e tests: `frontend/e2e/practice.e2e.ts` ("lists 25 problems",
-     `toHaveCount(25)`, "0 of 25 solved", "1 of 25 solved"),
-     `frontend/e2e/landing.e2e.ts` ("practice list shows 25 problems",
-     `toHaveCount(25)`) and the table in `frontend/e2e/README.md`;
+   - the landing page, `frontend/index.html`: "26 system design problems";
+   - the e2e tests: `frontend/e2e/practice.e2e.ts` ("lists 26 problems",
+     `toHaveCount(26)`, "0 of 26 solved", "1 of 26 solved"),
+     `frontend/e2e/landing.e2e.ts` ("practice list shows 26 problems",
+     `toHaveCount(26)`) and the table in `frontend/e2e/README.md`;
    - the practice tests: `frontend/src/practice/practice.test.ts`, its
-     `toBeGreaterThanOrEqual(25)` and the ordered list of ids in "lists
+     `toBeGreaterThanOrEqual(26)` and the ordered list of ids in "lists
      problems by difficulty, then order, then title" (put the new id where
      the sort puts it);
-   - the tooling test: `tooling/test/problem.test.ts` ("25 problems, …");
-   - the sample output in `docs/PRACTICE.md` ("25 problems, 86 wrong
+   - the tooling test: `tooling/test/problem.test.ts` ("26 problems, …");
+   - the sample output in `docs/PRACTICE.md` ("26 problems, 90 wrong
      designs").
 
-   This finds them all (with today's count, 25):
+   This finds them all (with today's count, 26):
 
    ```sh
-   git grep -nE "\b25 (problems|system)|of 25 solved|\(25\)" -- frontend/index.html frontend/e2e frontend/src/practice tooling/test docs/PRACTICE.md
+   git grep -nE "\b26 (problems|system)|of 26 solved|\(26\)" -- frontend/index.html frontend/e2e frontend/src/practice tooling/test docs/PRACTICE.md
    ```
 
 7. **Place it on the roadmap, and link cards (optional).** Every problem
