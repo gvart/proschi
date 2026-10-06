@@ -26,6 +26,7 @@ import { startMode, type StartMode } from '../onboarding/seen';
 import type { Account } from './useAccount';
 import AccountMenu from './AccountMenu';
 import CommunityStats from './CommunityStats';
+import ProblemBoards from './ProblemBoards';
 import { useProblemStats } from './useCommunity';
 import { useZenMode } from '../components/Playground/useZenMode';
 import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
@@ -418,6 +419,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
                   <>
                     {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
                     {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
+                    {community && <ProblemBoards problemId={problem.id} signedIn={account.state.status === 'signed-in'} refresh={statsRefresh} />}
                   </>
                 ) : undefined
               }

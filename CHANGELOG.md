@@ -10,6 +10,40 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **One daily streak for any daily practice.** The daily goal is now met by
+  your cards for the day, a solved problem, the daily challenge or a
+  finished Arcade run (played to the end, not just started), with freezes
+  and milestones as before. Past challenges and Arcade runs count too, so a
+  streak may have grown. The challenge page shows the challenge's own days
+  in a row as a sub-stat ("Challenge: 4 days in a row") under the one streak
+  at the top of interview prep, and the weekly recap lists challenges and
+  Arcade runs when the week had any.
+- **Per-problem leaderboards**: under how others did on a problem, after a
+  run, the cheapest passing design and the lowest p99 of those who chose to
+  appear on the leaderboard, with your own rank. They come only from designs
+  the server ran the tests on itself, keep your best (a cheaper design later
+  moves you up) and break ties by who got there first.
+- **Share your results.** A finished Arcade daily run shares a square per
+  wave (🟩 clean, 🟨 hit, 🟥 lost), the score and today's rank, and "Beat my
+  score" dares a friend with a link that opens today's daily run
+  (`#/arcade/daily`). A first solve shares its cost against the reference and
+  its p99 with a link to the problem, and a new badge, with a public profile,
+  a link to it. On phones the share sheet opens; elsewhere the text is copied.
+- **Public profiles have addresses of their own**, `proschi.app/u/<id>`,
+  with the profile's name, solved problems, badges and streak in the link
+  preview and a picture card made for it. Only profiles their owner made
+  public have one; `#/u/<id>` keeps working.
+- **Short links with a preview, and embeds.** The editor's Share button is a
+  menu now. Signed in, **Short link with preview** stores the diagram on
+  proschi.app and copies `https://proschi.app/s/<id>`: short whatever the
+  diagram's size, and link previews in chat apps show its title and an
+  image of the diagram. **Embed** copies an `<iframe>` of a new read-only
+  page (`/embed/`): the diagram, its use cases to play and **Open in
+  Proschi**, with `theme=light|dark`; short links also answer oEmbed.
+  **Your short links** lists and deletes yours; they are in Download my
+  data and go with the account. Signed out, links work as before, and the
+  long-link warning points to short links. See
+  [Sharing and embedding](docs/SHARING.md).
 - **Import from Mermaid and OpenAPI.** *Diagrams › Import Mermaid or
   OpenAPI…* turns a Mermaid flowchart or sequence diagram (or Markdown with
   several ```` ```mermaid ```` blocks) into a Proschi document: shapes and

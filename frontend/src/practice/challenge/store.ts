@@ -1,5 +1,5 @@
 import { challengeStats, challengeStreak, isPerfect, MAX_SCORE, scoreChallenge, type ChallengeAnswerItem, type ChallengeCard, type ChallengeStats } from '../../learn/challenge';
-import { isDay, type CardReview } from '../../learn/review';
+import { isDay, localDay, type CardReview } from '../../learn/review';
 import type { ChallengeCardOutcome, ChallengeStreakAnswer } from '../../services/api';
 import { loadJson, saveJson } from '../../services/storage';
 import { readReviews } from '../review/store';
@@ -26,6 +26,12 @@ export interface ChallengeResult {
   perfect: boolean;
   totalMs: number;
   results: ChallengeCardOutcome[];
+  /**
+   * This device's local date when the challenge was played, for the daily
+   * streak (`day` is the challenge's, a UTC date). Missing from results kept
+   * before it was recorded: the streak takes `day` then.
+   */
+  localDay?: string;
   /** Signed in: the rank among the day's players. */
   rank?: number;
   players?: number;
@@ -50,6 +56,7 @@ export function scoreLocally(day: string, cards: readonly ChallengeCard[], answe
     perfect: isPerfect(score),
     totalMs: score.totalMs,
     results: score.results.map((r, i) => ({ ...r, answer: answers[i].answer })),
+    localDay: localDay(new Date()),
   };
 }
 
@@ -71,6 +78,7 @@ export function readResult(raw: unknown): ChallengeResult | undefined {
     perfect: r.perfect === true,
     totalMs: r.totalMs,
     results: results.map((x) => ({ ...x, bonus: isWhole(x.bonus) ? x.bonus : 0, answer: x.answer ?? null })),
+    ...(isDay(r.localDay) ? { localDay: r.localDay } : {}),
   };
 }
 

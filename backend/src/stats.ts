@@ -36,7 +36,10 @@ export async function cached<T>(ctx: Ctx, key: string, compute: () => Promise<T>
 /** Tests call this between cases. */
 export async function clearStatsCache(): Promise<void> {
   const day = (offset: number) => new Date(Date.now() + offset * 86_400_000).toISOString().slice(0, 10);
-  const keys = ['stats', 'leaderboard', ...problemIds().map((id) => `problem/${id}`), ...[-1, 0, 1].map((n) => `challenge/${day(n)}`), ...gameCacheKeys()];
+  const keys = [
+    'stats',
+    'leaderboard',
+    ...problemIds().flatMap((id) => [`problem/${id}`, ...BOARD_METRICS.map((m) => `problem-board/${id}/${m}`)]), ...[-1, 0, 1].map((n) => `challenge/${day(n)}`), ...gameCacheKeys()];
   await Promise.all(keys.map((key) => caches.default.delete(cacheKey(key))));
 }
 
@@ -224,4 +227,81 @@ export async function getLeaderboard(ctx: Ctx): Promise<Response> {
     };
   });
   return json(body, 200, PUBLIC_CACHE);
+}
+
+/** The per-problem boards: the cheapest passing design (monthly cost) and the fastest (worst use case p99). */
+export const BOARD_METRICS = ['cost', 'p99'] as const;
+export type BoardMetric = (typeof BOARD_METRICS)[number];
+/** Entries of a per-problem board. */
+export const PROBLEM_BOARD_SIZE = 10;
+
+/** Each metric's columns: the user's best verified value, and when it was first reached (NULL before migration 0009: the first solve's time instead). */
+const BOARD_COLUMNS: Record<BoardMetric, { value: string; at: string }> = {
+  cost: { value: 'best_cost_usd', at: 'best_cost_at' },
+  p99: { value: 'best_p99_ms', at: 'best_p99_at' },
+};
+
+interface ProblemBoardRow {
+  id: string;
+  name: string;
+  value: number;
+  at: number;
+  rank: number;
+}
+
+/**
+ * GET /api/problems/<id>/leaderboard?metric=cost|p99 (default cost):
+ * `{problem, metric, players, entries: [{rank, id, displayName, value, at}]}`,
+ * each solver's best passing design on the current problem and simulation
+ * versions, lowest first, ties going to whoever reached it first. Values only
+ * ever come from the server's own run of the tests (upsertProgress keeps the
+ * verdict's, never a number from the client), and a better design later
+ * replaces the user's entry. The top PROBLEM_BOARD_SIZE of those who opted in
+ * (`publicProfile`), ranked among every solver; `id` is the user's public
+ * id. Signed in, also `you: {rank, value, players}`, or null before solving.
+ * Cached for a minute, like the other stats; `you` is read fresh.
+ */
+export async function getProblemLeaderboard(request: Request, ctx: Ctx, problemId: string): Promise<Response> {
+  const { env } = ctx;
+  await rateLimit(env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
+  const problem = findProblem(problemId);
+  if (!problem) throw new HttpError(404, `No problem called ${problemId}`);
+  const raw = new URL(request.url).searchParams.get('metric') ?? 'cost';
+  if (!(BOARD_METRICS as readonly string[]).includes(raw)) throw new HttpError(400, `metric must be one of ${BOARD_METRICS.join(', ')}`);
+  const metric = raw as BoardMetric;
+  const { value } = BOARD_COLUMNS[metric];
+  /** When the best was first reached, for ties: the first solve for a best from before the column. */
+  const at = `COALESCE(p.${BOARD_COLUMNS[metric].at}, p.solved_at)`;
+  const version = problem.version ?? 1;
+  const current = `p.problem_id = ?1 AND p.problem_version = ?2 AND p.sim_version = ?3 AND p.solved_at IS NOT NULL AND p.${value} IS NOT NULL`;
+  const user = await authenticate(request, ctx);
+  const board = await cached(ctx, `problem-board/${problemId}/${metric}`, async () => {
+    const [entries, players] = await env.DB.batch([
+      env.DB.prepare(
+        `SELECT id, name, value, at, rank FROM (
+           SELECT u.id AS id, u.display_name AS name, u.public_profile AS public, p.${value} AS value, ${at} AS at,
+             RANK() OVER (ORDER BY p.${value} ASC, ${at} ASC) AS rank
+           FROM progress p JOIN users u ON u.id = p.user_id WHERE ${current}
+         ) WHERE public = 1 ORDER BY rank, id LIMIT ?4`,
+      ).bind(problemId, version, SIM_VERSION, PROBLEM_BOARD_SIZE),
+      env.DB.prepare(`SELECT COUNT(*) AS n FROM progress p WHERE ${current}`).bind(problemId, version, SIM_VERSION),
+    ]);
+    return {
+      problem: problemId,
+      metric,
+      players: (players.results[0] as { n: number }).n,
+      entries: (entries.results as unknown as ProblemBoardRow[]).map((r) => ({ rank: r.rank, id: r.id, displayName: r.name, value: r.value, at: r.at })),
+    };
+  });
+  if (!user) return json(board, 200, { 'Cache-Control': 'no-store' });
+  // Read fresh, so a design the page just recorded shows at once.
+  const mine = await env.DB.prepare(
+    `SELECT m.value, (SELECT COUNT(*) FROM progress p WHERE ${current}
+         AND (p.${value} < m.value OR (p.${value} = m.value AND ${at} < m.at))) + 1 AS rank,
+       (SELECT COUNT(*) FROM progress p WHERE ${current}) AS players
+     FROM (SELECT p.${value} AS value, ${at} AS at FROM progress p WHERE ${current} AND p.user_id = ?4) m`,
+  )
+    .bind(problemId, version, SIM_VERSION, user.id)
+    .first<{ value: number; rank: number; players: number }>();
+  return json({ ...board, you: mine ? { rank: mine.rank, value: mine.value, players: mine.players } : null }, 200, { 'Cache-Control': 'no-store' });
 }

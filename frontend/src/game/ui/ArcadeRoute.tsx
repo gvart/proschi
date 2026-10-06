@@ -1,7 +1,9 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Boxes, CalendarDays, Gem, Lock, Medal, Play, ShoppingBag, Sparkles, Trophy, Wrench, type LucideIcon } from 'lucide-react';
 import { api, apiEnabled } from '../../services/api';
 import type { Account } from '../../practice/useAccount';
+import type { Activity } from '../../practice/activity';
+import { notifyActivity } from '../../practice/skills/activity';
 import { PROVIDER_LABEL } from '../../practice/account';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { gameContent } from '../content';
@@ -21,7 +23,8 @@ import './arcade.css';
  * screen has today's daily run, the scenarios (locked ones say what opens
  * them, cleared ones offer the next difficulty), the shop where Blueprints
  * buy components, cards and perks, and the leaderboards. A run in progress
- * survives a reload.
+ * survives a reload. `#/arcade/daily` (the link in a shared daily run)
+ * opens on today's daily run.
  */
 
 interface Playing {
@@ -31,9 +34,15 @@ interface Playing {
   key: number;
 }
 
-export default function ArcadeRoute({ account }: { account: Account }) {
+export default function ArcadeRoute({ account, activity, focusDaily = false }: { account: Account; activity?: Activity; focusDaily?: boolean }) {
   const { content, errors } = gameContent();
-  const arcade = useArcade(content, account.state);
+  const refreshActivity = activity?.refresh;
+  // A finished run meets the daily goal: the streak at the top, and badges, again.
+  const onRunDone = useCallback(() => {
+    refreshActivity?.();
+    notifyActivity();
+  }, [refreshActivity]);
+  const arcade = useArcade(content, account.state, onRunDone);
   const [settings, setSettings] = useState<Settings>(() => loadSettings());
   const [playing, setPlaying] = useState<Playing>();
   const [saved, setSaved] = useState(() => loadRun());
@@ -45,6 +54,14 @@ export default function ArcadeRoute({ account }: { account: Account }) {
   useEffect(() => {
     document.title = 'Scale or Fail: the system design game · Proschi';
   }, []);
+
+  const dailyBox = useRef<HTMLElement>(null);
+  const hasDaily = content.scenarios.some((s) => s.id === arcade.daily.scenario);
+  useEffect(() => {
+    if (!focusDaily || !hasDaily || playing) return;
+    dailyBox.current?.scrollIntoView({ block: 'center' });
+    dailyBox.current?.focus({ preventScroll: true });
+  }, [focusDaily, hasDaily, playing]);
 
   const updateSettings = (s: Settings) => {
     setSettings(s);
@@ -162,7 +179,12 @@ export default function ArcadeRoute({ account }: { account: Account }) {
       )}
 
       {daily && (
-        <section className="rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+        <section
+          ref={dailyBox}
+          tabIndex={-1}
+          aria-label="Today’s daily run"
+          className={`rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md focus:outline-none ${focusDaily ? 'ring-4 ring-pop-yellow' : ''}`}
+        >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <p className={`${eyebrow} flex items-center gap-1`}>

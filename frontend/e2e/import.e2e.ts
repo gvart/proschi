@@ -4,7 +4,7 @@ import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from
 async function openEditor(page: Page) {
   await page.goto('app/');
   await expect(codeEditor(page)).toBeVisible();
-  await waitForCanvas(page, 6);
+  await waitForCanvas(page);
 }
 
 test.describe('import and the start gallery', () => {
