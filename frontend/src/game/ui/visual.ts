@@ -94,6 +94,8 @@ export const CATEGORY_TILE: Record<EventDef['category'], string> = {
 export const PERK_TILE = 'bg-pop-blue/20 text-ink';
 export const COMPONENT_TILE = 'bg-pop-yellow/30 text-ink';
 export const FEATURE_TILE = 'bg-pop-lilac/25 text-ink';
+export const MUTATOR_TILE = 'bg-pop-pink/30 text-ink';
+export const BOUNTY_TILE = 'bg-pop-yellow/40 text-ink';
 
 /** Each shop feature's icon: a bigger box, more partitions, a longer lane. */
 export const FEATURE_ICON: Record<FeatureDef['id'], LucideIcon> = {

@@ -1,0 +1,12 @@
+{
+  "bounties": [
+    { "id": "cool-servers", "name": "Cool heads", "icon": "gauge", "text": "Keep every app server under 50% busy at the peak.", "kind": "max-utilization", "role": "app", "value": 0.5, "cash": 150, "points": 250 },
+    { "id": "penny-pincher", "name": "Penny pincher", "icon": "piggy-bank", "text": "Keep this wave's cloud bill under 40% of its revenue.", "kind": "budget", "value": 0.4, "cash": 200, "points": 250 },
+    { "id": "perfect-month", "name": "Perfect month", "icon": "shield-check", "text": "Finish the wave without a single breach.", "kind": "clean", "cash": 100, "points": 300 },
+    { "id": "right-sized", "name": "Right-sized", "icon": "ruler", "text": "Earn the right-sized bonus: nothing over 75% at the peak, and something working above 40%.", "kind": "right-sized", "cash": 250, "points": 400 },
+    { "id": "quiet-night", "name": "Quiet night", "icon": "bell-ring", "text": "Get through the wave clean without paging the on-call.", "kind": "no-oncall", "cash": 100, "points": 200 },
+    { "id": "ship-it", "name": "Ship it", "icon": "rocket", "text": "Deploy without a load test and finish the wave clean.", "kind": "no-loadtest", "cash": 200, "points": 300 },
+    { "id": "zone-proof", "name": "Zone-proof", "icon": "cloud-off", "text": "Lose an availability zone this wave and stay up: no resilience breach.", "kind": "no-breach", "breach": "resilience", "event": "az-down", "cash": 250, "points": 400 },
+    { "id": "not-one-dropped", "name": "Not one dropped", "icon": "trophy", "text": "Get through the boss without dropping a single request.", "kind": "no-breach", "breach": "drop", "boss": true, "cash": 300, "points": 500 }
+  ]
+}

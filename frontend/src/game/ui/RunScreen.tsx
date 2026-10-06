@@ -20,6 +20,7 @@ import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, W
 import Report from './Report';
 import { ChangesPanel, DiagnosisPanel, TicketCard } from './Modes';
 import { MascotBriefing, MASCOT } from './Mascot';
+import { BountyLine, BountyResult, MutatorChip, MutatorPicker } from './Twists';
 import { briefing } from './briefing';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
@@ -690,7 +691,16 @@ export default function RunScreen(props: RunScreenProps) {
       {planning && game.waveDef().diagnosis && (
         <DiagnosisPanel key={`diagnosis-${s.wave}`} diagnosis={game.waveDef().diagnosis!} picked={s.diagnosis} onPick={(pick) => apply({ t: 'diagnose', pick })} />
       )}
-      {planning && <ForecastPanel forecast={forecast} scenario={game.scenario} events={events} act={act} collapsible={narrow} key={`forecast-${s.wave}`} />}
+      {planning && (
+        <ForecastPanel forecast={forecast} scenario={game.scenario} events={events} act={act} collapsible={narrow} key={`forecast-${s.wave}`}>
+          {forecast.mutator && (
+            <p className="mt-2">
+              <MutatorChip mutator={forecast.mutator} />
+            </p>
+          )}
+          {forecast.bounty && <BountyLine bounty={forecast.bounty} />}
+        </ForecastPanel>
+      )}
       {planning && (
         <ChangesPanel
           game={game}
@@ -775,6 +785,18 @@ export default function RunScreen(props: RunScreenProps) {
           onContinue={() => {
             setShowResult(false);
             if (lastSummary.clean) play('cash');
+          }}
+        >
+          {lastSummary.bounty && <BountyResult result={lastSummary.bounty} def={content.bounties.find((b) => b.id === lastSummary.bounty!.id)} />}
+        </WaveResult>
+      )}
+      {!showResult && planning && s.mutatorOffer.length > 0 && (
+        <MutatorPicker
+          offer={s.mutatorOffer.map((id) => content.mutators.find((m) => m.id === id)!).filter(Boolean)}
+          daily={setup.mode === 'daily'}
+          onPick={(i) => {
+            apply({ t: 'mutator', pick: i });
+            if (i !== null) play('card');
           }}
         />
       )}

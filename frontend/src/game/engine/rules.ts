@@ -7,7 +7,7 @@ import type { Role } from './types';
  */
 
 /** Part of every leaderboard key: a new version starts new boards. */
-export const GAME_VERSION = 1;
+export const GAME_VERSION = 2;
 
 /** Samples of a wave (a month of traffic). */
 export const TICKS = 8;
@@ -88,6 +88,10 @@ export const END_CASH_DIVISOR = 10;
 /** Draft odds by rarity. */
 export const RARITY_WEIGHTS = { common: 60, uncommon: 30, rare: 9, legendary: 1 } as const;
 export const OFFER_SIZE = 3;
+/** Mutators offered at the start of a Scale or Fail run. */
+export const MUTATOR_OFFER = 3;
+/** How much likelier a bounty made for the wave (its incident, its boss) is drawn than any other. */
+export const BOUNTY_FITTED_WEIGHT = 4;
 
 /** A seeded incident from the scenario's pool every wave from this one on. */
 export const POOL_FROM_WAVE = 3;

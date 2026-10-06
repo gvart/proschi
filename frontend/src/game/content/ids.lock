@@ -1,5 +1,13 @@
 # Every id Scale or Fail has published. Ids are never removed: progress and replays refer to them.
 # Add new ones with `proschi game lock`.
+bounty:cool-servers
+bounty:not-one-dropped
+bounty:penny-pincher
+bounty:perfect-month
+bounty:quiet-night
+bounty:right-sized
+bounty:ship-it
+bounty:zone-proof
 card:async-io
 card:autoscaler
 card:blameless-culture
@@ -53,6 +61,13 @@ event:write-surge
 feature:shards
 feature:tiers
 feature:wide-lanes
+mutator:cache-vendor
+mutator:flaky-zone
+mutator:lean-seed
+mutator:licence-audit
+mutator:read-storm
+mutator:viral-abroad
+mutator:write-heavy
 perk:free-reroll
 perk:load-lab
 perk:loyal-users

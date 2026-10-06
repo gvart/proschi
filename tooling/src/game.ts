@@ -6,7 +6,7 @@
  */
 import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, relative, resolve } from 'node:path';
-import { checkGame, LOCK_FILE, playScript, type GameCheck, type ScriptedRun } from '../../frontend/src/game/engine/check';
+import { checkGame, LOCK_FILE, playScript, publishedIds, type GameCheck, type ScriptedRun } from '../../frontend/src/game/engine/check';
 import { readContent } from '../../frontend/src/game/engine/content';
 import { readTopics } from '../../frontend/src/learn/cards';
 import { displayPath } from './imports';
@@ -19,12 +19,13 @@ export const GAME_USAGE = `  proschi game check [--format text|github|json] [dir
 
 export const GAME_HELP = `game    Scale or Fail, the system design game (docs/GAME.md).
         check validates the content folder (default: the repository's
-        frontend/src/game/content): components, perks, cards, events and
-        scenarios; ids listed in ids.lock; review cards, topics and practice
-        problems they refer to; requirement lines that parse; and the
-        scripted runs: every reference.json must clear all waves, every
-        wrong/*.json must fail by its wave, and doing nothing must lose.
-        Exits with 1 on any violation.
+        frontend/src/game/content): components, perks, mutators, bounties,
+        cards, events and scenarios; ids listed in ids.lock; review cards,
+        topics and practice problems they refer to; requirement lines that
+        parse; and the scripted runs: every reference.json must clear all
+        waves, every wrong/*.json must fail by its wave, doing nothing must
+        lose, and the reference must get past act 1 with every mutator its
+        scenario offers. Exits with 1 on any violation.
         lock adds new ids to ids.lock.
         sim plays a scenario's reference run (or --run) and prints every
         wave: traffic, cost, revenue, score, Trust and what broke.`;
@@ -82,7 +83,7 @@ export function formatGameCheck(dir: string, check: GameCheck, style: 'text' | '
   for (const r of check.runs) lines.push(`  ${r.scenario}/${r.name}: ${r.outcome ?? 'running'} after ${r.waves} wave(s), score ${r.score}, ${Math.round(r.ms)} ms`);
   const c = check.content;
   lines.push(
-    `${c.scenarios.length} scenario(s), ${c.components.length} components, ${c.cards.length} cards, ${c.events.length} events, ${c.perks.length} perks: ` +
+    `${c.scenarios.length} scenario(s), ${c.components.length} components, ${c.cards.length} cards, ${c.events.length} events, ${c.perks.length} perks, ${c.mutators.length} mutators, ${c.bounties.length} bounties: ` +
       (check.violations.length ? `${check.violations.length} violation(s)` : 'no violations'),
   );
   return lines.join('\n');
@@ -164,15 +165,7 @@ function gameCheck(args: string[], out: (s: string) => void, err: (s: string) =>
 
 /** The ids a content folder publishes, as ids.lock lists them. */
 export function contentIds(files: Record<string, string>): string[] {
-  const { content } = readContent(files);
-  const ids = [
-    ...content.components.map((c) => `component:${c.id}`),
-    ...content.features.map((f) => `feature:${f.id}`),
-    ...content.perks.map((p) => `perk:${p.id}`),
-    ...content.cards.map((c) => `card:${c.id}`),
-    ...content.events.map((e) => `event:${e.id}`),
-    ...content.scenarios.map((s) => `scenario:${s.id}`),
-  ];
+  const ids = publishedIds(readContent(files).content);
   // Files that do not read yet still get their ids: the id is the file or folder name.
   for (const path of Object.keys(files)) {
     let m = /^cards\/([^/]+)\.md$/.exec(path);

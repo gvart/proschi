@@ -10,6 +10,16 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Mutators and bounties** in Scale or Fail, so no two runs want the same
+  design. A run starts with a choice of three mutators: users on another
+  continent, a dearer SQL licence, a read storm, a write-heavy crowd, a
+  flaky zone, a lean seed round or a cache vendor in trouble. Each changes
+  the design that wins and multiplies your points (×1.1 to ×1.3). Every wave
+  also has an optional bounty, such as keeping app servers under 50%,
+  keeping the bill under 40% of revenue, or getting through a boss without
+  dropping a request. Met, it pays cash at once and points. Kernel mentions
+  both, the debrief and the report count them, and the daily run offers
+  everyone the same ones. New leaderboards start with this version.
 - **Kernel**, the Arcade's cat SRE lead: at the start of every wave it briefs
   you in a speech bubble that types itself out. It says how traffic changed
   since last month, which use cases go live, and the new requirements in

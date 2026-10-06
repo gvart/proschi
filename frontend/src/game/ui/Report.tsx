@@ -7,7 +7,8 @@ import type { Game } from '../engine/run';
 import type { GameContent } from '../engine/types';
 import { exportSource } from './exportSource';
 import { BreachCard, LearnLinks, Stat, Timeline } from './Panels';
-import { topMistakes } from './visual';
+import { topMistakes, usd } from './visual';
+import { MutatorLearn } from './Twists';
 import type { RunResult } from './useArcade';
 
 /**
@@ -50,6 +51,8 @@ export default function Report(props: {
     }
   })();
   const mistakes = topMistakes(s.history);
+  const claimed = s.history.flatMap((h) => (h.bounty ? [h.bounty] : []));
+  const bounties = { total: claimed.length, met: claimed.filter((b) => b.met).length, cash: claimed.reduce((t, b) => t + b.cash, 0), points: claimed.reduce((t, b) => t + b.points, 0) };
   const events = new Map(content.events.map((e) => [e.id, e]));
   const related = game.scenario.related;
 
@@ -98,6 +101,17 @@ export default function Report(props: {
         <p className={eyebrow}>Revenue and cost per wave</p>
         <Timeline history={s.history} events={events} />
       </section>
+
+      {(game.mutatorDef || bounties.total > 0) && (
+        <section className="rounded-brutal border-bw-1 border-ink bg-surface p-3 text-sm">
+          {bounties.total > 0 && (
+            <p>
+              <strong>Bounties:</strong> {bounties.met} of {bounties.total} claimed, for {usd(bounties.cash)} and {bounties.points.toLocaleString('en-US')} points.
+            </p>
+          )}
+          {game.mutatorDef && <MutatorLearn mutator={game.mutatorDef} />}
+        </section>
+      )}
 
       {mistakes.length > 0 && (
         <section className="space-y-2">

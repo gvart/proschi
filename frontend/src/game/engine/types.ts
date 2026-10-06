@@ -65,6 +65,71 @@ export interface PerkDef {
   value: number;
 }
 
+/**
+ * A mutator (mutators.json): a twist on a whole Scale or Fail run, picked
+ * from three at its start. It changes the problem, so the design that wins
+ * changes too, and pays for the trouble with a multiplier on every tick's
+ * points.
+ */
+export interface MutatorDef {
+  id: string;
+  name: string;
+  /** A lucide icon name from GAME_ICONS, unique among mutators. */
+  icon: IconName;
+  /** Short rules text: what changes. */
+  text: string;
+  /** What it teaches: the design it pushes you toward. */
+  why: string;
+  /** Multiplier on every tick's points, above 1. */
+  score: number;
+  /** Cloud bill multipliers by component id or role. */
+  cost?: { target: string; mult: number }[];
+  /** Traffic multipliers: reads are GET use cases, writes everything else. */
+  traffic?: { read?: number; write?: number };
+  /** Far users' share from the first wave on, at least (0..0.99). */
+  global?: number;
+  /** Multiplier on the starting cash. */
+  cash?: number;
+  /** Multiplier on the interest cap. */
+  interest?: number;
+  /** Incidents it adds: an event id on each of these waves (1-based, from wave 2). */
+  events?: { id: string; waves: number[] }[];
+  /** Scenarios it is never offered in: ones it would make impossible. */
+  excludes?: string[];
+  learn: string[];
+}
+
+export const BOUNTY_KINDS = ['max-utilization', 'budget', 'clean', 'no-breach', 'right-sized', 'no-oncall', 'no-loadtest'] as const;
+export type BountyKind = (typeof BOUNTY_KINDS)[number];
+
+/**
+ * A bounty (bounties.json): an optional objective for one Scale or Fail
+ * wave. Met, it pays cash at once and points (times the act). Each kind has
+ * its own test; `role`, `value` and `breach` are its parameters.
+ */
+export interface BountyDef {
+  id: string;
+  name: string;
+  /** A lucide icon name from GAME_ICONS, unique among bounties. */
+  icon: IconName;
+  /** The objective, as the player reads it. */
+  text: string;
+  kind: BountyKind;
+  /** `max-utilization`: the role whose every node must stay under `value` at the peak. */
+  role?: Role;
+  /** `max-utilization`: the utilization cap (0..1); `budget`: the bill's share of revenue. */
+  value?: number;
+  /** `no-breach`: the breach kind to avoid all wave. */
+  breach?: string;
+  /** Drawn only on waves with an incident of this effect (lose a zone, and survive it). */
+  event?: EventEffect;
+  /** Drawn only on boss waves. */
+  boss?: boolean;
+  cash: number;
+  /** Points, times the act (1 to 3). */
+  points: number;
+}
+
 /** `capacity { … }`-like numbers a card or event changes, as multipliers. */
 export type Stat = 'rps' | 'reads' | 'writes';
 
@@ -354,6 +419,8 @@ export interface GameContent {
   components: ComponentDef[];
   features: FeatureDef[];
   perks: PerkDef[];
+  mutators: MutatorDef[];
+  bounties: BountyDef[];
   cards: CardDef[];
   events: EventDef[];
   scenarios: ScenarioDef[];
@@ -420,6 +487,8 @@ export type Action =
   /** Planning: stop serving a legacy use case (an old API version). */
   | { t: 'sunset'; useCase: string }
   /** After the last wave: keep going (Endless) or bank the score. */
+  /** Before the first deploy of a Scale or Fail run: take one of the offered mutators (index), or none. */
+  | { t: 'mutator'; pick: number | null }
   | { t: 'endless' }
   | { t: 'retire' };
 
