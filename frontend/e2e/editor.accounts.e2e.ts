@@ -21,6 +21,12 @@ interface Doc {
 class Account {
   docs = new Map<string, Doc>();
   puts: string[] = [];
+  /** documentLimit in backend/src/documents.ts; none unless a test sets it. */
+  limit?: number;
+
+  live(): number {
+    return [...this.docs.values()].filter((d) => d.deletedAt === null).length;
+  }
   private clock = Date.now();
 
   write(doc: Omit<Doc, 'updatedAt'>): Doc {
@@ -39,7 +45,8 @@ class Account {
         const method = request.method();
         if (method === 'GET') {
           const since = Number(url.searchParams.get('since') ?? 0);
-          return route.fulfill({ json: { documents: [...this.docs.values()].filter((d) => d.updatedAt >= since), cursor: this.clock } });
+          const documents = [...this.docs.values()].filter((d) => d.updatedAt >= since);
+          return route.fulfill({ json: { documents, cursor: this.clock, ...(this.limit !== undefined ? { limit: this.limit, used: this.live() } : {}) } });
         }
         if (method === 'DELETE' && !id) {
           const deleted = this.docs.size;
@@ -51,6 +58,9 @@ class Account {
           const body = request.postDataJSON() as { name: string; source: string; imports: Record<string, string> | null; baseVersion: number };
           this.puts.push(id);
           if (existing && existing.version !== body.baseVersion) return route.fulfill({ status: 409, json: { error: 'changed', document: existing } });
+          if (this.limit !== undefined && (!existing || existing.deletedAt !== null) && this.live() >= this.limit) {
+            return route.fulfill({ status: 409, json: { error: 'document_limit', message: 'Your account is full', limit: this.limit, used: this.live() } });
+          }
           const doc = this.write({ id, name: body.name, source: body.source, imports: body.imports, version: (existing?.version ?? 0) + 1, deletedAt: null });
           return route.fulfill({ json: { document: doc } });
         }
@@ -78,10 +88,10 @@ test('signed in, the diagrams sync with the account, and a conflict keeps both',
   account.write({ id: 'cloud-1', name: 'cloud.proschi', source: 'title "Cloud Diagram"\n\nweb "Web" [Service]\n', imports: null, version: 1, deletedAt: null });
   await mockSignedIn(page);
   await account.mock(page);
-  await page.goto('app/');
+  await page.goto('app/?example=ecommerce');
   await expect(codeEditor(page)).toBeVisible();
 
-  // The account's diagram arrives, and the one in this browser (the starter example) is uploaded.
+  // The account's diagram arrives, and the one in this browser (the example) is uploaded.
   await expect.poll(() => account.docs.size).toBe(2);
   const localId = [...account.docs.keys()].find((id) => id !== 'cloud-1')!;
   expect(account.docs.get(localId)?.source).toContain('title "E-Commerce Platform"');
@@ -160,4 +170,41 @@ test('another account signing in: diagrams already in the browser are only added
   await expect(menu).toContainText('Made Here');
   await menu.getByRole('menuitem', { name: 'Add 2 diagrams from this browser to your account' }).click();
   await expect.poll(() => account.docs.size).toBe(2);
+});
+
+test('the account keeps a limited number of diagrams: the rest stay in this browser, marked, and can swap places', async ({ page, errors }) => {
+  const account = new Account();
+  account.limit = 2;
+  account.write({ id: 'cloud-1', name: 'cloud.proschi', source: 'title "Cloud Diagram"\n\nweb "Web" [Service]\n', imports: null, version: 1, deletedAt: null });
+  await mockSignedIn(page);
+  await account.mock(page);
+  await page.addInitScript(() => {
+    if (localStorage.getItem('proschi.docs')) return;
+    const doc = (id: string, title: string, day: number) => ({ id, source: `title "${title}"\n\nweb "Web" [Service]\n`, fileName: `${id}.proschi`, updatedAt: `2026-10-0${day}T00:00:00.000Z` });
+    localStorage.setItem('proschi.docs', JSON.stringify({ docs: [doc('d1', 'Oldest', 1), doc('d2', 'Middle', 2), doc('d3', 'Newest', 3)], currentId: 'd3' }));
+  });
+  await page.goto('app/');
+  await expect(codeEditor(page)).toBeVisible();
+
+  // One slot was free: the most recently edited diagram takes it.
+  await expect.poll(() => [...account.docs.keys()].sort()).toEqual(['cloud-1', 'd3']);
+  let menu = await openMenu(page);
+  await expect(menu.getByTestId('cloud-status')).toHaveText('Cloud full: 2 of 2 — new diagrams stay in this browser');
+  const row = (title: string) => menu.getByRole('listitem').filter({ hasText: title });
+  await expect(row('Oldest').getByTestId('browser-only')).toHaveText('This browser only');
+  await expect(row('Middle').getByTestId('browser-only')).toBeVisible();
+  await expect(row('Newest').getByTestId('browser-only')).toHaveCount(0);
+  await expect(menu.getByRole('button', { name: 'Keep Oldest in your account' })).toBeDisabled();
+
+  // Moving one to this browser only frees its slot, which the next most recent takes.
+  page.once('dialog', (dialog) => void dialog.accept());
+  await menu.getByRole('button', { name: 'Move Cloud Diagram to this browser only' }).click();
+  await expect.poll(() => account.docs.get('cloud-1')?.deletedAt).not.toBeNull();
+  await expect.poll(() => account.docs.get('d2')?.deletedAt).toBeNull();
+  await page.keyboard.press('Escape');
+  menu = await openMenu(page);
+  await expect(row('Cloud Diagram').getByTestId('browser-only')).toBeVisible();
+  await expect(row('Middle').getByTestId('browser-only')).toHaveCount(0);
+  await expect(menu.getByTestId('cloud-status')).toHaveText('Cloud full: 2 of 2 — new diagrams stay in this browser');
+  allowStatus(errors, 409);
 });

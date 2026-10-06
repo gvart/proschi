@@ -90,9 +90,18 @@ instead ([Mobile apps](#mobile-apps)).
   was based on; a stale one gets 409 with the server's copy, and the page
   keeps both (its own renamed "<name> (conflict <date>)"). Deleting leaves a
   tombstone, so other devices delete their copy too; the daily cron prunes
-  tombstones after 30 days. At most 200 diagrams a user, 64 KiB each. The
-  page never uploads another account's diagrams: on an account switch it
-  drops them from the browser and asks before adding any others.
+  tombstones after 30 days. 64 KiB each, and at most 5 diagrams a user for
+  now: `documentLimit(ctx, user)` returns `FREE_DOCUMENT_LIMIT`, the one
+  place a paid plan will raise it. A new diagram past the limit gets 409
+  `{error: 'document_limit', limit, used}`; saving one the account keeps is
+  always allowed. The page decides which diagrams sync (`cloudPlan` in
+  `sync.ts`): those in the account keep their slot, new ones take free
+  slots most recently edited first, and the rest stay in the browser,
+  marked "This browser only" in the Diagrams menu, where the user can swap
+  them ("Move to this browser only" deletes the cloud copy). The page never
+  uploads another account's diagrams: on an account switch it drops them
+  from the browser and asks before adding any others (at most as many as
+  fit).
 - **Short links and embeds** ([below](#short-links-and-embeds)): a
   signed-in user stores a diagram at `/s/<id>` with a preview image; anyone
   with the link opens it in the editor or the embed page.
@@ -127,8 +136,8 @@ instead ([Mobile apps](#mobile-apps)).
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
 | `POST /api/me/achievements/seen {ids?}` | Marks earned badges as seen (those listed, or all); answers `{seen}`, how many |
-| `GET /api/me/documents?since=<ms>` | The synced diagrams changed at or after `since` (Unix milliseconds; all without), tombstones included: `{documents: [{id, name, source, imports, version, updatedAt, deletedAt}], cursor}`. `cursor` is the server's time before the query, the next `since` |
-| `PUT /api/me/documents/<id> {name, source, imports?, baseVersion}` | Saves a diagram (`id` is the page's, unique per user). `baseVersion` is the version the page last had, 0 for a new one: `{document}`, its version one higher. 409 `{error, document}` with the server's copy when it changed since (or was deleted: saving on top of the tombstone's version restores it). 413 past 64 KiB (source plus imports) or 200 diagrams |
+| `GET /api/me/documents?since=<ms>` | The synced diagrams changed at or after `since` (Unix milliseconds; all without), tombstones included: `{documents: [{id, name, source, imports, version, updatedAt, deletedAt}], cursor, limit, used}`. `cursor` is the server's time before the query, the next `since`; `limit` is how many diagrams the account may keep (5 for now) and `used` how many it keeps |
+| `PUT /api/me/documents/<id> {name, source, imports?, baseVersion}` | Saves a diagram (`id` is the page's, unique per user). `baseVersion` is the version the page last had, 0 for a new one: `{document}`, its version one higher. 409 `{error, document}` with the server's copy when it changed since (or was deleted: saving on top of the tombstone's version restores it). 413 past 64 KiB (source plus imports). 409 `{error: 'document_limit', message, limit, used}` for a new diagram (or restoring a deleted one) when the account already keeps `limit` |
 | `DELETE /api/me/documents/<id>?baseVersion=<n>` | Leaves a tombstone (name, source and imports cleared): `{document}`. 409 `{error, document}` when it changed since `baseVersion`; 204 for one the account does not have |
 | `DELETE /api/me/documents` | "Delete my cloud copies": every synced diagram and tombstone of the user, at once: `{deleted}` |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user: cookies, apps' tokens and unused app sign-in codes |

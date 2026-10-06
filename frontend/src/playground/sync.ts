@@ -45,6 +45,12 @@ export interface SyncMeta {
   held?: string[];
   /** Whether to ask "Add N diagrams from this browser to your account?". */
   ask?: boolean;
+  /** How many diagrams the account may keep (GET's `limit`); unknown until the first pull. */
+  limit?: number;
+  /** Diagrams the user moved to this browser only: never sent, and their cloud copy is deleted. */
+  localOnly?: string[];
+  /** Diagrams the user chose to keep in the account: first in line for a free slot. */
+  keep?: string[];
 }
 
 /** What `proschi.docs.sync` holds. */
@@ -77,7 +83,21 @@ export function readStoredSync(value: unknown): StoredSync {
     if (isRecord(meta.refused)) for (const [id, fp] of Object.entries(meta.refused)) if (isSafeKey(id) && typeof fp === 'string') refused[id] = fp;
     const cursor = typeof meta.cursor === 'number' && Number.isFinite(meta.cursor) ? meta.cursor : null;
     const held = Array.isArray(meta.held) ? meta.held.filter((id): id is string => typeof id === 'string') : [];
-    out.meta = { userId: meta.userId, cursor, docs, refused, ...(held.length ? { held } : {}), ...(meta.ask === true && held.length ? { ask: true } : {}) };
+    const ids = (value: unknown) => (Array.isArray(value) ? value.filter((id): id is string => typeof id === 'string') : []);
+    const localOnly = ids(meta.localOnly);
+    const keep = ids(meta.keep);
+    const limit = Number.isSafeInteger(meta.limit) && (meta.limit as number) >= 0 ? (meta.limit as number) : undefined;
+    out.meta = {
+      userId: meta.userId,
+      cursor,
+      docs,
+      refused,
+      ...(held.length ? { held } : {}),
+      ...(meta.ask === true && held.length ? { ask: true } : {}),
+      ...(limit !== undefined ? { limit } : {}),
+      ...(localOnly.length ? { localOnly } : {}),
+      ...(keep.length ? { keep } : {}),
+    };
   }
   return out;
 }
@@ -172,6 +192,7 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
   const known: SyncMeta['docs'] = { ...meta.docs };
   const conflicts: string[] = [];
   const held = [...(meta.held ?? [])];
+  const localOnly = new Set(meta.localOnly ?? []);
   let changed = false;
 
   for (const remote of remotes) {
@@ -179,6 +200,12 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
     if (!isSafeKey(remote.id)) continue;
     const seen = known[remote.id];
     if (seen && remote.version <= seen.version) continue;
+    if (localOnly.has(remote.id)) {
+      // Moved to this browser only: the copy here wins; the cloud copy is deleted at its latest version.
+      if (remote.deletedAt !== null) delete known[remote.id];
+      else if (seen) known[remote.id] = { version: remote.version, fp: seen.fp };
+      continue;
+    }
     const i = docs.findIndex((d) => d.id === remote.id);
     const local = i >= 0 ? docs[i] : undefined;
     const dirty = local !== undefined && fingerprint(local) !== seen?.fp;
@@ -238,14 +265,83 @@ export function applyRemote(state: DocumentState, meta: SyncMeta, remotes: Remot
   return { state: { docs, currentId }, meta: nextMeta, conflicts };
 }
 
-/** The writes waiting to be sent: diagrams edited or made here (oldest first), then those deleted here. */
+/** Which diagrams in this browser are in the account and which stay here, under the account's limit. */
+export interface CloudPlan {
+  /** Diagrams kept in (or on their way to) the account. */
+  cloud: Set<string>;
+  /** Diagrams that stay in this browser only: moved here, held back, refused, or past the limit. */
+  local: Set<string>;
+  /** `cloud.size`: the slots taken. */
+  used: number;
+  /** The account's limit; null while unknown (before the first pull). */
+  limit: number | null;
+  /** Slots still free after this plan. */
+  free: number;
+}
+
+/**
+ * Decides, deterministically, which diagrams sync under the account's limit:
+ *
+ * - a diagram the account already keeps keeps its slot;
+ * - the others (never synced, or deleted there and edited here) take the free
+ *   slots: those the user chose to keep in the cloud first, then the most
+ *   recently edited (ties by id);
+ * - the rest stay in this browser only, never lost and never retried until a
+ *   slot frees up, as do diagrams moved to this browser only, held back from
+ *   this account, or refused by the server since their last change.
+ *
+ * A new blank diagram takes no slot until something is typed into it.
+ */
+export function cloudPlan(state: DocumentState, meta: SyncMeta): CloudPlan {
+  const held = new Set(meta.held ?? []);
+  const localOnly = new Set(meta.localOnly ?? []);
+  const keep = meta.keep ?? [];
+  const cloud = new Set<string>();
+  const local = new Set<string>();
+  const candidates: SavedDiagram[] = [];
+  const blank: string[] = [];
+  for (const d of state.docs) {
+    if (!isSafeKey(d.id) || held.has(d.id) || localOnly.has(d.id)) {
+      local.add(d.id);
+      continue;
+    }
+    const known = Object.hasOwn(meta.docs, d.id) ? meta.docs[d.id] : undefined;
+    // fp '' is a diagram deleted in the account but edited here: restoring it needs a slot.
+    if (known && known.fp !== '') cloud.add(d.id);
+    else if (meta.refused[d.id] === fingerprint(d)) local.add(d.id);
+    else if (!known && d.source === BLANK_SOURCE) blank.push(d.id);
+    else candidates.push(d);
+  }
+  const limit = meta.limit ?? null;
+  let free = Math.max(0, (limit ?? Infinity) - cloud.size);
+  const rank = (d: SavedDiagram) => {
+    const i = keep.indexOf(d.id);
+    return i < 0 ? keep.length : i;
+  };
+  candidates.sort((a, b) => rank(a) - rank(b) || b.updatedAt.localeCompare(a.updatedAt) || (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  for (const d of candidates) {
+    if (free > 0) {
+      cloud.add(d.id);
+      free--;
+    } else local.add(d.id);
+  }
+  if (free === 0) for (const id of blank) local.add(id);
+  return { cloud, local, used: cloud.size, limit, free: Number.isFinite(free) ? free : Number.MAX_SAFE_INTEGER };
+}
+
+/**
+ * The writes waiting to be sent: first the deletes (diagrams deleted here, or
+ * moved to this browser only), which free slots, then the diagrams edited or
+ * made here that have a slot (cloudPlan), oldest first.
+ */
 export function pendingOps(state: DocumentState, meta: SyncMeta): SyncOp[] {
   const ops: SyncOp[] = [];
-  const held = new Set(meta.held ?? []);
+  const plan = cloudPlan(state, meta);
+  const localOnly = new Set(meta.localOnly ?? []);
+  const here = new Set(state.docs.map((d) => d.id));
+  for (const [id, { version }] of Object.entries(meta.docs)) if (!here.has(id) || localOnly.has(id)) ops.push({ kind: 'delete', id, baseVersion: version });
   const edited = state.docs.filter((d) => {
-    if (!isSafeKey(d.id) || held.has(d.id)) return false;
-    // A new diagram nobody has typed into yet waits until it holds something.
-    if (!Object.hasOwn(meta.docs, d.id) && d.source === BLANK_SOURCE) return false;
+    if (!plan.cloud.has(d.id)) return false;
     const fp = fingerprint(d);
     return fp !== meta.docs[d.id]?.fp && meta.refused[d.id] !== fp;
   });
@@ -258,28 +354,68 @@ export function pendingOps(state: DocumentState, meta: SyncMeta): SyncOp[] {
       body: { name: fileNameOf(d), source: d.source, imports: d.imports ?? null },
     });
   }
-  const here = new Set(state.docs.map((d) => d.id));
-  for (const [id, { version }] of Object.entries(meta.docs)) if (!here.has(id)) ops.push({ kind: 'delete', id, baseVersion: version });
   return ops;
+}
+
+/** "Move to this browser only": the diagram stops syncing and its cloud copy is deleted (pendingOps). */
+export function moveToBrowser(meta: SyncMeta, id: string): SyncMeta {
+  const localOnly = [...new Set([...(meta.localOnly ?? []), id])];
+  const keep = (meta.keep ?? []).filter((k) => k !== id);
+  const next: SyncMeta = { ...meta, localOnly };
+  if (keep.length) next.keep = keep;
+  else delete next.keep;
+  return next;
+}
+
+/** "Keep in cloud": the diagram syncs again, first in line for a free slot. */
+export function keepInCloud(meta: SyncMeta, id: string): SyncMeta {
+  const next: SyncMeta = { ...meta, keep: [...(meta.keep ?? []).filter((k) => k !== id), id] };
+  const localOnly = (meta.localOnly ?? []).filter((k) => k !== id);
+  if (localOnly.length) next.localOnly = localOnly;
+  else delete next.localOnly;
+  const held = (meta.held ?? []).filter((k) => k !== id);
+  if (held.length) next.held = held;
+  else {
+    delete next.held;
+    delete next.ask;
+  }
+  const refused = { ...meta.refused };
+  delete refused[id];
+  next.refused = refused;
+  return next;
 }
 
 /** After the server saved a put: its version, and the fingerprint of what was sent (later edits stay pending). */
 export function afterPut(meta: SyncMeta, op: Extract<SyncOp, { kind: 'put' }>, saved: RemoteDoc): SyncMeta {
   const refused = { ...meta.refused };
   delete refused[op.id];
-  return { ...meta, docs: { ...meta.docs, [op.id]: { version: saved.version, fp: op.fp } }, refused };
+  const next: SyncMeta = { ...meta, docs: { ...meta.docs, [op.id]: { version: saved.version, fp: op.fp } }, refused };
+  const keep = (meta.keep ?? []).filter((k) => k !== op.id);
+  if (keep.length) next.keep = keep;
+  else delete next.keep;
+  return next;
 }
 
-/** After the server deleted a diagram (or did not have it). */
+/**
+ * After the server deleted a diagram (or did not have it). The slot it frees
+ * may take a new diagram the server refused while the account was full, so
+ * refusals of diagrams never synced are tried again.
+ */
 export function afterDelete(meta: SyncMeta, id: string): SyncMeta {
   const docs = { ...meta.docs };
   delete docs[id];
-  return { ...meta, docs };
+  const refused: SyncMeta['refused'] = {};
+  for (const [rid, fp] of Object.entries(meta.refused)) if (Object.hasOwn(docs, rid)) refused[rid] = fp;
+  return { ...meta, docs, refused };
 }
 
-/** After the server refused a put for good (413): not sent again until the diagram changes. */
-export function afterRefused(meta: SyncMeta, op: Extract<SyncOp, { kind: 'put' }>): SyncMeta {
-  return { ...meta, refused: { ...meta.refused, [op.id]: op.fp } };
+/**
+ * After the server refused a put (413 too large, or 409 document_limit with
+ * the account full): not sent again until the diagram changes (or, for the
+ * limit, a delete frees a slot). `limit` is the account's, when it said.
+ */
+export function afterRefused(meta: SyncMeta, op: Extract<SyncOp, { kind: 'put' }>, limit?: number): SyncMeta {
+  return { ...meta, refused: { ...meta.refused, [op.id]: op.fp }, ...(limit !== undefined ? { limit } : {}) };
 }
 
 /** The diagrams held back from the account (another account's, or there before it) still in this browser. */

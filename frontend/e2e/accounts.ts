@@ -37,11 +37,19 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/problems\/[^/]+\/leaderboard$/, { problem: '', metric: 'cost', players: 0, entries: [], you: null }],
     [/^\/api\/game\/me$/, GAME_ME],
     [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
+    // Cloud sync of the editor's diagrams: an empty account (editor.accounts.e2e.ts mocks a real one).
+    [/^\/api\/me\/documents$/, { documents: [], cursor: 0, limit: 5, used: 0 }],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),
     (route) => {
       const { pathname } = new URL(route.request().url());
+      if (route.request().method() === 'PUT' && pathname.startsWith('/api/me/documents/')) {
+        // Every save is taken, as a first version.
+        const body = route.request().postDataJSON() as { name: string; source: string; imports: Record<string, string> | null; baseVersion: number };
+        const id = decodeURIComponent(pathname.split('/')[4]);
+        return route.fulfill({ json: { document: { id, name: body.name, source: body.source, imports: body.imports, version: body.baseVersion + 1, updatedAt: Date.now(), deletedAt: null } } });
+      }
       const answer = route.request().method() === 'GET' ? answers.find(([path]) => path.test(pathname)) : undefined;
       return answer ? route.fulfill({ json: answer[1] }) : route.fulfill({ status: 404, json: { error: `not mocked: ${pathname}` } });
     },

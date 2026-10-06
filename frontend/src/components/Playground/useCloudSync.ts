@@ -25,7 +25,19 @@ export interface CloudSync {
   answer: (add: boolean) => void;
   /** Signs out; `removeSynced` also removes the account's synced diagrams from this browser. */
   signOut: (removeSynced: boolean) => Promise<void>;
+  /** While syncing: the diagrams that stay in this browser only (past the account's limit, moved here, held back). */
+  local: ReadonlySet<string>;
+  /** Whether the account has a free slot for "Keep in cloud". */
+  canKeep: boolean;
+  /** How many diagrams the account may keep; null while unknown. */
+  limit: number | null;
+  /** "Move to this browser only": stops syncing the diagram and deletes its cloud copy. */
+  moveToBrowser: (id: string) => void;
+  /** "Keep in cloud": syncs the diagram again, when a slot is free. */
+  keepInCloud: (id: string) => void;
 }
+
+const NONE: ReadonlySet<string> = new Set();
 
 /**
  * Cloud sync for the editor, in the build with accounts only: asks the API
@@ -38,6 +50,7 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
   const [enabled, setEnabledState] = useState(true);
   const [ask, setAsk] = useState(0);
   const [held, setHeld] = useState(0);
+  const [placement, setPlacement] = useState<{ local: ReadonlySet<string>; canKeep: boolean; limit: number | null }>({ local: NONE, canKeep: false, limit: null });
   const syncRef = useRef<DocSync | null>(null);
   const signedOutRef = useRef<() => Promise<void>>(async () => undefined);
   const onConflictRef = useRef(onConflict);
@@ -47,6 +60,7 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
     if (!apiEnabled) return;
     let cancelled = false;
     let sync: DocSync | null = null;
+    let unsubscribePlace: (() => void) | undefined;
     const signedOut = async () => {
       const { providers } = await api<{ providers: ProviderId[] }>('/auth/providers').catch(() => ({ providers: [] as ProviderId[] }));
       if (!cancelled) setState({ kind: 'signed-out', providers });
@@ -79,16 +93,28 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
       syncRef.current = sync;
       setEnabledState(sync.enabled);
       const live = sync;
+      const place = () => {
+        if (!live.enabled) return setPlacement({ local: NONE, canKeep: false, limit: null });
+        const plan = live.plan();
+        setPlacement((before) => {
+          const same = before.canKeep === plan.free > 0 && before.limit === plan.limit && before.local.size === plan.local.size && [...plan.local].every((id) => before.local.has(id));
+          return same ? before : { local: plan.local, canKeep: plan.free > 0, limit: plan.limit };
+        });
+      };
       sync.onStatus((status) => {
         if (status.kind !== 'signed-out') setState(status);
         setAsk(live.askCount());
         setHeld(live.heldCount());
+        place();
       });
+      // A new diagram, or a deleted one, can change which ones fit in the account.
+      unsubscribePlace = store.subscribe(place);
       const first = sync.getStatus();
       if (first.kind !== 'signed-out') setState(first);
       sync.start();
       setAsk(sync.askCount());
       setHeld(sync.heldCount());
+      place();
     };
     void boot();
 
@@ -103,6 +129,7 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
     window.addEventListener('online', onOnline);
     return () => {
       cancelled = true;
+      unsubscribePlace?.();
       sync?.stop();
       syncRef.current = null;
       document.removeEventListener('visibilitychange', onVisibility);
@@ -144,11 +171,15 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
     syncRef.current = null;
     setAsk(0);
     setHeld(0);
+    setPlacement({ local: NONE, canKeep: false, limit: null });
     await api('/auth/logout', { method: 'POST' }).catch(() => undefined);
     await signedOutRef.current();
   }, []);
 
-  return { state, enabled, signIn, setEnabled, deleteCloudCopies, ask, held, answer, signOut };
+  const moveToBrowser = useCallback((id: string) => syncRef.current?.moveToBrowser(id), []);
+  const keepInCloud = useCallback((id: string) => syncRef.current?.keepInCloud(id), []);
+
+  return { state, enabled, signIn, setEnabled, deleteCloudCopies, ask, held, answer, signOut, ...placement, moveToBrowser, keepInCloud };
 }
 
 /** The sync status in words, for the Diagrams menu. */
@@ -165,7 +196,10 @@ export function cloudLabel(state: CloudState): string {
     case 'saving':
       return 'Saving…';
     case 'saved':
-      return 'Saved to your account';
+      if (state.limit === undefined || state.used === undefined) return 'Saved to your account';
+      return state.used >= state.limit
+        ? `Cloud full: ${state.used} of ${state.limit} — new diagrams stay in this browser`
+        : `Saved to your account (${state.used} of ${state.limit})`;
     case 'offline':
       return 'Offline — saved in this browser';
     case 'error':

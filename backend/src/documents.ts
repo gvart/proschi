@@ -1,4 +1,4 @@
-import { requireUser } from './auth';
+import { requireUser, type User } from './auth';
 import type { Ctx } from './context';
 import { HttpError, json, rateLimit, readJson } from './http';
 
@@ -10,8 +10,8 @@ import { HttpError, json, rateLimit, readJson } from './http';
  * 30 days by the daily cron.
  */
 
-/** Live (not deleted) documents a user may keep. */
-export const MAX_DOCUMENTS = 200;
+/** Live (not deleted) documents a user on the free plan may keep. */
+export const FREE_DOCUMENT_LIMIT = 5;
 /** A document's source plus its imports (as JSON), in characters: the same as a practice design. */
 export const MAX_DOCUMENT = 64 * 1024;
 /** Tombstones older than this are deleted by the daily cron. */
@@ -63,15 +63,33 @@ function checkId(id: string): string {
   return id;
 }
 
-async function limited(request: Request, ctx: Ctx): Promise<string> {
-  const user = await requireUser(request, ctx);
-  await rateLimit(ctx.env.DOCS_LIMITER, user.id, 'Too many diagram saves; wait a minute');
-  return user.id;
+/**
+ * How many live (not deleted) documents `user` may keep in the account. The
+ * one place a paid plan will raise it; everyone is on the free plan today.
+ */
+export function documentLimit(_ctx: Ctx, _user: User): number {
+  return FREE_DOCUMENT_LIMIT;
 }
 
-/** GET /api/me/documents?since=<ms>: documents changed at or after `since` (all without), tombstones included. */
+async function limited(request: Request, ctx: Ctx): Promise<User> {
+  const user = await requireUser(request, ctx);
+  await rateLimit(ctx.env.DOCS_LIMITER, user.id, 'Too many diagram saves; wait a minute');
+  return user;
+}
+
+async function liveCount(DB: D1Database, userId: string): Promise<number> {
+  const row = await DB.prepare('SELECT COUNT(*) AS n FROM documents WHERE user_id = ? AND deleted_at IS NULL').bind(userId).first<{ n: number }>();
+  return row?.n ?? 0;
+}
+
+/**
+ * GET /api/me/documents?since=<ms>: documents changed at or after `since`
+ * (all without), tombstones included, with how many the account may keep
+ * (`limit`) and keeps now (`used`).
+ */
 export async function listDocuments(request: Request, ctx: Ctx): Promise<Response> {
-  const userId = await limited(request, ctx);
+  const user = await limited(request, ctx);
+  const userId = user.id;
   const raw = new URL(request.url).searchParams.get('since');
   const since = raw === null || raw === '' ? 0 : Number(raw);
   if (!Number.isSafeInteger(since) || since < 0) throw new HttpError(400, 'since must be a time in Unix milliseconds');
@@ -80,7 +98,8 @@ export async function listDocuments(request: Request, ctx: Ctx): Promise<Respons
   const { results } = await ctx.env.DB.prepare(`SELECT ${COLUMNS} FROM documents WHERE user_id = ? AND updated_at >= ? ORDER BY updated_at, id`)
     .bind(userId, since)
     .all<Row>();
-  return json({ documents: results.map(documentOf), cursor }, 200, NO_STORE);
+  const used = await liveCount(ctx.env.DB, userId);
+  return json({ documents: results.map(documentOf), cursor, limit: documentLimit(ctx, user), used }, 200, NO_STORE);
 }
 
 function readImports(value: unknown): Record<string, string> | null {
@@ -99,11 +118,15 @@ function readImports(value: unknown): Record<string, string> | null {
  * document. `baseVersion` is the version the page last had (0: none, a new
  * document). 409 {document} with the server's copy when it changed since;
  * a document the account no longer has at all (its tombstone pruned) is
- * created again. 413 past the size or count cap.
+ * created again. 413 past the size cap. A new document (or a deleted one
+ * restored) past the account's limit (documentLimit) gets 409
+ * {error: 'document_limit', limit, used}; saving one the account keeps is
+ * always allowed.
  */
 export async function putDocument(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
   const id = checkId(rawId);
-  const userId = await limited(request, ctx);
+  const user = await limited(request, ctx);
+  const userId = user.id;
   const body = await readJson(request, MAX_BODY);
   if (typeof body.name !== 'string' || !body.name.trim() || body.name.length > MAX_NAME) throw new HttpError(400, `name must be a file name of 1 to ${MAX_NAME} characters`);
   if (typeof body.source !== 'string') throw new HttpError(400, 'source must be a string');
@@ -115,8 +138,9 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
 
   const { DB } = ctx.env;
   const t = Date.now();
-  const room = `(SELECT COUNT(*) FROM documents WHERE user_id = ?1 AND deleted_at IS NULL) < ${MAX_DOCUMENTS}`;
-  // The version it was based on: saved. A tombstone counts toward the cap again once restored.
+  const limit = documentLimit(ctx, user);
+  const room = `(SELECT COUNT(*) FROM documents WHERE user_id = ?1 AND deleted_at IS NULL) < ${limit}`;
+  // The version it was based on: saved. A tombstone counts toward the limit again once restored.
   const updated = await DB.prepare(
     `UPDATE documents SET name = ?3, source = ?4, imports = ?5, updated_at = ?6, deleted_at = NULL, version = version + 1
      WHERE user_id = ?1 AND id = ?2 AND version = ?7 AND (deleted_at IS NULL OR ${room})
@@ -140,7 +164,16 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
   if (existing && existing.version !== baseVersion) {
     return json({ error: 'The diagram changed on another device', document: documentOf(existing) }, 409, NO_STORE);
   }
-  throw new HttpError(413, `Your account holds ${MAX_DOCUMENTS} diagrams, the most it can; the rest stay in this browser`);
+  return json(
+    {
+      error: 'document_limit',
+      message: `Your account keeps ${limit} diagrams, the most it can; the rest stay in this browser`,
+      limit,
+      used: await liveCount(DB, userId),
+    },
+    409,
+    NO_STORE,
+  );
 }
 
 /**
@@ -150,7 +183,7 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
  */
 export async function deleteDocument(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
   const id = checkId(rawId);
-  const userId = await limited(request, ctx);
+  const userId = (await limited(request, ctx)).id;
   const raw = new URL(request.url).searchParams.get('baseVersion');
   const baseVersion = raw === null ? null : Number(raw);
   if (baseVersion !== null && (!Number.isSafeInteger(baseVersion) || baseVersion < 0)) throw new HttpError(400, 'baseVersion must be a whole number');
@@ -171,7 +204,7 @@ export async function deleteDocument(request: Request, ctx: Ctx, rawId: string):
 
 /** DELETE /api/me/documents: "Delete my cloud copies", every document and tombstone of the account, at once. */
 export async function deleteAllDocuments(request: Request, ctx: Ctx): Promise<Response> {
-  const userId = await limited(request, ctx);
+  const userId = (await limited(request, ctx)).id;
   const { meta } = await ctx.env.DB.prepare('DELETE FROM documents WHERE user_id = ?').bind(userId).run();
   return json({ deleted: meta.changes }, 200, NO_STORE);
 }

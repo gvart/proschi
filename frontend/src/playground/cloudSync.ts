@@ -6,12 +6,16 @@ import {
   afterRefused,
   answerAsk,
   applyRemote,
+  cloudPlan,
   emptyMeta,
   forgetSynced,
   heldDocs,
+  keepInCloud,
+  moveToBrowser,
   pendingOps,
   readStoredSync,
   switchAccount,
+  type CloudPlan,
   type RemoteDoc,
   type StoredSync,
   type SyncMeta,
@@ -30,7 +34,8 @@ export type SyncStatus =
   | { kind: 'loading' }
   | { kind: 'off' }
   | { kind: 'saving' }
-  | { kind: 'saved'; note?: string }
+  /** `used` of `limit` diagrams in the account, once the server said its limit. */
+  | { kind: 'saved'; note?: string; used?: number; limit?: number }
   | { kind: 'offline' }
   | { kind: 'error'; message: string }
   | { kind: 'signed-out' };
@@ -41,17 +46,24 @@ export class SyncError extends Error {
   readonly retryAfter?: number;
   /** The server's copy, with a 409. */
   readonly document?: RemoteDoc;
-  constructor(status: number, message: string, retryAfter?: number, document?: RemoteDoc) {
+  /** A machine-readable reason: `document_limit` when the account is full. */
+  readonly code?: string;
+  /** The account's limit, with `document_limit`. */
+  readonly limit?: number;
+  constructor(status: number, message: string, retryAfter?: number, document?: RemoteDoc, extra: { code?: string; limit?: number } = {}) {
     super(message);
     this.name = 'SyncError';
     this.status = status;
     this.retryAfter = retryAfter;
     this.document = document;
+    this.code = extra.code;
+    this.limit = extra.limit;
   }
 }
 
 export interface Transport {
-  list(since: number | null): Promise<{ documents: RemoteDoc[]; cursor: number }>;
+  /** `limit`: how many diagrams the account may keep; `used`: how many it keeps. */
+  list(since: number | null): Promise<{ documents: RemoteDoc[]; cursor: number; limit?: number; used?: number }>;
   put(id: string, body: { name: string; source: string; imports: Record<string, string> | null; baseVersion: number }, keepalive?: boolean): Promise<RemoteDoc>;
   /** The tombstone, or null when the server did not have it. */
   remove(id: string, baseVersion: number, keepalive?: boolean): Promise<RemoteDoc | null>;
@@ -116,14 +128,39 @@ export class DocSync {
     if (stored.meta && stored.meta.userId !== options.userId) this.previous = stored.meta;
   }
 
-  /** "Add N diagrams from this browser to your account?": N, or 0 when there is nothing to ask. */
+  /**
+   * "Add N diagrams from this browser to your account?": N, at most the free
+   * slots, or 0 when there is nothing to ask (or no room).
+   */
   askCount(): number {
-    return this.meta.ask ? heldDocs(this.o.store.get(), this.meta).length : 0;
+    return this.meta.ask ? this.heldCount() : 0;
   }
 
-  /** Diagrams in this browser held back from the account (to offer adding them later). */
+  /** Diagrams in this browser held back from the account that would fit in it (to offer adding them later). */
   heldCount(): number {
-    return heldDocs(this.o.store.get(), this.meta).length;
+    const held = heldDocs(this.o.store.get(), this.meta).filter((d) => d.source !== BLANK_SOURCE).length;
+    return Math.min(held, this.plan().free);
+  }
+
+  /** Which diagrams are in the account and which stay in this browser only (sync.ts cloudPlan). */
+  plan(): CloudPlan {
+    return cloudPlan(this.o.store.get(), this.meta);
+  }
+
+  /** "Move to this browser only": stops syncing a diagram and deletes its cloud copy. */
+  moveToBrowser(id: string): void {
+    this.meta = moveToBrowser(this.meta, id);
+    this.persist();
+    this.setStatus(this.status);
+    void this.flush();
+  }
+
+  /** "Keep in cloud": syncs a diagram again, first in line for a free slot. */
+  keepInCloud(id: string): void {
+    this.meta = keepInCloud(this.meta, id);
+    this.persist();
+    this.setStatus(this.status);
+    void this.flush();
   }
 
   /** The answer to askCount's question: add them to the account, or keep them in this browser only. */
@@ -260,10 +297,10 @@ export class DocSync {
     try {
       if (pull) {
         const since = this.meta.cursor === null ? null : Math.max(0, this.meta.cursor - PULL_OVERLAP_MS);
-        const { documents, cursor } = await transport.list(since);
+        const { documents, cursor, limit } = await transport.list(since);
         if (this.off || this.stopped) return;
         this.merge(documents);
-        this.meta = { ...this.meta, cursor };
+        this.meta = { ...this.meta, cursor, ...(typeof limit === 'number' ? { limit } : {}) };
         this.persist();
       }
       for (let n = 0; n < MAX_OPS_PER_PASS; n++) {
@@ -278,7 +315,10 @@ export class DocSync {
           }
         } catch (e) {
           if (!(e instanceof SyncError)) throw e;
-          if (e.status === 409 && e.document && !conflicted.has(op.id)) {
+          if (e.status === 409 && e.code === 'document_limit' && op.kind === 'put') {
+            // The account is full: this one stays in this browser until a slot frees up.
+            this.meta = afterRefused(this.meta, op, e.limit);
+          } else if (e.status === 409 && e.document && !conflicted.has(op.id)) {
             conflicted.add(op.id);
             this.merge([e.document]);
           }
@@ -290,10 +330,7 @@ export class DocSync {
         this.persist();
       }
       this.failures = 0;
-      if (!this.off && !this.stopped) {
-        const left = Object.keys(this.meta.refused).length;
-        this.setStatus(left ? { kind: 'saved', note: refusedNote ?? 'Some diagrams stay in this browser only: too large, or your account is full.' } : { kind: 'saved' });
-      }
+      if (!this.off && !this.stopped) this.setStatus(this.savedStatus(refusedNote));
     } catch (e) {
       this.persist();
       if (e instanceof SyncError && e.status === 401) {
@@ -316,6 +353,15 @@ export class DocSync {
     }
   }
 
+  /** "Saved", with how full the account is once its limit is known, and a note for diagrams too large to save. */
+  private savedStatus(refusedNote: string | undefined): SyncStatus {
+    const store = this.o.store.get();
+    const tooLarge = store.docs.some((d) => this.meta.refused[d.id] !== undefined && Object.hasOwn(this.meta.docs, d.id));
+    const note = refusedNote ?? (tooLarge ? 'Some diagrams are too large to save to your account; they stay in this browser.' : undefined);
+    const plan = cloudPlan(store, this.meta);
+    return { kind: 'saved', ...(note ? { note } : {}), ...(plan.limit !== null ? { used: plan.used, limit: plan.limit } : {}) };
+  }
+
   private merge(remotes: RemoteDoc[]): void {
     const { store } = this.o;
     const result = applyRemote(store.get(), this.meta, remotes, this.o.now, this.o.newId);
@@ -333,10 +379,17 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
     throw new SyncError(0, e instanceof Error ? e.message : String(e));
   }
   if (response.status === 204) return undefined as T;
-  const data = (await response.json().catch(() => ({}))) as { error?: string; document?: RemoteDoc };
+  const data = (await response.json().catch(() => ({}))) as { error?: string; message?: string; limit?: number; document?: RemoteDoc };
   if (!response.ok) {
     const retryAfter = Number(response.headers.get('Retry-After') ?? NaN);
-    throw new SyncError(response.status, data.error ?? `${response.status} ${response.statusText}`, Number.isFinite(retryAfter) ? retryAfter : undefined, data.document);
+    const limited = data.error === 'document_limit';
+    throw new SyncError(
+      response.status,
+      (limited ? data.message : undefined) ?? data.error ?? `${response.status} ${response.statusText}`,
+      Number.isFinite(retryAfter) ? retryAfter : undefined,
+      data.document,
+      limited ? { code: data.error, ...(typeof data.limit === 'number' ? { limit: data.limit } : {}) } : {},
+    );
   }
   return data as T;
 }

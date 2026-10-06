@@ -1,13 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { DocSync, PUSH_DELAY_MS, SyncError, type Transport } from './cloudSync';
 import { createDocStore, type DocStore } from './docStore';
-import { addDoc, removeDoc, updateCurrent, type DocumentState } from './documents';
+import { addDoc, removeDoc, selectDoc, updateCurrent, type DocumentState } from './documents';
 import type { RemoteDoc, StoredSync } from './sync';
 
 /** The account's documents in memory, with the server's rules (backend/src/documents.ts). */
 class FakeServer implements Transport {
   docs = new Map<string, RemoteDoc>();
   online = true;
+  /** The account's limit (documentLimit); none unless a test sets it. */
+  limit?: number;
   calls: string[] = [];
   private clock = 1_000;
 
@@ -18,7 +20,12 @@ class FakeServer implements Transport {
 
   async list(since: number | null) {
     this.check(`list ${since}`);
-    return { documents: [...this.docs.values()].filter((d) => since === null || d.updatedAt >= since).map((d) => ({ ...d })), cursor: this.clock };
+    const documents = [...this.docs.values()].filter((d) => since === null || d.updatedAt >= since).map((d) => ({ ...d }));
+    return { documents, cursor: this.clock, ...(this.limit !== undefined ? { limit: this.limit, used: this.live() } : {}) };
+  }
+
+  live() {
+    return [...this.docs.values()].filter((d) => d.deletedAt === null).length;
   }
 
   async put(id: string, body: { name: string; source: string; imports: Record<string, string> | null; baseVersion: number }) {
@@ -26,6 +33,9 @@ class FakeServer implements Transport {
     const existing = this.docs.get(id);
     if (existing && existing.version !== body.baseVersion) throw new SyncError(409, 'changed', undefined, { ...existing });
     if (body.source.length > 100) throw new SyncError(413, 'too large');
+    if (this.limit !== undefined && (!existing || existing.deletedAt !== null) && this.live() >= this.limit) {
+      throw new SyncError(409, 'Your account keeps 2 diagrams', undefined, undefined, { code: 'document_limit', limit: this.limit });
+    }
     return this.write({ id, name: body.name, source: body.source, imports: body.imports, version: (existing?.version ?? 0) + 1, updatedAt: 0, deletedAt: null });
   }
 
@@ -308,5 +318,101 @@ describe('DocSync', () => {
     expect(server.docs.get('a')?.deletedAt).toBeNull();
     expect(store.get().docs.map((d) => d.id).sort()).toEqual(['a', 'b']);
     expect(server.docs.get('b')?.source).toBe('title "B unsent"\n');
+  });
+
+  describe('the account\'s limit', () => {
+    const add = (id: string, day: number) => store.set((s) => addDoc(s, `title "${id}"\n`, () => `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z`, () => id));
+
+    it('fills the free slots, keeps the rest in this browser without retrying, and says how full the account is', async () => {
+      server.limit = 2;
+      makeSync().start();
+      await settle();
+      expect(sync.getStatus()).toEqual({ kind: 'saved', used: 1, limit: 2 });
+      add('b', 2);
+      add('c', 3);
+      await settle(PUSH_DELAY_MS);
+      // The most recently edited takes the last slot; `b` stays here.
+      expect([...server.docs.keys()].sort()).toEqual(['a', 'c']);
+      expect(sync.getStatus()).toEqual({ kind: 'saved', used: 2, limit: 2 });
+      expect([...sync.plan().local]).toEqual(['b']);
+      server.calls = [];
+      store.set((s) => updateCurrent(selectDoc(s, 'b'), 'title "b2"\n'));
+      await settle(PUSH_DELAY_MS * 5);
+      await sync.sync();
+      expect(server.calls).toEqual(['list 0']);
+      // An edit of a diagram the account keeps is still saved.
+      store.set((s) => updateCurrent(selectDoc(s, 'a'), 'title "a2"\n'));
+      await settle(PUSH_DELAY_MS);
+      expect(server.docs.get('a')?.source).toBe('title "a2"\n');
+    });
+
+    it('deleting a diagram frees its slot for one waiting in this browser', async () => {
+      server.limit = 2;
+      add('b', 2);
+      makeSync().start();
+      await settle();
+      add('c', 3);
+      await settle(PUSH_DELAY_MS);
+      expect(server.docs.has('c')).toBe(false);
+      store.set((s) => removeDoc(s, 'a'));
+      await settle(PUSH_DELAY_MS);
+      expect(server.calls.slice(-2)).toEqual(['delete a@1', 'put c@0']);
+      expect(sync.plan().local.size).toBe(0);
+    });
+
+    it('a refusal from a full account (another device took the slot) is not retried in a loop', async () => {
+      makeSync().start();
+      await settle();
+      // Another device filled the account since the last pull.
+      server.limit = 1;
+      server.write({ id: 'other', name: 'other.proschi', source: 'x', imports: null, version: 1, updatedAt: 0, deletedAt: null });
+      server.limit = 2;
+      add('b', 2);
+      await settle(PUSH_DELAY_MS);
+      expect(server.calls.filter((c) => c === 'put b@0')).toHaveLength(1);
+      await settle(PUSH_DELAY_MS * 10);
+      expect(server.calls.filter((c) => c === 'put b@0')).toHaveLength(1);
+      expect(sync.getStatus()).toMatchObject({ kind: 'saved' });
+      expect(sync.plan().local.has('b')).toBe(true);
+    });
+
+    it('move to this browser only, and keep in cloud', async () => {
+      server.limit = 2;
+      add('b', 2);
+      makeSync().start();
+      await settle();
+      add('c', 3);
+      await settle(PUSH_DELAY_MS);
+      sync.moveToBrowser('a');
+      await settle();
+      expect(server.docs.get('a')?.deletedAt).not.toBeNull();
+      expect(server.docs.get('c')?.deletedAt).toBeNull();
+      expect([...sync.plan().local]).toEqual(['a']);
+      expect(store.get().docs.map((d) => d.id).sort()).toEqual(['a', 'b', 'c']);
+      // Back in the cloud once a slot is free.
+      sync.moveToBrowser('b');
+      await settle();
+      sync.keepInCloud('a');
+      await settle();
+      expect(server.docs.get('a')?.deletedAt).toBeNull();
+      expect([...sync.plan().local]).toEqual(['b']);
+    });
+
+    it('another account: offers to add only as many diagrams as fit', async () => {
+      saved = { meta: { userId: 'u1', cursor: 5, docs: {}, refused: {} } };
+      add('b', 2);
+      add('c', 3);
+      server.limit = 2;
+      server.write({ id: 'theirs', name: 'theirs.proschi', source: 'title "U2"\n', imports: null, version: 1, updatedAt: 0, deletedAt: null });
+      makeSync('u2').start();
+      await settle();
+      expect(sync.askCount()).toBe(1);
+      sync.answer(true);
+      await settle();
+      expect(server.live()).toBe(2);
+      expect(server.docs.has('c')).toBe(true);
+      expect([...sync.plan().local].sort()).toEqual(['a', 'b']);
+      expect(sync.getStatus()).toEqual({ kind: 'saved', used: 2, limit: 2 });
+    });
   });
 });

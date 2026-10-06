@@ -1,7 +1,7 @@
 import { createScheduledController } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { MAX_DOCUMENT, MAX_DOCUMENTS, TOMBSTONE_TTL_MS, type CloudDocument } from '../src/documents';
+import { FREE_DOCUMENT_LIMIT, MAX_DOCUMENT, TOMBSTONE_TTL_MS, type CloudDocument } from '../src/documents';
 import worker from '../src/index';
 import { call, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
@@ -11,11 +11,11 @@ const put = (token: string, id: string, body: Record<string, unknown>, headers?:
   call(`/api/me/documents/${id}`, { method: 'PUT', token, body, headers });
 const doc = (baseVersion: number, source = 'title "A"\n', name = 'a.proschi') => ({ name, source, baseVersion });
 
-async function list(token: string, since?: number): Promise<{ documents: CloudDocument[]; cursor: number }> {
+async function list(token: string, since?: number): Promise<{ documents: CloudDocument[]; cursor: number; limit: number; used: number }> {
   const response = await call(`/api/me/documents${since === undefined ? '' : `?since=${since}`}`, { token });
   expect(response.status).toBe(200);
   expect(response.headers.get('Cache-Control')).toBe('no-store');
-  return (await response.json()) as { documents: CloudDocument[]; cursor: number };
+  return (await response.json()) as { documents: CloudDocument[]; cursor: number; limit: number; used: number };
 }
 
 async function saved(response: Response): Promise<CloudDocument> {
@@ -70,20 +70,46 @@ describe('synced documents', () => {
     expect((await put(token, 'imports', { ...doc(0, half), imports: { 'lib.proschi': half } })).status).toBe(413);
   });
 
-  it(`are capped at ${MAX_DOCUMENTS} per user, tombstones not counted`, async () => {
-    const { id, token } = await signedInUser();
-    const statements = Array.from({ length: MAX_DOCUMENTS }, (_, i) =>
-      env.DB.prepare("INSERT INTO documents (user_id, id, name, source, updated_at, version) VALUES (?, ?, 'n.proschi', '', 1, 1)").bind(id, `d${i}`),
-    );
-    await env.DB.batch(statements);
+  it(`are limited to ${FREE_DOCUMENT_LIMIT} per user, tombstones not counted`, async () => {
+    expect(FREE_DOCUMENT_LIMIT).toBe(5);
+    const { token } = await signedInUser();
+    for (let i = 0; i < FREE_DOCUMENT_LIMIT; i++) await saved(await put(token, `d${i}`, doc(0)));
+    expect(await list(token)).toMatchObject({ limit: 5, used: 5 });
+
+    // A new one is refused, with a code the page can act on.
     const full = await put(token, 'one-more', doc(0));
-    expect(full.status).toBe(413);
-    // Existing ones can still be saved.
-    expect((await put(token, 'd0', doc(1))).status).toBe(200);
+    expect(full.status).toBe(409);
+    expect(await full.json()).toMatchObject({ error: 'document_limit', limit: 5, used: 5 });
+    expect((await list(token)).documents.map((d) => d.id)).not.toContain('one-more');
+
+    // The ones the account keeps can always be saved.
+    expect((await saved(await put(token, 'd0', doc(1, 'title "Edited"\n')))).version).toBe(2);
+    // A stale save of a kept one is still a conflict with the server copy, not the limit.
+    const stale = await put(token, 'd0', doc(1));
+    expect(stale.status).toBe(409);
+    expect(await stale.json()).toMatchObject({ document: { id: 'd0', version: 2 } });
+
+    // Deleting one frees its slot.
     expect((await call('/api/me/documents/d1?baseVersion=1', { method: 'DELETE', token })).status).toBe(200);
+    expect(await list(token)).toMatchObject({ used: 4 });
     expect((await put(token, 'one-more', doc(0))).status).toBe(200);
-    // Restoring the tombstone would make 201.
-    expect((await put(token, 'd1', doc(2))).status).toBe(413);
+    expect(await list(token)).toMatchObject({ limit: 5, used: 5 });
+    // Restoring the tombstone would make 6.
+    const restore = await put(token, 'd1', doc(2));
+    expect(restore.status).toBe(409);
+    expect(await restore.json()).toMatchObject({ error: 'document_limit' });
+  });
+
+  it('let updates through even past the limit (kept from before it was lowered)', async () => {
+    const { id, token } = await signedInUser();
+    await env.DB.batch(
+      Array.from({ length: FREE_DOCUMENT_LIMIT + 2 }, (_, i) =>
+        env.DB.prepare("INSERT INTO documents (user_id, id, name, source, updated_at, version) VALUES (?, ?, 'n.proschi', '', 1, 1)").bind(id, `d${i}`),
+      ),
+    );
+    expect(await list(token)).toMatchObject({ limit: 5, used: 7 });
+    expect((await put(token, 'd6', doc(1))).status).toBe(200);
+    expect((await put(token, 'new', doc(0))).status).toBe(409);
   });
 
   it('answer a stale write with 409 and the server copy', async () => {

@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { DocumentState, SavedDiagram } from './documents';
 import { BLANK_SOURCE } from './documents';
-import { afterDelete, afterPut, answerAsk, applyRemote, conflictCopy, emptyMeta, fingerprint, forgetSynced, pendingOps, readStoredSync, remoteFingerprint, retitle, switchAccount, type RemoteDoc, type SyncMeta } from './sync';
+import { afterDelete, afterPut, afterRefused, answerAsk, applyRemote, cloudPlan, conflictCopy, emptyMeta, fingerprint, forgetSynced, keepInCloud, moveToBrowser, pendingOps, readStoredSync, remoteFingerprint, retitle, switchAccount, type RemoteDoc, type SyncMeta } from './sync';
 
 const NOW = '2026-10-06T14:05:00.000Z';
 const clock = () => NOW;
@@ -123,7 +123,7 @@ describe('cloud sync merge', () => {
     expect(ops).toHaveLength(2);
   });
 
-  it('ops: edits and new diagrams oldest first with their base version, then deletes', () => {
+  it('ops: deletes first (they free slots), then edits and new diagrams oldest first with their base version', () => {
     const a = local('a', 'A');
     const b = local('b', 'B');
     const meta = synced([a, b], 5);
@@ -131,11 +131,11 @@ describe('cloud sync merge', () => {
     const added = { ...local('c', 'C'), imports: { 'lib.proschi': 'x' }, updatedAt: '2026-10-02T00:00:00.000Z' };
     const ops = pendingOps({ docs: [editedA, added], currentId: 'a' }, meta);
     expect(ops).toEqual([
+      { kind: 'delete', id: 'b', baseVersion: 5 },
       { kind: 'put', id: 'c', baseVersion: 0, fp: fingerprint(added), body: { name: 'c.proschi', source: 'C', imports: { 'lib.proschi': 'x' } } },
       { kind: 'put', id: 'a', baseVersion: 5, fp: fingerprint(editedA), body: { name: 'a.proschi', source: 'A2', imports: null } },
-      { kind: 'delete', id: 'b', baseVersion: 5 },
     ]);
-    let next = afterPut(meta, ops[0] as Extract<(typeof ops)[0], { kind: 'put' }>, remote('c', 'C', 1));
+    let next = afterPut(meta, ops[1] as Extract<(typeof ops)[0], { kind: 'put' }>, remote('c', 'C', 1));
     next = afterDelete(next, 'b');
     expect(pendingOps({ docs: [editedA, added], currentId: 'a' }, next).map((o) => o.id)).toEqual(['a']);
   });
@@ -207,5 +207,99 @@ describe('cloud sync merge', () => {
 
   it('a new blank diagram is not uploaded until something is typed', () => {
     expect(pendingOps(state(local('n', BLANK_SOURCE)), emptyMeta('u'))).toEqual([]);
+  });
+
+  describe('the account\'s limit', () => {
+    const at = (id: string, day: number) => ({ ...local(id, `title "${id}"\n`), updatedAt: `2026-10-${String(day).padStart(2, '0')}T00:00:00.000Z` });
+    const limited = (docs: SavedDiagram[], limit: number): SyncMeta => ({ ...synced(docs), limit });
+    const puts = (s: DocumentState, m: SyncMeta) => pendingOps(s, m).flatMap((o) => (o.kind === 'put' ? [o.id] : []));
+
+    it('diagrams in the account keep their slot; new ones take the free slots, most recently edited first', () => {
+      const kept = [at('a', 1), at('b', 2), at('c', 3)];
+      const fresh = [at('old', 4), at('newest', 9), at('mid', 6), at('tie-b', 7), at('tie-a', 7)];
+      const s = { docs: [...kept, ...fresh], currentId: 'a' };
+      const plan = cloudPlan(s, limited(kept, 5));
+      expect([...plan.cloud].sort()).toEqual(['a', 'b', 'c', 'newest', 'tie-a']);
+      expect([...plan.local].sort()).toEqual(['mid', 'old', 'tie-b']);
+      expect(plan).toMatchObject({ used: 5, limit: 5, free: 0 });
+      expect(puts(s, limited(kept, 5)).sort()).toEqual(['newest', 'tie-a']);
+    });
+
+    it('full: new diagrams stay in this browser and nothing is sent for them, an edit of a kept one still is', () => {
+      const kept = [at('a', 1), at('b', 2)];
+      const s = { docs: [...kept, at('n', 3)], currentId: 'a' };
+      const meta = limited(kept, 2);
+      expect(cloudPlan(s, meta)).toMatchObject({ used: 2, free: 0, local: new Set(['n']) });
+      expect(pendingOps(s, meta)).toEqual([]);
+      const edited = { docs: [{ ...kept[0], source: 'title "a2"\n' }, kept[1], at('n', 3)], currentId: 'a' };
+      expect(puts(edited, meta)).toEqual(['a']);
+      // A blank new diagram is marked too, once there is no room.
+      expect(cloudPlan({ docs: [...kept, local('blank', BLANK_SOURCE)], currentId: 'a' }, meta).local.has('blank')).toBe(true);
+    });
+
+    it('a delete frees a slot for the next new diagram, and goes first', () => {
+      const kept = [at('a', 1), at('b', 2)];
+      const meta = limited(kept, 2);
+      const s = { docs: [kept[0], at('n', 3)], currentId: 'a' };
+      expect(pendingOps(s, meta).map((o) => `${o.kind} ${o.id}`)).toEqual(['delete b', 'put n']);
+    });
+
+    it('unknown limit (before the first pull): everything may sync, the server decides', () => {
+      const s = { docs: [at('a', 1), at('b', 2)], currentId: 'a' };
+      expect(cloudPlan(s, emptyMeta('u1'))).toMatchObject({ limit: null, local: new Set() });
+      expect(puts(s, emptyMeta('u1')).sort()).toEqual(['a', 'b']);
+    });
+
+    it('a refusal for the limit is not retried until a delete frees a slot', () => {
+      const kept = [at('a', 1)];
+      const n = at('n', 2);
+      const s = { docs: [kept[0], n], currentId: 'a' };
+      const op = pendingOps(s, synced(kept))[0] as Extract<ReturnType<typeof pendingOps>[0], { kind: 'put' }>;
+      const refused = afterRefused(synced(kept), op, 5);
+      expect(refused.limit).toBe(5);
+      expect(pendingOps(s, refused)).toEqual([]);
+      expect(cloudPlan(s, refused).local.has('n')).toBe(true);
+      expect(puts(s, afterDelete(refused, 'gone'))).toEqual(['n']);
+    });
+
+    it('move to this browser only deletes the cloud copy and frees the slot; keep in cloud takes it back first', () => {
+      const kept = [at('a', 1), at('b', 2)];
+      const s = { docs: [...kept, at('n', 9)], currentId: 'a' };
+      let meta = moveToBrowser(limited(kept, 2), 'a');
+      expect(pendingOps(s, meta).map((o) => `${o.kind} ${o.id}`)).toEqual(['delete a', 'put n']);
+      meta = afterDelete(meta, 'a');
+      meta = afterPut(meta, pendingOps(s, meta)[0] as Extract<ReturnType<typeof pendingOps>[0], { kind: 'put' }>, remote('n', 'title "n"\n', 1));
+      expect(cloudPlan(s, meta)).toMatchObject({ local: new Set(['a']), used: 2, free: 0 });
+      // Its own tombstone coming back does not restore it.
+      const pulled = applyRemote(s, meta, [tombstone('a', 2)], clock, ids);
+      expect(pendingOps(pulled.state, pulled.meta)).toEqual([]);
+      // Keep in cloud: first in line once a slot is free.
+      meta = keepInCloud(afterDelete(meta, 'b'), 'a');
+      const s2 = { docs: [kept[0], at('n', 9), at('newer', 10)], currentId: 'a' };
+      expect(puts(s2, meta)).toEqual(['a']);
+      expect(cloudPlan(s2, meta).local).toEqual(new Set(['newer']));
+    });
+
+    it('a diagram moved here while another device edits it is still deleted there, at the latest version', () => {
+      const a = at('a', 1);
+      const meta = moveToBrowser(limited([a], 5), 'a');
+      const pulled = applyRemote(state(a), meta, [remote('a', 'theirs', 4)], clock, ids);
+      expect(pulled.state.docs[0].source).toBe(a.source);
+      expect(pendingOps(pulled.state, pulled.meta)).toEqual([{ kind: 'delete', id: 'a', baseVersion: 4 }]);
+    });
+
+    it('held diagrams stay local; answering yes lets the most recent fill the free slots', () => {
+      const s = { docs: [at('x', 1), at('y', 3), at('z', 2)], currentId: 'x' };
+      const meta: SyncMeta = { ...emptyMeta('u2'), limit: 2, held: ['x', 'y', 'z'], ask: true };
+      expect(cloudPlan(s, meta)).toMatchObject({ local: new Set(['x', 'y', 'z']), free: 2 });
+      const yes = answerAsk(meta, true);
+      expect(cloudPlan(s, yes)).toMatchObject({ cloud: new Set(['y', 'z']), local: new Set(['x']) });
+    });
+
+    it('reads the limit and the choices back from storage', () => {
+      const back = readStoredSync({ meta: { userId: 'u', cursor: 1, docs: {}, refused: {}, limit: 5, localOnly: ['a', 3], keep: ['b'] } });
+      expect(back.meta).toMatchObject({ limit: 5, localOnly: ['a'], keep: ['b'] });
+      expect(readStoredSync({ meta: { userId: 'u', docs: {}, refused: {}, limit: -1 } }).meta?.limit).toBeUndefined();
+    });
   });
 });

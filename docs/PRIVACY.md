@@ -163,12 +163,13 @@ above are about events, not about you).
   uploaded when you first sign in. They are private: they never appear on a
   profile or a leaderboard, and only you can read them. Deleting a diagram
   leaves a marker (its id, version and when) for 30 days, so your other
-  devices delete their copy too; its text is removed at once. At most 5
-  diagrams for now (more will come with a paid plan), 64 KiB each; the
-  others stay in your browser only, marked "This browser only" in the
-  Diagrams menu, and are never lost. Turning sync
-  off keeps the copies in your account until you choose **Delete my cloud
-  copies** in the same menu.
+  devices delete their copy too; its text is removed at once. Your account
+  keeps at most 5 diagrams for now (a paid plan will raise that), 64 KiB
+  each; the others stay in your browser only, marked "This browser only" in
+  the Diagrams menu, and are never lost. **Move to this browser only** in
+  that menu takes a diagram out of your account (and your other devices) to
+  free a slot. Turning sync off keeps the copies in your account until you
+  choose **Delete my cloud copies** in the same menu.
 
   **Shared computers.** The browser remembers which account its diagrams
   were synced with. When a different account signs in, the diagrams synced
@@ -176,7 +177,8 @@ above are about events, not about you).
   account) and nothing of it is uploaded to the new one. Other diagrams in
   the browser (never synced, or with edits the previous account never
   received) stay, and are added to the new account only if you answer yes to
-  "Add N diagrams from this browser to your account?". Signing out gives you
+  "Add N diagrams from this browser to your account?" (at most as many as
+  your account has room for). Signing out gives you
   the choice: **Sign out** keeps the synced diagrams in this browser (the
   default, as before), **Sign out and remove synced diagrams from this
   browser** removes them (edits not yet saved to your account stay).

@@ -20,8 +20,11 @@ deployed from `main` and ships with the same changes.
   never overwritten: both versions are kept, yours as "<name> (conflict
   <date>)". The Diagrams menu shows where your work is saved, and cloud sync
   can be turned off there; **Delete my cloud copies** removes them from your
-  account. Synced diagrams are in **Download my data** and go with the
-  account (docs/PRIVACY.md). On a shared computer another account never gets
+  account. Your account keeps up to 5 diagrams for now: the others stay in
+  the browser, marked "This browser only" in the Diagrams menu, which says
+  how full the account is ("Saved to your account (3 of 5)") and lets you
+  swap a diagram in or out of the cloud. Synced diagrams are in **Download
+  my data** and go with the account (docs/PRIVACY.md). On a shared computer another account never gets
   your diagrams: they leave the browser when it signs in, diagrams already
   there are only added after asking, and signing out can remove the synced
   ones from the browser.

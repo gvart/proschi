@@ -38,6 +38,8 @@ import {
   Network,
   Archive,
   ArchiveRestore,
+  Cloud,
+  CloudOff,
   Import,
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
@@ -603,6 +605,8 @@ export default function Playground() {
                 <ul className="max-h-72 overflow-y-auto">
                   {sortedDocs.map((doc) => {
                     const title = titleOf(doc.source);
+                    const syncing = cloud.enabled && (cloud.state.kind === 'saved' || cloud.state.kind === 'saving');
+                    const browserOnly = syncing && cloud.local.has(doc.id);
                     return (
                       <li key={doc.id} className="group flex items-center">
                         <button
@@ -615,9 +619,37 @@ export default function Playground() {
                         >
                           <span className="block truncate">{title}</span>
                           <span className="block truncate text-xs font-normal text-muted">
+                            {browserOnly && (
+                              <span data-testid="browser-only" className="mr-1 rounded bg-ink/10 px-1 text-ink/80">
+                                This browser only
+                              </span>
+                            )}
                             {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
                           </span>
                         </button>
+                        {syncing &&
+                          (browserOnly ? (
+                            <button
+                              aria-label={`Keep ${title} in your account`}
+                              title={cloud.canKeep ? 'Keep in cloud' : 'Cloud full: move another diagram to this browser only first'}
+                              disabled={!cloud.canKeep}
+                              onClick={() => cloud.keepInCloud(doc.id)}
+                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10 disabled:opacity-40 disabled:hover:bg-transparent"
+                            >
+                              <Cloud size={14} />
+                            </button>
+                          ) : (
+                            <button
+                              aria-label={`Move ${title} to this browser only`}
+                              title="Move to this browser only (frees a cloud slot)"
+                              onClick={() => {
+                                if (window.confirm(`Move "${title}" to this browser only? It is removed from your account and your other devices, and stays here.`)) cloud.moveToBrowser(doc.id);
+                              }}
+                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
+                            >
+                              <CloudOff size={14} />
+                            </button>
+                          ))}
                         <button
                           aria-label={`Rename file ${fileNameOf(doc)}`}
                           title="Rename the file imports refer to"
@@ -872,7 +904,9 @@ export default function Playground() {
         {cloud.ask > 0 && (
           <Banner
             banner={{
-              message: `Add ${cloud.ask} ${cloud.ask === 1 ? 'diagram' : 'diagrams'} from this browser to your account?`,
+              message:
+                `Add ${cloud.ask} ${cloud.ask === 1 ? 'diagram' : 'diagrams'} from this browser to your account?` +
+                (cloud.limit !== null ? ` Your account keeps up to ${cloud.limit}; the most recently edited go first, any others stay here.` : ''),
               action: { label: 'Add to my account', run: () => cloud.answer(true) },
               secondary: { label: 'Keep in this browser only', run: () => cloud.answer(false) },
             }}
