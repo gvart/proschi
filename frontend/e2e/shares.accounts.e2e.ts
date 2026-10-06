@@ -32,7 +32,7 @@ test.describe('short links', () => {
       posted = route.request().postDataJSON() as typeof posted;
       await route.fulfill({ status: 201, json: { id: ID, url: `https://proschi.app/s/${ID}`, title: 'E-Commerce Platform', hasImage: true, createdAt: 1 } });
     });
-    await page.goto('app/');
+    await page.goto('app/?example=ecommerce');
     await expect(codeEditor(page)).toBeVisible();
     await waitForCanvas(page, 6);
 

@@ -9,7 +9,7 @@ import { canvasNodes, codeEditor, expect, test, waitForCanvas } from './fixtures
 
 /** Share → Embed in the editor; answers the iframe's src. */
 async function copyEmbedSrc(page: import('@playwright/test').Page): Promise<string> {
-  await page.goto('app/');
+  await page.goto('app/?example=ecommerce');
   await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page, 6);
   await page.getByRole('button', { name: 'Share', exact: true }).click();
