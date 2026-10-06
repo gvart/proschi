@@ -1,0 +1,68 @@
+import { Cloud, CloudOff, LogIn, RefreshCw, Trash2 } from 'lucide-react';
+import { MenuItem } from './Menu';
+import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
+
+const PROVIDER_LABEL = { github: 'GitHub', google: 'Google' } as const;
+
+/** The small cloud by the Diagrams menu's title: only when signed in with sync on. */
+export function CloudIcon({ state }: { state: CloudState }) {
+  if (state.kind === 'saved' || state.kind === 'saving') return <Cloud size={13} aria-hidden="true" className={state.kind === 'saving' ? 'text-muted animate-pulse' : 'text-muted'} />;
+  if (state.kind === 'offline' || state.kind === 'error') return <CloudOff size={13} aria-hidden="true" className="text-muted" />;
+  return null;
+}
+
+/** The bottom of the Diagrams menu: where the diagrams are saved, sign-in, and the cloud sync setting. */
+export default function CloudSection({ cloud, close }: { cloud: CloudSync; close: () => void }) {
+  const { state } = cloud;
+  const note = state.kind === 'saved' ? state.note : undefined;
+  return (
+    <>
+      <p role="status" data-testid="cloud-status" className="px-3 pt-0.5 pb-1 text-xs text-muted">
+        {cloudLabel(state)}
+        {note && <span className="block">{note}</span>}
+      </p>
+      {state.kind === 'signed-out' &&
+        state.providers.map((provider) => (
+          <MenuItem key={provider} icon={<LogIn size={14} />} onSelect={() => cloud.signIn(provider)}>
+            Sign in with {PROVIDER_LABEL[provider]}
+          </MenuItem>
+        ))}
+      {state.kind !== 'unavailable' && state.kind !== 'signed-out' && state.kind !== 'loading' && (
+        <>
+          {cloud.enabled ? (
+            <MenuItem
+              icon={<CloudOff size={14} />}
+              onSelect={() => {
+                cloud.setEnabled(false);
+                close();
+              }}
+            >
+              Turn off cloud sync
+            </MenuItem>
+          ) : (
+            <>
+              <MenuItem
+                icon={<RefreshCw size={14} />}
+                onSelect={() => {
+                  cloud.setEnabled(true);
+                  close();
+                }}
+              >
+                Turn on cloud sync
+              </MenuItem>
+              <MenuItem
+                icon={<Trash2 size={14} />}
+                onSelect={() => {
+                  close();
+                  if (window.confirm('Delete every diagram saved in your account? The diagrams in this browser stay, and cloud sync stays off.')) void cloud.deleteCloudCopies();
+                }}
+              >
+                Delete my cloud copies
+              </MenuItem>
+            </>
+          )}
+        </>
+      )}
+    </>
+  );
+}

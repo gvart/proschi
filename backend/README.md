@@ -72,12 +72,21 @@ instead ([Mobile apps](#mobile-apps)).
   in (`/api/game/sync`) and count for progress, never for a leaderboard.
   There is a board per scenario, ascension and version, and one per daily
   run (the same scenario and seed for everyone, the first run of the day).
+- **Cloud sync of the editor's diagrams** (`src/documents.ts`,
+  `frontend/src/playground/sync.ts`): signed in, the editor keeps its
+  diagrams (file name, source and the imports a share link brought) in the
+  account too, unless the user turns it off. Each save names the version it
+  was based on; a stale one gets 409 with the server's copy, and the page
+  keeps both (its own renamed "<name> (conflict <date>)"). Deleting leaves a
+  tombstone, so other devices delete their copy too; the daily cron prunes
+  tombstones after 30 days. At most 200 diagrams a user, 64 KiB each.
 - **Account controls**: link a second provider to the account (and unlink
   one, never the last), download everything stored (`/api/me/export`), sign
   out everywhere, delete the account. Display names that pass for the site or
   its staff, or contain a slur, are refused (`src/moderation.ts`).
 - **Sessions** last 30 days and slide: one used in its second half is renewed
-  for 30 more. A daily cron (03:17 UTC) deletes expired ones.
+  for 30 more. A daily cron (03:17 UTC) deletes expired ones, and the
+  tombstones of synced diagrams deleted more than 30 days ago.
 
 | | |
 |---|---|
@@ -91,12 +100,16 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
 | `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
 | `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
-| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements and its game progress and runs |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs |
+| `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs and its synced diagrams |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `documents` the synced diagrams, tombstones included |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, goalDays, streak}}`. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
 | `POST /api/me/achievements/seen {ids?}` | Marks earned badges as seen (those listed, or all); answers `{seen}`, how many |
+| `GET /api/me/documents?since=<ms>` | The synced diagrams changed at or after `since` (Unix milliseconds; all without), tombstones included: `{documents: [{id, name, source, imports, version, updatedAt, deletedAt}], cursor}`. `cursor` is the server's time before the query, the next `since` |
+| `PUT /api/me/documents/<id> {name, source, imports?, baseVersion}` | Saves a diagram (`id` is the page's, unique per user). `baseVersion` is the version the page last had, 0 for a new one: `{document}`, its version one higher. 409 `{error, document}` with the server's copy when it changed since (or was deleted: saving on top of the tombstone's version restores it). 413 past 64 KiB (source plus imports) or 200 diagrams |
+| `DELETE /api/me/documents/<id>?baseVersion=<n>` | Leaves a tombstone (name, source and imports cleared): `{document}`. 409 `{error, document}` when it changed since `baseVersion`; 204 for one the account does not have |
+| `DELETE /api/me/documents` | "Delete my cloud copies": every synced diagram and tombstone of the user, at once: `{deleted}` |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user: cookies, apps' tokens and unused app sign-in codes |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
@@ -120,7 +133,7 @@ instead ([Mobile apps](#mobile-apps)).
 | `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
-changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
+changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases), 120 synced diagram requests (`DOCS_LIMITER`) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
 requests (the daily challenge's cards and leaderboard included) and 10 design reviews per IP.
 
 ### Design review (`POST /api/review`)

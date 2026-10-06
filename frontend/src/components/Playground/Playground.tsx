@@ -1,4 +1,4 @@
-import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Suspense, lazy, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import ReactFlow, {
   Background,
   BackgroundVariant,
@@ -55,6 +55,7 @@ import {
   updateCurrent,
   type DocumentState,
 } from '../../playground/documents';
+import { createDocStore } from '../../playground/docStore';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
 import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
 import { LONG_LINK_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
@@ -82,6 +83,8 @@ import { useZenMode } from './useZenMode';
 import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
+import CloudSection, { CloudIcon } from './CloudStatus';
+import { useCloudSync } from './useCloudSync';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
 import Tabs from '../../design/Tabs';
 import HelpMenu from '../../onboarding/HelpMenu';
@@ -132,15 +135,18 @@ function initialTourMode(): StartMode {
 }
 
 export default function Playground() {
-  const [docState, setDocState] = useState(loadInitialState);
+  // An external store, so cloud sync can merge into the latest diagrams (src/playground/docStore.ts).
+  const [docStore] = useState(() => createDocStore(loadInitialState()));
+  const docState = useSyncExternalStore(docStore.subscribe, docStore.get);
+  const setDocState = docStore.set;
   const current = currentDoc(docState);
   const source = current.source;
   const rootPath = fileNameOf(current);
-  const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), []);
+  const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
   /** Applies a canvas edit to the current document's text. */
   const editSource = useCallback(
     (edit: (source: string) => string) => setDocState((s) => updateCurrent(s, edit(currentDoc(s).source))),
-    [],
+    [setDocState],
   );
 
   // A link may point at a use case step; open straight into playback there.
@@ -196,6 +202,12 @@ export default function Playground() {
     const link = readShareLink(window.location.hash);
     return link && 'error' in link ? { message: link.error, tone: 'warning' } : null;
   });
+  const cloud = useCloudSync(docStore, (titles) =>
+    setBanner({
+      message: `Changed on another device as well, so both versions are kept: yours is now ${titles.map((t) => `"${t}"`).join(', ')}.`,
+      tone: 'warning',
+    }),
+  );
   useEffect(() => {
     if (!notice) return;
     const timer = setTimeout(() => setNotice(null), 4000);
@@ -427,13 +439,14 @@ export default function Playground() {
             trigger={
               <>
                 <span className="max-w-[7.5rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
+                <CloudIcon state={cloud.state} />
                 <ChevronDown size={14} />
               </>
             }
           >
             {(close) => (
               <>
-                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>Saved in this browser</div>
+                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>{cloud.state.kind === 'saved' || cloud.state.kind === 'saving' ? 'Your diagrams' : 'Saved in this browser'}</div>
                 <ul className="max-h-72 overflow-y-auto">
                   {sortedDocs.map((doc) => {
                     const title = titleOf(doc.source);
@@ -527,7 +540,7 @@ export default function Playground() {
                 >
                   Import backup…
                 </MenuItem>
-                <p className="px-3 pt-0.5 pb-1 text-xs text-muted">Saved in this browser only — export a backup.</p>
+                <CloudSection cloud={cloud} close={close} />
               </>
             )}
           </Menu>

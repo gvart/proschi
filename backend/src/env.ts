@@ -12,6 +12,8 @@ export interface Env {
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
   GAME_LIMITER: RateLimit;
+  /** Synced editor diagrams listed, saved or deleted, per user. */
+  DOCS_LIMITER: RateLimit;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */

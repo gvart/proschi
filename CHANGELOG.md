@@ -10,6 +10,18 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Your diagrams on every device.** Signed in on proschi.app, the editor
+  keeps your diagrams in your account as well as in the browser: edits are
+  saved about two seconds after you stop typing (and when you leave the
+  page), changes from your other devices arrive when you open or return to
+  the editor, and the diagrams already in your browser are uploaded the
+  first time you sign in. Editing never waits for the network: offline, the
+  editor says so and catches up later. A diagram changed on two devices is
+  never overwritten: both versions are kept, yours as "<name> (conflict
+  <date>)". The Diagrams menu shows where your work is saved, and cloud sync
+  can be turned off there; **Delete my cloud copies** removes them from your
+  account. Synced diagrams are in **Download my data** and go with the
+  account (docs/PRIVACY.md).
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

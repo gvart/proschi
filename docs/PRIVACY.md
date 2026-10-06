@@ -1,7 +1,8 @@
 # Privacy
 
-Short version: the editor never sends your diagrams anywhere, there is no
-analytics and no tracking, and an account is optional and only for practice.
+Short version: signed out, the editor never sends your diagrams anywhere;
+signed in, it keeps them in your account (private, and you can turn that
+off). There is no analytics and no tracking, and an account is optional.
 The rest of this page lists exactly what is kept, where, and for how long.
 
 ## In your browser
@@ -12,6 +13,7 @@ server. What they remember stays in your browser's storage on this device:
 | Key | What it holds |
 |---|---|
 | `proschi.docs` | Your diagrams in the editor: their text, file names and which one is open |
+| `proschi.docs.sync` | Cloud sync, signed in: whether you turned it off, and per diagram the version your account has and a fingerprint of its content then, to tell what changed since |
 | `proschi.playground.source` | A diagram saved by an older version of the editor, read once to carry it over |
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
@@ -50,7 +52,8 @@ anywhere else.
 ## With a practice account
 
 On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub or
-Google to keep practice progress across devices and see how others did.
+Google to keep practice progress and your diagrams across devices and see
+how others did.
 Without signing in, nothing about you reaches the server.
 
 **What is stored**
@@ -96,6 +99,17 @@ Without signing in, nothing about you reaches the server.
   cards and incidents you have seen) and every run you submit: its scenario,
   seed, loadout, the moves you made, the score and when you played. Runs
   played signed out stay in your browser and are sent when you sign in.
+- Your diagrams in the editor, while cloud sync is on (it is, once you
+  sign in, until you turn it off in the editor's Diagrams menu): each one's
+  file name, text and the imported files a share link brought, a version
+  number and when it last changed. The diagrams already in your browser are
+  uploaded when you first sign in. They are private: they never appear on a
+  profile or a leaderboard, and only you can read them. Deleting a diagram
+  leaves a marker (its id, version and when) for 30 days, so your other
+  devices delete their copy too; its text is removed at once. At most 200
+  diagrams, 64 KiB each; larger ones stay in your browser only. Turning sync
+  off keeps the copies in your account until you choose **Delete my cloud
+  copies** in the same menu.
 - Achievements: which badges you earned, when, and when the page first
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
@@ -151,10 +165,15 @@ nobody can tell whether you have an account.
 
 In the account menu on the practice page:
 
-- **Download my data** saves everything stored about you as JSON, every
-  session with its kind (the site or an app) but never the token hashes.
+- **Download my data** saves everything stored about you as JSON, your
+  synced diagrams included, every session with its kind (the site or an
+  app) but never the token hashes.
+- **Delete my cloud copies**, in the editor's Diagrams menu once cloud sync
+  is off, removes every diagram from your account; those in your browser
+  stay.
 - **Delete account** removes your account, sessions (apps' too), progress, card
-  reviews, daily challenge results and badges from the server at once; the progress in your browser stays.
+  reviews, daily challenge results, badges and synced diagrams from the server at once; the progress and
+  diagrams in your browser stay.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

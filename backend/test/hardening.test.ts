@@ -260,6 +260,7 @@ describe('data export', () => {
       achievements: [],
       challengeAttempts: [],
       game: { meta: null, runs: [] },
+      documents: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

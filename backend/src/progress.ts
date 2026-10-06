@@ -9,6 +9,7 @@ import { HttpError, json, rateLimit, readJson } from './http';
 import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
+import { exportDocuments } from './documents';
 
 /** The signed-in user's account and practice progress. */
 
@@ -106,7 +107,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements and daily challenge attempts (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game data and synced diagrams (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -201,6 +202,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       submittedAt: r.submitted_at,
     })),
     game: await exportGame(DB, user.id),
+    // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).
+    documents: await exportDocuments(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }
