@@ -448,6 +448,7 @@ export default function RunScreen(props: RunScreenProps) {
         onAgain={props.onAgain}
         onExit={props.onExit}
         signedIn={arcade.signedIn}
+        day={arcade.daily.day}
       />
     );
   }

@@ -54,6 +54,16 @@ export function profileIdOf(route: string): string | undefined {
   return /^[A-Za-z0-9-]{1,64}$/.test(id) ? id : '';
 }
 
+/**
+ * The practice page served at a profile's own address, `/u/<id>` (the
+ * Worker's src/profilePage.ts), shows `#/u/<id>`: the address it should
+ * have, or undefined when it is already at a practice address.
+ */
+export function profileAddressOf(pathname: string): string | undefined {
+  const id = /^\/u\/([A-Za-z0-9-]{1,64})\/?$/.exec(pathname)?.[1];
+  return id ? `/practice/#/u/${id}` : undefined;
+}
+
 /** A badge of GET /api/me/achievements (or its local twin) as a profile shows it: progress while locked. */
 export function profileBadge(a: AchievementStatus): ProfileBadge {
   const { current, target, unseen, ...badge } = a;

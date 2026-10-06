@@ -104,6 +104,8 @@ instead ([Mobile apps](#mobile-apps)).
 | `GET /api/stats/<id>` | Plus `costUsd` and `p99Ms` distributions; signed in, `you` |
 | `GET /api/leaderboard` | Top 50 who opted in, by problems solved: `{problems, entries: [{rank, id, displayName, solved, lastSolvedAt}]}`; `id` is the user's public id, for their profile |
 | `GET /api/users/<id>/profile` | A public profile, only of a user who opted in (`public_profile = 1`); otherwise 404, the same as an unknown id. `{id, displayName, memberSince, solved: [{id, difficulty}], streak: {current, longest}, challenge: {current, longest, best} | null, readiness, topics: [{topic, mastery}], badges: [{id, earnedAt}]}`: shares in whole percent from 0 to 1, times at the start of a UTC day. `challenge` is the daily challenge streak in days and the best score, null before a first challenge. Never designs, the daily goal, review counts or logs, challenge answers, sign-ins or sessions (docs/PRIVACY.md). Rate limited per IP (`STATS_LIMITER`), not cached, and stores nothing |
+| `GET /u/<id>` | Outside the API: the profile's page at an address of its own, for links people share. The built practice page (`/practice/`) with a `<base href="/practice/">`, the profile's `<title>`, description, canonical address, `robots: index, follow` and Open Graph tags (`og:image` is the card below, `?v=` its hash), and a plain summary (name, problems solved, badges) in `#root` that the page replaces; the page then moves itself to `#/u/<id>`. Only for a user who opted in, else the site's 404 page (`X-Robots-Tag: noindex`), the same as for an unknown id. `no-store`, rate limited like the JSON profile. Without a built site, a plain page with the same head |
+| `GET /u/<id>.png` | The profile's Open Graph card, a 1200×630 PNG of the display name, problems solved, streak, badges and readiness ([Open Graph images](#open-graph-images)); the query is ignored. 404 like the page. `Cache-Control: public, no-cache` with an `ETag` of the card's contents, so a turned-off profile's card stops at once |
 | `GET /api/cards/state?day=YYYY-MM-DD` | `{states: {<card id>: {version, due, stability, difficulty, reps, lapses, lastReview}}, today?: {reviews, new}}`: the user's card states; with `day` (the client's local date), that day's reviews and new cards |
 | `POST /api/cards/reviews {reviews: [{id, cardId, version, rating, reviewedAt, durationMs, day}]}` | Up to 200 reviews (`rating` 1 again to 4 easy, `reviewedAt` Unix seconds). Idempotent by `id`. Answers `{accepted, skipped: [{id, cardId, reason}], states}`: reviews of unknown cards or versions, dated in the future or far from `day`, are skipped; `states` are the reviewed cards' new states |
 | `GET /api/challenge/today` | `{day, cardIds, endsAt, maxScore}`: the day's cards (UTC date) in the order to show them, and when the next challenge starts (Unix seconds); signed in, also `attempt` (null before playing), `streak: {current, longest, todayDone}` and `best`, the best score of any day (null before a first challenge) |
@@ -190,6 +192,31 @@ request id, method, path (never the query), status, time and user id.
 
 Sign-in fails closed: without a `SESSION_SECRET` of at least 32 characters no
 provider is offered and `/auth/<provider>/…` answers 503.
+
+### Open Graph images
+
+`/u/<id>.png` is drawn on the Worker (`src/og.ts`): [satori](https://github.com/vercel/satori)
+lays out a small element tree and turns its text into SVG paths with the
+Archivo font (`@fontsource/archivo`, Latin and Latin Extended, 400 and 800, imported as bytes:
+`rules` in `wrangler.jsonc`), and [resvg](https://github.com/yisibl/resvg-js)
+renders the SVG to PNG. Both are WebAssembly, compiled at upload (Workers may
+not compile WebAssembly at run time) and started on an isolate's first image.
+satori is pinned to 0.32.0: later versions load HarfBuzz from the file system,
+which Workers do not have.
+
+- **Size**: the Worker grows from about 0.3 MB to 1.5 MB gzipped (resvg's
+  WebAssembly is most of it), within Workers Paid's 10 MB and Free's 3 MB.
+- **CPU**: about 300 ms for an isolate's first card (starting the
+  WebAssembly and reading the fonts), then about 100 ms a card, inside
+  `limits.cpu_ms`.
+- **Cache**: a card is named by a hash of what it shows (and a layout
+  version, `CARD_VERSION`), kept in this data centre's Cache API for a week;
+  the profile page's `og:image` carries the hash, so a new solve or badge is
+  a new image for link previews. The profile is read every time, so a card
+  is never served for a profile that was turned off.
+- **Abuse**: only stored data of a public profile is drawn, never text from
+  the request, and characters outside Archivo's Latin sets (other scripts, emoji) are
+  drawn as boxes. A failed render redirects to the site's `/og.png`.
 
 ## Mobile apps
 

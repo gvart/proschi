@@ -8,16 +8,19 @@
   // Verifying solutions runs the simulation: 3–12 ms of CPU per problem, a
   // whole import of them more. Needs Workers Paid; Free caps a request at 10 ms.
   "limits": { "cpu_ms": 1000 },
+  // Fonts of the Open Graph images (src/og.ts), imported as bytes; .wasm is compiled at upload by default.
+  "rules": [{ "type": "Data", "globs": ["**/*.woff"], "fallthrough": true }],
   "routes": [{ "pattern": "proschi.app", "custom_domain": true }],
   // `wrangler dev` would otherwise rewrite requests to the route's host, so
   // OAuth callbacks and the same-origin check would see proschi.app.
   "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
-  // The built site: `npm run build` in frontend/ first. Paths outside /api and /auth
-  // are served straight from these files, without running the Worker.
+  // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth and
+  // /u (public profile pages, src/profilePage.ts) are served straight from these
+  // files, without running the Worker.
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*"],
+    "run_worker_first": ["/api/*", "/auth/*", "/u/*"],
     "not_found_handling": "404-page"
   },
   // Daily: delete expired sessions (src/cron.ts).

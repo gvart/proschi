@@ -10,6 +10,16 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Share your results.** A finished Arcade daily run shares a square per
+  wave (🟩 clean, 🟨 hit, 🟥 lost), the score and today's rank, and "Beat my
+  score" dares a friend with a link that opens today's daily run
+  (`#/arcade/daily`). A first solve shares its cost against the reference and
+  its p99 with a link to the problem, and a new badge, with a public profile,
+  a link to it. On phones the share sheet opens; elsewhere the text is copied.
+- **Public profiles have addresses of their own**, `proschi.app/u/<id>`,
+  with the profile's name, solved problems, badges and streak in the link
+  preview and a picture card made for it. Only profiles their owner made
+  public have one; `#/u/<id>` keeps working.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

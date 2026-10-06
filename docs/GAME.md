@@ -176,7 +176,9 @@ Scenarios open as you reach waves in earlier ones, and each has ten
 **difficulty levels** (ascensions): you may play one above the highest you
 cleared. Unlocks and perks count on the leaderboard; each scenario and
 difficulty has its own board, and there is a daily run with the same seed for
-everyone.
+everyone. A finished daily run can be shared: a square per wave (🟩 no
+breach, 🟨 breached but survived, 🟥 lost), the score and the day's rank, with
+a link that opens today's daily run (`#/arcade/daily`).
 
 ## Design-first modes
 

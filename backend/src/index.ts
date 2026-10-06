@@ -14,6 +14,7 @@ import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { reviewDesign } from './review';
 import { getPublicProfile } from './profile';
+import { servePublicProfile } from './profilePage';
 import { getLeaderboard, getProblemStats, getStats } from './stats';
 
 /**
@@ -58,6 +59,11 @@ import { getLeaderboard, getProblemStats, getStats } from './stats';
  *   POST   /api/game/sync {events}          runs, purchases and perks from signed out, replayed in order
  *   GET    /api/game/leaderboard?scenario=&ascension= | ?day=   top 20 who opted in (+ your rank, signed in)
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *
+ * and, outside the API, public profiles at addresses of their own (src/profilePage.ts):
+ *
+ *   GET    /u/<id>                          the practice page showing the profile, with its title and image in the meta tags
+ *   GET    /u/<id>.png                      the profile's Open Graph card (1200×630)
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -121,13 +127,19 @@ async function health(ctx: Ctx): Promise<Response> {
 export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
-    if (!/^\/(api|auth)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
+    const page = pathname.startsWith('/u/');
+    if (!page && !/^\/(api|auth)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();
     const ctx = createContext(request, env, exec);
     let response: Response;
     let error: string | undefined;
+    /** A page or image of the site's (src/profilePage.ts), with the headers of one, not an API answer. */
+    let pageResponse = false;
     try {
-      response = await route(request, ctx, pathname);
+      if (page) {
+        response = await servePublicProfile(request, ctx);
+        pageResponse = true;
+      } else response = await route(request, ctx, pathname);
     } catch (e) {
       if (e instanceof HttpError) response = errorResponse(e.status, e.message, e.headers);
       else {
@@ -145,6 +157,11 @@ export default {
       ...(ctx.userId ? { userId: ctx.userId } : {}),
       ...(error ? { error } : {}),
     });
+    if (pageResponse) {
+      const out = new Response(response.body, response);
+      out.headers.set('X-Request-Id', ctx.requestId);
+      return out;
+    }
     return withSecurityHeaders(response, ctx);
   },
 
