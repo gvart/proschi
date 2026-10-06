@@ -248,3 +248,23 @@ export interface ActivityAnswer {
   streak: Streak;
   recap: WeeklyRecap;
 }
+
+/**
+ * GET /api/me/email: the email reminders' address and settings
+ * (backend/src/reminders.ts); `{email: null}` without an address.
+ */
+export type EmailPrefs =
+  | { email: null }
+  | {
+      email: string;
+      /** Whether the confirmation link was followed: only then do reminders go out. */
+      confirmed: boolean;
+      timeZone: string;
+      streak: boolean;
+      cards: boolean;
+      recap: boolean;
+      /** Paused after three reminders in a row with no practice in between. */
+      paused: boolean;
+      /** PUT only: whether a confirmation email went out. */
+      confirmationSent?: boolean;
+    };

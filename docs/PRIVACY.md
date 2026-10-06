@@ -6,8 +6,9 @@ unless you make a short link; signed in, it keeps them in your account
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
-practice, short links and keeping your diagrams across devices). The rest of
-this page lists exactly what is kept, where, and for how long.
+practice, short links and keeping your diagrams across devices), and an email
+address is kept only if you ask for email reminders. The rest of this page
+lists exactly what is kept, where, and for how long.
 
 ## In your browser
 
@@ -86,6 +87,8 @@ times a day each of these happens:
 | `challenge_complete` | A daily challenge is finished |
 | `arcade_run_start`, `arcade_run_end` | A Scale or Fail run starts, ends |
 | `sign_in` | Someone signs in (counted by the server) |
+| `email_opt_in` | Someone asks for email reminders on the account page (a confirmation link is sent) |
+| `email_reminder_sent` | Reminder emails sent (counted by the server, how many each hour's run sent) |
 
 **What is sent and kept**: the page sends only the names of these events
 (`POST /api/metrics`), a few at a time. The server adds them to one number
@@ -195,8 +198,11 @@ above are about events, not about you).
   showed them to you. The skill map and the badges are computed from the
   reviews and progress above each time you open them; nothing else is
   collected for them.
+- Only if you ask for email reminders: your email address and its settings
+  ([Email reminders](#email-reminders), below).
 
-**What is not stored**: your email address, your avatar, and the access
+**What is not stored**: your email address (unless you opt in to email
+reminders), your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
 read your user id and name, and dropped). Proschi asks GitHub for no
 permissions beyond your public profile, and Google for `openid profile` only.
@@ -250,6 +256,44 @@ nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
 
+## Email reminders
+
+Signed in, you can ask for reminders by email on your account page
+(`#/me`). It is off until you turn it on, and nothing is emailed until you
+follow the confirmation link sent to the address (it works for two days).
+
+**What is stored**, in one row per account, and nothing else:
+
+- your email address, and when you confirmed it (empty until you do) and
+  when the last confirmation email was sent;
+- your browser's time zone (such as `Europe/Berlin`), read when you enter the
+  address, so reminders arrive in your evening and the recap on Monday
+  morning;
+- which reminders you want: streak at risk, cards due, weekly recap;
+- a random secret for the unsubscribe link in each email;
+- the last reminder sent: your local date, the time and which kind (for the
+  one-a-day limit), how many were sent in a row with no practice in between,
+  and when reminders were paused for that reason;
+- when the row was made and last changed.
+
+**What it is used for**: only to send these reminders, at most one a day:
+your streak would end today and today's goal isn't met (in your evening),
+5 or more review cards are due (in your evening, when no streak reminder was
+sent), and last week's recap (Monday morning). Whether one is due is worked
+out from the practice data above, at the time. After three reminders in a
+row with no practice in between, they pause (the third email says so) until
+you resume them on your account page. Your address is never shown to anyone,
+never used for anything else and never given to anyone else. The emails are
+sent through Cloudflare Email Service, which handles the address only to
+deliver them; they carry no tracking pixels and no tracked links.
+
+**How long, and how to remove it**: until you remove it. Every email has an
+unsubscribe link (also offered by your mail app as a one-click
+"Unsubscribe"), which deletes the row at once; so do **Remove address** on
+your account page and deleting your account. Changing the address replaces
+the old one, which then needs confirming again. Log lines of the hourly
+reminder run hold your user id, never the address, when a send fails.
+
 ## Your controls
 
 In the account menu on the practice page:
@@ -257,14 +301,15 @@ In the account menu on the practice page:
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams included, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
-  the address of each preview.
+  the address of each preview, and email reminders with their address and
+  settings (the unsubscribe secret stays out).
 - **Delete my cloud copies**, in the editor's Diagrams menu once cloud sync
   is off, removes every diagram from your account; those in your browser
   stay.
 - **Delete account** removes your account, sessions (apps' too), progress, card
-  reviews, daily challenge results, badges, game progress, short links and
-  synced diagrams from the server at once; the progress and diagrams in your
-  browser stay.
+  reviews, daily challenge results, badges, game progress, short links,
+  synced diagrams and the email reminders' address from the server at once;
+  the progress and diagrams in your browser stay.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

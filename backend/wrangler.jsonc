@@ -23,9 +23,13 @@
     "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*"],
     "not_found_handling": "404-page"
   },
-  // Daily: delete expired sessions, abandoned game runs, usage counts older
-  // than 400 days and old diagram tombstones (src/cron.ts).
-  "triggers": { "crons": ["17 3 * * *"] },
+  // Hourly: the email reminders of users whose local time it is (src/reminders.ts);
+  // in the 03:xx UTC run also delete expired sessions, abandoned game runs,
+  // usage counts older than 400 days and old diagram tombstones (src/cron.ts).
+  "triggers": { "crons": ["17 * * * *"] },
+  // Cloudflare Email Service: the reminder and confirmation emails (src/email.ts).
+  // proschi.app must be onboarded to Email Service (backend/README.md "Email reminders").
+  "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["reminders@proschi.app"] }],
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
   // (exact URIs, comma-separated; README "Mobile apps"). Empty: app sign-in is off.
   "vars": { "ENVIRONMENT": "production", "APP_REDIRECT_URIS": "" },
@@ -39,7 +43,8 @@
     }
   ],
   // Per minute: test runs (they run the simulation), account changes,
-  // progress uploads, card review requests, daily challenge attempts, short links and synced diagram requests per user;
+  // progress uploads, card review requests, daily challenge attempts, short links, synced diagram
+  // requests and reminder confirmation emails per user;
   // sign-ins, stats and usage counts (POST /api/metrics) per IP.
   "ratelimits": [
     { "name": "RUN_LIMITER", "namespace_id": "1001", "simple": { "limit": 30, "period": 60 } },
@@ -53,7 +58,8 @@
     { "name": "GAME_LIMITER", "namespace_id": "1009", "simple": { "limit": 20, "period": 60 } },
     { "name": "METRICS_LIMITER", "namespace_id": "1010", "simple": { "limit": 30, "period": 60 } },
     { "name": "SHARE_LIMITER", "namespace_id": "1011", "simple": { "limit": 10, "period": 60 } },
-    { "name": "DOCS_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } }
+    { "name": "DOCS_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } },
+    { "name": "EMAIL_LIMITER", "namespace_id": "1013", "simple": { "limit": 3, "period": 60 } }
   ],
   // Secrets (`npx wrangler secret put <NAME>`, the dashboard, or .dev.vars locally):
   // SESSION_SECRET (at least 32 characters), GITHUB_CLIENT_ID, GITHUB_CLIENT_SECRET,
@@ -66,7 +72,8 @@
     "staging": {
       "name": "proschi-staging",
       "routes": [{ "pattern": "staging.proschi.app", "custom_domain": true }],
-      "triggers": { "crons": ["17 3 * * *"] },
+      "triggers": { "crons": ["17 * * * *"] },
+      "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["reminders@proschi.app"] }],
       "vars": { "ENVIRONMENT": "staging", "APP_REDIRECT_URIS": "" },
       "d1_databases": [
         {
@@ -89,7 +96,8 @@
         { "name": "GAME_LIMITER", "namespace_id": "2009", "simple": { "limit": 20, "period": 60 } },
         { "name": "METRICS_LIMITER", "namespace_id": "2010", "simple": { "limit": 30, "period": 60 } },
         { "name": "SHARE_LIMITER", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } },
-        { "name": "DOCS_LIMITER", "namespace_id": "2012", "simple": { "limit": 120, "period": 60 } }
+        { "name": "DOCS_LIMITER", "namespace_id": "2012", "simple": { "limit": 120, "period": 60 } },
+        { "name": "EMAIL_LIMITER", "namespace_id": "2013", "simple": { "limit": 3, "period": 60 } }
       ]
     }
   }

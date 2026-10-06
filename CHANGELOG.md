@@ -42,6 +42,14 @@ deployed from `main` and ships with the same changes.
   your diagrams: they leave the browser when it signs in, diagrams already
   there are only added after asking, and signing out can remove the synced
   ones from the browser.
+- **Email reminders, opt-in.** Signed in, enter an email address on your
+  account page and confirm it from the link we send: then get a nudge in
+  your evening when your streak is at risk or 5 or more cards are due, and a
+  weekly recap on Monday morning, each switchable. At most one email a day;
+  after three in a row with no practice they pause until you resume them.
+  Every email has a one-click unsubscribe link, which deletes the address.
+  The address is in **Download my data** and goes with your account
+  ([privacy](docs/PRIVACY.md#email-reminders)).
 - **A GitHub Action**, `gvart/proschi/action@<tag>`: checks and tests the
   `.proschi` files in a repository (errors and failing requirements as
   annotations; the job fails on them) and, on pull requests, keeps one

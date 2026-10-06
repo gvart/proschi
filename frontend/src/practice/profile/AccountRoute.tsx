@@ -14,14 +14,15 @@ import type { Progress } from '../progress';
 import { GoalPicker } from '../Streak';
 import type { Account } from '../useAccount';
 import type { Achievements } from '../skills/useAchievements';
+import EmailReminders from './EmailReminders';
 import ProfileView from './ProfileView';
 import { ownProfile, PUBLIC_FIELDS } from './profile';
 
 /**
  * The account page (`#/me`): the learner's own profile (ProfileView) with
- * what only they see: streak freezes, card counts, the daily goal picker and
- * the public profile setting. The daily challenge's streak and best score
- * come from GET /api/challenge/today (signed in) or this browser's results. Signed out, an invitation to sign in; in a
+ * what only they see: streak freezes, card counts, the daily goal picker,
+ * the public profile setting and email reminders (EmailReminders). The
+ * daily challenge's streak and best score come from GET /api/challenge/today (signed in) or this browser's results. Signed out, an invitation to sign in; in a
  * build without accounts, this browser's progress.
  *
  * Loaded lazily with the cards, for the topics' names.
@@ -137,6 +138,7 @@ export default function AccountRoute({ account, activity, achievements, progress
           )}
         </section>
       )}
+      {user && <EmailReminders />}
     </ProfileView>
   );
 }

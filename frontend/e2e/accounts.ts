@@ -28,6 +28,7 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
   const answers: [RegExp, unknown][] = [
     [/^\/api\/me$/, me],
     [/^\/auth\/providers$/, { providers: ['github', 'google'] }],
+    [/^\/api\/me\/email$/, { email: null }],
     [/^\/api\/me\/activity$/, { day: '', goal: { reviews: me.user.dailyGoal ?? 10, solves: 1 }, days: [] }],
     [/^\/api\/me\/achievements$/, { achievements: [], skills: { readiness: 0, topics: [], weakest: [] }, stats: { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 } }],
     [/^\/api\/cards\/state$/, { states: {}, today: { reviews: 0, new: 0 } }],

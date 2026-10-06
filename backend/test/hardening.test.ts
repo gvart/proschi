@@ -8,7 +8,7 @@ import type { Env } from '../src/env';
 import worker from '../src/index';
 import { normalizeForCheck, rejectName, wordsForCheck } from '../src/moderation';
 import { findProblem, problemIds } from '../src/verify';
-import { call, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
+import { call, dailyRun, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 
 const ID = 'url-shortener';
 const problem = findProblem(ID)!;
@@ -141,7 +141,7 @@ describe('sessions', () => {
     const { id } = await signedInUser();
     await addSession(id, nowSeconds() - 10);
     await addSession(id, nowSeconds() - 1);
-    await worker.scheduled(createScheduledController({ cron: '17 3 * * *' }), env);
+    await worker.scheduled(createScheduledController({ cron: '17 * * * *', scheduledTime: dailyRun() }), env);
     expect(await count('SELECT COUNT(*) AS n FROM sessions WHERE user_id = ?', id)).toBe(1);
   });
 });
@@ -264,6 +264,7 @@ describe('data export', () => {
       game: { meta: null, runs: [] },
       shares: [],
       documents: [],
+      emailReminders: null,
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

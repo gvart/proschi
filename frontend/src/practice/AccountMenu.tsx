@@ -28,7 +28,7 @@ export default function AccountMenu({ account }: { account: Account }) {
             {message}
             <p className="px-3 py-2 text-xs text-muted">
               Keep your progress across devices, compare your designs with other solvers and join the leaderboard. Your designs are stored on the server;
-              no email address is.
+              no email address is, unless you ask for email reminders.
             </p>
             {state.providers.map((p) => (
               <MenuItem key={p} onSelect={() => account.signIn(p)} icon={<LogIn size={14} />}>

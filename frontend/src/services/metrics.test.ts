@@ -106,7 +106,7 @@ describe('metrics', () => {
   });
 
   it('lets a page send every event but sign_in, which only the server counts', () => {
-    expect(METRIC_EVENTS.filter((e) => !isClientMetricEvent(e))).toEqual(['sign_in']);
+    expect(METRIC_EVENTS.filter((e) => !isClientMetricEvent(e))).toEqual(['sign_in', 'email_reminder_sent']);
     expect(isClientMetricEvent('page_view')).toBe(false);
   });
 });

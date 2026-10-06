@@ -18,6 +18,13 @@ export interface Env {
   SHARE_LIMITER: RateLimit;
   /** POST /api/metrics, per IP (the IP is only the limiter's key, never stored). */
   METRICS_LIMITER: RateLimit;
+  /** Confirmation emails of email reminders, per user (src/reminders.ts). */
+  EMAIL_LIMITER: RateLimit;
+  /**
+   * Cloudflare Email Service (wrangler.jsonc `send_email`), for the email
+   * reminders; only src/email.ts uses it. Unset, opting in answers 503.
+   */
+  EMAIL?: SendEmail;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */
