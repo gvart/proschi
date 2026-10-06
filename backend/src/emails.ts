@@ -79,8 +79,8 @@ type Body = Omit<EmailSpec, 'footer'>;
 function streakEmail(origin: string, data: ReminderData): Body {
   const s = data.streak!;
   const goal = data.goal ?? { reviews: 10, solves: 1 };
-  const left = Math.max(1, goal.reviews - s.today.reviews);
-  const cards = Math.min(5, left);
+  // The button asks for exactly what meets today's goal: the cards still left.
+  const cards = Math.max(1, goal.reviews - s.today.reviews);
   const minutes = Math.max(1, Math.round(cards * 0.6));
   return {
     subject: `🔥 Day ${s.current} streak — don't let it go out`,
@@ -96,7 +96,7 @@ function streakEmail(origin: string, data: ReminderData): Body {
     paragraphs: [
       `You're on a ${s.current}-day streak, and today's goal isn't met yet. A few cards, the daily challenge or an Arcade run keeps it going.`,
     ],
-    cta: { label: `Do ${plural(cards, 'card')} (${minutes} min)`, url: `${origin}/practice/#/review` },
+    cta: { label: `${s.today.reviews > 0 ? 'Do the last' : 'Do'} ${plural(cards, 'card')} (${minutes} min)`, url: `${origin}/practice/#/review` },
     secondary: { label: 'Or try the daily challenge', url: `${origin}/practice/#/challenge` },
     kernel: `🔥 Your ${s.current}-day streak is on fire... literally. Kernel is pacing the server room with a tiny extinguisher.`,
   };

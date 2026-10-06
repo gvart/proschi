@@ -357,7 +357,7 @@ describe('the emails themselves', () => {
     expect(all.confirmation.text).toContain('https://proschi.app/api/email/confirm?token=abc');
     expect(all.confirmation.text).toContain('two days');
     expect(reminders.streak.text).toContain('6-day streak');
-    expect(reminders.streak.text).toContain('Do 5 cards (3 min): https://proschi.app/practice/#/review');
+    expect(reminders.streak.text).toContain('Do the last 8 cards (5 min): https://proschi.app/practice/#/review');
     expect(reminders.streak.text).toContain('Kernel');
     expect(reminders.cards.text).toContain('From: Caching, Queues');
     expect(reminders.cards.text).toContain('Review now: https://proschi.app/practice/#/review');
