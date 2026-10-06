@@ -1,0 +1,77 @@
+{
+  "mutators": [
+    {
+      "id": "viral-abroad",
+      "name": "Viral abroad",
+      "icon": "earth",
+      "text": "60% of your users are on another continent from the first wave: every request they make crosses an ocean.",
+      "why": "Distance is latency you cannot scale away. A CDN answers cacheable requests near the user, so far users stop paying the round trip.",
+      "score": 1.2,
+      "global": 0.6,
+      "excludes": ["ping", "drop"],
+      "learn": ["cdn-helps-on-miss", "cdn-cache-control"]
+    },
+    {
+      "id": "licence-audit",
+      "name": "Licence audit",
+      "icon": "receipt",
+      "text": "Your SQL database vendor raises its price by 75%, and every SQL database you run costs that much more.",
+      "why": "When the database is the expensive part, keep load off it: a cache in front of reads, or a store priced for the access pattern.",
+      "score": 1.15,
+      "cost": [{ "target": "sql", "mult": 1.75 }],
+      "excludes": ["snapshots"],
+      "learn": ["cache-aside", "read-write-ratio-first"]
+    },
+    {
+      "id": "read-storm",
+      "name": "Read storm",
+      "icon": "trending-up",
+      "text": "Users browse far more than they post: reads ×1.5, writes halved.",
+      "why": "A read-heavy system is won with caches and edge hits, not bigger databases.",
+      "score": 1.1,
+      "traffic": { "read": 1.5, "write": 0.5 },
+      "learn": ["read-qps-from-write-ratio", "cache-aside"]
+    },
+    {
+      "id": "write-heavy",
+      "name": "Write-heavy",
+      "icon": "hard-drive-upload",
+      "text": "Everybody posts: writes ×3 from the first wave.",
+      "why": "Replicas do not scale writes. Queues smooth the bursts, and shards split the write rate.",
+      "score": 1.25,
+      "traffic": { "write": 3 },
+      "learn": ["replicas-do-not-scale-writes", "shards-for-write-rate", "queue-load-levelling"]
+    },
+    {
+      "id": "flaky-zone",
+      "name": "Flaky zone",
+      "icon": "cloud-off",
+      "text": "Your cloud region has a bad year: an availability zone goes down on waves 3, 6 and 10.",
+      "why": "Two of everything is not enough if both are in the same zone. Spread replicas so losing a zone loses capacity, not the service.",
+      "score": 1.3,
+      "events": [{ "id": "az-outage", "waves": [3, 6, 10] }],
+      "learn": ["surviving-a-zone", "error-budget"]
+    },
+    {
+      "id": "lean-seed",
+      "name": "Lean seed round",
+      "icon": "piggy-bank",
+      "text": "The investors got cold feet: you start with 60% of the cash, but the bank pays twice the interest cap.",
+      "why": "With little money, the first design has to be right-sized: buy capacity just ahead of demand, not years ahead.",
+      "score": 1.2,
+      "cash": 0.6,
+      "interest": 2,
+      "learn": ["egress-bill"]
+    },
+    {
+      "id": "cache-vendor",
+      "name": "Cache vendor trouble",
+      "icon": "snowflake",
+      "text": "Your managed cache keeps restarting: a cache stampede on waves 5, 6 and 7.",
+      "why": "A cold cache sends every read to the database at once. Size the database for the misses, or warm and coalesce.",
+      "score": 1.25,
+      "events": [{ "id": "cache-stampede", "waves": [5, 6, 7] }],
+      "learn": ["cache-stampede", "cold-cache-restart"]
+    }
+  ]
+}

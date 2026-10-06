@@ -112,7 +112,7 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
 
 // ---- Forecast ----
 
-export function ForecastPanel({ forecast, scenario, events, act, collapsible }: { forecast: Forecast; scenario: ScenarioDef; events: Map<string, EventDef>; act?: string; collapsible?: boolean }) {
+export function ForecastPanel({ forecast, scenario, events, act, collapsible, children }: { forecast: Forecast; scenario: ScenarioDef; events: Map<string, EventDef>; act?: string; collapsible?: boolean; children?: ReactNode }) {
   const max = Math.max(...forecast.multipliers);
   const [open, setOpen] = useState(true);
   return (
@@ -179,6 +179,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible }: 
           })}
         </ul>
       )}
+      {children}
     </section>
   );
 }
@@ -451,7 +452,7 @@ const BREACH_TITLE: Record<Breach['kind'], string> = {
   migration: 'Risky migration',
 };
 
-export function WaveResult({ summary, scenario, events, onContinue }: { summary: WaveSummary; scenario: ScenarioDef; events: Map<string, EventDef>; onContinue: () => void }) {
+export function WaveResult({ summary, scenario, events, onContinue, children }: { summary: WaveSummary; scenario: ScenarioDef; events: Map<string, EventDef>; onContinue: () => void; children?: ReactNode }) {
   const lines: [string, number, string?][] = [
     ['Revenue', summary.revenue],
     ['Cloud bill', -summary.cost],
@@ -497,6 +498,7 @@ export function WaveResult({ summary, scenario, events, onContinue }: { summary:
           </dl>
         </div>
         <div className="space-y-3 text-sm">
+          {children}
           {summary.worst && <BreachCard breach={summary.worst} count={summary.breaches.filter((b) => b.kind === summary.worst!.kind).length} during={summary.events.map((e) => events.get(e.id)).filter((d): d is EventDef => !!d)} />}
           {summary.events.map((e) => {
             const def = events.get(e.id);

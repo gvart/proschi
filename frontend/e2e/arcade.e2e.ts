@@ -21,6 +21,11 @@ async function startShortly(page: Page) {
   await expect(page.getByRole('heading', { level: 1, name: 'Shortly' })).toBeVisible();
   // The run opens at the top, whatever the scenario list was scrolled to.
   await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+  // Three mutators are on offer; these tests play it straight.
+  const mutators = page.getByRole('dialog', { name: "Pick this run's mutator" });
+  await expect(mutators.getByRole('listitem')).toHaveCount(3);
+  await mutators.getByRole('button', { name: /Play it straight/ }).click();
+  await expect(mutators).toBeHidden();
   await expect(page.getByRole('region', { name: 'Forecast' })).toContainText('Wave 1');
 }
 
@@ -107,6 +112,15 @@ test('the shop sells unlocks for Blueprints', async ({ page }) => {
   await shop.getByRole('tab', { name: 'Components' }).click();
   await shop.getByRole('button', { name: 'Close' }).click();
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
+  // Take the first mutator on offer: the forecast names it, with this wave's bounty.
+  const mutators = page.getByRole('dialog', { name: "Pick this run's mutator" });
+  const first = mutators.getByRole('listitem').first();
+  const name = (await first.locator('.font-display').textContent())!;
+  await first.getByRole('button').click();
+  const forecast = page.getByRole('region', { name: 'Forecast' });
+  await expect(forecast).toContainText(name);
+  await expect(forecast.getByLabel('Bounty')).toContainText(/Bounty: .+ Pays \$\d+ and \d+ points\./);
+  await expect(page.getByRole('complementary', { name: "Kernel's briefing" })).toContainText(`This run's twist is ${name}`);
   await expect(page.getByRole('toolbar', { name: 'Components' }).getByRole('button', { name: 'Cache' })).toBeEnabled();
 });
 

@@ -50,6 +50,8 @@ export const GAME_ICONS = [
   'hourglass',
   'trending-up',
   'hard-drive-upload',
+  // Bounties.
+  'trophy',
   // Ticket kinds and modes.
   'lightbulb',
   'maximize-2',

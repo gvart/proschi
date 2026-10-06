@@ -19,6 +19,8 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
   });
   await page.goto('practice/#/arcade');
   await page.getByRole('listitem').filter({ hasText: 'Shortly' }).getByRole('button', { name: 'Play', exact: true }).click();
+  // Take a mutator: the pick is the run's first action, replayed by the Worker like the rest.
+  await page.getByRole('dialog', { name: "Pick this run's mutator" }).getByRole('listitem').first().getByRole('button').click();
 
   // Keep the start board every wave until the users churn.
   for (let i = 0; i < 12; i++) {
@@ -38,6 +40,7 @@ test('a ranked run: the server starts it, and gets the actions to replay at the 
     if (await noThanks.isVisible()) await noThanks.click();
   }
   await expect(page.getByText('Rank #3 of 10 on this leaderboard.')).toBeVisible();
-  expect(submitted?.actions[0].t).toBe('deploy');
+  expect(submitted?.actions[0]).toEqual({ t: 'mutator', pick: 0 });
+  expect(submitted?.actions[1].t).toBe('deploy');
   await expect(page.getByRole('link', { name: 'Open your design in the editor' })).toHaveAttribute('href', /^\.\.\/app\/#/);
 });

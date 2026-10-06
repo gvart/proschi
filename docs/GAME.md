@@ -13,15 +13,16 @@ cards, incidents and components are plain files in
 
 ## How a run works
 
-A run is twelve **waves** in three acts. Each wave is a month of traffic:
+A run is twelve **waves** in three acts. It starts with a choice of three
+**mutators** (below), and each wave is a month of traffic:
 
 1. **Forecast.** Kernel, the cat SRE lead, briefs the wave in plain words:
    how traffic changed since last month, the new use cases and requirements,
    and the incidents coming (a boss wave opens with its own intro). The
    forecast panel then shows the traffic curve and its peak per use case, the
    requirements in force (as Proschi lines), and the incidents coming (with
-   their tick, below difficulty 1). The cat button in the run's header turns
-   the briefings off.
+   their tick, below difficulty 1), and this wave's **bounty**. The cat
+   button in the run's header turns the briefings off.
 2. **Plan.** Place, wire, scale out (replicas), scale up (sizes S, M, L),
    shard, remove. Nothing is timed. A **load test** shows the plan at the
    forecast peak for $100. The board is drawn on the editor's canvas (the
@@ -33,7 +34,7 @@ A run is twelve **waves** in three acts. Each wave is a month of traffic:
 3. **Run.** Eight ticks, each one simulated with the wave's traffic at that
    point of the curve. Once a wave you can page the **on-call** to add a
    replica mid-run ($200).
-4. **Score and debrief.** Revenue, cost, interest and bonuses. If anything
+4. **Score and debrief.** Revenue, cost, interest, bonuses and the bounty. If anything
    broke, the debrief shows the bottleneck, the simulation's hint and the
    review cards that explain it.
 5. **Draft.** Take one of three **tech cards**, or skip it for $100.
@@ -44,6 +45,28 @@ A run is twelve **waves** in three acts. Each wave is a month of traffic:
 Waves 4, 8 and 12 are **bosses**: a launch, a holiday, a Super Bowl ad. After
 wave 12 you can bank the score or keep going in **Endless** (traffic ×1.3 a
 wave, two incidents, up to wave 24).
+
+### Mutators and bounties
+
+So that no two runs want the same design, a Scale or Fail run (not the
+design-first modes) has two kinds of twist, both seeded like everything else:
+the daily run offers everyone the same ones.
+
+- **Mutators.** Before the first deploy, pick one of three, or play it
+  straight. A mutator changes the whole run: 60% of users on another
+  continent, a SQL licence 75% dearer, reads ×1.5 and writes halved, writes
+  ×3, a zone outage on waves 3, 6 and 10, 60% of the seed money with twice the
+  interest cap, or a cache stampede on waves 5 to 7. Each multiplies every
+  tick's points (×1.1 to ×1.3), the harder the more. Deploying without a pick
+  plays it straight. The pick is an action like any other, so the Worker
+  replays it.
+- **Bounties.** Every wave has one optional objective: every app server
+  under 50% at the peak, a cloud bill under 40% of revenue, a wave without a
+  breach, the right-sized bonus, a clean wave without the on-call or without
+  a load test, a lost zone survived, a boss without a dropped request. Met, it
+  pays its cash at once and its points × the act. A bounty made for the wave
+  (its incident, its boss) is four times as likely, and no bounty comes twice
+  in a row.
 
 ### Cash, Trust and score
 
@@ -63,7 +86,8 @@ wave, two incidents, up to wave 24).
   any breach resets it. A wave where every compute and store node stays under
   75% at the peak, none could lose a replica and stay there, and something
   works above 40% earns the **right-sized** bonus (+15%). Bosses add
-  500 × the act. The end adds Trust × 10 and cash ÷ 10.
+  500 × the act, and a met bounty its points × the act. A mutator multiplies
+  every tick's points. The end adds Trust × 10 and cash ÷ 10.
 
 ### Progression
 
@@ -370,11 +394,37 @@ debrief.
 and `effect` is one of `cash`, `trust`, `free-reroll`, `starter-card`,
 `loadtest` or `oncall`. `icon` is required and unique among the perks.
 
+### mutators.json
+
+```json
+{ "id": "licence-audit", "name": "Licence audit", "icon": "receipt", "text": "…", "why": "…", "score": 1.15, "cost": [{ "target": "sql", "mult": 1.75 }], "excludes": ["snapshots"], "learn": ["cache-aside"] }
+```
+
+`score` multiplies every tick's points (above 1, at most 2). The effects, any
+of them: `cost` (bill multipliers by component id or role), `traffic`
+(`read` for GET use cases, `write` for the rest), `global` (the far users'
+share from the first wave), `cash` and `interest` (multipliers on the
+starting cash and the interest cap) and `events` (an event id on given waves,
+2 to 12). `excludes` lists the scenarios it would make impossible, so they
+never offer it. `text` says what changes, `why` the design it pushes toward.
+
+### bounties.json
+
+```json
+{ "id": "cool-servers", "name": "Cool heads", "icon": "gauge", "text": "Keep every app server under 50% busy at the peak.", "kind": "max-utilization", "role": "app", "value": 0.5, "cash": 150, "points": 250 }
+```
+
+`kind` is the test: `max-utilization` (every node of `role` under `value` at
+the peak), `budget` (the bill under `value` × revenue), `clean`,
+`no-breach` (no breach of kind `breach` all wave), `right-sized`,
+`no-oncall` and `no-loadtest` (a clean wave without them). `event` (an event
+effect) and `boss` limit it to waves that have that incident, or a boss.
+`cash` is paid at once, `points` × the act.
+
 ### Icons
 
-Perks, cards and events each have an icon of their own: an icon may appear
-once among the perks, once among the cards and once among the events, but
-not twice in one of them. The names are lucide's, listed in
+Perks, mutators, bounties, cards and events each have an icon of their own:
+an icon may appear once in each of those, but not twice in one of them. The names are lucide's, listed in
 `frontend/src/game/engine/icons.ts` (no React, so `proschi game check` can
 read it) and mapped to their components in
 `frontend/src/game/ui/gameIcons.tsx`. To use a new icon, add its name to
@@ -484,10 +534,15 @@ node tooling/dist/cli.cjs game lock      # adds new ids to ids.lock
 
 `game check` reads every file and checks: fields and their values, ids in
 `ids.lock` (and none removed), review cards, topics and practice problems
-that exist, card and event targets, icons (known, and unique among the
-perks, the cards and the events), requirement lines that parse and name a
-use case, traffic for every active use case, start boards the first run
-allows, and the scripted runs. The frontend tests run the same check.
+that exist, card and event targets, icons (known, and unique within their
+kind), requirement lines that parse and name a use case, traffic for every
+active use case, start boards the first run allows, and the scripted runs.
+For every mutator a Scale or Fail scenario offers, it also plays the
+reference with that mutator through act 1, which it must survive: a twist
+may force a new design later, but should not end a sound one at once. And it
+flags a far-user mutator in a scenario with a latency limit the ocean alone
+breaks (a use case no edge can answer, under 120 ms): exclude it there. The
+frontend tests run the same check.
 
 ## Checklist
 
@@ -496,6 +551,7 @@ allows, and the scripted runs. The frontend tests run the same check.
    `game sim` until the reference clears with some margin and the wrong runs
    lose for the reason in their note.
 3. New cards or events: one file each, with `learn` cards and all sections.
+   New mutators or bounties: an entry in `mutators.json` or `bounties.json`.
 4. `node tooling/dist/cli.cjs game lock`, then `game check`.
 5. `npm test` in `frontend/` and `tooling/`.
 6. Add the change to `CHANGELOG.md` under `[Unreleased]`.

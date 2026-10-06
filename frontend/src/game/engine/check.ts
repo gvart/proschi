@@ -2,12 +2,12 @@ import { componentCatalog } from '../../catalog/componentCatalog';
 import { kindOf } from '../../dsl/kinds';
 import { parse } from '../../dsl/parser';
 import { boardProblems, cloneBoard } from './board';
-import { USERS } from './compile';
+import { USERS, WAN_MS } from './compile';
 import { readContent, type ContentError } from './content';
 import { isIconName } from './icons';
-import { Game, GameError, LEARN_IDS, parseRequirements, type BreachKind, type Outcome } from './run';
-import { MAX_ASCENSION, WAVES } from './rules';
-import { LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type RunSetup, type ScenarioDef } from './types';
+import { BREACH_KINDS, Game, GameError, LEARN_IDS, mutatorsFor, parseRequirements, type BreachKind, type Outcome } from './run';
+import { MAX_ASCENSION, MUTATOR_OFFER, WAVES } from './rules';
+import { BOUNTY_KINDS, EVENT_EFFECTS, LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type RunSetup, type ScenarioDef } from './types';
 
 /**
  * `proschi game check`: everything a content change can get wrong, checked
@@ -68,6 +68,8 @@ export interface ScriptedRun {
   seed: string;
   ascension?: number;
   loadout?: Loadout;
+  /** A mutator to play with (any of mutators.json, offered or not). */
+  mutator?: string;
   /** One per wave, from the first; waves past the list keep the board and skip every choice. */
   plays: Play[];
   /**
@@ -108,6 +110,11 @@ export function playScript(content: GameContent, scenario: string, run: Scripted
   };
   const game = new Game(content, setup);
   const s = game.state;
+  if (run.mutator) {
+    // A script names its mutator whatever the seed offers: put it on offer, then take it.
+    s.mutatorOffer = [run.mutator];
+    game.apply({ t: 'mutator', pick: 0 });
+  }
   for (let w = 0; s.phase !== 'over' && w < maxWaves; w++) {
     if (s.phase === 'cleared') {
       game.apply({ t: 'retire' });
@@ -151,6 +158,23 @@ export function allUnlocks(content: GameContent): string[] {
   return [...content.components.map((c) => c.id), ...content.features.map((f) => f.id), ...content.cards.map((c) => c.id)];
 }
 
+/** The ids content publishes, as ids.lock lists them (`kind:id`). */
+/** Waves in act 1: a mutator must leave the reference standing through them. */
+const ACT_ONE = 4;
+
+export function publishedIds(content: GameContent): string[] {
+  return [
+    ...content.components.map((c) => `component:${c.id}`),
+    ...content.features.map((f) => `feature:${f.id}`),
+    ...content.perks.map((p) => `perk:${p.id}`),
+    ...content.mutators.map((m) => `mutator:${m.id}`),
+    ...content.bounties.map((b) => `bounty:${b.id}`),
+    ...content.cards.map((c) => `card:${c.id}`),
+    ...content.events.map((e) => `event:${e.id}`),
+    ...content.scenarios.map((s) => `scenario:${s.id}`),
+  ];
+}
+
 export function checkGame(files: Record<string, string>, ctx: CheckContext): GameCheck {
   const { content, errors } = readContent(files);
   const violations: GameViolation[] = errors.map((e: ContentError) => ({ file: e.file, message: e.message.replace(/^[^:]*: /, ''), ...(e.line ? { line: e.line } : {}) }));
@@ -159,14 +183,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
 
   // ids.lock: every id ever published stays.
   const lockText = files[LOCK_FILE];
-  const ids = [
-    ...content.components.map((c) => `component:${c.id}`),
-    ...content.features.map((f) => `feature:${f.id}`),
-    ...content.perks.map((p) => `perk:${p.id}`),
-    ...content.cards.map((c) => `card:${c.id}`),
-    ...content.events.map((e) => `event:${e.id}`),
-    ...content.scenarios.map((s) => `scenario:${s.id}`),
-  ];
+  const ids = publishedIds(content);
   if (lockText === undefined) v(LOCK_FILE, 'Missing: run `proschi game lock`');
   else {
     const locked = new Set(lockText.split(/\r?\n/).map((l) => l.trim()).filter((l) => l && !l.startsWith('#')));
@@ -209,6 +226,8 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     }
   };
   icons(content.perks, () => 'perks.json', 'perk');
+  icons(content.mutators, () => 'mutators.json', 'mutator');
+  icons(content.bounties, () => 'bounties.json', 'bounty');
   icons(content.cards, (id) => `cards/${id}.md`, 'card');
   icons(content.events, (id) => `events/${id}.md`, 'event');
   const startUnlocked = content.components.filter((c) => c.unlock === 0).map((c) => c.role);
@@ -231,6 +250,45 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
     if (['traffic', 'bots', 'latency', 'hot-key', 'external-slow', 'write-surge'].includes(e.effect) && !(e.value !== undefined && e.value > 0)) v(f, `A ${e.effect} event needs a positive "value:"`);
     if (!(e.duration >= 1 && e.duration <= 8)) v(f, 'duration is 1 to 8 ticks');
     for (const c of e.counters) if (!content.cards.some((x) => x.id === c)) v(f, `Counter '${c}' is not a card`);
+  }
+
+  // Mutators and bounties.
+  const unique = (items: readonly { id: string }[], file: string, kind: string) => {
+    const seen = new Set<string>();
+    for (const it of items) {
+      if (!/^[a-z0-9]+(?:-[a-z0-9]+)*$/.test(it.id)) v(file, `${kind} id '${it.id}' must be lowercase words joined by "-"`);
+      if (seen.has(it.id)) v(file, `Duplicate ${kind} '${it.id}'`);
+      seen.add(it.id);
+    }
+  };
+  unique(content.mutators, 'mutators.json', 'mutator');
+  unique(content.bounties, 'bounties.json', 'bounty');
+  if (content.mutators.length < MUTATOR_OFFER) v('mutators.json', `A run offers ${MUTATOR_OFFER} mutators: add at least that many`);
+  for (const m of content.mutators) {
+    const f = 'mutators.json';
+    for (const k of ['name', 'text', 'why'] as const) if (!m[k]) v(f, `'${m.id}' needs "${k}"`);
+    learn(f, m.learn ?? []);
+    if (!(m.score > 1 && m.score <= 2)) v(f, `'${m.id}': score is a multiplier above 1, at most 2`);
+    for (const c of m.cost ?? []) if (!targetOk(c.target) || !(c.mult > 0)) v(f, `'${m.id}': a cost needs a known target and a positive multiplier`);
+    for (const x of [m.traffic?.read, m.traffic?.write, m.cash, m.interest]) if (x !== undefined && !(x > 0)) v(f, `'${m.id}': multipliers are positive`);
+    if (m.global !== undefined && !(m.global > 0 && m.global < 1)) v(f, `'${m.id}': global is a share 0.01 to 0.99`);
+    for (const e of m.events ?? []) {
+      if (!content.events.some((x) => x.id === e.id)) v(f, `'${m.id}': unknown event '${e.id}'`);
+      if (!e.waves.length || e.waves.some((w) => !Number.isInteger(w) || w < 2 || w > WAVES)) v(f, `'${m.id}': event waves are 2 to ${WAVES} (the first wave's incidents are drawn before the pick)`);
+    }
+    if (!m.cost && !m.traffic && m.global === undefined && !m.cash && !m.interest && !m.events) v(f, `'${m.id}' changes nothing`);
+    for (const id of m.excludes ?? []) if (!content.scenarios.some((x) => x.id === id)) v(f, `'${m.id}' excludes unknown scenario '${id}'`);
+  }
+  const breachKinds: readonly string[] = BREACH_KINDS;
+  for (const b of content.bounties) {
+    const f = 'bounties.json';
+    for (const k of ['name', 'text'] as const) if (!b[k]) v(f, `'${b.id}' needs "${k}"`);
+    if (!(BOUNTY_KINDS as readonly string[]).includes(b.kind)) v(f, `'${b.id}': unknown kind '${b.kind}'`);
+    if (!(b.cash >= 0) || !(b.points > 0)) v(f, `'${b.id}' pays cash (0 or more) and points (more than 0)`);
+    if (b.kind === 'max-utilization' && (!b.role || !(ROLES as readonly string[]).includes(b.role) || !(b.value! > 0 && b.value! < 1))) v(f, `'${b.id}': max-utilization needs a "role" and a "value" between 0 and 1`);
+    if (b.kind === 'budget' && !(b.value! > 0 && b.value! < 1)) v(f, `'${b.id}': budget needs a "value", the bill's share of revenue (0 to 1)`);
+    if (b.kind === 'no-breach' && !breachKinds.includes(b.breach ?? '')) v(f, `'${b.id}': no-breach needs a "breach" kind (${breachKinds.join(', ')})`);
+    if (b.event && !(EVENT_EFFECTS as readonly string[]).includes(b.event)) v(f, `'${b.id}': unknown event effect '${b.event}'`);
   }
 
   for (const s of content.scenarios) checkScenario(s);
@@ -346,6 +404,35 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
 
     const plan = parse(`requirements {\n${lines.map((l) => `  ${l}`).join('\n')}\n}`);
     if (plan.diagnostics.some((d) => d.severity === 'error')) return;
+
+    // The reference with each mutator: a twist must leave the scenario winnable.
+    if (s.mode === 'scale' && files[`${dir}/reference.json`]) {
+      let reference: ScriptedRun | undefined;
+      try {
+        reference = JSON.parse(files[`${dir}/reference.json`]!) as ScriptedRun;
+      } catch {
+        reference = undefined;
+      }
+      for (const m of reference ? mutatorsFor(content, s.id) : []) {
+        // Far users pay the ocean on every request an edge cannot answer: a latency limit under it can never be met.
+        if (m.global) {
+          for (const line of [...s.waves.flatMap((w) => w.requirements ?? []), ...s.contracts.flatMap((c) => c.requirements ?? [])]) {
+            const [r] = parseRequirements([line]);
+            const uc = r?.kind === 'latency' ? Object.values(s.useCases).find((u) => u.name === r.useCase) : undefined;
+            if (r?.kind === 'latency' && uc && !uc.edge && r.maxMs <= WAN_MS) v('mutators.json', `'${m.id}' puts users an ocean (${WAN_MS} ms) away, so "${line}" in ${s.id} can never hold: add '${s.id}' to its excludes`);
+          }
+        }
+        const started = performance.now();
+        try {
+          // Act 1 and the first wave after it are enough to tell: play no further, the check stays fast.
+          const st = playScript(content, s.id, { ...reference!, mutator: m.id }, ACT_ONE + 1).state;
+          runs.push({ scenario: s.id, name: `reference + ${m.id}`, outcome: st.outcome, waves: st.history.length, score: st.score, ms: performance.now() - started });
+          if (st.outcome && st.history.length <= ACT_ONE) v(`${dir}/reference.json`, `With the mutator '${m.id}' the reference falls in act 1 (${st.outcome} in wave ${st.history.length}): a twist may force a new design later, not end a sound one at once. Soften it, or add '${s.id}' to its excludes`);
+        } catch (e) {
+          v(`${dir}/reference.json`, `With the mutator '${m.id}': ${e instanceof GameError ? e.message : String(e)}`);
+        }
+      }
+    }
 
     // The runs: the reference clears, every wrong run fails in time, and doing nothing loses.
     const scripted: [string, string | undefined][] = [[`${dir}/reference.json`, files[`${dir}/reference.json`]]];

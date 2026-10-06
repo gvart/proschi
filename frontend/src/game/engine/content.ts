@@ -1,10 +1,11 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from '../../practice/frontMatter';
 import type { IconName } from './icons';
-import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type MigrationDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
+import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type MigrationDef, type BountyDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type MutatorDef, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
 
 /**
  * Reads the game's content folder (docs/GAME.md) from a map of files keyed
- * by their path in it: `components.json`, `perks.json`, `cards/<id>.md`,
+ * by their path in it: `components.json`, `perks.json`, `mutators.json`,
+ * `bounties.json`, `cards/<id>.md`,
  * `events/<id>.md` and `scenarios/<id>/scenario.{json,md}`. The Arcade page
  * passes Vite's glob of the folder, the CLI reads it from disk, the Worker
  * gets a generated module: all three read it with this.
@@ -279,6 +280,16 @@ export function readContent(files: Record<string, string>): ContentRead {
     if (text === undefined) throw new ContentError('perks.json', 'Missing');
     return json<{ perks: PerkDef[] }>('perks.json', text).perks;
   }) ?? [];
+  const mutators = attempt(() => {
+    const text = files['mutators.json'];
+    if (text === undefined) throw new ContentError('mutators.json', 'Missing');
+    return json<{ mutators: MutatorDef[] }>('mutators.json', text).mutators;
+  }) ?? [];
+  const bounties = attempt(() => {
+    const text = files['bounties.json'];
+    if (text === undefined) throw new ContentError('bounties.json', 'Missing');
+    return json<{ bounties: BountyDef[] }>('bounties.json', text).bounties;
+  }) ?? [];
   const cards: CardDef[] = [];
   const events: EventDef[] = [];
   const scenarios: ScenarioDef[] = [];
@@ -301,5 +312,5 @@ export function readContent(files: Record<string, string>): ContentRead {
     }
   }
   scenarios.sort((a, b) => a.order - b.order || a.id.localeCompare(b.id));
-  return { content: { components: components.components ?? [], features: components.features ?? [], perks, cards, events, scenarios }, errors };
+  return { content: { components: components.components ?? [], features: components.features ?? [], perks, mutators, bounties, cards, events, scenarios }, errors };
 }

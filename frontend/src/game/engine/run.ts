@@ -44,11 +44,15 @@ import {
   TRUST_PENALTY,
   DIAGNOSIS_POINTS,
   DIAGNOSIS_TRUST,
+  MUTATOR_OFFER,
+  BOUNTY_FITTED_WEIGHT,
 } from './rules';
 import {
   CURVES,
   MIGRATION_PHASES,
   type Action,
+  type BountyDef,
+  type MutatorDef,
   type MigrationDef,
   type MigrationPhase,
   type TicketDef,
@@ -81,7 +85,8 @@ export class GameError extends Error {
   }
 }
 
-export type BreachKind = 'latency' | 'availability' | 'cost' | 'durability' | 'resilience' | 'drop' | 'unroutable' | 'freshness' | 'consistency' | 'compat' | 'migration';
+export const BREACH_KINDS = ['latency', 'availability', 'cost', 'durability', 'resilience', 'drop', 'unroutable', 'freshness', 'consistency', 'compat', 'migration'] as const;
+export type BreachKind = (typeof BREACH_KINDS)[number];
 
 export interface Breach {
   kind: BreachKind;
@@ -176,6 +181,8 @@ export interface WaveSummary {
   debrief?: string;
   /** On-call: the root cause picked, and whether it was right. */
   diagnosis?: { pick: string; correct: boolean };
+  /** The wave's bounty, whether it was met, and what it paid. */
+  bounty?: { id: string; met: boolean; cash: number; points: number };
 }
 
 export type Outcome = 'cleared' | 'retired' | 'churned' | 'bankrupt' | 'max';
@@ -227,6 +234,15 @@ export interface RunState {
   diagnosis?: { pick: string; correct: boolean };
   /** What changed since the last wave began, for the briefing. */
   news: WaveNews;
+  /** Scale or Fail: the mutators offered before the first deploy (empty once one is picked, declined or the run deployed). */
+  mutatorOffer: string[];
+  /** The run's mutator. */
+  mutator?: string;
+  /** This wave's bounty. */
+  bounty?: string;
+  /** On-call pages and load tests this wave, for the bounties that forbid them. */
+  paged: number;
+  tested: boolean;
 }
 
 /** What a wave brings since the one before: the mascot's briefing reads it. */
@@ -238,6 +254,9 @@ export interface WaveNews {
   /** Base traffic over the last wave's (1.6: 60% more); absent on the first wave. */
   growth?: number;
 }
+
+/** The mutators a Scale or Fail run of `scenario` can be offered. */
+export const mutatorsFor = (content: GameContent, scenario: string): MutatorDef[] => content.mutators.filter((m) => !m.excludes?.includes(scenario));
 
 /** What the forecast panel shows before planning. */
 export interface Forecast {
@@ -258,6 +277,10 @@ export interface Forecast {
   /** The wave's ticket, with its text. */
   ticket?: TicketDef & { text: string };
   news: WaveNews;
+  /** The run's mutator, once picked. */
+  mutator?: MutatorDef;
+  /** This wave's bounty, with the points it pays this act. */
+  bounty?: BountyDef & { pays: { cash: number; points: number } };
 }
 
 const LOC: SourceLoc = { line: 0, col: 0, length: 0 };
@@ -403,6 +426,9 @@ export class Game {
       sunset: [],
       bigBang: [],
       news: { useCases: [], requirements: [] },
+      mutatorOffer: scenario.mode === 'scale' ? shuffled(stream(setup.seed, 'mutators'), mutatorsFor(content, scenario.id)).slice(0, MUTATOR_OFFER).map((m) => m.id) : [],
+      paged: 0,
+      tested: false,
     };
     if (perks.some((p) => p.def.effect === 'starter-card')) {
       const commons = this.pool().filter((c) => c.rarity === 'common');
@@ -422,11 +448,27 @@ export class Game {
   // ---- What the page reads ----
 
   get mods(): Mods {
-    return computeMods(
+    const m = computeMods(
       this.state.hand.map((id) => this.index.cards.get(id)!),
       this.perks(),
       { streakStep: STREAK_STEP, interestCap: INTEREST_CAP },
     );
+    const mu = this.mutatorDef;
+    if (mu) {
+      for (const c of mu.cost ?? []) m.cost.push({ target: c.target, mult: c.mult });
+      if (mu.interest) m.interestCap = Math.round(m.interestCap * mu.interest);
+    }
+    return m;
+  }
+
+  /** The run's mutator, once picked. */
+  get mutatorDef(): MutatorDef | undefined {
+    return this.state.mutator ? this.content.mutators.find((m) => m.id === this.state.mutator) : undefined;
+  }
+
+  /** A bounty's pay on the current wave: its cash, and its points times the act. */
+  private pays(b: BountyDef): { cash: number; points: number } {
+    return { cash: b.cash, points: b.points * Math.min(3, Math.ceil((this.state.wave + 1) / 4)) };
   }
 
   waveDef(w = this.state.wave): WaveDef {
@@ -467,6 +509,11 @@ export class Game {
       contract: !!w.contract && this.state.wave < this.scenario.waves.length - 1,
       ...(w.ticket ? { ticket: { ...w.ticket, text: this.scenario.sections[`Ticket: ${w.ticket.id}`] ?? '' } } : {}),
       news: this.state.news,
+      ...(this.mutatorDef ? { mutator: this.mutatorDef } : {}),
+      ...(() => {
+        const b = this.state.bounty ? this.content.bounties.find((x) => x.id === this.state.bounty) : undefined;
+        return b ? { bounty: { ...b, pays: this.pays(b) } } : {};
+      })(),
     };
   }
 
@@ -517,6 +564,7 @@ export class Game {
         this.expect('plan');
         if (this.waveDef().diagnosis && !s.diagnosis) throw new GameError('Name the root cause first: the fix depends on it');
         this.checkBoard(action.board);
+        s.mutatorOffer = [];
         s.board = cloneBoard(action.board);
         s.phase = 'run';
         s.tick = 0;
@@ -532,6 +580,7 @@ export class Game {
           s.cash -= LOADTEST_COST;
         }
         result = this.evaluate(action.board, this.forecast().peakTick, s.lag, false);
+        s.tested = true;
         break;
       }
       case 'oncall': {
@@ -547,7 +596,23 @@ export class Game {
         if (s.cash < ONCALL_COST) throw new GameError('Not enough cash to page the on-call');
         s.cash -= ONCALL_COST;
         s.oncallLeft--;
+        s.paged++;
         node.replicas++;
+        break;
+      }
+      case 'mutator': {
+        this.expect('plan');
+        if (!s.mutatorOffer.length) throw new GameError('No mutator on offer: one is picked before the first deploy');
+        if (action.pick !== null) {
+          const def = this.content.mutators.find((m) => m.id === s.mutatorOffer[action.pick!]);
+          if (!def) throw new GameError('No such mutator on offer');
+          s.mutator = def.id;
+          if (def.cash) s.cash = Math.round(s.cash * def.cash);
+          if (def.global) s.global = Math.max(s.global, def.global);
+          // The briefing compares next wave's traffic with this one's as the mutator shapes it.
+          if (this.briefed) this.briefed.traffic = s.useCases.reduce((t, key) => t + this.baseRps(key), 0);
+        }
+        s.mutatorOffer = [];
         break;
       }
       case 'pick': {
@@ -693,10 +758,14 @@ export class Game {
     s.requirements = mergeRequirements(s.requirements, lines);
     for (const f of w.freshness ?? []) s.freshness = [...s.freshness.filter((x) => x.useCase !== f.useCase), f];
     if (w.global !== undefined) s.global = w.global;
+    if (this.mutatorDef?.global) s.global = Math.max(s.global, this.mutatorDef.global);
+    s.paged = 0;
+    s.tested = false;
     const mods = this.mods;
     s.oncallLeft = ONCALL_PER_WAVE + mods.oncall;
     s.loadtestsFree = mods.loadtests;
     s.events = this.drawEvents();
+    s.bounty = this.drawBounty();
     const traffic = s.useCases.reduce((a, key) => a + this.baseRps(key), 0);
     const prev = this.briefed;
     s.news = {
@@ -722,12 +791,16 @@ export class Game {
       const def = this.index.events.get(id);
       if (def) out.push(place(def));
     }
+    const roles = new Set(s.board.nodes.map((node) => this.index.components.get(node.component)?.role).filter(Boolean));
+    for (const e of this.mutatorDef?.events ?? []) {
+      const def = this.index.events.get(e.id);
+      if (def && e.waves.includes(n) && !out.some((x) => x.id === def.id) && def.requires.every((r) => roles.has(r))) out.push(place(def));
+    }
     let extra = n >= POOL_FROM_WAVE ? 1 : 0;
     if (s.wave >= this.scenario.waves.length) extra++;
     if (this.rules.extraActIncident && (n === 3 || n === 7 || n === 11)) extra++;
     if (this.rules.bossIncident && w.boss) extra++;
     const previous = new Set(s.history[s.history.length - 1]?.events.map((e) => e.id) ?? []);
-    const roles = new Set(s.board.nodes.map((node) => this.index.components.get(node.component)?.role).filter(Boolean));
     for (let i = 0; i < extra; i++) {
       const eligible = this.scenario.eventPool.filter((p) => {
         const def = this.index.events.get(p.id);
@@ -748,6 +821,47 @@ export class Game {
     return out;
   }
 
+  /** Scale or Fail: one bounty a wave, drawn from those that fit it, never the last wave's. */
+  private drawBounty(): string | undefined {
+    const s = this.state;
+    if (this.scenario.mode !== 'scale') return undefined;
+    const w = this.waveDef();
+    const effects = new Set(s.events.map((e) => this.index.events.get(e.id)?.effect));
+    const last = s.history[s.history.length - 1]?.bounty?.id;
+    const eligible = this.content.bounties.filter((b) => b.id !== last && (!b.boss || !!w.boss) && (!b.event || effects.has(b.event)));
+    // A bounty made for this wave (its incident, its boss) is the likelier draw.
+    const at = weighted(stream(this.setup.seed, `bounty:${s.wave}`), eligible.map((b) => (b.event || b.boss ? BOUNTY_FITTED_WEIGHT : 1)));
+    return at < 0 ? undefined : eligible[at].id;
+  }
+
+  /** Whether the wave just run met its bounty. */
+  private bountyMet(b: BountyDef, summary: WaveSummary): boolean {
+    const s = this.state;
+    if (!summary.survived) return false;
+    switch (b.kind) {
+      case 'max-utilization': {
+        const peak = s.ticks[argmax(this.multipliers())];
+        const of = peak?.nodes.filter((n) => {
+          const node = s.board.nodes.find((x) => x.id === n.id);
+          return node && this.index.components.get(node.component)?.role === b.role;
+        });
+        return !!of?.length && of.every((n) => !n.down && n.utilization <= (b.value ?? 1));
+      }
+      case 'budget':
+        return summary.revenue > 0 && summary.cost <= (b.value ?? 0) * summary.revenue;
+      case 'clean':
+        return summary.clean;
+      case 'no-breach':
+        return !summary.breaches.some((x) => x.kind === b.breach);
+      case 'right-sized':
+        return summary.leanBonus > 0;
+      case 'no-oncall':
+        return summary.clean && s.paged === 0;
+      case 'no-loadtest':
+        return summary.clean && !s.tested;
+    }
+  }
+
   private endWave() {
     const s = this.state;
     const summary = this.summarize();
@@ -759,6 +873,14 @@ export class Game {
       s.cash += interest;
     }
     s.score += summary.leanBonus + summary.bossBonus;
+    const bounty = s.bounty ? this.content.bounties.find((b) => b.id === s.bounty) : undefined;
+    if (bounty) {
+      const met = this.bountyMet(bounty, summary);
+      const pay = met ? this.pays(bounty) : { cash: 0, points: 0 };
+      summary.bounty = { id: bounty.id, met, ...pay };
+      s.cash += pay.cash;
+      s.score += pay.points;
+    }
     if (s.cash < 0) return this.end('bankrupt');
     const last = s.wave + 1 >= (s.endless ? MAX_WAVES : this.scenario.waves.length);
     if (last) {
@@ -986,7 +1108,9 @@ export class Game {
       const start = this.state.contractStart[key] ?? this.state.wave;
       rps = c?.rps ? c.rps * (c.growth ?? 1.4) ** Math.max(0, this.state.wave - start) : 0;
     }
-    return rps * this.rules.trafficMultiplier;
+    const t = this.mutatorDef?.traffic;
+    const mix = t ? ((this.scenario.useCases[key]?.method === 'GET' ? t.read : t.write) ?? 1) : 1;
+    return rps * this.rules.trafficMultiplier * mix;
   }
 
   private active(tick: number): { def: EventDef; i: number }[] {
@@ -1392,7 +1516,7 @@ export class Game {
     const quality = breaches.length === 0 ? 1 : severe ? 0.4 : 0.6;
     const streak = breaches.length === 0 ? s.streak + 1 : 0;
     const streakMult = Math.min(STREAK_MAX, 1 + mods.streakStep * streak);
-    const points = Math.round(revenue * quality * streakMult);
+    const points = Math.round(revenue * quality * streakMult * (this.mutatorDef?.score ?? 1));
     const trustDelta = -breaches.reduce((a, b) => a + b.trust, 0);
 
     const nodes: NodeTick[] = board.nodes

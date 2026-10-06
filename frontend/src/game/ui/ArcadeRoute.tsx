@@ -253,6 +253,7 @@ function HowItWorks() {
         <li>Twelve waves in three acts. Each wave, read the forecast, plan the board, and deploy: eight ticks of real simulated traffic follow.</li>
         <li>Cash pays the cloud bill; requests that succeed earn it. Trust is your lives: missed latency or availability targets, dropped requests and outages cost it.</li>
         <li>The score is revenue × quality × your uptime streak. Running every node between 40% and 75% at the peak earns the right-sized bonus; over-provisioning burns cash.</li>
+        <li>Each run starts with a choice of three mutators: twists like users on another continent or three times the writes, which change the winning design and multiply your points. Every wave also has an optional bounty that pays cash and points.</li>
         <li>Between waves, take a tech card. Every few waves, a contract adds a use case. Waves 4, 8 and 12 are bosses.</li>
         <li>Runs earn Blueprints for the shop: new components, rare cards and perks, which you keep. Clear a scenario to open the next difficulty.</li>
       </ul>

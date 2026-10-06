@@ -48,6 +48,7 @@ export function briefing(scenario: ScenarioDef, wave: WaveDef, forecast: Forecas
   if (wave.brief) lines.push(wave.brief);
   else if (forecast.boss) lines.push(`Boss wave: ${forecast.name ?? 'the big one'}! Everything we built gets tested this month.`);
   else if (first) lines.push(`Welcome aboard! ${scenario.summary}`);
+  if (first && forecast.mutator) lines.push(`This run's twist is ${forecast.mutator.name}: ${forecast.mutator.text}`);
 
   if (wave.diagnosis) lines.push("We're being paged! Read the alert, then name the root cause before you touch the board.");
   else if (forecast.ticket) lines.push(`New ticket from ${SENDER_LABEL[forecast.ticket.from]}: “${forecast.ticket.title}”. The details are right below.`);
@@ -62,10 +63,15 @@ export function briefing(scenario: ScenarioDef, wave: WaveDef, forecast: Forecas
   if (fresh.length && !first) lines.push(`New ${fresh.length === 1 ? 'feature' : 'features'} going live: ${fresh.map((u) => `${u.name} (${u.method} ${u.path})`).join(', ')}.`);
   for (const r of news.requirements) lines.push(sayRequirement(r));
 
-  const farUsers = forecast.global > 0 && (first || wave.global !== undefined);
+  // On the first wave a far-user mutator has said it already.
+  const farUsers = forecast.global > 0 && (first || wave.global !== undefined) && !(first && forecast.mutator?.global);
   if (farUsers) lines.push(`${Math.round(forecast.global * 100)}% of our users are far away now: every request they make crosses an ocean.`);
   for (const e of forecast.events) lines.push(`Heads-up: ${e.telegraph}`);
   if (forecast.contract) lines.push('After this wave a client offers us a contract. More revenue, if we can carry it.');
+  if (forecast.bounty) {
+    const { pays } = forecast.bounty;
+    lines.push(`Bounty, if you want it: ${forecast.bounty.text} It pays $${pays.cash.toLocaleString('en-US')} and ${pays.points.toLocaleString('en-US')} points.`);
+  }
   const quiet = !first && !fresh.length && !news.requirements.length && !farUsers && !forecast.events.length && !forecast.ticket && !wave.diagnosis;
   if (quiet) lines.push('Nothing else is new. Check the forecast and deploy when you are ready.');
 
