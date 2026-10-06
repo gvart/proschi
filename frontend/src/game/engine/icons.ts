@@ -36,6 +36,11 @@ export const GAME_ICONS = [
   'coins',
   'timer',
   'package',
+  'ship-wheel',
+  'copy-plus',
+  'earth-lock',
+  'battery-charging',
+  'fast-forward',
   // Events.
   'cloud-off',
   'server-crash',

@@ -27,7 +27,6 @@ import {
   MAX_TRUST,
   MAX_WAVES,
   OFFER_SIZE,
-  ONCALL_COST,
   ONCALL_PER_WAVE,
   POOL_FROM_WAVE,
   RARITY_WEIGHTS,
@@ -46,6 +45,15 @@ import {
   DIAGNOSIS_TRUST,
   MUTATOR_OFFER,
   BOUNTY_FITTED_WEIGHT,
+  BOUNTY_FORFEIT,
+  BOUNTY_OFFER,
+  DEMAND_SPREAD,
+  DEMAND_SPREAD_BOSS,
+  LEAN_REFUND,
+  ONCALL_ACTS,
+  RATE_LIMIT_KEEP,
+  SURPRISE_CHANCE,
+  SURPRISE_FROM_WAVE,
 } from './rules';
 import {
   CURVES,
@@ -85,6 +93,9 @@ export class GameError extends Error {
     this.name = 'GameError';
   }
 }
+
+/** Breaches bad enough to set off an incident's `then`. */
+const CASCADE_BREACHES: readonly string[] = ['drop', 'availability', 'unroutable', 'resilience'];
 
 export const BREACH_KINDS = ['latency', 'availability', 'cost', 'durability', 'resilience', 'drop', 'unroutable', 'freshness', 'consistency', 'compat', 'migration'] as const;
 export type BreachKind = (typeof BREACH_KINDS)[number];
@@ -159,6 +170,22 @@ export interface EventInstance {
   /** 1-based first tick. */
   from: number;
   duration: number;
+  /** Not on the forecast: it strikes unannounced. */
+  surprise?: boolean;
+  /** Set off by another incident that broke something (a cascade). */
+  chained?: boolean;
+}
+
+/** What the on-call did this wave, each from a tick (0-based) on. */
+export interface Mitigation {
+  /** Nodes brought back: incidents no longer take them down. */
+  reboot: Record<string, number>;
+  /** The cache warmed: no cold cache. */
+  warm?: number;
+  /** A rate limit at the edge. */
+  ratelimit?: number;
+  /** Use cases switched off. */
+  shed: Record<string, number>;
 }
 
 export interface WaveSummary {
@@ -182,8 +209,12 @@ export interface WaveSummary {
   debrief?: string;
   /** On-call: the root cause picked, and whether it was right. */
   diagnosis?: { pick: string; correct: boolean };
-  /** The wave's bounty, whether it was met, and what it paid. */
+  /** The wave's bounty, whether it was met, and what it paid (a missed one costs cash). */
   bounty?: { id: string; met: boolean; cash: number; points: number };
+  /** Cash back for a right-sized wave. */
+  leanCash?: number;
+  /** The real traffic over the forecast's (Scale or Fail): 1.1 is 10% more. */
+  demand?: number;
 }
 
 export type Outcome = 'cleared' | 'retired' | 'churned' | 'bankrupt' | 'max';
@@ -239,8 +270,14 @@ export interface RunState {
   mutatorOffer: string[];
   /** The run's mutator. */
   mutator?: string;
-  /** This wave's bounty. */
+  /** This wave's bounty, once taken. */
   bounty?: string;
+  /** The bounties on offer this wave (Scale or Fail): take one before deploying, or none. */
+  bountyOffer: string[];
+  /** This wave's real traffic over the forecast's, hidden until it runs. */
+  demand: number;
+  /** The on-call's actions this wave. */
+  mitigation: Mitigation;
   /** On-call pages and load tests this wave, for the bounties that forbid them. */
   paged: number;
   tested: boolean;
@@ -254,6 +291,8 @@ export interface WaveNews {
   requirements: string[];
   /** Base traffic over the last wave's (1.6: 60% more); absent on the first wave. */
   growth?: number;
+  /** Unannounced incidents begin this wave. */
+  surprises?: boolean;
 }
 
 /** The mutators a Scale or Fail run of `scenario` can be offered. */
@@ -268,8 +307,12 @@ export interface Forecast {
   /** Per tick, the traffic multiplier (curve and spikes). */
   multipliers: number[];
   peakTick: number;
-  /** Peak rps per active use case. */
-  peak: { key: string; name: string; rps: number }[];
+  /** Peak rps per active use case, with the range the real peak falls in. */
+  peak: { key: string; name: string; rps: number; low: number; high: number }[];
+  /** The share the real traffic may differ by, either way (0 when the forecast is exact). */
+  spread: number;
+  /** Incidents may strike unannounced this wave. */
+  surprises: boolean;
   requirements: string[];
   freshness: Freshness[];
   events: { id: string; title: string; telegraph: string; from?: number; duration: number }[];
@@ -280,8 +323,10 @@ export interface Forecast {
   news: WaveNews;
   /** The run's mutator, once picked. */
   mutator?: MutatorDef;
-  /** This wave's bounty, with the points it pays this act. */
+  /** This wave's bounty, once taken, with the points it pays this act. */
   bounty?: BountyDef & { pays: { cash: number; points: number } };
+  /** The bounties on offer, until one is taken. */
+  bountyOffer: (BountyDef & { pays: { cash: number; points: number } })[];
 }
 
 const LOC: SourceLoc = { line: 0, col: 0, length: 0 };
@@ -430,6 +475,9 @@ export class Game {
       mutatorOffer: scenario.mode === 'scale' ? shuffled(stream(setup.seed, 'mutators'), mutatorsFor(content, scenario.id)).slice(0, MUTATOR_OFFER).map((m) => m.id) : [],
       paged: 0,
       tested: false,
+      bountyOffer: [],
+      demand: 1,
+      mitigation: { reboot: {}, shed: {} },
     };
     if (perks.some((p) => p.def.effect === 'starter-card')) {
       const commons = this.pool().filter((c) => c.rarity === 'common');
@@ -491,7 +539,11 @@ export class Game {
     const w = this.waveDef();
     const multipliers = this.multipliers();
     const peakTick = argmax(multipliers);
-    const peak = this.state.useCases.map((key) => ({ key, name: this.scenario.useCases[key].name, rps: Math.round(this.baseRps(key) * multipliers[peakTick]) }));
+    const spread = this.spread();
+    const peak = this.state.useCases.map((key) => {
+      const rps = this.baseRps(key) * multipliers[peakTick];
+      return { key, name: this.scenario.useCases[key].name, rps: Math.round(rps), low: Math.round(rps * (1 - spread)), high: Math.round(rps * (1 + spread)) };
+    });
     return {
       wave: this.state.wave,
       name: w.name,
@@ -500,9 +552,11 @@ export class Game {
       multipliers,
       peakTick,
       peak,
+      spread,
+      surprises: this.surprises(),
       requirements: this.state.requirements,
       freshness: this.state.freshness,
-      events: this.state.events.map((e) => {
+      events: this.state.events.filter((e) => !e.surprise).map((e) => {
         const def = this.index.events.get(e.id)!;
         return { id: e.id, title: def.title, telegraph: def.telegraph, ...(this.rules.hiddenTicks ? {} : { from: e.from }), duration: e.duration };
       }),
@@ -515,8 +569,21 @@ export class Game {
         const b = this.state.bounty ? this.content.bounties.find((x) => x.id === this.state.bounty) : undefined;
         return b ? { bounty: { ...b, pays: this.pays(b) } } : {};
       })(),
+      bountyOffer: this.state.bounty ? [] : this.state.bountyOffer.map((id) => this.content.bounties.find((x) => x.id === id)!).filter(Boolean).map((b) => ({ ...b, pays: this.pays(b) })),
     };
   }
+
+  /** The share a Scale or Fail wave's real traffic may differ from the forecast by; 0 in the design-first modes. */
+  spread(): number {
+    if (this.scenario.mode !== 'scale') return 0;
+    return this.waveDef().boss ? DEMAND_SPREAD_BOSS : DEMAND_SPREAD;
+  }
+
+  /** Whether an incident may come unannounced this wave. */
+  surprises(): boolean {
+    return this.scenario.mode === 'scale' && this.state.wave + 1 >= SURPRISE_FROM_WAVE;
+  }
+
 
   /** How the code pane teaches on a wave (0-based; this wave by default): watch, edit or only. */
   codeLevel(w = this.state.wave): CodeLevel {
@@ -596,16 +663,65 @@ export class Game {
         if (!Number.isInteger(action.tick) || action.tick < s.tick || action.tick >= TICKS) throw new GameError('On-call actions happen during the run');
         while (s.tick < action.tick && s.phase === 'run') this.advance();
         this.expect('run');
-        if (s.oncallLeft <= 0) throw new GameError('No on-call actions left this wave');
-        const node = s.board.nodes.find((n) => n.id === action.node);
-        const c = node && this.index.components.get(node.component);
-        if (!node || !c) throw new GameError(`No component '${action.node}' to scale`);
-        if (node.replicas >= MAX_REPLICAS) throw new GameError(`'${node.id}' is at ${MAX_REPLICAS} replicas`);
-        if (s.cash < ONCALL_COST) throw new GameError('Not enough cash to page the on-call');
-        s.cash -= ONCALL_COST;
-        s.oncallLeft--;
+        const act = action.act ?? 'replica';
+        const price = ONCALL_ACTS[act];
+        if (!price) throw new GameError(`No on-call action '${act}'`);
+        if (s.oncallLeft < price.attention) throw new GameError('The on-call has no attention left this wave');
+        if (s.cash < price.cash) throw new GameError('Not enough cash for that on-call action');
+        const m = s.mitigation;
+        const nodeOf = () => {
+          const node = s.board.nodes.find((n) => n.id === action.node);
+          const c = node && this.index.components.get(node.component);
+          if (!node || !c) throw new GameError(`No component '${action.node ?? ''}' on the board`);
+          return { node, c };
+        };
+        switch (act) {
+          case 'replica': {
+            const { node } = nodeOf();
+            if (node.replicas >= MAX_REPLICAS) throw new GameError(`'${node.id}' is at ${MAX_REPLICAS} replicas`);
+            node.replicas++;
+            break;
+          }
+          case 'reboot': {
+            const { node } = nodeOf();
+            if (m.reboot[node.id] !== undefined) throw new GameError(`'${node.id}' was already brought back this wave`);
+            m.reboot[node.id] = s.tick;
+            break;
+          }
+          case 'warm':
+            if (!s.board.nodes.some((n) => this.index.components.get(n.component)?.role === 'cache')) throw new GameError('There is no cache to warm');
+            if (m.warm !== undefined) throw new GameError('The cache is already warm');
+            m.warm = s.tick;
+            break;
+          case 'ratelimit':
+            if (m.ratelimit !== undefined) throw new GameError('The rate limit is already on');
+            m.ratelimit = s.tick;
+            break;
+          case 'shed': {
+            const key = action.useCase ?? '';
+            if (!s.useCases.includes(key) || s.sunset.includes(key)) throw new GameError(`No use case '${key}' to switch off`);
+            if (m.shed[key] !== undefined) throw new GameError(`"${this.scenario.useCases[key].name}" is already off`);
+            m.shed[key] = s.tick;
+            break;
+          }
+        }
+        s.cash -= price.cash;
+        s.oncallLeft -= price.attention;
+        s.trust = Math.max(0, s.trust - price.trust);
         s.paged++;
-        node.replicas++;
+        if (s.trust <= 0) {
+          this.summarize();
+          this.end('churned');
+        }
+        break;
+      }
+      case 'bounty': {
+        this.expect('plan');
+        if (s.bounty) throw new GameError('You already took a bounty this wave');
+        const id = s.bountyOffer[action.pick];
+        if (id === undefined) throw new GameError('No such bounty on offer');
+        s.bounty = id;
+        s.bountyOffer = [];
         break;
       }
       case 'mutator': {
@@ -741,6 +857,7 @@ export class Game {
     s.streak = r.streak;
     s.score += r.points;
     s.ticks.push(r);
+    this.cascade(r);
     s.tick++;
     if (s.trust <= 0) {
       s.trust = 0;
@@ -748,6 +865,23 @@ export class Game {
       this.end('churned');
     } else if (s.tick >= TICKS) this.endWave();
     return r;
+  }
+
+  /** An incident that broke something badly and has a `then` sets that one off the tick after it ends, unannounced. */
+  private cascade(r: TickResult) {
+    const s = this.state;
+    // Only what users felt hard (a dropped or failed request), and one cascade a wave.
+    if (!r.breaches.some((b) => CASCADE_BREACHES.includes(b.kind)) || s.events.some((e) => e.chained)) return;
+    for (const { def, i } of this.active(s.tick)) {
+      const inst = s.events.find((e) => e.id === def.id);
+      if (!def.then || !inst || i !== inst.duration - 1) continue;
+      const next = this.index.events.get(def.then);
+      const from = s.tick + 2;
+      if (!next || from > TICKS || s.events.some((e) => e.id === next.id)) continue;
+      const roles = new Set(s.board.nodes.map((n) => this.index.components.get(n.component)?.role));
+      if (!next.requires.every((x) => roles.has(x))) continue;
+      s.events.push({ id: next.id, from, duration: Math.min(next.duration, TICKS - from + 1), surprise: true, chained: true });
+    }
   }
 
   // ---- Waves ----
@@ -773,13 +907,18 @@ export class Game {
     s.oncallLeft = ONCALL_PER_WAVE + mods.oncall;
     s.loadtestsFree = mods.loadtests;
     s.events = this.drawEvents();
-    s.bounty = this.drawBounty();
+    delete s.bounty;
+    s.bountyOffer = this.drawBounties();
+    s.mitigation = { reboot: {}, shed: {} };
+    const spread = this.spread();
+    s.demand = spread ? 1 + spread * (2 * stream(this.setup.seed, `demand:${s.wave}`)() - 1) : 1;
     const traffic = s.useCases.reduce((a, key) => a + this.baseRps(key), 0);
     const prev = this.briefed;
     s.news = {
       useCases: s.useCases.filter((k) => !prev?.useCases.includes(k)),
       requirements: s.requirements.filter((l) => !prev?.requirements.includes(l)),
       ...(prev && prev.traffic > 0 ? { growth: traffic / prev.traffic } : {}),
+      ...(this.surprises() && s.wave + 1 === SURPRISE_FROM_WAVE ? { surprises: true } : {}),
     };
     this.briefed = { useCases: [...s.useCases], requirements: [...s.requirements], traffic };
   }
@@ -824,22 +963,31 @@ export class Game {
       });
       const at = weighted(next, eligible.map((p) => p.weight));
       if (at < 0) break;
-      out.push(place(this.index.events.get(eligible[at].id)!));
+      const inst = place(this.index.events.get(eligible[at].id)!);
+      if (this.surprises() && stream(this.setup.seed, `surprise:${s.wave}:${i}`)() < SURPRISE_CHANCE) inst.surprise = true;
+      out.push(inst);
     }
     return out;
   }
 
-  /** Scale or Fail: one bounty a wave, drawn from those that fit it, never the last wave's. */
-  private drawBounty(): string | undefined {
+  /** Scale or Fail: the wave's bounties on offer, drawn from those that fit it (its announced incidents, its boss), never the last wave's. */
+  private drawBounties(): string[] {
     const s = this.state;
-    if (this.scenario.mode !== 'scale') return undefined;
+    if (this.scenario.mode !== 'scale') return [];
     const w = this.waveDef();
-    const effects = new Set(s.events.map((e) => this.index.events.get(e.id)?.effect));
+    const effects = new Set(s.events.filter((e) => !e.surprise).map((e) => this.index.events.get(e.id)?.effect));
     const last = s.history[s.history.length - 1]?.bounty?.id;
-    const eligible = this.content.bounties.filter((b) => b.id !== last && (!b.boss || !!w.boss) && (!b.event || effects.has(b.event)));
-    // A bounty made for this wave (its incident, its boss) is the likelier draw.
-    const at = weighted(stream(this.setup.seed, `bounty:${s.wave}`), eligible.map((b) => (b.event || b.boss ? BOUNTY_FITTED_WEIGHT : 1)));
-    return at < 0 ? undefined : eligible[at].id;
+    let eligible = this.content.bounties.filter((b) => b.id !== last && (!b.boss || !!w.boss) && (!b.event || effects.has(b.event)));
+    const next = stream(this.setup.seed, `bounty:${s.wave}`);
+    const out: string[] = [];
+    while (out.length < BOUNTY_OFFER) {
+      // A bounty made for this wave is the likelier draw.
+      const at = weighted(next, eligible.map((b) => (b.event || b.boss ? BOUNTY_FITTED_WEIGHT : 1)));
+      if (at < 0) break;
+      out.push(eligible[at].id);
+      eligible = eligible.filter((_, i) => i !== at);
+    }
+    return out;
   }
 
   /** Whether the wave just run met its bounty. */
@@ -881,10 +1029,15 @@ export class Game {
       s.cash += interest;
     }
     s.score += summary.leanBonus + summary.bossBonus;
+    if (summary.leanBonus > 0 && this.scenario.mode === 'scale') {
+      summary.leanCash = Math.round(summary.cost * LEAN_REFUND);
+      s.cash += summary.leanCash;
+    }
     const bounty = s.bounty ? this.content.bounties.find((b) => b.id === s.bounty) : undefined;
     if (bounty) {
       const met = this.bountyMet(bounty, summary);
-      const pay = met ? this.pays(bounty) : { cash: 0, points: 0 };
+      // A bounty taken and missed costs part of what it would have paid.
+      const pay = met ? this.pays(bounty) : { cash: -Math.round(bounty.cash * BOUNTY_FORFEIT), points: 0 };
       summary.bounty = { id: bounty.id, met, ...pay };
       s.cash += pay.cash;
       s.score += pay.points;
@@ -937,6 +1090,7 @@ export class Game {
       events: s.events,
       ...(w.debrief ? { debrief: w.debrief } : {}),
       ...(s.diagnosis ? { diagnosis: s.diagnosis } : {}),
+      ...(this.spread() ? { demand: s.demand } : {}),
     };
     s.history.push(summary);
     return summary;
@@ -1079,6 +1233,10 @@ export class Game {
     const s = this.state;
     const card = this.index.cards.get(id)!;
     s.hand.push(id);
+    if (card.downside?.effect === 'trust') {
+      s.maxTrust += card.downside.value;
+      s.trust = Math.max(1, Math.min(s.maxTrust, s.trust + card.downside.value));
+    }
     if (card.effect === 'trust') {
       s.maxTrust += card.value;
       s.trust += card.value;
@@ -1217,6 +1375,20 @@ export class Game {
       }
     }
     if (mods.spot && active.length) for (const n of board.nodes) if (comp(n.id)?.role === 'worker') lost.set(n.id, (lost.get(n.id) ?? 0) + 1);
+    // The on-call's actions, each from its tick on.
+    const m = s.mitigation;
+    const since = (t: number | undefined) => t !== undefined && tick >= t;
+    for (const [id, t] of Object.entries(m.reboot)) {
+      if (!since(t)) continue;
+      down.delete(id);
+      writesDown.delete(id);
+      partialWrites.delete(id);
+      lost.delete(id);
+    }
+    if (since(m.warm)) coldFactor = 1;
+    const limited = since(m.ratelimit);
+    if (limited) botsMult = 0;
+    const shed = new Set(Object.entries(m.shed).filter(([, t]) => since(t)).map(([key]) => key));
     const replicas = new Map<string, number>();
     for (const n of board.nodes) {
       if (!this.index.components.has(n.component)) continue;
@@ -1247,7 +1419,10 @@ export class Game {
       if (surge.has('async') && uc.steps.some((st) => st.async)) m *= surge.get('async')!;
       return m;
     };
-    for (const key of s.useCases) rps.set(key, this.baseRps(key) * multiplier * surgeOf(key) * (targetMult.get(key) ?? 1));
+    // The forecast is a guess: the wave as it runs has its real demand.
+    const demand = s.phase === 'run' ? s.demand : 1;
+    const keep = limited ? RATE_LIMIT_KEEP : 1;
+    for (const key of s.useCases) rps.set(key, shed.has(key) ? 0 : this.baseRps(key) * multiplier * demand * keep * surgeOf(key) * (targetMult.get(key) ?? 1));
     const eff = this.effective();
     for (const j of eff.jobs) rps.set(j.key, j.rps);
     const legit = [...rps.values()].reduce((a, b) => a + b, 0);
@@ -1325,6 +1500,7 @@ export class Game {
     const reqLines = s.requirements.filter((l) => {
       const named = /"([^"]*)"/.exec(l)?.[1];
       if (named && !Object.values(compiled.routes).some((r) => r.name === named)) return false;
+      if (named && [...shed].some((key) => this.scenario.useCases[key]?.name === named)) return false;
       if (/^\s*survive/.test(l) && (tick !== peakTick || quick)) return false;
       return true;
     });
@@ -1524,7 +1700,7 @@ export class Game {
     const quality = breaches.length === 0 ? 1 : severe ? 0.4 : 0.6;
     const streak = breaches.length === 0 ? s.streak + 1 : 0;
     const streakMult = Math.min(STREAK_MAX, 1 + mods.streakStep * streak);
-    const points = Math.round(revenue * quality * streakMult * (this.mutatorDef?.score ?? 1));
+    const points = Math.round(revenue * quality * streakMult * (this.mutatorDef?.score ?? 1) * mods.setBonus);
     const trustDelta = -breaches.reduce((a, b) => a + b.trust, 0);
 
     const nodes: NodeTick[] = board.nodes

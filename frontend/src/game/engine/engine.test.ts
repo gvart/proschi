@@ -110,7 +110,10 @@ describe('a run', () => {
     expect(g.state.tick).toBe(3);
     expect(g.state.board.nodes.find((n) => n.id === 'api')!.replicas).toBe(2);
     expect(g.state.cash).toBeLessThan(cash - ONCALL_COST + 1);
-    expect(() => g.apply({ t: 'oncall', tick: 4, node: 'api' })).toThrow(/No on-call actions left/);
+    // Attention runs out: three actions a wave.
+    g.apply({ t: 'oncall', tick: 3, node: 'api' });
+    g.apply({ t: 'oncall', tick: 4, node: 'api' });
+    expect(() => g.apply({ t: 'oncall', tick: 4, node: 'api' })).toThrow(/no attention left/);
   });
 
   it('applies ascension rules', () => {

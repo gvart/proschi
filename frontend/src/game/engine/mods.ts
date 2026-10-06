@@ -1,3 +1,4 @@
+import { SET_BONUS, SET_SIZE } from './rules';
 import type { BoardNode, CardDef, ComponentDef, PerkDef, Stat } from './types';
 
 /**
@@ -33,6 +34,10 @@ export interface Mods {
   freeReroll: boolean;
   /** Users upload straight to object storage with a signed URL. */
   presigned: boolean;
+  /** Topics held as a set (SET_SIZE cards of one topic; two sets for twice as many). */
+  sets: string[];
+  /** Multiplier on every tick's points from the sets. */
+  setBonus: number;
 }
 
 export function computeMods(cards: readonly CardDef[], perks: readonly { def: PerkDef; level: number }[], base: { streakStep: number; interestCap: number }): Mods {
@@ -56,8 +61,11 @@ export function computeMods(cards: readonly CardDef[], perks: readonly { def: Pe
     streakStep: base.streakStep,
     freeReroll: false,
     presigned: false,
+    sets: [],
+    setBonus: 1,
   };
-  for (const c of cards) {
+  const effects = cards.flatMap((c) => [c, ...(c.downside ? [{ ...c.downside, id: c.id }] : [])]);
+  for (const c of effects) {
     switch (c.effect) {
       case 'capacity':
         m.capacity.push({ target: c.target, stat: c.stat ?? 'rps', mult: c.value });
@@ -123,6 +131,10 @@ export function computeMods(cards: readonly CardDef[], perks: readonly { def: Pe
         break; // paid once, when picked
     }
   }
+  const topics = new Map<string, number>();
+  for (const c of cards) topics.set(c.topic, (topics.get(c.topic) ?? 0) + 1);
+  for (const [topic, n] of [...topics].sort()) for (let i = 0; i < Math.floor(n / SET_SIZE); i++) m.sets.push(topic);
+  m.setBonus = 1 + SET_BONUS * m.sets.length;
   for (const { def, level } of perks) {
     if (def.effect === 'loadtest') m.loadtests += def.value * level;
     else if (def.effect === 'oncall') m.oncall += def.value * level;

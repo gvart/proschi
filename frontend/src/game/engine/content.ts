@@ -1,6 +1,6 @@
 import { FrontMatterError, parseFrontMatter, type FrontMatterValue } from '../../practice/frontMatter';
 import type { IconName } from './icons';
-import { CARD_EFFECTS, CURVES, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type CodeLevels, type MigrationDef, type BountyDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type MutatorDef, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
+import { CARD_EFFECTS, CURVES, DOWNSIDE_EFFECTS, EVENT_EFFECTS, GAME_MODES, RARITIES, ROLES, TICKET_KINDS, TICKET_SENDERS, type Board, type CodeLevels, type MigrationDef, type BountyDef, type CardDef, type ComponentDef, type ContractDef, type EventDef, type FeatureDef, type GameContent, type MutatorDef, type PerkDef, type Role, type ScenarioDef, type Stat } from './types';
 
 /**
  * Reads the game's content folder (docs/GAME.md) from a map of files keyed
@@ -115,12 +115,26 @@ const fileId = (file: string) => file.replace(/^.*\//, '').replace(/\.md$/, '');
 
 export function cardFromFile(file: string, text: string): CardDef {
   const { fields: f, sections } = readMarkdown(file, text);
-  f.known(['name', 'icon', 'rarity', 'topic', 'learn', 'effect', 'target', 'stat', 'value', 'unlock']);
+  f.known(['name', 'icon', 'rarity', 'topic', 'learn', 'effect', 'target', 'stat', 'value', 'unlock', 'downside', 'downside-target', 'downside-stat', 'downside-value']);
   const id = fileId(file);
   if (!ID.test(id)) throw new ContentError(file, 'The file name must be lowercase words joined by "-"');
   const stat = f.optionalString('stat');
   if (stat !== undefined && !['rps', 'reads', 'writes'].includes(stat)) throw new ContentError(file, '"stat:" is rps, reads or writes');
   const target = f.optionalString('target');
+  const downsideEffect = f.optionalString('downside');
+  let downside: CardDef['downside'];
+  if (downsideEffect !== undefined) {
+    if (!DOWNSIDE_EFFECTS.includes(downsideEffect as (typeof DOWNSIDE_EFFECTS)[number])) throw new ContentError(file, `"downside:" is one of ${DOWNSIDE_EFFECTS.join(', ')}`);
+    const dStat = f.optionalString('downside-stat');
+    if (dStat !== undefined && !['rps', 'reads', 'writes'].includes(dStat)) throw new ContentError(file, '"downside-stat:" is rps, reads or writes');
+    const dTarget = f.optionalString('downside-target');
+    downside = {
+      effect: downsideEffect as (typeof DOWNSIDE_EFFECTS)[number],
+      ...(dTarget !== undefined ? { target: dTarget } : {}),
+      ...(dStat !== undefined ? { stat: dStat as Stat } : {}),
+      value: f.number('downside-value', 0),
+    };
+  }
   return {
     id,
     name: f.string('name'),
@@ -133,6 +147,7 @@ export function cardFromFile(file: string, text: string): CardDef {
     ...(stat !== undefined ? { stat: stat as Stat } : {}),
     value: f.number('value', 0),
     unlock: f.number('unlock', 0),
+    ...(downside ? { downside } : {}),
     text: section(file, sections, 'Text'),
     why: section(file, sections, 'Why'),
   };
@@ -140,7 +155,7 @@ export function cardFromFile(file: string, text: string): CardDef {
 
 export function eventFromFile(file: string, text: string): EventDef {
   const { fields: f, sections } = readMarkdown(file, text);
-  f.known(['title', 'icon', 'category', 'topic', 'learn', 'effect', 'target', 'value', 'values', 'duration', 'from', 'telegraph', 'counters', 'requires', 'min-wave']);
+  f.known(['title', 'icon', 'category', 'topic', 'learn', 'effect', 'target', 'value', 'values', 'duration', 'from', 'telegraph', 'counters', 'requires', 'min-wave', 'then']);
   const id = fileId(file);
   if (!ID.test(id)) throw new ContentError(file, 'The file name must be lowercase words joined by "-"');
   const values = f.list('values').map((v) => {
@@ -153,6 +168,7 @@ export function eventFromFile(file: string, text: string): EventDef {
   const target = f.optionalString('target');
   const value = f.optionalNumber('value');
   const from = f.optionalNumber('from');
+  const then = f.optionalString('then');
   return {
     id,
     title: f.string('title'),
@@ -170,6 +186,7 @@ export function eventFromFile(file: string, text: string): EventDef {
     counters: f.list('counters'),
     requires: requires as Role[],
     minWave: f.number('min-wave', 1),
+    ...(then !== undefined ? { then } : {}),
     whatHappened: section(file, sections, 'What happened'),
     why: section(file, sections, 'Why'),
     senior: section(file, sections, 'What a senior engineer would do'),

@@ -10,6 +10,7 @@ duration: 1
 telegraph: A cache host is scheduled for emergency maintenance.
 counters: [circuit-breaker]
 requires: [cache]
+then: cache-stampede
 min-wave: 5
 ---
 

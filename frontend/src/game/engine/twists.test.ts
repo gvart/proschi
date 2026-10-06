@@ -109,43 +109,64 @@ describe('mutators', () => {
 });
 
 describe('bounties', () => {
-  it('sets one a wave in Scale or Fail, never the same twice in a row, and none in the design-first modes', () => {
-    const g = playScript(content, 'shortly', reference('shortly'));
-    const ids = g.state.history.map((h) => h.bounty?.id);
+  /** The reference run, taking the first bounty on offer every wave. */
+  const hunting = (id: string, seed?: string) => {
+    const run = reference(id);
+    return playScript(content, id, { ...run, ...(seed ? { seed } : {}), plays: Array.from({ length: 12 }, (_, i) => ({ ...run.plays[i], bounty: 'first' })) });
+  };
+
+  it('offers three a wave in Scale or Fail, never the one taken last wave, and none in the design-first modes', () => {
+    const g = new Game(content, setup());
+    expect(g.state.bountyOffer).toHaveLength(3);
+    expect(new Set(g.state.bountyOffer).size).toBe(3);
+    const h = hunting('shortly');
+    const ids = h.state.history.map((x) => x.bounty?.id);
     expect(ids.every(Boolean)).toBe(true);
     for (let i = 1; i < ids.length; i++) expect(ids[i]).not.toBe(ids[i - 1]);
-    expect(playScript(content, 'pawprint', reference('pawprint')).state.history.some((h) => h.bounty)).toBe(false);
+    expect(playScript(content, 'pawprint', reference('pawprint')).state.bountyOffer).toEqual([]);
   });
 
-  it('pays cash and points (times the act) when met, nothing when missed', () => {
-    const g = playScript(content, 'shortly', reference('shortly'));
+  it('is taken once, before the deploy; a wave without one has none', () => {
+    const g = new Game(content, setup());
+    g.apply({ t: 'bounty', pick: 1 });
+    expect(g.state.bounty).toBeDefined();
+    expect(g.forecast().bountyOffer).toEqual([]);
+    expect(() => g.apply({ t: 'bounty', pick: 0 })).toThrow(/already took/);
+    expect(playScript(content, 'shortly', reference('shortly')).state.history.some((x) => x.bounty)).toBe(false);
+  });
+
+  it('pays cash and points (times the act) when met, and costs a quarter of its cash when missed', () => {
+    const g = hunting('shortly');
     const met = g.state.history.filter((h) => h.bounty?.met);
     const missed = g.state.history.filter((h) => h.bounty && !h.bounty.met);
     expect(met.length).toBeGreaterThan(0);
     expect(missed.length).toBeGreaterThan(0);
-    for (const h of missed) expect(h.bounty).toMatchObject({ cash: 0, points: 0 });
+    for (const h of missed) {
+      const def = content.bounties.find((b) => b.id === h.bounty!.id)!;
+      expect(h.bounty).toMatchObject({ cash: -Math.round(def.cash / 4), points: 0 });
+    }
     for (const h of met) {
       const def = content.bounties.find((b) => b.id === h.bounty!.id)!;
       expect(h.bounty).toMatchObject({ cash: def.cash, points: def.points * Math.ceil((h.wave + 1) / 4) });
     }
   });
 
-  it('draws a boss-only bounty only on a boss wave, and an incident bounty only with its incident', () => {
+  it('offers a boss-only bounty only on a boss wave, and an incident bounty only with its announced incident', () => {
     for (const id of ['shortly', 'snapshots', 'ping', 'drop']) {
       for (const seed of ['a', 'b', 'c']) {
-        const g = playScript(content, id, { ...reference(id), seed });
+        const g = hunting(id, seed);
         for (const h of g.state.history) {
           const def = content.bounties.find((b) => b.id === h.bounty?.id);
           if (def?.boss) expect(h.boss || !h.survived).toBe(true);
-          if (def?.event) expect(h.events.some((e) => content.events.find((x) => x.id === e.id)?.effect === def.event)).toBe(true);
+          if (def?.event) expect(h.events.some((e) => !e.surprise && content.events.find((x) => x.id === e.id)?.effect === def.event)).toBe(true);
         }
       }
     }
   });
 
-  it('shows in the forecast with what it pays this act', () => {
+  it('shows in the forecast with what each pays this act', () => {
     const f = new Game(content, setup()).forecast();
-    expect(f.bounty).toBeDefined();
-    expect(f.bounty!.pays.points).toBe(f.bounty!.points);
+    expect(f.bountyOffer).toHaveLength(3);
+    for (const b of f.bountyOffer) expect(b.pays.points).toBe(b.points);
   });
 });

@@ -9,6 +9,7 @@ value: 0.3
 duration: 3
 telegraph: One link is about to be on every phone in the country.
 counters: [hot-key-replication]
+then: cache-node-loss
 min-wave: 5
 ---
 

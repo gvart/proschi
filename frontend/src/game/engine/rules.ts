@@ -7,7 +7,7 @@ import type { Role } from './types';
  */
 
 /** Part of every leaderboard key: a new version starts new boards. */
-export const GAME_VERSION = 2;
+export const GAME_VERSION = 3;
 
 /** Samples of a wave (a month of traffic). */
 export const TICKS = 8;
@@ -69,9 +69,39 @@ export const SKIP_CARD_CASH = 100;
 export const REROLL_COST = 150;
 export const REROLL_STEP = 50;
 export const LOADTEST_COST = 100;
-/** Overtime for an on-call action. */
+/** Overtime for the on-call's extra replica. */
 export const ONCALL_COST = 200;
-export const ONCALL_PER_WAVE = 1;
+/** On-call attention a wave: every on-call action spends some. */
+export const ONCALL_PER_WAVE = 3;
+/** What each on-call action costs: attention, cash, and Trust (users notice a rate limit or a feature switched off). */
+export const ONCALL_ACTS = {
+  replica: { attention: 1, cash: ONCALL_COST, trust: 0 },
+  reboot: { attention: 1, cash: 100, trust: 0 },
+  warm: { attention: 1, cash: 150, trust: 0 },
+  ratelimit: { attention: 1, cash: 0, trust: 2 },
+  shed: { attention: 1, cash: 0, trust: 3 },
+} as const satisfies Record<string, { attention: number; cash: number; trust: number }>;
+/** A rate limit keeps this share of real traffic and turns every bot away. */
+export const RATE_LIMIT_KEEP = 0.85;
+
+/**
+ * Scale or Fail: a wave's real traffic is the forecast's within ± this share
+ * (a boss's wider), drawn from the seed, so a load test at the forecast is a
+ * guide and headroom is a choice.
+ */
+export const DEMAND_SPREAD = 0.12;
+export const DEMAND_SPREAD_BOSS = 0.2;
+/** Scale or Fail: from this wave, an incident drawn from the pool is unannounced with this chance. */
+export const SURPRISE_FROM_WAVE = 5;
+export const SURPRISE_CHANCE = 0.3;
+/** A right-sized wave gets this share of its cloud bill back. */
+export const LEAN_REFUND = 0.1;
+/** Bounties on offer each wave (take one or none), and the share of a missed bounty's cash it costs. */
+export const BOUNTY_OFFER = 3;
+export const BOUNTY_FORFEIT = 0.25;
+/** Cards of one topic that make a set, and the points each set adds (×1.1 for one). */
+export const SET_SIZE = 3;
+export const SET_BONUS = 0.1;
 export const HAND_SIZE = 10;
 
 /** Score: the uptime streak grows per clean tick and resets on any breach. */

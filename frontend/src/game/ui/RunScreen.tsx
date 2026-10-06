@@ -1,12 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Cat, Code2, FastForward, FileCode2, LayoutGrid, SquareTerminal, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX, Zap } from 'lucide-react';
+import { ArrowLeft, Cat, Code2, FastForward, FileCode2, LayoutGrid, SquareTerminal, FlaskConical, Pause, Play, Redo2, Rocket, SkipForward, Undo2, Volume2, VolumeX } from 'lucide-react';
 import { celebrate } from '../../design/celebrate';
 import { prefersReducedMotion } from '../../design/motion';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { canWire, cloneBoard, roleOf } from '../engine/board';
 import { compile } from '../engine/compile';
 import { Game, GameError, type TickResult } from '../engine/run';
-import { LOADTEST_COST, ONCALL_COST, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
+import { LOADTEST_COST, ONCALL_ACTS, SLOTS, WAVES, WIDE_SLOTS } from '../engine/rules';
 import type { Action, Board, GameContent, RunSetup } from '../engine/types';
 import GameCanvas from './GameCanvas';
 import { boardToDsl, dslToBoard } from '../engine/boardDsl';
@@ -22,7 +22,8 @@ import { BreachCard, Contracts, Draft, ForecastPanel, Hud, Inspector, Palette, W
 import Report from './Report';
 import { ChangesPanel, DiagnosisPanel, TicketCard } from './Modes';
 import { MascotBriefing, MASCOT } from './Mascot';
-import { BountyLine, BountyResult, MutatorChip, MutatorPicker } from './Twists';
+import { BountyChoice, BountyLine, BountyResult, MutatorChip, MutatorPicker } from './Twists';
+import { OncallBar } from './Oncall';
 import { briefing } from './briefing';
 import { buzz, play, setSound } from './sound';
 import { saveRun, type Settings } from './store';
@@ -544,10 +545,17 @@ export default function RunScreen(props: RunScreenProps) {
       <button type="button" className={outlineButton} onClick={skip}>
         <SkipForward size={14} aria-hidden="true" /> Skip
       </button>
-      <span className="text-xs sm:text-sm text-muted inline-flex items-center gap-1">
-        <Zap size={14} aria-hidden="true" /> On-call: {s.oncallLeft} left{narrow ? '' : ' (tap a node)'}
-      </span>
     </div>
+  );
+  const oncallBar = !planning && (
+    <OncallBar
+      game={game}
+      compact={narrow}
+      onAct={(act, useCase) => {
+        apply({ t: 'oncall', tick: s.tick, act, ...(useCase ? { useCase } : {}) });
+        play('cash');
+      }}
+    />
   );
   const feedback = (
     <>
@@ -598,14 +606,28 @@ export default function RunScreen(props: RunScreenProps) {
       }}
       oncall={
         !planning && components.has(node.component)
-          ? {
-              left: s.oncallLeft,
-              cost: ONCALL_COST,
-              onPage: () => {
-                apply({ t: 'oncall', tick: s.tick, node: node.id });
-                play('cash');
+          ? [
+              {
+                label: `+1 replica ($${ONCALL_ACTS.replica.cash})`,
+                disabled: s.oncallLeft < ONCALL_ACTS.replica.attention || s.cash < ONCALL_ACTS.replica.cash,
+                onClick: () => {
+                  apply({ t: 'oncall', tick: s.tick, node: node.id, act: 'replica' });
+                  play('cash');
+                },
               },
-            }
+              ...(shownTick?.nodes.find((n) => n.id === node.id)?.down && s.mitigation.reboot[node.id] === undefined
+                ? [
+                    {
+                      label: `Bring it back ($${ONCALL_ACTS.reboot.cash})`,
+                      disabled: s.oncallLeft < ONCALL_ACTS.reboot.attention || s.cash < ONCALL_ACTS.reboot.cash,
+                      onClick: () => {
+                        apply({ t: 'oncall', tick: s.tick, node: node.id, act: 'reboot' });
+                        play('cash');
+                      },
+                    },
+                  ]
+                : []),
+            ]
           : undefined
       }
     />
@@ -624,6 +646,12 @@ export default function RunScreen(props: RunScreenProps) {
           );
         })}
       </ul>
+      {mods.sets.length > 0 && (
+        <p className="mt-1 text-xs text-muted">
+          Sets: {mods.sets.join(', ')}: points ×{Number(mods.setBonus.toFixed(2))}
+        </p>
+      )}
+      {mods.sets.length === 0 && s.hand.length >= 2 && <p className="mt-1 text-xs text-muted">Three cards of one topic make a set: points ×1.1.</p>}
     </>
   );
   const tabs = (
@@ -772,6 +800,7 @@ export default function RunScreen(props: RunScreenProps) {
             </p>
           )}
           {forecast.bounty && <BountyLine bounty={forecast.bounty} />}
+          {forecast.bountyOffer.length > 0 && <BountyChoice offer={forecast.bountyOffer} onPick={(i) => apply({ t: 'bounty', pick: i })} />}
         </ForecastPanel>
       )}
       {planning && (
@@ -809,7 +838,10 @@ export default function RunScreen(props: RunScreenProps) {
                   </div>
                 </>
               ) : (
-                controls
+                <>
+                  {controls}
+                  {oncallBar}
+                </>
               )}
             </div>
           </div>
@@ -818,7 +850,12 @@ export default function RunScreen(props: RunScreenProps) {
         <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
           <div className="min-w-0 space-y-2">
             {boardView}
-            {planning ? (codeOnly ? typeInstead : palette) : controls}
+            {planning ? (codeOnly ? typeInstead : palette) : (
+              <>
+                {controls}
+                {oncallBar}
+              </>
+            )}
             {feedback}
           </div>
           <div className="min-w-0 space-y-3">
@@ -830,7 +867,7 @@ export default function RunScreen(props: RunScreenProps) {
                     ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
                     : planning
                     ? 'Pick a component below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
-                    : 'Watch the requests flow. Hot nodes turn yellow, then pink, then red. Tap a node to page the on-call for one more replica.'}
+                    : 'Watch the requests flow. Hot nodes turn yellow, then pink, then red. The on-call can rate-limit, warm the cache or switch a feature off below; tap a node for one more replica, or to bring a lost one back.'}
                 </p>
                 {hand}
               </div>

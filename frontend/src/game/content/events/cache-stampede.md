@@ -11,6 +11,7 @@ duration: 2
 telegraph: The cache cluster restarts for a version upgrade.
 counters: [request-coalescing]
 requires: [cache]
+then: db-failover
 min-wave: 4
 ---
 

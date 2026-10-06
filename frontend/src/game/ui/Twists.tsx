@@ -70,6 +70,30 @@ export function BountyLine({ bounty }: { bounty: NonNullable<Forecast['bounty']>
   );
 }
 
+/** The wave's bounties on offer: take one before deploying (a missed one costs part of its cash), or none. */
+export function BountyChoice({ offer, onPick }: { offer: Forecast['bountyOffer']; onPick: (i: number) => void }) {
+  return (
+    <div className="mt-2 rounded border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" role="group" aria-label="Bounties">
+      <p className="font-semibold">Take a bounty, or none. Met, it pays; missed, it costs a quarter of its cash.</p>
+      <ul className="mt-1 grid gap-1.5 sm:grid-cols-3">
+        {offer.map((b, i) => (
+          <li key={b.id}>
+            <button type="button" className="flex h-full w-full items-start gap-1.5 rounded border-bw-1 border-ink/40 bg-surface p-1.5 text-left hover:border-ink" onClick={() => onPick(i)} aria-label={`Take the bounty ${b.name}`}>
+              <IconTile name={b.icon} tone={BOUNTY_TILE} size="sm" />
+              <span>
+                <strong>{b.name}.</strong> {b.text}{' '}
+                <span className="text-muted">
+                  {usd(b.pays.cash)}, {b.pays.points.toLocaleString('en-US')} pts
+                </span>
+              </span>
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
 /** The bounty's outcome in the wave's debrief. */
 export function BountyResult({ result, def }: { result: NonNullable<WaveSummary['bounty']>; def?: BountyDef }) {
   return (
@@ -78,11 +102,13 @@ export function BountyResult({ result, def }: { result: NonNullable<WaveSummary[
       <div>
         <p className="font-semibold">
           Bounty {result.met ? 'claimed' : 'missed'}: {def?.name ?? result.id}
-          {result.met && (
+          {result.met ? (
             <span className="ml-1 font-mono text-pass">
               +{usd(result.cash)}, +{result.points.toLocaleString('en-US')} pts
             </span>
-          )}
+          ) : result.cash < 0 ? (
+            <span className="ml-1 font-mono text-fail">{usd(result.cash)}</span>
+          ) : null}
         </p>
         {def && <p className="text-xs text-muted">{def.text}</p>}
       </div>
