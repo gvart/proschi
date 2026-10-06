@@ -228,7 +228,8 @@ name, or, short of that, at least one of its `test` blocks (a requirement
 such as `survive any node failure` alone has too many causes to name one).
 Full matches win; then the design whose failures, all of them, are most like
 the run's (the page runs each wrong design once to know them); then the one
-sharing the most named failures. The page shows the best match only. The
+sharing the most named failures. The page shows the best match only, and
+nothing for a run of the untouched starter. The
 tests check that a run of each wrong design is matched to its own mistake,
 or to one of a design that fails exactly the same tests.
 
@@ -347,10 +348,13 @@ and, once solved, a link to the next one.
 Anyone can see the stages, but starting the roadmap takes an account: signed
 out, the page lists the problems without links and offers the sign-in buttons,
 and `practice/#/roadmap/<id>` shows the roadmap instead of the problem (sign-in
-returns to that address). The exception is `OPEN_STEPS` in `roadmapStages.ts`:
+returns to that address). The exception is `OPTIONAL_STEPS` in `roadmapStages.ts`:
 the first step, `hello-proschi`, a tutorial that teaches the language one
 idea per test (nodes, connections, a use case's request and response, the
-traffic, requirements, a replica), opens signed out too. The rule is `roadmapAccess` in `roadmap.ts`, the one
+traffic, requirements, a replica), opens signed out too. It is optional:
+recommended first to a learner who has solved nothing, but unsolved it locks
+no later step, keeps no stage from counting as complete and is in no badge's
+target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`, the one
 place to change when the roadmap moves behind a paid plan. A build without
 accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.

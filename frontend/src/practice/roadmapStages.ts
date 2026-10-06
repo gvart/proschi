@@ -16,10 +16,17 @@ export interface RoadmapStage {
 }
 
 /**
- * Roadmap steps open to everyone, signed in or not: the tutorial that teaches
- * the language comes before the roadmap asks for an account.
+ * Optional roadmap steps: the tutorial that teaches the language. It is shown
+ * first and recommended to a learner who has solved nothing yet, and it opens
+ * signed out, but unsolved it locks no later step, keeps no stage from
+ * counting as complete and is not part of any badge's target.
  */
-export const OPEN_STEPS: readonly string[] = ['hello-proschi'];
+export const OPTIONAL_STEPS: readonly string[] = ['hello-proschi'];
+
+/** The stages without the OPTIONAL_STEPS: what stage completion and badges count. */
+export function requiredStages<S extends { problems: string[] }>(stages: readonly S[]): S[] {
+  return stages.map((s) => ({ ...s, problems: s.problems.filter((id) => !OPTIONAL_STEPS.includes(id)) }));
+}
 
 export const ROADMAP: RoadmapStage[] = [
   {

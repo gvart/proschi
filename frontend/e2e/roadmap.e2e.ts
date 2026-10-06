@@ -17,14 +17,16 @@ test.describe('interview prep roadmap', () => {
     await expect(progress(page).getByText(/^0 of \d+ solved$/)).toBeVisible();
     await expect(progress(page)).toContainText('Current stage 1. Foundations');
 
-    // Only the first problem, the language tutorial, is open; the rest show a lock and what to solve first.
+    // The language tutorial comes first and is recommended, but optional: the first required problem is open
+    // too, and the rest show a lock and what to solve first.
     const foundations = stage(page, 'Foundations');
-    await expect(challenges(foundations)).toHaveCount(1);
+    await expect(challenges(foundations)).toHaveCount(2);
     await expect(foundations.getByRole('link', { name: /Hello, Proschi/ })).toBeVisible();
-    await expect(challenges(foundations).filter({ hasText: 'URL Shortener' })).toHaveCount(0);
-    const shortener = foundations.getByRole('listitem').filter({ hasText: 'URL Shortener' });
-    await expect(shortener.getByRole('img', { name: 'Locked' })).toBeVisible();
-    await expect(shortener).toContainText('Solve Hello, Proschi first');
+    await expect(foundations.getByRole('link', { name: /URL Shortener/ })).toBeVisible();
+    await expect(challenges(foundations).filter({ hasText: 'Pastebin' })).toHaveCount(0);
+    const pastebinStep = foundations.getByRole('listitem').filter({ hasText: 'Pastebin' });
+    await expect(pastebinStep.getByRole('img', { name: 'Locked' })).toBeVisible();
+    await expect(pastebinStep).toContainText('Solve URL Shortener first');
     await expect(challenges(stage(page, 'Caching and the edge'))).toHaveCount(0);
 
     // Start opens the first problem with the roadmap's banner.
@@ -72,8 +74,8 @@ test.describe('interview prep roadmap', () => {
     // The lesson of a locked step shows, disabled, with what unlocks it.
     const lesson = pastebin.getByRole('link', { name: 'Read the lesson: Pastebin, locked' });
     await expect(lesson).toHaveAttribute('aria-disabled', 'true');
-    await expect(lesson).toHaveAccessibleDescription('Locked: Solve Hello, Proschi first');
-    await expect(lesson).toHaveAttribute('title', 'Locked: Solve Hello, Proschi first');
+    await expect(lesson).toHaveAccessibleDescription('Locked: Solve URL Shortener first');
+    await expect(lesson).toHaveAttribute('title', 'Locked: Solve URL Shortener first');
     await expect(lesson).not.toHaveAttribute('href');
     await expect(lesson.locator('svg')).toHaveCount(1);
     await lesson.click({ force: true });
@@ -85,7 +87,7 @@ test.describe('interview prep roadmap', () => {
     for (const hash of ['#/roadmap/pastebin', '#/roadmap/pastebin/lesson']) {
       await page.goto(`practice/${hash}`);
       await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
-      await expect(page.getByRole('status').filter({ hasText: 'Pastebin is locked on the roadmap' })).toContainText('Solve Hello, Proschi first');
+      await expect(page.getByRole('status').filter({ hasText: 'Pastebin is locked on the roadmap' })).toContainText('Solve URL Shortener first');
       await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
     }
 

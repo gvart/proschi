@@ -2,7 +2,7 @@ import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from '
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { OPEN_STEPS, roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
+import { OPTIONAL_STEPS, roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
@@ -143,7 +143,7 @@ function StageSection({
   state: RoadmapState;
   problems: ProblemListing[];
   current: boolean;
-  /** Not started (signed out): every problem shows, none opens but the OPEN_STEPS (the tutorial), nor do their lessons. */
+  /** Not started (signed out): every problem shows, none opens but the OPTIONAL_STEPS (the tutorial), nor do their lessons. */
   preview: boolean;
   access: RoadmapAccess;
   lessons: Record<string, number>;
@@ -151,15 +151,17 @@ function StageSection({
   // A preview shows the problems without the viewer's progress.
   const steps = state.steps
     .filter((s) => s.stage === index)
-    .map((s) => (preview ? { ...s, status: 'todo' as const, locked: !(access === 'sign-in' && OPEN_STEPS.includes(s.id)) } : s));
-  const solved = steps.filter((s) => s.status === 'solved').length;
+    .map((s) => (preview ? { ...s, status: 'todo' as const, locked: !(access === 'sign-in' && OPTIONAL_STEPS.includes(s.id)) } : s));
+  // The header counts the required problems: an optional step (the tutorial) keeps no stage from completing.
+  const required = steps.filter((s) => !s.optional);
+  const solved = required.filter((s) => s.status === 'solved').length;
   return (
     <li aria-label={`Stage ${index + 1}: ${stage.title}`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="font-display text-xl font-bold text-ink">
           <span className="tabular-nums text-muted">{index + 1}.</span> {stage.title}
         </h2>
-        <span className="text-xs tabular-nums text-muted">{preview ? `${steps.length} problems` : `${solved} / ${steps.length}`}</span>
+        <span className="text-xs tabular-nums text-muted">{preview ? `${required.length} problems` : `${solved} / ${required.length}`}</span>
         {current && <span className="rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-xs font-bold text-on-accent">You are here</span>}
       </div>
       <p className="mt-1 max-w-2xl text-sm text-ink/80">{stage.why}</p>
@@ -173,7 +175,10 @@ function StageSection({
             <>
               {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
               <span className="flex-1 min-w-0">
-                <span className={`block font-display text-lg font-bold leading-tight ${step.locked ? 'text-ink/50' : 'text-ink'}`}>{title}</span>
+                <span className={`block font-display text-lg font-bold leading-tight ${step.locked ? 'text-ink/50' : 'text-ink'}`}>
+                  {title}
+                  {step.optional && <span className="ml-2 align-middle rounded-full border-bw-1 border-ink px-1.5 py-0.5 text-xs font-semibold text-muted">Optional</span>}
+                </span>
                 {minutes !== undefined && (
                   <span className="mt-0.5 flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
                     <BookOpen size={12} aria-hidden="true" />
@@ -181,7 +186,7 @@ function StageSection({
                     <span className="tabular-nums">· {minutes} min read</span>
                   </span>
                 )}
-                {step.locked && !preview && state.next && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.next.id)} first</span>}
+                {step.locked && !preview && state.blocker && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.blocker.id)} first</span>}
               </span>
               {p && <DifficultyBadge difficulty={p.difficulty} />}
             </>

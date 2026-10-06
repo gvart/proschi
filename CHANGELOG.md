@@ -21,7 +21,9 @@ deployed from `main` and ships with the same changes.
 - **Hello, Proschi**, a tutorial problem for the language: nodes,
   connections, a use case with its request and response, the traffic, a
   requirement, and a replica that fixes availability, one test per idea. It
-  is the first step of the roadmap and opens without signing in.
+  is the first step of the roadmap, recommended and open without signing in,
+  but optional: it locks nothing and stage completion and badges do not
+  count it.
 - **Hold the line**: in the Arcade a wave's run is no longer something you
   watch. Change the board while it runs and ship it live: scaling lands the
   next tick, new components and wires in two, and a cache that goes live

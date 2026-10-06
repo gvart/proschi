@@ -20,7 +20,7 @@ import { localActivity, localGoal } from '../activity';
 import { localChallengeStats } from '../challenge/store';
 import { challengeDay } from '../../learn/challenge';
 import { loadProgress, type Progress } from '../progress';
-import { ROADMAP, roadmapFor } from '../roadmap';
+import { ROADMAP, requiredStages, roadmapFor } from '../roadmap';
 import { CARDS_LOG_KEY, readReviews } from '../review/store';
 import { loadRunStats } from '../runStats';
 import { gameContent } from '../../game/content';
@@ -43,8 +43,9 @@ export const ACHIEVEMENTS_KEY = 'proschi.achievements';
 /** The catalog the rules look at: the problems this build has, and the roadmap's stages with them. */
 export const context: AchievementContext = {
   problems,
+  // Optional steps (the tutorial) are in no badge's target.
   stages: roadmapFor(
-    ROADMAP,
+    requiredStages(ROADMAP),
     problems.map((p) => p.id),
   ),
 };

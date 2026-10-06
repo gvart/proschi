@@ -208,14 +208,14 @@ test.describe('practice', () => {
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Hello, Proschi');
     await waitForCanvas(page);
 
-    // The starter fails every check, one per idea, and points at the name the traffic uses.
+    // The starter fails every check, one per idea; an untouched starter is no known mistake.
     const run = page.getByRole('button', { name: 'Run tests' });
     await run.click();
     await expect(passedCount(page)).toHaveText(/^0 \/ 6 passed/);
     for (const name of ['A service answers the user', 'Say hello answers with 200', 'The greeting is read from a database', 'Every component has a spare']) {
       await expect(page.locator('[data-tour="tests"]').getByText(name).first()).toBeVisible();
     }
-    await expect(page.getByRole('region', { name: 'Common mistake' })).toContainText('A use case name that does not match the traffic');
+    await expect(page.getByRole('region', { name: 'Common mistake' })).toHaveCount(0);
 
     page.on('dialog', (dialog) => dialog.accept());
     await page.getByRole('button', { name: 'Show reference solution' }).click();

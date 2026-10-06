@@ -297,7 +297,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               onSelect={goTo}
               review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
               mistake={
-                run && !run.result.blocked && !run.result.solved && problem.wrong?.length ? (
+                // Not for the untouched starter: it fails everything, so no one mistake describes it.
+                run && !run.result.blocked && !run.result.solved && problem.wrong?.length && run.source.trim() !== problem.starter.trim() ? (
                   <Suspense fallback={null}>
                     <MistakePanel problem={problem} engine={engine} results={run.result.results} onLesson={openLessonAt} />
                   </Suspense>
