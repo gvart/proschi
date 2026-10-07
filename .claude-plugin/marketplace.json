@@ -1,0 +1,18 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "proschi",
+  "description": "Agent skills for Proschi, architecture diagrams as text with a simulation: model existing systems, write request flows from code, plan capacity, review designs and keep diagrams in sync.",
+  "owner": {
+    "name": "gvart",
+    "url": "https://github.com/gvart"
+  },
+  "plugins": [
+    {
+      "name": "proschi",
+      "source": "./",
+      "description": "Skills that turn infrastructure, code and docs into checked Proschi architecture models: infra-to-proschi, code-to-usecases, proschi-capacity-plan, proschi-design-review, proschi-keep-in-sync, proschi-hld-doc.",
+      "category": "development",
+      "tags": ["architecture", "diagrams", "system-design", "simulation"]
+    }
+  ]
+}

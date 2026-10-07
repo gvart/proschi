@@ -38,6 +38,12 @@
       "description": "Share a Proschi diagram as a link, as a short link with a preview image, or embed it read-only in a blog post, a wiki or docs with an iframe or oEmbed."
     },
     {
+      "slug": "agents",
+      "title": "Agent skills",
+      "source": "AGENT-SKILLS.md",
+      "description": "Skills for Claude Code, Codex, Cursor, Copilot and Gemini CLI that turn docs, Terraform, Kubernetes, docker-compose and code into checked Proschi diagrams."
+    },
+    {
       "slug": "numbers",
       "title": "Numbers to know",
       "source": "NUMBERS.md",
@@ -96,7 +102,8 @@
         { "page": "editors", "anchor": "formatting", "label": "Formatting" },
         { "page": "editors", "anchor": "checking-against-openapi", "label": "OpenAPI" },
         { "page": "editors", "anchor": "rendering-and-export", "label": "Export" },
-        { "page": "sharing", "label": "Sharing and embedding" }
+        { "page": "sharing", "label": "Sharing and embedding" },
+        { "page": "agents", "label": "Agent skills" }
       ]
     },
     {

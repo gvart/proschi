@@ -10,6 +10,19 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Agent skills.** Six skills in the open Agent Skills format (`skills/`)
+  teach AI coding agents to turn what a repository already has into Proschi
+  and check it: `infra-to-proschi` (docs, Mermaid, Terraform,
+  CloudFormation, CDK, Kubernetes, Helm, docker-compose), `code-to-usecases`
+  (routes, handlers, consumers and clients, or an OpenAPI spec, to use
+  cases with failure scenarios), `proschi-capacity-plan`,
+  `proschi-design-review`, `proschi-keep-in-sync` (architecture drift in a
+  pull request) and `proschi-hld-doc`. Each validates with `proschi check`
+  and `test` until clean and ends with a share link. In Claude Code the
+  repository is a plugin marketplace: `/plugin marketplace add gvart/proschi`,
+  then `/plugin install proschi@proschi`; for Codex, Cursor, Copilot and
+  Gemini CLI, `npx degit gvart/proschi/skills .agents/skills` and one line in
+  the agent's instructions file. See the new *Agent skills* docs page.
 - **Three new practice problems**, each with a lesson, hints, an interview
   mode and five known mistakes: **Web Crawler** (a durable frontier,
   per-host politeness and a Bloom filter for seen URLs; in *Queues and async
