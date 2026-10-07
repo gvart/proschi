@@ -1,8 +1,8 @@
 package app.proschi.jetbrains
 
 import com.intellij.ide.FileIconProvider
-import com.intellij.ide.plugins.PluginManager
-import com.intellij.openapi.extensions.PluginId
+import com.intellij.openapi.extensions.PluginAware
+import com.intellij.openapi.extensions.PluginDescriptor
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VirtualFile
@@ -41,10 +41,16 @@ class ProschiFileIconProvider : FileIconProvider {
  * `source.proschi` grammar and brings the language configuration: brackets,
  * auto-closing pairs and `#` line comments.
  */
-class ProschiTextMateBundleProvider : TextMateBundleProvider {
+class ProschiTextMateBundleProvider : TextMateBundleProvider, PluginAware {
+    /** Set by the platform when it creates the extension; the public way to find the plugin's own directory. */
+    private var plugin: PluginDescriptor? = null
+
+    override fun setPluginDescriptor(pluginDescriptor: PluginDescriptor) {
+        plugin = pluginDescriptor
+    }
+
     override fun getBundles(): List<PluginBundle> {
-        val dir = PluginManager.getInstance().findEnabledPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath?.resolve("textmate/proschi")
-            ?: return emptyList()
+        val dir = plugin?.pluginPath?.resolve("textmate/proschi") ?: return emptyList()
         return if (Files.isDirectory(dir)) listOf(PluginBundle("Proschi", dir)) else emptyList()
     }
 }

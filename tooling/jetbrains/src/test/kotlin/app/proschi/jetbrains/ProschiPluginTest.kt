@@ -2,7 +2,9 @@ package app.proschi.jetbrains
 
 import app.proschi.jetbrains.lsp.ProschiLspServerDescriptor
 import app.proschi.jetbrains.settings.ProschiSettings
+import com.intellij.openapi.extensions.ExtensionPointName
 import com.intellij.testFramework.fixtures.BasePlatformTestCase
+import org.jetbrains.plugins.textmate.api.TextMateBundleProvider
 import java.nio.file.Files
 
 /** Runs inside a headless IDE with the plugin loaded from the test sandbox. */
@@ -31,7 +33,8 @@ class ProschiPluginTest : BasePlatformTestCase() {
     }
 
     fun testTextMateBundleShipsWithThePlugin() {
-        val bundles = ProschiTextMateBundleProvider().getBundles()
+        val provider = ExtensionPointName.create<TextMateBundleProvider>("com.intellij.textmate.bundleProvider").extensionList.filterIsInstance<ProschiTextMateBundleProvider>().single()
+        val bundles = provider.getBundles()
         assertEquals(1, bundles.size)
         val dir = bundles.single().path
         assertTrue(Files.isRegularFile(dir.resolve("package.json")))
