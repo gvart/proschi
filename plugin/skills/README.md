@@ -37,15 +37,15 @@ versions. Or copy the folders by hand, for yourself or for one project
 (commit `.claude/skills/` to share them with your team):
 
 ```sh
-npx degit --force gvart/proschi/skills ~/.claude/skills     # every project
-npx degit --force gvart/proschi/skills .claude/skills       # this project only
+npx degit --force gvart/proschi/plugin/skills ~/.claude/skills     # every project
+npx degit --force gvart/proschi/plugin/skills .claude/skills       # this project only
 ```
 
 **Codex, Cursor, Copilot, Gemini CLI and other agents**: put the skills in
 the repository, then point the agent's instructions file at them:
 
 ```sh
-npx degit gvart/proschi/skills .agents/skills
+npx degit gvart/proschi/plugin/skills .agents/skills
 ```
 
 | Agent | Add to | Line to add |
@@ -58,7 +58,7 @@ npx degit gvart/proschi/skills .agents/skills
 Agents that support Agent Skills natively load `.agents/skills/` (or their
 own skills folder) without the extra line; check your agent's docs.
 
-Without `degit`: `git clone --depth 1 https://github.com/gvart/proschi /tmp/proschi && cp -R /tmp/proschi/skills .agents/skills`.
+Without `degit`: `git clone --depth 1 https://github.com/gvart/proschi /tmp/proschi && cp -R /tmp/proschi/plugin/skills .agents/skills`.
 
 ## Editing the skills
 

@@ -89,7 +89,7 @@ test "Notes are stored before they are returned" {
 | Language reference | [docs/LANGUAGE.md](docs/LANGUAGE.md) |
 | Editor support, CLI, CI | [docs/EDITORS.md](docs/EDITORS.md) |
 | GitHub Action | [`gvart/proschi/action`](docs/EDITORS.md#github-action) |
-| Agent skills (Claude Code, Codex, Cursor, …) | [skills/](skills/README.md) |
+| Agent skills (Claude Code, Codex, Cursor, …) | [plugin/skills/](plugin/skills/README.md) |
 | Contributing (problems, cards, code) | [CONTRIBUTING.md](CONTRIBUTING.md) |
 | Writing practice problems | [docs/PRACTICE.md](docs/PRACTICE.md) |
 | Design: HLDs and the practice platform | [docs/design/hld-and-practice.md](docs/design/hld-and-practice.md) |
@@ -116,7 +116,7 @@ For VS Code, download `proschi-<version>.vsix` from the
 
 ## Agent skills
 
-[Skills](skills/README.md) for AI coding agents turn your docs, Mermaid,
+[Skills](plugin/skills/README.md) for AI coding agents turn your docs, Mermaid,
 Terraform, Kubernetes, docker-compose and code into Proschi models, plan
 capacity, review designs and keep diagrams in sync with pull requests. Each
 one checks its output with `proschi check` and `test` and ends with a share
@@ -131,7 +131,7 @@ link.
 ```sh
 # Codex, Cursor, Copilot, Gemini CLI, …: copy them, then point AGENTS.md
 # (or .cursor/rules, .github/copilot-instructions.md, GEMINI.md) at .agents/skills/*/SKILL.md
-npx degit gvart/proschi/skills .agents/skills
+npx degit gvart/proschi/plugin/skills .agents/skills
 ```
 
 Details for each agent: [Agent skills](docs/AGENT-SKILLS.md).

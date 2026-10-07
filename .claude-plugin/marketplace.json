@@ -9,7 +9,7 @@
   "plugins": [
     {
       "name": "proschi",
-      "source": "./",
+      "source": "./plugin",
       "description": "Skills that turn infrastructure, code and docs into checked Proschi architecture models: infra-to-proschi, code-to-usecases, proschi-capacity-plan, proschi-design-review, proschi-keep-in-sync, proschi-hld-doc.",
       "category": "development",
       "tags": ["architecture", "diagrams", "system-design", "simulation"]

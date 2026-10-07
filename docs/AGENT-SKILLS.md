@@ -7,7 +7,7 @@ Terraform, Kubernetes, docker-compose, application code, OpenAPI specs) into
 a Proschi model, checks it with the [`proschi` CLI](EDITORS.md#install) until
 it is clean, and gives you a link that opens it in the editor.
 
-The skills are in [`skills/`](../skills/) in the open
+The skills are in [`plugin/skills/`](../plugin/skills/) in the open
 [Agent Skills](https://agentskills.io) format: one folder per skill with a
 `SKILL.md` and a one-page cheat-sheet of the language.
 
@@ -41,8 +41,8 @@ Without the plugin, copy the skills into your personal or project skills
 folder (commit `.claude/skills/` to share them with your team):
 
 ```sh
-npx degit --force gvart/proschi/skills ~/.claude/skills     # every project
-npx degit --force gvart/proschi/skills .claude/skills       # this project only
+npx degit --force gvart/proschi/plugin/skills ~/.claude/skills     # every project
+npx degit --force gvart/proschi/plugin/skills .claude/skills       # this project only
 ```
 
 ## Codex, Cursor, Copilot, Gemini CLI and others
@@ -50,7 +50,7 @@ npx degit --force gvart/proschi/skills .claude/skills       # this project only
 Copy the skills into the repository:
 
 ```sh
-npx degit gvart/proschi/skills .agents/skills
+npx degit gvart/proschi/plugin/skills .agents/skills
 ```
 
 Then add one line to the agent's instructions file, so it knows where they
@@ -69,7 +69,7 @@ For architecture diagrams (.proschi files), follow the matching skill in .agents
 
 Agents with native Agent Skills support load the folders without that line;
 see your agent's documentation for the folder it reads. Without `degit`:
-`git clone --depth 1 https://github.com/gvart/proschi /tmp/proschi && cp -R /tmp/proschi/skills .agents/skills`.
+`git clone --depth 1 https://github.com/gvart/proschi /tmp/proschi && cp -R /tmp/proschi/plugin/skills .agents/skills`.
 
 ## What to ask
 

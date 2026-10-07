@@ -5,13 +5,13 @@ import { describe, expect, it } from 'vitest';
 import { run } from '../src/cli';
 
 /**
- * The agent skills in skills/ (Agent Skills format) and the Claude Code
+ * The agent skills in plugin/skills/ (Agent Skills format) and the Claude Code
  * plugin marketplace that ships them (.claude-plugin/). Agents copy the
  * skills' examples, so every full ```proschi example must be clean,
  * canonical and pass its own tests.
  */
 const root = new URL('../../', import.meta.url).pathname;
-const skillsDir = join(root, 'skills');
+const skillsDir = join(root, 'plugin', 'skills');
 const skills = readdirSync(skillsDir).filter((d) => statSync(join(skillsDir, d)).isDirectory());
 
 async function cli(argv: string[]) {
@@ -75,11 +75,11 @@ describe('agent skills', () => {
 
 describe('Claude Code plugin marketplace', () => {
   const marketplace = JSON.parse(readFileSync(join(root, '.claude-plugin', 'marketplace.json'), 'utf8'));
-  const plugin = JSON.parse(readFileSync(join(root, '.claude-plugin', 'plugin.json'), 'utf8'));
+  const plugin = JSON.parse(readFileSync(join(root, 'plugin', '.claude-plugin', 'plugin.json'), 'utf8'));
 
-  it('lists the proschi plugin at the repository root, whose skills are skills/', () => {
+  it('lists the proschi plugin in plugin/, whose skills are plugin/skills/', () => {
     expect(marketplace).toMatchObject({ name: 'proschi', owner: { name: expect.any(String) } });
-    expect(marketplace.plugins).toEqual([expect.objectContaining({ name: plugin.name, source: './' })]);
+    expect(marketplace.plugins).toEqual([expect.objectContaining({ name: plugin.name, source: './plugin' })]);
     expect(plugin.name).toBe('proschi');
   });
 });
