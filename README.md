@@ -66,10 +66,12 @@ test "Notes are stored before they are returned" {
   devices, see each problem's solve rate, compare your design's cost and p99
   with other solvers', and join the leaderboard; the server re-runs the tests
   before it records a solve. See [the backend](backend/README.md).
-- **CLI, LSP and VS Code**: `proschi check`, `fmt`, `render`, `test`,
-  `analyze` and `problem` for CI; a language server for any LSP editor; a VS
-  Code extension with a diagram preview. Use case steps can also be checked
-  against OpenAPI specs. See [editor support](docs/EDITORS.md).
+- **CLI, LSP, VS Code and JetBrains**: `proschi check`, `fmt`, `render`,
+  `test`, `analyze` and `problem` for CI; a language server for any LSP
+  editor; a VS Code extension with a diagram preview, and a plugin for
+  JetBrains IDEs ([tooling/jetbrains](tooling/jetbrains/README.md)). Use case
+  steps can also be checked against OpenAPI specs. See
+  [editor support](docs/EDITORS.md).
 - **GitHub Action**: `uses: gvart/proschi/action@<tag>` checks and tests your
   diagrams and keeps one comment on each pull request with every changed
   diagram's tests, cost and p99, and a link that opens it in the editor. See

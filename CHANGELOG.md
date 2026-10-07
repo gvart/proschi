@@ -71,6 +71,15 @@ deployed from `main` and ships with the same changes.
   for a file, with the files it imports.
 - **The VS Code extension is published to the VS Code Marketplace and Open
   VSX** on each tooling release, with an icon and a screenshot.
+- **A plugin for JetBrains IDEs** (IntelliJ IDEA, WebStorm, PyCharm and the
+  others, 2025.3 and newer), in `tooling/jetbrains`: highlighting from the
+  TextMate grammar, the language server through the IDE's built-in LSP
+  client (errors as you type, quick fixes, completion, hover, go to
+  definition, find usages, structure, Reformat Code), *Check File*, *Run
+  Tests*, a diagram preview tool window and *Open in Proschi*, with a
+  settings page for the server, CLI and Node.js paths. Not on the JetBrains
+  Marketplace yet; build it with `./gradlew buildPlugin` (see
+  [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
 - **One daily streak for any daily practice.** The daily goal is now met by
   your cards for the day, a solved problem, the daily challenge or a
   finished Arcade run (played to the end, not just started), with freezes

@@ -35,6 +35,12 @@ Open VSX access token, with the namespace `gvart` created once); while a
 secret is missing, its step is skipped with a notice. The tag also pins the
 [GitHub Action](#github-action).
 
+The JetBrains plugin is released on its own: bump `pluginVersion` in
+`tooling/jetbrains/gradle.properties`, merge, and push the tag
+`jetbrains-v<version>`. The *JetBrains plugin* workflow signs it and publishes
+it to the JetBrains Marketplace once its secrets are set up (see
+[tooling/jetbrains/README.md](https://github.com/gvart/proschi/blob/main/tooling/jetbrains/README.md)).
+
 ## Install
 
 The command-line tool and the language server are the `proschi` package on
@@ -67,7 +73,32 @@ the grammar and the language server; nothing else is needed.
 
 ## IntelliJ IDEA and other JetBrains IDEs
 
-Works in Community and Ultimate editions.
+### The Proschi plugin
+
+`tooling/jetbrains` is a plugin for JetBrains IDEs 2025.3 and newer
+(IntelliJ IDEA in the free and paid tiers, WebStorm, PyCharm, GoLand and the
+others). It is not on the JetBrains Marketplace yet. To build it, run
+`./gradlew buildPlugin` (JDK 21), then *Settings → Plugins → ⚙ → Install
+Plugin from Disk…* and pick the zip in `build/distributions/`. It brings:
+
+- highlighting, bracket matching and comment toggling from the TextMate grammar;
+- the language server through the IDE's built-in LSP client: errors and
+  warnings as you type, quick fixes, completion, hover, go to definition,
+  find usages, *Structure*, and formatting with *Reformat Code*;
+- *Tools → Proschi*: *Check File*, *Run Tests*, *Show Diagram Preview* (renders
+  each time you save) and *Open in Proschi* (the web editor with the diagram
+  in the link).
+
+It needs Node.js 18 or newer. It runs `proschi-language-server` and `proschi`
+from PATH (`npm install -g proschi`), or else through `npx`. You can set the
+paths in *Settings → Languages & Frameworks → Proschi*. See
+[tooling/jetbrains/README.md](https://github.com/gvart/proschi/blob/main/tooling/jetbrains/README.md)
+for how it works.
+
+### Without the plugin (LSP4IJ)
+
+For IntelliJ IDEA open-source builds, Android Studio or IDE versions before
+2025.3, which the plugin doesn't support:
 
 1. **Highlighting.** Unzip `proschi.vsix` (it is a zip file), then
    *Settings → Editor → TextMate Bundles → +* and pick its `extension` folder.
