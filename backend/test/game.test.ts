@@ -21,7 +21,13 @@ function play(setup: RunSetup, tamper?: (actions: Action[]) => Action[]): { acti
   const game = new Game(gameContent(), setup);
   const s = game.state;
   for (let guard = 0; s.phase !== 'over' && guard < 1000; guard++) {
-    if (s.phase === 'plan') game.apply({ t: 'deploy', board: s.board });
+    if (s.phase === 'plan') {
+      // An On-call wave takes a root cause before its fix: name the first one, as the engine's check does.
+      const diagnosis = game.waveDef().diagnosis;
+      if (diagnosis && !s.diagnosis) game.apply({ t: 'diagnose', pick: diagnosis.options[0].id });
+      // A wrong root cause can end the run there and then.
+      if (s.phase === 'plan') game.apply({ t: 'deploy', board: s.board });
+    }
     else if (s.phase === 'run') game.advance();
     else if (s.phase === 'draft') game.apply({ t: 'pick', card: null });
     else if (s.phase === 'contract') game.apply({ t: 'contract', pick: null });
@@ -30,6 +36,16 @@ function play(setup: RunSetup, tamper?: (actions: Action[]) => Action[]): { acti
   const actions = tamper ? tamper(s.log) : s.log;
   return { actions, score: s.score };
 }
+
+describe('the test helper', () => {
+  // The daily run's scenario changes every day; play() must finish any of them, or the daily tests fail on some days.
+  it('plays every scenario to the end', () => {
+    for (const { id } of gameContent().scenarios) {
+      const { actions } = play({ scenario: id, seed: 'helper', ascension: 0, mode: 'normal', loadout: { unlocked: [], perks: {} } });
+      expect(actions.length, id).toBeGreaterThan(0);
+    }
+  });
+});
 
 async function start(token: string, body: unknown) {
   const response = await call('/api/game/runs', { method: 'POST', token, body });

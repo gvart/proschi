@@ -4,3 +4,4 @@ node_modules
 src/problems.gen.ts
 src/cards.gen.ts
 src/game.gen.ts
+email-previews/

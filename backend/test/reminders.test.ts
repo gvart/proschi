@@ -6,6 +6,8 @@ import { SESSION_COOKIE } from '../src/auth';
 import { hourlyCron } from '../src/cron';
 import type { Env } from '../src/env';
 import worker from '../src/index';
+import { allCards, cardTopics } from '../src/cards';
+import { confirmationEmail, reminderEmail } from '../src/emails';
 import { confirmToken, localTime, sendReminders } from '../src/reminders';
 import { ORIGIN, resetDatabase, signedInUser } from './helpers';
 
@@ -168,7 +170,7 @@ describe('the hourly reminders', () => {
     expect(await sendReminders(mail.env, t)).toBe(1);
     const email = mail.sent[0];
     expect(email.to).toBe(`${id}@example.com`);
-    expect(email.subject).toBe('Your 1-day streak ends tonight');
+    expect(email.subject).toBe("🔥 Day 1 streak — don't let it go out");
     expect(email.text).toContain('https://proschi.app/practice/#/review');
     expect(email.text).toContain('streak reminders');
     expect(email.html).toContain('Unsubscribe');
@@ -207,7 +209,7 @@ describe('the hourly reminders', () => {
     await solveOn(done.id, addDays(today, -1), 'a');
     await solveOn(done.id, today, 'b');
     expect(await sendReminders(mail.env, t)).toBe(1);
-    expect(mail.sent[0]).toMatchObject({ to: `${many.id}@example.com`, subject: '5 cards are due for review' });
+    expect(mail.sent[0]).toMatchObject({ to: `${many.id}@example.com`, subject: '🧠 5 cards are due — review before they fade' });
   });
 
   it('sends at most one email a day, and respects the per-type switches', async () => {
@@ -246,6 +248,8 @@ describe('the hourly reminders', () => {
     expect(await sendReminders(mail.env, t + 2 * DAY)).toBe(1);
     expect(await sendReminders(mail.env, t + 3 * DAY)).toBe(1);
     expect(mail.sent[3].text).toContain('we paused your reminders');
+    expect(mail.sent[3].subject).toBe('💤 We paused your Proschi reminders');
+    expect(mail.sent[3].text).toContain('https://proschi.app/practice/#/me');
     expect(mail.sent[2].text).not.toContain('paused');
     expect((await row(id))!.paused_at).not.toBeNull();
     expect(await sendReminders(mail.env, t + 4 * DAY)).toBe(0);
@@ -270,7 +274,7 @@ describe('the hourly reminders', () => {
     await prefs(quiet.id, 'UTC');
     await solveOn(id, addDays(day, -3));
     expect(await sendReminders(mail.env, t)).toBe(1);
-    expect(mail.sent[0]).toMatchObject({ to: `${id}@example.com`, subject: 'Your Proschi week: 1 goal day' });
+    expect(mail.sent[0]).toMatchObject({ to: `${id}@example.com`, subject: '📊 Your Proschi week: 1 goal day' });
     expect(mail.sent[0].text).toContain('1 problem solved');
     expect(mail.sent[0].text).toContain('weekly recap');
   });
@@ -316,5 +320,111 @@ describe('unsubscribing, export and deletion', () => {
     expect(JSON.stringify(data)).not.toContain(`unsub-${id}`);
     expect((await callWith(mail.env, '/api/me', { method: 'DELETE', token })).status).toBe(204);
     expect(await row(id)).toBeNull();
+  });
+});
+
+/** Every URL an email's HTML could load or link: attributes, CSS url()s and bare http(s) URLs. */
+function urlsIn(html: string): string[] {
+  const found = [
+    ...[...html.matchAll(/\b(?:href|src|background|action|poster|srcset)\s*=\s*["']([^"']*)["']/gi)].map((m) => m[1]),
+    ...[...html.matchAll(/url\(\s*['"]?([^'")]+)/gi)].map((m) => m[1]),
+    ...[...html.matchAll(/\bhttps?:\/\/[^\s"'<>)]+/gi)].map((m) => m[0]),
+  ];
+  return found.map((u) => u.replace(/&amp;/g, '&'));
+}
+
+describe('the emails themselves', () => {
+  const origin = 'https://proschi.app';
+  const unsubscribeUrl = `${origin}/api/email/unsubscribe?token=tok-123`;
+  const recap = { start: '2026-09-28', end: '2026-10-04', reviews: 40, newCards: 5, solves: 2, challenges: 3, runs: 1, goalDays: 5, streak: 9 };
+  const reminders = {
+    streak: reminderEmail('streak', { streak: { current: 6, today: { day: '2026-10-06', reviews: 2, solves: 0 } }, goal: { reviews: 10, solves: 1 } }, { origin, unsubscribeUrl }),
+    cards: reminderEmail('cards', { due: 12, topics: ['Caching', 'Queues'] }, { origin, unsubscribeUrl }),
+    recap: reminderEmail('recap', { recap }, { origin, unsubscribeUrl }),
+    paused: reminderEmail('cards', { due: 7 }, { origin, unsubscribeUrl, paused: true }),
+  };
+  const all = { confirmation: confirmationEmail(`${origin}/api/email/confirm?token=abc`), ...reminders };
+
+  it('each has a subject, an HTML body and a complete plain-text body', () => {
+    for (const [name, email] of Object.entries(all)) {
+      expect(email.subject, name).toBeTruthy();
+      expect(email.html, name).toMatch(/^<!doctype html>/);
+      expect(email.html, name).toContain(`<title>${email.subject.replace(/'/g, '&#39;')}</title>`);
+      expect(email.text.length, name).toBeGreaterThan(100);
+      expect(email.text, name).not.toMatch(/<[a-z/!]/i);
+      expect(email.text, name).toContain('https://proschi.app/');
+    }
+    expect(all.confirmation.text).toContain('https://proschi.app/api/email/confirm?token=abc');
+    expect(all.confirmation.text).toContain('two days');
+    expect(reminders.streak.text).toContain('6-day streak');
+    expect(reminders.streak.text).toContain('Do the last 8 cards (5 min): https://proschi.app/practice/#/review');
+    expect(reminders.streak.text).toContain('Kernel');
+    expect(reminders.cards.text).toContain('From: Caching, Queues');
+    expect(reminders.cards.text).toContain('Review now: https://proschi.app/practice/#/review');
+    for (const stat of ['Reviews: 40', 'Solves: 2', 'Challenges: 3', 'Arcade runs: 1', 'Goal days: 5/7', 'Day streak: 9']) expect(reminders.recap.text).toContain(stat);
+    expect(reminders.recap.text).toContain('Keep going: https://proschi.app/practice/#/review');
+    expect(reminders.paused.text).toContain('we paused your reminders');
+  });
+
+  it('each reminder has the unsubscribe link and the account page link, in both bodies', () => {
+    for (const [name, email] of Object.entries(reminders)) {
+      expect(email.text, name).toContain(`Unsubscribe from all Proschi emails: ${unsubscribeUrl}`);
+      expect(email.html, name).toContain(`href="${unsubscribeUrl}"`);
+      expect(email.html, name).toContain('href="https://proschi.app/practice/#/me"');
+      expect(email.text, name).toContain('You got this because');
+    }
+  });
+
+  it('loads nothing and links nowhere but proschi.app', () => {
+    for (const [name, email] of Object.entries(all)) {
+      const urls = urlsIn(email.html);
+      expect(urls.length, name).toBeGreaterThan(0);
+      for (const url of urls) expect(url, name).toMatch(/^https:\/\/proschi\.app\//);
+      expect(email.html, name).not.toMatch(/<(img|link|script|iframe)\b/i);
+      expect(email.html, name).not.toMatch(/@import|@font-face/i);
+    }
+  });
+
+  it('escapes what it shows', () => {
+    const email = reminderEmail('cards', { due: 6, topics: ['<b>x</b>'] }, { origin, unsubscribeUrl: `${origin}/api/email/unsubscribe?token=a"b` });
+    expect(email.html).not.toContain('<b>x</b>');
+    expect(email.html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(email.html).not.toContain('token=a"b');
+  });
+});
+
+describe('what the reminders and pages show', () => {
+  beforeEach(resetDatabase);
+
+  it("names the due cards' topics in a cards-due reminder", async () => {
+    const mail = fakeMail();
+    const t = nowS();
+    const { id } = await signedInUser();
+    await prefs(id, zoneAt(19, t));
+    const picked = [...allCards().values()].filter((c) => !c.retired).slice(0, 6);
+    await env.DB.batch(
+      picked.map((c) =>
+        env.DB.prepare(
+          'INSERT INTO card_state (user_id, card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at) VALUES (?, ?, 1, ?, 1, 5, 1, 0, 0)',
+        ).bind(id, c.id, t - 3600),
+      ),
+    );
+    expect(await sendReminders(mail.env, t)).toBe(1);
+    const title = cardTopics().find((topic) => topic.id === picked[0].topic)!.title;
+    expect(mail.sent[0].text).toContain(`From: ${title}`);
+  });
+
+  it('the confirm and unsubscribe pages keep their strict CSP: no scripts, nothing external', async () => {
+    const mail = fakeMail();
+    const { id } = await signedInUser();
+    await prefs(id, 'UTC');
+    const response = await callWith(mail.env, `/api/email/unsubscribe?token=unsub-${id}`);
+    const csp = response.headers.get('Content-Security-Policy')!;
+    expect(csp).toContain("default-src 'none'");
+    expect(csp).not.toContain('script-src');
+    const html = await response.text();
+    expect(html).toContain('Kernel');
+    expect(html).not.toMatch(/<(script|img|link)\b/i);
+    expect(html).not.toMatch(/https?:\/\//);
   });
 });

@@ -399,6 +399,15 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **Reminder emails with some attitude.** The confirmation, streak, cards-due,
+  weekly recap and reminders-paused emails now look like the site: a chunky
+  wordmark, a colour of their own per email, thick ink borders, hard
+  shadows, a big number (your streak, the cards due) or a stat grid (the
+  recap), a big button, and a one-liner from Kernel the cat SRE. The
+  cards-due email names the topics most of the cards are from. Subjects got
+  livelier ("🔥 Day 6 streak — don't let it go out") and every email has
+  preview text. The plain-text part carries the same content, and the
+  confirm and unsubscribe pages got the same look.
 - **Scale or Fail's home sorts the scenarios in two.** The Scale or Fail
   scenarios (Shortly and what it opens) come first, as their own chain; the
   four design-first scenarios (Pawprint, Dinnerbell, Monolith and Runway)
