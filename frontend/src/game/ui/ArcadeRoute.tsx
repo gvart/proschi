@@ -9,9 +9,9 @@ import { eyebrow, outlineButton, primaryButton } from '../../components/Playgrou
 import { gameContent } from '../content';
 import { maxAscension, scenarioOpen, shop, twistsOpen, type ShopItem } from '../engine/meta';
 import { ASCENSIONS, ascensionRules } from '../engine/rules';
-import type { Action, RunSetup } from '../engine/types';
+import type { Action, RunSetup, ScenarioDef } from '../engine/types';
 import { IconTile } from './gameIcons';
-import { COMPONENT_TILE, FEATURE_ICON, FEATURE_TILE, ICON, MODE_ICON, MODE_LABEL, PERK_TILE, RARITY_TILE } from './visual';
+import { COMPONENT_TILE, FEATURE_ICON, FEATURE_TILE, ICON, MODE_BLURB, MODE_ICON, MODE_LABEL, PERK_TILE, RARITY_TILE } from './visual';
 import { Modal } from './Panels';
 import RunScreen from './RunScreen';
 import { loadRun, loadSettings, saveRun, saveSettings, type Settings } from './store';
@@ -19,9 +19,10 @@ import { useArcade } from './useArcade';
 import './arcade.css';
 
 /**
- * The Arcade tab of Interview prep (`#/arcade`): Scale or Fail. The home
- * screen has today's daily run, the scenarios (locked ones say what opens
- * them, cleared ones offer the next difficulty), the shop where Blueprints
+ * The Arcade tab of the practice hub (`#/arcade`): Scale or Fail. The home
+ * screen has today's daily run, the Scale or Fail scenarios (locked ones say
+ * what opens them, cleared ones offer the next difficulty), the design
+ * challenges (one scenario per design-first mode), the shop where Blueprints
  * buy components, cards and perks, and the leaderboards. A run in progress
  * survives a reload. `#/arcade/daily` (the link in a shared daily run)
  * opens on today's daily run.
@@ -110,6 +111,57 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
   const daily = content.scenarios.find((s) => s.id === arcade.daily.scenario);
   const signedOut = account.state.status === 'signed-out' ? account.state : undefined;
   const equippedPerks = meta.equipped.map((id) => content.perks.find((p) => p.id === id)).filter((p) => p !== undefined);
+
+  const chain = content.scenarios.filter((s) => s.mode === 'scale');
+  const challenges = content.scenarios.filter((s) => s.mode !== 'scale');
+  /** A scenario's card: what it is, how far the player got, and Play (or what opens it). */
+  const scenarioCard = (s: ScenarioDef) => {
+    const open = scenarioOpen(s, meta, (id) => content.scenarios.find((x) => x.id === id)?.title ?? id);
+    const top = maxAscension(meta, s.id);
+    const asc = Math.min(ascension[s.id] ?? top, top);
+    const reached = meta.scenarios[s.id];
+    return (
+      <li key={s.id} className={`rounded-brutal border-bw-2 border-ink p-4 ${open.open ? 'bg-surface shadow-brutal-sm' : 'bg-paper border-dashed'}`}>
+        <p className={`${eyebrow} flex items-center gap-1.5`}>
+          <IconTile name={MODE_ICON[s.mode]} tone={s.mode === 'scale' ? 'bg-paper' : 'bg-pop-yellow text-on-accent'} size="sm" />
+          {MODE_LABEL[s.mode]} · {s.difficulty} · {s.tags.slice(0, 2).join(', ')}
+        </p>
+        <h4 className="mt-1 font-display text-xl font-extrabold flex items-center gap-1.5">
+          {!open.open && <Lock size={16} aria-hidden="true" />}
+          {s.title}
+        </h4>
+        {s.mode !== 'scale' && <p className="mt-1 text-sm font-semibold">{MODE_BLURB[s.mode]}</p>}
+        <p className="mt-1 text-sm">{s.summary}</p>
+        {reached && (
+          <p className="mt-2 text-xs text-muted">
+            Best wave {reached.reached}/{s.waves.length}{reached.cleared >= 0 ? ` · cleared up to ascension ${reached.cleared}` : ''}
+          </p>
+        )}
+        {open.open ? (
+          <div className="mt-3 flex flex-wrap items-center gap-2">
+            {top > 0 && (
+              <label className="text-sm inline-flex items-center gap-1">
+                Ascension
+                <select className="rounded border-bw-1 border-ink bg-surface px-1 py-1" value={asc} onChange={(e) => setAscension({ ...ascension, [s.id]: Number(e.target.value) })}>
+                  {Array.from({ length: top + 1 }, (_, i) => (
+                    <option key={i} value={i}>
+                      {i}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
+            <button type="button" className={primaryButton} disabled={!!starting || arcade.busy} onClick={() => void begin(s.id, { mode: 'normal', scenario: s.id, ascension: asc })}>
+              <Play size={14} aria-hidden="true" /> {starting === s.id ? 'Starting…' : 'Play'}
+            </button>
+            {asc > 0 && <p className="w-full text-xs text-muted">{ASCENSIONS.slice(0, asc).map((a) => a.text).join(' ')}</p>}
+          </div>
+        ) : (
+          <p className="mt-3 text-sm font-semibold">{open.reason}</p>
+        )}
+      </li>
+    );
+  };
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 space-y-6">
@@ -207,62 +259,24 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
         </section>
       )}
 
-      <section>
-        <h3 className="font-display text-2xl font-extrabold">Scenarios</h3>
+      <section aria-labelledby="arcade-scale">
+        <h3 id="arcade-scale" className="font-display text-2xl font-extrabold">Scale or Fail scenarios</h3>
+        <p className="mt-1 text-sm text-muted">Twelve waves of growth, a tech card after each, and a boss at the end of every act. Clear one to open the next.</p>
         {!twistsOpen(content, meta) && (
           <p className="mt-1 text-sm text-muted">
             Your first runs play the basic rules, and Kernel walks you through Shortly's first wave. Clear a Scale or Fail scenario to unlock the twists: mutators, bounties, forecast ranges, live changes and more.
           </p>
         )}
-        <ul className="mt-3 grid gap-4 sm:grid-cols-2">
-          {content.scenarios.map((s) => {
-            const open = scenarioOpen(s, meta, (id) => content.scenarios.find((x) => x.id === id)?.title ?? id);
-            const top = maxAscension(meta, s.id);
-            const asc = Math.min(ascension[s.id] ?? top, top);
-            const reached = meta.scenarios[s.id];
-            return (
-              <li key={s.id} className={`rounded-brutal border-bw-2 border-ink p-4 ${open.open ? 'bg-surface shadow-brutal-sm' : 'bg-paper border-dashed'}`}>
-                <p className={`${eyebrow} flex items-center gap-1.5`}>
-                  <IconTile name={MODE_ICON[s.mode]} tone={s.mode === 'scale' ? 'bg-paper' : 'bg-pop-yellow text-on-accent'} size="sm" />
-                  {MODE_LABEL[s.mode]} · {s.difficulty} · {s.tags.slice(0, 2).join(', ')}
-                </p>
-                <h4 className="mt-1 font-display text-xl font-extrabold flex items-center gap-1.5">
-                  {!open.open && <Lock size={16} aria-hidden="true" />}
-                  {s.title}
-                </h4>
-                <p className="mt-1 text-sm">{s.summary}</p>
-                {reached && (
-                  <p className="mt-2 text-xs text-muted">
-                    Best wave {reached.reached}/{s.waves.length}{reached.cleared >= 0 ? ` · cleared up to ascension ${reached.cleared}` : ''}
-                  </p>
-                )}
-                {open.open ? (
-                  <div className="mt-3 flex flex-wrap items-center gap-2">
-                    {top > 0 && (
-                      <label className="text-sm inline-flex items-center gap-1">
-                        Ascension
-                        <select className="rounded border-bw-1 border-ink bg-surface px-1 py-1" value={asc} onChange={(e) => setAscension({ ...ascension, [s.id]: Number(e.target.value) })}>
-                          {Array.from({ length: top + 1 }, (_, i) => (
-                            <option key={i} value={i}>
-                              {i}
-                            </option>
-                          ))}
-                        </select>
-                      </label>
-                    )}
-                    <button type="button" className={primaryButton} disabled={!!starting || arcade.busy} onClick={() => void begin(s.id, { mode: 'normal', scenario: s.id, ascension: asc })}>
-                      <Play size={14} aria-hidden="true" /> {starting === s.id ? 'Starting…' : 'Play'}
-                    </button>
-                    {asc > 0 && <p className="w-full text-xs text-muted">{ASCENSIONS.slice(0, asc).map((a) => a.text).join(' ')}</p>}
-                  </div>
-                ) : (
-                  <p className="mt-3 text-sm font-semibold">{open.reason}</p>
-                )}
-              </li>
-            );
-          })}
-        </ul>
+        <ul className="mt-3 grid gap-4 sm:grid-cols-2">{chain.map(scenarioCard)}</ul>
       </section>
+
+      {challenges.length > 0 && (
+        <section aria-labelledby="arcade-challenges">
+          <h3 id="arcade-challenges" className="font-display text-2xl font-extrabold">Design challenges</h3>
+          <p className="mt-1 text-sm text-muted">One scenario each, design first: no card draft and no twists. A ticket lands every wave, and the same cash, Trust and score rules decide the run.</p>
+          <ul className="mt-3 grid gap-4 sm:grid-cols-2">{challenges.map(scenarioCard)}</ul>
+        </section>
+      )}
 
       <HowItWorks />
       {apiEnabled && <Leaderboards scenarios={content.scenarios.map((s) => ({ id: s.id, title: s.title }))} day={arcade.daily.day} />}

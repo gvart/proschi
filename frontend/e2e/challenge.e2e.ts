@@ -23,7 +23,7 @@ async function loadCards(request: APIRequestContext): Promise<Map<string, Bundle
   return new Map(bundle.cards.map((c) => [c.id, c]));
 }
 
-const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Interview prep' });
+const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
 
 const challengeCard = (page: Page, n: number) => page.getByRole('article', { name: `Challenge card ${n} of 5` });
 
@@ -74,7 +74,7 @@ test.describe('daily challenge', () => {
     const cards = await loadCards(request);
     // The problem list points to interview prep, whose Challenge tab it is.
     await page.goto('practice/');
-    await page.getByRole('main').getByRole('link', { name: /Interview prep/ }).click();
+    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
     await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
     await expect(page).toHaveURL(/#\/challenge$/);
     await expect(prepNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
@@ -118,7 +118,7 @@ test.describe('daily challenge', () => {
     await expect(page.getByRole('button', { name: 'Start the challenge' })).toHaveCount(0);
 
     // Every answer counted as a review today.
-    await prepNav(page).getByRole('link', { name: 'Daily review' }).click();
+    await prepNav(page).getByRole('link', { name: 'Review', exact: true }).click();
     await expect(page).toHaveURL(/#\/review$/);
     const reviewed = page.getByRole('region', { name: 'Today' }).locator('dt', { hasText: /^Reviewed today$/ }).locator('xpath=following-sibling::dd[1]');
     await expect(reviewed).toHaveText('5');

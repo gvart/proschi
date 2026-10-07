@@ -1,8 +1,7 @@
-import { FileText, FlaskConical, Gauge, Network } from 'lucide-react';
+import { ClipboardCheck, FileText, Network } from 'lucide-react';
 import type { TestResult } from '../../sim';
 import Tabs from '../../design/Tabs';
-
-export type View = 'diagram' | 'analysis' | 'tests' | 'hld';
+import type { View } from './view';
 
 interface ViewTabsProps {
   view: View;
@@ -12,12 +11,11 @@ interface ViewTabsProps {
 
 const TABS: { view: View; label: string; icon: typeof Network }[] = [
   { view: 'diagram', label: 'Diagram', icon: Network },
-  { view: 'analysis', label: 'Analysis', icon: Gauge },
-  { view: 'tests', label: 'Tests', icon: FlaskConical },
+  { view: 'results', label: 'Results', icon: ClipboardCheck },
   { view: 'hld', label: 'HLD', icon: FileText },
 ];
 
-/** Switches the right-hand pane between the canvas, the capacity analysis, the test results and the high-level design. */
+/** Switches the right-hand pane between the canvas, the results (checks, analysis, review) and the high-level design. */
 export default function ViewTabs({ view, onChange, results }: ViewTabsProps) {
   const failed = results.filter((r) => !r.passed).length;
   return (
@@ -32,7 +30,7 @@ export default function ViewTabs({ view, onChange, results }: ViewTabsProps) {
           label,
           icon: <Icon size={15} />,
           badge:
-            v === 'tests' && results.length > 0 ? (
+            v === 'results' && results.length > 0 ? (
               <span className={`tabular-nums ${failed ? 'text-red-700 dark:text-red-300' : 'text-emerald-700 dark:text-emerald-300'}`} title={failed ? `${failed} failing` : 'All passing'}>
                 {results.length - failed}/{results.length}
               </span>

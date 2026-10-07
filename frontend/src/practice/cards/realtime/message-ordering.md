@@ -1,7 +1,7 @@
 ---
 type: flip
 difficulty: hard
-related: [chat, snowflake-ids]
+related: [chat, snowflake-ids, collaborative-docs]
 ---
 
 ## Front

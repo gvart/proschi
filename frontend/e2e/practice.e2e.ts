@@ -8,11 +8,11 @@ const problemList = (page: Page) => page.getByRole('main').getByRole('list').fir
 const passedCount = (page: Page) => page.getByText(/^\d+ \/ \d+ passed/);
 
 test.describe('practice', () => {
-  test('lists 26 problems', async ({ page }) => {
+  test('lists 29 problems', async ({ page }) => {
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
-    await expect(problemList(page).getByRole('link')).toHaveCount(26);
-    await expect(page.getByText('0 of 26 solved')).toBeVisible();
+    await expect(problemList(page).getByRole('link')).toHaveCount(29);
+    await expect(page.getByText('0 of 29 solved')).toBeVisible();
   });
 
   test('ends with links to contribute a problem or suggest one, in a new tab', async ({ page }) => {
@@ -159,7 +159,7 @@ test.describe('practice', () => {
     await expect.poll(() => editorText(page)).toBe(solution);
 
     await page.getByRole('link', { name: /Problems/ }).click();
-    await expect(page.getByText('1 of 26 solved')).toBeVisible();
+    await expect(page.getByText('1 of 29 solved')).toBeVisible();
     await expect(problemList(page).getByRole('link', { name: /URL shortener/i }).getByRole('img', { name: 'Solved' })).toBeVisible();
   });
 

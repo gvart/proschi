@@ -1,0 +1,94 @@
+import "problem.proschi"
+
+lb        "Load Balancer"   [AWS Load Balancer] x2 @docs
+gateways  "Session Servers" [WebSocket]         x26 @docs "Hold the editors' WebSockets and subscribe to the documents they have open"
+collab    "Collab Service"  [Go]                x4 @docs "Owns each open document's revision: transforms concurrent operations and appends them in order"
+oplog     "Operation Log"   [Cassandra]         x3 @docs "Every operation of every document, partitioned by document id, ordered by revision"
+bus       "Document Bus"    [NATS]              x2 @docs "One subject per open document; carries operations and cursors to the session servers"
+docsApi   "Docs API"        [REST API]          x2 @docs "Loads a document: the latest snapshot plus the operations after it"
+snapshots "Snapshots"       [AWS S3]            x2 @docs "The full document every few hundred operations"
+compactor "Snapshotter"     [Go]                x2 @docs "Folds the operations since the last snapshot into a new one"
+
+editor    -> lb            : WebSocket and HTTPS
+lb        -> gateways      : WebSocket
+lb        -> docsApi       : HTTPS
+gateways  -> collab        : operations, routed by document id
+collab    -> oplog         : append
+collab    -> bus           : publish
+gateways  -> bus           : publish / subscribe
+gateways  -> collaborators : WebSocket
+docsApi   -> snapshots     : read
+docsApi   -> oplog         : read
+compactor -> oplog         : read
+compactor -> snapshots     : write
+
+entity Operation in oplog "One operation, in the order the collab service accepted it" {
+  docId    string key
+  revision int    key
+  authorId string
+  op       json
+}
+
+entity Snapshot in snapshots "The whole document at one revision" {
+  docId    string key
+  revision int    key
+  content  bytes
+}
+
+decision "One owner per open document" {
+  because "Every operation of a document goes to the same collab instance (routed by document id), which transforms it against the operations accepted since its base revision and gives it the next revision number; one sequencer per document means no locks"
+  rejected "Any server applies any operation" "Two servers would accept conflicting operations at the same revision and need a distributed lock or a consensus round per keystroke"
+}
+decision "Operational transformation on the server" {
+  because "Clients send operations against the revision they last saw; the server transforms them into the order it chose, so every client converges"
+  rejected "A CRDT merged on every client" "Also converges, with no central order, but every character carries an id and tombstones; worth it for offline editing and peer-to-peer, not needed with a server in the middle"
+}
+decision "Append to the operation log before the ack" {
+  because "The ack tells the editor the change is saved; a crash after it must not lose the operation"
+  rejected "Ack, then write in the background" "A crash in between loses edits the user saw as saved, and collaborators may already have applied them"
+}
+decision "Broadcast after the ack, through a bus" because "Collaborators are connected to other session servers; the editor never waits for their deliveries"
+decision "Cursors are not operations" because "Cursor moves are twice as frequent as edits and worthless a second later; they go over the bus and are never stored"
+decision "Snapshots every few hundred operations" because "Opening a document reads one snapshot and the short tail of operations after it, never the whole history"
+
+usecase "Edit" "An editor types; the change is ordered, stored, acknowledged and shown to the others" {
+  editor    -> lb            : OP insert "a" at 120, base revision 41
+  lb        -> gateways      : OP insert "a" at 120, base revision 41
+  gateways  -> collab        : APPLY op to doc 42, base revision 41
+  collab    -> oplog         : INSERT Operation doc 42 revision 43 (transformed)
+  oplog    --> collab        : ok
+  collab   --> gateways      : ACK revision 43
+  gateways --> lb            : ACK revision 43
+  lb       --> editor        : ACK revision 43
+  collab   ->> bus           : PUBLISH doc.42 revision 43
+  bus      ->> gateways      : x2 doc.42 revision 43
+  gateways ->> collaborators : x2 OP revision 43
+}
+
+usecase "Move cursor" "An editor moves the cursor or selects text; the others see it" {
+  editor    -> lb            : CURSOR doc 42 at 120
+  lb        -> gateways      : CURSOR doc 42 at 120
+  gateways ->> bus           : PUBLISH doc.42.presence cursor 120
+  gateways --> lb            : ok
+  lb       --> editor        : ok
+  bus      ->> gateways      : x2 doc.42.presence cursor 120
+  gateways ->> collaborators : x2 CURSOR alice at 120
+}
+
+usecase "Open document" "Someone opens a document and gets its current text" {
+  editor     -> lb        : GET /docs/42
+  lb         -> docsApi   : GET /docs/42
+  docsApi    -> snapshots : ~50KB GET snapshots/42 latest
+  snapshots --> docsApi   : revision 4000
+  docsApi    -> oplog     : SELECT Operation doc 42 after revision 4000
+  oplog     --> docsApi   : 43 operations
+  docsApi   --> lb        : 200 document at revision 4043
+  lb        --> editor    : 200 document at revision 4043
+}
+
+usecase "Save snapshot" "Every few hundred operations, a new snapshot replaces the old one" {
+  compactor  -> oplog     : SELECT Operation doc 42 after revision 4000
+  oplog     --> compactor : 300 operations
+  compactor  -> snapshots : ~50KB PUT snapshots/42 revision 4300
+  snapshots --> compactor : ok
+}

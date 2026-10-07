@@ -19,9 +19,7 @@ import {
   Check,
   CheckCircle2,
   ChevronDown,
-  Download,
   FilePlus,
-  Image,
   LayoutGrid,
   Link,
   Link2,
@@ -36,7 +34,6 @@ import {
   Plus,
   Gauge,
   Network,
-  Archive,
   ArchiveRestore,
   Cloud,
   CloudOff,
@@ -81,7 +78,8 @@ import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
 import PaneLoading from '../PaneLoading';
-import ViewTabs, { type View } from '../Analysis/ViewTabs';
+import ViewTabs from '../Analysis/ViewTabs';
+import { parseView, type View } from '../Analysis/view';
 import { useSimulation } from '../Analysis/useSimulation';
 import { editorReviewInput } from '../../review/editor';
 import CodeEditor, { type CodeEditorHandle } from './CodeEditor';
@@ -92,7 +90,7 @@ import { ApiError } from '../../services/api';
 import { useAccount } from '../../practice/useAccount';
 import { track } from '../../services/metrics';
 import Banner, { type BannerMessage } from './Banner';
-import { MermaidMenuItems, type MermaidSource } from './mermaidExport';
+import ExportMenu from './ExportMenu';
 import { useZenMode } from './useZenMode';
 import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
@@ -110,8 +108,7 @@ import type { FitInset } from '../Diagram/useFitOnChange';
 // Panes that are not visible at start load on first use.
 const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
 const HldView = lazy(() => import('../Hld/HldView'));
-const AnalysisPanel = lazy(() => import('../Analysis/AnalysisPanel'));
-const TestsPanel = lazy(() => import('../Analysis/TestsPanel'));
+const ResultsPanel = lazy(() => import('../Analysis/ResultsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
@@ -124,7 +121,7 @@ const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 const noop = () => {};
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 const PARSE_DELAY_MS = 150;
-const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', analysis: 'Analysis', tests: 'Tests', hld: 'HLD' };
+const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -157,6 +154,11 @@ function isDeepLink(): boolean {
 /** Whether this browser has saved diagrams from an earlier visit. */
 function isReturning(): boolean {
   return loadJson<unknown>(DOCS_KEY, null) !== null || loadJson<unknown>(LEGACY_SOURCE_KEY, null) !== null;
+}
+
+/** The view a link asks for with `?view=` (old names such as `tests` included), else the diagram. */
+function initialView(): View {
+  return parseView(new URLSearchParams(window.location.search).get('view')) ?? 'diagram';
 }
 
 /** The tour on a first visit; only a hint over a shared diagram or example link. */
@@ -210,7 +212,7 @@ export default function Playground() {
   const [showImport, setShowImport] = useState(false);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
-  const [view, setView] = useState<View>('diagram');
+  const [view, setView] = useState<View>(initialView);
   const [copied, setCopied] = useState(false);
   const [tour, setTour] = useState<StartMode>(initialTourMode);
   /** Bumped by Help → Take the tour, so a replay starts at the first step. */
@@ -342,11 +344,11 @@ export default function Playground() {
   );
   const [edges, setEdges] = useState<Edge[]>([]);
 
-  // Usage counts: the first look at the simulation's numbers (the Analysis or
-  // HLD tab, or the load overlay) and at the tests, once per session each.
+  // Usage counts: the first look at the simulation's numbers (the Results or
+  // HLD tab, or the load overlay) and at the tests (Results), once per session each.
   useEffect(() => {
-    if (view === 'analysis' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
-    if (view === 'tests') track('test_run', { once: 'session', key: 'test_run:editor' });
+    if (view === 'results' || view === 'hld' || (overlayOn && canOverlay)) track('simulation_run', { once: 'session' });
+    if (view === 'results') track('test_run', { once: 'session', key: 'test_run:editor' });
   }, [view, overlayOn, canOverlay]);
 
   // Edges are local state so selection works; keep it across re-parses.
@@ -524,6 +526,15 @@ export default function Playground() {
     setMobilePane('diagram');
   };
 
+  /** An image of the diagram asked for in the Export menu; the canvas makes it once it is on screen. */
+  const [imageRequest, setImageRequest] = useState<ImageRequest | null>(null);
+  const requestImage = (format: ImageRequest['format']) => {
+    stopPlaying();
+    setView('diagram');
+    setMobilePane('diagram');
+    setImageRequest({ format });
+  };
+
   const pickScenario = (id: string) => {
     setSelectedScenarioId(id);
     setInitialStep(undefined);
@@ -571,7 +582,7 @@ export default function Playground() {
     const example = examples.find((e) => e.id === 'url-shortener');
     if (!example) return;
     openExample(example.source);
-    setView('tests');
+    setView('results');
     setMobilePane('diagram');
   };
 
@@ -680,6 +691,15 @@ export default function Playground() {
                   New diagram
                 </MenuItem>
                 <MenuItem
+                  icon={<BookOpen size={14} />}
+                  onSelect={() => {
+                    setShowExamples(true);
+                    close();
+                  }}
+                >
+                  Examples…
+                </MenuItem>
+                <MenuItem
                   icon={<Upload size={14} />}
                   onSelect={() => {
                     fileInputRef.current?.click();
@@ -698,15 +718,6 @@ export default function Playground() {
                   Import Mermaid or OpenAPI…
                 </MenuItem>
                 <MenuItem
-                  icon={<Download size={14} />}
-                  onSelect={() => {
-                    downloadText(source, rootPath);
-                    close();
-                  }}
-                >
-                  Download .proschi file
-                </MenuItem>
-                <MenuItem
                   icon={<AlignLeft size={14} />}
                   onSelect={() => {
                     close();
@@ -716,15 +727,6 @@ export default function Playground() {
                   Format code <span className="ml-auto text-xs text-muted">Shift+Alt+F</span>
                 </MenuItem>
                 <div className="my-1 border-t border-ink/10" />
-                <MenuItem
-                  icon={<Archive size={14} />}
-                  onSelect={() => {
-                    exportAll();
-                    close();
-                  }}
-                >
-                  Export all (.zip)
-                </MenuItem>
                 <MenuItem
                   icon={<ArchiveRestore size={14} />}
                   onSelect={() => {
@@ -772,7 +774,8 @@ export default function Playground() {
           <button
             onClick={() => setShowExamples(true)}
             aria-label="Examples"
-            className={toolButton}
+            // Phones keep the room for the use case picker; Examples… is in the Diagrams menu there.
+            className={`${toolButton} max-sm:hidden`}
           >
             <BookOpen size={16} />
             <span className="hidden sm:inline">Examples</span>
@@ -787,7 +790,7 @@ export default function Playground() {
               setInitialStep(undefined);
             }}
             disabled={diagram.useCases.length === 0}
-            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[16rem] ${field}`}
+            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[13rem] ${field}`}
           >
             {diagram.useCases.length === 0 && <option value="">No use cases</option>}
             {useCaseGroups.map((group) =>
@@ -827,6 +830,17 @@ export default function Playground() {
           )}
 
           <ZenButton zen={zen} className={iconButton} />
+
+          <div data-tour="export">
+            <ExportMenu
+              canImage={nodes.length > 0}
+              exporting={imageRequest !== null}
+              onImage={requestImage}
+              mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
+              onDownloadSource={() => downloadText(source, rootPath)}
+              onExportAll={exportAll}
+            />
+          </div>
 
           <div data-tour="share">
             <Menu
@@ -960,17 +974,23 @@ export default function Playground() {
                   onStepChange={setPlayStep}
                   showHeader={false}
                 />
-              ) : view === 'analysis' ? (
-                <AnalysisPanel
+              ) : view === 'results' ? (
+                <ResultsPanel
                   diagram={diagram}
                   analysis={simulation.analysis}
+                  results={simulation.results}
                   onSelect={selectDiagnostic}
                   review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
                 />
-              ) : view === 'tests' ? (
-                <TestsPanel results={simulation.results} onSelect={selectDiagnostic} />
               ) : view === 'hld' ? (
-                <HldView diagram={diagram} nodes={nodes} edges={edges} analysis={simulation.analysis} results={simulation.results} />
+                <HldView
+                  diagram={diagram}
+                  nodes={nodes}
+                  edges={edges}
+                  analysis={simulation.analysis}
+                  results={simulation.results}
+                  onOpenResults={() => setView('results')}
+                />
               ) : (
                 <ReactFlowProvider>
                   <DiagramView
@@ -993,7 +1013,8 @@ export default function Playground() {
                     onResetLayout={() => editSource(clearPositions)}
                     onDelete={deleteFromCanvas}
                     fitKey={`${mobilePane}:${layoutSettled}`}
-                    mermaid={{ diagram, useCaseId: useCase?.id, scenarioId: scenario?.id }}
+                    imageRequest={imageRequest}
+                    onImageDone={() => setImageRequest(null)}
                     notice={notice}
                     onNotice={setNotice}
                     cover={tour === 'tour' ? tourCover : null}
@@ -1152,6 +1173,10 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
   );
 }
 
+interface ImageRequest {
+  format: 'png' | 'svg';
+}
+
 interface DiagramViewProps {
   nodes: Node[];
   edges: Edge[];
@@ -1177,7 +1202,9 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
-  mermaid: MermaidSource;
+  /** An image to export (the Export menu in the header), made once the nodes are drawn. */
+  imageRequest: ImageRequest | null;
+  onImageDone: () => void;
   /** Nodes declared in imported files (id → file); they cannot be moved here. */
   importedNodes: Map<string, string>;
   /** A short message shown over the canvas, e.g. why an edit was refused. */
@@ -1207,7 +1234,8 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
-  mermaid,
+  imageRequest,
+  onImageDone,
   importedNodes,
   notice,
   onNotice,
@@ -1253,21 +1281,39 @@ function DiagramView({
     );
   };
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const [exporting, setExporting] = useState(false);
 
-  const handleExport = async (format: 'png' | 'svg') => {
-    const viewport = wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
-    if (!viewport || nodes.length === 0) return;
-    setExporting(true);
-    try {
-      await exportImage(format, getNodes(), viewport, fileNameFor(title, format));
-    } catch (error) {
-      console.error('Export failed:', error);
-      window.alert('Sorry, the image could not be exported.');
-    } finally {
-      setExporting(false);
-    }
-  };
+  // The canvas may have just been opened for the export (from another tab, the
+  // code pane on a phone, or playback): wait until it is shown and its nodes are measured.
+  useEffect(() => {
+    if (!imageRequest) return;
+    let cancelled = false;
+    let frame = 0;
+    const tick = async () => {
+      if (cancelled) return;
+      const viewport = wrapperRef.current?.querySelector<HTMLElement>('.react-flow__viewport');
+      const drawn = getNodes();
+      const ready = !!viewport && viewport.getClientRects().length > 0 && drawn.length > 0 && drawn.every((n) => n.width && n.height);
+      if (!ready && frame++ < 120) {
+        requestAnimationFrame(() => void tick());
+        return;
+      }
+      try {
+        if (!ready || !viewport) throw new Error('the diagram is not on screen');
+        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format));
+      } catch (error) {
+        console.error('Export failed:', error);
+        window.alert('Sorry, the image could not be exported.');
+      } finally {
+        if (!cancelled) onImageDone();
+      }
+    };
+    requestAnimationFrame(() => void tick());
+    return () => {
+      cancelled = true;
+    };
+    // Once per request.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [imageRequest]);
   // Re-fit once nodes are measured after being added or removed, not on every drag.
   // The part of the canvas a covering band hides, measured after layout.
   const [inset, setInset] = useState<FitInset | undefined>(undefined);
@@ -1456,38 +1502,6 @@ function DiagramView({
                 Auto-layout
               </button>
             )}
-            <Menu
-              label="Export image"
-              align="right"
-              trigger={
-                <>
-                  <Image size={16} />
-                  {exporting ? 'Exporting…' : 'Export'}
-                </>
-              }
-            >
-              {(close) => (
-                <>
-                  <MenuItem
-                    onSelect={() => {
-                      close();
-                      handleExport('png');
-                    }}
-                  >
-                    PNG image
-                  </MenuItem>
-                  <MenuItem
-                    onSelect={() => {
-                      close();
-                      handleExport('svg');
-                    }}
-                  >
-                    SVG image
-                  </MenuItem>
-                  <MermaidMenuItems source={mermaid} close={close} />
-                </>
-              )}
-            </Menu>
           </Panel>
         )}
       </ReactFlow>

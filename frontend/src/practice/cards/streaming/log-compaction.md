@@ -2,6 +2,7 @@
 type: cloze
 difficulty: medium
 tags: [storage]
+related: [collaborative-docs]
 distinct-from: [kafka-retention]
 ---
 

@@ -3,6 +3,7 @@ type: choice
 difficulty: medium
 decks: [sample]
 tags: [caching]
+related: [web-crawler]
 ---
 
 ## Question

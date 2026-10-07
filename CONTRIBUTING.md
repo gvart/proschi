@@ -158,23 +158,24 @@ is the checklist.
 
 6. **Update the hard-coded problem counts.** A few tests and pages state the
    number of problems; each must go up by one:
-   - the landing page, `frontend/index.html`: "26 system design problems";
-   - the e2e tests: `frontend/e2e/practice.e2e.ts` ("lists 26 problems",
-     `toHaveCount(26)`, "0 of 26 solved", "1 of 26 solved"),
-     `frontend/e2e/landing.e2e.ts` ("practice list shows 26 problems",
-     `toHaveCount(26)`) and the table in `frontend/e2e/README.md`;
+   - the e2e tests: `frontend/e2e/practice.e2e.ts` ("lists 29 problems",
+     `toHaveCount(29)`, "0 of 29 solved", "1 of 29 solved"),
+     `frontend/e2e/landing.e2e.ts` ("practice list shows 29 problems",
+     `toHaveCount(29)`) and the table in `frontend/e2e/README.md`;
    - the practice tests: `frontend/src/practice/practice.test.ts`, its
-     `toBeGreaterThanOrEqual(26)` and the ordered list of ids in "lists
+     `toBeGreaterThanOrEqual(29)` and the ordered list of ids in "lists
      problems by difficulty, then order, then title" (put the new id where
      the sort puts it);
-   - the tooling test: `tooling/test/problem.test.ts` ("26 problems, …");
-   - the sample output in `docs/PRACTICE.md` ("26 problems, 90 wrong
+   - the tooling test: `tooling/test/problem.test.ts` ("29 problems, …");
+   - the sample output in `docs/PRACTICE.md` ("29 problems, 105 wrong
      designs").
 
-   This finds them all (with today's count, 26):
+   The landing page (`frontend/index.html`) fills in its list and count at
+   build time, so it needs no change. This finds the rest (with today's
+   count, 29):
 
    ```sh
-   git grep -nE "\b26 (problems|system)|of 26 solved|\(26\)" -- frontend/index.html frontend/e2e frontend/src/practice tooling/test docs/PRACTICE.md
+   git grep -nE "\b29 (problems|system)|of 29 solved|\(29\)" -- frontend/index.html frontend/e2e frontend/src/practice tooling/test docs/PRACTICE.md
    ```
 
 7. **Place it on the roadmap, and link cards (optional).** Every problem

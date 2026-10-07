@@ -22,7 +22,7 @@ export type WaveMark = 'clean' | 'hit' | 'lost';
 
 export const WAVE_EMOJI: Record<WaveMark, string> = { clean: '🟩', hit: '🟨', lost: '🟥' };
 
-/** A wave's mark from its summary (frontend/src/game/engine/run.ts WaveSummary). */
+/** A wave's mark from its summary (frontend/src/game/engine/state.ts WaveSummary). */
 export function waveMark(wave: { clean: boolean; survived: boolean }): WaveMark {
   return !wave.survived ? 'lost' : wave.clean ? 'clean' : 'hit';
 }
