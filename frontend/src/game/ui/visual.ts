@@ -135,3 +135,11 @@ export const SENDER_LABEL: Record<TicketSender, string> = {
 
 export const MODE_ICON: Record<GameMode, IconName> = { scale: 'activity', startup: 'rocket', incident: 'siren', legacy: 'building-2', cost: 'scissors' };
 export const MODE_LABEL: Record<GameMode, string> = { scale: 'Scale or Fail', startup: 'Chaotic Startup', incident: 'On-call', legacy: 'Legacy rescue', cost: 'Cost crunch' };
+/** What each mode asks of the player, in one line (the Arcade's design challenges). */
+export const MODE_BLURB: Record<GameMode, string> = {
+  scale: 'Keep the system up while traffic grows, wave after wave.',
+  startup: 'The product changes under you: version the API and migrate the schema one step a wave.',
+  incident: 'Every wave is a page: name the root cause, then fix it on the board.',
+  legacy: 'Strangle a monolith one use case at a time without breaking its clients.',
+  cost: 'Cut the cloud bill every wave without missing an SLO.',
+};

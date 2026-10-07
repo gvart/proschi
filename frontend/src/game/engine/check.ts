@@ -6,6 +6,7 @@ import { USERS, WAN_MS } from './compile';
 import { readContent, type ContentError } from './content';
 import { isIconName } from './icons';
 import { BREACH_KINDS, Game, GameError, LEARN_IDS, mutatorsFor, parseRequirements, type BreachKind, type Outcome } from './run';
+import { MODES } from './modes';
 import { MAX_ASCENSION, MUTATOR_OFFER, WAVES } from './rules';
 import { BOUNTY_KINDS, EVENT_EFFECTS, LANES, ROLES, STORES, type Action, type Board, type BoardNode, type GameContent, type Loadout, type OncallAct, type RunSetup, type ScenarioDef } from './types';
 
@@ -218,7 +219,7 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
   const learn = (file: string, list: readonly string[]) => {
     for (const id of list) if (!ctx.cards.has(id)) v(file, `Review card '${id}' does not exist`);
   };
-  for (const id of LEARN_IDS) if (!ctx.cards.has(id)) v('engine/run.ts', `Review card '${id}' does not exist`);
+  for (const id of LEARN_IDS) if (!ctx.cards.has(id)) v('engine/state.ts', `Review card '${id}' does not exist`);
 
   // Components.
   const techs = new Set<string>(componentCatalog.map((c) => c.techStack));
@@ -345,6 +346,14 @@ export function checkGame(files: Record<string, string>, ctx: CheckContext): Gam
         else ticketIds.add(w.ticket.id);
       });
     }
+    // A mechanic's data only works in a mode that uses the mechanic (modes/).
+    const mechanics = new Set(MODES[s.mode].mechanics.map((m) => m.id));
+    const uses = (id: string, what: string, used: boolean) => {
+      if (used && !mechanics.has(id)) v(jf, `${what}: the ${s.mode} mode does not play them (modes/${s.mode}.ts); use a mode that does`);
+    };
+    uses('migrations', 'Migrations', s.migrations.length > 0);
+    uses('legacy-versions', 'Legacy versions', Object.values(s.useCases).some((uc) => uc.legacy));
+    uses('diagnosis', 'Diagnoses', s.waves.some((w) => w.diagnosis));
     const migrationIds = new Set<string>();
     for (const m of s.migrations) {
       if (migrationIds.has(m.id)) v(jf, `Two migrations are called '${m.id}'`);

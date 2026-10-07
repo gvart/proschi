@@ -399,6 +399,12 @@ deployed from `main` and ships with the same changes.
   Every estimate card and the interview guide link to the section they use.
 
 ### Changed
+- **Scale or Fail's home sorts the scenarios in two.** The Scale or Fail
+  scenarios (Shortly and what it opens) come first, as their own chain; the
+  four design-first scenarios (Pawprint, Dinnerbell, Monolith and Runway)
+  are listed apart under **Design challenges**, each with a line on what its
+  mode asks: migrations and API versions, naming the root cause, strangling a
+  monolith, cutting the bill.
 - **Editor: one Results tab, one Export menu.** The Analysis and Tests tabs
   are now a single **Results** tab: failing requirements and tests first with
   their hints, the passing ones folded away, then the load, latency,

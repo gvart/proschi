@@ -27,7 +27,7 @@ import { parseSize } from '../../dsl/parser';
  */
 
 /** The parts of the board's situation that change the compiled source (the rest is numbers, applied per tick). */
-/** Use case keys of migration backfill jobs (run.ts `backfillKey`). */
+/** Use case keys of migration backfill jobs (modes/migrations.ts `backfillKey`). */
 export const BACKFILL_PREFIX = 'backfill_';
 
 export interface Situation {

@@ -149,6 +149,12 @@ everyone the same ones.
   (its announced incident, its boss) is four times as likely, and the one
   taken last wave is not offered again.
 
+Bounties and [contracts](#how-a-run-works) are both optional offers, but
+different decisions, so they stay apart: a bounty is a goal for one wave that
+pays if met and costs a little if missed, and changes nothing else; a
+contract changes the rest of the run (a new use case that grows each wave, a
+stricter requirement, or cash for a tighter SLA) and has no goal to meet.
+
 ### Cash, Trust and score
 
 - **Cash** starts at the scenario's seed round. Each tick adds the revenue of
@@ -222,6 +228,10 @@ from the product manager, the CTO, a customer, legal, finance or marketing,
 and asks for something real: a feature, a launch, an SLA, a law. The cash,
 Trust and score rules are the same, and so are the leaderboards.
 
+The Arcade home lists them apart from the Scale or Fail scenarios, under
+**Design challenges**: one scenario per mode, each card with a line on what
+its mode asks.
+
 **Chaotic Startup** (Pawprint) is about change. Besides scaling, it has:
 
 - **API versions.** A breaking change ships as a new use case (v2) next to the
@@ -293,6 +303,42 @@ simulation, and approximates:
 | Failover | A SQL database's writes stop for the first tick while a replica is promoted; with shards, only one shard's share. Without a replica, it is down. |
 | Hot key | Caches and databases lose that share of their read capacity. |
 | Bots | Extra traffic on random keys; a firewall (403) or gateway (429) stops it at the edge. |
+
+## The engine
+
+The engine is pure TypeScript with no React, shared by the page, the Worker
+(which replays every submitted run) and `proschi game check`. It is split by
+what each part decides:
+
+| File | What it holds |
+|---|---|
+| `engine/run.ts` | The core state machine every scenario shares: `Game`, waves, the deploy and load test, the card draft, scoring a wave and ending a run. |
+| `engine/state.ts` | The run's state and what it reports (`RunState`, `TickResult`, `WaveSummary`, `Forecast`), breach kinds and requirement helpers. |
+| `engine/tick.ts` | One tick of the simulation: traffic, capacity, analysis, what was served, breaches, backlog and points. |
+| `engine/incidents.ts` | Drawing the wave's incidents, what they do to a tick, and the on-call's hotfixes. |
+| `engine/twists.ts` | What a run adds after a first clear: mutators, the forecast range and unannounced incidents, bounties, contracts, cascades, card sets and live changes. |
+| `engine/modes/` | One file per mode (`scale`, `startup`, `incident`, `legacy`, `cost`) and the mechanics they use. |
+
+A mode (`modes/mode.ts`) says whether waves end in a card draft, whether the
+twists apply, whether a right-sized wave gets cash back, and which
+**mechanics** its scenarios use. A mechanic owns its planning actions and
+hooks into the core: when a wave starts, before a deploy, how the wave's use
+cases are shaped and which are served, what locks a store's writes, which use
+cases get no answer this tick, the breaches after serving, and upkeep. There
+are three: `migrations` (Pawprint and Monolith: the migrate action, dual
+writes, backfills and big bangs), `legacy-versions` (the same two: sunset,
+upkeep and 410 Gone) and `diagnosis` (Dinnerbell: name the root cause).
+Runway needs none: its `cost` requirement is checked like any other.
+`proschi game check` refuses a scenario whose data needs a mechanic its mode
+does not play (a diagnosis in a `cost` scenario, say).
+
+`engine/determinism.test.ts` replays every reference and wrong run (and the
+references with each mutator, under the basic rules, at higher ascension,
+with perks, into Endless, taking bounties, and with hotfixes and live
+changes) against a snapshot of every tick, forecast and refused action. A
+change that moves any score fails it; a deliberate rule change bumps
+`GAME_VERSION` and updates the snapshot with
+`npx vitest run determinism -u`.
 
 ## The content folder
 
