@@ -2,6 +2,7 @@ package app.proschi.jetbrains
 
 import com.intellij.ide.FileIconProvider
 import com.intellij.ide.plugins.PluginManager
+import com.intellij.openapi.extensions.PluginId
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.util.IconLoader
 import com.intellij.openapi.vfs.VirtualFile
@@ -42,7 +43,7 @@ class ProschiFileIconProvider : FileIconProvider {
  */
 class ProschiTextMateBundleProvider : TextMateBundleProvider {
     override fun getBundles(): List<PluginBundle> {
-        val dir = PluginManager.getPluginByClass(javaClass)?.pluginPath?.resolve("textmate/proschi")
+        val dir = PluginManager.getInstance().findEnabledPlugin(PluginId.getId(PLUGIN_ID))?.pluginPath?.resolve("textmate/proschi")
             ?: return emptyList()
         return if (Files.isDirectory(dir)) listOf(PluginBundle("Proschi", dir)) else emptyList()
     }
