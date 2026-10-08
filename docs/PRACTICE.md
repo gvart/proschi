@@ -144,8 +144,67 @@ example):
 - **Do not paste the reference solution.** Describe the design step by step
   and its trade-offs; a ```` ```proschi fragment ```` may illustrate a
   pattern on a different example, but the solver writes the design.
-- Prefer short paragraphs, tables for numbers and a `>` callout for the one
-  sentence to remember.
+- **Keep it scannable.** Short paragraphs (three or four sentences), tables
+  for numbers, and the lesson blocks below: open with a `tldr`, put the key
+  figures of *Back-of-the-envelope* in a `numbers` row, mark the one sentence
+  to remember with a `callout`, fold long tangents into a `deepdive`, and
+  end a few sections with a `quiz` from the problem's review cards.
+
+### Lesson blocks
+
+Lessons (and guides) can use five blocks, written as fenced blocks whose
+language names them. The app draws them as cards; the static page shows the
+same content as plain HTML (a deep dive as `<details>`, a quiz as its
+questions linked to the cards' pages).
+
+| Block | Opening line | Body |
+|---|---|---|
+| TL;DR | ```` ```tldr ```` | Markdown: the lesson in two to four lines, shown first as "In 30 seconds". |
+| Callout | ```` ```callout <tone> [title] ```` | Markdown. `tone` is `tip`, `pitfall`, `interview` or `takeaway`; the title defaults to Tip, Pitfall, In the interview or Key takeaway. |
+| Key numbers | ```` ```numbers ```` | One `value \| label` per line: a big figure and inline Markdown under it. Three to six tiles read best. |
+| Deep dive | ```` ```deepdive <title> ```` | Markdown, closed until opened: detail the main path can do without. |
+| Quick check | ```` ```quiz ```` | Review card ids, one per line, answered in place and graded with the card's explanation. Practice only: answers are not reviews and leave the schedule as it is. |
+
+`````markdown
+```tldr
+Reads outnumber writes 100 to 1: put a cache in front of the database.
+```
+
+```numbers
+100:1 | reads per write
+500 rps | reach the database
+```
+
+```callout pitfall
+Averages hide the slow 5%: **p99 is decided by cache misses**.
+```
+
+````deepdive Base62 vs hashing
+Markdown, and code fences too: the block around them takes four backticks.
+````
+
+```quiz
+cache-aside
+```
+`````
+
+Inside a block, headings must be `###` or smaller, so the lesson's sections
+stay its own. A block that holds a fenced code block uses a longer fence
+around it (```` ```` ````), as in CommonMark. `proschi problem check` and the
+tests report an unknown callout tone, a deep dive without a title, a numbers
+line without `|`, an empty block, a `#`/`##` heading inside a block and a
+quiz naming a card that does not exist.
+
+### Reading progress
+
+A lesson counts as read once its end comes into view or its challenge is
+started; a guide once its end comes into view. The roadmap shows a **Read**
+chip on each lesson and guide read and counts the lessons read per stage and
+in all. Reads are kept in the browser (`proschi.lessons`) and, signed in,
+sent to the account (`POST /api/me/lessons`, the `lesson_reads` table), so
+they show on every device; on sign-in the reads of the browser and of the
+account are joined. The reading badges count them (docs/CARDS.md,
+"Achievements": `lessons`, `stage-lessons`, `all-lessons`).
 
 ## `interview.md`
 

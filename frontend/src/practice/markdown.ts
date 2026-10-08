@@ -5,7 +5,14 @@
  * italics and links. It produces a tree that Markdown.tsx (and the static
  * pages, plugins/practicePages.ts) render, so no HTML from a statement ever
  * reaches the page; anything else is text.
+ *
+ * Lessons also have rich blocks, written as fences whose language names
+ * them (docs/PRACTICE.md, "Lesson blocks"): ```tldr, ```callout <tone>,
+ * ```numbers, ```deepdive <title> and ```quiz. A block that holds a code
+ * fence uses a longer fence around it (````deepdive … ````), as in CommonMark.
  */
+
+import { CALLOUT_TONES, RICH_BLOCKS, closesFence, FENCE, type CalloutTone } from './lessonBlocks';
 
 export type Inline =
   | { kind: 'text'; text: string }
@@ -25,7 +32,19 @@ export type Block =
   /** A GFM pipe table; every row has as many cells as the header. */
   | { kind: 'table'; align: Align[]; header: Inline[][]; rows: Inline[][][] }
   /** A `>` blockquote, shown as a callout. */
-  | { kind: 'quote'; children: Block[] };
+  | { kind: 'quote'; children: Block[] }
+  /** ```tldr: the lesson in a few lines, shown first. */
+  | { kind: 'tldr'; children: Block[] }
+  /** ```callout <tone> [title]: a tip, a pitfall, an interview tip or a key takeaway. */
+  | { kind: 'callout'; tone: CalloutTone; title?: Inline[]; children: Block[] }
+  /** ```numbers: big figures, one `value | label` per line. */
+  | { kind: 'numbers'; items: { value: string; label: Inline[] }[] }
+  /** ```deepdive <title>: detail that is closed until opened. */
+  | { kind: 'deepdive'; title: Inline[]; children: Block[] }
+  /** ```quiz: review cards (by id, one per line) to answer right there. */
+  | { kind: 'quiz'; ids: string[] };
+
+export { CALLOUT_TITLES, CALLOUT_TONES, RICH_BLOCKS, TLDR_TITLE, closesFence, FENCE, type CalloutTone } from './lessonBlocks';
 
 /** A list item, with at most one level of nested items. */
 export interface ListItem {
@@ -145,7 +164,6 @@ function delimiterRow(line: string): Align[] | undefined {
 }
 
 const LIST_ITEM = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/;
-const FENCE = /^\s*```\s*([\w-]*)(?:\s+[\w-]+)*\s*$/;
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 
 /** Parses Markdown into blocks. Pass one `slug` to several parses that share a page, so their heading ids stay unique. */
@@ -173,9 +191,10 @@ export function parseMarkdown(source: string, slug: Slugger = slugger()): Block[
     const fence = FENCE.exec(line);
     if (fence) {
       flush();
+      const [, ticks, lang, info = ''] = fence;
       const body: string[] = [];
-      while (++i < lines.length && !/^\s*```\s*$/.test(lines[i])) body.push(lines[i]);
-      blocks.push({ kind: 'code', ...(fence[1] ? { lang: fence[1] } : {}), text: body.join('\n') });
+      while (++i < lines.length && !closesFence(lines[i], ticks)) body.push(lines[i]);
+      blocks.push(isRich(lang) ? richBlock(lang, info, body.join('\n'), slug) : { kind: 'code', ...(lang ? { lang } : {}), text: body.join('\n') });
       continue;
     }
     if (!line.trim()) {
@@ -234,4 +253,46 @@ export function parseMarkdown(source: string, slug: Slugger = slugger()): Block[
   }
   flush();
   return blocks;
+}
+
+const isRich = (lang: string): lang is (typeof RICH_BLOCKS)[number] => (RICH_BLOCKS as readonly string[]).includes(lang);
+
+/** A lesson block from its fence: the language, the rest of the opening line and the body. */
+function richBlock(lang: (typeof RICH_BLOCKS)[number], info: string, body: string, slug: Slugger): Block {
+  switch (lang) {
+    case 'tldr':
+      return { kind: 'tldr', children: parseMarkdown(body, slug) };
+    case 'callout': {
+      const [, tone = '', title = ''] = /^(\S*)\s*(.*)$/.exec(info) ?? [];
+      const known = (CALLOUT_TONES as readonly string[]).includes(tone) ? (tone as CalloutTone) : 'tip';
+      return { kind: 'callout', tone: known, ...(title ? { title: parseInline(title) } : {}), children: parseMarkdown(body, slug) };
+    }
+    case 'numbers':
+      return {
+        kind: 'numbers',
+        items: body
+          .split('\n')
+          .filter((l) => l.trim())
+          .map((l) => {
+            const bar = l.indexOf('|');
+            return bar < 0 ? { value: l.trim(), label: [] } : { value: l.slice(0, bar).trim(), label: parseInline(l.slice(bar + 1).trim()) };
+          }),
+      };
+    case 'deepdive':
+      return { kind: 'deepdive', title: parseInline(info || 'Deep dive'), children: parseMarkdown(body, slug) };
+    case 'quiz':
+      return { kind: 'quiz', ids: body.split(/\s+/).filter(Boolean) };
+  }
+}
+
+/** The ids of the review cards a parsed text quizzes, in order, without repeats. */
+export function quizIds(blocks: Block[]): string[] {
+  const out = new Set<string>();
+  const walk = (bs: Block[]) =>
+    bs.forEach((b) => {
+      if (b.kind === 'quiz') b.ids.forEach((id) => out.add(id));
+      else if ('children' in b && b.kind !== 'heading' && b.kind !== 'paragraph') walk(b.children);
+    });
+  walk(blocks);
+  return [...out];
 }

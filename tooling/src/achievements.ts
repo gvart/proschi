@@ -150,7 +150,7 @@ function achievementsCheck(args: string[], out: (s: string) => void, err: (s: st
     err(`${displayPath(file)}: not valid JSON: ${(e as Error).message}`);
     return 1;
   }
-  const violations = checkAchievements(raw, { problems: problemsIn(problemsDir), topics, stages: ROADMAP.map((s) => s.id), lock: lock ?? '' }).violations;
+  const violations = checkAchievements(raw, { problems: problemsIn(problemsDir), topics, stages: ROADMAP.map((s) => s.id), stageProblems: Object.fromEntries(ROADMAP.map((s) => [s.id, s.problems])), lock: lock ?? '' }).violations;
   if (lock === undefined) {
     // Without a lock every id would be reported as new; one violation says what to do.
     const fresh = violations.filter((v) => !v.message.startsWith('New achievement'));

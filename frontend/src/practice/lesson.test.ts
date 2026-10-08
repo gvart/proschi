@@ -2,9 +2,9 @@ import { readFileSync } from 'node:fs';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { problems } from './catalog';
 import { GUIDES } from './guide/guides';
-import { LESSON_HEADINGS, h2Headings, lessonIssues, readingMinutes } from './lesson';
-import { lessonToc, parseMarkdown, slugger, type Block } from './markdown';
-import { LESSONS_KEY, lessonRead, markLessonRead } from './progress';
+import { LESSON_HEADINGS, blockIssues, h2Headings, lessonIssues, readingMinutes } from './lesson';
+import { lessonToc, parseMarkdown, quizIds, slugger, type Block } from './markdown';
+import { LESSONS_KEY, lessonRead, lessonsRead, markLessonRead, markLessonsRead, onLessonsRead } from './progress';
 import { RESERVED_IDS } from './problemFiles';
 import { ROADMAP } from './roadmap';
 
@@ -190,5 +190,107 @@ describe('lessons read', () => {
     });
     expect(() => markLessonRead('url-shortener')).not.toThrow();
     expect(lessonRead('url-shortener')).toBe(false);
+  });
+});
+
+describe('lesson blocks', () => {
+  const lesson = (body: string) => `${body}\n${lessonOf(LESSON_HEADINGS)}`;
+
+  it('parses each kind', () => {
+    const blocks = parseMarkdown(
+      [
+        '```tldr',
+        'Cache **reads**.',
+        '```',
+        '```callout pitfall Watch **p99**',
+        'Misses decide it.',
+        '```',
+        '```callout interview',
+        'Say the ratio.',
+        '```',
+        '```numbers',
+        '100:1 | reads per **write**',
+        '500 rps | to the DB',
+        '```',
+        '````deepdive Counter blocks',
+        'Text.',
+        '```proschi',
+        'a -> b',
+        '```',
+        '````',
+        '```quiz',
+        'cache-aside',
+        'hit-rate-to-db-load',
+        '```',
+      ].join('\n'),
+    );
+    expect(blocks.map((b) => b.kind)).toEqual(['tldr', 'callout', 'callout', 'numbers', 'deepdive', 'quiz']);
+    expect(blocks[1]).toMatchObject({ tone: 'pitfall', title: [{ kind: 'text', text: 'Watch ' }, { kind: 'strong' }] });
+    expect(blocks[2]).toMatchObject({ tone: 'interview' });
+    expect(blocks[2]).not.toHaveProperty('title');
+    expect(blocks[3]).toMatchObject({ items: [{ value: '100:1' }, { value: '500 rps', label: [{ kind: 'text', text: 'to the DB' }] }] });
+    // The longer fence keeps the code block inside the deep dive.
+    expect(blocks[4]).toMatchObject({ kind: 'deepdive', children: [{ kind: 'paragraph' }, { kind: 'code', lang: 'proschi', text: 'a -> b' }] });
+    expect(quizIds(blocks)).toEqual(['cache-aside', 'hit-rate-to-db-load']);
+  });
+
+  it('finds quizzes nested in other blocks, once each', () => {
+    const blocks = parseMarkdown('````deepdive More\n```quiz\na\n```\n````\n```quiz\na b\n```');
+    expect(quizIds(blocks)).toEqual(['a', 'b']);
+  });
+
+  it('keeps other fences code, with an info string', () => {
+    expect(parseMarkdown('```js title="x"\nlet a\n```')).toEqual([{ kind: 'code', lang: 'js', text: 'let a' }]);
+  });
+
+  it('accepts well-formed blocks and counts their prose as reading, not the quiz ids', () => {
+    const text = lesson('```tldr\nShort.\n```\n\n```callout tip\nA tip.\n```\n\n```numbers\n1 | one\n```\n\n```deepdive More\n### A detail\nText.\n```\n\n```quiz\ncache-aside\n```');
+    expect(lessonIssues(text, new Set(['cache-aside']))).toEqual([]);
+    expect(h2Headings(text).map((h) => h.text)).toEqual([...LESSON_HEADINGS]);
+    expect(readingMinutes('```quiz\n' + 'card '.repeat(1000) + '\n```')).toBe(1);
+    expect(readingMinutes('```callout tip\n' + 'word '.repeat(1000) + '\n```')).toBe(5);
+  });
+
+  it('reports malformed blocks with their lines', () => {
+    const issues = (body: string) => blockIssues(body, new Set(['cache-aside'])).map((i) => `${i.line}: ${i.message}`);
+    expect(issues('```callout\nx\n```')).toEqual([expect.stringMatching(/^1: A callout needs a tone after "callout": tip, pitfall, interview, takeaway$/)]);
+    expect(issues('```callout warning\nx\n```')).toEqual([expect.stringMatching(/^1: .*, not "warning"$/)]);
+    expect(issues('```deepdive\nx\n```')).toEqual(['1: A deepdive needs a title after "deepdive"']);
+    expect(issues('```tldr Title\nx\n```')).toEqual(['1: A tldr block takes nothing after its name']);
+    expect(issues('```numbers\n100 rps\n```')).toEqual(['2: Each line of a numbers block is "value | label"']);
+    expect(issues('```quiz\n```')).toEqual(['1: The quiz block is empty']);
+    expect(issues('```quiz\ncache-aside nope\n```')).toEqual(['2: The quiz names "nope", which is not a review card']);
+    expect(issues('```deepdive More\n## Concepts\n```')).toEqual([expect.stringMatching(/^2: Headings inside a deepdive block must be ### or smaller/)]);
+    // A heading in a block is not one of the lesson's sections.
+    expect(h2Headings('```callout tip\n## Concepts\n```')).toEqual([]);
+    // Without card ids, quiz ids are not checked.
+    expect(blockIssues('```quiz\nnope\n```')).toEqual([]);
+  });
+
+  it('every lesson and guide quizzes existing cards', () => {
+    const cardIds = new Set(Object.keys(import.meta.glob('./cards/*/*.md')).map((path) => path.replace(/^.*\/(.*)\.md$/, '$1')));
+    for (const p of problems) expect(lessonIssues(p.lesson!, cardIds), p.id).toEqual([]);
+    for (const g of GUIDES) expect(blockIssues(readFileSync(new URL(`./guide/${g.id}.md`, import.meta.url), 'utf8'), cardIds), g.id).toEqual([]);
+  });
+});
+
+describe('the list of lessons read', () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it('lists them, and tells listeners about new ones with where they came from', () => {
+    const store = new Map<string, string>();
+    vi.stubGlobal('localStorage', { getItem: (k: string) => store.get(k) ?? null, setItem: (k: string, v: string) => store.set(k, v) });
+    const heard: [string[], string][] = [];
+    const stop = onLessonsRead((ids, source) => heard.push([ids, source]));
+    markLessonRead('pastebin');
+    markLessonsRead(['pastebin', 'approach', 'chat', '__proto__'], 'account');
+    markLessonRead('chat');
+    stop();
+    markLessonRead('rate-limiter');
+    expect(lessonsRead()).toEqual(['approach', 'chat', 'pastebin', 'rate-limiter']);
+    expect(heard).toEqual([
+      [['pastebin'], 'here'],
+      [['approach', 'chat'], 'account'],
+    ]);
   });
 });

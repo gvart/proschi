@@ -7,7 +7,8 @@ import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
 import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
-import { loadProgress, saveProgress, type Progress } from './progress';
+import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
+import { useLessonsRead } from './useLessonsRead';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
@@ -21,6 +22,7 @@ import { requestTour } from '../onboarding/seen';
 import Footer from '../design/Footer';
 import Header from '../design/Header';
 import { useAchievements } from './skills/useAchievements';
+import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import TodayPanel from './hub/TodayPanel';
@@ -92,6 +94,17 @@ async function importProgress(items: { problemId: string; source: string; solved
   }
 }
 
+/** Tells the account which lessons were read (POST /api/me/lessons); a failure is dropped: the next sign-in sends them again. */
+async function sendLessonsRead(ids: string[]): Promise<void> {
+  try {
+    await api('/api/me/lessons', { method: 'POST', body: { ids } });
+    // A reading badge may be earned now.
+    notifyActivity();
+  } catch {
+    // Kept in this browser; onSignedIn sends what the account lacks.
+  }
+}
+
 /** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const route = useHashRoute();
@@ -113,10 +126,23 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       const toImport = progressToImport(progressRef.current, me.progress).filter((item) => problems.some((p) => p.id === item.id));
       updateProgress((p) => mergeServerProgress(p, me.progress));
       if (toImport.length) void importProgress(toImport.map(({ id, source, solved }) => ({ problemId: id, source, solved })));
+      // Lessons read: the account's join this browser's, and this browser's the account lacks are sent.
+      const remote = new Set(me.lessons ?? []);
+      const missing = lessonsRead().filter((id) => !remote.has(id));
+      markLessonsRead([...remote], 'account');
+      if (me.lessons && missing.length) void sendLessonsRead(missing);
     },
     [updateProgress],
   );
   const account = useAccount(onSignedIn);
+  const signedIn = account.state.status === 'signed-in';
+  // Signed in, each lesson read here goes to the account too; without accounts, the badges are checked here at once.
+  const accountsOff = account.state.status === 'off';
+  useEffect(() => {
+    if (signedIn) return onLessonsRead((ids, source) => source === 'here' && void sendLessonsRead(ids));
+    if (accountsOff) return onLessonsRead(() => notifyActivity());
+  }, [signedIn, accountsOff]);
+  const lessonsReadIds = useLessonsRead();
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
@@ -265,6 +291,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 lessons={lessons}
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
+                read={lessonsReadIds}
               />
             )}
           </PracticeHub>

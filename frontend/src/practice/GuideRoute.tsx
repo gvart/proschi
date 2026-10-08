@@ -1,6 +1,7 @@
 import { use } from 'react';
 import { ArrowLeft, ArrowRight } from 'lucide-react';
 import LessonView from './LessonView';
+import { markLessonRead } from './progress';
 import type { Guide } from './guide/guides';
 import { primaryButton, toolButton } from '../components/Playground/ui';
 
@@ -42,7 +43,7 @@ export default function GuideRoute({ guide, startHref, startLabel }: { guide: Gu
         {source === undefined ? (
           <p className="text-sm text-red-700 dark:text-red-300">This article could not be loaded; reload the page to try again.</p>
         ) : (
-          <LessonView source={source} label="Guide" tocAlways large />
+          <LessonView source={source} label="Guide" tocAlways large onRead={() => markLessonRead(guide.id)} />
         )}
       </div>
       <p className="mt-10">

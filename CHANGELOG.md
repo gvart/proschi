@@ -9,6 +9,27 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Added
+- **Livelier lessons.** Every roadmap lesson and the "Read first" guide
+  are rewritten tighter, with new lesson blocks: an *In 30 seconds*
+  summary at the top, key-number tiles in the back-of-the-envelope,
+  tip / pitfall / interview / takeaway callouts, folding deep dives for
+  the long tangents, and **quick checks**: review cards answered right in
+  the lesson and graded on the spot with their explanation (practice
+  only; the review schedule is untouched). The static problem pages show
+  the same blocks as plain HTML, the quick checks linked to their cards.
+  Authors write them as fenced blocks (`tldr`, `callout`, `numbers`,
+  `deepdive`, `quiz`), checked by `proschi problem check`
+  (docs/PRACTICE.md, "Lesson blocks").
+- **Reading progress.** A lesson counts as read once you reach its end
+  or start its challenge. The roadmap marks each lesson and the guide
+  read, and counts the lessons read per stage and in all. Signed in,
+  reads are kept with your account (`POST /api/me/lessons`), so they show
+  on every device and come along when you sign in.
+- **Four reading badges**: First lesson, Avid reader (10 lessons), Stage
+  scholar (every lesson of a stage) and Bookworm (every lesson), with the
+  new rule kinds `lessons`, `stage-lessons` and `all-lessons`.
+
 ## [0.9.0] - 2026-10-07
 
 ### Added

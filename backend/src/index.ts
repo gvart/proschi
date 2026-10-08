@@ -14,6 +14,7 @@ import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
+import { postLessonsRead } from './lessons';
 import { reviewDesign } from './review';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
@@ -46,6 +47,7 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
  *   GET    /api/email/confirm?token=        the confirmation link's page; POST confirms
  *   GET    /api/email/unsubscribe?token=    the unsubscribe link's page; POST unsubscribes (one-click, RFC 8058, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
+ *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
  *   GET    /api/me/documents?since=<ms>     the editor's synced diagrams changed since (tombstones too), {documents, cursor}
@@ -122,6 +124,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'email', 'confirm')) return confirmPage(request, ctx);
   if (is('GET', 'api', 'email', 'unsubscribe')) return unsubscribePage(request, ctx);
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
+  if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);

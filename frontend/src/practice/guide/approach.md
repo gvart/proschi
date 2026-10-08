@@ -1,16 +1,25 @@
-A system design interview is a conversation, not a quiz. There is rarely one
-right answer; the interviewer wants to see how you turn a vague request
-("design a URL shortener") into a concrete system, which trade-offs you
-notice, and whether you can defend your choices with numbers. This guide
-gives you a plan for the usual 45 to 60 minutes and the handful of numbers
-you need along the way. Every problem on the roadmap is practice for exactly
-this plan.
+```tldr
+A system design interview is a **conversation, not a quiz**. Follow **four steps**: scope, high-level design, deep dive, wrap-up, and get a **complete system on the board** before polishing any part. Back every choice with **rough numbers**: per-second load, latency orders of magnitude and availability nines.
+```
+
+There is rarely one right answer. The interviewer wants to see how you turn a
+vague request ("design a URL shortener") into a concrete system, which
+trade-offs you notice, and whether you can defend your choices with numbers.
+This guide gives you a plan for the usual 45 to 60 minutes and the handful of
+numbers you need along the way. Every problem on the roadmap is practice for
+exactly this plan.
 
 ## The four steps
 
-Most good interviews follow the same arc. Keep an eye on the clock: the
-times below are for a 45-minute slot; stretch them in proportion for longer
-ones.
+Most good interviews follow the same arc. Watch the clock: the times below
+are for a 45-minute slot; stretch them in proportion for longer ones.
+
+```numbers
+5–8 min | **Scope** and requirements
+10–15 min | **High-level** design
+15–20 min | **Deep dive**
+3–5 min | **Wrap-up**
+```
 
 | Step | Time | What you produce |
 |---|---:|---|
@@ -19,9 +28,11 @@ ones.
 | 3. Deep dive | 15–20 min | One or two components examined closely: data model, scaling, failures |
 | 4. Wrap-up | 3–5 min | Bottlenecks, trade-offs, what you would do next |
 
-> The most common failure is not a wrong design. It is spending 30 minutes on
-> one component and never showing a complete system. Get something end to end
-> on the board first, then improve it.
+```callout pitfall Running out of time
+The most common failure is not a wrong design. It is spending 30 minutes on
+one component and never showing a complete system. **Get something end to end
+on the board first**, then improve it.
+```
 
 ### Step 1: scope and requirements
 
@@ -30,9 +41,8 @@ see them. You are looking for two lists.
 
 **Functional requirements** are what the system does: the use cases. Name
 them precisely ("a user posts a message", "a follower reads their feed") and
-agree on which ones are in scope. Three or four is plenty for an interview;
-saying "search and moderation are out of scope for now" is a sign of
-judgement, not of weakness.
+agree which are in scope. Three or four is plenty; saying "search and
+moderation are out of scope for now" is a sign of judgement, not of weakness.
 
 **Non-functional requirements** are how well it must do it:
 
@@ -46,21 +56,28 @@ judgement, not of weakness.
   view counts usually answer "a little is fine".
 - **Cost**: often unstated, always relevant. Ask whether there is a budget.
 
+```callout interview No numbers given? Propose some
 If the interviewer has no numbers, propose some and say they are
-assumptions. Numbers you chose are far better than no numbers at all.
+assumptions. **Numbers you chose are far better than no numbers at all.**
+```
 
 ### Step 2: high-level design
 
 Draw the system for every use case, end to end, before optimising anything:
-the client, the entry point (a load balancer or API gateway), the services,
+the client, the entry point (a load balancer or API gateway), the services
 and the data stores. Walk each use case through the diagram out loud: "the
 client sends a POST to the API, the API inserts the row, then answers 201".
 
 Keep services stateless where you can, so any replica can serve any request
-and you can scale them by adding copies. Put state in stores chosen for their
-access pattern: a key-value store for lookups by key, a relational database
-for transactions and flexible queries, object storage for large blobs, a
-queue for work that can happen later.
+and you scale by adding copies. Put state in stores chosen for their access
+pattern:
+
+| Store | Use it for |
+|---|---|
+| Key-value store | Lookups by key |
+| Relational database | Transactions and flexible queries |
+| Object storage | Large blobs |
+| Queue | Work that can happen later |
 
 At the end of this step you should be able to point at every requirement
 and say which part of the diagram meets it, even if roughly.
@@ -76,15 +93,17 @@ pressure from your numbers. Typical deep dives:
 - **The hot path**: what makes the most frequent use case fast. Usually a
   cache, a precomputed result or a CDN (a network of caches near users).
 - **Failures**: what happens when each component dies, and what the user
-  sees. Retries, timeouts, fallbacks, idempotency (a
-  retried request has the same effect as a single one).
+  sees. Retries, timeouts, fallbacks, idempotency (a retried request has the
+  same effect as a single one).
 - **Contention**: what happens when many requests want the same row, seat or
   counter at once.
 
-For every choice, name the alternative and why you rejected it. "I chose a
-queue here rather than a synchronous call because the email provider is slow
-and occasionally down, and the user does not need to wait for the email" is
-the kind of sentence interviewers remember.
+```callout interview Name the alternative you rejected
+For every choice, say what else you considered and why you did not pick it.
+"I chose a queue here rather than a synchronous call because the email
+provider is slow and occasionally down, and the user does not need to wait
+for the email" is the kind of sentence interviewers remember.
+```
 
 ### Step 4: wrap-up
 
@@ -98,7 +117,16 @@ design's limits is worth more than a last-minute feature.
 
 Estimation is not about precision. It is about knowing whether a number is a
 thousand or a million, because that decides whether one machine is enough or
-you need fifty. A few habits make it quick:
+you need fifty.
+
+```numbers
+~100,000 | seconds in a day (86,400)
+~2.5 million | seconds in a month
+~30 million | seconds in a year
+2–5× | peak over the average
+```
+
+A few habits make it quick:
 
 - **Round hard.** A day has about 100,000 seconds (86,400), a month about
   2.5 million, a year about 30 million.
@@ -117,8 +145,7 @@ The tables below are the essentials; [Numbers to know](https://proschi.app/docs/
 has the full cheat sheet (latency, throughput per server, sizes, cloud
 prices) and a fully worked estimate.
 
-Powers of two and ten that come up all the time:
-
+```deepdive Powers of two and ten that come up all the time
 | Unit | Roughly |
 |---|---|
 | 1 KB | a short JSON document or database row |
@@ -126,6 +153,12 @@ Powers of two and ten that come up all the time:
 | 1 GB | fits comfortably in one machine's memory |
 | 1 TB | fits on one machine's disk; a big but ordinary database |
 | 1 PB | needs a distributed storage system |
+```
+
+```quiz
+qps-from-daily-users
+servers-for-peak-load
+```
 
 ### Latency numbers worth knowing
 
@@ -143,10 +176,16 @@ calls hurt.
 | Read 1 MB from an SSD | ~1 ms |
 | Round trip between continents | ~100–150 ms |
 
-The lesson: memory is thousands of times faster than a network round trip,
-and a network round trip inside one data centre is hundreds of times faster
-than one across an ocean. Designs that keep the hot path in memory and in one
-region are fast; designs that cross regions on every request are not.
+```callout takeaway Keep the hot path in memory and in one region
+Memory is thousands of times faster than a network round trip, and a round
+trip inside one data centre is hundreds of times faster than one across an
+ocean. Designs that keep the hot path in memory and in one region are fast;
+designs that cross regions on every request are not.
+```
+
+```quiz
+round-trip-latencies
+```
 
 ### Availability in nines
 
@@ -170,6 +209,11 @@ Two rules let you reason about availability on a whiteboard:
   that are each down 1% of the time are both down only 0.01% of the time:
   99% becomes 99.99%. That is why "two of everything" is the first answer to
   an availability requirement.
+
+```quiz
+three-nines-downtime
+availability-in-series
+```
 
 ## How Proschi maps to the interview
 
@@ -199,15 +243,20 @@ the follow-up questions an interviewer would ask.
   "codes are stored before they are returned": these are the sentences you
   should be able to say out loud about your design.
 
+```deepdive How accurate are the simulation's numbers?
 The numbers are deliberately simple teaching values, right to an order of
 magnitude. They are meant to tell a sound design from a broken one, not to
 replace a load test; [How the simulation works](https://proschi.app/docs/model/)
 lists every formula and default.
+```
 
 Each step of the roadmap starts with a lesson that explains the concepts
-behind its problem, then the challenge, then the review of your design. Read
-the lesson, try the problem without the hints, and only then compare with
-the reference solution. The struggle is where the learning happens.
+behind its problem, then the challenge, then the review of your design.
+
+```callout tip How to use the roadmap
+Read the lesson, try the problem without the hints, and only then compare
+with the reference solution. The struggle is where the learning happens.
+```
 
 ## Further reading
 

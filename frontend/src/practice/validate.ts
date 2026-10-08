@@ -93,8 +93,8 @@ export function validateProblem(problem: Problem, engine: Engine = defaultEngine
     if (!problem.solution.includes(`usecase "${name}"`)) add(SOLUTION, `The solution must define usecase "${name}" from the traffic`);
   }
 
-  // lesson.md, when there is one: the required sections in order, links to the web only.
-  if (problem.lesson !== undefined) for (const issue of lessonIssues(problem.lesson)) add(LESSON_MD, issue.message, issue.line);
+  // lesson.md, when there is one: the required sections in order, links to the web only, lesson blocks well formed (quizzes name real cards).
+  if (problem.lesson !== undefined) for (const issue of lessonIssues(problem.lesson, options.cardIds)) add(LESSON_MD, issue.message, issue.line);
 
   // given.proschi: standalone, error-free, canonical.
   const importLine = problem.given.split('\n').findIndex((l) => /^\s*import /.test(l));
