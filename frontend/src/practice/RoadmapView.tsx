@@ -77,13 +77,13 @@ export default function Roadmap({ stages, problems, progress, access, providers,
           <div className="flex flex-wrap items-center gap-3">
             <p className="font-semibold tabular-nums text-ink">
               {state.solved} of {total} solved
-              {withLesson.length > 0 && (
-                <span className="ml-2 inline-flex items-center gap-1 text-sm font-normal text-ink/80">
-                  <BookOpen size={14} aria-hidden="true" />
-                  {lessonsDone} of {withLesson.length} lessons read
-                </span>
-              )}
             </p>
+            {withLesson.length > 0 && (
+              <p className="inline-flex items-center gap-1 text-sm tabular-nums text-ink/80">
+                <BookOpen size={14} aria-hidden="true" />
+                {lessonsDone} of {withLesson.length} lessons read
+              </p>
+            )}
             {current && (
               <p className="text-sm text-ink/80">
                 <span className={eyebrow}>{state.next ? 'Current stage' : 'Last stage'}</span>{' '}
