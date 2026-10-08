@@ -9,6 +9,8 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-10-08
+
 ### Added
 - **Livelier lessons.** Every roadmap lesson and the "Read first" guide
   are rewritten tighter, with new lesson blocks: an *In 30 seconds*
@@ -871,7 +873,8 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.9.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.10.0...HEAD
+[0.10.0]: https://github.com/gvart/proschi/compare/tooling-v0.9.0...tooling-v0.10.0
 [0.9.0]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...tooling-v0.9.0
 [0.8.0]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...tooling-v0.8.0
 [0.7.0]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...tooling-v0.7.0
