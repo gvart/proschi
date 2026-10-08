@@ -8,16 +8,7 @@ import Markdown from './Markdown';
 import Roadmap from './RoadmapView';
 
 const { cards } = vi.hoisted(() => {
-  const base = {
-    topic: 'caching',
-    tags: ['caching'],
-    difficulty: 'easy',
-    related: [],
-    decks: [],
-    version: 1,
-    retired: false,
-    distinctFrom: [],
-  } as const;
+  const base = { topic: 'caching', tags: ['caching'], difficulty: 'easy' as const, related: [], decks: [], version: 1, retired: false, distinctFrom: [] };
   const cards: Card[] = [
     {
       ...base,

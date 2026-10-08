@@ -12,6 +12,8 @@
  * fence uses a longer fence around it (````deepdive … ````), as in CommonMark.
  */
 
+import { CALLOUT_TONES, RICH_BLOCKS, closesFence, FENCE, type CalloutTone } from './lessonBlocks';
+
 export type Inline =
   | { kind: 'text'; text: string }
   | { kind: 'code'; text: string }
@@ -42,18 +44,7 @@ export type Block =
   /** ```quiz: review cards (by id, one per line) to answer right there. */
   | { kind: 'quiz'; ids: string[] };
 
-export const CALLOUT_TONES = ['tip', 'pitfall', 'interview', 'takeaway'] as const;
-export type CalloutTone = (typeof CALLOUT_TONES)[number];
-
-/** Each tone's title when the block names none. */
-export const CALLOUT_TITLES: Record<CalloutTone, string> = { tip: 'Tip', pitfall: 'Pitfall', interview: 'In the interview', takeaway: 'Key takeaway' };
-
-/** The fence languages that are lesson blocks rather than code. */
-export const RICH_BLOCKS = ['tldr', 'callout', 'numbers', 'deepdive', 'quiz'] as const;
-const isRich = (lang: string): lang is (typeof RICH_BLOCKS)[number] => (RICH_BLOCKS as readonly string[]).includes(lang);
-
-/** The title of a ```tldr block. */
-export const TLDR_TITLE = 'In 30 seconds';
+export { CALLOUT_TITLES, CALLOUT_TONES, RICH_BLOCKS, TLDR_TITLE, closesFence, FENCE, type CalloutTone } from './lessonBlocks';
 
 /** A list item, with at most one level of nested items. */
 export interface ListItem {
@@ -173,10 +164,6 @@ function delimiterRow(line: string): Align[] | undefined {
 }
 
 const LIST_ITEM = /^\s*(?:([-*+])|(\d+)[.)])\s+(.*)$/;
-/** An opening fence: its backticks, its language and the rest of the info line. */
-export const FENCE = /^\s*(`{3,})\s*([\w-]*)(?:\s+(.*?))?\s*$/;
-/** Whether a line closes a fence opened with `ticks` backticks: as many or more, nothing else. */
-export const closesFence = (line: string, ticks: string) => new RegExp(`^\\s*\`{${ticks.length},}\\s*$`).test(line);
 const QUOTE = /^\s{0,3}>\s?(.*)$/;
 
 /** Parses Markdown into blocks. Pass one `slug` to several parses that share a page, so their heading ids stay unique. */
@@ -267,6 +254,8 @@ export function parseMarkdown(source: string, slug: Slugger = slugger()): Block[
   flush();
   return blocks;
 }
+
+const isRich = (lang: string): lang is (typeof RICH_BLOCKS)[number] => (RICH_BLOCKS as readonly string[]).includes(lang);
 
 /** A lesson block from its fence: the language, the rest of the opening line and the body. */
 function richBlock(lang: (typeof RICH_BLOCKS)[number], info: string, body: string, slug: Slugger): Block {

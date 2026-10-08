@@ -5,7 +5,7 @@
  * Review"). Pure, so the page, the tests and `proschi problem check` share it.
  */
 
-import { CALLOUT_TONES, FENCE, RICH_BLOCKS, closesFence } from './markdown.ts';
+import { CALLOUT_TONES, FENCE, RICH_BLOCKS, closesFence } from './lessonBlocks';
 
 /** The level-2 headings every lesson has, in this order. */
 export const LESSON_HEADINGS = [
