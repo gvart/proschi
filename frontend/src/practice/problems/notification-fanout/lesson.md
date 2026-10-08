@@ -1,6 +1,10 @@
 # Notification Fan-out: accept fast, deliver patiently
 
-"Tell the customer their order shipped" sounds like one line of code: call the email API. Then the email provider has a bad afternoon, every order update starts taking seconds, and some of them fail. In this lesson you design a notification system that takes events from the Order Service in a few milliseconds. It then picks the right channel, respects opt-outs and survives a provider outage.
+```tldr
+The promise to the Order Service is **accepted, not sent**: one write to a **durable queue**, in milliseconds. **Workers** take events from the queue, **check preferences first**, send through one provider and **fail over** to a backup SMS provider. Delete only after the send; the event id is the **idempotency key**.
+```
+
+"Tell the customer their order shipped" sounds like one line of code: call the email API. Then the email provider has a bad afternoon, and every order update takes seconds or fails. Here you design a notification system that takes events from the Order Service in milliseconds, picks the right channel, respects opt-outs and survives a provider outage.
 
 ## What you'll learn
 
@@ -12,20 +16,26 @@
 
 ## The problem, explained
 
-**Who uses it.** The Order Service, an internal caller. It emits events like `OrderShipped` and wants them turned into an email, SMS or push notification, whichever the customer prefers.
+**Who uses it.** The Order Service, an internal caller, emits events like `OrderShipped` to be turned into an email, SMS or push notification, whichever the customer prefers.
 
 **Functional requirements.**
 
 - **Notify**: the Order Service hands over an event and gets an answer as soon as the event is safely accepted.
-- **Deliver**: a queue hands an accepted event to a worker. The worker reads the user's preferences and sends at most one notification. Five scenarios: `"Email"`, `"Push"`, `"SMS"`, `"SMS failover"` (the SMS provider does not answer, the backup sends it) and `"Opted out"` (nothing is sent).
+- **Deliver**: a queue hands an accepted event to a worker, which reads the user's preferences and sends at most one notification. Five scenarios: `"Email"`, `"Push"`, `"SMS"`, `"SMS failover"` (the SMS provider does not answer, the backup sends it) and `"Opted out"` (nothing is sent).
 
-**Non-functional requirements.** Handing over an event takes under 50 ms at p99 (99% of hand-overs are faster), and the Order Service never waits for a provider. Accepting events is available 99.95% of the time. An accepted event is never lost, even if every provider is down for a while. Losing any single machine, or the SMS provider, must not stop notifications. At most $2,000 a month, including the given Order Service and Preferences service.
+**Non-functional requirements.**
 
-**What is given, and why.** `given.proschi` declares the caller (`orders`, four replicas), the existing Preferences service (`prefs`, three replicas) and four providers: `email`, `sms`, `smsBackup` and `push`. The providers carry capacity limits (2k, 500, 500 and 10k requests a second) because real providers rate-limit you. They are external systems: you do not run them, they cost nothing in the model, and they answer in about 200 ms with 99.9% availability.
+- Hand-over p99 under 50 ms (99% are faster); the Order Service never waits for a provider.
+- Accepting events is 99.95% available.
+- An accepted event is never lost, even if every provider is down for a while.
+- Losing any single machine, or the SMS provider, does not stop notifications.
+- At most $2,000 a month, including the given Order Service and Preferences service.
+
+**What is given, and why.** `given.proschi` declares the caller (`orders`, four replicas), the existing Preferences service (`prefs`, three replicas) and four providers: `email`, `sms`, `smsBackup` and `push`. Their capacity limits (2k, 500, 500 and 10k requests a second) stand for real rate limits. They are external: free in the model, about 200 ms per call, 99.9% available.
 
 **What the tests check.**
 
-- *The Order Service never waits for a provider*: Notify never waits for an external system, writes a queue before answering, and there is no connection at all from `orders` to a provider.
+- *The Order Service never waits for a provider*: Notify never waits for an external system, writes a queue before answering, and `orders` has no connection to a provider.
 - *Workers take events from the queue*: Deliver starts at a queue.
 - *Preferences are checked before anything is sent*: Deliver calls `prefs` before any provider, and the opted-out scenario never calls a provider.
 - *Each channel goes out through its provider*: Email calls `email`, Push calls `push`, SMS calls `sms`.
@@ -33,7 +43,15 @@
 
 ## Back-of-the-envelope
 
-Peak is 1,500 events a second, each accepted once and delivered once. The channel mix splits that load: 55% email, 30% push, 11% SMS (10% sent by the primary, 1% failing over to the backup) and 4% opted out.
+```numbers
+1,500/s | events at peak, accepted and delivered once
+825 rps | email sends, about 40% of the 2k limit
+≈ 300 | provider calls in flight
+900,000 | events queued after a 10-minute total outage
+$700 | of the $2,000 already spent
+```
+
+Peak is 1,500 events a second, each accepted and delivered once, split 55% email, 30% push, 11% SMS (10% by the primary, 1% failing over to the backup) and 4% opted out.
 
 | Quantity | Arithmetic | Result |
 |---|---|---|
@@ -47,29 +65,39 @@ Peak is 1,500 events a second, each accepted once and delivered once. The channe
 | Provider calls in flight | 1,500/s × ~0.2 s (Little's law) | about 300 at once |
 | Backlog if all providers are down for 10 minutes | 1,500/s × 600 s | 900,000 events |
 
-**Rate limits.** Every channel is under its provider's limit at peak. Email is the closest, at about 40%. That matters: if the Order Service also called a provider inline, the email provider would get that load on top and could go over its limit.
+**Rate limits.** Every channel is under its provider's limit at peak; email is the closest, at about 40%. If the Order Service also called a provider inline, that load would come on top and could push email over its limit.
 
-**Concurrency.** *Little's law* says the number of requests in flight equals arrival rate times time in the system. With 200 ms provider calls, workers hold about 300 calls open at once. Real workers need asynchronous I/O or a big enough pool. Proschi does not model a worker waiting on a slow dependency (a service replica is one server with a 10 ms service time), so you have to point this out yourself.
+**Concurrency.** *Little's law*: requests in flight = arrival rate × time in the system. With 200 ms provider calls, workers hold about 300 calls open, so they need asynchronous I/O or a big enough pool. Proschi does not model a worker waiting on a slow dependency (a service replica is one server with a 10 ms service time): point this out yourself.
 
-**Backlog.** A ten-minute outage of everything leaves under a million small messages in the queue. Queues keep messages for days (SQS for up to 14), so "never lose an accepted event" is a property you get from the queue, not from heroics in the workers.
+```quiz
+littles-law-concurrency
+```
 
-**Sizing the parts you add.** A queue node takes 50k writes a second per replica, so two are lightly loaded and give redundancy. A service replica takes 2k requests a second; the worker receives 1,500 events a second. Divide by your target utilisation, then make sure the tier stays under 100% with one replica lost.
+**Backlog.** A ten-minute outage of everything leaves under a million small messages queued. Queues keep messages for days (SQS for up to 14), so "never lose an accepted event" comes from the queue, not from heroics in the workers.
 
-**Latency in the model.** Notify's path is the Order Service writing the queue, a 5 ms hop. The 50 ms limit leaves lots of room, unless a provider is on the path: one provider call is already 200 ms. Deliver has no latency requirement, and the providers decide its p99. In the model a provider is a single server, so at 41% busy the email provider takes around 340 ms on average because of queueing. That shows why you never want a third party's slow tail on your caller's path.
+**Sizing the parts you add.** A queue replica takes 50k writes a second, so two are lightly loaded and redundant. A service replica takes 2k requests a second against the worker's 1,500 events a second: divide by your target utilisation, and stay under 100% with one replica lost.
 
-**Availability.** Notify's availability is the queue's, and two replicas of a 99.99% queue are effectively always up in the model. Deliver's availability is capped by the providers (99.9% each). That is fine, because the queue holds events until they are delivered.
+**Latency in the model.** Notify is the Order Service writing the queue, a 5 ms hop: lots of room under 50 ms, unless a provider is on the path, since one call is already 200 ms.
 
-**Cost.** The given services cost $700 a month ($100 per service replica). A queue replica is $200. The budget leaves room for a sensible design, not for doubling every tier.
+```deepdive Why a provider's tail must stay off the caller's path
+Deliver has no latency requirement; the providers decide its p99. A provider is a single server in the model, so at 41% busy the email provider takes around 340 ms on average because of queueing: exactly the slow tail you keep off your caller's path.
+```
+
+**Availability.** Notify's is the queue's, and two replicas of a 99.99% queue are effectively always up in the model. Deliver's is capped by the providers (99.9% each), which is fine: the queue holds events until delivered.
+
+**Cost.** The given services cost $700 a month ($100 per service replica); a queue replica is $200. There is room for a sensible design, not for doubling every tier.
 
 ## Concepts
 
 ### Queue-based load levelling
 
-Put a durable queue between a fast caller and slow work. The caller's request ends when the queue stores the message. Workers then drain the queue at the pace the providers allow. The queue absorbs bursts (*load levelling*) and outages (*buffering*).
+Put a durable queue between a fast caller and slow work. The caller's request ends when the queue stores the message; workers drain it at the pace the providers allow. The queue absorbs bursts (*load levelling*) and outages (*buffering*).
 
-Why it works: the queue is a simple, highly available system whose only job is to accept and hold messages. Its availability and latency are much better than any provider's, so the caller inherits those, not the provider's.
+```callout takeaway
+The queue is a simple, highly available system whose only job is to accept and hold messages. Its availability and latency are far better than any provider's, so **the caller inherits the queue's, not the provider's**.
+```
 
-Trade-offs: delivery becomes asynchronous, so the caller cannot know whether the email was sent, only that it will be attempted. You also need to monitor queue depth and message age. When not to use it: when the caller truly needs the result now. (A one-time password the user is waiting for may still go through a queue, but with a priority lane and tight alerting.)
+Trade-offs: delivery is asynchronous, so the caller only knows the email will be attempted, and you must monitor queue depth and message age. When not to use it: when the caller truly needs the result now. (A one-time password the user awaits may still go through a queue, with a priority lane and tight alerting.)
 
 ```proschi
 title "Accept now, work later"
@@ -96,22 +124,30 @@ usecase "Work" {
 }
 ```
 
-Note the shape: the second use case *starts at the queue*. In Proschi a request to a queue always counts as a write, so a worker that "polls" with a request would look like write load on the queue and its flow would start at the worker. Real SQS consumers do long-poll; the model's convention is that the queue hands the message over, as an SQS-triggered Lambda or a push subscription would.
+```callout pitfall The second use case starts at the queue
+In Proschi a request to a queue always counts as a write, so a worker that "polls" looks like write load, and its flow starts at the worker. Real SQS consumers do long-poll; the model's convention is that the queue hands the message over, as an SQS-triggered Lambda or a push subscription would.
+```
+
+```quiz
+queue-load-levelling
+beat-your-dependency
+```
 
 ### At-least-once delivery and idempotency keys
 
-Queues like SQS deliver *at least once*. A message stays in the queue, hidden for a *visibility timeout* while a worker handles it, and is deleted only when the worker says so. If the worker crashes, the message reappears and another worker takes it. Occasionally a message is delivered twice even without a crash, so the SQS documentation tells you to make consumers *idempotent* (safe to run twice).
+Queues like SQS deliver *at least once*. A message is hidden for a *visibility timeout* while a worker handles it, and deleted only when the worker says so; if the worker crashes, it reappears for another worker. Occasionally a message arrives twice even without a crash, so the SQS documentation says to make consumers *idempotent* (safe to run twice).
 
-For notifications, a duplicate means a customer gets the same text twice. The standard defence is an *idempotency key*: a unique id (the event id) that the worker passes to the provider or records itself, so a repeated send with the same key does nothing. Stripe's write-up on idempotency explains the pattern for APIs in general.
+Here a duplicate means a customer gets the same text twice. The defence is an *idempotency key*: a unique id (the event id) that the worker passes to the provider or records itself, so a repeated send does nothing. Stripe's write-up on idempotency explains the pattern for APIs in general.
 
-Trade-off: someone must store the keys for a while. Providers that accept an idempotency key do it for you; otherwise a small table or cache of recently sent event ids does it.
+Someone must store the keys for a while: the provider, if it accepts idempotency keys, or a small table or cache of recently sent event ids.
 
 ### Provider failover and circuit breakers
 
-A third party will fail. For channels with alternatives (SMS has many vendors), the worker tries the primary and, on a timeout or error, sends through a backup. A *circuit breaker* makes this cheap. After enough failures, it stops calling the primary for a while and goes straight to the backup, so you do not pay a timeout on every message.
+A third party will fail. For channels with alternatives (SMS has many vendors), the worker tries the primary and, on a timeout or error, sends through a backup. A *circuit breaker* makes this cheap: after enough failures it skips the primary for a while, so you do not pay a timeout on every message.
 
-In Proschi, a failed call is `-x`, which costs a timeout (1,000 ms by default) and gets no answer. A scenario that calls a node with `-x` and still succeeds through another node is a *fallback*, which is what `survive failure of …` and `handles failure of …` look for:
+In Proschi a failed call is `-x`: a timeout (1,000 ms by default) and no answer. A scenario that calls a node with `-x` and still succeeds through another node is a *fallback*, what `survive failure of …` and `handles failure of …` look for.
 
+````deepdive In Proschi: two providers
 ```proschi
 title "Two providers"
 
@@ -136,55 +172,65 @@ usecase "Geocode" {
   }
 }
 ```
+````
 
-When not to fail over: when the two providers would both act (a payment captured twice), or when the backup is much worse and a short delay would be better. Then retrying later from the queue is the safer choice.
+Do not fail over when both providers could act (a payment captured twice) or when the backup is much worse than a short delay: retry later from the queue instead.
+
+```quiz
+circuit-breaker
+delayed-retries
+```
 
 ## Designing it step by step
 
-**1. Scope.** Clarify: which channels (email, SMS, push), who decides the channel (the user's preferences), whether one event can produce several notifications (no, at most one), the peak rate, and the promise to the caller ("accepted" means stored, not sent). Ask about opt-outs: for legal and ethical reasons, they must be honoured before anything goes out.
+**1. Scope.** Clarify the channels (email, SMS, push), who picks one (the user's preferences), whether one event can produce several notifications (no, at most one), the peak rate, and the promise to the caller ("accepted" means stored, not sent). Ask about opt-outs: for legal and ethical reasons, they are honoured before anything goes out.
 
 **2. High-level design.** Two flows, one boundary between them:
 
 - *Notify*: Order Service → queue → `200`. Nothing else on that path.
 - *Deliver*: queue → worker → Preferences → one provider → delete the message.
 
-Name the alternative and reject it: the Order Service calling providers itself. It couples order processing to the worst provider's latency and availability, and the requirement says the Order Service must never wait for one.
+Name and reject the alternative, the Order Service calling providers itself: it couples order processing to the worst provider's latency and availability, which the requirements forbid.
 
 **3. Deep dive.**
 
-- *Scenarios.* The preference answer decides the branch. Write one branch per channel, a failover branch where the SMS call fails with `-x` and the backup is called, and an opted-out branch that only deletes the message. Spell the scenario names exactly as the problem does; the traffic mix refers to them.
-- *Ordering of steps.* Preferences first, provider second. Delete the message only after the provider accepted it (or after deciding not to send), so a crash in between causes a retry, not a loss.
-- *Sizing.* Two queue replicas, and enough worker replicas for 1,500 events a second at well under 70%, still fine with one lost. Nothing you add needs to be big; the budget is $2,000 with $700 already spent.
-- *Duplicates.* Use the event id as an idempotency key with the provider. Mention it even though the model does not simulate redelivery.
+- *Scenarios.* The preference answer decides the branch: one per channel, a failover branch where the SMS call fails with `-x` and the backup is called, and an opted-out branch that only deletes the message. Spell the names exactly as the problem does; the traffic mix refers to them.
+- *Ordering of steps.* Preferences, then provider. Delete the message only after the provider accepted it (or after deciding not to send), so a crash causes a retry, not a loss.
+- *Sizing.* Two queue replicas, and enough workers for 1,500 events a second at well under 70%, still fine with one lost. Nothing needs to be big; $700 of the $2,000 is already spent.
+- *Duplicates.* Use the event id as the provider's idempotency key; mention it though the model does not simulate redelivery.
 
-**4. Wrap-up.** Check: Notify is one queue write; no path from the Order Service to a provider; the SMS outage is covered by the failover scenario; every node you run has two or more replicas; the bill fits. Then extend: priority queues for urgent messages, per-user rate limits so nobody gets twenty texts in a minute, a dead-letter queue for events that keep failing, and delivery receipts from providers to track what actually arrived.
+**4. Wrap-up.** Check: Notify is one queue write; no path from the Order Service to a provider; the failover scenario covers an SMS outage; every node you run has two or more replicas; the bill fits. Then extend: priority queues for urgent messages, per-user rate limits so nobody gets twenty texts in a minute, a dead-letter queue for events that keep failing, and provider delivery receipts to track what arrived.
 
 ## Common mistakes
 
-**A notifier that queues and then sends inline** (`wrong/notifier-calls-provider-inline`). The Order Service calls a notifier, which writes the queue and then calls the email provider before answering. The queue is there, but the caller still waits for a 200 ms third party, and every provider outage becomes an order-processing outage. In the model it is worse: the email provider now gets the inline sends on top of the worker's and goes over its 2k rps limit, so Notify's p99 runs to many seconds. It fails *The Order Service never waits for a provider*, and also Notify's p99 and availability limits.
+**A notifier that queues and then sends inline** (`wrong/notifier-calls-provider-inline`). The notifier writes the queue, then calls the email provider before answering. The caller still waits for a 200 ms third party, and every provider outage becomes an order-processing outage. In the model it is worse: the inline sends come on top of the worker's, the email provider goes over its 2k rps limit, and Notify's p99 runs to many seconds. It fails *The Order Service never waits for a provider*, and also Notify's p99 and availability limits.
 
-**A worker that polls the queue** (`wrong/worker-polls-queue`). The Deliver flow starts with the worker sending `ReceiveMessage` to the queue. That is how SQS consumers are often written, but in this model it reads as the worker writing to the queue, and the flow no longer starts at the queue. It fails *Workers take events from the queue*. Model the queue handing the event over instead.
+**A worker that polls the queue** (`wrong/worker-polls-queue`). Deliver starts with the worker sending `ReceiveMessage` to the queue. Common with SQS, but in this model it reads as the worker writing to the queue, and the flow no longer starts at the queue. It fails *Workers take events from the queue*. Model the queue handing the event over instead.
 
 **Other classic mistakes.**
 
 - *Checking preferences after sending*, or not at all for one channel. An opted-out user gets a message. Fails *Preferences are checked before anything is sent*.
-- *Only retrying the primary SMS provider.* During an outage every SMS waits, and with a single external node and no fallback, `survive failure of sms` fails.
+- *Only retrying the primary SMS provider.* Every SMS waits out the outage, and with no fallback `survive failure of sms` fails.
 - *Deleting the message before the send.* If the worker dies right after, the notification is lost: at-most-once by accident.
 - *One queue replica or one worker.* A single point of failure; fails `survive any node failure`.
-- *One giant queue for every priority.* A marketing blast of millions delays password resets. Separate queues (or priorities) per class of message.
+- *One giant queue for every priority.* A marketing blast of millions delays password resets: separate queues (or priorities) per class of message.
 
 ## In the interview
 
-Say the core idea in one sentence: "The caller's promise is *accepted*, not *sent*; a durable queue makes that promise cheap and keeps third parties off the request path." Draw the queue as the boundary, then walk through one event per scenario.
+Give the core idea, draw the queue as the boundary, then walk one event through each scenario.
+
+```callout interview The one-sentence pitch
+"The caller's promise is *accepted*, not *sent*; a durable queue makes that promise cheap and keeps third parties off the request path."
+```
 
 Follow-ups you should expect:
 
 - *How do you avoid sending twice?* At-least-once plus idempotency: the event id is the key, sent to the provider or checked in a small store of recently sent ids.
-- *A provider is down for an hour. What happens?* Messages stay in the queue (or are retried with backoff); a circuit breaker switches to the backup where one exists; queue age alerts fire. Nothing is lost.
-- *How do you respect provider rate limits?* Limit worker concurrency per provider, or use a token bucket per provider in the workers.
-- *How would you add templates and localisation?* A template service the worker calls after preferences, keyed by event type and locale; cache it heavily.
-- *How do you know a message was delivered?* Provider callbacks (delivery receipts) written to a status store; for push, the app can acknowledge when it displays the notification.
-- *What about bulk campaigns?* A separate pipeline and queue so they never compete with transactional messages.
+- *A provider is down for an hour?* Messages stay queued (or are retried with backoff), a circuit breaker switches to the backup where one exists, and queue age alerts fire. Nothing is lost.
+- *Provider rate limits?* Limit worker concurrency per provider, or a token bucket per provider in the workers.
+- *Templates and localisation?* A template service the worker calls after preferences, keyed by event type and locale, heavily cached.
+- *How do you know it was delivered?* Provider callbacks (delivery receipts) written to a status store; for push, the app can acknowledge on display.
+- *Bulk campaigns?* A separate pipeline and queue, never competing with transactional messages.
 
 ## Further reading
 
