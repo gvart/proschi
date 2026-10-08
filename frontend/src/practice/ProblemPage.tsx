@@ -329,7 +329,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           {/* Both stay mounted, so the hints already shown survive switching. */}
           {hasLesson && (
             <div ref={lessonRef} className={`${lessonShown ? '' : 'hidden'} px-4 py-4`}>
-              <LessonView source={problem.lesson!} onStart={startChallenge} />
+              <LessonView source={problem.lesson!} onStart={startChallenge} onRead={() => markLessonRead(problem.id)} />
             </div>
           )}
           <div className={lessonShown ? 'hidden' : undefined}>

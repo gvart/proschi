@@ -1,4 +1,4 @@
-import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
+import { ArrowRight, BookCheck, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
@@ -26,11 +26,26 @@ interface RoadmapProps {
   guide?: Guide & { minutes?: number };
   /** A locked step the address asked for (`#/roadmap/<id>` or its lesson): the roadmap shows what unlocks it. */
   locked?: { id: string; lock: StepLock };
+  /** The lessons and guides read (progress.ts lessonsRead). */
+  read?: readonly string[];
+}
+
+/** "Read", next to a lesson or guide that was read. */
+function ReadChip() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink bg-pass/25 px-1.5 py-px text-[11px] font-bold text-ink">
+      <BookCheck size={11} aria-hidden="true" />
+      Read
+    </span>
+  );
 }
 
 /** The interview prep roadmap, the hub's first tab: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked, read = [] }: RoadmapProps) {
   const checking = access === 'checking';
+  const readSet = new Set(read);
+  const withLesson = roadmapState(stages, progress).steps.filter((s) => lessons[s.id] !== undefined);
+  const lessonsDone = withLesson.filter((s) => readSet.has(s.id)).length;
   const guest = access === 'sign-in';
   const state = roadmapState(stages, progress);
   // Signed out, the next step past the first stage waits for a sign-in.
@@ -62,6 +77,12 @@ export default function Roadmap({ stages, problems, progress, access, providers,
           <div className="flex flex-wrap items-center gap-3">
             <p className="font-semibold tabular-nums text-ink">
               {state.solved} of {total} solved
+              {withLesson.length > 0 && (
+                <span className="ml-2 inline-flex items-center gap-1 text-sm font-normal text-ink/80">
+                  <BookOpen size={14} aria-hidden="true" />
+                  {lessonsDone} of {withLesson.length} lessons read
+                </span>
+              )}
             </p>
             {current && (
               <p className="text-sm text-ink/80">
@@ -108,8 +129,9 @@ export default function Roadmap({ stages, problems, progress, access, providers,
         >
           <BookOpen size={22} className="mt-0.5 flex-shrink-0 text-ink" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            <span className={`block ${eyebrow}`}>
+            <span className={`flex flex-wrap items-center gap-2 ${eyebrow}`}>
               Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
+              {!checking && readSet.has(guide.id) && <ReadChip />}
             </span>
             <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
             <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
@@ -135,6 +157,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             preview={checking || (guest && i >= SIGNED_OUT_STAGES)}
             access={access}
             lessons={lessons}
+            read={readSet}
           />
         ))}
       </ol>
@@ -151,6 +174,7 @@ function StageSection({
   preview,
   access,
   lessons,
+  read,
 }: {
   stage: RoadmapStage;
   index: number;
@@ -161,6 +185,7 @@ function StageSection({
   preview: boolean;
   access: RoadmapAccess;
   lessons: Record<string, number>;
+  read: ReadonlySet<string>;
 }) {
   // A preview shows the problems without the viewer's progress.
   const steps = state.steps
@@ -169,6 +194,8 @@ function StageSection({
   // The header counts the required problems: an optional step (the tutorial) keeps no stage from completing.
   const required = steps.filter((s) => !s.optional);
   const solved = required.filter((s) => s.status === 'solved').length;
+  const withLesson = steps.filter((s) => lessons[s.id] !== undefined);
+  const lessonsDone = preview ? 0 : withLesson.filter((s) => read.has(s.id)).length;
   return (
     <li aria-label={`Stage ${index + 1}: ${stage.title}`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
@@ -176,6 +203,11 @@ function StageSection({
           <span className="tabular-nums text-muted">{index + 1}.</span> {stage.title}
         </h2>
         <span className="text-xs tabular-nums text-muted">{preview ? `${required.length} problems` : `${solved} / ${required.length}`}</span>
+        {!preview && withLesson.length > 0 && (
+          <span className={`text-xs tabular-nums ${lessonsDone === withLesson.length ? 'font-semibold text-ink' : 'text-muted'}`}>
+            · {lessonsDone} / {withLesson.length} lessons read
+          </span>
+        )}
         {current && <span className="rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-xs font-bold text-on-accent">You are here</span>}
       </div>
       <p className="mt-1 max-w-2xl text-sm text-ink/80">{stage.why}</p>
@@ -198,6 +230,7 @@ function StageSection({
                     <BookOpen size={12} aria-hidden="true" />
                     <span>Lesson · Challenge</span>
                     <span className="tabular-nums">· {minutes} min read</span>
+                    {!preview && read.has(step.id) && <ReadChip />}
                   </span>
                 )}
                 {step.locked && !preview && state.blocker && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.blocker.id)} first</span>}

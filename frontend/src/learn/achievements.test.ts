@@ -33,7 +33,7 @@ const problems: ProblemInfo[] = [
 ];
 const context: AchievementContext = { problems, stages: [{ id: 'one', problems: ['a', 'b', 'gone'] }] };
 
-const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 }, game: NO_GAME };
+const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 }, game: NO_GAME, lessons: [] };
 const snap = (over: Partial<StatsSnapshot>): StatsSnapshot => ({ ...empty, ...over });
 const solved = (...ids: string[]) => ids.map((id) => ({ id, firstRun: false, underReference: false }));
 

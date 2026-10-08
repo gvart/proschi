@@ -22,7 +22,7 @@ export const TIERS = ['bronze', 'silver', 'gold'] as const;
 export type Tier = (typeof TIERS)[number];
 
 /** The icons a badge can show, by name; the page maps each to a lucide icon, an app to its own. */
-export const ICONS = ['layers', 'brain', 'flame', 'trophy', 'check', 'zap', 'coins', 'calculator', 'target', 'map', 'database', 'radio', 'shield', 'star'] as const;
+export const ICONS = ['layers', 'brain', 'flame', 'trophy', 'check', 'zap', 'coins', 'calculator', 'target', 'map', 'database', 'radio', 'shield', 'star', 'book'] as const;
 export type Icon = (typeof ICONS)[number];
 
 type Difficulty = ProblemInfo['difficulty'];
@@ -63,7 +63,13 @@ export type Rule =
   /** Scale or Fail: scenarios cleared (all twelve waves). */
   | { kind: 'game-clears'; min: number }
   /** Scale or Fail: the highest ascension cleared in any scenario. */
-  | { kind: 'game-ascension'; min: number };
+  | { kind: 'game-ascension'; min: number }
+  /** Problem lessons read (lesson.md), optionally only those of one roadmap stage. */
+  | { kind: 'lessons'; min: number; stage?: string }
+  /** Every lesson of some roadmap stage read. */
+  | { kind: 'stage-lessons' }
+  /** Every problem lesson read. */
+  | { kind: 'all-lessons' };
 
 export type RuleKind = Rule['kind'];
 
@@ -85,6 +91,9 @@ const RULE_FIELDS: Record<RuleKind, { required: string[]; optional: string[] }> 
   'game-waves': { required: ['min'], optional: [] },
   'game-clears': { required: ['min'], optional: [] },
   'game-ascension': { required: ['min'], optional: [] },
+  lessons: { required: ['min'], optional: ['stage'] },
+  'stage-lessons': { required: [], optional: [] },
+  'all-lessons': { required: [], optional: [] },
 };
 export const RULE_KINDS = Object.keys(RULE_FIELDS) as RuleKind[];
 
@@ -139,6 +148,8 @@ export interface StatsSnapshot {
   challenges: ChallengeStats;
   /** Scale or Fail. */
   game: GameStats;
+  /** The ids of the problems whose lessons were read (guides and unknown ids are not counted by the rules). */
+  lessons: string[];
 }
 
 /** What the game badges and the skill map's game bonus look at (src/game/engine/meta.ts gameStats). */
@@ -211,9 +222,32 @@ export function ruleProgress(rule: Rule, s: StatsSnapshot, context: AchievementC
       const ids = context.stages.find((st) => st.id === rule.stage)?.problems.filter((id) => known.has(id)) ?? [];
       return { current: ids.filter((id) => solved.has(id)).length, target: Math.max(1, ids.length) };
     }
+    case 'lessons': {
+      const known = new Set(rule.stage ? (context.stages.find((st) => st.id === rule.stage)?.problems ?? []) : context.problems.map((p) => p.id));
+      return count(lessonsRead(s, context).filter((id) => known.has(id)).length, rule.min);
+    }
+    case 'all-lessons':
+      return { current: lessonsRead(s, context).length, target: Math.max(1, context.problems.length) };
+    case 'stage-lessons': {
+      // The stage closest to done: its lessons read against its size.
+      const read = new Set(lessonsRead(s, context));
+      const known = new Set(context.problems.map((p) => p.id));
+      const best = context.stages
+        .map((st) => st.problems.filter((id) => known.has(id)))
+        .filter((ids) => ids.length > 0)
+        .map((ids) => ({ current: ids.filter((id) => read.has(id)).length, target: ids.length }))
+        .sort((a, b) => b.current / b.target - a.current / a.target || a.target - b.target)[0];
+      return best ?? { current: 0, target: 1 };
+    }
     default:
       return { current: 0, target: 1 };
   }
+}
+
+/** The lessons read that belong to a problem of the catalog, each once. */
+function lessonsRead(s: StatsSnapshot, context: AchievementContext): string[] {
+  const known = new Set(context.problems.map((p) => p.id));
+  return [...new Set(s.lessons ?? [])].filter((id) => known.has(id));
 }
 
 /** One badge for a learner, as GET /api/me/achievements answers it. */
@@ -293,6 +327,8 @@ export interface SnapshotInput extends Omit<MasteryInput, 'solved'> {
   challenges?: ChallengeStats;
   /** Scale or Fail's; none when absent. */
   game?: GameStats;
+  /** The ids of the lessons read; none when absent. */
+  lessons?: readonly string[];
 }
 
 const NO_CHALLENGES: ChallengeStats = { completed: 0, perfect: 0, longestStreak: 0 };
@@ -311,6 +347,7 @@ export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; 
       mastery: Object.fromEntries(map.topics.map((t) => [t.topic, t.mastery])),
       challenges: input.challenges ?? NO_CHALLENGES,
       game,
+      lessons: [...(input.lessons ?? [])],
     },
     skills: map,
   };
@@ -357,6 +394,8 @@ export interface AchievementCheckContext {
   topics: readonly string[];
   /** Roadmap stage ids. */
   stages: readonly string[];
+  /** Each roadmap stage's problem ids, when known: how many lessons a stage's `lessons` rule can count. */
+  stageProblems?: Readonly<Record<string, readonly string[]>>;
   /**
    * The text of achievements.lock, every id ever published: each achievement
    * must be in it and each id in it must still have an achievement. Not
@@ -472,6 +511,10 @@ function checkRule(raw: unknown, context: AchievementCheckContext, retired = fal
   if (rule.stage !== undefined && (typeof rule.stage !== 'string' || !context.stages.includes(rule.stage))) return `"stage" names "${String(rule.stage)}", which is not a roadmap stage`;
   if (kind === 'game-waves' && (rule.min as number) > 24) return '"min" of a game-waves rule is at most 24, the last wave of Endless';
   if (kind === 'game-ascension' && (rule.min as number) > 10) return '"min" of a game-ascension rule is at most 10';
+  if (kind === 'lessons') {
+    const reachable = rule.stage ? (context.stageProblems?.[rule.stage as string]?.length ?? Infinity) : context.problems.length;
+    if ((rule.min as number) > reachable) return `"min" is ${String(rule.min)}, but only ${reachable} lesson(s) can count towards it`;
+  }
   if (kind === 'solved' || kind === 'first-run' || kind === 'under-reference') {
     const reachable = context.problems.filter((p) => (!rule.difficulty || p.difficulty === rule.difficulty) && (!rule.tag || p.tags.includes(rule.tag as string))).length;
     if ((rule.min as number) > reachable) return `"min" is ${String(rule.min)}, but only ${reachable} problem(s) can count towards it`;

@@ -62,19 +62,25 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
-  const [rows, identities, account] = await DB.batch([
+  const [rows, identities, account, lessons] = await DB.batch([
     DB.prepare(
       'SELECT problem_id, runs, source, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms FROM progress WHERE user_id = ? ORDER BY problem_id',
     ).bind(user.id),
     DB.prepare('SELECT provider FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     // When the account was made: "member since" on the account page.
     DB.prepare('SELECT created_at FROM users WHERE id = ?').bind(user.id),
+    // Lessons and guides read on any device (src/lessons.ts).
+    DB.prepare('SELECT lesson_id FROM lesson_reads WHERE user_id = ? ORDER BY lesson_id').bind(user.id),
   ]);
   const progress: Record<string, ProgressEntry> = {};
   for (const row of rows.results as unknown as ProgressRow[]) progress[row.problem_id] = entryOf(row);
   const createdAt = (account.results[0] as { created_at: number } | undefined)?.created_at;
   return json(
-    { user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) }, progress },
+    {
+      user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) },
+      progress,
+      lessons: (lessons.results as { lesson_id: string }[]).map((r) => r.lesson_id),
+    },
     200,
     NO_STORE,
   );
@@ -110,7 +116,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -208,6 +214,11 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       localDay: r.local_day,
     })),
     game: await exportGame(DB, user.id),
+    // Lessons and roadmap guides read, with when.
+    lessonReads: (await DB.prepare('SELECT lesson_id, read_at FROM lesson_reads WHERE user_id = ? ORDER BY read_at, lesson_id').bind(user.id).all<Row>()).results.map((r) => ({
+      lessonId: r.lesson_id,
+      readAt: r.read_at,
+    })),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).

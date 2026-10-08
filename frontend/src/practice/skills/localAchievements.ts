@@ -19,7 +19,7 @@ import { ACHIEVEMENTS } from '../achievementList';
 import { localActivity, localGoal } from '../activity';
 import { localChallengeStats } from '../challenge/store';
 import { challengeDay } from '../../learn/challenge';
-import { loadProgress, type Progress } from '../progress';
+import { lessonsRead, loadProgress, type Progress } from '../progress';
 import { ROADMAP, requiredStages, roadmapFor } from '../roadmap';
 import { CARDS_LOG_KEY, readReviews } from '../review/store';
 import { loadRunStats } from '../runStats';
@@ -98,6 +98,8 @@ export function localAchievements(now: number, progress: Progress = loadProgress
     challenges: localChallengeStats(challengeDay(new Date(now * 1000))),
     // Scale or Fail's progress kept in this browser.
     game: gameStats(loadLocalMeta(), gameContent().content),
+    // Lessons read in this browser.
+    lessons: lessonsRead(),
   });
   const earned = loadEarned();
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, context, earned, now);

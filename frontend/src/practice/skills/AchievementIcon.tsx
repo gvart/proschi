@@ -1,4 +1,4 @@
-import { Award, Brain, Calculator, Check, Coins, Database, Flame, Layers, Map as MapIcon, Radio, Shield, Star, Target, Trophy, Zap, type LucideIcon } from 'lucide-react';
+import { Award, BookOpen, Brain, Calculator, Check, Coins, Database, Flame, Layers, Map as MapIcon, Radio, Shield, Star, Target, Trophy, Zap, type LucideIcon } from 'lucide-react';
 import type { Icon, Tier } from '../../learn/achievements';
 
 /** The lucide icon for each icon name achievements.json may use (ICONS in src/learn/achievements.ts). */
@@ -17,6 +17,7 @@ const ICON: Record<Icon, LucideIcon> = {
   radio: Radio,
   shield: Shield,
   star: Star,
+  book: BookOpen,
 };
 
 /** The medal colour of each tier; a badge without a tier is lilac. Filled, with dark ink, so they read in both themes. */

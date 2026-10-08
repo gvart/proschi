@@ -82,7 +82,13 @@ export function withRun(progress: Progress, problem: Problem, solved: boolean): 
   return { ...progress, [problem.id]: { ...entry, status: solved || entry.status === 'solved' ? 'solved' : 'attempted' } };
 }
 
-/** Lessons read in this browser, `{ [problem id]: true }`: a problem opened from the roadmap shows its lesson first until it is read. */
+/**
+ * Lessons (and roadmap guides) read in this browser, `{ [id]: true }`: a
+ * problem opened from the roadmap shows its lesson first until it is read,
+ * the roadmap marks what was read, and the reading badges count it. Signed
+ * in, reads also go to the account (PracticeApp), which sends back the
+ * reads of other devices.
+ */
 export const LESSONS_KEY = 'proschi.lessons';
 
 function readLessons(): Record<string, unknown> {
@@ -95,8 +101,35 @@ export function lessonRead(id: string): boolean {
   return Object.prototype.hasOwnProperty.call(read, id) && read[id] === true;
 }
 
-/** Remembers that the lesson of `id` was read; storage errors are ignored (services/storage.ts). */
+/** Every lesson and guide read in this browser, sorted. */
+export function lessonsRead(): string[] {
+  return Object.entries(readLessons())
+    .filter(([id, v]) => v === true && isSafeKey(id))
+    .map(([id]) => id)
+    .sort();
+}
+
+/** Where reads come from: read here, or read on another device and sent by the account. */
+export type ReadSource = 'here' | 'account';
+
+const listeners = new Set<(ids: string[], source: ReadSource) => void>();
+
+/** Called with the ids newly marked read and where they come from; answers the way to stop listening. */
+export function onLessonsRead(listener: (ids: string[], source: ReadSource) => void): () => void {
+  listeners.add(listener);
+  return () => listeners.delete(listener);
+}
+
+/** Remembers lessons as read; storage errors are ignored (services/storage.ts). Listeners hear the ids that were new. */
+export function markLessonsRead(ids: readonly string[], source: ReadSource = 'here'): void {
+  const read = readLessons();
+  const fresh = [...new Set(ids)].filter((id) => isSafeKey(id) && read[id] !== true);
+  if (!fresh.length) return;
+  saveJson(LESSONS_KEY, { ...read, ...Object.fromEntries(fresh.map((id) => [id, true])) });
+  listeners.forEach((l) => l(fresh, source));
+}
+
+/** Remembers that the lesson (or guide) `id` was read. */
 export function markLessonRead(id: string): void {
-  if (!isSafeKey(id)) return;
-  saveJson(LESSONS_KEY, { ...readLessons(), [id]: true });
+  markLessonsRead([id]);
 }
