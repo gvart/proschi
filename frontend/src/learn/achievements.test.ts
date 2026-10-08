@@ -63,6 +63,12 @@ describe('rules', () => {
     [{ kind: 'challenges', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 1, 1],
     [{ kind: 'challenge-perfect', min: 1 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 0, 1],
     [{ kind: 'challenge-streak', min: 7 }, snap({ challenges: { completed: 3, perfect: 0, longestStreak: 2 } }), 2, 7],
+    // Lessons of problems this catalog has count; guides and unknown ids do not.
+    [{ kind: 'lessons', min: 3 }, snap({ lessons: ['a', 'd', 'approach', 'gone', 'a'] }), 2, 3],
+    [{ kind: 'lessons', min: 2, stage: 'one' }, snap({ lessons: ['a', 'c', 'd'] }), 1, 2],
+    [{ kind: 'all-lessons' }, snap({ lessons: ['a', 'b', 'approach'] }), 2, 4],
+    [{ kind: 'stage-lessons' }, snap({ lessons: ['a'] }), 1, 2],
+    [{ kind: 'stage-lessons' }, snap({ lessons: ['a', 'b'] }), 2, 2],
   ])('%j on a snapshot is %d of %d', (rule, s, current, target) => {
     expect(ruleProgress(rule, s, context)).toEqual({ current, target });
   });
@@ -197,6 +203,8 @@ describe('the achievements check', () => {
     ['an unknown tag', [{ ...ok, rule: { kind: 'all-solved', tag: 'blockchain' } }], /"blockchain", which no practice problem has/],
     ['an unknown topic', [{ ...ok, rule: { kind: 'mastery', topic: 'queues', min: 0.5 } }], /"queues", which is not a topic/],
     ['an unknown stage', [{ ...ok, rule: { kind: 'stage', stage: 'two' } }], /"two", which is not a roadmap stage/],
+    ['more lessons than there are', [{ ...ok, rule: { kind: 'lessons', min: 5 } }], /only 4 lesson\(s\) can count/],
+    ['a field all-lessons lacks', [{ ...ok, rule: { kind: 'all-lessons', min: 1 } }], /"all-lessons" rule has no field "min"/],
     ['a bad difficulty', [{ ...ok, rule: { kind: 'solved', min: 1, difficulty: 'brutal' } }], /"difficulty" must be one of/],
     ['more solves than problems', [{ ...ok, rule: { kind: 'solved', min: 3, difficulty: 'hard' } }], /only 2 problem\(s\) can count/],
     ['a repeated rule', [ok, { ...ok, id: 'again' }], /Same rule as "ok"/],
