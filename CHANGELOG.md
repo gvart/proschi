@@ -9,6 +9,12 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Changed
+- **Landing page SEO.** A shorter title and meta description that fit in
+  search results, the main keywords in the hero heading (read by search
+  engines and screen readers, not shown), and Twitter title and
+  description tags.
+
 ## [0.10.0] - 2026-10-08
 
 ### Added
