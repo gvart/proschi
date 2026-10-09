@@ -189,6 +189,15 @@ h3 {
     font-size: clamp(3.5rem, 5.4vw, 5.6rem);
   }
 }
+/* Keywords for search engines and screen readers; the heading shows only the hook. */
+.hero__keywords {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
 .hero__typed {
   position: relative;
   display: inline-block;
