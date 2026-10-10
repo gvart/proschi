@@ -9,6 +9,8 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-10-10
+
 ### Added
 - **One account control on every page.** The header shows a Sign in
   button when signed out and your name with a menu when signed in, now
@@ -972,7 +974,8 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.10.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.11.0...HEAD
+[0.11.0]: https://github.com/gvart/proschi/compare/tooling-v0.10.0...tooling-v0.11.0
 [0.10.0]: https://github.com/gvart/proschi/compare/tooling-v0.9.0...tooling-v0.10.0
 [0.9.0]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...tooling-v0.9.0
 [0.8.0]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...tooling-v0.8.0
