@@ -144,10 +144,12 @@ interface ShareRow {
   created_at: number;
 }
 
+/** A short link, unless its owner is blocked (src/admin.ts): then it answers as if deleted. */
 async function findShare(ctx: Ctx, id: string): Promise<ShareRow | null> {
   if (!SHARE_ID.test(id)) return null;
   return ctx.env.DB.prepare(
-    'SELECT id, title, source, imports, image IS NOT NULL AS has_image, image_width, image_height, created_at FROM shares WHERE id = ?',
+    `SELECT s.id, s.title, s.source, s.imports, s.image IS NOT NULL AS has_image, s.image_width, s.image_height, s.created_at
+     FROM shares s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND u.blocked_at IS NULL`,
   )
     .bind(id)
     .first<ShareRow>();
@@ -279,7 +281,7 @@ export async function sharePage(request: Request, ctx: Ctx, id: string): Promise
 
 /** GET /s/<id>.png: the preview, kept for a year (a share never changes); without one, a redirect to the site's image. */
 export async function shareImage(request: Request, ctx: Ctx, id: string): Promise<Response> {
-  const row = SHARE_ID.test(id) ? await ctx.env.DB.prepare('SELECT image FROM shares WHERE id = ?').bind(id).first<{ image: unknown }>() : null;
+  const row = SHARE_ID.test(id) ? await ctx.env.DB.prepare('SELECT s.image FROM shares s JOIN users u ON u.id = s.user_id WHERE s.id = ? AND u.blocked_at IS NULL').bind(id).first<{ image: unknown }>() : null;
   if (!row?.image) {
     return new Response(null, { status: 302, headers: { Location: `${originOf(request)}/og.png`, 'Cache-Control': 'public, max-age=3600' } });
   }

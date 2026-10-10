@@ -56,7 +56,7 @@ export default defineConfig(async () => ({
     rollupOptions: {
       // The landing page at the root, the editor under app/, system design
       // practice under practice/ (and a page per problem), model/, which forwards to the
-      // docs, embed/ (a diagram for other sites' iframes) and 404.html.
+      // docs, embed/ (a diagram for other sites' iframes), admin/ and 404.html.
       // docsSite adds the docs pages (docs/**/index.html).
       input: {
         landing: fileURLToPath(new URL('./index.html', import.meta.url)),
@@ -66,6 +66,8 @@ export default defineConfig(async () => ({
         notFound: fileURLToPath(new URL('./404.html', import.meta.url)),
         // The template of each problem's page, practice/<id>/ (plugins/practicePages.ts).
         problemPage: fileURLToPath(new URL('./practice/problem/index.html', import.meta.url)),
+        // The admin panel (src/admin/main.tsx; backend/README.md "Admin panel"), noindex.
+        admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
         // The read-only diagram other sites frame (src/embed/main.tsx).
         embed: fileURLToPath(new URL('./embed/index.html', import.meta.url)),
         // The review cards' index, and the templates of each topic's and card's page (plugins/cardPages.ts).

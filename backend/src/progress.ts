@@ -133,7 +133,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
-    DB.prepare('SELECT created_at, daily_goal FROM users WHERE id = ?').bind(user.id),
+    DB.prepare('SELECT created_at, daily_goal, last_seen_day FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
@@ -156,6 +156,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       publicProfile: user.publicProfile,
       dailyGoal: (account.results[0] as Row).daily_goal,
       createdAt: (account.results[0] as Row).created_at,
+      lastSeenDay: (account.results[0] as Row).last_seen_day,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
     // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).

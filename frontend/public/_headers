@@ -18,6 +18,11 @@
   ! Content-Security-Policy
   Content-Security-Policy: frame-ancestors *
 
+# The admin panel (src/admin/): never indexed, never cached by the browser.
+/admin/*
+  X-Robots-Tag: noindex, nofollow
+  Cache-Control: no-store
+
 # Vite names these by content hash, so they never change.
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

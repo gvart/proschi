@@ -201,6 +201,9 @@ above are about events, not about you).
   collected for them.
 - Only if you ask for email reminders: your email address and its settings
   ([Email reminders](#email-reminders), below).
+- The last day (UTC date only, no time) you used your account, for counting
+  how many people are active ([The site's operator](#the-sites-operator),
+  below).
 
 **What is not stored**: your email address (unless you opt in to email
 reminders), your avatar, and the access
@@ -213,6 +216,9 @@ only to proschi.app). `proschi_oauth` lives for ten minutes during sign-in to
 tie the provider's answer to your browser. Neither is used for anything else.
 An app sends its access token with each request instead of a cookie; when
 it signs in through your browser, no session cookie is set there.
+
+**Cookies of the operator**: `__Host-proschi_admin` signs the site's
+operator in to the admin panel; visitors never get it.
 
 **Logs**: each request to the server is logged with a request id, its
 method, path (never the query), status, duration and, when signed in, your
@@ -256,6 +262,40 @@ its address then answers "not found", the same as an address no user has, so
 nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
+
+## The site's operator
+
+Proschi has one operator, who signs in to an admin panel (`/admin/`) with a
+passkey. It reads the database directly, so the operator can see what the
+server stores about an account (listed above), with these limits: the email
+reminders' address is shown masked (`a***@example.com`), and session tokens
+exist only as hashes. The panel shows aggregates (accounts, sign-ups, the
+usage counts) and, per account, the display name, sign-in providers and
+their user ids, when it joined and was last active (a date), its progress
+and counts, and its short links, but not your diagrams' or designs' text.
+
+The operator can **block** an account that breaks the rules (spam in short
+links, an abusive name): it is signed out everywhere, cannot sign in again
+(the page says the account is blocked), its profile is made private and its
+short links stop working while it is blocked. The operator can also rename an
+account, make its profile private, sign it out, remove its email address,
+delete a short link, or delete the account as **Delete account** does. To
+ask about a block, open a [GitHub issue](https://github.com/gvart/proschi/issues).
+
+What the panel keeps of its own:
+
+- **An audit log** of the operator's actions: when, which action (for
+  example "block", with the reason given), and the id of the account or short
+  link it was taken on; never a name or address. Kept for 400 days, then
+  deleted. It stays after an account is deleted, holding only that account's
+  id.
+- **App events** for the server's health, kept 30 days: server errors with
+  the route and request id, rate limits hit, failed sign-ins, sign-ins of
+  blocked accounts, failed reminder emails and the scheduled jobs' runs.
+  They never hold a user id, an IP address, a query or an email address;
+  ids in a route are replaced by `:id`.
+- **The last active day** of each account (above): a date, written at most
+  once a day, deleted with the account and part of **Download my data**.
 
 ## Email reminders
 
