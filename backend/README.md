@@ -539,8 +539,7 @@ solve locally either way.
    - only then (or straight away without staging), for production: prints the D1 Time Travel bookmark
      (`npm run backup`), applies `migrations/` to D1, deploys the Worker on
      proschi.app (Cloudflare creates the DNS records and certificates) and runs
-     the smoke test; when that fails, the log shows how to roll back;
-   - turns GitHub Pages into a redirect to proschi.app (`pages-redirect/`).
+     the smoke test; when that fails, the log shows how to roll back.
 3. **OAuth apps.**
    - GitHub: Settings → Developer settings → OAuth Apps → New. Homepage
      `https://proschi.app`, callback `https://proschi.app/auth/github/callback`.

@@ -4,7 +4,7 @@ All notable changes to Proschi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the tooling
 (the `proschi` npm package and the VS Code extension) follows
 [Semantic Versioning](https://semver.org/). Versions are tagged
-`tooling-v<version>`; the web app at <https://gvart.github.io/proschi/> is
+`tooling-v<version>`; the web app at <https://proschi.app/> is
 deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
