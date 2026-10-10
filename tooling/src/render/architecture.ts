@@ -1,13 +1,14 @@
 import { layoutBoxes } from '../../../frontend/src/dsl/autoLayout';
 import type { Diagram, DiagramNode } from '../proschi';
-import { TAILWIND_HEX, techIcon, typeColor } from './icons';
-import { esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
+import { techIcon } from './icons';
+import { COLORS, MONO, card, esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
 
 /**
- * The architecture as SVG, drawn like the editor's canvas: the canvas's own
- * top-down ELK layout (autoLayout.ts, so pinned `pos x,y` positions hold),
- * ComponentNode-style cards with the coloured icon tile, GroupNode's dashed
- * boxes, TextNode's sticky notes, and React Flow's bezier edges.
+ * The architecture as SVG, drawn like the editor's canvas (canvas.css): the
+ * canvas's own top-down ELK layout (autoLayout.ts, so pinned `pos x,y`
+ * positions hold), ComponentNode's monochrome cards with a thick ink border,
+ * hard shadow and square handles, GroupNode's dashed frames, TextNode's notes,
+ * and React Flow's bezier edges.
  */
 
 const MARGIN = 32;
@@ -19,16 +20,9 @@ const PAD_Y = 14;
 const NOTE_FONT = 14;
 const NOTE_LINE = 21;
 
-const GRAY = {
-  border: TAILWIND_HEX['border-gray-300'],
-  name: TAILWIND_HEX['text-gray-800'],
-  tech: TAILWIND_HEX['text-gray-500'],
-  team: TAILWIND_HEX['text-gray-600'],
-  body: TAILWIND_HEX['text-gray-700'],
-};
-const EDGE = '#b1b1b7';
-const GROUP_FILL = '#f0f9ff';
-const GROUP_BORDER = '#3b82f6';
+const ICON = 34;
+// TextNode: `--c-yellow` at 22%.
+const NOTE_FILL = '#FFD23F';
 
 interface Placed {
   node: DiagramNode;
@@ -43,7 +37,7 @@ function noteLines(node: DiagramNode, width: number): string[] {
   return wrap(node.description ?? node.name, width - 36, NOTE_FONT, 12);
 }
 
-export async function renderArchitectureSvg(diagram: Diagram, idPrefix = ''): Promise<string> {
+export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
   const boxes = new Map((await layoutBoxes(diagram)).map((b) => [b.id, b]));
 
   // Absolute positions: group members are laid out relative to their group.
@@ -82,10 +76,10 @@ export async function renderArchitectureSvg(diagram: Diagram, idPrefix = ''): Pr
     const y = p.y + dy;
     body.push(
       `<g data-node="${esc(p.node.id)}" data-kind="group">`,
-      `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="8" fill="${GROUP_FILL}" stroke="${GROUP_BORDER}" stroke-width="2" stroke-dasharray="7 5"/>`,
-      techIcon('Logical Group', x + 18, y + 22, 20, GROUP_BORDER),
-      text(x + 46, y + 38, fit(p.node.name, p.width - 64, 18, true), { size: 18, weight: 600, fill: GROUP_BORDER }),
-      p.node.description ? text(x + 18, y + 72, fit(p.node.description, p.width - 36, 14), { size: 14, fill: GRAY.team }) : '',
+      `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="10" fill="${COLORS.text}" fill-opacity="0.03" stroke="${COLORS.text}" stroke-opacity="0.45" stroke-width="2" stroke-dasharray="7 5"/>`,
+      techIcon('Logical Group', x + 14, y + 13, 14, COLORS.text),
+      text(x + 34, y + 24, fit(p.node.name.toUpperCase(), p.width - 52, 12, true), { size: 12, weight: 700, fill: COLORS.text, opacity: 0.8, spacing: 1 }),
+      p.node.description ? text(x + 14, y + 48, fit(p.node.description, p.width - 28, 13), { size: 13, fill: COLORS.muted }) : '',
       '</g>',
     );
   }
@@ -94,36 +88,39 @@ export async function renderArchitectureSvg(diagram: Diagram, idPrefix = ''): Pr
     const s = placed.get(edge.source);
     const t = placed.get(edge.target);
     if (!s || !t || s === t) continue;
-    body.push(drawEdge(edge.id, edge.label, s.x + dx + s.width / 2, s.y + dy + s.height, t.x + dx + t.width / 2, t.y + dy, idPrefix));
+    body.push(drawEdge(edge.id, edge.label, s.x + dx + s.width / 2, s.y + dy + s.height, t.x + dx + t.width / 2, t.y + dy));
   }
 
   for (const p of all) {
     if (p.node.kind === 'group') continue;
-    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : drawCard(p, dx, dy, idPrefix));
+    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : drawCard(p, dx, dy));
   }
 
-  if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: GRAY.tech }));
-  const defs = [
-    `<filter id="${idPrefix}shadow" x="-10%" y="-10%" width="120%" height="140%"><feDropShadow dx="0" dy="3" stdDeviation="4" flood-color="#000000" flood-opacity="0.1"/></filter>`,
-    `<marker id="${idPrefix}arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="${EDGE}"/></marker>`,
-  ].join('');
-  return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean), defs);
+  if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: COLORS.muted }));
+  return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean));
 }
 
-function drawCard(p: Placed, dx: number, dy: number, idPrefix: string): string {
+/** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy). */
+function handle(cx: number, cy: number): string {
+  return `<rect x="${r(cx - 4.5)}" y="${r(cy - 4.5)}" width="9" height="9" rx="1" fill="${COLORS.surface}" stroke="${COLORS.border}" stroke-width="2"/>`;
+}
+
+function drawCard(p: Placed, dx: number, dy: number): string {
   const { node, width, height } = p;
   const x = p.x + dx;
   const y = p.y + dy;
-  const textX = x + PAD_X + 44;
-  const textMax = width - PAD_X * 2 - 44;
+  const textX = x + PAD_X + ICON + 10;
+  const textMax = width - PAD_X * 2 - ICON - 10;
   return [
     `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}">`,
-    `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(width - 2)}" height="${r(height - 2)}" rx="8" fill="#ffffff" stroke="${GRAY.border}" stroke-width="2" filter="url(#${idPrefix}shadow)"/>`,
-    `<rect x="${r(x + PAD_X)}" y="${r(y + PAD_Y)}" width="36" height="36" rx="4" fill="${typeColor(node.type)}"/>`,
-    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 20, '#ffffff', node.type),
-    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 600, fill: GRAY.name }),
-    text(textX, y + PAD_Y + 32, fit(node.techStack, textMax, 12), { size: 12, fill: GRAY.tech }),
-    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: GRAY.team }) : '',
+    card(x, y, width, height),
+    `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
+    techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, COLORS.text, node.type),
+    text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700 }),
+    text(textX, y + PAD_Y + 31, fit(node.techStack, textMax, 12), { size: 11, weight: 500, fill: COLORS.muted, family: MONO }),
+    node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: COLORS.muted }) : '',
+    handle(x + width / 2, y),
+    handle(x + width / 2, y + height),
     '</g>',
   ]
     .filter(Boolean)
@@ -135,31 +132,32 @@ function drawNote(p: Placed, dx: number, dy: number): string {
   const y = p.y + dy;
   return [
     `<g data-node="${esc(p.node.id)}" data-kind="text">`,
-    `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="8" fill="${TAILWIND_HEX['bg-yellow-100']}" stroke="${TAILWIND_HEX['border-yellow-300']}" stroke-width="2"/>`,
-    techIcon('Sticky Note', x + 18, y + 20, 16, TAILWIND_HEX['text-yellow-600']),
-    text(x + 42, y + 33, fit(p.node.name, p.width - 60, 14), { size: 14, weight: 500, fill: TAILWIND_HEX['text-yellow-800'] }),
-    ...(p.lines ?? []).map((line, i) => text(x + 18, y + 61 + i * NOTE_LINE, line, { size: NOTE_FONT, fill: GRAY.body })),
+    card(x, y, p.width, p.height, { fill: COLORS.surface, stroke: 2 }),
+    `<rect x="${r(x + 2)}" y="${r(y + 2)}" width="${r(p.width - 4)}" height="${r(p.height - 4)}" rx="3" fill="${NOTE_FILL}" fill-opacity="0.22"/>`,
+    techIcon('Sticky Note', x + 18, y + 20, 16, COLORS.text),
+    text(x + 42, y + 33, fit(p.node.name, p.width - 60, 14), { size: 14, weight: 600 }),
+    ...(p.lines ?? []).map((line, i) => text(x + 18, y + 61 + i * NOTE_LINE, line, { size: NOTE_FONT })),
     '</g>',
   ].join('\n');
 }
 
-/** React Flow's default (bezier) edge from the source's bottom to the target's top, label at its middle. */
-function drawEdge(id: string, label: string | undefined, sx: number, sy: number, tx: number, ty: number, idPrefix: string): string {
+/** React Flow's default (bezier) edge from the source's bottom handle to the target's top one, label at its middle. */
+function drawEdge(id: string, label: string | undefined, sx: number, sy: number, tx: number, ty: number): string {
   const offset = (d: number) => (d >= 0 ? 0.5 * d : 0.25 * 25 * Math.sqrt(-d));
   const c1y = sy + offset(ty - sy);
   const c2y = ty - offset(ty - sy);
   const out = [
     `<g data-edge="${esc(id)}">`,
-    `<path d="M${r(sx)},${r(sy)} C${r(sx)},${r(c1y)} ${r(tx)},${r(c2y)} ${r(tx)},${r(ty)}" fill="none" stroke="${EDGE}" stroke-width="1.5" marker-end="url(#${idPrefix}arrow)"/>`,
+    `<path d="M${r(sx)},${r(sy)} C${r(sx)},${r(c1y)} ${r(tx)},${r(c2y)} ${r(tx)},${r(ty)}" fill="none" stroke="${COLORS.line}" stroke-width="2"/>`,
   ];
   if (label) {
     const cx = sx * 0.125 + sx * 0.375 + tx * 0.375 + tx * 0.125;
     const cy = sy * 0.125 + c1y * 0.375 + c2y * 0.375 + ty * 0.125;
     const shown = fit(label, 200, 11);
-    const w = textWidth(shown, 11) + 8;
+    const w = textWidth(shown, 11) + 12;
     out.push(
-      `<rect x="${r(cx - w / 2)}" y="${r(cy - 9)}" width="${r(w)}" height="18" rx="2" fill="#ffffff"/>`,
-      text(cx, cy + 4, shown, { size: 11, fill: GRAY.name, anchor: 'middle' }),
+      `<rect x="${r(cx - w / 2)}" y="${r(cy - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
+      text(cx, cy + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
     );
   }
   out.push('</g>');

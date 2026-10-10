@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { analyze, complete, definition, hover, outline, quickFix, references, toRange, type TextEdit } from '../src/analysis';
+import { analyze, complete, definition, hover, outline, quickFix, references, semanticTokens, toRange, type TextEdit } from '../src/analysis';
 
 const doc = `title "Shop"
 
@@ -172,6 +172,15 @@ describe('analysis', () => {
     expect(applyEdit(src, fix.edit)).toBe('db "Orders" [PostgreSQL] x2\n');
     // Without a suggestion there is nothing to fix.
     expect(quickFix(b, "Unknown tech stack 'Zzyzx'; simulated as a generic service, like [Service]", toRange(warning))).toBeNull();
+  });
+
+  it('tokenizes node ids, tech stacks and teams, but not strings, labels or payloads', () => {
+    const at = (text: string) => semanticTokens(a).filter((t) => t.line === lineOf(text)).map((t) => [doc.split('\n')[t.line].substr(t.character, t.length), t.kind]);
+    expect(at('api "Order API"')).toEqual([['api', 'node'], ['[REST API]', 'tech'], ['@orders', 'team']]);
+    expect(at('api -> db : SQL')).toEqual([['api', 'node'], ['db', 'node']]);
+    expect(at('"sku": "api"')).toEqual([]);
+    expect(at('api -x db')).toEqual([['api', 'node'], ['db', 'node']]);
+    expect(semanticTokens(a).some((t) => t.line === lineOf('usecase "Place order"'))).toBe(false);
   });
 });
 

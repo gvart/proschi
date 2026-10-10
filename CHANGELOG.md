@@ -16,6 +16,25 @@ deployed from `main` and ships with the same changes.
 - **Offers after a first solve.** The "First solve" card offers the
   leaderboard and email reminders right there.
 - **Leave playback with Escape** or the new "Exit playback" button.
+- **A plugin for JetBrains IDEs** (IntelliJ IDEA, WebStorm, PyCharm and the
+  others, 2025.3 and newer), in `tooling/jetbrains`: highlighting from the
+  TextMate grammar, with node ids, tech stacks and teams colored through the
+  language server (*Settings | Editor | Color Scheme | Proschi*), the
+  language server through the IDE's built-in LSP client (errors as you type,
+  quick fixes, completion, hover, go to definition, find usages, structure,
+  Reformat Code), *Check File*, *Run Tests*, a diagram preview tool window
+  that fits the diagrams to its width and follows the IDE theme, and *Open
+  in Proschi*, with a settings page for the server, CLI and Node.js paths.
+  Not on the JetBrains Marketplace yet; build it with `./gradlew buildPlugin`
+  (see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
+- **The language server sends semantic tokens** for node ids, tech stacks
+  and teams, so editors can color them apart from other names.
+- **`proschi render`, the VS Code preview and HLD exports draw in the
+  editor's new look**: paper background, monochrome cards with a thick
+  border, hard shadow and handles, monospace tech stacks and edge labels,
+  upper-case group names, and pink step numbers in sequence diagrams.
+- **The VS Code preview fits the diagrams to the panel's width** instead of
+  showing them at full size with scroll bars.
 
 - **Admin panel** at `/admin/`, signed in with a **passkey** (no username
   or password). The first passkey is registered with a one-time
@@ -190,15 +209,6 @@ deployed from `main` and ships with the same changes.
   for a file, with the files it imports.
 - **The VS Code extension is published to the VS Code Marketplace and Open
   VSX** on each tooling release, with an icon and a screenshot.
-- **A plugin for JetBrains IDEs** (IntelliJ IDEA, WebStorm, PyCharm and the
-  others, 2025.3 and newer), in `tooling/jetbrains`: highlighting from the
-  TextMate grammar, the language server through the IDE's built-in LSP
-  client (errors as you type, quick fixes, completion, hover, go to
-  definition, find usages, structure, Reformat Code), *Check File*, *Run
-  Tests*, a diagram preview tool window and *Open in Proschi*, with a
-  settings page for the server, CLI and Node.js paths. Not on the JetBrains
-  Marketplace yet; build it with `./gradlew buildPlugin` (see
-  [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
 - **One daily streak for any daily practice.** The daily goal is now met by
   your cards for the day, a solved problem, the daily challenge or a
   finished Arcade run (played to the end, not just started), with freezes

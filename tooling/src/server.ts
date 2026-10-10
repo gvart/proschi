@@ -23,7 +23,7 @@ import {
 import { TextDocument } from 'vscode-languageserver-textdocument';
 import { statSync } from 'node:fs';
 import { openApiDiagnostics, watchedFiles } from './openapi/config';
-import { analyze, complete, declaration, hover, outline, quickFix, references, toRange, type Analysis, type OutlineSymbol } from './analysis';
+import { analyze, complete, declaration, hover, outline, quickFix, references, semanticTokens, toRange, type Analysis, type OutlineSymbol, type TokenKind } from './analysis';
 import { fileResolver, importLinks, ownDiagnostics } from './imports';
 import { format } from './proschi';
 import { testDiagnostics } from './simulation';
@@ -70,6 +70,10 @@ function publishDependents(uri: string) {
   }
 }
 
+// Standard token types, so every theme colours them: node ids, tech stacks, teams.
+const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator' };
+const TOKEN_TYPES = Object.values(TOKEN_TYPE);
+
 connection.onInitialize(() => ({
   capabilities: {
     textDocumentSync: TextDocumentSyncKind.Incremental,
@@ -81,6 +85,7 @@ connection.onInitialize(() => ({
     documentLinkProvider: { resolveProvider: false },
     documentFormattingProvider: true,
     codeActionProvider: { codeActionKinds: [CodeActionKind.QuickFix] },
+    semanticTokensProvider: { legend: { tokenTypes: TOKEN_TYPES, tokenModifiers: [] }, full: true },
   },
   serverInfo: { name: 'proschi-language-server', version: typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev' },
 }));
@@ -256,6 +261,20 @@ connection.onCodeAction((params) => {
     });
   }
   return actions;
+});
+
+// Each token as [deltaLine, deltaStart, length, type, modifiers], relative to the previous one.
+connection.languages.semanticTokens.on((params) => {
+  const doc = documents.get(params.textDocument.uri);
+  const data: number[] = [];
+  let line = 0;
+  let character = 0;
+  for (const t of doc ? semanticTokens(analysisOf(doc)) : []) {
+    data.push(t.line - line, t.line === line ? t.character - character : t.character, t.length, TOKEN_TYPES.indexOf(TOKEN_TYPE[t.kind]), 0);
+    line = t.line;
+    character = t.character;
+  }
+  return { data };
 });
 
 documents.listen(connection);

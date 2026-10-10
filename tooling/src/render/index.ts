@@ -44,7 +44,7 @@ export function scenarioSlug(useCase: DiagramUseCase, scenario: DiagramScenario)
  * prefix so several can share one HTML page.
  */
 export async function renderSvgs(diagram: Diagram, inline = false): Promise<RenderedDiagram> {
-  const architecture = await renderArchitectureSvg(diagram, inline ? 'arch-' : '');
+  const architecture = await renderArchitectureSvg(diagram);
   let n = 0;
   const scenarios = diagram.useCases.flatMap((useCase) =>
     useCase.scenarios.map((scenario) => ({
@@ -75,8 +75,8 @@ export function renderMarkdown(diagram: Diagram): string {
 }
 
 const PAGE_STYLE = `
-:root { color-scheme: light dark; --bg: #f8fafc; --fg: #1f2937; --muted: #6b7280; --card: #ffffff; --border: #e5e7eb; --link: #2563eb; --error: #dc2626; }
-@media (prefers-color-scheme: dark) { :root { --bg: #0f172a; --fg: #e5e7eb; --muted: #94a3b8; --card: #1e293b; --border: #334155; --link: #93c5fd; --error: #f87171; } }
+:root { color-scheme: light dark; --bg: #ffffff; --fg: #111111; --muted: #5b5b5b; --card: #fff8e7; --border: #111111; --link: #111111; --error: #ff3b30; }
+@media (prefers-color-scheme: dark) { :root { --bg: #141318; --fg: #f4efe3; --muted: #a9a5b4; --card: #fff8e7; --border: #f4efe3; --link: #f4efe3; --error: #ff6b61; } }
 * { box-sizing: border-box; }
 body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg); color: var(--fg); }
 header { padding: 20px 24px 8px; }
@@ -86,14 +86,14 @@ nav { position: sticky; top: 16px; flex: 0 0 240px; font-size: 14px; }
 nav ul { list-style: none; margin: 0; padding: 0; }
 nav ul ul { padding-left: 14px; }
 nav li { margin: 4px 0; }
-nav a { color: var(--link); text-decoration: none; }
-nav a:hover { text-decoration: underline; }
+nav a { color: var(--link); text-decoration: underline; text-decoration-thickness: 1px; text-underline-offset: 3px; }
+nav a:hover { text-decoration-thickness: 2px; }
 nav .error, h2 .error { color: var(--error); }
 .content { flex: 1; min-width: 0; }
 section { margin-bottom: 24px; }
 h2 { font-size: 16px; margin: 0 0 8px; }
 .about { color: var(--muted); font-size: 13px; margin: -4px 0 8px; }
-figure { margin: 0; overflow-x: auto; background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 8px; }
+figure { margin: 0; overflow-x: auto; background: var(--card); border: 2px solid var(--border); border-radius: 4px; box-shadow: 3px 3px 0 var(--border); }
 figure svg { display: block; max-width: none; }
 @media (max-width: 760px) { main { flex-direction: column; } nav { position: static; flex: none; } }
 `;
