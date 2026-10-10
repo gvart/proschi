@@ -4,7 +4,7 @@ All notable changes to Proschi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the tooling
 (the `proschi` npm package and the VS Code extension) follows
 [Semantic Versioning](https://semver.org/). Versions are tagged
-`tooling-v<version>`; the web app at <https://gvart.github.io/proschi/> is
+`tooling-v<version>`; the web app at <https://proschi.app/> is
 deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
@@ -17,6 +17,25 @@ deployed from `main` and ships with the same changes.
   leaderboard and email reminders right there.
 - **Leave playback with Escape** or the new "Exit playback" button.
 
+- **Admin panel** at `/admin/`, signed in with a **passkey** (no username
+  or password). The first passkey is registered with a one-time
+  `ADMIN_SETUP_TOKEN` secret and only while none exists; more can be added
+  as backups. Tabs: **Overview** (accounts, active users, sign-ups, content
+  and the daily usage counts as charts), **Health** (database, deployed
+  version, each scheduled job's last run, errors and rate limits,
+  configuration checks), **Users** (search, filter, an account's detail;
+  block and unblock, sign out everywhere, rename, make the profile private,
+  remove the email address, delete), **Short links** (list and delete),
+  **Events** (server errors, failed sign-ins, rate limits, cron runs),
+  **Audit log** and **Passkeys** (backend/README.md, "Admin panel").
+- **Blocked accounts** are signed out everywhere and cannot sign in (the
+  practice page says so), their profile is made private and their short
+  links answer "not found" while blocked.
+
+### Changed
+- The server keeps each account's last active day (a date, at most one
+  write a day) for the admin's active-user counts, and app events and an
+  audit log of admin actions (docs/PRIVACY.md, "The site's operator").
 ### Changed
 - **Landing page SEO.** A shorter title and meta description that fit in
   search results, the main keywords in the hero heading (read by search

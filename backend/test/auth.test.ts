@@ -89,6 +89,20 @@ describe('sign-in', () => {
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{ n: number }>())!.n).toBe(1);
   });
 
+  it('refuses a blocked account: no session, back to the page with login_error=blocked', async () => {
+    mockProviders();
+    await signIn();
+    await env.DB.prepare('UPDATE users SET blocked_at = 1').run();
+    const { back, session } = await signIn();
+    expect(back.headers.get('Location')).toBe('/practice/?a=1&login_error=blocked#/url-shortener');
+    expect(session).toBeUndefined();
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM sessions').first<{ n: number }>())!.n).toBe(1);
+    const recorded = await env.DB.prepare("SELECT message, detail FROM app_events WHERE kind = 'blocked_sign_in'").all<{ message: string; detail: string }>();
+    expect(recorded.results).toHaveLength(1);
+    const { id } = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!;
+    expect(JSON.stringify(recorded.results)).not.toContain(id);
+  });
+
   it('counts each sign-in in the daily usage counts, and nothing about who', async () => {
     mockProviders();
     await signIn();

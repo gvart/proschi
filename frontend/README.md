@@ -27,7 +27,7 @@ npm run dev        # http://localhost:5173/ (editor at /app/, practice at /pract
 npm run lint
 npx tsc -b
 npm test           # vitest: parser, formatter, simulation, HLD, practice problems
-npm run build      # dist/, the site GitHub Pages serves
+npm run build      # dist/, the site the Worker serves
 npm run preview    # serve dist/ locally
 ```
 
@@ -54,4 +54,4 @@ npm run preview    # serve dist/ locally
 - `src/catalog/`, `src/types/`, `src/utils/`: tech stacks, node types, icons
   and colors.
 
-The deploy workflow is `.github/workflows/site.yml`: proschi.app through the Worker in `backend/`, and GitHub Pages (the site, or a redirect once the site is on Cloudflare).
+The deploy workflow is `.github/workflows/site.yml`: proschi.app through the Worker in `backend/`.
