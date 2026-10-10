@@ -7,52 +7,41 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
 
 /**
  * The practice hub's Today panel, at the top of `#/`: the streak and daily
- * goal, the cards due with "Review now", today's challenge, today's daily
- * Arcade run, and "Continue". Each reads what its own page reads (the same
- * stores and API answers), so the panel and the pages always agree; it only
- * shows the state and links to the page that acts on it.
+ * goal, one primary "Your next step" card (the last problem left unsolved,
+ * else the roadmap's next step, else today's review), and a compact row of
+ * secondary chips for the cards due, today's challenge and today's daily
+ * Arcade run. Kept short so the problem list starts high, on a phone too.
+ * Each reads what its own page reads (the same stores and API answers), so
+ * the panel and the pages always agree; it only shows the state and links
+ * to the page that acts on it.
  */
 
 // The due count needs the whole deck: loaded after the panel shows.
 const DueCards = lazy(() => import('./DueCards'));
 
-const tile = 'flex min-w-0 flex-col gap-2 rounded-brutal border-bw-2 border-ink bg-surface p-3 shadow-brutal-sm';
 const action =
   'inline-flex min-h-[40px] max-w-full items-center gap-1.5 self-start rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-sm font-bold text-paper hover:bg-ink/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue';
-const quiet =
-  'inline-flex min-h-[40px] max-w-full items-center gap-1.5 self-start rounded border-bw-1 border-ink bg-surface px-3 py-1.5 text-sm font-bold text-ink hover:bg-pop-yellow/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue';
+const chip =
+  'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue';
 
-function Tile({ icon: Icon, title, label, children }: { icon: LucideIcon; title: string; label: string; children: ReactNode }) {
+function Chip({ href, icon: Icon, label, children }: { href: string; icon: LucideIcon; label: string; children?: ReactNode }) {
   return (
-    <section aria-label={label} className={tile}>
-      <p className={`flex items-center gap-1.5 ${eyebrow}`}>
-        <Icon size={13} aria-hidden="true" />
-        {title}
-      </p>
-      {children}
-    </section>
+    <a href={href} className={chip}>
+      <Icon size={14} aria-hidden="true" />
+      {label}
+      {children && <span className="font-normal text-ink/75">· {children}</span>}
+    </a>
   );
 }
 
-function PlayedTile({ played, icon, title, label, href, play, see }: { played: Played; icon: LucideIcon; title: string; label: string; href: string; play: string; see: string }) {
-  const max = played.status === 'ready' && played.played ? played.maxScore : undefined;
+/** "· 540" once played (with a check), nothing while unknown or not played yet. */
+function PlayedNote({ played }: { played: Played }) {
+  if (played.status !== 'ready' || !played.played) return null;
   return (
-    <Tile icon={icon} title={title} label={label}>
-      {played.status === 'loading' ? (
-        <span className="text-sm text-muted">Checking…</span>
-      ) : played.status === 'ready' && played.played ? (
-        <span className="inline-flex items-center gap-1.5 font-display text-lg font-extrabold tabular-nums text-ink">
-          <Check size={16} aria-hidden="true" className="text-pass" />
-          {typeof played.score === 'number' ? `${played.score.toLocaleString('en-US')}${max ? ` / ${max}` : ''}` : 'Played'}
-        </span>
-      ) : (
-        <span className="font-display text-lg font-extrabold text-ink">{played.status === 'ready' ? 'Not played yet' : 'Ready when you are'}</span>
-      )}
-      <a href={href} className={played.status === 'ready' && played.played ? quiet : action}>
-        {played.status === 'ready' && played.played ? see : play}
-        <ArrowRight size={14} aria-hidden="true" />
-      </a>
-    </Tile>
+    <span className="inline-flex items-center gap-1 tabular-nums">
+      <Check size={13} aria-hidden="true" className="text-pass" />
+      {typeof played.score === 'number' ? played.score.toLocaleString('en-US') : 'played'}
+    </span>
   );
 }
 
@@ -71,6 +60,8 @@ export default function TodayPanel({
 }) {
   const challenge = useChallengeStatus(account);
   const daily = useDailyRunStatus(account);
+  const challengePlayed = challenge.status === 'ready' && challenge.played;
+  const dailyPlayed = daily.status === 'ready' && daily.played;
   return (
     <section aria-labelledby="today-title" className="mt-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -79,38 +70,32 @@ export default function TodayPanel({
         </h2>
         {streak}
       </div>
-      <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-        <Tile icon={Layers} title="Daily review" label="Cards due">
-          <Suspense fallback={<span className="text-sm text-muted">Counting your cards…</span>}>
+      <section aria-label="Your next step" className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2 rounded-brutal border-bw-2 border-ink bg-surface p-3 shadow-brutal-sm">
+        <div className="min-w-0 flex-1">
+          <p className={`flex items-center gap-1.5 ${eyebrow}`}>
+            {next?.kind === 'last' ? <Play size={13} aria-hidden="true" /> : <CalendarDays size={13} aria-hidden="true" />}
+            {next ? (next.kind === 'last' ? 'Pick up where you left off' : 'Next on the roadmap') : 'Roadmap complete'}
+          </p>
+          <p className="mt-0.5 min-w-0 break-words font-display text-lg font-extrabold leading-tight text-ink">{next ? (nextTitle ?? next.id) : 'Keep it fresh with today’s review'}</p>
+        </div>
+        <a href={next ? next.href : '#/review'} className={action}>
+          {next ? 'Continue' : 'Review now'}
+          <ArrowRight size={14} aria-hidden="true" />
+        </a>
+      </section>
+      <nav aria-label="Also today" className="mt-3 flex flex-wrap gap-2">
+        <Chip href="#/review" icon={Layers} label="Review">
+          <Suspense fallback={<span className="text-muted">…</span>}>
             <DueCards account={account} />
           </Suspense>
-          <a href="#/review" className={action}>
-            Review now
-            <ArrowRight size={14} aria-hidden="true" />
-          </a>
-        </Tile>
-        <PlayedTile played={challenge} icon={Zap} title="Daily challenge" label="Daily challenge status" href="#/challenge" play="Take the challenge" see="See your result" />
-        <PlayedTile played={daily} icon={Gamepad2} title="Arcade daily run" label="Arcade daily run status" href="#/arcade/daily" play="Play the daily run" see="See the daily run" />
-        <Tile icon={next?.kind === 'last' ? Play : CalendarDays} title={next?.kind === 'last' ? 'Pick up where you left off' : 'Next on the roadmap'} label="Continue">
-          {next ? (
-            <>
-              <span className="min-w-0 break-words font-display text-lg font-extrabold leading-tight text-ink">{nextTitle ?? next.id}</span>
-              <a href={next.href} className={action}>
-                Continue
-                <ArrowRight size={14} aria-hidden="true" />
-              </a>
-            </>
-          ) : (
-            <>
-              <span className="font-display text-lg font-extrabold text-ink">Roadmap complete</span>
-              <a href="#/progress" className={quiet}>
-                See your progress
-                <ArrowRight size={14} aria-hidden="true" />
-              </a>
-            </>
-          )}
-        </Tile>
-      </div>
+        </Chip>
+        <Chip href="#/challenge" icon={Zap} label="Challenge">
+          {challengePlayed && <PlayedNote played={challenge} />}
+        </Chip>
+        <Chip href="#/arcade/daily" icon={Gamepad2} label="Arcade run">
+          {dailyPlayed && <PlayedNote played={daily} />}
+        </Chip>
+      </nav>
     </section>
   );
 }

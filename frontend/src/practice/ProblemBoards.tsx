@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Trophy } from 'lucide-react';
 import type { BoardMetric } from '../services/api';
 import { formatMs, formatUsd } from '../sim/format';
+import { BOARD_MIN_ENTRIES } from './LeaderboardPanel';
 import { useProblemBoard } from './useCommunity';
 
 interface ProblemBoardsProps {
@@ -9,6 +10,8 @@ interface ProblemBoardsProps {
   signedIn: boolean;
   /** Changes refetch, e.g. after a run is recorded. */
   refresh: number;
+  /** Signed in and not on the leaderboard: opts in. Offered while the board is too short to show. */
+  onOptIn?: () => void;
 }
 
 const METRICS: { id: BoardMetric; label: string; format: (n: number) => string }[] = [
@@ -20,15 +23,32 @@ const METRICS: { id: BoardMetric; label: string; format: (n: number) => string }
  * The problem's leaderboards, under how others did (CommunityStats): the
  * cheapest passing design and the lowest worst-use-case p99, each solver's
  * best as the server measured it, the top 10 of those who opted in, and
- * your own rank signed in.
+ * your own rank signed in. Until a board has BOARD_MIN_ENTRIES entries, only
+ * an invitation to opt in (or nothing).
  */
-export default function ProblemBoards({ problemId, signedIn, refresh }: ProblemBoardsProps) {
+export default function ProblemBoards({ problemId, signedIn, refresh, onOptIn }: ProblemBoardsProps) {
   const [metric, setMetric] = useState<BoardMetric>('cost');
   const answer = useProblemBoard(problemId, metric, signedIn, refresh);
   // The hook keeps the last answer while the other metric loads: show only this metric's.
   const board = answer?.metric === metric && answer.problem === problemId ? answer : undefined;
   const { label, format } = METRICS.find((m) => m.id === metric)!;
+  // Once a board is long enough the section stays, so switching to a shorter one keeps the switch.
+  const [shown, setShown] = useState(false);
+  if (!shown && board && board.entries.length >= BOARD_MIN_ENTRIES) setShown(true);
   if (!answer) return null;
+  if (!shown && !(board && board.entries.length >= BOARD_MIN_ENTRIES)) {
+    return onOptIn ? (
+      <p className="m-3 flex flex-wrap items-center gap-2 text-xs text-muted">
+        <Trophy size={14} aria-hidden="true" className="text-amber-500 dark:text-amber-400" />
+        <span>
+          Be the first:{' '}
+          <button type="button" onClick={onOptIn} className="underline underline-offset-2 hover:text-ink">
+            opt in to the leaderboard
+          </button>
+        </span>
+      </p>
+    ) : null;
+  }
   return (
     <section aria-labelledby="problem-board" className="m-3 rounded-md border border-ink/15 bg-paper px-3 py-2 text-ink/85">
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -54,25 +74,21 @@ export default function ProblemBoards({ problemId, signedIn, refresh }: ProblemB
         <p className="mt-2 text-xs text-muted">Loading…</p>
       ) : (
         <>
-          {board.entries.length === 0 ? (
-            <p className="mt-2 text-xs text-muted">Nobody here yet. Solve it, then choose “Show me on the leaderboard” in your account menu.</p>
-          ) : (
-            <ol aria-label={`${label} passing designs`} className="mt-2 divide-y divide-ink/10 rounded border border-ink/15 bg-surface">
-              {board.entries.map((e) => (
-                <li key={e.id}>
-                  <a
-                    href={`#/u/${encodeURIComponent(e.id)}`}
-                    aria-label={`${e.displayName}: rank ${e.rank}, ${format(e.value)}. See their profile`}
-                    className="flex items-center gap-3 px-2.5 py-1.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
-                  >
-                    <span className="w-5 text-right tabular-nums text-muted">{e.rank}</span>
-                    <span className="min-w-0 flex-1 truncate text-ink">{e.displayName}</span>
-                    <span className="tabular-nums text-ink/75">{format(e.value)}</span>
-                  </a>
-                </li>
-              ))}
-            </ol>
-          )}
+          <ol aria-label={`${label} passing designs`} className="mt-2 divide-y divide-ink/10 rounded border border-ink/15 bg-surface">
+            {board.entries.map((e) => (
+              <li key={e.id}>
+                <a
+                  href={`#/u/${encodeURIComponent(e.id)}`}
+                  aria-label={`${e.displayName}: rank ${e.rank}, ${format(e.value)}. See their profile`}
+                  className="flex items-center gap-3 px-2.5 py-1.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+                >
+                  <span className="w-5 text-right tabular-nums text-muted">{e.rank}</span>
+                  <span className="min-w-0 flex-1 truncate text-ink">{e.displayName}</span>
+                  <span className="tabular-nums text-ink/75">{format(e.value)}</span>
+                </a>
+              </li>
+            ))}
+          </ol>
           {board.you && (
             <p data-testid="problem-board-you" className="mt-2 text-xs text-ink">
               You: rank {board.you.rank} of {board.you.players}, {format(board.you.value)}

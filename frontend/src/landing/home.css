@@ -894,18 +894,35 @@ h3 {
   }
 }
 
-/* ---------- 01 break it on purpose: a dark slab, a request that dies ---------- */
+/* ---------- 01 break it, test it: a request that dies on a dark slab, then checks turning green ---------- */
 
-.story--break {
+.proof {
+  display: grid;
+  gap: 32px;
+  margin-top: 48px;
+}
+@media (min-width: 980px) {
+  .proof {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: start;
+  }
+}
+.proof__title {
+  margin-bottom: 16px;
+  font-size: var(--fs-20);
+}
+.proof .ps-btn {
+  margin-top: 20px;
+}
+.proof .ps-btn[hidden] {
+  display: none;
+}
+.proof__break {
+  padding: 24px;
   background: rgb(var(--c-slab));
   color: rgb(var(--c-on-slab));
+  border-radius: var(--r-md);
   --c-ink: var(--c-on-slab);
-}
-.story--break .story__no {
-  -webkit-text-stroke-color: rgb(var(--c-fail));
-}
-.story--break .story__lede {
-  color: rgb(var(--c-on-slab) / 0.85);
 }
 .break {
   display: grid;
@@ -1119,8 +1136,6 @@ h3 {
   }
 }
 
-/* ---------- 02 test your design: checks turning green ---------- */
-
 .checks {
   display: grid;
   gap: 20px;
@@ -1139,6 +1154,19 @@ h3 {
   .checks .results {
     position: relative;
     z-index: 1;
+  }
+}
+/* Beside the crash, half the width: the report first, its source under it, like the crash. */
+@media (min-width: 980px) {
+  .checks {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .checks .snip {
+    margin: 0;
+    rotate: none;
+  }
+  .checks .results {
+    order: -1;
   }
 }
 .results {
@@ -1254,7 +1282,7 @@ h3 {
   }
 }
 
-/* ---------- 03, 04 examples and practice ---------- */
+/* ---------- practice: a few problems ---------- */
 
 .story--practice {
   background: rgb(var(--c-lilac) / 0.18);
@@ -1297,42 +1325,28 @@ h3 {
 .tile:hover .tile__go {
   transform: translateX(6px);
 }
-.tiles--examples .tile {
-  grid-template-columns: 1fr;
-}
 
-/* ---------- 05 the Arcade: Scale or Fail ---------- */
+/* ---------- the Arcade: Scale or Fail, a banner ---------- */
 
 .story--arcade {
+  padding: 48px 0;
   background: rgb(var(--c-yellow) / 0.12);
 }
 .arcade {
-  display: grid;
-  gap: 24px;
+  display: flex;
+  flex-wrap: wrap;
   align-items: center;
+  gap: 16px 24px;
 }
-.arcade::before {
-  grid-column: 1 / -1;
-}
-@media (min-width: 900px) {
-  .arcade {
-    grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
-  }
+.arcade__text {
+  flex: 1 1 320px;
 }
 .arcade__text h2 {
-  margin-top: 12px;
+  font-size: var(--fs-h3);
 }
-.arcade__facts {
-  display: grid;
-  gap: 10px;
-  font-weight: 600;
-}
-.arcade__facts b {
-  font-family: var(--font-display);
-  font-weight: 800;
-}
-.arcade__cta {
-  justify-self: start;
+.arcade__text p {
+  margin-top: 4px;
+  color: rgb(var(--c-ink) / 0.82);
 }
 
 /* ---------- closer ---------- */
@@ -1385,4 +1399,17 @@ h3 {
   min-height: 72px;
   padding: 0 40px;
   font-size: var(--fs-20);
+}
+.closer__examples-title {
+  margin-top: 40px;
+  font-weight: 700;
+}
+.closer__examples {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 10px;
+  margin-top: 14px;
+  --c-shadow: 17 17 17;
+  --c-ink: 17 17 17;
 }

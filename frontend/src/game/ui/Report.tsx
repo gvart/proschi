@@ -101,7 +101,7 @@ export default function Report(props: {
       )}
       {result?.firstClear && <p className="text-sm text-pass">First clear of {game.scenario.title}: +5 Blueprints.</p>}
       {result?.firstClear && !game.twists && game.scenario.mode === 'scale' && (
-        <p className="text-sm font-semibold">Twists unlocked: from your next run, mutators, bounties, forecast ranges, live changes and more. Kernel will brief you.</p>
+        <p className="text-sm font-semibold">Twists unlocked: from your next run, mutators (a rule twist on the whole run that pays more points), bounties (optional goals for a wave), forecast ranges, live changes and more. Kernel, your cat SRE lead, will brief you.</p>
       )}
       {result?.error && <p className="text-sm text-fail">{result.error}</p>}
       {share && (

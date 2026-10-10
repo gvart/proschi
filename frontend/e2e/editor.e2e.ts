@@ -91,6 +91,17 @@ test.describe('editor', () => {
     await waitForCanvas(page, DEFAULT_NODES);
   });
 
+  test('Escape and the Exit playback button leave playback', async ({ page }) => {
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await expect(stepLabel(page)).toHaveText(/^Step 1 of \d+$/);
+    await page.keyboard.press('Escape');
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+
+    await page.getByRole('button', { name: 'Play', exact: true }).click();
+    await page.getByRole('button', { name: 'Exit playback' }).click();
+    await expect(page.getByRole('button', { name: 'Play', exact: true })).toBeVisible();
+  });
+
   test('scenario tabs switch the played scenario', async ({ page }) => {
     const tabs = page.getByRole('tablist', { name: 'Scenarios of Create order' });
     await expect(tabs.getByRole('tab')).toHaveCount(3);

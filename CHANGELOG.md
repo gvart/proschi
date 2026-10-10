@@ -9,11 +9,66 @@ deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
+### Added
+- **One account control on every page.** The header shows a Sign in
+  button when signed out and your name with a menu when signed in, now
+  also in the editor, the docs, problem and card pages and the 404 page.
+- **Offers after a first solve.** The "First solve" card offers the
+  leaderboard and email reminders right there.
+- **Leave playback with Escape** or the new "Exit playback" button.
+
 ### Changed
 - **Landing page SEO.** A shorter title and meta description that fit in
   search results, the main keywords in the hero heading (read by search
   engines and screen readers, not shown), and Twitter title and
   description tags.
+- **A shorter landing page**: one "Break it, then test it" section,
+  three featured problems with a link to all of them, the examples under
+  the editor button, and the Arcade as a banner.
+- **The Practice home leads with one "Your next step" card**, with
+  compact chips for the daily review, challenge and Arcade run.
+- **Progress (`#/progress`) is the one place for your level, streaks,
+  skills, roadmap, badges and solved problems**, led by your next step
+  and the next three badges to earn (all badges fold away). `#/me` is
+  now Settings: leaderboard, email reminders, display name, sign-in
+  methods, data download, sign out and a danger zone for deleting the
+  account. The account menu has only Your progress, Settings and Sign
+  out.
+- **The problem Tests panel shows failing tests and their fixes first**,
+  folds the passing tests and "How others did", and grows taller while
+  tests fail. On phones, Reset and Help share one "More" menu.
+- **Leaderboards show from 3 entries**; until then one line invites you
+  to opt in.
+- **Every roadmap lesson is readable**; only the challenges keep their
+  order. Stages count the optional tutorial ("+ 1 optional").
+- **A Scale or Fail run fills the screen**: the practice tabs, streak and
+  footer hide, the forecast sits beside the board, and the palette and
+  Deploy stay in a sticky bar. The HUD explains Trust, and the report
+  explains mutators and bounties when they unlock.
+- **Daily review** brings each new card into view and keeps Next on
+  screen; estimates within 10% say "Correct" instead of "Close enough".
+- **The daily challenge shows when it resets in your local time.**
+- **The editor tour's last step** covers only sharing and saving.
+- The design review no longer announces an AI reviewer.
+
+### Fixed
+- A test that names a missing use case suggests adding it
+  (`Add usecase "Redirect" { … }`); an existing name is suggested only
+  for a likely typo.
+- "Solved by X of Y" and the problem leaderboards update right after a
+  solve instead of up to a minute later.
+- The quick tour popover no longer jumps under the cursor, and a
+  finished step stays finished.
+- Practice pages scroll to the top on a new tab and restore the position
+  on back and forward.
+- No console errors when a page-to-page transition is cut short.
+- "1 component" and "1 use case" in the HLD instead of "1 components",
+  "1 use cases".
+- Playback shows request and response formats as JSON, XML or Text
+  instead of `FREE_TEXT`.
+- Edge labels no longer hide behind a node beside a long edge.
+- The arcade wave summary says "Trust is full (100)" instead of
+  "Trust +0 (+5 clean)".
 
 ## [0.10.0] - 2026-10-08
 

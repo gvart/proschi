@@ -88,6 +88,7 @@ import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng 
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
 import { useAccount } from '../../practice/useAccount';
+import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
 import Banner, { type BannerMessage } from './Banner';
 import ExportMenu from './ExportMenu';
@@ -598,7 +599,7 @@ export default function Playground() {
       data-keyboard={keyboard.open || undefined}
     >
       <ZenCollapse zen={zen.zen}>
-        <Header base="../" current="editor" compact>
+        <Header base="../" current="editor" compact actions={<AccountMenu account={account} />}>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
           <Menu
             label="Diagrams"

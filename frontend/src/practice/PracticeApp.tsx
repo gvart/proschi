@@ -1,11 +1,12 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useHashRoute } from './hashRoute';
 import problems from 'virtual:practice-listings';
 import { guides as guideMinutes, lessons } from 'virtual:practice-lessons';
 import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
 import { useLessonsRead } from './useLessonsRead';
@@ -41,9 +42,9 @@ const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
 const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
 // Scale or Fail, the system design game: the engine, the simulation and the content.
 const ArcadeRoute = lazy(() => import('../game/ui/ArcadeRoute'));
-// The skill map and badges, with the cards' topics.
+// Progress: the level, streak, skill map, roadmap, badges and problems solved, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
-// The account page and public profiles, with the cards' topics.
+// The account and settings page; public profiles, with the cards' topics.
 const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
 
@@ -59,22 +60,13 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
- * the daily challenge, `#/progress` the skill map and badges, `#/me` the
- * account page and `#/u/<user id>` a public profile; hash routes work under
+ * the daily challenge, `#/progress` progress (level, skills, badges, streak),
+ * `#/me` the account and settings page and `#/u/<user id>` a public profile; hash routes work under
  * any sub-path. The list (with the Today panel above it), the roadmap,
  * review, challenge, Arcade and progress pages are the practice hub's tabs
- * (hub/tabs.ts).
+ * (hub/tabs.ts). useHashRoute (hashRoute.ts) reads it, and scrolls to the
+ * top on a new address or back to where it was on back/forward.
  */
-function useHashRoute(): string {
-  const read = () => window.location.hash.replace(/^#\/?/, '');
-  const [route, setRoute] = useState(read);
-  useEffect(() => {
-    const onChange = () => setRoute(read());
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return route;
-}
 
 /**
  * Uploads the browser's progress in one request. Signing in again and again
@@ -146,15 +138,15 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
-  // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
-  // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
+  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its challenges open in order: a locked
+  // challenge, `#/roadmap/<id>`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
+  // Reading is never gated: the roadmap's guides and every lesson (`#/roadmap/<id>/lesson`, `#/<id>/lesson`) are open to everyone.
   const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
   const target = guide ? undefined : roadmapTarget(route);
   const roadmapNow = roadmapState(roadmap, progress);
-  const lock = target ? stepLock(roadmapNow, target.id, access) : undefined;
+  const lock = target ? routeLock(roadmapNow, target, access) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
@@ -262,7 +254,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </ProblemList>
             ) : onProgress ? (
               <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
-                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} />
+                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} />
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
@@ -296,8 +288,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             )}
           </PracticeHub>
         ) : onMe ? (
-          <Suspense fallback={<PaneLoading label="Loading your profile…" />}>
-            <AccountRoute account={account} activity={activity} achievements={achievements} progress={progress} />
+          <Suspense fallback={<PaneLoading label="Loading your settings…" />}>
+            <AccountRoute account={account} />
           </Suspense>
         ) : (
           profileId !== undefined && (

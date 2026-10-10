@@ -69,6 +69,7 @@ describe('leaderboard', () => {
           entries: [
             { rank: 1, id: 'a1b2', displayName: 'Ada', solved: 3, lastSolvedAt: 1 },
             { rank: 2, id: 'c3d4', displayName: 'Grace', solved: 1, lastSolvedAt: 2 },
+            { rank: 3, id: 'e5f6', displayName: 'Linus', solved: 1, lastSolvedAt: 3 },
           ],
         }}
       />,
@@ -76,5 +77,12 @@ describe('leaderboard', () => {
     expect(html).toContain('href="#/u/a1b2"');
     expect(html).toContain('href="#/u/c3d4"');
     expect(html).toContain('aria-label="Ada: rank 1, 3 of 25 solved. See their profile"');
+  });
+
+  it('shows only an invitation to opt in until it has three entries', () => {
+    const html = renderToStaticMarkup(<LeaderboardPanel leaderboard={{ problems: 25, entries: [{ rank: 1, id: 'a1b2', displayName: 'Ada', solved: 3, lastSolvedAt: 1 }] }} />);
+    expect(html).not.toContain('Ada');
+    expect(html).toContain('opt in to the leaderboard');
+    expect(html).toContain('href="#/me"');
   });
 });

@@ -5,6 +5,7 @@ import type { Account } from '../../practice/useAccount';
 import type { Activity } from '../../practice/activity';
 import { notifyActivity } from '../../practice/skills/activity';
 import { PROVIDER_LABEL } from '../../practice/account';
+import { BOARD_MIN_ENTRIES, BoardInvite } from '../../practice/LeaderboardPanel';
 import { eyebrow, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { gameContent } from '../content';
 import { maxAscension, scenarioOpen, shop, twistsOpen, type ShopItem } from '../engine/meta';
@@ -425,28 +426,30 @@ function Leaderboards({ scenarios, day }: { scenarios: { id: string; title: stri
       {board === null && <p className="mt-2 text-sm text-muted">The leaderboard is not available right now.</p>}
       {board && (
         <>
-          <p className="mt-1 text-xs text-muted">
-            {board.title} · {board.players} player{board.players === 1 ? '' : 's'}
-          </p>
-          {board.entries.length === 0 ? (
-            <p className="mt-2 text-sm">No one on it yet. Be the first.</p>
+          {board.entries.length < BOARD_MIN_ENTRIES ? (
+            <BoardInvite />
           ) : (
-            <ol className="mt-2 divide-y divide-ink/10">
-              {board.entries.map((e) => (
-                <li key={`${e.rank}-${e.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm">
-                  <span className="min-w-0 truncate">
-                    <span className="inline-block w-7 font-mono text-muted">#{e.rank}</span>
-                    <a className="font-semibold hover:underline" href={`#/u/${e.id}`}>
-                      {e.displayName}
-                    </a>
-                  </span>
-                  <span className="font-mono font-bold sf-count">
-                    {e.score.toLocaleString('en-US')}
-                    <span className="ml-1 text-xs font-normal text-muted">w{e.waves}</span>
-                  </span>
-                </li>
-              ))}
-            </ol>
+            <>
+              <p className="mt-1 text-xs text-muted">
+                {board.title} · {board.players} player{board.players === 1 ? '' : 's'}
+              </p>
+              <ol className="mt-2 divide-y divide-ink/10">
+                {board.entries.map((e) => (
+                  <li key={`${e.rank}-${e.id}`} className="flex items-center justify-between gap-2 py-1.5 text-sm">
+                    <span className="min-w-0 truncate">
+                      <span className="inline-block w-7 font-mono text-muted">#{e.rank}</span>
+                      <a className="font-semibold hover:underline" href={`#/u/${e.id}`}>
+                        {e.displayName}
+                      </a>
+                    </span>
+                    <span className="font-mono font-bold sf-count">
+                      {e.score.toLocaleString('en-US')}
+                      <span className="ml-1 text-xs font-normal text-muted">w{e.waves}</span>
+                    </span>
+                  </li>
+                ))}
+              </ol>
+            </>
           )}
           {board.you && (
             <p className="mt-2 text-sm">

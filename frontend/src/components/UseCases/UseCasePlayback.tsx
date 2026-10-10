@@ -7,6 +7,7 @@ import {
   SkipForward,
   ChevronLeft,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import ReactFlow, {
   Background,
@@ -37,6 +38,9 @@ const edgeTypes = {
 };
 
 const ERROR_COLOR = CANVAS_FAIL;
+
+/** How a body format reads in the step card. */
+const FORMAT_LABEL: Record<FlowStep['responseFormat'], string> = { JSON: 'JSON', XML: 'XML', FREE_TEXT: 'Text' };
 
 /** A step that failed outright or was answered with a 4xx/5xx status. */
 function isErrorStep(step: FlowStep): boolean {
@@ -123,6 +127,23 @@ function UseCasePlayerContent({
     onFinishedRef.current = onFinished;
     autoPlayRef.current = autoPlay;
   });
+
+  // Escape leaves playback, unless it is meant for a field or an open menu.
+  const onBackRef = useRef(onBack);
+  useEffect(() => {
+    onBackRef.current = onBack;
+  });
+  useEffect(() => {
+    if (bare) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const t = e.target as HTMLElement | null;
+      if (t?.closest('input, textarea, select, [contenteditable="true"], [role="menu"], [role="dialog"]')) return;
+      onBackRef.current();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [bare]);
 
   // Steps between nodes with no architecture edge get a hidden edge so they can still animate.
   const edges = useMemo(() => {
@@ -441,7 +462,7 @@ function UseCasePlayerContent({
                     {step.requestBody && (
                       <div>
                         <div className="text-xs font-medium text-muted mb-1">
-                          Request ({step.requestFormat})
+                          Request ({FORMAT_LABEL[step.requestFormat]})
                         </div>
                         <pre className="text-xs bg-paper p-2 rounded border border-ink/15 overflow-auto max-h-32">
                           {step.requestBody}
@@ -451,7 +472,7 @@ function UseCasePlayerContent({
                     {step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
                       <div>
                         <div className={`text-xs font-medium mb-1 ${isErrorStep(step) ? 'text-red-600 dark:text-red-400' : 'text-muted'}`}>
-                          Response ({step.responseFormat}){step.statusCode !== undefined && ` - ${step.statusCode}`}
+                          Response ({FORMAT_LABEL[step.responseFormat]}){step.statusCode !== undefined && ` - ${step.statusCode}`}
                         </div>
                         <pre
                           className={`text-xs p-2 rounded border overflow-auto max-h-32 ${
@@ -546,6 +567,16 @@ function UseCasePlayerContent({
                 </div>
               </div>
             </div>
+            {!showHeader && (
+              <button
+                onClick={onBack}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 text-sm text-ink/75 hover:bg-ink/10 rounded-lg transition-colors"
+                title="Exit playback (Esc)"
+              >
+                <X size={16} aria-hidden />
+                Exit playback
+              </button>
+            )}
           </div>
         </div>
       </div>

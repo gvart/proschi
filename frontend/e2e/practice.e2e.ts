@@ -91,7 +91,7 @@ test.describe('practice', () => {
     await page.goto('practice/#/url-shortener');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
     await page.getByRole('button', { name: 'Review', exact: true }).click();
-    await expect(page.getByText('An automatic review, based on the simulation and the tests. An AI reviewer is coming.')).toBeVisible();
+    await expect(page.getByText('An automatic review, based on the simulation and the tests.')).toBeVisible();
     await page.getByRole('button', { name: 'Review my design' }).click();
     const result = page.getByTestId('review-result');
     await expect(result.getByRole('heading', { name: /^Critical/ })).toBeVisible();
@@ -103,6 +103,19 @@ test.describe('practice', () => {
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(passedCount(page)).toBeVisible();
     await expect(page.getByRole('button', { name: 'Review my design' })).toBeHidden();
+  });
+
+  test('after a failing run, the first failure and its fix are in view, with the passing tests folded below', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('practice/#/url-shortener');
+    await expect(codeEditor(page)).toBeVisible();
+    await page.getByRole('button', { name: 'Run tests' }).click();
+    await expect(passedCount(page)).toBeVisible();
+    const tests = page.locator('[data-tour="tests"]');
+    // The starter lacks the Redirect use case: the fix is to add it, not to rename it.
+    const fix = tests.getByText('Fix: Add usecase "Redirect" { … }').first();
+    await expect(fix).toBeInViewport();
+    await expect(tests.getByText(/^\d+ passing$/)).toBeVisible();
   });
 
   test('the Twitter-based problem shows its company', async ({ page }) => {

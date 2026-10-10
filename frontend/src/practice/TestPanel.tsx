@@ -14,7 +14,7 @@ interface TestPanelProps {
   onRun: () => void;
   /** Jumps to a line of the solution. */
   onSelect: (loc: SourceLoc) => void;
-  /** How others did on this problem (CommunityStats), shown under the verdict. */
+  /** How others did on this problem (CommunityStats), folded under the results until solved. */
   community?: ReactNode;
   /** The design review (src/review/ReviewPanel.tsx), shown in a view of its own next to the tests. */
   review?: ReactNode;
@@ -37,6 +37,8 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
     setView('tests');
   }
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
+  const failed = run?.results.filter((r) => !r.passed) ?? [];
+  const passed = run?.results.filter((r) => r.passed) ?? [];
   // The first solve on this page gets a little burst (skipped under reduced motion), unless the celebration brings its own.
   const solvedRef = useRef<HTMLDivElement>(null);
   const celebrated = useRef(false);
@@ -107,45 +109,9 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
           </div>
         )}
         {celebration}
-        {community}
 
-        {run && run.results.length > 0 && (
-          <p className="px-3 pt-2 text-xs text-muted">
-            Verdicts come from a deterministic model of your design, not a load test.{' '}
-            <a href="../docs/model/#practice" target="_blank" rel="noopener" className="text-pop-blue hover:underline">
-              How is this calculated?
-            </a>
-          </p>
-        )}
-        {run && run.results.length > 0 && (
-          <ul className="divide-y divide-ink/10">
-            {run.results.map((r) => (
-              <li key={r.id} className={`flex gap-2 px-3 py-2 ${r.passed ? '' : 'shadow-[inset_4px_0_0_rgb(var(--c-fail))]'}`}>
-                {r.passed ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={16} className="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />}
-                <div className="min-w-0">
-                  <p className="font-medium text-ink">
-                    {r.name} <span className="ml-1 font-mono text-[11px] font-normal uppercase tracking-wide text-muted">{r.category}</span>
-                  </p>
-                  <p className="text-ink/75">{r.message}</p>
-                  {!r.passed && r.hint && <p className="text-xs text-muted">Fix: {r.hint}</p>}
-                  {r.assertions && r.assertions.length > 1 && (
-                    <ul className="mt-1 space-y-0.5">
-                      {r.assertions.map((a, i) => (
-                        <li key={i} className="flex gap-1.5 text-xs">
-                          {a.passed ? <CheckCircle2 size={13} className="mt-px flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={13} className="mt-px flex-shrink-0 text-red-600 dark:text-red-400" />}
-                          <span>
-                            <span className={a.passed ? 'text-ink/75' : 'text-ink'}>{a.message}</span>
-                            {!a.passed && a.hint && <span className="block text-muted">Fix: {a.hint}</span>}
-                          </span>
-                        </li>
-                      ))}
-                    </ul>
-                  )}
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+        {/* Failures first, with their fixes; what passes folds away below them. */}
+        {failed.length > 0 && <ResultList results={failed} />}
         {mistake}
         {diagnostics.length > 0 && (
           <ul className="border-t border-ink/10 bg-paper text-xs">
@@ -167,8 +133,63 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
             ))}
           </ul>
         )}
-
+        {passed.length > 0 && (
+          <details className="border-t border-ink/10" open={failed.length === 0 && !celebration}>
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink">
+              {passed.length} passing
+            </summary>
+            <ResultList results={passed} />
+          </details>
+        )}
+        {run && run.results.length > 0 && (
+          <p className="px-3 pt-2 text-xs text-muted">
+            Verdicts come from a deterministic model of your design, not a load test.{' '}
+            <a href="../docs/model/#practice" target="_blank" rel="noopener" className="text-pop-blue hover:underline">
+              How is this calculated?
+            </a>
+          </p>
+        )}
+        {community && (
+          // Open once solved; while tests fail, the results come first.
+          <details className="mt-2 border-t border-ink/10" open={solved || undefined}>
+            <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink">How others did</summary>
+            {community}
+          </details>
+        )}
       </div>
     </div>
+  );
+}
+
+/** Requirements and tests, each with what was measured and, failing, how to fix it. */
+function ResultList({ results }: { results: RunResult['results'] }) {
+  return (
+    <ul className="divide-y divide-ink/10">
+      {results.map((r) => (
+        <li key={r.id} className={`flex gap-2 px-3 py-2 ${r.passed ? '' : 'shadow-[inset_4px_0_0_rgb(var(--c-fail))]'}`}>
+          {r.passed ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={16} className="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />}
+          <div className="min-w-0">
+            <p className="font-medium text-ink">
+              {r.name} <span className="ml-1 font-mono text-[11px] font-normal uppercase tracking-wide text-muted">{r.category}</span>
+            </p>
+            <p className="text-ink/75">{r.message}</p>
+            {!r.passed && r.hint && <p className="text-xs text-muted">Fix: {r.hint}</p>}
+            {r.assertions && r.assertions.length > 1 && (
+              <ul className="mt-1 space-y-0.5">
+                {r.assertions.map((a, i) => (
+                  <li key={i} className="flex gap-1.5 text-xs">
+                    {a.passed ? <CheckCircle2 size={13} className="mt-px flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={13} className="mt-px flex-shrink-0 text-red-600 dark:text-red-400" />}
+                    <span>
+                      <span className={a.passed ? 'text-ink/75' : 'text-ink'}>{a.message}</span>
+                      {!a.passed && a.hint && <span className="block text-muted">Fix: {a.hint}</span>}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </li>
+      ))}
+    </ul>
   );
 }

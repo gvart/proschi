@@ -278,3 +278,11 @@
     animation: none;
   }
 }
+
+/* A run in progress (RunScreen) is a focused screen: the site header stays,
+   the practice hub's streak, tabs and footer go, so the HUD, the board, the
+   palette and Deploy fit one window. */
+html.sf-run div:has(> .ps-tabs),
+html.sf-run .ps-footer {
+  display: none;
+}

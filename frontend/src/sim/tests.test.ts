@@ -167,7 +167,12 @@ usecase "Idle" {
   it('fails when nothing has traffic or the use case does not exist', () => {
     expect(req(READ, { kind: 'latency', percentile: 50, maxMs: 100 })).toMatchObject({ passed: false, message: 'No use case has traffic, so there is nothing to measure' });
     const r = req(READ, { kind: 'latency', percentile: 50, useCase: 'Nope', maxMs: 100 });
-    expect(r).toMatchObject({ passed: false, message: 'No use case named "Nope"', hint: 'Use one of "Read"' });
+    expect(r).toMatchObject({ passed: false, message: 'No use case named "Nope"', hint: 'Add usecase "Nope" { … }' });
+  });
+
+  it('suggests an existing use case only for a likely typo', () => {
+    expect(req(READ, { kind: 'latency', percentile: 50, useCase: 'Raed', maxMs: 100 })).toMatchObject({ passed: false, message: 'No use case named "Raed"', hint: 'Use one of "Read"' });
+    expect(req(READ, { kind: 'latency', percentile: 50, useCase: 'Redirect', maxMs: 100 }).hint).toBe('Add usecase "Redirect" { … }');
   });
 
   it('measures a named use case without traffic and says so', () => {

@@ -41,6 +41,7 @@ import { TYPE_LABEL } from '../review/labels';
 import { accountStore, localStore, reviewId, signedOutError, type CardStore } from '../review/store';
 import { notifyActivity } from '../skills/activity';
 import type { Account } from '../useAccount';
+import { BOARD_MIN_ENTRIES, BoardInvite } from '../LeaderboardPanel';
 import {
   challengeProgress,
   clearChallengeProgress,
@@ -356,7 +357,7 @@ export default function ChallengeRoute({ account, activity }: { account: Account
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
       {/* The practice hub's tabs lead to daily review and the rest. */}
-      <Heading day={day} />
+      <Heading />
       {submitting ? (
         <PaneLoading label="Scoring your answers…" />
       ) : setup.result ? (
@@ -387,24 +388,24 @@ export default function ChallengeRoute({ account, activity }: { account: Account
   );
 }
 
-function Heading({ day }: { day?: string }) {
+function Heading() {
   return (
-    <>
-      <h1 className="mt-3 flex items-center gap-2 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">
-        <Zap className="h-[0.8em] w-[0.8em] shrink-0" aria-hidden="true" />
-        Daily challenge
-      </h1>
-      {day && <p className="mt-2 font-mono text-sm text-muted">{day} (UTC)</p>}
-    </>
+    <h1 className="mt-3 flex items-center gap-2 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">
+      <Zap className="h-[0.8em] w-[0.8em] shrink-0" aria-hidden="true" />
+      Daily challenge
+    </h1>
   );
 }
 
-/** "Next challenge in 5 h 12 min, at 00:00 UTC." */
+/** The reset (00:00 UTC) in the user's own clock, e.g. "02:00". */
+const localResetTime = (endsAt: number): string => new Date(endsAt * 1000).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+
+/** "A new challenge starts at 02:00 your time, in 5 h 12 min." */
 function NextReset({ endsAt }: { endsAt: number }) {
   const now = useNow();
   return (
     <p className="text-sm text-ink/80">
-      A new challenge starts at 00:00 UTC, in <span className="font-semibold tabular-nums">{untilText(endsAt - now)}</span>.
+      A new challenge starts at {localResetTime(endsAt)} your time, in <span className="font-semibold tabular-nums">{untilText(endsAt - now)}</span>.
     </p>
   );
 }
@@ -781,6 +782,7 @@ function Leaderboard({ day, refresh }: { day: string; refresh: number }) {
     };
   }, [day, refresh]);
   if (!board) return null;
+  if (board.entries.length < BOARD_MIN_ENTRIES) return <BoardInvite />;
   return (
     <section aria-labelledby="challenge-leaderboard" className="mt-8">
       <h2 id="challenge-leaderboard" className="flex items-center gap-2 font-display text-xl font-bold text-ink">
@@ -788,35 +790,31 @@ function Leaderboard({ day, refresh }: { day: string; refresh: number }) {
         Today’s leaderboard
       </h2>
       <p className="mt-1 text-sm text-muted">
-        {board.players} {board.players === 1 ? 'player' : 'players'} so far. Only those who chose “Show me on the leaderboard” in the account menu are listed.
+        {board.players} {board.players === 1 ? 'player' : 'players'} so far. Only those who chose “Show me on the leaderboard” in Settings are listed.
       </p>
       {board.you && (
         <p className="mt-2 text-sm font-semibold text-ink">
           You: rank {board.you.rank} of {board.you.players}, {board.you.score} points
         </p>
       )}
-      {board.entries.length === 0 ? (
-        <p className="mt-2 text-sm text-muted">Nobody listed yet today.</p>
-      ) : (
-        <ol className="mt-3 divide-y divide-ink/15 rounded-lg border border-ink/15 bg-surface text-sm">
-          {board.entries.map((e) => (
-            <li key={e.id}>
-              <a
-                href={`#/u/${encodeURIComponent(e.id)}`}
-                aria-label={`${e.displayName}: rank ${e.rank}, ${e.score} points, ${e.correct} of ${CHALLENGE_SIZE} right. See their profile`}
-                className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
-              >
-                <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
-                <span className="min-w-0 flex-1 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>
-                <span className="hidden tabular-nums text-ink/75 sm:inline" aria-hidden="true">
-                  {'✅'.repeat(Math.min(e.correct, CHALLENGE_SIZE))}
-                </span>
-                <span className="w-16 text-right font-semibold tabular-nums text-ink">{e.score}</span>
-              </a>
-            </li>
-          ))}
-        </ol>
-      )}
+      <ol className="mt-3 divide-y divide-ink/15 rounded-lg border border-ink/15 bg-surface text-sm">
+        {board.entries.map((e) => (
+          <li key={e.id}>
+            <a
+              href={`#/u/${encodeURIComponent(e.id)}`}
+              aria-label={`${e.displayName}: rank ${e.rank}, ${e.score} points, ${e.correct} of ${CHALLENGE_SIZE} right. See their profile`}
+              className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+            >
+              <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
+              <span className="min-w-0 flex-1 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>
+              <span className="hidden tabular-nums text-ink/75 sm:inline" aria-hidden="true">
+                {'✅'.repeat(Math.min(e.correct, CHALLENGE_SIZE))}
+              </span>
+              <span className="w-16 text-right font-semibold tabular-nums text-ink">{e.score}</span>
+            </a>
+          </li>
+        ))}
+      </ol>
     </section>
   );
 }

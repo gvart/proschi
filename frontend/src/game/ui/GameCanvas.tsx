@@ -31,6 +31,8 @@ export interface GameCanvasProps {
   wide: boolean;
   /** A phone: narrower columns and smaller nodes. */
   compact?: boolean;
+  /** The tallest the board may get, so the run screen fits the window. */
+  maxHeight?: number;
   /** The last tick (or load test): heat, flows, who is down. */
   tick?: { nodes: NodeTick[]; flows: FlowTick[] };
   /** Draw particles (a wave is running and motion is allowed). */
@@ -249,7 +251,7 @@ function Canvas(props: GameCanvasProps) {
   }, [rowAt, rowY, screenToFlowPosition]);
 
   // The board keeps the proportions of its rows, like a picture: no panning or zooming, so a phone scrolls the page.
-  const height = Math.max(compact ? 260 : 320, Math.min(760, Math.round((width * flowHeight) / flowWidth)));
+  const height = Math.max(compact ? 260 : 320, Math.min(props.maxHeight ?? 760, 760, Math.round((width * flowHeight) / flowWidth)));
   useFitOnChange(`${nodes.map((n) => `${n.id}@${n.position.x},${n.position.y}`).join('|')}#${width}x${height}`, { wrapper });
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {

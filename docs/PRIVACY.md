@@ -226,8 +226,8 @@ your display name and the monthly cost and p99 of your best solving designs
 on each problem's leaderboards,
 your display name and daily challenge score on that day's challenge
 leaderboard, and your display name and best game score on the game's
-leaderboards, only if you opt in ("Show me on the leaderboard", in the account
-menu or on your profile page). Without it, your challenge score and your best designs still count
+leaderboards, only if you opt in ("Show me on the leaderboard", in Settings
+at `#/me`). Without it, your challenge score and your best designs still count
 toward the number of players and everyone's ranks, but your name is never
 shown.
 
@@ -297,7 +297,7 @@ reminder run hold your user id, never the address, when a send fails.
 
 ## Your controls
 
-In the account menu on the practice page:
+In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams included, every session with its kind (the site or an

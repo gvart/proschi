@@ -63,6 +63,33 @@ export function placePopover(
   return { top: clamp(t.top + t.height - h - MARGIN, MARGIN, vh - h - MARGIN), left: midX };
 }
 
+export interface Placement {
+  target: Box | null;
+  top: number;
+  left: number;
+}
+
+/**
+ * Where the popover goes on this render. A step is placed once; after that it
+ * stays put (only kept on screen) while its anchor does, so its own text
+ * changing never moves the buttons under the cursor. It follows the anchor
+ * when the anchor really moves, and phones always dock. Exported for tests.
+ */
+export function nextPlacement(
+  prev: Placement | null,
+  target: Box | null,
+  size: { width: number; height: number },
+  viewport: { width: number; height: number },
+  options: Parameters<typeof placePopover>[3],
+): Placement {
+  if (!prev || options.phone || !sameBox(prev.target, target)) return { target, ...placePopover(target, size, viewport, options) };
+  return {
+    target,
+    top: clamp(prev.top, MARGIN, viewport.height - size.height - MARGIN),
+    left: clamp(prev.left, MARGIN, viewport.width - size.width - MARGIN),
+  };
+}
+
 /** Phones get the one-pane layout (Tailwind's md breakpoint) and docked tour cards. */
 export function useIsPhone(): boolean {
   const query = '(max-width: 767px)';

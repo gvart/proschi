@@ -39,7 +39,8 @@ test('signed out, the first stage opens and sign-in is optional', async ({ page,
   const first = stage1.getByRole('link').first();
   await expect(first).toBeVisible();
   const stage2 = page.getByRole('listitem', { name: /^Stage 2:/ });
-  await expect(stage2.getByRole('link', { disabled: false })).toHaveCount(0);
+  // Only their lessons open: reading is never gated.
+  await expect(stage2.getByRole('link', { name: /^(?!Read the lesson)/ })).toHaveCount(0);
   await expect(stage2.getByRole('img', { name: 'Locked' }).first()).toBeVisible();
 
   await page.getByRole('link', { name: /^Start:/ }).click();
