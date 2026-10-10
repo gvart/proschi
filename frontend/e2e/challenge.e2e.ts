@@ -81,7 +81,7 @@ test.describe('daily challenge', () => {
     await expect(page).toHaveTitle('Daily challenge · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Daily challenge' })).toBeVisible();
     const intro = page.getByRole('region', { name: 'Today’s challenge' });
-    await expect(intro).toContainText(/A new challenge starts at 00:00 UTC, in 1[56] h \d+ min\./);
+    await expect(intro).toContainText(/A new challenge starts at 12:00 AM your time, in 1[56] h \d+ min\./);
     await expect(intro).toContainText('At most 600 points');
     // No accounts in this build: no leaderboard, no sign-in invitation.
     await expect(page.getByRole('heading', { name: 'Today’s leaderboard' })).toHaveCount(0);

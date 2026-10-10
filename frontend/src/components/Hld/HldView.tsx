@@ -17,6 +17,7 @@ import {
   formatPercent,
   formatRps,
   formatUsd,
+  overviewFacts,
   responseText,
   toHtml,
   toMarkdown,
@@ -124,7 +125,7 @@ function SectionBody({ doc, section: s, nodes, edges }: { doc: HldDocument; sect
         <>
           {s.summary && <p className="mb-2 text-base">{s.summary}</p>}
           <p className="text-muted">
-            {[`${s.components} components`, `${s.useCases} use cases`, s.teams.length ? `teams: ${s.teams.join(', ')}` : ''].filter(Boolean).join(' · ')}
+            {overviewFacts(s)}
           </p>
           {nodes.length > 0 && (
             <div className="mt-3 h-72 rounded-lg border border-ink/15 bg-surface overflow-hidden">

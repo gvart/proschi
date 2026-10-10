@@ -118,6 +118,10 @@ describe('shell', () => {
     expect(header).toMatch(/<details class="ps-menu"><summary class="ps-iconbtn ps-menu__button" aria-label="Menu">/);
   });
 
+  it('has an empty account slot for enhance.ts to fill', () => {
+    expect(header).toContain('<div data-account="" data-base="../" hidden="">');
+  });
+
   it('has no inline styles, which the static pages’ CSP blocks', () => {
     expect(header + footer).not.toMatch(/\sstyle="/);
   });

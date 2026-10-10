@@ -208,10 +208,12 @@ test.describe('no sideways scrolling on a phone', () => {
     }
   });
 
-  test('account page and a public profile, with a badge open', async ({ page }) => {
+  test('settings, progress and a public profile, with a badge open', async ({ page }) => {
     await visit(page, 'practice/#/me');
+    await visit(page, 'practice/#/progress');
+    await page.getByText(/^All \d+ badges$/).click();
     await page.locator('[data-achievement="reviews-100"]').getByRole('button').click();
-    await expectNoHorizontalOverflow(page, '#/me with a badge open');
+    await expectNoHorizontalOverflow(page, '#/progress with a badge open');
     await mockProfile(page);
     await visit(page, `practice/#/u/${PROFILE.id}`);
     await expect(page.getByRole('note')).toContainText('This is a public profile');
@@ -282,6 +284,23 @@ for (const width of [320, 400, 470]) {
     });
   });
 }
+
+test.describe('a problem header at 500px', () => {
+  test.use({ viewport: { width: 500, height: 800 }, isMobile: true, hasTouch: true });
+
+  test('keeps its controls on one row, with Reset and Help under More', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    const header = page.locator('.ps-header');
+    const title = (await header.getByRole('heading', { level: 1 }).boundingBox())!;
+    const more = header.getByRole('button', { name: 'More' });
+    const box = (await more.boundingBox())!;
+    expect(Math.abs(box.y + box.height / 2 - (title.y + title.height / 2)), 'More sits on the title’s row').toBeLessThan(12);
+    await expect(header.getByRole('button', { name: 'Help' })).toBeHidden();
+    await more.click();
+    await expect(page.getByRole('menuitem', { name: 'Reset to the starter code' })).toBeVisible();
+    await expect(page.getByRole('menuitem', { name: 'Take the practice tour' })).toBeVisible();
+  });
+});
 
 test.describe('editor diagram on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });

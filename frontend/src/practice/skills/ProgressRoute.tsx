@@ -1,6 +1,8 @@
-import { useEffect } from 'react';
-import { ArrowRight, Dumbbell, Lock, LogIn, RotateCcw, Sparkles } from 'lucide-react';
+import { useEffect, type ReactNode } from 'react';
+import { ArrowRight, Dumbbell, Flame, Layers, Lock, LogIn, RotateCcw, Snowflake, Sparkles, Zap } from 'lucide-react';
 import deck from 'virtual:practice-cards';
+import problems from 'virtual:practice-listings';
+import { MAX_SCORE } from '../../learn/challenge';
 import type { AchievementsAnswer } from '../../learn/achievements';
 import { percent } from '../../learn/mastery';
 import { levelOf, XP_PER_MASTERED_CARD, XP_PER_SOLVE, XP_PER_STREAK_DAY } from '../../learn/level';
@@ -9,21 +11,30 @@ import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton } from '../../components/Playground/ui';
 import { ACHIEVEMENTS } from '../achievementList';
 import { PROVIDER_LABEL } from '../account';
+import { summarize, type Activity } from '../activity';
+import { DifficultyBadge } from '../Badges';
+import { statusOf, type Progress } from '../progress';
+import { GoalPicker } from '../Streak';
 import type { Account } from '../useAccount';
+import AchievementIcon from './AchievementIcon';
 import BadgeGrid from '../profile/BadgeGrid';
-import { profileBadge, type ProfileBadge } from '../profile/profile';
+import { nextBadges, profileBadge, type ProfileBadge } from '../profile/profile';
 import SkillRadar, { type RadarPoint } from './SkillRadar';
 import type { Achievements } from './useAchievements';
+import { useChallengeSummary } from './useChallengeSummary';
 
 /**
- * The progress page (`#/progress`), one system read top to bottom: the
- * headline level and XP (src/learn/level.ts, from problems solved, cards
- * mastered and the longest streak) with the stats behind it, then the skill
- * map (each topic's mastery as a radar, with a table for screen readers, and
- * the "interview ready" score with the weakest topics to train), the roadmap's
- * progress, and every badge as a compact grid (BadgeGrid), earned or locked
- * with its progress. Signed out, a locked preview with a sign-in invitation.
- * A tab of the practice hub.
+ * The progress page (`#/progress`), the one place for progress, read top to
+ * bottom: "Your next step" first while nothing is earned yet, the headline
+ * level and XP (src/learn/level.ts, from problems solved, cards mastered and
+ * the longest streak) with the stats behind it, the streak (with freezes, the
+ * daily challenge's streak and best score, and the daily goal), the skill map
+ * (each topic's mastery as a radar, with a table for screen readers, and the
+ * "interview ready" score with the weakest topics to train), the roadmap's
+ * progress, the next badges to earn with every badge behind "All badges"
+ * (BadgeGrid), and the problems solved. Signed out, a locked preview with a
+ * sign-in invitation. A tab of the practice hub; the account's settings are
+ * on `#/me`.
  *
  * Loaded lazily with the cards, for the topics' names.
  */
@@ -38,14 +49,20 @@ export default function ProgressRoute({
   achievements,
   roadmap,
   stages,
+  activity,
+  progress,
 }: {
   account: Account;
   achievements: Achievements;
+  activity: Activity;
+  /** This browser's progress (merged with the account's when signed in): the problems solved. */
+  progress: Progress;
   /** Where the learner is on the roadmap (roadmapState), and its stages. */
   roadmap: RoadmapState;
   stages: RoadmapStage[];
 }) {
   const { state, refresh } = achievements;
+  const challenge = useChallengeSummary(account);
   useEffect(() => {
     document.title = 'Your progress · Proschi practice';
   }, []);
@@ -64,6 +81,9 @@ export default function ProgressRoute({
   const badges: ProfileBadge[] = answer ? answer.achievements.map(profileBadge) : preview;
   const level = levelOf(answer?.stats ?? { solved: 0, mastered: 0, longestStreak: 0 });
   const earned = badges.filter((b) => b.earned).length;
+  const ready = activity.state.status === 'ready' ? activity.state : undefined;
+  const streak = ready && summarize(ready).streak;
+  const solved = problems.filter((p) => statusOf(progress, p.id) === 'solved');
 
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
@@ -84,6 +104,8 @@ export default function ProgressRoute({
           </button>
         </section>
       )}
+
+      {level.xp === 0 && <NextStep roadmap={roadmap} />}
 
       <section aria-labelledby="level-title" className={`mt-6 overflow-hidden ${card} ${answer ? '' : 'opacity-60'}`}>
         <div className="h-2 border-b-bw-2 border-ink bg-pop-yellow" aria-hidden="true" />
@@ -128,6 +150,40 @@ export default function ProgressRoute({
           </dl>
         </div>
       </section>
+
+      {(streak || challenge) && (
+        <section aria-labelledby="streak-title" className="mt-10">
+          <h2 id="streak-title" className="font-display text-2xl font-extrabold text-ink">
+            Streak
+          </h2>
+          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Streak">
+            {streak && (
+              <Tile
+                label="Current streak"
+                value={streak.current}
+                unit={streak.current === 1 ? 'day' : 'days'}
+                icon={<Flame size={16} aria-hidden="true" className={streak.current > 0 ? 'fill-pop-yellow text-ink' : 'text-muted'} />}
+              />
+            )}
+            {streak && <Tile label="Streak freezes" value={streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />}
+            {challenge && (
+              <Tile
+                label="Challenge streak"
+                value={challenge.current}
+                unit={challenge.current === 1 ? 'day' : 'days'}
+                icon={<Zap size={16} aria-hidden="true" className={challenge.current > 0 ? 'fill-pop-yellow text-ink' : 'text-muted'} />}
+                detail={`Longest ${challenge.longest} ${challenge.longest === 1 ? 'day' : 'days'}`}
+              />
+            )}
+            {challenge && <Tile label="Best challenge" value={challenge.best} unit={`/ ${MAX_SCORE}`} testId="profile-challenge-best" />}
+          </dl>
+          {ready && (
+            <div className="mt-4">
+              <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />
+            </div>
+          )}
+        </section>
+      )}
 
       <h2 className="mt-10 font-display text-2xl font-extrabold text-ink">Skills and mastery</h2>
       <div className="mt-3 grid gap-5 md:grid-cols-[minmax(0,1fr)_minmax(0,1.35fr)]">
@@ -190,9 +246,39 @@ export default function ProgressRoute({
 
       <RoadmapProgress roadmap={roadmap} stages={stages} />
 
-      <div className="mt-10">
-        <BadgeGrid badges={badges} />
-      </div>
+      <NextBadges badges={badges} />
+      {/* New learners see the next badges first; the whole grid opens on demand. */}
+      <details className="mt-4" open={earned > 0}>
+        <summary className="cursor-pointer text-sm font-semibold text-ink underline-offset-2 hover:underline">All {badges.length} badges</summary>
+        <div className="mt-3">
+          <BadgeGrid badges={badges} headingLevel={3} label="All badges" />
+        </div>
+      </details>
+
+      <section aria-labelledby="progress-solved" className="mt-10">
+        <h2 id="progress-solved" className="font-display text-2xl font-extrabold text-ink">
+          Problems solved
+        </h2>
+        {solved.length === 0 ? (
+          <p className="mt-2 text-sm text-muted">
+            None yet.{' '}
+            <a href="#/" className="font-semibold text-ink underline underline-offset-2">
+              Pick a problem
+            </a>
+          </p>
+        ) : (
+          <ul className="mt-3 divide-y divide-ink/15 overflow-hidden rounded-brutal border-bw-2 border-ink bg-surface text-sm shadow-brutal-sm">
+            {solved.map((p) => (
+              <li key={p.id}>
+                <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25">
+                  <span className="min-w-0 flex-1 truncate font-semibold text-ink">{p.title}</span>
+                  <DifficultyBadge difficulty={p.difficulty} />
+                </a>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </main>
   );
 }
@@ -206,6 +292,78 @@ function Stat({ label, value, unit }: { label: string; value: number; unit?: str
         {unit && <span className="ml-1 text-sm font-semibold text-muted">{unit}</span>}
       </dd>
     </div>
+  );
+}
+
+/** A streak total, in a tile: a label, a number with its unit, an icon and a detail line. */
+function Tile({ label, value, unit, icon, detail, testId }: { label: string; value: number; unit?: string; icon?: ReactNode; detail?: string; testId?: string }) {
+  return (
+    <div className="min-w-0 rounded-brutal border-bw-2 border-ink bg-surface px-3 py-2 shadow-brutal-sm">
+      <dt className={eyebrow}>{label}</dt>
+      <dd className="font-display text-2xl font-extrabold tabular-nums text-ink">
+        <span className="inline-flex items-center gap-1.5" data-testid={testId}>
+          {value}
+          {unit && <span className="text-sm font-semibold text-muted">{unit}</span>}
+          {icon}
+        </span>
+        {detail && <span className="block font-sans text-xs font-semibold text-muted">{detail}</span>}
+      </dd>
+    </div>
+  );
+}
+
+/** Before anything is earned: one clear next step instead of a page of zeros. */
+function NextStep({ roadmap }: { roadmap: RoadmapState }) {
+  const title = roadmap.next && (problems.find((p) => p.id === roadmap.next!.id)?.title ?? roadmap.next.id);
+  return (
+    <section aria-labelledby="next-step" className={`mt-6 p-4 sm:p-5 ${card}`}>
+      <h2 id="next-step" className={eyebrow}>
+        Your next step
+      </h2>
+      <p className="mt-1 font-display text-xl font-extrabold leading-tight text-ink">{title ? `Start the roadmap: ${title}` : 'Review today’s cards'}</p>
+      <p className="mt-1 max-w-2xl text-sm text-ink/80">Every problem solved, card mastered and day of streak adds to your level, skills and badges below.</p>
+      <div className="mt-3 flex flex-wrap gap-2">
+        {roadmap.next && (
+          <a href={roadmapHref(roadmap.next.id)} className={`min-h-[40px] ${primaryButton}`}>
+            Start
+            <ArrowRight size={14} aria-hidden="true" />
+          </a>
+        )}
+        <a href="#/review" className="inline-flex min-h-[40px] items-center gap-1.5 rounded border-bw-1 border-ink bg-surface px-3 py-1.5 text-sm font-bold text-ink hover:bg-pop-yellow/30">
+          <Layers size={14} aria-hidden="true" />
+          Review cards
+        </a>
+      </div>
+    </section>
+  );
+}
+
+/** The three badges closest to being earned, named, with what earns them and how far along they are. */
+function NextBadges({ badges }: { badges: ProfileBadge[] }) {
+  const next = nextBadges(badges);
+  if (next.length === 0) return null;
+  return (
+    <section aria-labelledby="next-badges" className="mt-10">
+      <h2 id="next-badges" className="font-display text-2xl font-extrabold text-ink">
+        Badges to earn next
+      </h2>
+      <ul className="mt-3 grid gap-3 sm:grid-cols-3">
+        {next.map((b) => (
+          <li key={b.id} data-next-badge={b.id} className={`flex items-start gap-3 p-3 ${card}`}>
+            <AchievementIcon icon={b.icon} tier={b.tier} earned={false} />
+            <div className="min-w-0">
+              <p className="font-display text-base font-bold leading-tight text-ink">{b.title}</p>
+              <p className="mt-0.5 text-sm text-ink/80">{b.description}</p>
+              {b.progress && b.progress.current > 0 && (
+                <p className="mt-1 text-xs tabular-nums text-muted">
+                  {b.progress.current} / {b.progress.target}
+                </p>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }
 

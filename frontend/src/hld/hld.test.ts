@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from '../dsl';
 import { shortenerAnalysis, shortenerDiagram, shortenerTests } from './fixtures';
-import { assertionLabel, buildHld, hld, nullEngine, requirementLabel, section, toHtml, toMarkdown, type Engine } from './index';
+import { assertionLabel, buildHld, hld, nullEngine, overviewFacts, requirementLabel, section, toHtml, toMarkdown, type Engine } from './index';
 
 /** Every opened tag is closed, in order (void elements aside). */
 function expectBalancedHtml(html: string) {
@@ -310,5 +310,13 @@ describe('toHtml', () => {
     expect(html).toContain('<h1>&lt;b&gt;Shop&lt;/b&gt;</h1>');
     expect(html).not.toContain('<script>');
     expectBalancedHtml(html);
+  });
+});
+
+describe('overviewFacts', () => {
+  it('pluralises the counts', () => {
+    const one = { kind: 'overview', title: 'Overview', components: 1, useCases: 1, teams: [] } as const;
+    expect(overviewFacts({ ...one, teams: [] })).toBe('1 component · 1 use case');
+    expect(overviewFacts({ ...one, components: 3, useCases: 0, teams: ['a', 'b'] })).toBe('3 components · 0 use cases · teams: a, b');
   });
 });

@@ -19,6 +19,8 @@ export interface HeaderProps {
   children?: ReactNode;
   /** Controls before the theme toggle, like the account and help menus; on phones they make room (components.css). */
   actions?: ReactNode;
+  /** Static pages: an empty slot for the account control, which enhance.ts fills in from the session (account.ts). */
+  accountSlot?: boolean;
 }
 
 export function ArrowIcon() {
@@ -48,7 +50,7 @@ function NavLink({ link, base, current, className }: { link: SiteLink; base: str
  * build time (plugins/siteShell.ts), React pages mount it. Below 1040px (1200px
  * when compact) the links fold into a menu.
  */
-export default function Header({ base, current, compact = false, children, actions }: HeaderProps) {
+export default function Header({ base, current, compact = false, children, actions, accountSlot = false }: HeaderProps) {
   const menuRef = useRef<HTMLDetailsElement>(null);
   useEffect(() => (menuRef.current ? bindMenu(menuRef.current) : undefined), []);
 
@@ -64,6 +66,7 @@ export default function Header({ base, current, compact = false, children, actio
         </nav>
         <div className="ps-header__end">
           {actions}
+          {accountSlot && <div data-account="" data-base={base} hidden />}
           <ThemeToggle />
           {!compact && (
             <Button href={siteHref(base, EDITOR_LINK.href)} variant="primary" size="sm" magnetic className="ps-header__cta" trailing={<ArrowIcon />}>

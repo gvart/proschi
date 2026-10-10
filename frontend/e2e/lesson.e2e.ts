@@ -62,7 +62,7 @@ test.describe('lessons', () => {
     const quiz = lesson.getByRole('region', { name: 'Quick check' }).first();
     await quiz.getByLabel('Your estimate in database reads/s').fill('5k');
     await quiz.getByRole('button', { name: 'Check' }).first().click();
-    await expect(quiz.getByRole('status').first()).toContainText('Close enough');
+    await expect(quiz.getByRole('status').first()).toContainText(/(Correct|Close enough): the answer/);
   });
 
   test('a lesson read shows on the roadmap', async ({ page }) => {

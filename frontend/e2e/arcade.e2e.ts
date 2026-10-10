@@ -238,6 +238,23 @@ test.describe('on a phone', () => {
   });
 });
 
+test.describe('on a desktop', () => {
+  test.use({ viewport: { width: 1440, height: 900 } });
+
+  test('a run hides the practice tabs and fits the HUD, board, palette and Deploy in one window', async ({ page }) => {
+    await startShortly(page);
+    await expect(page.getByRole('navigation', { name: 'Practice sections' })).toBeHidden();
+    await expect(page.getByRole('contentinfo')).toBeHidden();
+    await expect(page.getByRole('status', { name: 'Run status' })).toBeInViewport();
+    await expect(board(page)).toBeInViewport({ ratio: 1 });
+    await expect(page.getByRole('toolbar', { name: 'Components' })).toBeInViewport();
+    await expect(page.getByRole('button', { name: 'Deploy wave 1' })).toBeInViewport();
+    // Back on the Arcade's home, the tabs return.
+    await page.getByRole('button', { name: 'Back to the Arcade' }).click();
+    await expect(page.getByRole('navigation', { name: 'Practice sections' })).toBeVisible();
+  });
+});
+
 test('Chaotic Startup: tickets instead of a draft, and a migration one phase a wave', async ({ page }) => {
   await page.goto('practice/#/arcade');
   const card = page.getByRole('listitem').filter({ hasText: 'Pawprint' });

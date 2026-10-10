@@ -138,13 +138,13 @@ export function roadmapTarget(route: string): { id: string; lesson: boolean } | 
 }
 
 /**
- * Whether a roadmap step may be opened, lesson and challenge alike: `open`;
+ * Whether a roadmap step's challenge may be opened: `open`;
  * `checking` while the account loads; `sign-in` signed out past the first
  * stage (the first stage is open to everyone, with progress kept in this
  * browser); or `order` while an earlier problem is unsolved (`next` is the one
  * to solve). A problem that is not on the roadmap is only gated by the
- * account. Lessons opened from the problem list (`#/<id>/lesson`) are not
- * gated at all; only the roadmap's progression is. The OPTIONAL_STEPS (the
+ * account. Lessons are never gated (see routeLock): reading is always open,
+ * only the challenges keep the roadmap's order. The OPTIONAL_STEPS (the
  * tutorial) open signed out too.
  */
 export type StepLock = { kind: 'open' } | { kind: 'checking' } | { kind: 'sign-in' } | { kind: 'order'; next: string };
@@ -162,16 +162,7 @@ export function stepLock(state: RoadmapState, id: string, access: RoadmapAccess)
   return { kind: 'open' };
 }
 
-/** What opens a locked step, e.g. "Solve URL Shortener first"; `title` names a problem by its id. */
-export function unlockHint(lock: StepLock, title: (id: string) => string): string | undefined {
-  switch (lock.kind) {
-    case 'order':
-      return `Solve ${title(lock.next)} first`;
-    case 'sign-in':
-      return 'Sign in to continue past stage 1';
-    case 'checking':
-      return 'Checking your sign-in';
-    case 'open':
-      return undefined;
-  }
+/** The lock on a roadmap address: a lesson (`roadmap/<id>/lesson`) is always open, a challenge as stepLock says. */
+export function routeLock(state: RoadmapState, target: { id: string; lesson: boolean }, access: RoadmapAccess): StepLock {
+  return target.lesson ? { kind: 'open' } : stepLock(state, target.id, access);
 }

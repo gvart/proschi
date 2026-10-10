@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock, unlockHint, validateRoadmap, type RoadmapStage } from './roadmap';
+import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 import { roadmapAfterSolve } from './solveSummary';
 import { ruleProgress, type StatsSnapshot } from '../learn/achievements';
@@ -120,14 +120,20 @@ describe('roadmapTarget', () => {
 
 describe('stepLock', () => {
   const roadmap = stages(['a', 'b'], ['c']);
-  const title = (id: string) => id.toUpperCase();
 
-  it('locks a step, lesson and challenge alike, until every step before it is solved', () => {
+  it('locks a step’s challenge until every step before it is solved', () => {
     const state = roadmapState(roadmap, solved('a'));
     expect(stepLock(state, 'a', 'open')).toEqual({ kind: 'open' });
     expect(stepLock(state, 'b', 'open')).toEqual({ kind: 'open' });
     expect(stepLock(state, 'c', 'open')).toEqual({ kind: 'order', next: 'b' });
-    expect(unlockHint(stepLock(state, 'c', 'open'), title)).toBe('Solve B first');
+  });
+
+  it('never locks a lesson, only the challenge', () => {
+    const state = roadmapState(roadmap, {});
+    expect(routeLock(state, { id: 'c', lesson: false }, 'open')).toEqual({ kind: 'order', next: 'a' });
+    expect(routeLock(state, { id: 'c', lesson: true }, 'open')).toEqual({ kind: 'open' });
+    expect(routeLock(state, { id: 'c', lesson: false }, 'sign-in')).toEqual({ kind: 'sign-in' });
+    expect(routeLock(state, { id: 'c', lesson: true }, 'sign-in')).toEqual({ kind: 'open' });
   });
 
   it('keeps a step solved out of order open', () => {
@@ -140,7 +146,6 @@ describe('stepLock', () => {
     expect(stepLock(fresh, 'b', 'sign-in')).toEqual({ kind: 'order', next: 'a' });
     const state = roadmapState(roadmap, solved('a', 'b'));
     expect(stepLock(state, 'c', 'sign-in')).toEqual({ kind: 'sign-in' });
-    expect(unlockHint(stepLock(state, 'c', 'sign-in'), title)).toBe('Sign in to continue past stage 1');
   });
 
   it('waits while the account loads', () => {
@@ -198,6 +203,5 @@ describe('stepLock', () => {
     const state = roadmapState(roadmap, {});
     expect(stepLock(state, 'elsewhere', 'open')).toEqual({ kind: 'open' });
     expect(stepLock(state, 'elsewhere', 'sign-in')).toEqual({ kind: 'sign-in' });
-    expect(unlockHint({ kind: 'open' }, title)).toBeUndefined();
   });
 });

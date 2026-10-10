@@ -29,4 +29,17 @@
       if (root.getAttribute('data-theme-pref') === 'system') apply();
     });
   }
+  // Cross-document view transitions (src/design/tokens.css) reject their
+  // promises when the browser skips one (a resize mid-navigation, say), which
+  // shows up as an uncaught error. Skipping is fine: the page just navigates.
+  function quiet(e) {
+    var t = e.viewTransition;
+    if (!t) return;
+    var noop = function () {};
+    t.ready.catch(noop);
+    t.finished.catch(noop);
+    if (t.updateCallbackDone) t.updateCallbackDone.catch(noop);
+  }
+  window.addEventListener('pageswap', quiet);
+  window.addEventListener('pagereveal', quiet);
 })();

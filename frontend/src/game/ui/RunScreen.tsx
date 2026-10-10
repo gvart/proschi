@@ -70,6 +70,20 @@ function useNarrow(): boolean {
   return narrow;
 }
 
+/** The window's height, for a board that fits it with the HUD and the action bar. */
+function useWindowHeight(): number {
+  const [height, setHeight] = useState(() => (typeof window === 'undefined' ? 900 : window.innerHeight));
+  useEffect(() => {
+    const on = () => setHeight(window.innerHeight);
+    window.addEventListener('resize', on);
+    return () => window.removeEventListener('resize', on);
+  }, []);
+  return height;
+}
+
+/** Room the desktop layout needs around the board: the site header, the run's title, the HUD, the board's tabs and the action bar. */
+const BOARD_CHROME = 440;
+
 export default function RunScreen(props: RunScreenProps) {
   const { content, setup, runId, arcade, settings } = props;
   const [game] = useState(() => (props.resume?.length ? Game.replay(content, setup, props.resume) : new Game(content, setup)));
@@ -112,6 +126,7 @@ export default function RunScreen(props: RunScreenProps) {
   const [drag, setDrag] = useState<{ id: string; x: number; y: number; moved: boolean }>();
   const hold = useRef<number | undefined>(undefined);
   const narrow = useNarrow();
+  const windowHeight = useWindowHeight();
   /** The board as Proschi text: a second way to edit the plan, for those who would rather type. */
   const [pane, setPane] = useState<'board' | 'code' | 'compiled'>('board');
   const [code, setCode] = useState('');
@@ -448,7 +463,14 @@ export default function RunScreen(props: RunScreenProps) {
     }
   }, [pane, s.phase, s.wave, game, content, shownBoard, compiledTick]);
 
-  if (s.phase === 'over' || s.phase === 'cleared') {
+  const ended = s.phase === 'over' || s.phase === 'cleared';
+  // A run is a focused screen: the practice hub's tabs, streak and footer hide while it is on (arcade.css).
+  useEffect(() => {
+    if (ended) return;
+    document.documentElement.classList.add('sf-run');
+    return () => document.documentElement.classList.remove('sf-run');
+  }, [ended]);
+  if (ended) {
     return (
       <Report
         game={game}
@@ -757,6 +779,7 @@ export default function RunScreen(props: RunScreenProps) {
             scenario={game.scenario}
             wide={wide}
             compact={narrow}
+            maxHeight={narrow ? undefined : windowHeight - BOARD_CHROME}
             tick={shownTick}
             animate={!planning && !reduced && playing}
             speed={settings.speed}
@@ -857,11 +880,9 @@ export default function RunScreen(props: RunScreenProps) {
     </div>
   );
 
-  return (
-    <div className={`max-w-5xl mx-auto px-3 sm:px-4 py-4 space-y-3 ${narrow ? 'pb-56' : ''}`} data-coach-step={coaching}>
-      {top}
-      {!narrow && hud}
-      {stampEl}
+  /** The wave's briefing, forecast and changes: above the board on a phone, beside it on a desktop. */
+  const side = (
+    <>
       {planning && settings.mascot && briefedWave !== s.wave && (
         <MascotBriefing key={`brief-${s.wave}`} briefing={briefing(game.scenario, game.waveDef(), forecast)} boss={forecast.boss} onClose={() => setBriefedWave(s.wave)} />
       )}
@@ -903,7 +924,15 @@ export default function RunScreen(props: RunScreenProps) {
           }}
         />
       )}
+    </>
+  );
 
+  return (
+    <div className={`max-w-6xl mx-auto px-3 sm:px-4 pt-4 space-y-3 ${narrow ? 'pb-56' : ''}`} data-coach-step={coaching}>
+      {top}
+      {!narrow && hud}
+      {stampEl}
+      {narrow && side}
       {narrow ? (
         <>
           {boardView}
@@ -934,44 +963,50 @@ export default function RunScreen(props: RunScreenProps) {
           </div>
         </>
       ) : (
-        <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="min-w-0 space-y-2">
-            {boardView}
-            {planning ? (codeOnly ? typeInstead : palette) : (
-              <>
+        <>
+          <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_340px]">
+            <div className="min-w-0 space-y-2">
+              {boardView}
+              {feedback}
+            </div>
+            <div className="min-w-0 space-y-3">
+              {side}
+              {inspector ?? (
+                <div className="rounded-brutal border-bw-1 border-dashed border-ink/50 p-3 text-sm text-muted">
+                  <p className={eyebrow}>How to play</p>
+                  <p className="mt-1">
+                    {planning && codeOnly
+                      ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
+                      : planning
+                      ? 'Pick a component in the bar below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
+                      : game.twists
+                      ? 'Hold the line: hot nodes turn yellow, then pink, then red. Change the board while it runs and ship it (scaling lands next tick, new parts in two, and a new cache starts cold), or reach for a hotfix below: it acts at once.'
+                      : 'Watch it run: hot nodes turn yellow, then pink, then red. If something is about to break, reach for a hotfix below: it acts at once. Changing the board during the run unlocks after your first clear.'}
+                  </p>
+                  {hand}
+                </div>
+              )}
+            </div>
+          </div>
+          {/* The action bar: the palette and Deploy (or the run's controls and hotfixes), always on screen. */}
+          <div className="sticky bottom-0 z-30 -mx-3 sm:-mx-4 border-t-bw-2 border-ink bg-paper px-3 sm:px-4 py-2 shadow-[0_-4px_0_rgb(var(--c-shadow)/0.15)]" role="region" aria-label="Actions">
+            {planning ? (
+              <div className="flex items-center gap-2">
+                <div className="min-w-0 flex-1">{codeOnly ? typeInstead : palette}</div>
+                {undoRedo}
+                {loadTestButton}
+                {deployButton}
+              </div>
+            ) : (
+              <div className="space-y-2">
                 {controls}
                 {shipBar}
                 {oncallBar}
                 {game.twists && (codeOnly ? typeInstead : palette)}
-              </>
-            )}
-            {feedback}
-          </div>
-          <div className="min-w-0 space-y-3">
-            {inspector ?? (
-              <div className="rounded-brutal border-bw-1 border-dashed border-ink/50 p-3 text-sm text-muted">
-                <p className={eyebrow}>How to play</p>
-                <p className="mt-1">
-                  {planning && codeOnly
-                    ? 'Type new components in the Code tab, and wire them there or on the board. Tap a node to scale it, size it or remove it. Deploy when the forecast looks covered.'
-                    : planning
-                    ? 'Pick a component below and tap the + in its row (or drag it there). Tap a node to scale it, size it, wire it or remove it. Deploy when the forecast looks covered.'
-                    : game.twists
-                    ? 'Hold the line: hot nodes turn yellow, then pink, then red. Change the board while it runs and ship it (scaling lands next tick, new parts in two, and a new cache starts cold), or reach for a hotfix below: it acts at once.'
-                    : 'Watch it run: hot nodes turn yellow, then pink, then red. If something is about to break, reach for a hotfix below: it acts at once. Changing the board during the run unlocks after your first clear.'}
-                </p>
-                {hand}
-              </div>
-            )}
-            {planning && (
-              <div className="grid grid-cols-2 gap-2">
-                {undoRedo}
-                <div className="col-span-2 grid">{loadTestButton}</div>
-                <div className="col-span-2 grid">{deployButton}</div>
               </div>
             )}
           </div>
-        </div>
+        </>
       )}
 
       {drag?.moved && (
@@ -983,6 +1018,7 @@ export default function RunScreen(props: RunScreenProps) {
       {showResult && lastSummary && (
         <WaveResult
           summary={lastSummary}
+          trustFull={s.trust >= s.maxTrust ? s.maxTrust : undefined}
           scenario={game.scenario}
           events={events}
           onContinue={() => {

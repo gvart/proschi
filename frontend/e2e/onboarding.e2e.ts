@@ -8,6 +8,16 @@ const FIRST_RUN_NODES = 3;
 const editorTour = (page: Page) => page.getByRole('dialog', { name: /^Quick tour:/ });
 const practiceTour = (page: Page) => page.getByRole('dialog', { name: /^Practice tour:/ });
 
+/** Clicks Next (or Finish) where it is right after each step shows: the popover must not move under the cursor. */
+async function clickThrough(page: Page, tour: ReturnType<typeof editorTour>, titles: string[], label: string) {
+  for (const [i, title] of titles.entries()) {
+    await expect(tour).toHaveAccessibleName(`${label}: ${title}`);
+    const box = (await tour.getByRole('button', { name: i === titles.length - 1 ? 'Finish' : 'Next', exact: true }).boundingBox())!;
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  }
+  await expect(tour).toHaveCount(0);
+}
+
 async function seenFlags(page: Page): Promise<unknown> {
   return page.evaluate((key) => JSON.parse(localStorage.getItem(key) ?? 'null'), ONBOARDING_KEY);
 }
@@ -32,6 +42,27 @@ test.describe('editor tour', () => {
     await page.reload();
     await waitForCanvas(page, 1);
     await expect(editorTour(page)).toHaveCount(0);
+  });
+
+  test('Next stays where it first shows on every step', async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, FIRST_RUN_NODES);
+    const steps = ['Text in, diagram out', 'Change a line, watch the diagram', 'Play a use case', 'Will it scale?', 'Share and keep your work'];
+    await clickThrough(page, editorTour(page), steps, 'Quick tour');
+  });
+
+  test('a done step stays done while the user is on it', async ({ page }) => {
+    await page.goto('app/');
+    await waitForCanvas(page, FIRST_RUN_NODES);
+    const tour = editorTour(page);
+    await tour.getByRole('button', { name: 'Next' }).click();
+    await expect(tour).toHaveAccessibleName('Quick tour: Change a line, watch the diagram');
+    const top = (await tour.boundingBox())!.y;
+    await page.keyboard.type('Orders API');
+    await expect(tour.getByText('The diagram followed your text.')).toBeVisible();
+    expect((await tour.boundingBox())!.y).toBe(top);
+    // It moves on by itself, never back to the task.
+    await expect(tour).toHaveAccessibleName('Quick tour: Play a use case');
   });
 
   test('Escape and the X skip it; focus goes back', async ({ page }) => {
@@ -255,6 +286,12 @@ test.describe('practice tour', () => {
     await page.goto('practice/#/pastebin');
     await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
     await expect(practiceTour(page)).toHaveCount(0);
+  });
+
+  test('Next stays where it first shows on every step', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    const steps = ['Read the problem', 'Edit the starter, run the tests', 'Budgets make brute force fail'];
+    await clickThrough(page, practiceTour(page), steps, 'Practice tour');
   });
 
   test('Help on the problem list replays it on the first problem', async ({ page }) => {

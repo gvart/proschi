@@ -37,13 +37,13 @@ function useDueCount(account: Account): number | undefined {
   return count;
 }
 
-/** "12 cards for today", once counted. */
+/** The cards for today, for the Review chip: "9 due", or "all done" when caught up; "…" while counting. */
 export default function DueCards({ account }: { account: Account }) {
   const count = useDueCount(account);
-  if (count === undefined) return <span className="text-sm text-muted">Counting your cards…</span>;
+  if (count === undefined) return <span className="text-muted">…</span>;
   return (
-    <span data-testid="today-due" className="font-display text-lg font-extrabold tabular-nums text-ink">
-      {count === 0 ? 'All caught up' : `${count} ${count === 1 ? 'card' : 'cards'} for today`}
+    <span data-testid="today-due" className="tabular-nums">
+      {count === 0 ? 'all done' : `${count} due`}
     </span>
   );
 }

@@ -1,12 +1,12 @@
 import type { APIRequestContext, Page } from '@playwright/test';
-import { mockSignedIn, SIGNED_IN } from './accounts';
+import { mockSignedIn } from './accounts';
 import { expect, test } from './fixtures';
 import { PROFILE } from './profile';
 
 /**
  * The daily challenge signed in (the build with accounts, API mocked): it is
  * the practice hub's Challenge tab, its leaderboard's rows open the
- * players' public profiles, and the account page and a public profile show
+ * players' public profiles, and the progress page and a public profile show
  * the challenge streak and best score. On a phone none of these pages
  * scrolls sideways.
  */
@@ -20,7 +20,7 @@ async function someCardIds(request: APIRequestContext): Promise<string[]> {
   return bundle.cards.filter((c) => !c.retired && ['choice', 'estimate', 'cloze'].includes(c.type)).slice(0, 5).map((c) => c.id);
 }
 
-/** Signed in, with today's challenge not played yet, a leaderboard of two who opted in, and CHALLENGER's profile. */
+/** Signed in, with today's challenge not played yet, a leaderboard of three who opted in (fewer show only an invitation), and CHALLENGER's profile. */
 async function mockChallenge(page: Page, request: APIRequestContext): Promise<void> {
   const cardIds = await someCardIds(request);
   const day = new Date().toISOString().slice(0, 10);
@@ -39,6 +39,7 @@ async function mockChallenge(page: Page, request: APIRequestContext): Promise<vo
         maxScore: 600,
         entries: [
           { rank: 1, id: CHALLENGER.id, displayName: CHALLENGER.displayName, score: 560, correct: 5 },
+          { rank: 2, id: 'b2c3d4e5-0000-4000-8000-000000000000', displayName: 'Grace', score: 420, correct: 4 },
           { rank: 3, id: 'c3d4e5f6-0000-4000-8000-000000000000', displayName: 'A rather long display name that has to truncate', score: 340, correct: 3 },
         ],
         you: null,
@@ -68,7 +69,7 @@ test('the challenge is the hub’s Challenge tab, and its leaderboard links to p
 
   const board = page.getByRole('region', { name: 'Today’s leaderboard' });
   const rows = board.getByRole('link');
-  await expect(rows).toHaveCount(2);
+  await expect(rows).toHaveCount(3);
   await expect(rows.first()).toHaveAttribute('href', `#/u/${CHALLENGER.id}`);
   await expect(rows.first()).toHaveAccessibleName(`${CHALLENGER.displayName}: rank 1, 560 points, 5 of 5 right. See their profile`);
   await rows.first().click();
@@ -79,10 +80,10 @@ test('the challenge is the hub’s Challenge tab, and its leaderboard links to p
   await expect(page.getByText('Longest 8 days')).toBeVisible();
 });
 
-test('the account page shows your challenge streak and best score', async ({ page, request }) => {
+test('the progress page shows your challenge streak and best score', async ({ page, request }) => {
   await mockChallenge(page, request);
-  await page.goto('practice/#/me');
-  await expect(page.getByRole('heading', { level: 1, name: SIGNED_IN.user.displayName })).toBeVisible();
+  await page.goto('practice/#/progress');
+  await expect(page.getByRole('heading', { level: 1, name: 'Your progress' })).toBeVisible();
   await expect(page.getByTestId('profile-challenge-best')).toHaveText('540/ 600');
   await expect(page.getByText('Longest 5 days')).toBeVisible();
 });
@@ -96,8 +97,8 @@ for (const width of [320, 360]) {
       for (const path of ['practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/me', `practice/#/u/${CHALLENGER.id}`]) {
         await page.goto(path);
         await page.waitForLoadState('networkidle');
-        if (path.endsWith('challenge')) await expect(page.getByRole('region', { name: 'Today’s leaderboard' }).getByRole('link')).toHaveCount(2);
-        if (path.includes('#/u/') || path.endsWith('#/me')) await expect(page.getByTestId('profile-challenge-best')).toBeVisible();
+        if (path.endsWith('challenge')) await expect(page.getByRole('region', { name: 'Today’s leaderboard' }).getByRole('link')).toHaveCount(3);
+        if (path.includes('#/u/') || path.endsWith('#/progress')) await expect(page.getByTestId('profile-challenge-best')).toBeVisible();
         await expectNoSideways(page, path);
       }
       // Every tab of the hub can be reached in its strip (it scrolls sideways inside itself, never the page).

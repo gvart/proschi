@@ -13,6 +13,7 @@ import { exportDocuments } from './documents';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
+import { BOARD_METRICS, cacheKey } from './stats';
 
 /** The signed-in user's account and practice progress. */
 
@@ -323,6 +324,12 @@ export async function recordRun(request: Request, ctx: Ctx, problemId: string): 
   // runs_to_solve, so it equals the runs. Imported solves have none (the page
   // counted them when they happened, signed out).
   if (verdict?.solved && !imported && row.runs_to_solve !== null && row.runs_to_solve === row.runs) await countServerEvent(ctx, 'problem_solve');
+  // A first run or a solve changes the problem's stats and boards: drop their
+  // cached answers, so the page's refetch right after this run includes it.
+  if (verdict?.solved || row.runs === 1) {
+    const keys = [`problem/${problemId}`, ...BOARD_METRICS.map((m) => `problem-board/${problemId}/${m}`)];
+    await Promise.all(keys.map((key) => caches.default.delete(cacheKey(key))));
+  }
   return json({ progress: entryOf(row), ...(verdict ? { verdict } : {}) }, 200, NO_STORE);
 }
 

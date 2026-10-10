@@ -179,15 +179,10 @@ export default function EditorTour(props: EditorTourProps) {
         target: q('[data-tour="share"]'),
         sides: ['bottom', 'left'],
         body: (
-          <>
-            <p>
-              <strong>Share → Copy link</strong> copies a link that holds the whole diagram; nothing is uploaded. The same menu embeds it in other pages. Diagrams save in this browser: the diagrams menu
-              (top left) has New and Open, and <strong>Export</strong> next to Share saves an image, Mermaid, the file or <strong>Export all (.zip)</strong> for a backup.
-            </p>
-            <p>
-              The <strong>?</strong> menu replays this tour and has a syntax cheat-sheet.
-            </p>
-          </>
+          <p>
+            <strong>Share → Copy link</strong> copies a link that holds the whole diagram; nothing is uploaded. Your diagrams also save in this browser as
+            you type.
+          </p>
         ),
         task: 'Press Share, then Copy link.',
         done: shared,

@@ -33,6 +33,11 @@ export default function ReviewSession({ items, states, topics, onReview, onDone,
   const [index, setIndex] = useState(0);
   const [results, setResults] = useState<SessionResult[]>([]);
   const item = items[index];
+  // Each card after the first brings the session's top (End session, the count and the progress bar) back into view with it.
+  const top = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (index > 0 && top.current) showCardTop(top.current);
+  }, [index]);
 
   const rate = (rating: Rating, durationMs: number) => {
     onReview(item.card, rating, durationMs);
@@ -48,7 +53,7 @@ export default function ReviewSession({ items, states, topics, onReview, onDone,
   const topic = topics.find((t) => t.id === item.card.topic);
   return (
     <main className="max-w-2xl mx-auto px-4 py-6 sm:py-10">
-      <div className="flex items-center gap-3">
+      <div ref={top} className="flex items-center gap-3">
         <button type="button" onClick={() => onQuit(results)} className={`-ml-2.5 ${toolButton}`}>
           <X size={14} aria-hidden="true" />
           End session
@@ -303,7 +308,8 @@ function Graded({ outcome, onRate }: { outcome: Outcome; onRate: (r: Rating) => 
         <span>{outcome.feedback}</span>
       </p>
       {outcome.explanation}
-      <div className="mt-5 flex flex-wrap gap-2">
+      {/* Sticks to the bottom of the screen while a long explanation is read, so Next is always in reach. */}
+      <div className="sticky bottom-0 -mx-4 mt-5 flex flex-wrap gap-2 bg-surface px-4 py-3 sm:-mx-5 sm:px-5">
         <button type="button" onClick={() => onRate(autoRating(outcome.correct))} className={`flex-1 justify-center min-h-[48px] ${primaryButton}`}>
           Next
           <ArrowRight size={14} aria-hidden="true" />
@@ -423,7 +429,7 @@ function EstimateBody({ card, onAnswer, onRate }: { card: EstimateCard; onAnswer
           outcome={{
             correct: result.correct,
             feedback: result.correct
-              ? `Close enough: the answer is ${answer}.`
+              ? `${result.factor <= 1.1 ? 'Correct' : 'Close enough'}: the answer is ${answer}.`
               : `About ${formatFactor(result.factor)}× too ${result.direction === 'high' ? 'high' : 'low'}: the answer is ${answer}.`,
             explanation: (
               <>

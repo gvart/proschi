@@ -118,6 +118,15 @@ describe('lesson blocks in the app', () => {
     expect(screen.getByRole('status').textContent).toContain('10,000 × 5%.');
   });
 
+  it('says an estimate within 10% is correct, not just close enough', () => {
+    render(<LessonQuiz ids={['guess']} />);
+    fireEvent.change(screen.getByLabelText('Your estimate in rps'), {
+      target: { value: '520' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Check' }));
+    expect(screen.getByRole('status').textContent).toContain('Correct: the answer is about 500 rps.');
+  });
+
   it('grades a cloze, and a flip card shows its answer', () => {
     render(<LessonQuiz ids={['gap', 'turn']} />);
     expect(screen.getByRole('region', { name: 'Quick check' }).textContent).toContain('2 questions');

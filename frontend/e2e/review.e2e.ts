@@ -45,12 +45,15 @@ test.describe('daily review', () => {
     await expect(c.getByRole('alert')).toContainText('Enter a number');
     await c.getByLabel('Your estimate').fill('2.3k');
     await c.getByRole('button', { name: 'Check' }).click();
-    await expect(c.getByRole('region', { name: 'Correct' })).toContainText('Close enough: the answer is 2,300 requests/s.');
+    await expect(c.getByRole('region', { name: 'Correct' })).toContainText('Correct: the answer is 2,300 requests/s.');
     await expect(c).toContainText('Solution');
+    // Next stays in reach under a long solution.
+    await expect(c.getByRole('button', { name: 'Next' })).toBeInViewport();
     await c.getByRole('button', { name: 'Too easy' }).click();
 
-    // 2. Choice, answered right; Enter goes on.
+    // 2. Choice, answered right; Enter goes on. The session's top (its progress) comes back into view with the new card.
     c = card(page, 2);
+    await expect(page.getByRole('progressbar', { name: 'Session progress' })).toBeInViewport();
     await expectType(c, 'choice', 'Which load balancer');
     await c.getByRole('button', { name: /layer 7 \(HTTP\)/ }).click();
     await expect(c.getByRole('region', { name: 'Correct' })).toBeVisible();

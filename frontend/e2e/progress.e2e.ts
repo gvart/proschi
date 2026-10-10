@@ -5,13 +5,20 @@ import { expect, test } from './fixtures';
  * The progress page in a build without accounts: the skill map, the
  * readiness score and the badges are computed from this browser's reviews
  * and solves (src/practice/skills/localAchievements.ts), and a new badge is
- * celebrated once. The badges are a compact grid; a badge's details open on
- * a tap.
+ * celebrated once. A new learner sees one next step and the next three
+ * badges, with every badge behind "All badges": a compact grid whose
+ * badges' details open on a tap.
  */
 
 const badge = (page: Page, id: string) => page.locator(`[data-achievement="${id}"]`);
+/** Opens "All badges" when it is collapsed (it is, before a first badge). */
+async function openAllBadges(page: Page) {
+  const all = page.locator('details', { has: page.getByTestId('badge-grid') });
+  if (!(await all.evaluate((e) => (e as HTMLDetailsElement).open))) await all.locator('summary').click();
+}
 /** Opens a badge's details under the grid. */
 async function details(page: Page, id: string) {
+  await openAllBadges(page);
   await badge(page, id).getByRole('button').click();
   return page.locator(`[data-achievement-detail="${id}"]`);
 }
@@ -26,6 +33,10 @@ test.describe('progress page', () => {
     await expect(prepTab(page, 'Progress')).toHaveAttribute('aria-current', 'page');
     await expect(page).toHaveTitle('Your progress · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Your progress' })).toBeVisible();
+    // Nothing earned yet: the page leads with the next step, and offers three badges instead of the whole grid.
+    await expect(page.getByRole('region', { name: 'Your next step' }).getByRole('link', { name: 'Start' })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
+    await expect(page.locator('[data-next-badge]')).toHaveCount(3);
+    await expect(page.getByTestId('badge-grid')).toBeHidden();
     await expect(page.getByTestId('readiness')).toHaveText('0%');
     await expect(page.getByRole('img', { name: /^Topic mastery, from 0 to 100%/ })).toBeVisible();
     // The table for screen readers has every topic: a header row and 18 topics.

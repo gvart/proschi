@@ -177,7 +177,7 @@ function Estimate({ card }: { card: EstimateCard }) {
             </>
           }
         >
-          {result.correct ? 'Close enough' : `About ${formatFactor(result.factor)}× too ${result.direction}`}: the answer is about {formatNumber(card.answer)} {card.unit}.
+          {result.correct ? (result.factor <= 1.1 ? 'Correct' : 'Close enough') : `About ${formatFactor(result.factor)}× too ${result.direction}`}: the answer is about {formatNumber(card.answer)} {card.unit}.
         </Verdict>
       )}
     </>

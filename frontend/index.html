@@ -151,18 +151,21 @@ usecase "Place order" {
         </div>
       </section>
 
-      <section class="story story--break" aria-labelledby="break-title">
-        <div class="ps-wrap story__split">
+      <!-- One section for the two things the editor does beyond drawing: play the failure, then test the design. -->
+      <section class="story story--proof" aria-labelledby="proof-title">
+        <div class="ps-wrap">
           <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">01</p>
-            <h2 id="break-title">Break it on purpose.</h2>
+            <h2 id="proof-title">Break it on purpose. Then test it.</h2>
             <p class="story__lede">
-              Every <code>alt</code> is a way your system fails. Watch the packet die at the database, not in production.
+              Every <code>alt</code> is a way your system fails: watch the packet die at the database, not in production. Then check requirements,
+              traffic and capacity in your browser. Green means it holds&nbsp;up.
             </p>
-            <button type="button" class="ps-btn ps-btn--danger" id="break-again" hidden>Break it again</button>
           </header>
-          <div class="break" data-reveal>
-            <pre class="snip snip--dark" data-proschi><code>usecase "Pay" {
+          <div class="proof">
+            <div class="proof__break" data-reveal>
+              <h3 class="proof__title">Break it</h3>
+              <div class="break">
+                <pre class="snip snip--dark" data-proschi><code>usecase "Pay" {
   web -&gt; api : POST /pay
 
   alt "Paid" {
@@ -173,45 +176,38 @@ usecase "Place order" {
     api --&gt; web : 503 {"error": "retry_later"}
   }
 }</code></pre>
-            <figure class="crash" id="crash">
-              <svg viewBox="0 0 360 120" role="img" aria-labelledby="crash-title">
-                <title id="crash-title">The “DB down” scenario: the call from the Order API to the Orders DB gets no answer, and the API replies 503.</title>
-                <path class="crash__edge" d="M128 75 H236" />
-                <g class="crash__node crash__node--api">
-                  <rect x="12" y="45" width="116" height="60" rx="8" />
-                  <text x="70" y="72" text-anchor="middle" class="crash__tech">REST API</text>
-                  <text x="70" y="91" text-anchor="middle">Order API</text>
-                </g>
-                <g class="crash__node crash__node--db">
-                  <path d="M236 53 a56 9 0 0 1 112 0 v46 a56 9 0 0 1 -112 0 z" />
-                  <path class="crash__lid" d="M236 53 a56 9 0 0 0 112 0" />
-                  <text x="292" y="80" text-anchor="middle" class="crash__tech">PostgreSQL</text>
-                  <text x="292" y="98" text-anchor="middle">Orders DB</text>
-                </g>
-                <g class="crash__packet"><rect x="-8" y="-8" width="16" height="16" rx="3" /></g>
-                <g class="crash__x">
-                  <path d="M186 65 L206 85 M186 85 L206 65" />
-                </g>
-                <g class="crash__reply">
-                  <rect x="36" y="8" width="68" height="26" rx="13" />
-                  <text x="70" y="27" text-anchor="middle">503</text>
-                </g>
-              </svg>
-            </figure>
-          </div>
-        </div>
-      </section>
-
-      <section class="story story--test" aria-labelledby="test-title">
-        <div class="ps-wrap story__split story__split--flip">
-          <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">02</p>
-            <h2 id="test-title">Test your design.</h2>
-            <p class="story__lede">Requirements, traffic and capacity, checked in your browser. Green means it holds&nbsp;up.</p>
-            <button type="button" class="ps-btn ps-btn--primary" id="run-tests" hidden>Run the tests again</button>
-          </header>
-          <div class="checks" id="checks" data-reveal>
-            <pre class="snip snip--dark" data-proschi><code>traffic {
+                <figure class="crash" id="crash">
+                  <svg viewBox="0 0 360 120" role="img" aria-labelledby="crash-title">
+                    <title id="crash-title">The “DB down” scenario: the call from the Order API to the Orders DB gets no answer, and the API replies 503.</title>
+                    <path class="crash__edge" d="M128 75 H236" />
+                    <g class="crash__node crash__node--api">
+                      <rect x="12" y="45" width="116" height="60" rx="8" />
+                      <text x="70" y="72" text-anchor="middle" class="crash__tech">REST API</text>
+                      <text x="70" y="91" text-anchor="middle">Order API</text>
+                    </g>
+                    <g class="crash__node crash__node--db">
+                      <path d="M236 53 a56 9 0 0 1 112 0 v46 a56 9 0 0 1 -112 0 z" />
+                      <path class="crash__lid" d="M236 53 a56 9 0 0 0 112 0" />
+                      <text x="292" y="80" text-anchor="middle" class="crash__tech">PostgreSQL</text>
+                      <text x="292" y="98" text-anchor="middle">Orders DB</text>
+                    </g>
+                    <g class="crash__packet"><rect x="-8" y="-8" width="16" height="16" rx="3" /></g>
+                    <g class="crash__x">
+                      <path d="M186 65 L206 85 M186 85 L206 65" />
+                    </g>
+                    <g class="crash__reply">
+                      <rect x="36" y="8" width="68" height="26" rx="13" />
+                      <text x="70" y="27" text-anchor="middle">503</text>
+                    </g>
+                  </svg>
+                </figure>
+              </div>
+              <button type="button" class="ps-btn ps-btn--danger" id="break-again" hidden>Break it again</button>
+            </div>
+            <div class="proof__test" data-reveal data-reveal-delay="1">
+              <h3 class="proof__title">Test it</h3>
+              <div class="checks" id="checks">
+                <pre class="snip snip--dark" data-proschi><code>traffic {
   "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 9%, "Unknown code" 1%
 }
 
@@ -221,60 +217,23 @@ requirements {
   survive any node failure
   cost &lt;= 5000 usd/month
 }</code></pre>
-            <div class="results">
-              <p class="results__head">
-                <span>Tests <small>URL shortener example</small></span>
-                <span class="results__total ps-badge ps-badge--pass" id="checks-total">5 / 5 pass</span>
-              </p>
-              <ul class="results__list">
-                <li data-result="req:1"><b>p99 of Redirect &lt; 100 ms</b><span>p99 of Redirect is 24.3 ms (limit 100 ms)</span></li>
-                <li data-result="req:3"><b>availability of Redirect ≥ 99.95%</b><span>availability of Redirect is 99.999999% (limit 99.95%)</span></li>
-                <li data-result="req:6"><b>survive any node failure</b><span>Every use case keeps working after losing any of 4 nodes</span></li>
-                <li data-result="req:8"><b>cost ≤ $5,000/month</b><span>Total cost is $3,000/month (limit $5,000/month)</span></li>
-                <li data-result="test:Redirects are served from the cache"><b>Redirects are served from the cache</b><span>All 6 assertions hold</span></li>
-              </ul>
+                <div class="results">
+                  <p class="results__head">
+                    <span>Tests <small>URL shortener example</small></span>
+                    <span class="results__total ps-badge ps-badge--pass" id="checks-total">5 / 5 pass</span>
+                  </p>
+                  <ul class="results__list">
+                    <li data-result="req:1"><b>p99 of Redirect &lt; 100 ms</b><span>p99 of Redirect is 24.3 ms (limit 100 ms)</span></li>
+                    <li data-result="req:3"><b>availability of Redirect ≥ 99.95%</b><span>availability of Redirect is 99.999999% (limit 99.95%)</span></li>
+                    <li data-result="req:6"><b>survive any node failure</b><span>Every use case keeps working after losing any of 4 nodes</span></li>
+                    <li data-result="req:8"><b>cost ≤ $5,000/month</b><span>Total cost is $3,000/month (limit $5,000/month)</span></li>
+                    <li data-result="test:Redirects are served from the cache"><b>Redirects are served from the cache</b><span>All 6 assertions hold</span></li>
+                  </ul>
+                </div>
+              </div>
+              <button type="button" class="ps-btn ps-btn--primary" id="run-tests" hidden>Run the tests again</button>
             </div>
           </div>
-        </div>
-      </section>
-
-      <section class="story story--examples" aria-labelledby="examples-title">
-        <div class="ps-wrap">
-          <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">03</p>
-            <h2 id="examples-title">Examples</h2>
-            <p class="story__lede">Open one, break it, make it yours.</p>
-          </header>
-          <ul class="tiles tiles--examples">
-            <li data-reveal>
-              <a class="ps-card ps-card--yellow ps-card--interactive tile" data-example="ecommerce" href="./app/?example=ecommerce">
-                <span class="tile__name">E-commerce platform</span>
-                <span class="tile__desc">Success and error scenarios per endpoint, parallel steps.</span>
-                <span class="tile__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-            <li data-reveal data-reveal-delay="1">
-              <a class="ps-card ps-card--pink ps-card--interactive tile" data-example="login" href="./app/?example=login">
-                <span class="tile__name">Login with sessions</span>
-                <span class="tile__desc">Wrong password, outage and log out.</span>
-                <span class="tile__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-            <li data-reveal data-reveal-delay="2">
-              <a class="ps-card ps-card--blue ps-card--interactive tile" data-example="events" href="./app/?example=events">
-                <span class="tile__name">Event-driven checkout</span>
-                <span class="tile__desc">Kafka fan-out to several consumers.</span>
-                <span class="tile__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-            <li data-reveal data-reveal-delay="3">
-              <a class="ps-card ps-card--lilac ps-card--interactive tile" data-example="url-shortener" href="./app/?example=url-shortener">
-                <span class="tile__name">URL shortener HLD</span>
-                <span class="tile__desc">Traffic, requirements, capacity and tests.</span>
-                <span class="tile__go" aria-hidden="true">Open →</span>
-              </a>
-            </li>
-          </ul>
         </div>
       </section>
 
@@ -319,16 +278,15 @@ requirements {
       <section class="story story--practice" id="practice" aria-labelledby="practice-title">
         <div class="ps-wrap">
           <header class="story__head" data-reveal>
-            <p class="story__no" aria-hidden="true">04</p>
             <h2 id="practice-title">Practice system design</h2>
             <p class="story__lede"><!--practice:problem-count--> system design problems. Tests, not opinions.</p>
           </header>
-          <!-- Rendered at build time from frontend/src/practice/problems/*/problem.md (src/landing/practiceList.ts). -->
+          <!-- A few of the problems, rendered at build time from frontend/src/practice/problems/*/problem.md (src/landing/practiceList.ts). -->
           <ul class="tiles tiles--practice" id="practice-list">
-<!--practice:list-->
+<!--practice:featured-->
           </ul>
           <p class="story__more">
-            <a class="ps-btn ps-btn--secondary" href="./practice/">All problems <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+            <a class="ps-btn ps-btn--secondary" href="./practice/">All <!--practice:problem-count--> problems <span class="ps-btn__trail" aria-hidden="true">→</span></a>
           </p>
         </div>
       </section>
@@ -336,20 +294,11 @@ requirements {
       <section class="story story--arcade" id="arcade" aria-labelledby="arcade-title">
         <div class="ps-wrap">
           <div class="ps-card ps-card--lilac arcade" data-reveal>
+            <span class="ps-badge ps-badge--yellow">Arcade</span>
             <div class="arcade__text">
-              <p class="story__no" aria-hidden="true">05</p>
-              <p><span class="ps-badge ps-badge--yellow">Arcade</span></p>
               <h2 id="arcade-title">Scale or Fail</h2>
-              <p class="story__lede">
-                The system design game. Place components, then keep the system up while traffic grows, new use cases arrive and things break.
-                Every number comes from the simulation, and every failure says why.
-              </p>
+              <p>The system design game: keep a system up while traffic grows, new use cases arrive and things break.</p>
             </div>
-            <ul class="arcade__facts" aria-label="A run">
-              <li><b>12</b> waves in three acts</li>
-              <li><b>Incidents</b> that cascade</li>
-              <li><b>Code</b> pane in Proschi text</li>
-            </ul>
             <a class="ps-btn ps-btn--primary arcade__cta" href="./practice/#/arcade">Play Scale or Fail <span class="ps-btn__trail" aria-hidden="true">→</span></a>
           </div>
         </div>
@@ -362,6 +311,13 @@ requirements {
           </h2>
           <p class="closer__sub">Your diagrams never leave the browser.</p>
           <a class="ps-btn ps-btn--primary ps-btn--lg closer__cta" data-magnetic href="./app/">Start typing <span class="ps-btn__trail" aria-hidden="true">→</span></a>
+          <p class="closer__examples-title" id="examples-title">Or open an example, break it, make it yours:</p>
+          <ul class="closer__examples" aria-labelledby="examples-title">
+            <li><a class="ps-btn ps-btn--sm" data-example="ecommerce" href="./app/?example=ecommerce">E-commerce platform</a></li>
+            <li><a class="ps-btn ps-btn--sm" data-example="login" href="./app/?example=login">Login with sessions</a></li>
+            <li><a class="ps-btn ps-btn--sm" data-example="events" href="./app/?example=events">Event-driven checkout</a></li>
+            <li><a class="ps-btn ps-btn--sm" data-example="url-shortener" href="./app/?example=url-shortener">URL shortener HLD</a></li>
+          </ul>
         </div>
       </section>
     </main>
