@@ -1,0 +1,236 @@
+frontend/src/hld/html.ts
+  s_2abc9d8b51820b::t_6153dca37fb58e 12,95
+frontend/src/onboarding/Tour.tsx
+  s_2abc9d8b51820b::t_9f6c9e59da3942 4,51-54,75-81,105,111,128-132,150-162,164,169,176,179,181-182,188-189,198-199,202-204,228
+frontend/e2e/landing.e2e.ts
+  s_2abc9d8b51820b::t_bba22327b0c4fe 59,69
+  s_2abc9d8b51820b::t_e5edfa084ceb02 57,62,65,73-78,86-87
+frontend/e2e/challenge.e2e.ts
+  s_2abc9d8b51820b::t_5b1207583f8eb7 84
+frontend/src/hld/hld.ts
+  s_2abc9d8b51820b::t_6153dca37fb58e 504-511
+frontend/src/design/shell.tsx
+  s_2abc9d8b51820b::t_5e823f2459aca0 12,15
+frontend/src/onboarding/EditorTour.tsx
+  s_2abc9d8b51820b::t_51c7f351f22911 182-185
+frontend/src/game/ui/ArcadeRoute.tsx
+  s_2abc9d8b51820b::t_c20a09d20e1e1d 8,429-430
+  s_2abc9d8b51820b::t_e760695d1b30d6 432-452
+frontend/src/practice/profile/profile.ts
+  s_2abc9d8b51820b::t_2697c693a5e713 135-145
+frontend/index.html
+  s_2abc9d8b51820b::t_67ce9aadb95544 297,300
+  s_2abc9d8b51820b::t_9d43adce731b8e 154-156,158,160-161,164-168,179-210,220-234,284,286,289,314-320
+frontend/src/practice/hub/TodayPanel.tsx
+  s_2abc9d8b51820b::t_a1dc928cf12be9 10-16,24-25,27,29-33,37-39,41-44,63-64,73-88,91-98
+frontend/src/practice/PracticeApp.tsx
+  s_2abc9d8b51820b::t_d0e0286a6077f4 9,141-143,149
+  s_2abc9d8b51820b::t_4adfae695b931f 45,47,63-64,257,291-292
+  s_2abc9d8b51820b::t_1f7c2de06c9168 2,67-68
+frontend/src/game/ui/Report.tsx
+  s_2abc9d8b51820b::t_f550ab26425504 104
+frontend/src/onboarding/layout.ts
+  s_2abc9d8b51820b::t_171d84eb0041bd 66-92
+frontend/src/practice/hashRoute.ts
+  s_2abc9d8b51820b::t_74edea00b847d5 1-79
+CHANGELOG.md
+  s_2abc9d8b51820b::t_3bfcd172bb7180 12-19,25-71
+frontend/src/game/ui/Panels.tsx
+  s_2abc9d8b51820b::t_f550ab26425504 100
+  s_2abc9d8b51820b::t_475eaa9a621f6e 468,505-514
+  s_2abc9d8b51820b::t_136b9c51d0d1f6 48-50,67,93
+frontend/src/design/Header.tsx
+  s_2abc9d8b51820b::t_5e823f2459aca0 22-23,53,69
+frontend/src/components/UseCases/UseCasePlayback.tsx
+  s_2abc9d8b51820b::t_4efe3425051292 42-44
+  s_2abc9d8b51820b::t_ffc82566d3b836 465,475
+  s_2abc9d8b51820b::t_328044f2feb638 10,131-147,570-579
+frontend/src/game/ui/RunScreen.tsx
+  s_2abc9d8b51820b::t_02b214e0090029 73-86,129,782
+  s_2abc9d8b51820b::t_475eaa9a621f6e 1021
+  s_2abc9d8b51820b::t_ad7f2c9ecfc57e 883-885,927-928,930-935,966-1001,1009
+  s_2abc9d8b51820b::t_c2d638bdf69cfa 466-473
+docs/PRACTICE.md
+  s_2abc9d8b51820b::t_dfac2c8a252cee 100-103
+frontend/src/practice/review/ReviewSession.tsx
+  s_2abc9d8b51820b::t_91a3de5d832d2a 432
+  s_2abc9d8b51820b::t_c12ed6cc1d189f 36-40,56,311-312
+frontend/src/practice/roadmap.ts
+  s_2abc9d8b51820b::t_d0e0286a6077f4 141,146-147,165-167
+frontend/e2e/onboarding.e2e.ts
+  s_2abc9d8b51820b::t_d9fe57a31a4e6e 11-20,47-67,291-295
+  s_2abc9d8b51820b::t_cb5a0d22fb18c2 296
+frontend/src/practice/RoadmapView.tsx
+  s_2abc9d8b51820b::t_d0e0286a6077f4 252-256,258,260,287
+  s_2abc9d8b51820b::t_85ae1d9e10f62e 5
+  s_2abc9d8b51820b::t_e8649cc129d569 205-209
+frontend/src/practice/hashRoute.test.tsx
+  s_2abc9d8b51820b::t_a59ca776a93e77 1-39
+frontend/src/landing/landing.test.ts
+  s_2abc9d8b51820b::t_012668ade7e0d5 14,215-216,218-220,222-223,266-267
+frontend/src/practice/SolveCelebration.tsx
+  s_2abc9d8b51820b::t_b2ff6890b5eb64 3,16-17,32-33,40-41,43,123,150-195
+  s_2abc9d8b51820b::t_31e4d376500ba9 196
+frontend/src/components/Hld/HldView.tsx
+  s_2abc9d8b51820b::t_6153dca37fb58e 20,128
+frontend/e2e/roadmap.e2e.ts
+  s_2abc9d8b51820b::t_c7ed9420d4d07b 70,74-81,83,86-90
+frontend/src/practice/hub/hub.test.tsx
+  s_2abc9d8b51820b::t_ca048ca1cb611f 72,81-86
+  s_2abc9d8b51820b::t_7c648467fdfcec 87
+frontend/src/practice/profile/AccountRoute.tsx
+  s_2abc9d8b51820b::t_df158824dc1679 8,88
+  s_2abc9d8b51820b::t_89b6c3b5d04235 1-2,11,14-19,22,24,27,32,35-41,46,48-87,89,98-99,103,105
+frontend/src/game/ui/arcade.css
+  s_2abc9d8b51820b::t_5f30ff5de99e38 281-288
+frontend/src/practice/roadmap.test.ts
+  s_2abc9d8b51820b::t_b9bad6af669a8e 3,124,129-136
+frontend/e2e/progress.e2e.ts
+  s_2abc9d8b51820b::t_95907a03e92316 8-10,14-18,21,36-39
+frontend/src/design/enhance.ts
+  s_2abc9d8b51820b::t_5e823f2459aca0 6,31-32,41
+frontend/src/onboarding/layout.test.ts
+  s_2abc9d8b51820b::t_171d84eb0041bd 2,40-63
+  s_2abc9d8b51820b::t_5b914fceef96fa 64
+frontend/src/dsl/autoLayout.ts
+  s_2abc9d8b51820b::t_15bc7284d599ee 19
+  s_2abc9d8b51820b::t_93e6faf539143e 31
+  s_2abc9d8b51820b::t_9d7ebd176305a6 18,30
+frontend/e2e/lesson.e2e.ts
+  s_2abc9d8b51820b::t_ff046fec1ce9f8 65
+frontend/src/practice/AccountMenu.tsx
+  s_2abc9d8b51820b::t_cc63c1740a5712 1,6-13,24,27-28,51-54,59,62-63,74-75,77-78
+frontend/e2e/arcade.e2e.ts
+  s_2abc9d8b51820b::t_c07cd52fc8d994 241-257
+frontend/e2e/editor.e2e.ts
+  s_2abc9d8b51820b::t_edcffe8c17934e 94-104
+frontend/src/review/ReviewPanel.tsx
+  s_2abc9d8b51820b::t_505510fca585d3 64
+frontend/src/practice/TestPanel.test.tsx
+  s_2abc9d8b51820b::t_684277827901f8 1-28
+frontend/e2e/problem-board.accounts.e2e.ts
+  s_2abc9d8b51820b::t_7c17ab3b00948f 44-45,67-68,71-74,76-90
+  s_2abc9d8b51820b::t_2ca848d1b58b7d 19,51
+  s_2abc9d8b51820b::t_8cba6b5d94de58 1,69-70,75,91-112
+frontend/src/practice/AccountSettings.tsx
+  s_2abc9d8b51820b::t_5ae562ac5e444b 1-4,6-20,22-33,35-116,118-165
+  s_2abc9d8b51820b::t_100f753f49f597 5,21,34,117
+frontend/src/design/components.css
+  s_2abc9d8b51820b::t_2d648bb8bfd6a6 614,624-626
+  s_2abc9d8b51820b::t_b709f574c97d28 591-613,615-623,627-655
+frontend/src/landing/practiceList.ts
+  s_2abc9d8b51820b::t_3173e9e0c247f5 51-55,59
+  s_2abc9d8b51820b::t_bba22327b0c4fe 36
+  s_2abc9d8b51820b::t_6297e8a2c2757f 35,37-46,49
+frontend/e2e/challenge.accounts.e2e.ts
+  s_2abc9d8b51820b::t_8b8f0975d7f9ee 9,83,85-86,101
+  s_2abc9d8b51820b::t_783fd829babd65 23,42,72,100
+  s_2abc9d8b51820b::t_754f5a99cac3f1 2
+frontend/src/practice/hub/DueCards.tsx
+  s_2abc9d8b51820b::t_83dffb18ab9e93 43,45
+  s_2abc9d8b51820b::t_9631233771c3e7 40,46
+frontend/src/design/design.test.ts
+  s_2abc9d8b51820b::t_0578641c62c99f 121-124
+backend/test/api.test.ts
+  s_2abc9d8b51820b::t_a6859f6470ab2e 162,166,168-171,173,176-177
+frontend/src/hld/markdown.ts
+  s_2abc9d8b51820b::t_6153dca37fb58e 12,46
+frontend/src/practice/ProblemBoards.tsx
+  s_2abc9d8b51820b::t_cd5c31ca0826e0 78-91
+  s_2abc9d8b51820b::t_85c837d6d5dc90 5,13-14,26-27,29,40-51,77
+  s_2abc9d8b51820b::t_2ca848d1b58b7d 35-37,39
+frontend/e2e/mobile.e2e.ts
+  s_2abc9d8b51820b::t_8c483a65af372b 288-304
+  s_2abc9d8b51820b::t_8b8f0975d7f9ee 211,213-214,216
+frontend/e2e/review.e2e.ts
+  s_2abc9d8b51820b::t_cc625595dc44dd 50-51,54,56
+  s_2abc9d8b51820b::t_bd90a759cb847a 48
+backend/src/progress.ts
+  s_2abc9d8b51820b::t_a6859f6470ab2e 16,326-331
+frontend/src/hld/hld.test.ts
+  s_2abc9d8b51820b::t_be9669766cf311 4,315-320
+  s_2abc9d8b51820b::t_4b363dc5f16846 321-322
+frontend/e2e/header.accounts.e2e.ts
+  s_2abc9d8b51820b::t_2c67e096e6107d 70-73,93-106,109-127
+  s_2abc9d8b51820b::t_cfe4b6b2aa23df 74-92,107-108
+  s_2abc9d8b51820b::t_c7eb3a42b54eb7 42-43
+frontend/src/game/ui/Twists.tsx
+  s_2abc9d8b51820b::t_5f30ff5de99e38 78
+frontend/src/design/account.ts
+  s_2abc9d8b51820b::t_5e823f2459aca0 105-108,119-120
+  s_2abc9d8b51820b::t_395c32c6bd0073 46-53
+  s_2abc9d8b51820b::t_47166d2d6431f5 1-28,37,40,82-83,85-92,94-95,97-99,101-104,109-113,115-118,121-143
+  s_2abc9d8b51820b::t_2d648bb8bfd6a6 29-36,38-39,41-45,54-81,84,93,96,100,114
+frontend/src/game/ui/GameCanvas.tsx
+  s_2abc9d8b51820b::t_7b1053b104735a 34-35,254
+frontend/src/components/Playground/Playground.tsx
+  s_2abc9d8b51820b::t_e47aae594dfb86 91,602
+docs/PRIVACY.md
+  s_2abc9d8b51820b::t_bcff4f9ce20dc1 229-230,300
+frontend/src/practice/LessonQuiz.tsx
+  s_2abc9d8b51820b::t_91a3de5d832d2a 180
+frontend/src/practice/ProblemPage.tsx
+  s_2abc9d8b51820b::t_e5e89befb34993 2,24,46-48,235-239,282-289,292,418-419,438,447-455,474-517
+  s_2abc9d8b51820b::t_db246ea6ed83c1 518-523
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_2abc9d8b51820b::t_ac996da113ccc9 1-2,4-5,14-17,19,21,24,27-37,52-53,57-59,65,84-86,108-109,154-187,249-250,252-281,298-368
+  s_2abc9d8b51820b::t_4adfae695b931f 251
+  s_2abc9d8b51820b::t_06dc3d2b407bb1 369
+frontend/public/theme-init.js
+  s_2abc9d8b51820b::t_657fe088caab10 32-40,42-44
+  s_2abc9d8b51820b::t_a706a76cbc6d6e 41
+frontend/src/practice/challenge/ChallengeRoute.tsx
+  s_2abc9d8b51820b::t_3d3b6d7371ec2b 785
+  s_2abc9d8b51820b::t_2ac0a33c916659 360,391,393-396,401
+  s_2abc9d8b51820b::t_3c4b5acf529524 44,793,800-817
+  s_2abc9d8b51820b::t_5b1207583f8eb7 400,402-403,408
+frontend/src/practice/LessonBlocks.test.tsx
+  s_2abc9d8b51820b::t_91a3de5d832d2a 121-129
+frontend/e2e/prep.e2e.ts
+  s_2abc9d8b51820b::t_f147ed173d25fe 7-8,37-43,45,48,54,61-62
+  s_2abc9d8b51820b::t_b2da8cb416f4be 104-108,113-119
+  s_2abc9d8b51820b::t_8b8f0975d7f9ee 10-12
+  s_2abc9d8b51820b::t_b812ab34e07a65 109-112
+  s_2abc9d8b51820b::t_53d99a59289d20 132,137,147,149-154,158
+frontend/src/practice/profile/profile.test.ts
+  s_2abc9d8b51820b::t_24e289e68ba1c2 6,112-117
+  s_2abc9d8b51820b::t_4ed370fe7955a8 118-119
+frontend/e2e/practice.e2e.ts
+  s_2abc9d8b51820b::t_350e923138da06 108-120
+  s_2abc9d8b51820b::t_505510fca585d3 94
+frontend/src/landing/home.css
+  s_2abc9d8b51820b::t_ebc87d381261f8 1159-1171,1345
+  s_2abc9d8b51820b::t_b06382fd77c800 897,899-921,924,1285,1329,1332,1336-1337,1339,1341-1342,1347-1349,1403-1415
+frontend/src/practice/LeaderboardPanel.tsx
+  s_2abc9d8b51820b::t_7d08e0b5a905eb 4-22,39-40
+  s_2abc9d8b51820b::t_4416df34caeb9f 32-38,41-46
+  s_2abc9d8b51820b::t_adf92f75085df5 31
+  s_2abc9d8b51820b::t_58b51c6e050459 47
+frontend/src/practice/TestPanel.tsx
+  s_2abc9d8b51820b::t_f75f7beffc3b6b 17,40-41,113-114,136-158,163-193
+  s_2abc9d8b51820b::t_0431a05d29714b 194-195
+frontend/e2e/roadmap.accounts.e2e.ts
+  s_2abc9d8b51820b::t_c7ed9420d4d07b 42-43
+frontend/src/practice/skills/useChallengeSummary.ts
+  s_2abc9d8b51820b::t_7865e4e3737dc7 1-39
+frontend/src/sim/tests.test.ts
+  s_2abc9d8b51820b::t_ea6b955b5047dd 170-175
+frontend/src/sim/tests.ts
+  s_2abc9d8b51820b::t_8f1c2c5095ccc0 2,199-203,205-208
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a98671db6f602596534c17ffab91b4b6522fd6f1",
+  "prompts": {},
+  "sessions": {
+    "s_2abc9d8b51820b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "19690331-f420-4102-b200-064669089ff8",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
