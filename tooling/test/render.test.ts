@@ -7,7 +7,7 @@ import { run } from '../src/cli';
 import { examples, parse } from '../src/proschi';
 import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } from '../src/render';
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
-import { TAILWIND_HEX, techIcon, typeColor } from '../src/render/icons';
+import { techIcon } from '../src/render/icons';
 import { COLORS, esc, fit, textWidth } from '../src/render/svg';
 
 async function capture(argv: string[]) {
@@ -208,16 +208,17 @@ usecase "Create order" {
     expect(svg).toContain('>Order &lt;Service&gt;<');
     expect(svg).toContain('>AWS API Gateway<');
     expect(svg).toContain('>Team: platform<');
-    // Cards like ComponentNode: the coloured icon tile with the canvas's glyph in white.
-    expect(svg).toContain(`fill="${typeColor('service')}"`);
-    expect(svg).toContain(`fill="${TAILWIND_HEX['bg-blue-500']}"`);
-    expect(svg.match(/<svg x="[^"]+" y="[^"]+" width="20" height="20" color="#ffffff"/g)).toHaveLength(3);
-    // Both groups carry GroupNode's folder icon.
-    expect(svg.match(/width="20" height="20" color="#3b82f6"/g)).toHaveLength(2);
+    // Cards like ComponentNode: monochrome, an ink border and a hard shadow, the glyph in ink, a handle top and bottom.
+    expect(svg).toContain(`fill="${COLORS.background}"/>`);
+    expect(svg.match(/<svg x="[^"]+" y="[^"]+" width="18" height="18" color="#111111"/g)).toHaveLength(3);
+    expect(svg.match(/width="9" height="9"/g)).toHaveLength(6);
+    // Both groups carry GroupNode's folder icon and an upper-case name.
+    expect(svg.match(/width="14" height="14" color="#111111"/g)).toHaveLength(2);
     // No class or style attributes leak from the React icons.
     expect(svg).not.toMatch(/ (class|style)="/);
     expect(svg).toContain('>HTTP &amp; &quot;json&quot;<');
-    expect(svg.match(/marker-end="url\(#arrow\)"/g)).toHaveLength(2);
+    // Edges end at the handles, without arrowheads, as on the canvas.
+    expect(svg).not.toContain('marker-end');
   });
 
   it('draws numbered requests, responses, self-calls, par regions, and errors in red', () => {

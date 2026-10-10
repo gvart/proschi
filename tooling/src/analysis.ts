@@ -70,17 +70,55 @@ function inLabel(before: string): boolean {
 
 /** Whether a line belongs to a multi-line JSON payload rather than a statement. */
 function insidePayload(lines: string[], line: number): boolean {
+  return payloadLines(lines.slice(0, line + 1))[line];
+}
+
+/** For each line, whether it belongs to a multi-line JSON payload. */
+function payloadLines(lines: string[]): boolean[] {
   let depth = 0;
-  for (let i = 0; i < line; i++) {
-    const text = lines[i];
-    const colon = depth > 0 ? -1 : labelStart(text);
-    if (depth === 0 && colon < 0) continue;
-    for (const ch of text.slice(colon + 1)) {
-      if (ch === '{' || ch === '[') depth++;
-      else if (ch === '}' || ch === ']') depth = Math.max(0, depth - 1);
+  return lines.map((text) => {
+    const inside = depth > 0;
+    const colon = inside ? -1 : labelStart(text);
+    if (inside || colon >= 0) {
+      for (const ch of text.slice(colon + 1)) {
+        if (ch === '{' || ch === '[') depth++;
+        else if (ch === '}' || ch === ']') depth = Math.max(0, depth - 1);
+      }
     }
-  }
-  return depth > 0;
+    return inside;
+  });
+}
+
+export type TokenKind = 'node' | 'tech' | 'team';
+
+export interface Token {
+  line: number;
+  character: number;
+  length: number;
+  kind: TokenKind;
+}
+
+// Strings, comments and labels (free text after `:`) are consumed so nothing inside them
+// becomes a token; arrows so the `x` of `-x` is not taken for a node.
+const TOKEN = /"(?:[^"\\]|\\.)*"?|#.*|:.*|->>|-->|->|-x(?![A-Za-z0-9_])|\[[^\]\n]*\]|@[A-Za-z0-9_-]+|[A-Za-z_][A-Za-z0-9_]*/g;
+
+/**
+ * Semantic tokens for what the TextMate grammar cannot tell apart: node ids
+ * (only declared or implicit nodes), tech stacks (`[PostgreSQL]`) and teams (`@orders`).
+ */
+export function semanticTokens(analysis: Analysis): Token[] {
+  const nodes = new Set(analysis.diagram.nodes.map((n) => n.id));
+  const payload = payloadLines(analysis.lines);
+  const out: Token[] = [];
+  analysis.lines.forEach((text, line) => {
+    if (payload[line]) return;
+    for (const m of text.matchAll(TOKEN)) {
+      const word = m[0];
+      const kind: TokenKind | null = word[0] === '[' ? 'tech' : word[0] === '@' ? 'team' : /^[A-Za-z_]/.test(word) && nodes.has(word) ? 'node' : null;
+      if (kind) out.push({ line, character: m.index ?? 0, length: word.length, kind });
+    }
+  });
+  return out;
 }
 
 function labelStart(text: string): number {

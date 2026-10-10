@@ -54,8 +54,8 @@ const STYLE = `
 body { font-family: var(--vscode-font-family, sans-serif); color: var(--vscode-foreground); background: var(--vscode-editor-background); padding: 12px 16px; }
 h1 { font-size: 16px; margin: 0 0 12px; }
 section { margin-bottom: 20px; }
-.figure { overflow: auto; border: 1px solid var(--vscode-panel-border, #8884); border-radius: 6px; background: #ffffff; }
-.figure svg { display: block; }
+.figure { overflow: auto; border: 2px solid var(--vscode-foreground, #111111); border-radius: 4px; background: #fff8e7; }
+.figure svg { display: block; max-width: 100%; height: auto; }
 .picker { display: inline-flex; gap: 8px; align-items: center; margin-bottom: 8px; font-size: 13px; }
 select { background: var(--vscode-dropdown-background); color: var(--vscode-dropdown-foreground); border: 1px solid var(--vscode-dropdown-border, #8884); padding: 2px 4px; }
 .errors { border: 1px solid var(--vscode-inputValidation-errorBorder, #d33); background: var(--vscode-inputValidation-errorBackground, #d331); padding: 8px 12px; margin-bottom: 16px; border-radius: 4px; }

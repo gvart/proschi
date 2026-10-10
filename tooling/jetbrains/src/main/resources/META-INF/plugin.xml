@@ -1,0 +1,76 @@
+<!-- id, name, version and since-build are filled in from gradle.properties by the IntelliJ Platform Gradle Plugin. -->
+<idea-plugin>
+    <id>app.proschi</id>
+    <name>Proschi</name>
+    <vendor url="https://proschi.app/">Proschi</vendor>
+
+    <description><![CDATA[
+<p>Support for <a href="https://proschi.app/">Proschi</a> architecture diagrams (<code>*.proschi</code>):
+a text language for architecture diagrams with a deterministic simulation of load, latency,
+availability and cost.</p>
+<ul>
+  <li>Syntax highlighting, bracket matching and comment toggling (the same TextMate grammar as the web editor and VS Code)</li>
+  <li>Errors and warnings as you type, quick fixes, completion (keywords, node ids, the tech catalog), hover,
+      go to definition, find usages, structure view and formatting, from the Proschi language server</li>
+  <li><b>Tools | Proschi</b>: check the file, run its requirements and tests, preview the diagram, open it in the web editor</li>
+</ul>
+<p>The language server and the command line come from the <code>proschi</code> npm package and need
+Node.js 18 or newer. See <b>Settings | Languages &amp; Frameworks | Proschi</b>.</p>
+]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <!-- The IDE's built-in LSP client: every 2025.3+ JetBrains IDE except open-source builds and Android Studio. -->
+    <depends>com.intellij.modules.lsp</depends>
+    <depends>org.jetbrains.plugins.textmate</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <textmate.bundleProvider implementation="app.proschi.jetbrains.ProschiTextMateBundleProvider"/>
+        <fileIconProvider implementation="app.proschi.jetbrains.ProschiFileIconProvider"/>
+        <platform.lsp.serverSupportProvider implementation="app.proschi.jetbrains.lsp.ProschiLspServerSupportProvider"/>
+        <colorSettingsPage implementation="app.proschi.jetbrains.lsp.ProschiColorSettingsPage"/>
+
+        <applicationConfigurable parentId="language"
+                                 id="app.proschi.settings"
+                                 displayName="Proschi"
+                                 instance="app.proschi.jetbrains.settings.ProschiConfigurable"/>
+
+        <toolWindow id="Proschi Preview"
+                    anchor="right"
+                    icon="/icons/proschi.svg"
+                    doNotActivateOnStart="true"
+                    factoryClass="app.proschi.jetbrains.preview.ProschiPreviewToolWindowFactory"/>
+
+        <notificationGroup id="Proschi" displayType="BALLOON"/>
+    </extensions>
+
+    <actions>
+        <group id="Proschi.Menu"
+               class="app.proschi.jetbrains.actions.ProschiActionGroup"
+               text="Proschi"
+               icon="/icons/proschi.svg"
+               popup="true">
+            <action id="Proschi.CheckFile"
+                    class="app.proschi.jetbrains.actions.CheckFileAction"
+                    text="Check File"
+                    description="Run `proschi check` on the current file and show the errors and warnings"/>
+            <action id="Proschi.RunTests"
+                    class="app.proschi.jetbrains.actions.RunTestsAction"
+                    text="Run Tests"
+                    description="Run the requirements and test blocks of the current file against the simulation (`proschi test`)"/>
+            <!-- Reformat Code formats .proschi files through the language server (textDocument/formatting). -->
+            <reference ref="ReformatCode"/>
+            <separator/>
+            <action id="Proschi.ShowPreview"
+                    class="app.proschi.jetbrains.actions.ShowPreviewAction"
+                    text="Show Diagram Preview"
+                    description="Render the current file with `proschi render` and show it in the Proschi Preview tool window"/>
+            <action id="Proschi.OpenInWebEditor"
+                    class="app.proschi.jetbrains.actions.OpenInProschiAction"
+                    text="Open in Proschi"
+                    description="Open the current file in the web editor at proschi.app (the diagram travels in the link; nothing is uploaded)"/>
+            <add-to-group group-id="ToolsMenu" anchor="last"/>
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
+        </group>
+    </actions>
+</idea-plugin>

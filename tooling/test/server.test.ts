@@ -164,4 +164,12 @@ describe('language server', () => {
     });
     expect(none).toEqual([]);
   });
+
+  it('answers semantic tokens for nodes, tech stacks and teams', async () => {
+    const textDocument = { uri: 'file:///tmp/tokens.proschi', languageId: 'proschi', version: 1, text: 'api [REST API] @shop\ndb [Redis]\napi -> db : GET\n' };
+    await connection.sendNotification('textDocument/didOpen', { textDocument });
+    const { data } = (await connection.sendRequest('textDocument/semanticTokens/full', { textDocument: { uri: textDocument.uri } })) as { data: number[] };
+    // [deltaLine, deltaStart, length, type, modifiers]; types: 0 variable (node), 1 type (tech), 2 decorator (team).
+    expect(data).toEqual([0, 0, 3, 0, 0, 0, 4, 10, 1, 0, 0, 11, 5, 2, 0, 1, 0, 2, 0, 0, 0, 3, 7, 1, 0, 1, 0, 3, 0, 0, 0, 7, 2, 0, 0]);
+  });
 });

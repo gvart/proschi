@@ -1,11 +1,12 @@
 import { buildSequence, type Diagram, type DiagramScenario, type DiagramUseCase, type SequenceMessage } from '../proschi';
-import { techIcon, typeColor } from './icons';
-import { COLORS, esc, fit, marker, r, svgDocument, text, textWidth } from './svg';
+import { techIcon } from './icons';
+import { COLORS, MONO, card, esc, fit, marker, r, svgDocument, text, textWidth } from './svg';
 
 /**
  * One scenario as an SVG sequence diagram: a header box and dashed lifeline
  * per participant, numbered request arrows, dashed responses with their
- * status codes, `par` regions, and error replies and failed calls in red.
+ * status codes, `par` regions, and error replies and failed calls in red,
+ * in the canvas's style: ink cards with hard shadows, pink step numbers.
  */
 
 const MARGIN = 24;
@@ -102,7 +103,7 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   const height = bottom + MARGIN;
 
   const body: string[] = [
-    text(MARGIN, MARGIN + 16, title, { size: 16, weight: 600 }),
+    text(MARGIN, MARGIN + 16, title, { size: 16, weight: 700 }),
     subtitle.length ? text(MARGIN, MARGIN + 36, subtitle.join(' · '), { size: 12, fill: scenario.outcome === 'error' ? COLORS.error : COLORS.muted }) : '',
   ];
 
@@ -131,13 +132,13 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
     const node = p.tech ? nodes.get(p.id) : undefined;
     body.push(
       `<g data-participant="${esc(p.id)}">`,
-      `<line x1="${r(x)}" y1="${r(headerTop + HEADER_HEIGHT)}" x2="${r(x)}" y2="${r(bottom)}" stroke="${COLORS.border}" stroke-width="1.5" stroke-dasharray="5 4"/>`,
-      // A small ComponentNode: card, coloured icon tile, name and tech stack.
-      `<rect x="${r(x - w / 2 + 1)}" y="${r(headerTop + 1)}" width="${r(w - 2)}" height="${HEADER_HEIGHT - 2}" rx="8" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
-      node ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${typeColor(node.type)}"/>` : '',
-      node ? techIcon(node.techStack, x - w / 2 + 15, headerTop + 16, 14, '#ffffff', node.type) : '',
-      text(x - w / 2 + (node ? 42 : 12), headerTop + (p.tech ? 20 : 28), fit(p.name, w - (node ? 50 : 20), 13, true), { size: 13, weight: 600 }),
-      p.tech ? text(x - w / 2 + 42, headerTop + 36, fit(p.tech, w - 50, 11), { size: 11, fill: COLORS.muted }) : '',
+      `<line x1="${r(x)}" y1="${r(headerTop + HEADER_HEIGHT)}" x2="${r(x)}" y2="${r(bottom)}" stroke="${COLORS.muted}" stroke-opacity="0.6" stroke-width="1.5" stroke-dasharray="5 4"/>`,
+      // A small ComponentNode: card, icon tile, name and tech stack.
+      card(x - w / 2, headerTop, w, HEADER_HEIGHT, { stroke: 2 }),
+      node ? `<rect x="${r(x - w / 2 + 10)}" y="${r(headerTop + 11)}" width="24" height="24" rx="4" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="1.5"/>` : '',
+      node ? techIcon(node.techStack, x - w / 2 + 15, headerTop + 16, 14, COLORS.text, node.type) : '',
+      text(x - w / 2 + (node ? 42 : 12), headerTop + (p.tech ? 20 : 28), fit(p.name, w - (node ? 50 : 20), 13, true), { size: 13, weight: 700 }),
+      p.tech ? text(x - w / 2 + 42, headerTop + 36, fit(p.tech, w - 50, 11), { size: 10, weight: 500, fill: COLORS.muted, family: MONO }) : '',
       '</g>',
     );
   });
@@ -149,8 +150,8 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
   }
 
   const defs = [
-    marker(`${idPrefix}solid`, COLORS.active),
-    marker(`${idPrefix}open`, COLORS.active, true),
+    marker(`${idPrefix}solid`, COLORS.text),
+    marker(`${idPrefix}open`, COLORS.text, true),
     marker(`${idPrefix}reply`, COLORS.line, true),
     marker(`${idPrefix}solid-error`, COLORS.error),
     marker(`${idPrefix}open-error`, COLORS.error, true),
@@ -159,8 +160,8 @@ export function renderSequenceSvg(diagram: Diagram, useCase: DiagramUseCase, sce
 }
 
 function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPrefix: string): string {
-  // Requests in the editor's active blue, replies grey and dashed, errors red.
-  const color = m.error ? COLORS.error : m.kind === 'response' ? COLORS.line : COLORS.active;
+  // Requests in ink, replies grey and dashed, errors red.
+  const color = m.error ? COLORS.error : m.kind === 'response' ? COLORS.line : COLORS.text;
   const dash = m.kind === 'response' ? ' stroke-dasharray="6 4"' : '';
   const head = m.error ? `${m.kind === 'response' || m.async ? 'open' : 'solid'}-error` : m.kind === 'response' ? 'reply' : m.async ? 'open' : 'solid';
   const label = labelText(m);
@@ -178,8 +179,8 @@ function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPr
     let tx = startX;
     if (m.kind === 'request') {
       out.push(
-        `<circle cx="${r(tx + 8)}" cy="${r(ly - 4)}" r="8" fill="${m.error ? COLORS.error : COLORS.active}"/>`,
-        text(tx + 8, ly - 0.5, String(m.number), { size: 10, weight: 700, fill: COLORS.background, anchor: 'middle' }),
+        `<circle cx="${r(tx + 8)}" cy="${r(ly - 4)}" r="8" fill="${m.error ? COLORS.error : COLORS.active}" stroke="${COLORS.border}" stroke-width="1.5"/>`,
+        text(tx + 8, ly - 0.5, String(m.number), { size: 10, weight: 700, anchor: 'middle' }),
       );
       tx += 22;
     }
@@ -191,13 +192,13 @@ function drawMessage(m: SequenceMessage, x1: number, x2: number, y: number, idPr
   if (x1 === x2) {
     // A call to itself: a small loop to the right of the lifeline.
     const d = `M${r(x1)},${r(y)} H${r(x1 + 36)} V${r(y + 18)} H${r(x1 + 2)}`;
-    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="1.5"${dash} marker-end="url(#${idPrefix}${head})"/>`);
+    out.push(`<path d="${d}" fill="none" stroke="${color}" stroke-width="2"${dash} marker-end="url(#${idPrefix}${head})"/>`);
     drawLabel(x1 + 44, y + 13);
   } else {
     const dir = Math.sign(x2 - x1);
     const end = m.failed ? x2 - dir * 14 : x2 - dir * 2;
     out.push(
-      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="1.5"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
+      `<line x1="${r(x1)}" y1="${r(y)}" x2="${r(end)}" y2="${r(y)}" stroke="${color}" stroke-width="2"${dash}${m.failed ? '' : ` marker-end="url(#${idPrefix}${head})"`}/>`,
     );
     if (m.failed) {
       // ✕: the request never arrives.

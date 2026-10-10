@@ -1,22 +1,14 @@
 import { renderToStaticMarkup } from 'react-dom/server';
-import { getComponentTypeColor, getTechStackIcon } from '../../../frontend/src/utils/iconMapping';
-import { CANVAS_FONT, TAILWIND_HEX } from '../../../frontend/src/utils/canvasColors';
+import { getTechStackIcon } from '../../../frontend/src/utils/iconMapping';
 import type { DiagramNode } from '../proschi';
 
 /**
- * The canvas's icons and colours as static SVG: the same react-icons and
- * lucide glyphs `getTechStackIcon()` gives ComponentNode, rendered once per
- * tech stack with react-dom/server.
+ * The canvas's icons as static SVG: the same react-icons and lucide glyphs
+ * `getTechStackIcon()` gives ComponentNode, rendered once per tech stack with
+ * react-dom/server.
  */
 
-export { CANVAS_FONT, TAILWIND_HEX };
-
 const markup = new Map<string, string>();
-
-/** The icon tile's colour for a component type (`getComponentTypeColor()` as hex). */
-export function typeColor(type: DiagramNode['type']): string {
-  return TAILWIND_HEX[getComponentTypeColor(type)] ?? TAILWIND_HEX['bg-gray-500'];
-}
 
 /**
  * The icon of `techStack` as a nested `<svg>` at (x, y), `size` px square,

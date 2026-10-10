@@ -5,22 +5,40 @@
  * under a strict Content-Security-Policy.
  */
 
-import { CANVAS_FONT, TAILWIND_HEX } from '../../../frontend/src/utils/canvasColors';
+import { CANVAS_FONT, CANVAS_TOKENS } from '../../../frontend/src/utils/canvasColors';
 
 /** The editor's font stack (Tailwind's `font-sans`). */
 export const FONT = CANVAS_FONT;
 
-/** The editor's colours; `active` and `error` are what use case playback highlights with. */
+/** The canvas's monospace font (`--font-mono`), for tech stacks and edge labels. */
+export const MONO = "'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace";
+
+const T = CANVAS_TOKENS.light;
+
+/** The canvas's design tokens (light): paper background, white cards, ink borders; `active` and `error` are what use case playback highlights with. */
 export const COLORS = {
-  background: '#ffffff',
-  text: TAILWIND_HEX['text-gray-800'],
-  muted: TAILWIND_HEX['text-gray-500'],
-  line: '#6b7280',
-  border: TAILWIND_HEX['border-gray-300'],
-  active: '#3b82f6',
-  error: '#dc2626',
-  par: '#6366f1',
+  background: T.paper,
+  surface: T.surface,
+  text: T.ink,
+  muted: T.muted,
+  line: T.muted,
+  border: T.ink,
+  active: T.accent,
+  error: T.fail,
+  par: T.muted,
 };
+
+/** A card as on the canvas: `fill`, an ink border of `stroke` px and the hard 3px shadow (`--sh-sm`). */
+export function card(x: number, y: number, w: number, h: number, o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean } = {}): string {
+  const sw = o.stroke ?? 3;
+  const rx = o.rx ?? 4;
+  return [
+    o.shadow === false ? '' : `<rect x="${r(x + 3)}" y="${r(y + 3)}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${T.shadow}"/>`,
+    `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${COLORS.border}" stroke-width="${sw}"/>`,
+  ]
+    .filter(Boolean)
+    .join('\n');
+}
 
 export function esc(text: string): string {
   return text.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]!);
@@ -72,6 +90,8 @@ export interface TextOptions {
   fill?: string;
   anchor?: 'start' | 'middle' | 'end';
   family?: string;
+  opacity?: number;
+  spacing?: number;
 }
 
 export function text(x: number, y: number, content: string, o: TextOptions = {}): string {
@@ -83,6 +103,8 @@ export function text(x: number, y: number, content: string, o: TextOptions = {})
     `fill="${o.fill ?? COLORS.text}"`,
     o.anchor && o.anchor !== 'start' ? `text-anchor="${o.anchor}"` : '',
     o.family ? `font-family="${o.family}"` : '',
+    o.opacity !== undefined ? `fill-opacity="${o.opacity}"` : '',
+    o.spacing ? `letter-spacing="${o.spacing}"` : '',
   ].filter(Boolean);
   // Always escaped: labels come from the document, and one starting with `<tspan` once went out as raw markup.
   return `<text ${attrs.join(' ')}>${esc(content)}</text>`;
@@ -93,7 +115,7 @@ export function r(n: number): string {
   return String(Math.round(n * 10) / 10);
 }
 
-/** The outer `<svg>` element with a white background, so it reads well in dark viewers too. */
+/** The outer `<svg>` element with the canvas's paper background, so it reads well in dark viewers too. */
 export function svgDocument(width: number, height: number, title: string, body: string[], defs = ''): string {
   const w = Math.ceil(width);
   const h = Math.ceil(height);
