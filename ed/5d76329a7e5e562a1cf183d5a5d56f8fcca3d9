@@ -1,0 +1,19 @@
+.github/workflows/tooling.yml
+  s_fea72688184c9b::t_0481bd0ac39c55 48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ed5d76329a7e5e562a1cf183d5a5d56f8fcca3d9",
+  "prompts": {},
+  "sessions": {
+    "s_fea72688184c9b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b1852e00-3112-49a8-b6b1-a5935a109fd6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
