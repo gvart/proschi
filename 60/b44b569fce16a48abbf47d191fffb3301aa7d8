@@ -1,0 +1,27 @@
+tooling/jetbrains/src/main/kotlin/app/proschi/jetbrains/lsp/ProschiHighlighting.kt
+  s_46efa3ce751e41::t_8b8f9eeb64fd7c 1-63
+tooling/jetbrains/gradle.properties
+  s_46efa3ce751e41::t_5f871cfc45d7d9 7
+tooling/jetbrains/src/main/kotlin/app/proschi/jetbrains/lsp/ProschiLsp.kt
+  s_46efa3ce751e41::t_2b2fb8dfdbca51 16-17,42-43,50-53
+tooling/jetbrains/src/main/kotlin/app/proschi/jetbrains/preview/ProschiPreview.kt
+  s_46efa3ce751e41::t_eca0fbc36fcb83 10,26-27,32-34,42,102-108,111-113,142,149-171
+tooling/jetbrains/src/main/resources/META-INF/plugin.xml
+  s_46efa3ce751e41::t_c94bba83632c2c 30
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "60b44b569fce16a48abbf47d191fffb3301aa7d8",
+  "prompts": {},
+  "sessions": {
+    "s_46efa3ce751e41": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "22685e48-3e0e-4086-8909-e1641e7034ee",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
