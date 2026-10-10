@@ -29,6 +29,11 @@ deployed from `main` and ships with the same changes.
 - The server keeps each account's last active day (a date, at most one
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").
+### Changed
+- **Landing page SEO.** A shorter title and meta description that fit in
+  search results, the main keywords in the hero heading (read by search
+  engines and screen readers, not shown), and Twitter title and
+  description tags.
 
 ## [0.10.0] - 2026-10-08
 
