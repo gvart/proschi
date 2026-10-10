@@ -1,0 +1,27 @@
+backend/README.md
+  s_fea72688184c9b::t_bb1aa3701e675c 542
+.github/workflows/site.yml
+  s_fea72688184c9b::t_811c46c24d7c63 6,8,23-24
+CHANGELOG.md
+  s_fea72688184c9b::t_bb1aa3701e675c 7
+frontend/README.md
+  s_fea72688184c9b::t_bb1aa3701e675c 30,57
+.gitignore
+  s_fea72688184c9b::t_f2a1fc1b28ba7f 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8c4efe826bc4cc8b9df7af95a8d29b25eed46bd3",
+  "prompts": {},
+  "sessions": {
+    "s_fea72688184c9b": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "b1852e00-3112-49a8-b6b1-a5935a109fd6",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
