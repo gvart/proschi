@@ -75,7 +75,7 @@ export function BountyChoice({ offer, onPick }: { offer: Forecast['bountyOffer']
   return (
     <div className="mt-2 rounded border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" role="group" aria-label="Bounties">
       <p className="font-semibold">Take a bounty, or none. Met, it pays; missed, it costs a quarter of its cash.</p>
-      <ul className="mt-1 grid gap-1.5 sm:grid-cols-3">
+      <ul className="mt-1 grid gap-1.5">
         {offer.map((b, i) => (
           <li key={b.id}>
             <button type="button" className="flex h-full w-full items-start gap-1.5 rounded border-bw-1 border-ink/40 bg-surface p-1.5 text-left hover:border-ink" onClick={() => onPick(i)} aria-label={`Take the bounty ${b.name}`}>

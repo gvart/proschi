@@ -61,7 +61,7 @@ export default function ReviewPanel({ source, input, onSelect, reviewer = defaul
       <p className="text-ink/80">
         {reviewer.ai
           ? 'An AI reviewer reads your design, its test results and the simulation’s numbers, and comments on the trade-offs.'
-          : 'An automatic review, based on the simulation and the tests. An AI reviewer is coming.'}
+          : 'An automatic review, based on the simulation and the tests.'}
       </p>
       <button onClick={() => void review()} disabled={state.status === 'loading'} className={`${outlineButton} disabled:opacity-50`}>
         <ClipboardCheck size={14} />

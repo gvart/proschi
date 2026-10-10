@@ -159,18 +159,22 @@ describe('stats', () => {
     expect((await call('/api/stats/no-such-problem')).status).toBe(404);
   });
 
-  it('answers signed-in users from the shared cache, with where their latest design falls in it', async () => {
+  it('answers from the shared cache until a run changes the stats', async () => {
     const other = await signedInUser();
     await run(other.token, { source: problem.solution, solved: true });
     const me = await signedInUser();
-    expect(await stats(`/api/stats/${ID}`)).toMatchObject({ solved: 1 });
+    expect(await stats(`/api/stats/${ID}`)).toMatchObject({ attempted: 1, solved: 1 });
     await vi.waitFor(async () => expect(await caches.default.match(cacheKey(`problem/${ID}`))).toBeDefined());
+    // A run that does not change the counts keeps the cached answer.
+    await run(other.token, { source: problem.starter, solved: false });
+    expect(await caches.default.match(cacheKey(`problem/${ID}`))).toBeDefined();
+    // My solve drops it (no clearStatsCache), so the page's refetch includes it.
     await run(me.token, { source: problem.solution, solved: true });
-    // No clearStatsCache: both answers come from the cached distribution, which predates my solve.
+    expect(await caches.default.match(cacheKey(`problem/${ID}`))).toBeUndefined();
     const anonymous = (await (await call(`/api/stats/${ID}`)).json()) as Record<string, any>;
     const signedIn = (await (await call(`/api/stats/${ID}`, { token: me.token })).json()) as Record<string, any>;
-    expect(anonymous.solved).toBe(1);
-    expect(signedIn).toMatchObject({ solved: 1, costUsd: { count: 1 }, you: { cheaperThan: 0, runsToSolve: 1 } });
+    expect(anonymous).toMatchObject({ attempted: 2, solved: 2 });
+    expect(signedIn).toMatchObject({ solved: 2, costUsd: { count: 2 }, you: { runsToSolve: 1 } });
   });
 
   it('ranks only users who opted in, by problems solved, then who got there first', async () => {

@@ -28,6 +28,7 @@ export function loginMessage({ error, linked }: { error?: string; linked?: strin
   if (error === 'cancelled') return 'Sign-in cancelled.';
   if (error === 'identity_in_use') return 'That sign-in already belongs to another Proschi account; delete that account first to link it here.';
   if (error === 'provider_linked') return 'This account already has a sign-in with that provider; unlink it first.';
+  if (error === 'blocked') return 'This account is blocked. If you think that is a mistake, open an issue at github.com/gvart/proschi.';
   if (error) return 'Sign-in failed; try again.';
   if (linked) return `${PROVIDER_LABEL[linked as ProviderId] ?? linked} sign-in linked: you can now sign in with either.`;
   return undefined;

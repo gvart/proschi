@@ -325,6 +325,9 @@ in `ICONS` (`frontend/src/learn/achievements.ts`). The rule kinds:
 | `challenges` | `min` | that many daily challenges completed |
 | `challenge-perfect` | `min` | that many daily challenges with every card right |
 | `challenge-streak` | `min` | a challenge streak of that many days at its longest |
+| `lessons` | `min`, `stage?` | that many problem lessons read, of that roadmap stage |
+| `stage-lessons` | — | every lesson of some roadmap stage read |
+| `all-lessons` | — | every problem lesson read |
 
 An id never changes and is never reused: earned badges are stored by it, in
 the `achievements` table. A badge once earned stays earned. Like the cards'

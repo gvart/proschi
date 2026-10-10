@@ -9,6 +9,7 @@ import {
   formatPercent,
   formatRps,
   formatUsd,
+  overviewFacts,
   responseText,
   type CheckStatus,
   type HldDocument,
@@ -42,8 +43,7 @@ function renderSection(doc: HldDocument, s: HldSection): string[] {
   switch (s.kind) {
     case 'overview': {
       if (s.summary) out.push(s.summary, '');
-      const facts = [`${s.components} components`, `${s.useCases} use cases`, s.teams.length ? `teams: ${s.teams.join(', ')}` : ''].filter(Boolean);
-      out.push(facts.join(' · '), '');
+      out.push(overviewFacts(s), '');
       if (s.components) out.push(...fence('mermaid', toMermaidArchitecture(doc.diagram)));
       break;
     }

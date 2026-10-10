@@ -20,6 +20,10 @@ export interface Env {
   METRICS_LIMITER: RateLimit;
   /** Confirmation emails of email reminders, per user (src/reminders.ts). */
   EMAIL_LIMITER: RateLimit;
+  /** The admin panel's sign-in and setup, per IP (src/adminAuth.ts). */
+  ADMIN_LIMITER: RateLimit;
+  /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
+  CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
    * Cloudflare Email Service (wrangler.jsonc `send_email`), for the email
    * reminders; only src/email.ts uses it. Unset, opting in answers 503.
@@ -46,6 +50,12 @@ export interface Env {
    * at least 16 characters. Unset, the summary answers 404.
    */
   METRICS_TOKEN?: string;
+  /**
+   * The one-time secret that registers the admin panel's first passkey
+   * (src/adminAuth.ts), at least 16 characters. It works only while no
+   * passkey exists; unset, the admin cannot be set up.
+   */
+  ADMIN_SETUP_TOKEN?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

@@ -3,6 +3,7 @@ import type { Ctx } from './context';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, secretOk, type Env } from './env';
 import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
+import { recordEvent } from './events';
 import { errorText, log } from './log';
 import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
@@ -257,12 +258,14 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
     profile = await PROVIDERS[provider].profile(env, code, `${url.origin}/auth/${provider}/callback`, login.verifier);
   } catch (e) {
     log('warn', `Sign-in with ${provider} failed`, { requestId: ctx.requestId, error: errorText(e) });
+    await recordEvent(env, 'warn', 'sign_in_failed', `Sign-in with ${provider} failed`, { provider, requestId: ctx.requestId, error: errorText(e).split('\n')[0] });
     return failed('failed');
   }
 
   if (app) {
     // No cookie: the app exchanges this code, with its PKCE verifier, at POST /auth/token.
     const userId = await upsertUser(env, provider, profile);
+    if (await refuseBlocked(ctx, userId, provider)) return redirect(appRedirect(app.redirectUri, { error: 'access_denied', state: app.state }), [clearState]);
     ctx.userId = userId;
     const appCode = await issueAppCode(env, userId, app);
     await countServerEvent(ctx, 'sign_in');
@@ -280,6 +283,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
   }
 
   const userId = await upsertUser(env, provider, profile);
+  if (await refuseBlocked(ctx, userId, provider)) return redirect(withParam(login.returnTo, 'login_error', 'blocked'), [clearState]);
   const token = randomToken();
   const t = now();
   await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind) VALUES (?, ?, ?, ?, 'web')")
@@ -287,6 +291,14 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
     .run();
   await countServerEvent(ctx, 'sign_in');
   return redirect(login.returnTo, [clearState, ['Set-Cookie', sessionCookie(token, SESSION_TTL)]]);
+}
+
+/** Whether the account is blocked by the admin (src/admin.ts); records the refused sign-in, without the account's id. */
+async function refuseBlocked(ctx: Ctx, userId: string, provider: ProviderId): Promise<boolean> {
+  const row = await ctx.env.DB.prepare('SELECT blocked_at FROM users WHERE id = ?').bind(userId).first<{ blocked_at: number | null }>();
+  if (!row || row.blocked_at === null) return false;
+  await recordEvent(ctx.env, 'info', 'blocked_sign_in', `A blocked account tried to sign in with ${provider}`, { provider, requestId: ctx.requestId });
+  return true;
 }
 
 /**
@@ -344,13 +356,33 @@ interface UserRow {
   display_name: string;
   public_profile: number;
   daily_goal: number;
+  last_seen_day: string | null;
   expires_at: number;
 }
 
 const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal });
 
 /**
- * The signed-in user, or undefined without valid credentials. A request
+ * Notes today (UTC) as the account's last seen day, at most once a day and
+ * after the answer (the admin's active-user counts, src/admin.ts).
+ */
+function markSeen(ctx: Ctx, row: UserRow): void {
+  const today = new Date(now() * 1000).toISOString().slice(0, 10);
+  if (row.last_seen_day === today) return;
+  ctx.exec.waitUntil(
+    ctx.env.DB.prepare('UPDATE users SET last_seen_day = ?1 WHERE id = ?2 AND (last_seen_day IS NULL OR last_seen_day < ?1)')
+      .bind(today, row.id)
+      .run()
+      .then(
+        () => undefined,
+        (e: unknown) => log('warn', 'Noting the last seen day failed', { requestId: ctx.requestId, error: errorText(e) }),
+      ),
+  );
+}
+
+/**
+ * The signed-in user, or undefined without valid credentials. A blocked
+ * account's sessions do not count (blocking deletes them too). A request
  * with `Authorization: Bearer` is an app's: only its access token counts,
  * never the cookie. Otherwise the session cookie: sessions slide, one used in
  * the second half of its 30 days gets 30 more, and the response carries the
@@ -362,13 +394,14 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
     if (!bearer) return undefined;
     // Access tokens only: a refresh token or a cookie's token is refused here.
     const row = await ctx.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
-       WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ?`,
+      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+       WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ? AND u.blocked_at IS NULL`,
     )
       .bind(await sha256(bearer), now())
       .first<UserRow>();
     if (!row) return undefined;
     ctx.userId = row.id;
+    markSeen(ctx, row);
     return toUser(row);
   }
   const token = readCookie(request, SESSION_COOKIE);
@@ -376,13 +409,14 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
   const hash = await sha256(token);
   const t = now();
   const row = await ctx.env.DB.prepare(
-    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
-     WHERE s.token_hash = ? AND s.kind = 'web' AND s.expires_at > ?`,
+    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+     WHERE s.token_hash = ? AND s.kind = 'web' AND s.expires_at > ? AND u.blocked_at IS NULL`,
   )
     .bind(hash, t)
     .first<UserRow>();
   if (!row) return undefined;
   ctx.userId = row.id;
+  markSeen(ctx, row);
   if (row.expires_at - t < SESSION_TTL / 2) {
     // Conditional, so of concurrent requests only the first renews it.
     const { meta } = await ctx.env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE token_hash = ? AND kind = 'web' AND expires_at = ?")

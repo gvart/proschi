@@ -1,6 +1,10 @@
-import { useMemo } from 'react';
+import { lazy, Suspense, useMemo, type ReactNode } from 'react';
+import { ChevronRight, KeyRound, Lightbulb, MessagesSquare, TriangleAlert, Zap, type LucideIcon } from 'lucide-react';
 import { highlightLines, type TokenClass } from '../landing/highlight';
-import { parseInline, parseMarkdown, type Block, type Inline } from './markdown';
+import { CALLOUT_TITLES, TLDR_TITLE, parseInline, parseMarkdown, type Block, type CalloutTone, type Inline } from './markdown';
+
+// The cards load only when a lesson quizzes some, so a statement never ships them.
+const LessonQuiz = lazy(() => import('./LessonQuiz'));
 
 /** Renders a problem statement or a lesson; see markdown.ts for what it understands. */
 export default function Markdown({ source, blocks: given, large = false }: { source: string; /** Already parsed (e.g. for a table of contents). */ blocks?: Block[]; /** Article text size instead of the side panel's. */ large?: boolean }) {
@@ -102,7 +106,83 @@ function BlockView({ block, large = false }: { block: Block; large?: boolean }) 
           ))}
         </blockquote>
       );
+    case 'tldr':
+      return (
+        <aside aria-label={TLDR_TITLE} data-block="tldr" className="rounded-brutal border-bw-2 border-ink bg-pop-yellow/25 px-4 py-3 shadow-brutal-sm">
+          <p className="mb-1.5 flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.08em] text-ink">
+            <Zap size={14} aria-hidden="true" />
+            {TLDR_TITLE}
+          </p>
+          <Children blocks={block.children} large={large} />
+        </aside>
+      );
+    case 'callout': {
+      const { Icon, tone } = CALLOUT_STYLE[block.tone];
+      return (
+        <aside aria-label={block.title ? undefined : CALLOUT_TITLES[block.tone]} data-block="callout" data-tone={block.tone} className={`rounded-brutal border-bw-1 border-ink border-l-[6px] px-4 py-3 ${tone}`}>
+          <p className="mb-1 flex items-center gap-1.5 font-semibold text-ink">
+            <Icon size={16} aria-hidden="true" className="flex-shrink-0" />
+            {block.title ? <Inlines nodes={block.title} /> : CALLOUT_TITLES[block.tone]}
+          </p>
+          <Children blocks={block.children} large={large} />
+        </aside>
+      );
+    }
+    case 'numbers':
+      return (
+        <dl data-block="numbers" className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+          {block.items.map((item, i) => (
+            <div key={i} className="flex flex-col-reverse justify-end rounded-brutal border-bw-1 border-ink bg-surface px-3 py-2.5 shadow-brutal-sm">
+              <dt className="text-xs leading-snug text-ink/80">
+                <Inlines nodes={item.label} />
+              </dt>
+              <dd className="font-display text-2xl font-bold tabular-nums leading-tight text-ink [overflow-wrap:normal]">{item.value}</dd>
+            </div>
+          ))}
+        </dl>
+      );
+    case 'deepdive':
+      return (
+        <details data-block="deepdive" className="group rounded-brutal border-bw-1 border-ink bg-paper">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 font-semibold text-ink [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={16} aria-hidden="true" className="flex-shrink-0 transition-transform duration-d1 group-open:rotate-90" />
+            <span className={`${eyebrowText} text-muted`}>Deep dive</span>
+            <span className="min-w-0">
+              <Inlines nodes={block.title} />
+            </span>
+          </summary>
+          <div className="border-t-bw-1 border-dashed border-ink/40 px-4 py-3">
+            <Children blocks={block.children} large={large} />
+          </div>
+        </details>
+      );
+    case 'quiz':
+      return (
+        <Suspense fallback={<p className="text-sm text-muted">Loading the quick check…</p>}>
+          <LessonQuiz ids={block.ids} />
+        </Suspense>
+      );
   }
+}
+
+const eyebrowText = 'text-[11px] font-bold uppercase tracking-[0.08em]';
+
+const CALLOUT_STYLE: Record<CalloutTone, { Icon: LucideIcon; tone: string }> = {
+  tip: { Icon: Lightbulb, tone: 'border-l-pop-blue bg-pop-blue/10' },
+  pitfall: { Icon: TriangleAlert, tone: 'border-l-pop-pink bg-pop-pink/15' },
+  interview: { Icon: MessagesSquare, tone: 'border-l-pop-lilac bg-pop-lilac/15' },
+  takeaway: { Icon: KeyRound, tone: 'border-l-pass bg-pass/10' },
+};
+
+/** The blocks inside a lesson block, spaced as the article's. */
+function Children({ blocks, large }: { blocks: Block[]; large: boolean }): ReactNode {
+  return (
+    <div className="space-y-2">
+      {blocks.map((b, i) => (
+        <BlockView key={i} block={b} large={large} />
+      ))}
+    </div>
+  );
 }
 
 const ALIGN = { left: 'text-left', center: 'text-center', right: 'text-right' } as const;

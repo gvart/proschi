@@ -45,6 +45,9 @@ export function LearnLinks({ ids, max = 3 }: { ids: readonly string[]; max?: num
 
 // ---- Heads-up display ----
 
+/** What Trust is, where the HUD first shows it. */
+const TRUST_HELP = 'Trust: how much patience your users have left. Each breach (too slow, down, dropped requests) costs some, a clean wave earns some back, and at 0 the run is over.';
+
 export function Hud(props: { wave: number; waves: number; endless: boolean; cash: number; monthly?: number; trust: number; maxTrust: number; score: number; streak: number; streakStep: number; tick?: number; compact?: boolean }) {
   const mult = Math.min(STREAK_MAX, 1 + props.streakStep * props.streak);
   const trustShare = Math.max(0, Math.min(1, props.trust / props.maxTrust));
@@ -61,7 +64,7 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
           {usd(props.cash)}
           {props.monthly !== undefined && <span className="text-xs font-normal text-muted"> −{usd(props.monthly)}</span>}
         </span>
-        <span className="inline-flex items-center gap-1" aria-label={`Trust ${props.trust}`}>
+        <span className="inline-flex items-center gap-1" aria-label={`Trust ${props.trust}`} title={TRUST_HELP}>
           <Heart size={13} aria-hidden="true" className={trustShare < 0.3 ? 'text-fail' : 'text-pass'} />
           {props.trust}
         </span>
@@ -87,14 +90,14 @@ export function Hud(props: { wave: number; waves: number; endless: boolean; cash
           {props.monthly !== undefined && <span className="ml-1 text-xs text-muted">−{usd(props.monthly)}/mo</span>}
         </p>
       </div>
-      <div className="col-span-2 sm:col-span-1">
+      <div className="col-span-2 sm:col-span-1" title={TRUST_HELP}>
         <p className={`${eyebrow} flex items-center gap-1`}>
           <Heart size={11} aria-hidden="true" /> Trust
         </p>
         <div className="mt-1 h-3 rounded-full border-bw-1 border-ink bg-paper overflow-hidden" role="meter" aria-valuemin={0} aria-valuemax={props.maxTrust} aria-valuenow={props.trust} aria-label="Trust">
           <div className={`h-full transition-[width] duration-d3 ${trustShare < 0.3 ? 'bg-fail' : trustShare < 0.6 ? 'bg-pop-yellow' : 'bg-pass'}`} style={{ width: `${trustShare * 100}%` }} />
         </div>
-        <p className="text-xs text-muted sf-count">{props.trust}</p>
+        <p className="text-xs text-muted sf-count">{props.trust} · your users’ patience: breaches cost it, at 0 the run ends</p>
       </div>
       <div>
         <p className={eyebrow}>Score</p>
@@ -462,7 +465,7 @@ const BREACH_TITLE: Record<Breach['kind'], string> = {
   migration: 'Risky migration',
 };
 
-export function WaveResult({ summary, scenario, events, onContinue, children }: { summary: WaveSummary; scenario: ScenarioDef; events: Map<string, EventDef>; onContinue: () => void; children?: ReactNode }) {
+export function WaveResult({ summary, trustFull, scenario, events, onContinue, children }: { summary: WaveSummary; trustFull?: number; scenario: ScenarioDef; events: Map<string, EventDef>; onContinue: () => void; children?: ReactNode }) {
   const lines: [string, number, string?][] = [
     ['Revenue', summary.revenue],
     ['Cloud bill', -summary.cost],
@@ -499,12 +502,16 @@ export function WaveResult({ summary, scenario, events, onContinue, children }: 
             )}
             <div className="flex justify-between sf-card">
               <dt>Trust</dt>
-              <dd className={`font-mono font-bold ${summary.trustDelta < 0 ? 'text-fail' : 'text-pass'}`}>
-                {summary.trustDelta >= 0 ? '+' : ''}
-                {summary.trustDelta}
-                {summary.clean ? ' (+5 clean)' : ''}
-                {summary.boss ? ' (+15 boss)' : ''}
-              </dd>
+              {trustFull !== undefined && summary.trustDelta >= 0 ? (
+                <dd className="font-mono font-bold text-pass">Trust is full ({trustFull})</dd>
+              ) : (
+                <dd className={`font-mono font-bold ${summary.trustDelta < 0 ? 'text-fail' : 'text-pass'}`}>
+                  {summary.trustDelta >= 0 ? '+' : ''}
+                  {summary.trustDelta}
+                  {summary.clean ? ' (+5 clean)' : ''}
+                  {summary.boss ? ' (+15 boss)' : ''}
+                </dd>
+              )}
             </div>
           </dl>
         </div>

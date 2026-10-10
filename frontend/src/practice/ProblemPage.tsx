@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, Network, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
@@ -21,6 +21,7 @@ import { recordRunStats } from './runStats';
 import { notifyActivity } from './skills/activity';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
+import Menu, { MenuItem } from '../components/Playground/Menu';
 import Header from '../design/Header';
 import { startMode, type StartMode } from '../onboarding/seen';
 import type { Account } from './useAccount';
@@ -42,6 +43,9 @@ import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
+// On phones, Help's items join Reset in one "More" menu (MoreMenu).
+const HelpMenuItems = lazy(() => import('../onboarding/HelpMenuItems'));
+const CheatSheet = lazy(() => import('../onboarding/CheatSheet'));
 // Loaded on a problem's first solve, with the related cards.
 const SolveCelebration = lazy(() => import('./SolveCelebration'));
 // Loaded after a failed run, with the cards of the mistake it matches.
@@ -228,6 +232,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     setPane('tests');
   };
 
+  const startTour = () => {
+    setTourRun((n) => n + 1);
+    setTour('tour');
+  };
+
   const reset = () => {
     if (window.confirm('Replace your design with the starter code? Your current code is lost.')) setSource(problem.starter);
   };
@@ -270,19 +279,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             <InterviewClock session={session} dispatch={dispatchInterview} />
           </span>
         )}
-        <button onClick={reset} className={`${interviewOn && session ? '' : 'ml-auto '}${toolButton}`} title="Start over from the starter code">
-          <RotateCcw size={14} />
-          <span className="hidden sm:inline">Reset</span>
-        </button>
+        {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
+        <span className={`hidden sm:flex ${interviewOn && session ? '' : 'ml-auto'}`}>
+          <button onClick={reset} className={toolButton} title="Start over from the starter code">
+            <RotateCcw size={14} />
+            Reset
+          </button>
+        </span>
+        <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
         <ZenButton zen={zen} className={iconButton} />
         <AccountMenu account={account} />
-        <HelpMenu
-          tourLabel="Take the practice tour"
-          onTour={() => {
-            setTourRun((n) => n + 1);
-            setTour('tour');
-          }}
-        />
+        <HelpMenu className="hidden sm:block" tourLabel="Take the practice tour" onTour={startTour} />
       </Header>
       {banner}
 
@@ -329,7 +336,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           {/* Both stay mounted, so the hints already shown survive switching. */}
           {hasLesson && (
             <div ref={lessonRef} className={`${lessonShown ? '' : 'hidden'} px-4 py-4`}>
-              <LessonView source={problem.lesson!} onStart={startChallenge} />
+              <LessonView source={problem.lesson!} onStart={startChallenge} onRead={() => markLessonRead(problem.id)} />
             </div>
           )}
           <div className={lessonShown ? 'hidden' : undefined}>
@@ -408,7 +415,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} zen={zen.zen} />
             </section>
           </div>
-          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 md:h-[36%] flex-col md:border-t-bw-2 border-ink`}>
+          {/* Taller while tests fail, so the failures and their fixes have room. */}
+          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 ${run && !run.result.solved ? 'md:h-[55%]' : 'md:h-[36%]'} flex-col md:border-t-bw-2 border-ink`}>
             <TestPanel
               run={run?.result}
               stale={!!run && run.source !== source}
@@ -427,7 +435,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               celebration={
                 firstSolve && run?.result.solved ? (
                   <Suspense fallback={null}>
-                    <SolveCelebration problem={problem} engine={engine} runs={firstSolve.runs} metrics={firstSolve.metrics} before={firstSolve.before} />
+                    <SolveCelebration problem={problem} engine={engine} runs={firstSolve.runs} metrics={firstSolve.metrics} before={firstSolve.before} account={account} />
                   </Suspense>
                 ) : undefined
               }
@@ -436,7 +444,15 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
                   <>
                     {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
                     {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
-                    {community && <ProblemBoards problemId={problem.id} signedIn={account.state.status === 'signed-in'} refresh={statsRefresh} />}
+                    {community && (
+                      <ProblemBoards
+                        problemId={problem.id}
+                        signedIn={account.state.status === 'signed-in'}
+                        refresh={statsRefresh}
+                        // The first-solve card offers it itself: once per page.
+                        onOptIn={account.state.status === 'signed-in' && !account.state.user.publicProfile && !firstSolve ? () => void account.update({ publicProfile: true }) : undefined}
+                      />
+                    )}
                   </>
                 ) : undefined
               }
@@ -449,6 +465,56 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       {tour === 'tour' && (
         <Suspense fallback={null}>
           <PracticeTour key={tourRun} setPane={setPane} runs={runs} runTests={runNow} onClose={() => setTour(null)} />
+        </Suspense>
+      )}
+    </div>
+  );
+}
+
+/** Phones only: Reset and Help's items in one menu. */
+function MoreMenu({ className, onReset, onTour }: { className: string; onReset: () => void; onTour: () => void }) {
+  const [sheet, setSheet] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  return (
+    <div ref={rootRef} className={className}>
+      <Menu label="More" align="right" trigger={<MoreHorizontal size={18} />}>
+        {(close) => (
+          <>
+            <MenuItem
+              icon={<RotateCcw size={14} />}
+              onSelect={() => {
+                close();
+                onReset();
+              }}
+            >
+              Reset to the starter code
+            </MenuItem>
+            <div className="my-1 border-t border-ink/10" />
+            <Suspense fallback={<p className="px-3 py-1.5 text-sm text-muted">Loading…</p>}>
+              <HelpMenuItems
+                tourLabel="Take the practice tour"
+                onTour={() => {
+                  close();
+                  setSheet(false);
+                  onTour();
+                }}
+                onCheatSheet={() => {
+                  close();
+                  setSheet(true);
+                }}
+              />
+            </Suspense>
+          </>
+        )}
+      </Menu>
+      {sheet && (
+        <Suspense fallback={null}>
+          <CheatSheet
+            onClose={() => {
+              setSheet(false);
+              rootRef.current?.querySelector<HTMLButtonElement>('button[aria-label="More"]')?.focus();
+            }}
+          />
         </Suspense>
       )}
     </div>

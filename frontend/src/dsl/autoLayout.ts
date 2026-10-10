@@ -15,6 +15,8 @@ const GROUP_OPTIONS = {
   'elk.padding': '[top=56,left=24,bottom=24,right=24]',
   'elk.nodeSize.constraints': 'MINIMUM_SIZE',
   'elk.nodeSize.minimum': '(300, 200)',
+  // See ROOT_OPTIONS: ELK reads spacing from each container.
+  'elk.spacing.edgeNode': '48',
 };
 
 /** Space kept between a group's edge and a member that was dragged near it. */
@@ -25,6 +27,8 @@ const ROOT_OPTIONS = {
   'elk.direction': 'DOWN',
   'elk.hierarchyHandling': 'INCLUDE_CHILDREN',
   'elk.spacing.nodeNode': '48',
+  // A long edge passes this far from the nodes beside it, so its label (drawn at its middle) clears them.
+  'elk.spacing.edgeNode': '48',
   'elk.layered.spacing.nodeNodeBetweenLayers': '72',
   'elk.spacing.componentComponent': '72',
   'elk.layered.nodePlacement.strategy': 'BRANDES_KOEPF',

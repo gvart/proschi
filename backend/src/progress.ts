@@ -13,6 +13,7 @@ import { exportDocuments } from './documents';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
+import { BOARD_METRICS, cacheKey } from './stats';
 
 /** The signed-in user's account and practice progress. */
 
@@ -62,19 +63,25 @@ const NO_STORE = { 'Cache-Control': 'no-store' };
 export async function getMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;
   const user = await requireUser(request, ctx);
-  const [rows, identities, account] = await DB.batch([
+  const [rows, identities, account, lessons] = await DB.batch([
     DB.prepare(
       'SELECT problem_id, runs, source, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms FROM progress WHERE user_id = ? ORDER BY problem_id',
     ).bind(user.id),
     DB.prepare('SELECT provider FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     // When the account was made: "member since" on the account page.
     DB.prepare('SELECT created_at FROM users WHERE id = ?').bind(user.id),
+    // Lessons and guides read on any device (src/lessons.ts).
+    DB.prepare('SELECT lesson_id FROM lesson_reads WHERE user_id = ? ORDER BY lesson_id').bind(user.id),
   ]);
   const progress: Record<string, ProgressEntry> = {};
   for (const row of rows.results as unknown as ProgressRow[]) progress[row.problem_id] = entryOf(row);
   const createdAt = (account.results[0] as { created_at: number } | undefined)?.created_at;
   return json(
-    { user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) }, progress },
+    {
+      user: { ...user, providers: (identities.results as { provider: string }[]).map((r) => r.provider), ...(createdAt !== undefined ? { createdAt } : {}) },
+      progress,
+      lessons: (lessons.results as { lesson_id: string }[]).map((r) => r.lesson_id),
+    },
     200,
     NO_STORE,
   );
@@ -110,7 +117,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -127,7 +134,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
-    DB.prepare('SELECT created_at, daily_goal FROM users WHERE id = ?').bind(user.id),
+    DB.prepare('SELECT created_at, daily_goal, last_seen_day FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
@@ -150,6 +157,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       publicProfile: user.publicProfile,
       dailyGoal: (account.results[0] as Row).daily_goal,
       createdAt: (account.results[0] as Row).created_at,
+      lastSeenDay: (account.results[0] as Row).last_seen_day,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
     // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).
@@ -208,6 +216,11 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       localDay: r.local_day,
     })),
     game: await exportGame(DB, user.id),
+    // Lessons and roadmap guides read, with when.
+    lessonReads: (await DB.prepare('SELECT lesson_id, read_at FROM lesson_reads WHERE user_id = ? ORDER BY read_at, lesson_id').bind(user.id).all<Row>()).results.map((r) => ({
+      lessonId: r.lesson_id,
+      readAt: r.read_at,
+    })),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).
@@ -311,6 +324,12 @@ export async function recordRun(request: Request, ctx: Ctx, problemId: string): 
   // runs_to_solve, so it equals the runs. Imported solves have none (the page
   // counted them when they happened, signed out).
   if (verdict?.solved && !imported && row.runs_to_solve !== null && row.runs_to_solve === row.runs) await countServerEvent(ctx, 'problem_solve');
+  // A first run or a solve changes the problem's stats and boards: drop their
+  // cached answers, so the page's refetch right after this run includes it.
+  if (verdict?.solved || row.runs === 1) {
+    const keys = [`problem/${problemId}`, ...BOARD_METRICS.map((m) => `problem-board/${problemId}/${m}`)];
+    await Promise.all(keys.map((key) => caches.default.delete(cacheKey(key))));
+  }
   return json({ progress: entryOf(row), ...(verdict ? { verdict } : {}) }, 200, NO_STORE);
 }
 

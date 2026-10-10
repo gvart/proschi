@@ -3,6 +3,7 @@
 // the phone menu, magnetic buttons and scroll reveals. A few hundred bytes, so
 // static pages get the behaviour without loading React.
 
+import { bindAccount } from './account';
 import { bindMenu } from './menu';
 import { magnetic, observeReveal } from './motion';
 import { nextThemePref, readThemePref, setThemePref, subscribeTheme, systemTheme, themeToggleLabel } from './theme';
@@ -27,7 +28,8 @@ function bindThemeToggle(button: HTMLElement): () => void {
 
 /**
  * Wires up [data-theme-toggle] buttons, details.ps-menu menus,
- * [data-magnetic] elements and [data-reveal] elements under `root`.
+ * [data-magnetic] elements, [data-reveal] elements and the [data-account]
+ * slot under `root`.
  * Returns a function that undoes it all.
  */
 export function enhance(root: ParentNode = document): () => void {
@@ -36,5 +38,6 @@ export function enhance(root: ParentNode = document): () => void {
   root.querySelectorAll<HTMLDetailsElement>('details.ps-menu').forEach((el) => cleanups.push(bindMenu(el)));
   root.querySelectorAll<HTMLElement>('[data-magnetic]').forEach((el) => cleanups.push(magnetic(el)));
   root.querySelectorAll<HTMLElement>('[data-reveal]').forEach((el) => cleanups.push(observeReveal(el)));
+  root.querySelectorAll<HTMLElement>('[data-account]').forEach((el) => cleanups.push(bindAccount(el)));
   return () => cleanups.forEach((cleanup) => cleanup());
 }

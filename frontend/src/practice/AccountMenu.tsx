@@ -1,11 +1,16 @@
-import { Check, Download, Link, LogIn, LogOut, MonitorX, Pencil, Trash2, Unlink, UserRound } from 'lucide-react';
+import { ChartNoAxesColumn, LogIn, LogOut, Settings, UserRound } from 'lucide-react';
 import Menu, { MenuItem } from '../components/Playground/Menu';
-import { removeSyncedFromBrowser, syncedInBrowser } from '../playground/localDocs';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
-/** Sign in to sync progress and appear in the stats; signed in, the account page (`#/me`) and the account's settings. Absent without an API. */
-export default function AccountMenu({ account }: { account: Account }) {
+/**
+ * The header's account control on the React pages (static pages get the same
+ * button from design/account.ts). Signed out, sign in to sync progress and
+ * appear in the stats; signed in, progress, settings (`#/me`, with the rest of
+ * the account's actions: AccountSettings) and sign out. Absent without an API.
+ * `base` is the way back to the site root.
+ */
+export default function AccountMenu({ account, base = '../' }: { account: Account; base?: string }) {
   const { state } = account;
   if (state.status === 'off' || state.status === 'loading') return null;
   const message = state.message && <p className="px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-100 dark:border-amber-900">{state.message}</p>;
@@ -16,10 +21,11 @@ export default function AccountMenu({ account }: { account: Account }) {
       <Menu
         label="Sign in"
         align="right"
+        buttonClassName="ps-account__button"
         trigger={
           <>
-            <LogIn size={16} />
-            <span className="hidden sm:inline">Sign in</span>
+            <LogIn size={16} aria-hidden="true" />
+            <span className="ps-account__name ps-hide-sm">Sign in</span>
           </>
         }
       >
@@ -42,16 +48,19 @@ export default function AccountMenu({ account }: { account: Account }) {
   }
 
   const { user } = state;
-  const linked = user.providers ?? [];
-  const linkable = state.providers.filter((p) => !linked.includes(p));
+  const go = (close: () => void, path: string) => {
+    close();
+    window.location.href = `${base}${path}`;
+  };
   return (
     <Menu
       label="Account"
       align="right"
+      buttonClassName="ps-account__button"
       trigger={
         <>
-          <UserRound size={16} />
-          <span className="hidden md:inline-block max-w-[6rem] truncate align-bottom">{user.displayName}</span>
+          <UserRound size={16} aria-hidden="true" />
+          <span className="ps-account__name ps-hide-sm">{user.displayName}</span>
         </>
       }
     >
@@ -62,57 +71,11 @@ export default function AccountMenu({ account }: { account: Account }) {
             Signed in as <strong className="text-ink">{user.displayName}</strong>
             {user.providers?.length ? ` with ${user.providers.map((p) => PROVIDER_LABEL[p] ?? p).join(', ')}` : ''}
           </p>
-          <MenuItem
-            onSelect={() => {
-              close();
-              window.location.hash = '#/me';
-            }}
-            icon={<UserRound size={14} />}
-          >
-            Your profile
+          <MenuItem onSelect={() => go(close, 'practice/#/progress')} icon={<ChartNoAxesColumn size={14} />}>
+            Your progress
           </MenuItem>
-          <MenuItem
-            onSelect={() => void account.update({ publicProfile: !user.publicProfile })}
-            icon={<Check size={14} className={user.publicProfile ? 'text-green-600 dark:text-green-400' : 'invisible'} />}
-          >
-            Show me on the leaderboard
-          </MenuItem>
-          <MenuItem
-            onSelect={() => {
-              close();
-              const name = window.prompt('Display name (shown on the leaderboard if you opt in)', user.displayName);
-              if (name !== null && name.trim()) void account.update({ displayName: name });
-            }}
-            icon={<Pencil size={14} />}
-          >
-            Change display name
-          </MenuItem>
-          {linkable.map((p) => (
-            <MenuItem key={`link-${p}`} onSelect={() => account.link(p)} icon={<Link size={14} />}>
-              Link {PROVIDER_LABEL[p]}
-            </MenuItem>
-          ))}
-          {linked.length >= 2 &&
-            linked.map((p) => (
-              <MenuItem
-                key={`unlink-${p}`}
-                onSelect={() => {
-                  close();
-                  if (window.confirm(`Stop signing in with ${PROVIDER_LABEL[p] ?? p}?`)) void account.unlink(p);
-                }}
-                icon={<Unlink size={14} />}
-              >
-                Unlink {PROVIDER_LABEL[p] ?? p}
-              </MenuItem>
-            ))}
-          <MenuItem
-            onSelect={() => {
-              close();
-              void account.downloadData();
-            }}
-            icon={<Download size={14} />}
-          >
-            Download my data
+          <MenuItem onSelect={() => go(close, 'practice/#/me')} icon={<Settings size={14} />}>
+            Settings
           </MenuItem>
           <MenuItem
             onSelect={() => {
@@ -122,36 +85,6 @@ export default function AccountMenu({ account }: { account: Account }) {
             icon={<LogOut size={14} />}
           >
             Sign out
-          </MenuItem>
-          {syncedInBrowser() > 0 && (
-            <MenuItem
-              onSelect={() => {
-                close();
-                removeSyncedFromBrowser();
-                void account.signOut();
-              }}
-              icon={<LogOut size={14} />}
-            >
-              Sign out and remove synced diagrams from this browser
-            </MenuItem>
-          )}
-          <MenuItem
-            onSelect={() => {
-              close();
-              if (window.confirm('Sign out on every device and browser, this one included?')) void account.signOutEverywhere();
-            }}
-            icon={<MonitorX size={14} />}
-          >
-            Sign out everywhere
-          </MenuItem>
-          <MenuItem
-            onSelect={() => {
-              close();
-              if (window.confirm('Delete your account and the progress stored on the server? Progress in this browser stays.')) void account.remove();
-            }}
-            icon={<Trash2 size={14} className="text-red-600 dark:text-red-400" />}
-          >
-            Delete account
           </MenuItem>
         </>
       )}

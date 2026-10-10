@@ -3,7 +3,7 @@ import type { AchievementsAnswer, AchievementStatus } from '../../learn/achievem
 import type { PublicProfile } from '../../services/api';
 import { ACHIEVEMENTS } from '../achievementList';
 import type { ProblemListing } from '../listing';
-import { ownProfile, profileAddressOf, profileBadge, profileIdOf, publicProfile, solvedByDifficulty } from './profile';
+import { nextBadges, ownProfile, profileAddressOf, profileBadge, profileIdOf, publicProfile, solvedByDifficulty } from './profile';
 
 const problems = [
   { id: 'url-shortener', title: 'URL Shortener', difficulty: 'easy', tags: [] },
@@ -107,5 +107,13 @@ describe('profile models', () => {
     expect(model.cards).toBeUndefined();
     // Before a first challenge, no challenge stats.
     expect(publicProfile({ ...profile, challenge: null }, ACHIEVEMENTS, problems).challenge).toBeUndefined();
+  });
+});
+
+describe('next badges', () => {
+  it('offers the locked badges closest to being earned, then the catalog’s order', () => {
+    const badges = [status('first-solve', true), status('first-card', false, 0, 1), status('reviews-100', false, 60, 100), status('stage-foundations', false, 1, 4)].map(profileBadge);
+    expect(nextBadges(badges).map((b) => b.id)).toEqual(['reviews-100', 'stage-foundations', 'first-card']);
+    expect(nextBadges(badges, 1).map((b) => b.id)).toEqual(['reviews-100']);
   });
 });

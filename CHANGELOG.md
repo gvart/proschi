@@ -4,12 +4,131 @@ All notable changes to Proschi are documented here. The format is based on
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/), and the tooling
 (the `proschi` npm package and the VS Code extension) follows
 [Semantic Versioning](https://semver.org/). Versions are tagged
-`tooling-v<version>`; the web app at <https://gvart.github.io/proschi/> is
+`tooling-v<version>`; the web app at <https://proschi.app/> is
 deployed from `main` and ships with the same changes.
 
 ## [Unreleased]
 
 ### Added
+- **One account control on every page.** The header shows a Sign in
+  button when signed out and your name with a menu when signed in, now
+  also in the editor, the docs, problem and card pages and the 404 page.
+- **Offers after a first solve.** The "First solve" card offers the
+  leaderboard and email reminders right there.
+- **Leave playback with Escape** or the new "Exit playback" button.
+
+- **Admin panel** at `/admin/`, signed in with a **passkey** (no username
+  or password). The first passkey is registered with a one-time
+  `ADMIN_SETUP_TOKEN` secret and only while none exists; more can be added
+  as backups. Tabs: **Overview** (accounts, active users, sign-ups, content
+  and the daily usage counts as charts), **Health** (database, deployed
+  version, each scheduled job's last run, errors and rate limits,
+  configuration checks), **Users** (search, filter, an account's detail;
+  block and unblock, sign out everywhere, rename, make the profile private,
+  remove the email address, delete), **Short links** (list and delete),
+  **Events** (server errors, failed sign-ins, rate limits, cron runs),
+  **Audit log** and **Passkeys** (backend/README.md, "Admin panel").
+- **Blocked accounts** are signed out everywhere and cannot sign in (the
+  practice page says so), their profile is made private and their short
+  links answer "not found" while blocked.
+
+### Changed
+- The server keeps each account's last active day (a date, at most one
+  write a day) for the admin's active-user counts, and app events and an
+  audit log of admin actions (docs/PRIVACY.md, "The site's operator").
+### Changed
+- **Landing page SEO.** A shorter title and meta description that fit in
+  search results, the main keywords in the hero heading (read by search
+  engines and screen readers, not shown), and Twitter title and
+  description tags.
+- **A shorter landing page**: one "Break it, then test it" section,
+  three featured problems with a link to all of them, the examples under
+  the editor button, and the Arcade as a banner.
+- **The Practice home leads with one "Your next step" card**, with
+  compact chips for the daily review, challenge and Arcade run.
+- **Progress (`#/progress`) is the one place for your level, streaks,
+  skills, roadmap, badges and solved problems**, led by your next step
+  and the next three badges to earn (all badges fold away). `#/me` is
+  now Settings: leaderboard, email reminders, display name, sign-in
+  methods, data download, sign out and a danger zone for deleting the
+  account. The account menu has only Your progress, Settings and Sign
+  out.
+- **The problem Tests panel shows failing tests and their fixes first**,
+  folds the passing tests and "How others did", and grows taller while
+  tests fail. On phones, Reset and Help share one "More" menu.
+- **Leaderboards show from 3 entries**; until then one line invites you
+  to opt in.
+- **Every roadmap lesson is readable**; only the challenges keep their
+  order. Stages count the optional tutorial ("+ 1 optional").
+- **A Scale or Fail run fills the screen**: the practice tabs, streak and
+  footer hide, the forecast sits beside the board, and the palette and
+  Deploy stay in a sticky bar. The HUD explains Trust, and the report
+  explains mutators and bounties when they unlock.
+- **Daily review** brings each new card into view and keeps Next on
+  screen; estimates within 10% say "Correct" instead of "Close enough".
+- **The daily challenge shows when it resets in your local time.**
+- **The editor tour's last step** covers only sharing and saving.
+- The design review no longer announces an AI reviewer.
+
+### Fixed
+- A test that names a missing use case suggests adding it
+  (`Add usecase "Redirect" { … }`); an existing name is suggested only
+  for a likely typo.
+- "Solved by X of Y" and the problem leaderboards update right after a
+  solve instead of up to a minute later.
+- The quick tour popover no longer jumps under the cursor, and a
+  finished step stays finished.
+- Practice pages scroll to the top on a new tab and restore the position
+  on back and forward.
+- No console errors when a page-to-page transition is cut short.
+- "1 component" and "1 use case" in the HLD instead of "1 components",
+  "1 use cases".
+- Playback shows request and response formats as JSON, XML or Text
+  instead of `FREE_TEXT`.
+- Edge labels no longer hide behind a node beside a long edge.
+- The arcade wave summary says "Trust is full (100)" instead of
+  "Trust +0 (+5 clean)".
+
+## [0.10.0] - 2026-10-08
+
+### Added
+- **Livelier lessons.** Every roadmap lesson and the "Read first" guide
+  are rewritten tighter, with new lesson blocks: an *In 30 seconds*
+  summary at the top, key-number tiles in the back-of-the-envelope,
+  tip / pitfall / interview / takeaway callouts, folding deep dives for
+  the long tangents, and **quick checks**: review cards answered right in
+  the lesson and graded on the spot with their explanation (practice
+  only; the review schedule is untouched). The static problem pages show
+  the same blocks as plain HTML, the quick checks linked to their cards.
+  Authors write them as fenced blocks (`tldr`, `callout`, `numbers`,
+  `deepdive`, `quiz`), checked by `proschi problem check`
+  (docs/PRACTICE.md, "Lesson blocks").
+- **Reading progress.** A lesson counts as read once you reach its end
+  or start its challenge. The roadmap marks each lesson and the guide
+  read, and counts the lessons read per stage and in all. Signed in,
+  reads are kept with your account (`POST /api/me/lessons`), so they show
+  on every device and come along when you sign in.
+- **Four reading badges**: First lesson, Avid reader (10 lessons), Stage
+  scholar (every lesson of a stage) and Bookworm (every lesson), with the
+  new rule kinds `lessons`, `stage-lessons` and `all-lessons`.
+
+## [0.9.0] - 2026-10-07
+
+### Added
+- **Agent skills.** Six skills in the open Agent Skills format
+  (`plugin/skills/`) teach AI coding agents to turn what a repository
+  already has into Proschi and check it: `infra-to-proschi` (docs, Mermaid,
+  Terraform, CloudFormation, CDK, Kubernetes, Helm, docker-compose),
+  `code-to-usecases` (routes, handlers, consumers and clients, or an OpenAPI
+  spec, to use cases with failure scenarios), `proschi-capacity-plan`,
+  `proschi-design-review`, `proschi-keep-in-sync` (architecture drift in a
+  pull request) and `proschi-hld-doc`. Each validates with `proschi check`
+  and `test` until clean and ends with a share link. In Claude Code the
+  repository is a plugin marketplace: `/plugin marketplace add
+  gvart/proschi`, then `/plugin install proschi@proschi`; for Codex, Cursor,
+  Copilot and Gemini CLI, `npx degit gvart/proschi/plugin/skills
+  .agents/skills` and one line in the agent's instructions file. See the new
+  *Agent skills* docs page.
 - **Three new practice problems**, each with a lesson, hints, an interview
   mode and five known mistakes: **Web Crawler** (a durable frontier,
   per-host politeness and a Bloom filter for seen URLs; in *Queues and async
@@ -843,7 +962,9 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...HEAD
+[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.10.0...HEAD
+[0.10.0]: https://github.com/gvart/proschi/compare/tooling-v0.9.0...tooling-v0.10.0
+[0.9.0]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...tooling-v0.9.0
 [0.8.0]: https://github.com/gvart/proschi/compare/tooling-v0.7.0...tooling-v0.8.0
 [0.7.0]: https://github.com/gvart/proschi/compare/tooling-v0.6.0...tooling-v0.7.0
 [0.6.0]: https://github.com/gvart/proschi/compare/tooling-v0.5.0...tooling-v0.6.0

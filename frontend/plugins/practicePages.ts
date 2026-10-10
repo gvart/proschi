@@ -3,7 +3,7 @@ import { join } from 'node:path'
 import type { OutputAsset } from 'rollup'
 import type { Plugin, ViteDevServer } from 'vite'
 // With the extension: the folder also holds Markdown.tsx, which esbuild would otherwise pick.
-import { parseInline, parseMarkdown, safeHref, slugger, type Block, type Inline } from '../src/practice/markdown.ts'
+import { CALLOUT_TITLES, TLDR_TITLE, parseInline, parseMarkdown, safeHref, slugger, type Block, type Inline } from '../src/practice/markdown.ts'
 import { compareProblems, readProblemMd, LESSON_MD, RESERVED_IDS, type ProblemMeta } from '../src/practice/problemFiles'
 import { readingMinutes } from '../src/practice/lesson'
 import { GUIDES, type Guide } from '../src/practice/guide/guides'
@@ -110,14 +110,28 @@ export function inlineHtml(nodes: Inline[], base = ''): string {
 // Classes, not style attributes: the static pages' CSP allows no inline styles (page.css has them).
 const align = (a: string | undefined) => (a ? ` class="align-${a}"` : '')
 
+/** What a static page shows of a lesson's quiz card: its question, linked to the card's page where it is answered. */
+export type QuizCards = ReadonlyMap<string, RelatedCard>
+
+interface HtmlOptions {
+  anchors?: boolean
+  base?: string
+  /** The cards a ```quiz block may name; one it does not know is left out. */
+  cards?: QuizCards
+}
+
 /**
  * A statement's or lesson's Markdown as HTML, from the same reader the app
  * uses: only its elements, every text escaped. `anchors` gives headings
  * their ids and a `#` link (lessons and guides; the statement's stay plain).
- * `base` rebases relative links written from practice/ (see rebase).
+ * `base` rebases relative links written from practice/ (see rebase). Lesson
+ * blocks become plain HTML: a callout an <aside>, a deep dive a <details>, a
+ * quiz its questions linked to the cards' pages (pages under practice/<id>/).
  */
-export function statementHtml(blocks: Block[], { anchors = false, base = '' }: { anchors?: boolean; base?: string } = {}): string {
+export function statementHtml(blocks: Block[], options: HtmlOptions = {}): string {
+  const { anchors = false, base = '', cards } = options
   const inlineHtml = (nodes: Inline[]) => inlineHtmlAt(nodes, base)
+  const inner = (bs: Block[]) => statementHtml(bs, options)
   return blocks
     .map((b) => {
       switch (b.kind) {
@@ -142,7 +156,23 @@ export function statementHtml(blocks: Block[], { anchors = false, base = '' }: {
           return `<div class="table-wrap" tabindex="0"><table>\n<thead><tr>${head}</tr></thead>\n<tbody>\n${rows.join('\n')}\n</tbody>\n</table></div>`
         }
         case 'quote':
-          return `<blockquote>\n${statementHtml(b.children, { anchors, base })}\n</blockquote>`
+          return `<blockquote>\n${inner(b.children)}\n</blockquote>`
+        case 'tldr':
+          return `<aside class="lesson-block lesson-tldr">\n<p class="lesson-block__title">${TLDR_TITLE}</p>\n${inner(b.children)}\n</aside>`
+        case 'callout':
+          return `<aside class="lesson-block lesson-callout lesson-callout--${b.tone}">\n<p class="lesson-block__title">${b.title ? inlineHtml(b.title) : CALLOUT_TITLES[b.tone]}</p>\n${inner(b.children)}\n</aside>`
+        case 'numbers': {
+          const items = b.items.map((n) => `<div><dt>${inlineHtml(n.label)}</dt><dd>${escapeHtml(n.value)}</dd></div>`)
+          return `<dl class="lesson-numbers">\n${items.join('\n')}\n</dl>`
+        }
+        case 'deepdive':
+          return `<details class="lesson-block lesson-deepdive">\n<summary><span class="lesson-block__label">Deep dive</span> ${inlineHtml(b.title)}</summary>\n${inner(b.children)}\n</details>`
+        case 'quiz': {
+          const found = b.ids.flatMap((id) => (cards?.get(id) ? [cards.get(id)!] : []))
+          if (!found.length) return ''
+          const items = found.map((c) => `<li>${escapeHtml(c.question)} <a href="../cards/${encodeURIComponent(c.topic)}/${encodeURIComponent(c.id)}/">Answer it</a></li>`)
+          return `<aside class="lesson-block lesson-quiz">\n<p class="lesson-block__title">Quick check</p>\n<ul>\n${items.join('\n')}\n</ul>\n</aside>`
+        }
         case 'list': {
           const tag = b.ordered ? 'ol' : 'ul'
           const items = b.items.map((item) => {
@@ -234,7 +264,7 @@ export function companyHtml(p: Pick<PageProblem, 'company'>): string {
 
 export const DIFFICULTY_BADGE: Record<string, string> = { easy: 'ps-badge--pass', medium: 'ps-badge--yellow', hard: 'ps-badge--pink' }
 
-export function pageHtml(p: PageProblem, all: PageProblem[]): string {
+export function pageHtml(p: PageProblem, all: PageProblem[], cards?: QuizCards): string {
   const solve = `../#/${encodeURIComponent(p.id)}`
   const others = all
     .filter((o) => o.id !== p.id)
@@ -258,7 +288,7 @@ ${statementHtml(parseMarkdown(p.statement))}
 <p>You write the design as text in Proschi. Tests run in your browser: a simulation of the traffic above checks latency, availability, cost and what happens when a machine fails. <a href="../../docs/model/">How the simulation works</a>.</p>
 <p class="problem-page__cta"><a class="ps-btn ps-btn--primary" href="${solve}">Start designing <span class="ps-btn__trail" aria-hidden="true">→</span></a></p>
 </article>
-${lessonHtml(p, solve)}${relatedCardsHtml(p)}<section class="problem-page__more" aria-labelledby="more-title">
+${lessonHtml(p, solve, cards)}${relatedCardsHtml(p)}<section class="problem-page__more" aria-labelledby="more-title">
 <h2 id="more-title">More system design problems</h2>
 <ul>
 ${others}
@@ -282,7 +312,7 @@ ${items}
 }
 
 /** The lesson as an article under the statement: the concepts behind the problem, for readers and search engines. */
-export function lessonHtml(p: Pick<PageProblem, 'title' | 'lesson'>, solve: string): string {
+export function lessonHtml(p: Pick<PageProblem, 'title' | 'lesson'>, solve: string, cards?: QuizCards): string {
   if (p.lesson === undefined) return ''
   // `lesson` is the article's own heading, so the lesson's headings never take it.
   const slug = slugger()
@@ -290,14 +320,14 @@ export function lessonHtml(p: Pick<PageProblem, 'title' | 'lesson'>, solve: stri
   return `<article class="doc doc-body problem-page__lesson" aria-labelledby="lesson">
 <p class="kicker">Lesson · ${readingMinutes(p.lesson)} min read</p>
 <h2 id="lesson">Learn it: ${escapeHtml(p.title)} <a class="doc-anchor" href="#lesson" aria-label="Link to this section">#</a></h2>
-${statementHtml(parseMarkdown(p.lesson, slug), { anchors: true })}
+${statementHtml(parseMarkdown(p.lesson, slug), { anchors: true, cards })}
 <p class="problem-page__cta"><a class="ps-btn ps-btn--primary" href="${solve}">Now design it <span class="ps-btn__trail" aria-hidden="true">→</span></a></p>
 </article>
 `
 }
 
-export function fillTemplate(html: string, p: PageProblem, all: PageProblem[]): string {
-  return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? headHtml(p) : pageHtml(p, all)))
+export function fillTemplate(html: string, p: PageProblem, all: PageProblem[], cards?: QuizCards): string {
+  return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? headHtml(p) : pageHtml(p, all, cards)))
 }
 
 export const guideUrl = (id: string) => `${SITE_ORIGIN}practice/${id}/`
@@ -331,7 +361,7 @@ export function guideHeadHtml(g: PageGuide): string {
 }
 
 /** A guide's page, practice/<id>/: the article, then the way into the roadmap. */
-export function guidePageHtml(g: PageGuide): string {
+export function guidePageHtml(g: PageGuide, cards?: QuizCards): string {
   return `<main id="main" class="ps-wrap problem-page">
 <nav class="problem-page__crumbs" aria-label="Breadcrumb"><a href="../">Practice</a> <span aria-hidden="true">/</span> <a href="../#/roadmap">Roadmap</a> <span aria-hidden="true">/</span> <span aria-current="page">${escapeHtml(g.title)}</span></nav>
 <header class="doc-hero">
@@ -340,14 +370,19 @@ export function guidePageHtml(g: PageGuide): string {
 <p class="lede">${inlineHtml(parseInline(g.summary))}</p>
 </header>
 <article class="doc doc-body">
-${statementHtml(parseMarkdown(g.text), { anchors: true })}
+${statementHtml(parseMarkdown(g.text), { anchors: true, cards })}
 <p class="problem-page__cta"><a class="ps-btn ps-btn--primary" href="../#/roadmap">Go to the roadmap <span class="ps-btn__trail" aria-hidden="true">→</span></a></p>
 </article>
 </main>`
 }
 
-export function fillGuideTemplate(html: string, g: PageGuide): string {
-  return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? guideHeadHtml(g) : guidePageHtml(g)))
+export function fillGuideTemplate(html: string, g: PageGuide, cards?: QuizCards): string {
+  return html.replace(PLACEHOLDER, (_, slot: string) => (slot === 'head' ? guideHeadHtml(g) : guidePageHtml(g, cards)))
+}
+
+/** Every live card by id, as a lesson's quiz shows it on a static page. */
+export function quizCards(cards: Card[]): QuizCards {
+  return new Map(cards.filter((c) => !c.retired).map((c) => [c.id, { id: c.id, topic: c.topic, question: questionText(c) }]))
 }
 
 /** Each problem with the live review cards whose `related:` names it. */
@@ -378,11 +413,12 @@ export interface PracticePagesOptions {
 }
 
 export function practicePages(problemsDir: string, { guideDir = join(problemsDir, '..', 'guide'), cardsDir = join(problemsDir, '..', 'cards'), ogImages = false }: PracticePagesOptions = {}): Plugin {
-  const problems = () => {
+  const allCards = () => (existsSync(cardsDir) ? readCards(cardsDir).cards : [])
+  const problems = (cards: Card[]) => {
     const all = readProblems(problemsDir)
     const clash = all.find((p) => RESERVED_IDS.includes(p.id))
     if (clash) throw new Error(`A practice problem cannot be called "${clash.id}": the name is taken by a practice page (${RESERVED_IDS.join(', ')})`)
-    return existsSync(cardsDir) ? withRelatedCards(all, readCards(cardsDir).cards) : all
+    return cards.length ? withRelatedCards(all, cards) : all
   }
   return {
     name: 'proschi-practice-pages',
@@ -390,7 +426,8 @@ export function practicePages(problemsDir: string, { guideDir = join(problemsDir
       // `npm run dev`: /practice/<id>/ from the template, as the build writes it.
       server.middlewares.use(async (req, res, next) => {
         const id = /^\/practice\/([a-z0-9-]+)\/(?:index\.html)?$/.exec(req.url?.split('?')[0] ?? '')?.[1]
-        const all = id && id !== 'problem' ? problems() : []
+        const cards = id && id !== 'problem' ? allCards() : []
+        const all = id && id !== 'problem' ? problems(cards) : []
         const p = all.find((q) => q.id === id)
         const g = p || !id ? undefined : readGuides(guideDir).find((q) => q.id === id)
         if (!p && !g) return next()
@@ -398,7 +435,7 @@ export function practicePages(problemsDir: string, { guideDir = join(problemsDir
           const template = readFileSync(join(server.config.root, TEMPLATE), 'utf8')
           const html = await server.transformIndexHtml(req.url!, template, `/${TEMPLATE}`)
           res.setHeader('Content-Type', 'text/html')
-          res.end(p ? fillTemplate(html, p, all) : fillGuideTemplate(html, g!))
+          res.end(p ? fillTemplate(html, p, all, quizCards(cards)) : fillGuideTemplate(html, g!, quizCards(cards)))
         } catch (e) {
           next(e)
         }
@@ -412,9 +449,11 @@ export function practicePages(problemsDir: string, { guideDir = join(problemsDir
         if (!template) return
         const html = String(template.source)
         delete bundle[TEMPLATE]
-        const all = problems()
-        for (const p of all) this.emitFile({ type: 'asset', fileName: `practice/${p.id}/index.html`, source: fillTemplate(html, p, all) })
-        for (const g of readGuides(guideDir)) this.emitFile({ type: 'asset', fileName: `practice/${g.id}/index.html`, source: fillGuideTemplate(html, g) })
+        const cards = allCards()
+        const quiz = quizCards(cards)
+        const all = problems(cards)
+        for (const p of all) this.emitFile({ type: 'asset', fileName: `practice/${p.id}/index.html`, source: fillTemplate(html, p, all, quiz) })
+        for (const g of readGuides(guideDir)) this.emitFile({ type: 'asset', fileName: `practice/${g.id}/index.html`, source: fillGuideTemplate(html, g, quiz) })
         if (ogImages) {
           const images = await Promise.all(all.map((p) => ogPng(problemOgCard(p))))
           all.forEach((p, i) => this.emitFile({ type: 'asset', fileName: problemOgPath(p.id), source: images[i] }))

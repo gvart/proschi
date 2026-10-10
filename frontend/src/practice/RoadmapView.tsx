@@ -1,8 +1,8 @@
-import { ArrowRight, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
+import { ArrowRight, BookCheck, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
 import type { Progress } from './progress';
-import { OPTIONAL_STEPS, SIGNED_OUT_STAGES, roadmapHref, roadmapState, stepLock, unlockHint, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
+import { OPTIONAL_STEPS, SIGNED_OUT_STAGES, roadmapHref, roadmapState, type RoadmapAccess, type RoadmapStage, type RoadmapState, type StepLock } from './roadmap';
 import { PROVIDER_LABEL } from './account';
 import type { ProviderId } from '../services/api';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
@@ -26,11 +26,26 @@ interface RoadmapProps {
   guide?: Guide & { minutes?: number };
   /** A locked step the address asked for (`#/roadmap/<id>` or its lesson): the roadmap shows what unlocks it. */
   locked?: { id: string; lock: StepLock };
+  /** The lessons and guides read (progress.ts lessonsRead). */
+  read?: readonly string[];
+}
+
+/** "Read", next to a lesson or guide that was read. */
+function ReadChip() {
+  return (
+    <span className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink bg-pass/25 px-1.5 py-px text-[11px] font-bold text-ink">
+      <BookCheck size={11} aria-hidden="true" />
+      Read
+    </span>
+  );
 }
 
 /** The interview prep roadmap, the hub's first tab: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked, read = [] }: RoadmapProps) {
   const checking = access === 'checking';
+  const readSet = new Set(read);
+  const withLesson = roadmapState(stages, progress).steps.filter((s) => lessons[s.id] !== undefined);
+  const lessonsDone = withLesson.filter((s) => readSet.has(s.id)).length;
   const guest = access === 'sign-in';
   const state = roadmapState(stages, progress);
   // Signed out, the next step past the first stage waits for a sign-in.
@@ -63,6 +78,12 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             <p className="font-semibold tabular-nums text-ink">
               {state.solved} of {total} solved
             </p>
+            {withLesson.length > 0 && (
+              <p className="inline-flex items-center gap-1 text-sm tabular-nums text-ink/80">
+                <BookOpen size={14} aria-hidden="true" />
+                {lessonsDone} of {withLesson.length} lessons read
+              </p>
+            )}
             {current && (
               <p className="text-sm text-ink/80">
                 <span className={eyebrow}>{state.next ? 'Current stage' : 'Last stage'}</span>{' '}
@@ -108,8 +129,9 @@ export default function Roadmap({ stages, problems, progress, access, providers,
         >
           <BookOpen size={22} className="mt-0.5 flex-shrink-0 text-ink" aria-hidden="true" />
           <span className="min-w-0 flex-1">
-            <span className={`block ${eyebrow}`}>
+            <span className={`flex flex-wrap items-center gap-2 ${eyebrow}`}>
               Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
+              {!checking && readSet.has(guide.id) && <ReadChip />}
             </span>
             <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
             <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
@@ -135,6 +157,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             preview={checking || (guest && i >= SIGNED_OUT_STAGES)}
             access={access}
             lessons={lessons}
+            read={readSet}
           />
         ))}
       </ol>
@@ -151,6 +174,7 @@ function StageSection({
   preview,
   access,
   lessons,
+  read,
 }: {
   stage: RoadmapStage;
   index: number;
@@ -161,6 +185,7 @@ function StageSection({
   preview: boolean;
   access: RoadmapAccess;
   lessons: Record<string, number>;
+  read: ReadonlySet<string>;
 }) {
   // A preview shows the problems without the viewer's progress.
   const steps = state.steps
@@ -169,13 +194,24 @@ function StageSection({
   // The header counts the required problems: an optional step (the tutorial) keeps no stage from completing.
   const required = steps.filter((s) => !s.optional);
   const solved = required.filter((s) => s.status === 'solved').length;
+  const withLesson = steps.filter((s) => lessons[s.id] !== undefined);
+  const lessonsDone = preview ? 0 : withLesson.filter((s) => read.has(s.id)).length;
   return (
     <li aria-label={`Stage ${index + 1}: ${stage.title}`}>
       <div className="flex flex-wrap items-baseline gap-x-3 gap-y-1">
         <h2 className="font-display text-xl font-bold text-ink">
           <span className="tabular-nums text-muted">{index + 1}.</span> {stage.title}
         </h2>
-        <span className="text-xs tabular-nums text-muted">{preview ? `${required.length} problems` : `${solved} / ${required.length}`}</span>
+        <span className="text-xs tabular-nums text-muted">
+          {preview ? `${required.length} problems` : `${solved} / ${required.length} solved`}
+          {/* The optional steps (the tutorial) are named, so the lesson count (which includes theirs) adds up. */}
+          {steps.length > required.length && ` + ${steps.length - required.length} optional`}
+        </span>
+        {!preview && withLesson.length > 0 && (
+          <span className={`text-xs tabular-nums ${lessonsDone === withLesson.length ? 'font-semibold text-ink' : 'text-muted'}`}>
+            · {lessonsDone} / {withLesson.length} lessons read
+          </span>
+        )}
         {current && <span className="rounded-full border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-xs font-bold text-on-accent">You are here</span>}
       </div>
       <p className="mt-1 max-w-2xl text-sm text-ink/80">{stage.why}</p>
@@ -184,7 +220,6 @@ function StageSection({
           const p = problems.find((q) => q.id === step.id);
           const title = p?.title ?? step.id;
           const minutes = lessons[step.id];
-          const hint = step.locked ? unlockHint(stepLock(state, step.id, access), (id) => titleOf(problems, id)) : undefined;
           const content = (
             <>
               {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
@@ -198,6 +233,7 @@ function StageSection({
                     <BookOpen size={12} aria-hidden="true" />
                     <span>Lesson · Challenge</span>
                     <span className="tabular-nums">· {minutes} min read</span>
+                    {!preview && read.has(step.id) && <ReadChip />}
                   </span>
                 )}
                 {step.locked && !preview && state.blocker && <span className="block mt-0.5 text-xs text-muted">Solve {titleOf(problems, state.blocker.id)} first</span>}
@@ -213,17 +249,15 @@ function StageSection({
                     {content}
                   </div>
                   {minutes !== undefined && (
-                    // A step's lesson waits for its turn like its challenge (the problem list's lessons stay open).
-                    <span
-                      role="link"
-                      aria-disabled="true"
-                      aria-label={`Read the lesson: ${title}, locked`}
-                      title={hint ? `Locked: ${hint}` : 'Locked'}
-                      className="inline-flex cursor-not-allowed items-center gap-1.5 rounded border-bw-1 border-dashed border-ink/30 px-2.5 py-1 text-xs font-semibold text-ink/50"
+                    // Reading is never gated: a locked step's lesson opens; only its challenge waits for its turn.
+                    <a
+                      href={`${roadmapHref(step.id)}/lesson`}
+                      aria-label={`Read the lesson: ${title}`}
+                      className="inline-flex items-center gap-1.5 rounded border-bw-1 border-ink bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue"
                     >
-                      <Lock size={12} aria-hidden="true" />
+                      <BookOpen size={12} aria-hidden="true" />
                       Read the lesson
-                    </span>
+                    </a>
                   )}
                 </div>
               ) : (
@@ -250,7 +284,7 @@ function LockedNotice({ title, lock, problems }: { title: string; lock: StepLock
     <p role="status" className="mt-6 flex items-start gap-2 rounded-brutal border-bw-2 border-ink bg-pop-yellow/30 p-3 text-sm text-ink shadow-brutal-sm">
       <Lock size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
       <span>
-        <strong>{title}</strong> is locked on the roadmap, its lesson and challenge alike.{' '}
+        <strong>{title}</strong> is locked on the roadmap; its lesson is open to read.{' '}
         {lock.kind === 'order'
           ? `Solve ${titleOf(problems, lock.next)} first to open it.`
           : 'Sign in to continue past stage 1; the progress you made signed out comes with you.'}

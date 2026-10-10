@@ -132,3 +132,14 @@ export function publicProfile(profile: PublicProfile, catalog: readonly Achievem
     solved: solvedProblems(problems, new Set(profile.solved.map((p) => p.id))),
   };
 }
+
+/** The `n` locked badges closest to being earned (by progress, then in the catalog's order): what a progress page offers next. */
+export function nextBadges(badges: readonly ProfileBadge[], n = 3): ProfileBadge[] {
+  const ratio = (b: ProfileBadge) => (b.progress && b.progress.target > 0 ? Math.min(1, b.progress.current / b.progress.target) : 0);
+  return badges
+    .map((b, i) => ({ b, i }))
+    .filter(({ b }) => !b.earned)
+    .sort((x, y) => ratio(y.b) - ratio(x.b) || x.i - y.i)
+    .slice(0, n)
+    .map(({ b }) => b);
+}

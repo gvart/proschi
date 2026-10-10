@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { placePopover } from './layout';
+import { nextPlacement, placePopover } from './layout';
 
 const size = { width: 300, height: 200 };
 const desktop = { width: 1440, height: 900 };
@@ -35,5 +35,30 @@ describe('placePopover', () => {
 
   it('floats at the bottom centre without a target', () => {
     expect(placePopover(null, size, desktop, { phone: false })).toEqual({ top: 688, left: 570 });
+  });
+});
+
+describe('nextPlacement', () => {
+  const target = { top: 100, left: 100, width: 200, height: 40 };
+  const options = { phone: false, sides: ['right' as const] };
+
+  it('places a new step next to its target', () => {
+    expect(nextPlacement(null, target, size, desktop, options)).toEqual({ target, top: 20, left: 312 });
+  });
+
+  it('stays put while the anchor does, even when the popover grows', () => {
+    const placed = nextPlacement(null, target, size, desktop, options);
+    expect(nextPlacement(placed, { ...target }, { width: 300, height: 260 }, desktop, options)).toEqual({ target, top: 20, left: 312 });
+  });
+
+  it('is kept on screen when it grows past the bottom', () => {
+    const placed = { target, top: 600, left: 312 };
+    expect(nextPlacement(placed, target, { width: 300, height: 400 }, desktop, options).top).toBe(900 - 400 - 12);
+  });
+
+  it('follows the anchor when it moves', () => {
+    const placed = nextPlacement(null, target, size, desktop, options);
+    const moved = { ...target, top: 400 };
+    expect(nextPlacement(placed, moved, size, desktop, options)).toEqual({ target: moved, top: 320, left: 312 });
   });
 });

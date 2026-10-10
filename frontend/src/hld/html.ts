@@ -9,6 +9,7 @@ import {
   formatPercent,
   formatRps,
   formatUsd,
+  overviewFacts,
   responseText,
   type CheckStatus,
   type HldDocument,
@@ -91,8 +92,7 @@ function renderSection(doc: HldDocument, s: HldSection, figures: HldFigures): st
   switch (s.kind) {
     case 'overview': {
       if (s.summary) out.push(`<p>${e(s.summary)}</p>`);
-      const facts = [`${s.components} components`, `${s.useCases} use cases`, s.teams.length ? `teams: ${s.teams.join(', ')}` : ''].filter(Boolean);
-      out.push(`<p class="about">${e(facts.join(' · '))}</p>`);
+      out.push(`<p class="about">${e(overviewFacts(s))}</p>`);
       if (figures.architecture) out.push(`<figure>${figures.architecture}</figure>`);
       break;
     }

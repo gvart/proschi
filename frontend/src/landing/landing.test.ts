@@ -11,7 +11,7 @@ import { exampleFromSearch } from '../playground/exampleLink';
 import { highlightLine, highlightLines } from './highlight';
 import { format } from '../dsl/format';
 import { APP_PATH, editorLink, exampleLink } from './links';
-import { fillPracticePlaceholders, listingsFrom, practiceListHtml } from './practiceList';
+import { FEATURED, featuredProblems, fillPracticePlaceholders, listingsFrom, practiceListHtml } from './practiceList';
 import { fillPrepPlaceholders, prepStagesHtml } from './prep';
 import { ROADMAP, roadmapFor } from '../practice/roadmap';
 import prebuiltListings from 'virtual:practice-listings';
@@ -212,12 +212,15 @@ describe('practice section', () => {
   const built = fillPracticePlaceholders(landingHtml, prebuiltListings);
   const section = built.slice(built.indexOf('<section class="story story--practice"'), built.indexOf('</section>', built.indexOf('<section class="story story--practice"')));
 
-  it('is rendered at build time: every problem and their count, with no placeholder left', () => {
-    expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list">\s*<!--practice:list-->\s*<\/ul>/);
+  it('is rendered at build time: a few featured problems, the count and a link to all of them, with no placeholder left', () => {
+    expect(landingHtml).toMatch(/<ul class="tiles tiles--practice" id="practice-list">\s*<!--practice:featured-->\s*<\/ul>/);
     const ids = [...section.matchAll(/href="\.\/practice\/([^"/]+)\/"/g)].map((m) => m[1]);
-    expect(ids).toEqual(problems.map((p) => p.id));
+    expect(ids).toEqual(FEATURED);
+    expect(ids.length).toBeGreaterThanOrEqual(3);
+    expect(ids.length).toBeLessThanOrEqual(6);
     expect(section).toContain(`<p class="story__lede">${problems.length} system design problems. Tests, not opinions.</p>`);
-    expect(section).toMatch(/href="\.\/practice\/"/);
+    expect(section).toMatch(new RegExp(`href="\\./practice/">All ${problems.length} problems`));
+    expect(() => featuredProblems([])).toThrow(/featured problem url-shortener/);
     expect(built).not.toContain('<!--practice:');
     expect(() => fillPracticePlaceholders('<!--practice:nope-->', [])).toThrow(/unknown placeholder/);
     // No hard-coded count.
@@ -260,8 +263,8 @@ describe('interview prep section', () => {
   const built = fillPrepPlaceholders(landingHtml, stages);
   const section = built.slice(built.indexOf('<section class="prep"'), built.indexOf('</section>', built.indexOf('<section class="prep"')));
 
-  it('comes after the examples, with the hero linking to it', () => {
-    expect(landingHtml.indexOf('<section class="prep"')).toBeGreaterThan(landingHtml.indexOf('<section class="story story--examples"'));
+  it('comes after the break it / test it section, with the hero linking to it', () => {
+    expect(landingHtml.indexOf('<section class="prep"')).toBeGreaterThan(landingHtml.indexOf('<section class="story story--proof"'));
     expect(landingHtml).toMatch(/<a href="#interview-prep">/);
     expect(landingHtml).toContain('id="interview-prep"');
   });

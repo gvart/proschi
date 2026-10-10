@@ -18,6 +18,7 @@ import { addDays, goalFor, type DayActivity } from '../../frontend/src/learn/str
 import { ROADMAP, requiredStages } from '../../frontend/src/practice/roadmapStages';
 import raw from '../../frontend/src/practice/achievements.json';
 import { loadActivity } from './activity';
+import { loadLessonsRead } from './lessons';
 import { requireUser } from './auth';
 import { allCards, cardTopics } from './cards';
 import { loadChallengeStats } from './challenge';
@@ -112,13 +113,15 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
   const cards = allCards();
   const estimates = [...cards.values()].filter((c) => c.type === 'estimate').map((c) => c.id);
 
-  const [activity, challenges, game, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
+  const [activity, challenges, game, lessons, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
     // The daily streak as GET /api/me/activity counts it (streak.ts): the user's goal, solves and freezes included.
     loadActivity(DB, user.id, today),
     // The daily challenge's badges: attempts are kept by UTC day.
     loadChallengeStats(DB, user.id, t),
     // Scale or Fail's badges and its bonus to the skill map.
     loadGameStats(DB, user.id),
+    // The reading badges.
+    loadLessonsRead(DB, user.id),
     DB.batch([
       DB.prepare('SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ?').bind(user.id),
       DB.prepare('SELECT COUNT(*) AS n FROM card_reviews WHERE user_id = ?').bind(user.id),
@@ -166,6 +169,7 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
     solvedProblems,
     challenges,
     game,
+    lessons,
   });
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, catalog(), earned, t);
   return { statuses, newly, earned, answer: achievementsAnswer(statuses, skills, snapshot), activity };

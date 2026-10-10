@@ -77,6 +77,8 @@ export interface ServerProgress {
 export interface Me {
   user: User;
   progress: Record<string, ServerProgress>;
+  /** The lessons and guides read on any device (absent from an older Worker). */
+  lessons?: string[];
 }
 
 export interface Verdict {

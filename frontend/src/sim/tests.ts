@@ -1,4 +1,5 @@
 import type { Assertion, Diagram, DiagramScenario, DiagramStep, DiagramUseCase, FlowTest, Percentile, Requirement, Selector, SourceLoc } from '../dsl/types';
+import { editDistance } from '../catalog/componentCatalog';
 import { requestLabel } from '../dsl/sequence';
 import { accessIn } from './access';
 import {
@@ -195,9 +196,16 @@ function overUseCases(run: Run, name: string | undefined, check: (u: DiagramUseC
   return fail(failed.length === 1 ? failed[0].message : `${failed.map((c) => c.value ?? c.message).join('; ')} ${limit}`, failed[0].hint);
 }
 
+/**
+ * A use case the test names but the diagram lacks. "Use one of" only when the
+ * name looks like a typo of an existing one (a case-insensitive match or at most
+ * a quarter of its length in edits); otherwise the fix is to add it.
+ */
 function unknownUseCase(run: Run, name: string): Check {
-  const known = run.diagram.useCases.map((u) => `"${u.name}"`);
-  return { ...fail(`No use case named "${name}"`, known.length ? `Use one of ${known.join(', ')}` : 'Add a usecase "…" { … } block'), missing: `use case ${name}` };
+  const lower = name.toLowerCase();
+  const near = run.diagram.useCases.filter((u) => editDistance(u.name.toLowerCase(), lower) <= Math.max(1, Math.floor(name.length / 4)));
+  const hint = near.length ? `Use one of ${near.map((u) => quote(u.name)).join(', ')}` : `Add usecase ${quote(name)} { … }`;
+  return { ...fail(`No use case named ${quote(name)}`, hint), missing: `use case ${name}` };
 }
 
 /** The first saturated node among `ids`, as a failed latency check. */

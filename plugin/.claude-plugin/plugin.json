@@ -1,0 +1,13 @@
+{
+  "name": "proschi",
+  "displayName": "Proschi",
+  "description": "Turn infrastructure, code and docs into Proschi architecture models that render, simulate and pass their checks.",
+  "author": {
+    "name": "gvart",
+    "url": "https://github.com/gvart"
+  },
+  "homepage": "https://proschi.app/docs/agents/",
+  "repository": "https://github.com/gvart/proschi",
+  "license": "MIT",
+  "keywords": ["proschi", "architecture", "diagrams", "system-design", "simulation"]
+}

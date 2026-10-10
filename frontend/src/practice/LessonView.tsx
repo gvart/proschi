@@ -1,4 +1,4 @@
-import { useMemo, useRef, type RefObject } from 'react';
+import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import Markdown from './Markdown';
 import { lessonToc, parseMarkdown, type Block } from './markdown';
@@ -39,13 +39,35 @@ interface LessonProps {
   large?: boolean;
   /** The header's label and the article's name; "Lesson" by default. */
   label?: string;
+  /** Called once the end of the text comes into view: the lesson counts as read. */
+  onRead?: () => void;
+}
+
+/** Calls `onRead` once `end` scrolls into view (never without IntersectionObserver). */
+function useReadToEnd(end: RefObject<HTMLElement | null>, onRead?: () => void) {
+  const callback = useRef(onRead);
+  callback.current = onRead;
+  const wanted = onRead !== undefined;
+  useEffect(() => {
+    const target = end.current;
+    if (!wanted || !target || typeof IntersectionObserver === 'undefined') return;
+    const observer = new IntersectionObserver((entries) => {
+      if (!entries.some((e) => e.isIntersecting)) return;
+      observer.disconnect();
+      callback.current?.();
+    });
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [end, wanted]);
 }
 
 /** A problem's lesson (lesson.md): the concepts first, then the way into the challenge. */
-export default function LessonView({ source, onStart, tocAlways = false, large = false, label = 'Lesson' }: LessonProps) {
+export default function LessonView({ source, onStart, tocAlways = false, large = false, label = 'Lesson', onRead }: LessonProps) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
   const minutes = useMemo(() => readingMinutes(source), [source]);
   const article = useRef<HTMLElement>(null);
+  const end = useRef<HTMLDivElement>(null);
+  useReadToEnd(end, onRead);
   const start = onStart && (
     <button type="button" onClick={onStart} className={primaryButton}>
       Start the challenge
@@ -64,6 +86,7 @@ export default function LessonView({ source, onStart, tocAlways = false, large =
       </header>
       <LessonToc blocks={blocks} root={article} className={tocAlways ? '' : 'hidden md:block'} />
       <Markdown source={source} blocks={blocks} large={large} />
+      <div ref={end} aria-hidden="true" />
       {start && (
         <section aria-label="Your turn" className="rounded-brutal border-bw-2 border-ink bg-pop-yellow/25 p-4 shadow-brutal-sm">
           <p className="font-semibold text-ink">Your turn</p>

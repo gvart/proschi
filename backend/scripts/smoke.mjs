@@ -31,7 +31,9 @@ await check('/api/health', 200, (body) => (body.ok === true ? undefined : `body 
 await check('/auth/providers', 200, (body) => (Array.isArray(body.providers) ? undefined : 'no providers list'));
 await check('/api/stats', 200, (body) => (body.problems ? undefined : 'no problems'));
 await check('/api/me', 401);
-await check('/', 200, (body) => (body.includes('<title>Proschi') ? undefined : 'not the landing page'), STATIC_HEADERS);
+await check('/api/admin/users', 401);
+await check('/admin/', 200, (body) => (body.includes('noindex') ? undefined : 'not the admin page'), STATIC_HEADERS);
+await check('/', 200, (body) => (/<title>[^<]*Proschi<\/title>/.test(body) && body.includes('rel="canonical" href="https://proschi.app/"') ? undefined : 'not the landing page'), STATIC_HEADERS);
 await check('/no-such-page/', 404, (body) => (body.includes('Page not found') ? undefined : 'not the 404 page'), STATIC_HEADERS);
 await check('/practice/url-shortener/', 200, (body) => (body.includes('application/ld+json') ? undefined : 'no structured data'), STATIC_HEADERS);
 await check('/sitemap.xml', 200, (body) => (body.includes('<urlset') ? undefined : 'not a sitemap'), STATIC_HEADERS);

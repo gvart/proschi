@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). Scripts and connections stay 'self' only; the
+         admin API is on this origin (backend/src/admin.ts). frame-ancestors cannot be set from a meta tag: public/_headers
+         refuses framing for every page but /embed/. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="no-referrer" />
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <!-- Applies the saved or system theme before first paint. -->
+    <script src="../theme-init.js"></script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Admin · Proschi</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript><p>The admin panel needs JavaScript.</p></noscript>
+    <script type="module" src="../src/admin/main.tsx"></script>
+  </body>
+</html>

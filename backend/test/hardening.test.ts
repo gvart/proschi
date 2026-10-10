@@ -233,7 +233,7 @@ describe('data export', () => {
     const text = await response.text();
     expect(JSON.parse(text)).toEqual({
       exportedAt: expect.any(Number),
-      user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, createdAt: 0 },
+      user: { id, displayName: 'Ada', publicProfile: false, dailyGoal: 10, createdAt: 0, lastSeenDay: new Date().toISOString().slice(0, 10) },
       identities: [{ provider: 'github', subject: id }],
       sessions: [
         { kind: 'web', createdAt: 0, expiresAt: 4_000_000_000 },
@@ -262,6 +262,7 @@ describe('data export', () => {
       achievements: [],
       challengeAttempts: [],
       game: { meta: null, runs: [] },
+      lessonReads: [],
       shares: [],
       documents: [],
       emailReminders: null,

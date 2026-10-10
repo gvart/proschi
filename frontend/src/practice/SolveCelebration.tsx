@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { ArrowRight, Layers, Map as MapIcon, PartyPopper, Trophy } from 'lucide-react';
+import { api, type EmailPrefs } from '../services/api';
 import problems from 'virtual:practice-listings';
 import type { Topic } from '../learn/cards';
 import type { Engine } from '../hld/engine';
@@ -12,6 +13,8 @@ import type { Progress } from './progress';
 import { ROADMAP, roadmapFor, roadmapHref } from './roadmap';
 import { compareToReference as compare, roadmapAfterSolve } from './solveSummary';
 import type { Problem } from './types';
+import type { Account } from './useAccount';
+import EmailReminders from './profile/EmailReminders';
 import { parseSolution, runTests, type DesignMetrics } from './workspace';
 
 /** The roadmap's stages with the problems this build has. */
@@ -26,15 +29,18 @@ interface SolveCelebrationProps {
   metrics?: DesignMetrics;
   /** The progress before the solve. */
   before: Progress;
+  /** Signed in, offers email reminders and the leaderboard here, the moment they matter. */
+  account?: Account;
 }
 
 /**
  * A problem's first solve: what it took, the design's cost and p99 next to
  * the reference solution's, a roadmap stage completed, and where to go next
  * (the next roadmap problem, the cards that train for this one), and a
- * share button with the cost and p99 (learn/share.ts).
+ * share button with the cost and p99 (learn/share.ts). Signed in, it also
+ * offers email reminders and the leaderboard, unless the user has them.
  */
-export default function SolveCelebration({ problem, engine, runs, metrics, before }: SolveCelebrationProps) {
+export default function SolveCelebration({ problem, engine, runs, metrics, before, account }: SolveCelebrationProps) {
   const reference = useMemo(() => runTests(parseSolution(problem, problem.solution), engine).metrics, [problem, engine]);
   const roadmap = useMemo(() => roadmapAfterSolve(stages, problem.id, before), [problem.id, before]);
   const completed = roadmap.completed !== undefined ? stages[roadmap.completed] : undefined;
@@ -114,6 +120,7 @@ export default function SolveCelebration({ problem, engine, runs, metrics, befor
             </li>
           ))}
         </ul>
+        {account?.state.status === 'signed-in' && <StayOnTrack account={account} />}
       </Celebration>
     </div>
   );
@@ -139,4 +146,51 @@ function useRelatedTopics(problemId: string): { topic: Topic; count: number }[] 
     };
   }, [problemId]);
   return topics;
+}
+
+/**
+ * Signed in: the leaderboard opt-in, unless already on it, and email
+ * reminders (profile/EmailReminders.tsx), unless an address is set.
+ */
+function StayOnTrack({ account }: { account: Account }) {
+  const user = account.state.status === 'signed-in' ? account.state.user : undefined;
+  // Offered when the card first shows, and kept while the switch is used.
+  const [offerBoard] = useState(() => user?.publicProfile === false);
+  const [prefs, setPrefs] = useState<EmailPrefs>();
+  useEffect(() => {
+    let cancelled = false;
+    api<EmailPrefs>('/api/me/email').then(
+      (p) => !cancelled && setPrefs(p),
+      () => undefined,
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // Asked once: an address set while this card shows keeps the form, with its confirmation notice.
+  const [offerEmail, setOfferEmail] = useState(false);
+  if (!offerEmail && prefs?.email === null) setOfferEmail(true);
+  if (!user || (!offerBoard && !offerEmail)) return null;
+  return (
+    <div className="mt-4 border-t-bw-1 border-ink/30 pt-3 text-sm">
+      {offerBoard && (
+        <label className="flex cursor-pointer items-start gap-3">
+          <input
+            type="checkbox"
+            role="switch"
+            checked={user.publicProfile}
+            onChange={(e) => void account.update({ publicProfile: e.target.checked })}
+            className="mt-0.5 h-5 w-5 flex-shrink-0 accent-ink"
+          />
+          <span className="font-semibold text-ink">Show me on the leaderboard, with a public profile</span>
+        </label>
+      )}
+      {offerEmail && (
+        <details className="mt-2">
+          <summary className="cursor-pointer font-semibold text-ink">Keep your streak: remind me when cards are due</summary>
+          <EmailReminders />
+        </details>
+      )}
+    </div>
+  );
 }

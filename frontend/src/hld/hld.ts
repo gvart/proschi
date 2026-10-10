@@ -501,6 +501,14 @@ export const LOAD_HEADINGS = ['Component', 'Reads', 'Writes', 'Utilisation', 'Re
 export const totalCostText = (totalUsd: number, egressUsd = 0): string =>
   `${formatUsd(totalUsd)} / month${egressUsd > 0 ? ` (${formatUsd(egressUsd)} of it egress)` : ''}`;
 
+/** `1 component`, `3 use cases`. */
+export const plural = (n: number, word: string): string => `${n} ${word}${n === 1 ? '' : 's'}`;
+
+/** `4 components · 1 use case · teams: a, b`, the overview's one-line summary. */
+export function overviewFacts(s: Extract<HldSection, { kind: 'overview' }>): string {
+  return [plural(s.components, 'component'), plural(s.useCases, 'use case'), s.teams.length ? `teams: ${s.teams.join(', ')}` : ''].filter(Boolean).join(' · ');
+}
+
 /** "201 {"id": 1}", "failed", or "—". */
 export function responseText(r: ApiResponse): string {
   return [r.status, r.body].filter(Boolean).join(' ') || '—';

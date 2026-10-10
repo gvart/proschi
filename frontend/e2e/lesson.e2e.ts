@@ -48,7 +48,36 @@ test.describe('lessons', () => {
     await expect(page.locator('pre[data-lang="proschi"] .font-bold').first()).toBeAttached();
   });
 
-  test('the guide is open to everyone and linked from the roadmap', async ({ page }) => {
+  test('lesson blocks: the summary, key numbers, a deep dive that opens and a quick check graded in place', async ({ page }) => {
+    await page.goto('practice/#/url-shortener/lesson');
+    const lesson = page.getByRole('article', { name: 'Lesson' });
+    await expect(lesson.getByRole('complementary', { name: 'In 30 seconds' })).toBeVisible();
+    await expect(lesson.locator('[data-block="numbers"] dd').first()).toHaveText('100 : 1');
+
+    const dive = lesson.locator('details[data-block="deepdive"]').first();
+    await expect(dive).not.toHaveAttribute('open');
+    await dive.locator('summary').click();
+    await expect(dive).toHaveAttribute('open');
+
+    const quiz = lesson.getByRole('region', { name: 'Quick check' }).first();
+    await quiz.getByLabel('Your estimate in database reads/s').fill('5k');
+    await quiz.getByRole('button', { name: 'Check' }).first().click();
+    await expect(quiz.getByRole('status').first()).toContainText(/(Correct|Close enough): the answer/);
+  });
+
+  test('a lesson read shows on the roadmap', async ({ page }) => {
+    await page.goto('practice/#/roadmap');
+    const stage = page.getByRole('listitem', { name: /^Stage 1: / });
+    await expect(stage).toContainText(/0 \/ \d+ lessons read/);
+    await stage.getByRole('link', { name: /Hello, Proschi/ }).click();
+    await page.getByRole('article', { name: 'Lesson' }).getByRole('button', { name: 'Start the challenge' }).first().click();
+    await page.goto('practice/#/roadmap');
+    await expect(stage).toContainText(/1 \/ \d+ lessons read/);
+    await expect(stage.getByRole('link', { name: /Hello, Proschi/ })).toContainText('Read');
+    await expect(page.getByRole('region', { name: 'Your progress' })).toContainText(/1 of \d+ lessons read/);
+  });
+
+    test('the guide is open to everyone and linked from the roadmap', async ({ page }) => {
     await page.goto('practice/#/roadmap');
     await page.getByRole('link', { name: /How to approach a system design interview/ }).click();
     await expect(page).toHaveURL(/#\/roadmap\/approach$/);

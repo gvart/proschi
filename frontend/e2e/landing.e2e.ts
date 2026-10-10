@@ -54,19 +54,26 @@ test.describe('landing page', () => {
     await expect(canvasNodes(page).filter({ hasText: 'Session Cache' })).toBeVisible();
   });
 
-  test('practice list shows 29 problems', async ({ page }) => {
+  test('practice shows a few featured problems and links all 29', async ({ page }) => {
     const practice = page.getByRole('region', { name: 'Practice system design' });
-    await expect(practice.getByRole('listitem')).toHaveCount(29);
+    await expect(practice.getByRole('listitem')).toHaveCount(3);
     await expect(practice.getByText('29 system design problems.')).toBeVisible();
     await expect(practice.getByRole('link', { name: /URL shortener/i })).toHaveAttribute('href', './practice/url-shortener/');
+    await expect(practice.getByRole('link', { name: 'All 29 problems' })).toHaveAttribute('href', './practice/');
   });
 
-  test('the practice list is in the page without JavaScript', async ({ browser }) => {
+  test('the featured problems are in the page without JavaScript', async ({ browser }) => {
     const context = await browser.newContext({ javaScriptEnabled: false });
     const page = await context.newPage();
     await page.goto('./');
-    await expect(page.getByRole('region', { name: 'Practice system design' }).getByRole('listitem')).toHaveCount(29);
+    await expect(page.getByRole('region', { name: 'Practice system design' }).getByRole('listitem')).toHaveCount(3);
     await context.close();
+  });
+
+  test('the page is under six screens tall on a desktop', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    const height = await page.evaluate(() => document.documentElement.scrollHeight);
+    expect(height).toBeLessThan(6 * 900);
   });
 
   test('the Arcade is linked from the page and the footer', async ({ page }) => {
@@ -76,7 +83,8 @@ test.describe('landing page', () => {
   });
 
   test('example links open the editor with that example', async ({ page }) => {
-    const examples = page.getByRole('region', { name: 'Examples' });
+    // The examples sit under the editor's call to action.
+    const examples = page.getByRole('list', { name: /open an example/ });
     await expect(examples.getByRole('link', { name: /URL shortener HLD/ })).toHaveAttribute('href', './app/?example=url-shortener');
     await examples.getByRole('link', { name: /URL shortener HLD/ }).click();
     await expect(page).toHaveURL(/\/proschi\/app\/#code=/);

@@ -2,7 +2,7 @@ import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
 import { parseMarkdown } from '../src/practice/markdown.ts'
 import { readCards } from './practiceCards'
-import { fillGuideTemplate, fillTemplate, guideHeadHtml, headHtml, pageDescription, pageHtml, problemOgCard, readGuides, readProblems, statementHtml, withRelatedCards, type PageProblem } from './practicePages'
+import { fillGuideTemplate, fillTemplate, guideHeadHtml, headHtml, pageDescription, pageHtml, problemOgCard, quizCards, readGuides, readProblems, statementHtml, withRelatedCards, type PageProblem } from './practicePages'
 
 const problems = readProblems(fileURLToPath(new URL('../src/practice/problems', import.meta.url)))
 const shortener = problems.find((p) => p.id === 'url-shortener')!
@@ -89,7 +89,42 @@ describe('problem pages', () => {
     expect(html).not.toMatch(/<(b|i|x)>/)
   })
 
-  it('give lesson headings ids and anchors, the statement none', () => {
+  it('render lesson blocks as plain HTML, escaped, with quizzes linked to their cards', () => {
+    const cards = quizCards(readCards(fileURLToPath(new URL('../src/practice/cards', import.meta.url))).cards)
+    const md = [
+      '```tldr',
+      'Cache <reads>.',
+      '```',
+      '```callout pitfall Watch **p99**',
+      'Misses.',
+      '```',
+      '```callout takeaway',
+      'Remember.',
+      '```',
+      '```numbers',
+      '<100> | reads per write',
+      '```',
+      '```deepdive Counter blocks',
+      'Text.',
+      '```',
+      '```quiz',
+      'cache-aside',
+      'no-such-card',
+      '```',
+    ].join('\n')
+    const html = statementHtml(parseMarkdown(md), { cards })
+    expect(html).toContain('<aside class="lesson-block lesson-tldr">\n<p class="lesson-block__title">In 30 seconds</p>\n<p>Cache &lt;reads&gt;.</p>\n</aside>')
+    expect(html).toContain('<aside class="lesson-block lesson-callout lesson-callout--pitfall">\n<p class="lesson-block__title">Watch <strong>p99</strong></p>')
+    expect(html).toContain('<p class="lesson-block__title">Key takeaway</p>')
+    expect(html).toContain('<dl class="lesson-numbers">\n<div><dt>reads per write</dt><dd>&lt;100&gt;</dd></div>\n</dl>')
+    expect(html).toContain('<details class="lesson-block lesson-deepdive">\n<summary><span class="lesson-block__label">Deep dive</span> Counter blocks</summary>\n<p>Text.</p>\n</details>')
+    expect(html).toMatch(/<aside class="lesson-block lesson-quiz">\n<p class="lesson-block__title">Quick check<\/p>\n<ul>\n<li>Walk through a read with the cache-aside pattern\. <a href="\.\.\/cards\/caching\/cache-aside\/">Answer it<\/a><\/li>\n<\/ul>/)
+    expect(html).not.toContain('no-such-card')
+    // Without the cards, a quiz shows nothing.
+    expect(statementHtml(parseMarkdown('```quiz\ncache-aside\n```'))).toBe('')
+  })
+
+    it('give lesson headings ids and anchors, the statement none', () => {
     expect(statementHtml(parseMarkdown('## Scale'))).toBe('<h2>Scale</h2>')
     expect(statementHtml(parseMarkdown("## What you'll learn"), { anchors: true })).toBe(
       `<h2 id="what-youll-learn">What you'll learn <a class="doc-anchor" href="#what-youll-learn" aria-label="Link to this section">#</a></h2>`,

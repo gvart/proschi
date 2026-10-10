@@ -1,13 +1,15 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { useHashRoute } from './hashRoute';
 import problems from 'virtual:practice-listings';
 import { guides as guideMinutes, lessons } from 'virtual:practice-lessons';
 import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, stepLock } from './roadmap';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
-import { loadProgress, saveProgress, type Progress } from './progress';
+import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
+import { useLessonsRead } from './useLessonsRead';
 import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
@@ -21,6 +23,7 @@ import { requestTour } from '../onboarding/seen';
 import Footer from '../design/Footer';
 import Header from '../design/Header';
 import { useAchievements } from './skills/useAchievements';
+import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import TodayPanel from './hub/TodayPanel';
@@ -39,9 +42,9 @@ const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
 const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
 // Scale or Fail, the system design game: the engine, the simulation and the content.
 const ArcadeRoute = lazy(() => import('../game/ui/ArcadeRoute'));
-// The skill map and badges, with the cards' topics.
+// Progress: the level, streak, skill map, roadmap, badges and problems solved, with the cards' topics.
 const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
-// The account page and public profiles, with the cards' topics.
+// The account and settings page; public profiles, with the cards' topics.
 const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
 
@@ -57,22 +60,13 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
- * the daily challenge, `#/progress` the skill map and badges, `#/me` the
- * account page and `#/u/<user id>` a public profile; hash routes work under
+ * the daily challenge, `#/progress` progress (level, skills, badges, streak),
+ * `#/me` the account and settings page and `#/u/<user id>` a public profile; hash routes work under
  * any sub-path. The list (with the Today panel above it), the roadmap,
  * review, challenge, Arcade and progress pages are the practice hub's tabs
- * (hub/tabs.ts).
+ * (hub/tabs.ts). useHashRoute (hashRoute.ts) reads it, and scrolls to the
+ * top on a new address or back to where it was on back/forward.
  */
-function useHashRoute(): string {
-  const read = () => window.location.hash.replace(/^#\/?/, '');
-  const [route, setRoute] = useState(read);
-  useEffect(() => {
-    const onChange = () => setRoute(read());
-    window.addEventListener('hashchange', onChange);
-    return () => window.removeEventListener('hashchange', onChange);
-  }, []);
-  return route;
-}
 
 /**
  * Uploads the browser's progress in one request. Signing in again and again
@@ -89,6 +83,17 @@ async function importProgress(items: { problemId: string; source: string; solved
       const wait = Math.max(backoff, e.retryAfter ?? 0);
       await new Promise((resolve) => setTimeout(resolve, wait * 1000));
     }
+  }
+}
+
+/** Tells the account which lessons were read (POST /api/me/lessons); a failure is dropped: the next sign-in sends them again. */
+async function sendLessonsRead(ids: string[]): Promise<void> {
+  try {
+    await api('/api/me/lessons', { method: 'POST', body: { ids } });
+    // A reading badge may be earned now.
+    notifyActivity();
+  } catch {
+    // Kept in this browser; onSignedIn sends what the account lacks.
   }
 }
 
@@ -113,22 +118,35 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       const toImport = progressToImport(progressRef.current, me.progress).filter((item) => problems.some((p) => p.id === item.id));
       updateProgress((p) => mergeServerProgress(p, me.progress));
       if (toImport.length) void importProgress(toImport.map(({ id, source, solved }) => ({ problemId: id, source, solved })));
+      // Lessons read: the account's join this browser's, and this browser's the account lacks are sent.
+      const remote = new Set(me.lessons ?? []);
+      const missing = lessonsRead().filter((id) => !remote.has(id));
+      markLessonsRead([...remote], 'account');
+      if (me.lessons && missing.length) void sendLessonsRead(missing);
     },
     [updateProgress],
   );
   const account = useAccount(onSignedIn);
+  const signedIn = account.state.status === 'signed-in';
+  // Signed in, each lesson read here goes to the account too; without accounts, the badges are checked here at once.
+  const accountsOff = account.state.status === 'off';
+  useEffect(() => {
+    if (signedIn) return onLessonsRead((ids, source) => source === 'here' && void sendLessonsRead(ids));
+    if (accountsOff) return onLessonsRead(() => notifyActivity());
+  }, [signedIn, accountsOff]);
+  const lessonsReadIds = useLessonsRead();
   const stats = useStatsSummary();
   const leaderboard = useLeaderboard();
 
-  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its steps open in order: a locked step, `#/roadmap/<id>` or
-  // `#/roadmap/<id>/lesson`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
-  // The roadmap's guides, and lessons opened from the problem list (`#/<id>/lesson`), are open to everyone.
+  // The roadmap's first stage is open to everyone (progress in this browser), the rest takes an account, and its challenges open in order: a locked
+  // challenge, `#/roadmap/<id>`, shows the roadmap with what unlocks it (sign-in comes back to the same address).
+  // Reading is never gated: the roadmap's guides and every lesson (`#/roadmap/<id>/lesson`, `#/<id>/lesson`) are open to everyone.
   const access = roadmapAccess(account.state);
   const fromRoadmap = route.startsWith('roadmap/');
   const guide = fromRoadmap ? findGuide(route.slice('roadmap/'.length)) : undefined;
   const target = guide ? undefined : roadmapTarget(route);
   const roadmapNow = roadmapState(roadmap, progress);
-  const lock = target ? stepLock(roadmapNow, target.id, access) : undefined;
+  const lock = target ? routeLock(roadmapNow, target, access) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
   const onProgress = route === 'progress';
@@ -236,7 +254,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </ProblemList>
             ) : onProgress ? (
               <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
-                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} />
+                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} />
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
@@ -265,12 +283,13 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 lessons={lessons}
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
+                read={lessonsReadIds}
               />
             )}
           </PracticeHub>
         ) : onMe ? (
-          <Suspense fallback={<PaneLoading label="Loading your profile…" />}>
-            <AccountRoute account={account} activity={activity} achievements={achievements} progress={progress} />
+          <Suspense fallback={<PaneLoading label="Loading your settings…" />}>
+            <AccountRoute account={account} />
           </Suspense>
         ) : (
           profileId !== undefined && (

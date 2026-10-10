@@ -67,29 +67,27 @@ test.describe('interview prep roadmap', () => {
     await expect(page.getByRole('region', { name: 'Roadmap' })).toHaveCount(0);
   });
 
-  test("a locked step's lesson is locked too, on the roadmap and by its address", async ({ page }) => {
+  test("a locked step's lesson stays open to read; only its challenge waits", async ({ page }) => {
     await page.goto('practice/#/roadmap');
     const foundations = stage(page, 'Foundations');
     const pastebin = foundations.getByRole('listitem').filter({ hasText: 'Pastebin' });
-    // The lesson of a locked step shows, disabled, with what unlocks it.
-    const lesson = pastebin.getByRole('link', { name: 'Read the lesson: Pastebin, locked' });
-    await expect(lesson).toHaveAttribute('aria-disabled', 'true');
-    await expect(lesson).toHaveAccessibleDescription('Locked: Solve URL Shortener first');
-    await expect(lesson).toHaveAttribute('title', 'Locked: Solve URL Shortener first');
-    await expect(lesson).not.toHaveAttribute('href');
-    await expect(lesson.locator('svg')).toHaveCount(1);
-    await lesson.click({ force: true });
-    await expect(page).toHaveURL(/#\/roadmap$/);
+    // The challenge is locked; its lesson is a link.
+    await expect(pastebin.getByRole('img', { name: 'Locked' })).toBeVisible();
+    const lesson = pastebin.getByRole('link', { name: 'Read the lesson: Pastebin' });
+    await expect(lesson).toHaveAttribute('href', '#/roadmap/pastebin/lesson');
+    await lesson.click();
+    await expect(page).toHaveURL(/#\/roadmap\/pastebin\/lesson$/);
+    await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+
     // The guide stays open.
+    await page.goto('practice/#/roadmap');
     await expect(page.getByRole('link', { name: /Read first/ })).toHaveAttribute('href', '#/roadmap/approach');
 
-    // A locked step's address, the challenge's or the lesson's, shows the roadmap with what unlocks it.
-    for (const hash of ['#/roadmap/pastebin', '#/roadmap/pastebin/lesson']) {
-      await page.goto(`practice/${hash}`);
-      await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
-      await expect(page.getByRole('status').filter({ hasText: 'Pastebin is locked on the roadmap' })).toContainText('Solve URL Shortener first');
-      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
-    }
+    // A locked challenge's address shows the roadmap with what unlocks it.
+    await page.goto('practice/#/roadmap/pastebin');
+    await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: 'Pastebin is locked on the roadmap' })).toContainText('Solve URL Shortener first');
+    await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
 
     // An open step's lesson address opens on the lesson, with the roadmap's banner.
     await page.goto('practice/#/roadmap/hello-proschi/lesson');

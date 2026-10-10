@@ -1,0 +1,443 @@
+/* The admin panel (src/admin/): plain layout on the design tokens
+   (src/design/tokens.css), with the shared buttons, cards, badges and tabs
+   from components.css. */
+
+.adm {
+  min-height: 100vh;
+  background: rgb(var(--c-paper));
+  color: rgb(var(--c-ink));
+  font-family: var(--font-sans);
+}
+
+.adm-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
+  background: rgb(var(--c-surface));
+}
+
+.adm-header__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-20);
+  font-weight: 800;
+}
+
+.adm-header__space {
+  flex: 1;
+}
+
+.adm-main {
+  max-width: 1120px;
+  margin: 0 auto;
+  padding: 16px 16px 64px;
+}
+
+.adm-tabs {
+  overflow-x: auto;
+  margin-bottom: 16px;
+}
+
+.adm-panel:focus-visible {
+  outline: none;
+}
+
+.adm-gate {
+  display: grid;
+  place-items: center;
+  padding: 48px 16px;
+}
+
+.adm-gate__card {
+  width: min(480px, 100%);
+  padding: 24px;
+  display: grid;
+  gap: 12px;
+}
+
+.adm-gate__card h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 800;
+}
+
+.adm-section {
+  margin-bottom: 24px;
+  padding: 16px;
+  background: rgb(var(--c-surface));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-sm);
+  display: grid;
+  gap: 12px;
+  min-width: 0;
+}
+
+.adm-section__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.adm-section__head h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-20);
+  font-weight: 800;
+  overflow-wrap: anywhere;
+}
+
+.adm-stats {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 8px;
+}
+
+.adm-stat {
+  display: grid;
+  gap: 2px;
+  padding: 10px 12px;
+  border: var(--bw-1) solid rgb(var(--c-ink) / 0.2);
+  border-radius: var(--r-md);
+  background: rgb(var(--c-paper));
+}
+
+.adm-stat__label {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.adm-stat__value {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-stat__note {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-stat--pass {
+  border-left: 4px solid rgb(var(--c-pass));
+}
+
+.adm-stat--fail {
+  border-left: 4px solid rgb(var(--c-fail));
+}
+
+.adm-stat--warn {
+  border-left: 4px solid rgb(var(--c-yellow));
+}
+
+.adm-muted {
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+}
+
+.adm-mono {
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  overflow-wrap: anywhere;
+}
+
+.adm-error {
+  padding: 8px 12px;
+  border: var(--bw-2) solid rgb(var(--c-fail));
+  border-radius: var(--r-md);
+  background: rgb(var(--c-fail) / 0.08);
+}
+
+.adm-notice {
+  padding: 8px 12px;
+  border: var(--bw-1) solid rgb(var(--c-ink) / 0.3);
+  border-radius: var(--r-md);
+  background: rgb(var(--c-yellow) / 0.25);
+}
+
+.adm-warn {
+  color: rgb(var(--c-fail));
+  font-weight: 700;
+}
+
+.adm-toolbar,
+.adm-inline,
+.adm-actions,
+.adm-pager {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.adm-toolbar .adm-input[type='search'] {
+  flex: 1 1 260px;
+}
+
+.adm-danger-zone {
+  padding-top: 12px;
+  border-top: var(--bw-1) dashed rgb(var(--c-ink) / 0.3);
+}
+
+.adm-input {
+  min-height: 36px;
+  padding: 6px 10px;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  font: inherit;
+  font-size: var(--fs-14);
+  max-width: 100%;
+}
+
+.adm-form {
+  display: grid;
+  gap: 12px;
+}
+
+.adm-form label {
+  display: grid;
+  gap: 4px;
+  font-weight: 600;
+  font-size: var(--fs-14);
+}
+
+.adm-scroll {
+  overflow-x: auto;
+}
+
+/* On phones a wide table scrolls inside its card rather than squeezing its words letter by letter. */
+.adm-scroll > .adm-table {
+  min-width: 600px;
+}
+
+.adm-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: var(--fs-14);
+}
+
+.adm-table th {
+  text-align: left;
+  font-size: var(--fs-12);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgb(var(--c-muted));
+  font-weight: 600;
+}
+
+.adm-table th,
+.adm-table td {
+  padding: 8px 10px;
+  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.12);
+  vertical-align: top;
+}
+
+.adm-table--compact th,
+.adm-table--compact td {
+  padding: 4px 8px;
+}
+
+.adm-num {
+  text-align: right !important;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.adm-gap {
+  margin-left: 6px;
+}
+
+.adm-link {
+  color: rgb(var(--c-blue));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+  text-align: left;
+  overflow-wrap: anywhere;
+}
+
+.adm-section a {
+  color: rgb(var(--c-blue));
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.adm-list {
+  display: grid;
+  gap: 4px;
+  padding-left: 18px;
+  list-style: disc;
+  font-size: var(--fs-14);
+}
+
+.adm-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.adm-chip {
+  cursor: pointer;
+}
+
+.adm-checks {
+  display: grid;
+  gap: 6px;
+  font-size: var(--fs-14);
+}
+
+.adm-check span[aria-hidden] {
+  display: inline-grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  font-weight: 800;
+  font-size: var(--fs-12);
+  margin-right: 6px;
+}
+
+.adm-check--ok span[aria-hidden] {
+  background: rgb(var(--c-pass));
+  color: rgb(var(--c-on-accent));
+}
+
+.adm-check--bad span[aria-hidden] {
+  background: rgb(var(--c-fail));
+  color: rgb(255 255 255);
+}
+
+.adm-check--off span[aria-hidden] {
+  background: rgb(var(--c-ink) / 0.12);
+}
+
+.adm-events {
+  display: grid;
+  gap: 8px;
+}
+
+.adm-event {
+  display: grid;
+  gap: 4px;
+  padding: 10px 12px;
+  border: var(--bw-1) solid rgb(var(--c-ink) / 0.15);
+  border-radius: var(--r-md);
+}
+
+.adm-event__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.adm-event__kind {
+  font-weight: 700;
+}
+
+.adm-event__message {
+  overflow-wrap: anywhere;
+}
+
+.adm-pre {
+  padding: 8px 10px;
+  background: rgb(var(--c-ink) / 0.06);
+  border-radius: var(--r-md);
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.adm-sr {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Bar charts (BarChart.tsx): one series, thin bars on a quiet baseline. */
+.adm-chart {
+  display: grid;
+  gap: 6px;
+}
+
+.adm-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-14);
+}
+
+.adm-chart__title {
+  font-weight: 700;
+}
+
+.adm-chart__readout {
+  color: rgb(var(--c-muted));
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-chart__plot {
+  position: relative;
+  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.4);
+}
+
+.adm-chart__slot {
+  position: absolute;
+  bottom: 0;
+  top: 0;
+  display: flex;
+  align-items: flex-end;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: default;
+}
+
+.adm-chart__slot:focus-visible {
+  outline: 2px solid rgb(var(--c-ink));
+  outline-offset: 1px;
+}
+
+.adm-chart__bar {
+  flex: 1;
+  background: rgb(var(--c-blue));
+  border-radius: 4px 4px 0 0;
+}
+
+.adm-chart__slot.is-active .adm-chart__bar {
+  background: rgb(var(--c-pink));
+}
+
+.adm-chart__axis {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-chart__table summary {
+  cursor: pointer;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-chart__table table {
+  margin-top: 6px;
+  max-width: 320px;
+}

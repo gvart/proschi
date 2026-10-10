@@ -8,6 +8,7 @@ import { sendEmail, emailConfigured } from './email';
 import { pageHtml, type Accent } from './emailLayout';
 import { confirmationEmail, reminderEmail, PAUSE_AFTER, type Kind, type ReminderData } from './emails';
 import { now, secretOk, type Env } from './env';
+import { recordEvent } from './events';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { countEvents } from './metrics';
@@ -226,6 +227,7 @@ export async function putEmail(request: Request, ctx: Ctx): Promise<Response> {
       await sendConfirmation(env, user.id, email);
     } catch (e) {
       log('error', 'Sending a confirmation email failed', { requestId: ctx.requestId, error: errorText(e) });
+      await recordEvent(env, 'error', 'reminder_failed', 'Sending a confirmation email failed', { requestId: ctx.requestId });
       throw new HttpError(502, 'The confirmation email could not be sent; try again later');
     }
   }
@@ -417,7 +419,7 @@ export async function sendReminders(env: Env, t = now()): Promise<number> {
       const rows = (
         await DB.prepare(
           `SELECT p.*, u.daily_goal FROM email_prefs p JOIN users u ON u.id = p.user_id
-           WHERE p.confirmed_at IS NOT NULL AND p.paused_at IS NULL AND p.time_zone IN (${marks(chunk.length)}) AND p.user_id > ?
+           WHERE p.confirmed_at IS NOT NULL AND p.paused_at IS NULL AND u.blocked_at IS NULL AND p.time_zone IN (${marks(chunk.length)}) AND p.user_id > ?
            ORDER BY p.user_id LIMIT ${PAGE}`,
         )
           .bind(...chunk, after)
@@ -504,6 +506,8 @@ async function processPage(env: Env, rows: Candidate[], t: number, origin: strin
       });
     } catch (e) {
       log('error', 'Sending a reminder failed', { userId: row.user_id, kind, error: errorText(e) });
+      // Not the error's text: a provider's message may name the address.
+      await recordEvent(env, 'error', 'reminder_failed', `Sending a ${kind} reminder failed`, { kind });
       continue;
     }
     sent++;

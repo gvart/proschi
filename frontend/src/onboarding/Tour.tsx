@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { Check, MousePointerClick, X } from 'lucide-react';
-import { placePopover, sameBox, visibleRect, type Box, type Side } from './layout';
+import { nextPlacement, sameBox, visibleRect, type Box, type Placement, type Side } from './layout';
 
 /**
  * A small guided tour: one non-modal popover at a time, anchored next to a
@@ -48,6 +48,10 @@ interface TourProps {
   onCover?: (band: CoverBand | null) => void;
 }
 
+/** A new step waits for its target to hold still this many frames (or this long) before it shows. */
+const SETTLE_FRAMES = 3;
+const SETTLE_MAX_MS = 500;
+
 export interface CoverBand {
   top: number;
   bottom: number;
@@ -68,6 +72,13 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
   const [announce, setAnnounce] = useState('');
   const coverRef = useRef<string>('');
   const onCoverRef = useRef(onCover);
+  /** The step whose popover has settled and shows; until then it is hidden, so it never appears in one place and jumps. */
+  const [settled, setSettled] = useState(-1);
+  const placedRef = useRef<Placement & { index: number }>(null);
+  /** Focus to move once the step shows: the popover itself (on open) or its primary button. */
+  const focusOnShow = useRef<'popover' | 'primary' | null>('popover');
+  /** The last step that was done; it stays done until the user leaves it. */
+  const [doneAt, setDoneAt] = useState(-1);
 
   useEffect(() => {
     stepsRef.current = steps;
@@ -91,16 +102,15 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
     current?.onEnter?.();
     setAnnounce(`Step ${index + 1} of ${stepsRef.current.length}: ${current?.title ?? ''}`);
     // A step may put focus where the user should act (the editor); otherwise it follows the buttons.
-    if (focusNext.current && document.activeElement === before) primaryRef.current?.focus({ preventScroll: true });
+    if (focusNext.current && document.activeElement === before) focusOnShow.current = 'primary';
     focusNext.current = false;
   }, [index]);
 
   useEffect(() => () => onCoverRef.current?.(null), []);
 
-  // Focus the popover when the tour opens (keyboard users land in it) and give focus back when it closes.
+  // The popover takes focus when it first shows (keyboard users land in it); focus goes back when the tour closes.
   useEffect(() => {
     const previous = document.activeElement as HTMLElement | null;
-    popRef.current?.focus({ preventScroll: true });
     return () => {
       if (previous?.isConnected && previous !== document.body) previous.focus({ preventScroll: true });
     };
@@ -115,8 +125,11 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
     return () => document.removeEventListener('keydown', onKey);
   }, []);
 
-  // Done steps say so; auto steps move on once things settle.
-  const done = !!step.done;
+  // Done steps say so, and stay done until the user leaves them; auto steps move on once things settle.
+  const done = !!step.done || doneAt === index;
+  useEffect(() => {
+    if (step.done) setDoneAt(index);
+  }, [step.done, index]);
   useEffect(() => {
     if (done && step.doneText) setAnnounce(typeof step.doneText === 'string' ? step.doneText : 'Done.');
     // Announce on the transition only.
@@ -134,29 +147,46 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
       const current = stepsRef.current[index];
       const next = visibleRect(current?.target?.(), current?.clip?.());
       setTarget((prev) => (sameBox(prev, next) ? prev : next));
+      return next;
     };
-    update();
+    // A new step shows once its target holds still: entering it may switch panes or stop playback first.
+    const started = performance.now();
+    let last: Box | null | undefined;
+    let still = 0;
+    let frame = 0;
+    const settle = () => {
+      const next = update();
+      still = last !== undefined && sameBox(last, next) ? still + 1 : 0;
+      last = next;
+      if (still >= SETTLE_FRAMES || performance.now() - started > SETTLE_MAX_MS) setSettled(index);
+      else frame = requestAnimationFrame(settle);
+    };
+    settle();
     const timer = setInterval(update, 200);
     window.addEventListener('resize', update);
     window.addEventListener('scroll', update, true);
     return () => {
+      cancelAnimationFrame(frame);
       clearInterval(timer);
       window.removeEventListener('resize', update);
       window.removeEventListener('scroll', update, true);
     };
   }, [index]);
 
-  // Position after every render: the popover's own size changes with its text.
+  // Place a step once it has settled; after that it moves only with its anchor (or to stay on screen as its text grows).
   useLayoutEffect(() => {
     const pop = popRef.current;
-    if (!pop) return;
+    if (!pop || settled !== index) return;
     const viewport = { width: window.innerWidth, height: window.innerHeight };
-    const { top, left } = placePopover(target, { width: pop.offsetWidth, height: pop.offsetHeight }, viewport, {
+    const prev = placedRef.current?.index === index ? placedRef.current : null;
+    const placed = nextPlacement(prev, target, { width: pop.offsetWidth, height: pop.offsetHeight }, viewport, {
       phone,
       sides: step.sides,
       dock: step.dock,
       align: step.align,
     });
+    placedRef.current = { ...placed, index };
+    const { top, left } = placed;
     pop.style.top = `${Math.round(top)}px`;
     pop.style.left = `${Math.round(left)}px`;
     const band = phone ? { top: Math.round(top), bottom: Math.round(top + pop.offsetHeight) } : null;
@@ -165,10 +195,13 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
       coverRef.current = bandKey;
       onCoverRef.current?.(band);
     }
-    if (!pop.dataset.placed) {
-      // Glide between steps, but appear in place the first time: transitions start once that frame is drawn.
+    if (!prev) {
+      // Each step appears in place; it glides only when its anchor moves. Transitions start once this frame is drawn.
       pop.dataset.placed = 'pending';
       requestAnimationFrame(() => requestAnimationFrame(() => (pop.dataset.placed = 'true')));
+      if (focusOnShow.current === 'popover') pop.focus({ preventScroll: true });
+      else if (focusOnShow.current === 'primary') primaryRef.current?.focus({ preventScroll: true });
+      focusOnShow.current = null;
     }
   });
 
@@ -192,7 +225,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
         className={`fixed z-40 rounded-xl border border-ink/15 bg-surface shadow-xl outline-none motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
           phone ? 'w-[calc(100vw-24px)]' : 'w-[22rem]'
         }`}
-        style={{ top: -9999, left: -9999 }}
+        style={{ top: -9999, left: -9999, visibility: settled === index ? undefined : 'hidden' }}
       >
         <div className="flex items-center gap-2 pl-4 pr-2 pt-2.5">
           <span className="text-xs font-medium text-pop-blue">
