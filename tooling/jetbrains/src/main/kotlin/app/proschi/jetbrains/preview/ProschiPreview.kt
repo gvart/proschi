@@ -7,6 +7,7 @@ import com.intellij.openapi.Disposable
 import com.intellij.openapi.application.ApplicationManager
 import com.intellij.openapi.components.Service
 import com.intellij.openapi.components.service
+import com.intellij.openapi.fileEditor.FileEditorManager
 import com.intellij.openapi.fileEditor.FileEditorManagerEvent
 import com.intellij.openapi.fileEditor.FileEditorManagerListener
 import com.intellij.openapi.project.DumbAware
@@ -22,10 +23,15 @@ import com.intellij.openapi.vfs.newvfs.events.VFileEvent
 import com.intellij.openapi.wm.ToolWindow
 import com.intellij.openapi.wm.ToolWindowFactory
 import com.intellij.openapi.wm.ToolWindowManager
+import com.intellij.openapi.wm.ex.ToolWindowManagerListener
+import com.intellij.ui.JBColor
 import com.intellij.ui.components.JBLabel
 import com.intellij.ui.content.ContentFactory
 import com.intellij.ui.jcef.JBCefApp
 import com.intellij.ui.jcef.JBCefBrowser
+import com.intellij.util.ui.JBUI
+import com.intellij.util.ui.UIUtil
+import java.awt.Color
 import java.nio.file.Files
 import java.nio.file.Path
 import javax.swing.JComponent
@@ -33,7 +39,7 @@ import javax.swing.SwingConstants
 
 /**
  * The Proschi Preview tool window: `proschi render --format html` (one self-contained
- * page with the architecture and every scenario as SVG) shown in JCEF. It re-renders
+ * page with the architecture and every scenario as SVG) shown in JCEF, restyled to fit the panel. It re-renders
  * when the previewed file is saved and follows the selected `.proschi` editor while
  * the tool window is open.
  *
@@ -93,8 +99,17 @@ class ProschiPreviewPanel(private val project: Project, private val toolWindow: 
                 if (ProschiFiles.isProschi(selected) && selected != file && toolWindow.isVisible) render(selected)
             }
         })
-        message("Open a .proschi file and run Tools | Proschi | Show Diagram Preview.")
+        // Opened from the tool window stripe rather than the action: preview the file being edited.
+        bus.subscribe(ToolWindowManagerListener.TOPIC, object : ToolWindowManagerListener {
+            override fun toolWindowShown(shown: ToolWindow) {
+                if (shown.id == ProschiPreview.TOOL_WINDOW_ID) selectedFile()?.takeIf { it != file }?.let { render(it) }
+            }
+        })
+        selectedFile()?.let { render(it) } ?: message("Open a .proschi file to preview it.")
     }
+
+    private fun selectedFile(): VirtualFile? =
+        FileEditorManager.getInstance(project).selectedFiles.firstOrNull { ProschiFiles.isProschi(it) }
 
     /** Renders [target]; a request while a render runs is queued, and only the latest one is kept. */
     fun render(target: VirtualFile) {
@@ -124,11 +139,34 @@ class ProschiPreviewPanel(private val project: Project, private val toolWindow: 
             if (disposed) return@run
             val page = output.stdout.lines().map { it.trim() }.lastOrNull { it.endsWith(".html") }?.let { Path.of(it) }
             if (output.exitCode == 0 && page != null && Files.isRegularFile(page)) {
-                browser.loadHTML(Files.readString(page))
+                browser.loadHTML(fitToPanel(Files.readString(page)))
             } else {
                 message("Not rendered:\n\n" + (output.stderr + output.stdout).trim())
             }
         }
+    }
+
+    /**
+     * `render --format html` is laid out for a browser window; this restyles it for the
+     * tool window: one column, diagrams scaled down to the panel's width, and the page's
+     * colors from the IDE theme (the diagrams keep their paper background).
+     */
+    private fun fitToPanel(html: String): String {
+        fun hex(c: Color) = "#%02x%02x%02x".format(c.red, c.green, c.blue)
+        val style = """
+            <style>
+            :root { color-scheme: ${if (JBColor.isBright()) "light" else "dark"}; --bg: ${hex(UIUtil.getPanelBackground())}; --fg: ${hex(UIUtil.getLabelForeground())}; --muted: ${hex(UIUtil.getContextHelpForeground())}; --border: ${hex(JBColor.border())}; --link: ${hex(JBUI.CurrentTheme.Link.Foreground.ENABLED)}; --card: #fff8e7; }
+            body { font-size: 13px; }
+            header { padding: 10px 12px 4px; }
+            h1 { font-size: 15px; }
+            main { flex-direction: column; gap: 8px; padding: 4px 12px 12px; }
+            nav { position: static; flex: none; font-size: 12px; }
+            h2 { font-size: 13px; }
+            figure { box-shadow: none; }
+            figure svg { max-width: 100%; height: auto; }
+            </style>
+        """.trimIndent()
+        return html.replace("</head>", "$style\n</head>")
     }
 
     private fun message(text: String) {

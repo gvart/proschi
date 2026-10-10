@@ -13,6 +13,8 @@ import com.intellij.platform.lsp.api.LspServer
 import com.intellij.platform.lsp.api.LspServerManager
 import com.intellij.platform.lsp.api.LspServerSupportProvider
 import com.intellij.platform.lsp.api.ProjectWideLspServerDescriptor
+import com.intellij.platform.lsp.api.customization.LspCustomization
+import com.intellij.platform.lsp.api.customization.LspSemanticTokensCustomizer
 import com.intellij.platform.lsp.api.lsWidget.LspServerWidgetItem
 
 // The pre-2026.1.4 names of the LSP API (LspServer*): the only ones in 2025.3, and
@@ -37,13 +39,18 @@ class ProschiLspServerSupportProvider : LspServerSupportProvider {
  * The defaults cover what the server offers: diagnostics, quick fixes, completion,
  * hover, definition, references, document symbols, document links and formatting.
  * Formatting goes to the server because the IDE has no formatter of its own for
- * TextMate files, so Reformat Code (Ctrl+Alt+L / Cmd+Opt+L) uses it.
+ * TextMate files, so Reformat Code (Ctrl+Alt+L / Cmd+Opt+L) uses it. Semantic tokens
+ * color node ids, tech stacks and teams (see [ProschiSemanticTokensSupport]).
  */
 class ProschiLspServerDescriptor(project: Project) : ProjectWideLspServerDescriptor(project, "Proschi") {
     override fun isSupportedFile(file: VirtualFile): Boolean = ProschiFiles.isProschi(file)
 
     override fun createCommandLine(): GeneralCommandLine =
         ProschiCommands.commandLine(ProschiCommands.languageServer(ProschiSettings.options), project.basePath?.let { java.nio.file.Path.of(it) })
+
+    override val lspCustomization: LspCustomization = object : LspCustomization() {
+        override val semanticTokensCustomizer: LspSemanticTokensCustomizer = ProschiSemanticTokensSupport()
+    }
 }
 
 object ProschiLanguageServer {

@@ -27,6 +27,7 @@ Node.js 18 or newer. See <b>Settings | Languages &amp; Frameworks | Proschi</b>.
         <textmate.bundleProvider implementation="app.proschi.jetbrains.ProschiTextMateBundleProvider"/>
         <fileIconProvider implementation="app.proschi.jetbrains.ProschiFileIconProvider"/>
         <platform.lsp.serverSupportProvider implementation="app.proschi.jetbrains.lsp.ProschiLspServerSupportProvider"/>
+        <colorSettingsPage implementation="app.proschi.jetbrains.lsp.ProschiColorSettingsPage"/>
 
         <applicationConfigurable parentId="language"
                                  id="app.proschi.settings"
