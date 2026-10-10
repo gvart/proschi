@@ -18,6 +18,7 @@ export default defineConfig(async () => {
             GOOGLE_CLIENT_SECRET: 'google-secret',
             APP_REDIRECT_URIS: 'proschi://auth, https://app.proschi.test/callback?x=1',
             METRICS_TOKEN: 'test-metrics-token-0123456789',
+            ADMIN_SETUP_TOKEN: 'test-admin-setup-token-0123456789',
           },
         },
       }),

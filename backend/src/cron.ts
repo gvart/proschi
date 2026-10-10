@@ -1,5 +1,8 @@
+import { pruneAudit } from './admin';
+import { purgeAdminSessions } from './adminAuth';
 import { TOMBSTONE_TTL_MS } from './documents';
 import { now, type Env } from './env';
+import { pruneEvents, recordEvent } from './events';
 import { errorText, log } from './log';
 import { pruneDailyCounts } from './metrics';
 import { sendReminders } from './reminders';
@@ -17,15 +20,28 @@ export const DAILY_HOUR = 3;
  */
 export async function hourlyCron(env: Env, scheduledTime: number): Promise<void> {
   const t = Math.floor(scheduledTime / 1000);
-  if (new Date(scheduledTime).getUTCHours() === DAILY_HOUR) {
-    try {
-      await dailyCron(env);
-    } catch (e) {
-      log('error', 'Daily cron failed', { error: errorText(e) });
-    }
+  if (new Date(scheduledTime).getUTCHours() === DAILY_HOUR) await dailyCron(env);
+  await runJob(env, 'reminders', async () => {
+    const sent = await sendReminders(env, t);
+    if (sent) log('info', 'Sent reminders', { sent });
+    return { sent };
+  });
+}
+
+/**
+ * Runs one job and records how it went as a `cron` app event (the admin's
+ * health page shows each job's last run, src/admin.ts CRON_JOBS). A failure
+ * is logged, never thrown, so one job failing does not stop the others.
+ */
+async function runJob(env: Env, job: string, run: () => Promise<Record<string, number>>): Promise<void> {
+  const started = Date.now();
+  try {
+    const result = await run();
+    await recordEvent(env, 'info', 'cron', job, { ...result, ms: Date.now() - started });
+  } catch (e) {
+    log('error', `Cron job ${job} failed`, { error: errorText(e) });
+    await recordEvent(env, 'error', 'cron', job, { error: errorText(e).split('\n')[0], ms: Date.now() - started });
   }
-  const sent = await sendReminders(env, t);
-  if (sent) log('info', 'Sent reminders', { sent });
 }
 
 /**
@@ -33,11 +49,15 @@ export async function hourlyCron(env: Env, scheduledTime: number): Promise<void>
  * FSRS replays a card's whole review history to schedule it.
  */
 export async function dailyCron(env: Env): Promise<void> {
-  await purgeExpiredSessions(env);
-  await pruneAbandonedGameRuns(env);
-  await pruneDocumentTombstones(env);
-  const counts = await pruneDailyCounts(env);
-  log('info', 'Pruned old usage counts', { deleted: counts });
+  await runJob(env, 'sessions', async () => ({ deleted: await purgeExpiredSessions(env), admin: await purgeAdminSessions(env) }));
+  await runJob(env, 'game_runs', async () => ({ deleted: await pruneAbandonedGameRuns(env) }));
+  await runJob(env, 'tombstones', async () => ({ deleted: await pruneDocumentTombstones(env) }));
+  await runJob(env, 'usage_counts', async () => {
+    const deleted = await pruneDailyCounts(env);
+    log('info', 'Pruned old usage counts', { deleted });
+    return { deleted };
+  });
+  await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
 }
 
 /**

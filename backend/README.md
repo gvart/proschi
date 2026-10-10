@@ -182,11 +182,12 @@ instead ([Mobile apps](#mobile-apps)).
 
 | `POST /api/metrics {event}` or `{events: [...]}` | Adds one to today's (UTC) count of each event, signed in or not: 204. Up to 20 events, each from the allow-list (`frontend/src/services/metricsEvents.ts`, `sign_in` excluded); an unknown one refuses the whole request (400) |
 | `GET /api/metrics/summary?days=30` | With `X-Metrics-Token: <METRICS_TOKEN>`: `{from, to, events, days: [{day, counts: {<event>: n}}], totals: {<event>: n}}`, the last `days` UTC days (1–400) newest first. 404 without the secret set or with a wrong token |
+| `/api/admin/*` | The [admin panel](#admin-panel): passkey sign-in and its data |
 
 Rate limits, per minute (429 with `Retry-After`): 30 test runs, 10 account
 changes or exports, 3 imports, 60 card review and activity requests, 10 daily challenge attempts (and starts), 20 game requests (runs started, submitted or synced, purchases), 10 short links, 120 synced diagram requests (`DOCS_LIMITER`), 3 reminder confirmation emails (`EMAIL_LIMITER`) and 120 achievement requests per user; 20 sign-in steps (token and revoke requests included), 120 stats
 requests (the daily challenge's cards and leaderboard, the per-problem leaderboards,
-oEmbed and metrics summaries included), 30 usage count requests and 10 design reviews per IP.
+oEmbed and metrics summaries included), 30 usage count requests, 10 design reviews and 30 admin sign-in steps (`ADMIN_LIMITER`) per IP.
 
 ### Short links and embeds
 
@@ -420,6 +421,74 @@ is in [docs/PRIVACY.md](../docs/PRIVACY.md#email-reminders)):
 4. Check: on `#/me`, enter your address, follow the confirmation link, and
    watch the Worker's logs (`Sent reminders`) at your next local 19:17.
 
+## Admin panel
+
+`/admin/` (`frontend/src/admin/`, served like any page; its API is
+`src/adminAuth.ts` and `src/admin.ts`) is the operator's console: accounts,
+moderation, app health and events. There is no username or password: the
+admin signs in with a **passkey** (WebAuthn; Touch ID, Face ID, Windows Hello,
+a phone or a security key).
+
+**Setting it up**
+
+1. Set a one-time setup token, any random string of at least 16 characters:
+   `openssl rand -base64 24 | npx wrangler secret put ADMIN_SETUP_TOKEN`
+   (or Settings → Variables and Secrets in the dashboard).
+2. Open <https://proschi.app/admin/>. With no passkey registered yet it asks
+   for the setup token and a name, then your browser creates the passkey.
+   You are signed in.
+3. Delete the token: `npx wrangler secret delete ADMIN_SETUP_TOKEN`. It only
+   ever works while no passkey exists, but the health page reminds you until
+   it is gone.
+4. In **Passkeys**, add a second passkey (another device or a security key)
+   as a backup. The last passkey cannot be removed.
+
+Next time, `/admin/` shows **Sign in with passkey**. Lost every passkey?
+Delete them (`npx wrangler d1 execute proschi --remote --command "DELETE
+FROM admin_passkeys"`), set a new setup token and start again.
+
+A passkey belongs to the host it was made on: one made on proschi.app does not
+work on staging or on `localhost:8787` (`npm run dev`, with
+`ADMIN_SETUP_TOKEN` in `.dev.vars`), which each need their own.
+
+**Security.** The admin session is its own cookie (`__Host-proschi_admin`,
+HttpOnly, Secure, `SameSite=Strict`), stored as a hash like users' sessions;
+it ends after 30 idle minutes and 12 hours after sign-in at the latest. Users'
+sessions never open the panel. Every challenge is used once and expires in
+five minutes; user verification is required; a passkey whose signature counter
+goes backwards is refused. Admin requests that change something must carry
+this site's `Origin`. Setup and sign-in are rate limited per IP
+(`ADMIN_LIMITER`), and failures are recorded as events. Everything the admin
+changes goes to the audit log in the same batch as the change.
+
+**What it shows and does**
+
+| Tab | |
+|---|---|
+| Overview | Accounts (total, active today / 7 / 30 days from `users.last_seen_day`, new, blocked, public, email reminders), sign-ups per day, content totals, the last 24 hours' warnings and errors, and the [usage counts](#usage-counts) per day |
+| Health | D1 (latency, size, last migration, rows per table), the deployed version (`version_metadata`), each cron job's last run and result, errors and rate limits in the last day and week, email reminders, and configuration checks (secrets set, providers, the setup token removed) |
+| Users | Search by name, account id or the provider's user id; filter (active this week, blocked, public, email) and sort. An account's page: sign-ins, sessions, progress, cards, challenges, game, short links, synced diagrams, the email address masked (`a***@example.com`) and the admin actions on it. **Block** (with a reason; signs it out everywhere, apps too, refuses its sign-ins with `login_error=blocked`, makes its profile private and hides its short links; unblocking restores the links, the profile stays private until the user turns it on), **unblock**, **sign out everywhere**, **rename**, **make the profile private**, **remove the email address**, **delete the account** |
+| Short links | Every short link with its owner, searchable; delete one |
+| Events | App events (`app_events`, kept 30 days): server errors with their stack, rate limits hit, failed and blocked sign-ins, failed reminder emails, cron runs, admin sign-ins. Never a user id, an IP or a query: paths have their ids replaced by `:id`. Server errors and rate limits are recorded at most once a minute per route and Worker instance, so a flood cannot become as many writes |
+| Audit log | Every admin action (`admin_audit`, kept 400 days): when, what, the target's id and the passkey's name |
+| Passkeys | Add, list and remove passkeys; sign every admin session out |
+
+| Endpoint | |
+|---|---|
+| `GET /api/admin/status` | `{passkeys, setupAvailable, signedIn}`: what the page shows |
+| `POST /api/admin/setup/options {setupToken}`, `POST /api/admin/setup {setupToken, name, response}` | The first passkey: 403 with a wrong token or once one exists |
+| `POST /api/admin/login/options`, `POST /api/admin/login {response}` | Passkey sign-in; 401 when not accepted |
+| `POST /api/admin/logout` | Ends this admin session |
+| `GET /api/admin/passkeys`, `POST /api/admin/passkeys/options`, `POST /api/admin/passkeys {name, response}`, `DELETE /api/admin/passkeys/<id>`, `POST /api/admin/sessions/revoke-all` | Passkeys and sessions (409 for the last passkey) |
+| `GET /api/admin/overview`, `GET /api/admin/health` | The overview and health pages |
+| `GET /api/admin/users?q=&filter=all\|active\|blocked\|public\|email&sort=created\|seen\|name\|solved&offset=` | 50 at a time, with `total` |
+| `GET /api/admin/users/<id>`, `PATCH /api/admin/users/<id> {displayName?, publicProfile?}`, `DELETE /api/admin/users/<id>` | One account |
+| `POST /api/admin/users/<id>/block {reason?}`, `/unblock`, `/sign-out`; `DELETE /api/admin/users/<id>/email` | Moderation (409 when already blocked or not blocked) |
+| `GET /api/admin/shares?q=&offset=`, `DELETE /api/admin/shares/<id>` | Short links |
+| `GET /api/admin/events?kind=&level=&before=`, `GET /api/admin/audit?before=` | 100 at a time, newest first; `next` is the next page's `before` |
+
+Every route but status, setup and login answers 401 without an admin session.
+
 ## Mobile apps
 
 A native app (React Native, Swift, Kotlin) signs in with the same GitHub and
@@ -561,6 +630,8 @@ solve locally either way.
    - `METRICS_TOKEN` (optional): a random string of at least 16 characters,
      for reading the [usage counts](#usage-counts). Without it the summary
      answers 404; counting works either way.
+   - `ADMIN_SETUP_TOKEN` (once): registers the [admin panel](#admin-panel)'s
+     first passkey; delete it afterwards.
 
    A provider is offered once both of its secrets are set; no redeploy is
    needed.
@@ -612,8 +683,8 @@ so the previous Worker still runs on the migrated schema after a rollback.
 
 `env.staging` in `wrangler.jsonc` repeats every var and binding: Wrangler does
 not inherit those from the top level. The rate limiters' namespaces are
-1001–1013 in production and 2001–2013 in staging (1010/2010 is METRICS_LIMITER,
-1012/2012 DOCS_LIMITER, 1013/2013 EMAIL_LIMITER).
+1001–1014 in production and 2001–2014 in staging (1010/2010 is METRICS_LIMITER,
+1012/2012 DOCS_LIMITER, 1013/2013 EMAIL_LIMITER, 1014/2014 ADMIN_LIMITER).
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.

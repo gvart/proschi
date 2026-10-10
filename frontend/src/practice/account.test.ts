@@ -16,6 +16,7 @@ describe('takeLoginError', () => {
   it('explains each outcome', () => {
     expect(loginMessage({})).toBeUndefined();
     expect(loginMessage({ error: 'cancelled' })).toBe('Sign-in cancelled.');
+    expect(loginMessage({ error: 'blocked' })).toMatch(/^This account is blocked\./);
     expect(loginMessage({ error: 'identity_in_use' })).toMatch(/another Proschi account/);
     expect(loginMessage({ error: 'provider_linked' })).toMatch(/already has a sign-in with that provider/);
     expect(loginMessage({ error: 'failed' })).toBe('Sign-in failed; try again.');

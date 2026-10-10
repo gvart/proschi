@@ -1,5 +1,7 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import { getActivity } from './activity';
+import { blockUser, deleteAdminShare, deleteUser, deleteUserEmail, getHealth, getOverview, getUser, listAdminShares, listAudit, listEvents, listUsers, patchUser, signOutUser, unblockUser } from './admin';
+import { addPasskey, addPasskeyOptions, adminLogout, adminStatus, deletePasskey, listPasskeys, login as adminLogin, loginOptions, revokeAdminSessions, setup as adminSetup, setupOptions } from './adminAuth';
 import { getAchievements, markAchievementsSeen } from './achievements';
 import { revoke, token } from './apptokens';
 import { getCardState, postCardReviews } from './cards';
@@ -9,6 +11,7 @@ import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, listDocuments, putDocument } from './documents';
+import { recordThrottled, routeOf } from './events';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
@@ -85,6 +88,7 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
  *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
+ *   …      /api/admin/*                     the admin panel: passkey sign-in (src/adminAuth.ts) and its data (src/admin.ts)
  *
  * and, outside the API, public profiles at addresses of their own (src/profilePage.ts):
  *
@@ -163,6 +167,38 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   }
   if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
   if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
+  if (parts[0] === 'api' && parts[1] === 'admin') return adminRoute(request, ctx, is, parts);
+  return errorResponse(404, 'Not found');
+}
+
+/** /api/admin/*: the admin panel (backend/README.md "Admin panel"). */
+function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[]) => boolean, parts: string[]): Promise<Response> | Response {
+  const id = parts[3];
+  if (is('GET', 'api', 'admin', 'status')) return adminStatus(request, ctx);
+  if (is('POST', 'api', 'admin', 'setup', 'options')) return setupOptions(request, ctx);
+  if (is('POST', 'api', 'admin', 'setup')) return adminSetup(request, ctx);
+  if (is('POST', 'api', 'admin', 'login', 'options')) return loginOptions(request, ctx);
+  if (is('POST', 'api', 'admin', 'login')) return adminLogin(request, ctx);
+  if (is('POST', 'api', 'admin', 'logout')) return adminLogout(request, ctx);
+  if (is('GET', 'api', 'admin', 'passkeys')) return listPasskeys(request, ctx);
+  if (is('POST', 'api', 'admin', 'passkeys', 'options')) return addPasskeyOptions(request, ctx);
+  if (is('POST', 'api', 'admin', 'passkeys')) return addPasskey(request, ctx);
+  if (is('DELETE', 'api', 'admin', 'passkeys', '*')) return deletePasskey(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'sessions', 'revoke-all')) return revokeAdminSessions(request, ctx);
+  if (is('GET', 'api', 'admin', 'overview')) return getOverview(request, ctx);
+  if (is('GET', 'api', 'admin', 'health')) return getHealth(request, ctx);
+  if (is('GET', 'api', 'admin', 'users')) return listUsers(request, ctx);
+  if (is('GET', 'api', 'admin', 'users', '*')) return getUser(request, ctx, id);
+  if (is('PATCH', 'api', 'admin', 'users', '*')) return patchUser(request, ctx, id);
+  if (is('DELETE', 'api', 'admin', 'users', '*')) return deleteUser(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'block')) return blockUser(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'unblock')) return unblockUser(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'sign-out')) return signOutUser(request, ctx, id);
+  if (is('DELETE', 'api', 'admin', 'users', '*', 'email')) return deleteUserEmail(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'shares')) return listAdminShares(request, ctx);
+  if (is('DELETE', 'api', 'admin', 'shares', '*')) return deleteAdminShare(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'events')) return listEvents(request, ctx);
+  if (is('GET', 'api', 'admin', 'audit')) return listAudit(request, ctx);
   return errorResponse(404, 'Not found');
 }
 
@@ -199,6 +235,14 @@ export default {
         error = errorText(e);
         response = errorResponse(500, 'Internal error');
       }
+    }
+    // For the admin's health page (src/events.ts): the path only, no user id or IP, at most once a minute per path.
+    if (error) {
+      const route = routeOf(pathname);
+      recordThrottled(env, exec, `500 ${route}`, 'error', 'server_error', error.split('\n')[0], { method: request.method, path: route, requestId: ctx.requestId, stack: error });
+    } else if (response.status === 429) {
+      const route = routeOf(pathname);
+      recordThrottled(env, exec, `429 ${route}`, 'warn', 'rate_limited', `Rate limit hit on ${route}`, { method: request.method, path: route });
     }
     // The path only: the query of an OAuth callback holds the authorization code.
     log(error ? 'error' : 'info', 'request', {
