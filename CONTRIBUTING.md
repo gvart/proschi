@@ -364,35 +364,6 @@ full reference; this is the checklist.
 
 6. **Changelog and pull request**, as for problems and cards.
 
-## Releasing the tooling
-
-For maintainers. Bump `version` in both `tooling/package.json` and
-`tooling/vscode/package.json` and merge. Then push the tag
-`tooling-v<version>`:
-
-```sh
-git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
-```
-
-On a phone, creating a GitHub release with that new tag (*Releases → Draft a
-new release*) does the same, and so does running the workflow by hand on
-`main` (*Actions → Release tooling → Run workflow*), which tags the version in
-`tooling/package.json`. The *Release tooling* workflow tests, publishes
-`proschi` to npm through Trusted Publishing (no token in the repository),
-attaches the `.vsix` to the GitHub release, creating the release if needed,
-and publishes the extension to the VS Code Marketplace and Open VSX. Those two
-need the repository secrets `VSCE_PAT` (an Azure DevOps token with the
-Marketplace *Manage* scope for the publisher `gvart`) and `OVSX_PAT` (an
-Open VSX access token, with the namespace `gvart` created once); while a
-secret is missing, its step is skipped with a notice. The tag also pins the
-[GitHub Action](docs/EDITORS.md#github-action).
-
-The JetBrains plugin is released on its own: bump `pluginVersion` in
-`tooling/jetbrains/gradle.properties`, merge, and push the tag
-`jetbrains-v<version>`. The *JetBrains plugin* workflow signs it and publishes
-it to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi)
-(see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
-
 ## Reporting issues and suggesting problems
 
 - **Bugs and other ideas:** [open an issue](https://github.com/gvart/proschi/issues/new)
@@ -423,8 +394,29 @@ it to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-pro
 
 ## Releasing
 
-Maintainers: bump the version in `tooling/package.json` and
-`tooling/vscode/package.json`, add a section to the changelog, and push a
-`tooling-v<version>` tag. The JetBrains plugin has its own
-`jetbrains-v<version>` tag. [Releasing](docs/EDITORS.md#releasing) has the
-details.
+For maintainers. Bump `version` in both `tooling/package.json` and
+`tooling/vscode/package.json`, add a section to the changelog, and merge. Then push the tag
+`tooling-v<version>`:
+
+```sh
+git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
+```
+
+On a phone, creating a GitHub release with that new tag (*Releases → Draft a
+new release*) does the same, and so does running the workflow by hand on
+`main` (*Actions → Release tooling → Run workflow*), which tags the version in
+`tooling/package.json`. The *Release tooling* workflow tests, publishes
+`proschi` to npm through Trusted Publishing (no token in the repository),
+attaches the `.vsix` to the GitHub release, creating the release if needed,
+and publishes the extension to the VS Code Marketplace and Open VSX. Those two
+need the repository secrets `VSCE_PAT` (an Azure DevOps token with the
+Marketplace *Manage* scope for the publisher `gvart`) and `OVSX_PAT` (an
+Open VSX access token, with the namespace `gvart` created once); while a
+secret is missing, its step is skipped with a notice. The tag also pins the
+[GitHub Action](docs/EDITORS.md#github-action).
+
+The JetBrains plugin is released on its own: bump `pluginVersion` in
+`tooling/jetbrains/gradle.properties`, merge, and push the tag
+`jetbrains-v<version>`. The *JetBrains plugin* workflow signs it and publishes
+it to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi)
+(see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
