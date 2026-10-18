@@ -6,7 +6,7 @@ import { initialState, readState } from '../playground/documents';
 import { TooLargeError, decompressBounded } from '../playground/lzBounded';
 import { fileMap } from '../playground/sanitize';
 import { LONG_LINK_CHARS, MAX_SHARE_CHARS, TOO_LARGE_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink } from '../playground/share';
-import { safeHref } from '../practice/markdown';
+import { safeHref } from '../practice/markdownReader';
 import { loadProgress, readProgress } from '../practice/progress';
 
 describe('bounded lz-string decompression', () => {

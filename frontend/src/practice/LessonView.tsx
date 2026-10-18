@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, type RefObject } from 'react';
 import { ArrowRight, BookOpen } from 'lucide-react';
 import Markdown from './Markdown';
-import { lessonToc, parseMarkdown, type Block } from './markdown';
+import { lessonToc, parseMarkdown, type Block } from './markdownReader';
 import { readingMinutes } from './lesson';
 import { eyebrow, primaryButton } from '../components/Playground/ui';
 

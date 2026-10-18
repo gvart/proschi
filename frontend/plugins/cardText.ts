@@ -1,5 +1,5 @@
 import { clozeWithAnswers, type Card, type ClozeCard } from '../src/learn/cards'
-import { inlineText, parseInline } from '../src/practice/markdown.ts'
+import { inlineText, parseInline } from '../src/practice/markdownReader.ts'
 
 /**
  * A review card's sides as plain text, for the static card pages' titles,

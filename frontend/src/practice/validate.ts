@@ -3,7 +3,7 @@ import { parse } from '../dsl/parser';
 import type { Diagnostic } from '../dsl/types';
 import { defaultEngine, type Engine } from '../hld/engine';
 import { lessonIssues } from './lesson';
-import { headingIds } from './markdown';
+import { headingIds } from './markdownReader';
 import { readMistake } from './mistakes';
 import { guidedIssues, parseGuided } from './modes/guidedFile';
 import { interviewIssues, parseInterview } from './modes/interviewFile';

@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { problems } from './catalog';
 import { GUIDES } from './guide/guides';
 import { LESSON_HEADINGS, blockIssues, h2Headings, lessonIssues, readingMinutes } from './lesson';
-import { lessonToc, parseMarkdown, quizIds, slugger, type Block } from './markdown';
+import { lessonToc, parseMarkdown, quizIds, slugger, type Block } from './markdownReader';
 import { LESSONS_KEY, lessonRead, lessonsRead, markLessonRead, markLessonsRead, onLessonsRead } from './progress';
 import { RESERVED_IDS } from './problemFiles';
 import { ROADMAP } from './roadmap';

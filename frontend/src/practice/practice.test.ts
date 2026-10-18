@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { parse } from '../dsl';
 import { defaultEngine, nullEngine, type Engine, type TestResult } from '../hld/engine';
-import { parseInline, parseMarkdown, safeHref } from './markdown';
+import { parseInline, parseMarkdown, safeHref } from './markdownReader';
 import { catalogErrors, findProblem, problems } from './catalog';
 import { loadProblem } from './loadProblem';
 import { PROGRESS_KEY, loadProgress, saveProgress, sourceOf, statusOf, withRun, withSource } from './progress';

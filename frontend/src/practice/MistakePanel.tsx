@@ -4,7 +4,7 @@ import type { Card, Topic } from '../learn/cards';
 import { promptOf } from '../learn/cards';
 import type { Engine, TestResult } from '../hld/engine';
 import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
-import { inlineText, parseMarkdown } from './markdown';
+import { inlineText, parseMarkdown } from './markdownReader';
 import { knownFailures, matchMistake } from './mistakes';
 import { addToFocus } from './review/focus';
 import type { Problem } from './types';

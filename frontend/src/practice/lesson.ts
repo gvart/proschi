@@ -45,7 +45,7 @@ interface ProseLine {
 }
 
 /**
- * Reads a text's lines as markdown.ts does: code fences close on as many
+ * Reads a text's lines as markdownReader.ts does: code fences close on as many
  * backticks as they opened with, a lesson block's body is prose (a quiz's
  * ids are not) and its fence lines are not. Lines are 1-based.
  */

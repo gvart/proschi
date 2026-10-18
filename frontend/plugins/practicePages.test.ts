@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { parseMarkdown } from '../src/practice/markdown.ts'
+import { parseMarkdown } from '../src/practice/markdownReader.ts'
 import { readCards } from './practiceCards'
 import { fillGuideTemplate, fillTemplate, guideHeadHtml, headHtml, pageDescription, pageHtml, problemOgCard, quizCards, readGuides, readProblems, statementHtml, withRelatedCards, type PageProblem } from './practicePages'
 
