@@ -77,7 +77,7 @@ export default function PracticeTour({ setPane, runs, runTests, onClose }: Pract
               everywhere blows the cost budget. Size each part for its load, then run again.
             </p>
             <p>
-              Stuck? Hints are under the problem.{' '}
+              Stuck? Hints are under the problem, and <strong>Lesson</strong> opens the lesson beside your work.{' '}
               <a href={MODEL_URL} className="text-pop-blue underline-offset-2 hover:underline">
                 How the simulation works
               </a>

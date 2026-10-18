@@ -3,7 +3,7 @@ import markdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/dsl/parser'
 import { runTests } from '../src/sim/tests'
-import { layoutHtml, pageHref, readSite, renderFromDisk, rewriteHref, slugger, stubInputs, type RenderedPage } from './docsSite'
+import { layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, rewriteHref, slugger, stubInputs, type RenderedPage } from './docsSite'
 
 /**
  * The docs section: every page in docs/site.json has a stub and renders,
@@ -47,6 +47,16 @@ describe('docs/site.json', () => {
   it('lists every page in the sidebar', () => {
     const inNav = new Set(site.nav.flatMap((g) => g.items.filter((i) => i.page !== undefined && !i.anchor).map((i) => i.page)))
     expect([...inNav].sort()).toEqual(site.pages.map((p) => p.slug).sort())
+  })
+
+  it('pages through the docs in the sidebar order, starting with Why Proschi', () => {
+    const sidebar = [...new Set(site.nav.flatMap((g) => g.items.flatMap((i) => (i.page !== undefined ? [i.page] : []))))]
+    expect(readingOrder(site).map((p) => p.slug)).toEqual(sidebar)
+    expect(sidebar.slice(0, 2)).toEqual(['', 'quickstart'])
+    const pager = (slug: string) => layoutHtml(site, rendered.get(slug)!).match(/<nav class="pager"[\s\S]*?<\/nav>/)![0]
+    expect(pager('')).toContain('rel="next"><span class="pager__dir">Next</span><span class="pager__title">Quickstart</span>')
+    expect(pager('quickstart')).toContain('<span class="pager__title">Why Proschi</span>')
+    expect(pager('quickstart')).toContain('<span class="pager__title">Language reference</span>')
   })
 
   it('points sidebar anchors at headings that exist', () => {

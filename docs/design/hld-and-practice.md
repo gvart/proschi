@@ -298,7 +298,7 @@ values):
 | database (NoSQL) | DynamoDB, Cassandra, ScyllaDB, MongoDB, CockroachDB, Spanner | 20k | 20k | 5 ms | 99.99% | 500 | 100 MB/s | $0.09/GB | yes |
 | search | Elasticsearch, OpenSearch, Solr | 3k | 3k | 15 ms | 99.9% | 400 | 100 MB/s | $0.09/GB | yes |
 | analytics | BigQuery, Snowflake, Redshift, ClickHouse | 200 | 200 | 500 ms | 99.9% | 300 | 100 MB/s | $0.09/GB | yes |
-| queue | Kafka, Kinesis, SQS, SNS, Pub/Sub, RabbitMQ | 50k | 50k | 5 ms | 99.99% | 200 | 100 MB/s | $0.09/GB | yes |
+| queue, broker | SQS; Kafka, Kinesis, SNS, Pub/Sub, RabbitMQ | 50k | 50k | 5 ms | 99.99% | 200 | 100 MB/s | $0.09/GB | yes |
 | storage | S3, GCS, Azure Blob, MinIO | 5k | 5k | 30 ms | 99.99% | 50 | 100 MB/s | $0.09/GB | yes |
 | external | Stripe, Twilio, SendGrid, third-party APIs | 1k | 1k | 200 ms | 99.9% | 0 | 100 MB/s | — | — |
 

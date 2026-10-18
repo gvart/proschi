@@ -114,7 +114,8 @@ describe('shell', () => {
   it('has the hooks enhance.ts and the view transitions need', () => {
     expect(header).toContain('class="ps-header"');
     expect(header.match(/data-theme-toggle=""/g)).toHaveLength(1);
-    expect(header).toContain('data-magnetic="true"');
+    // Not magnetic: pulled toward the pointer, it slid over the theme toggle beside it.
+    expect(header).not.toContain('data-magnetic');
     expect(header).toMatch(/<details class="ps-menu"><summary class="ps-iconbtn ps-menu__button" aria-label="Menu">/);
   });
 

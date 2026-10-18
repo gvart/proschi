@@ -306,7 +306,7 @@ describe('entity', () => {
 
   it('warns when the store is not a data store or does not exist', () => {
     expect(bodyProblems('entity A in api {\n}\nentity B in ghost {\n}\nentity C in cache {\n}')).toEqual([
-      ['warning', "'api' is not a data store (cache, database, search, analytics, queue, storage); entity 'A' is placed in a service"],
+      ['warning', "'api' is not a data store (cache, database, search, analytics, queue, broker, storage); entity 'A' is placed in a service"],
       ['warning', "Unknown node 'ghost'"],
     ]);
   });
@@ -530,7 +530,7 @@ describe('section blocks', () => {
     });
     expect(diagram).not.toHaveProperty('summary');
     expect(diagnostics).toEqual([
-      expect.objectContaining({ message: "'b' is not a data store (cache, database, search, analytics, queue, storage); entity 'E' is placed in a client", file: 'hld.proschi' }),
+      expect.objectContaining({ message: "'b' is not a data store (cache, database, search, analytics, queue, broker, storage); entity 'E' is placed in a client", file: 'hld.proschi' }),
       expect.objectContaining({ message: "Unknown node 'ghost'", file: 'hld.proschi', line: 17 }),
     ]);
   });

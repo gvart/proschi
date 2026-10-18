@@ -118,6 +118,37 @@ test.describe('practice', () => {
     await expect(tests.getByText(/^\d+ passing$/)).toBeVisible();
   });
 
+  test('the workspace: quiet before the first run, the tests unfold on a run, the panes resize', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.goto('practice/#/hello-proschi');
+    await waitForCanvas(page);
+    const tests = page.locator('[data-tour="tests"]');
+    // Folded to its bar, with no warnings about the starter before anything was run.
+    const toggle = page.getByRole('button', { name: 'Show the test results' });
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    await expect(tests.getByText(/Unknown use case/)).toHaveCount(0);
+    expect((await tests.boundingBox())!.height).toBeLessThan(60);
+
+    await page.getByRole('button', { name: 'Run tests' }).click();
+    await expect(passedCount(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Hide the test results' })).toHaveAttribute('aria-expanded', 'true');
+    expect((await tests.boundingBox())!.height).toBeGreaterThan(300);
+    await page.getByRole('button', { name: 'Hide the test results' }).click();
+    await expect(toggle).toBeVisible();
+
+    // Dragging the splitter between the problem and the editor widens the problem.
+    const statement = page.locator('[data-tour="statement"]');
+    const before = (await statement.boundingBox())!.width;
+    const splitter = page.getByRole('separator', { name: 'Resize the problem and the editor' });
+    const box = (await splitter.boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 200, box.y + box.height / 2, { steps: 8 });
+    await page.mouse.up();
+    await expect.poll(async () => (await statement.boundingBox())!.width).toBeGreaterThan(before + 150);
+    await waitForCanvas(page);
+  });
+
   test('the Twitter-based problem shows its company', async ({ page }) => {
     await page.goto('practice/#/snowflake-ids');
     await expect(page.getByRole('heading', { level: 1 })).toContainText('Snowflake IDs');
@@ -196,10 +227,12 @@ test.describe('practice', () => {
     await expect(mistake.getByRole('link', { name: /cache-aside pattern/ })).toHaveAttribute('href', 'cards/caching/cache-aside/');
     await expect(mistake.getByRole('link')).toHaveCount(3);
 
-    // The lesson opens at the section that teaches the fix.
+    // The lesson opens in its drawer, at the section that teaches the fix; Escape closes it.
     await mistake.getByRole('button', { name: 'Lesson: Cache-aside (lazy loading)' }).click();
-    const lesson = page.getByRole('article', { name: 'Lesson' });
-    await expect(lesson.getByRole('heading', { level: 3, name: 'Cache-aside (lazy loading)' })).toBeInViewport();
+    const drawer = page.getByRole('dialog', { name: 'Lesson' });
+    await expect(drawer.getByRole('heading', { level: 3, name: 'Cache-aside (lazy loading)' })).toBeInViewport();
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
 
     // Its cards go to the review, due now and first in the queue.
     await mistake.getByRole('button', { name: 'Add these cards to my review' }).click();
@@ -243,10 +276,10 @@ test.describe('practice', () => {
 test.describe('practice on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('shows the tabbed layout', async ({ page }) => {
+  test('shows the tabbed layout, with the lesson a button away', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
-    await expect(tabs.getByRole('tab')).toHaveText(['Lesson', 'Problem', 'Code', 'Diagram', 'Tests']);
+    await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
     await expect(tabs.getByRole('tab', { name: 'Problem' })).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByRole('button', { name: 'Show reference solution' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);
@@ -262,5 +295,14 @@ test.describe('practice on a phone', () => {
     await tabs.getByRole('tab', { name: 'Tests' }).click();
     await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
     await expect(canvasNodes(page)).toHaveCount(0);
+
+    // The lesson opens over the tabs, full width, and closes back to the same tab.
+    await page.getByRole('button', { name: 'Lesson', exact: true }).click();
+    const drawer = page.getByRole('dialog', { name: 'Lesson' });
+    await expect(drawer.getByRole('article', { name: 'Lesson' })).toBeVisible();
+    expect((await drawer.boundingBox())!.width).toBeGreaterThanOrEqual(389);
+    await drawer.getByRole('button', { name: 'Close the lesson' }).click();
+    await expect(drawer).toHaveCount(0);
+    await expect(tabs.getByRole('tab', { name: 'Tests' })).toHaveAttribute('aria-selected', 'true');
   });
 });

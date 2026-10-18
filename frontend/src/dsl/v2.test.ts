@@ -302,7 +302,7 @@ describe('§7.2–§7.4 capacity keys', () => {
 
   it('warns about shards or consistency on a node that holds no data', () => {
     expect(problems('capacity {\n  api shards 2 consistency strong\n  db shards 2\n}')).toEqual([
-      ['warning', "'api' is not a data store (cache, database, search, analytics, queue, storage); shards and consistency only apply to data stores"],
+      ['warning', "'api' is not a data store (cache, database, search, analytics, queue, broker, storage); shards and consistency only apply to data stores"],
     ]);
   });
 

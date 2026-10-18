@@ -26,3 +26,24 @@ describe('TestPanel', () => {
     expect(html).toMatch(/<details[^>]*open[^>]*><summary[^>]*>How others did/);
   });
 });
+
+describe('TestPanel before the first run', () => {
+  const warning = { severity: 'warning' as const, message: "Unknown use case 'Say hello'", line: 3, col: 1, length: 9 };
+
+  it('stays quiet: no diagnostics until the tests have run', () => {
+    const html = renderToStaticMarkup(<TestPanel stale={false} diagnostics={[warning]} onRun={() => {}} onSelect={() => {}} />);
+    expect(html).toContain('Run tests');
+    expect(html).not.toContain('Unknown use case');
+  });
+
+  it('lists the diagnostics after a run', () => {
+    const html = renderToStaticMarkup(<TestPanel run={{ results: [], passed: 0, solved: false }} stale={false} diagnostics={[warning]} onRun={() => {}} onSelect={() => {}} />);
+    expect(html).toContain('Unknown use case');
+  });
+
+  it('folded, shows its bar with a toggle and hides the results', () => {
+    const html = renderToStaticMarkup(<TestPanel stale={false} diagnostics={[]} onRun={() => {}} onSelect={() => {}} collapsed onToggle={() => {}} />);
+    expect(html).toMatch(/aria-expanded="false" aria-label="Show the test results"/);
+    expect(html).toMatch(/<div class="[^"]*\bhidden\b[^"]*"><p[^>]*>Run the tests/);
+  });
+});

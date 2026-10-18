@@ -10,6 +10,17 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
+  Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
+  Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with
+  their own icon and colour and a generic `[Message Broker]`. SQS and other
+  plain queues stay `queue`. A broker is simulated exactly like a queue,
+  and `any queue` still selects brokers, so existing tests keep passing;
+  `any broker` selects brokers only.
+- **Resize the editor's panes.** Drag the splitter between the code and
+  the diagram (or focus it and use the arrow keys); the diagram re-fits
+  and the size is remembered in this browser. Phones keep one pane at a
+  time.
 - **One account control on every page.** The header shows a Sign in
   button when signed out and your name with a menu when signed in, now
   also in the editor, the docs, problem and card pages and the 404 page.
@@ -25,8 +36,8 @@ deployed from `main` and ships with the same changes.
   Reformat Code), *Check File*, *Run Tests*, a diagram preview tool window
   that fits the diagrams to its width and follows the IDE theme, and *Open
   in Proschi*, with a settings page for the server, CLI and Node.js paths.
-  Not on the JetBrains Marketplace yet; build it with `./gradlew buildPlugin`
-  (see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
+  Install it from the
+  [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi).
 - **The language server sends semantic tokens** for node ids, tech stacks
   and teams, so editors can color them apart from other names.
 - **`proschi render`, the VS Code preview and HLD exports draw in the
@@ -52,10 +63,27 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Docs that are easier to follow.** The previous / next links follow the
+  sidebar, starting with *Why Proschi*. The language reference explains
+  parallel steps, starts each high-level design block with what it is for,
+  uses plain words instead of strings of code, and its scenario and design
+  examples are complete diagrams. Wide tables and the model page's formulas
+  and default profiles fit the column without scrolling sideways. *Editor
+  support* links the plugins on the JetBrains Marketplace and Open VSX, and
+  the contributor guides have their own *Contribute* group.
 - The server keeps each account's last active day (a date, at most one
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").
 ### Changed
+- **Practice problems open on their lesson, then a calmer workspace.** An
+  unread lesson comes first, as a page of its own with "Start the
+  challenge" at the top and the bottom. The workspace then shows the
+  problem, the editor and the diagram side by side in panes you can resize
+  by dragging. The tests stay folded under them until the first run. The
+  tests panel shows no warnings before you run. The **Lesson** button opens
+  the lesson in a drawer beside your work, and anything you revealed or
+  answered in it stays open. Phones follow the same steps, with Problem,
+  Code, Diagram and Tests tabs. The roadmap banner is a single slim line.
 - **Landing page SEO.** A shorter title and meta description that fit in
   search results, the main keywords in the hero heading (read by search
   engines and screen readers, not shown), and Twitter title and
@@ -90,6 +118,12 @@ deployed from `main` and ships with the same changes.
 - The design review no longer announces an AI reviewer.
 
 ### Fixed
+- **Playing a use case no longer flickers.** In the editor, the docs'
+  live examples and the landing page demo, Play, Replay and leaving
+  playback restyle the diagram already on screen instead of swapping in a
+  new canvas: no flash, no jump, and the packet moves smoothly without
+  redrawing the whole diagram on every frame. In the editor the diagram
+  glides to fit the room left by the step panel.
 - A test that names a missing use case suggests adding it
   (`Add usecase "Redirect" { … }`); an existing name is suggested only
   for a likely typo.
@@ -107,6 +141,12 @@ deployed from `main` and ships with the same changes.
 - Edge labels no longer hide behind a node beside a long edge.
 - The arcade wave summary says "Trust is full (100)" instead of
   "Trust +0 (+5 clean)".
+- Selected text in the editor is clearly visible in both themes, also on
+  the cursor's line.
+- Tab in the editor accepts the open completion; otherwise it indents at
+  the cursor (or indents the selected lines), and Shift-Tab outdents.
+- The header's "Open the editor" button no longer drifts toward the
+  pointer and over the theme toggle.
 
 ## [0.10.0] - 2026-10-08
 

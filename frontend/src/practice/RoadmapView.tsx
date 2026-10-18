@@ -324,22 +324,23 @@ export function RoadmapBanner({ id, stages, problems, progress }: { id: string; 
   if (!step) return null;
   const stage = stages[step.stage];
   return (
-    <div role="region" aria-label="Roadmap" className="flex flex-wrap items-center gap-x-3 gap-y-1 border-b-bw-1 border-ink bg-pop-lilac/25 px-3 py-1.5 text-sm text-ink">
-      <a href="#/roadmap" className="inline-flex items-center gap-1.5 font-semibold underline-offset-2 hover:underline">
+    // One slim line over the workspace: the step's place on the roadmap, and the next step once solved.
+    <div role="region" aria-label="Roadmap" className="flex min-h-8 items-center gap-x-3 border-b-bw-1 border-ink bg-pop-lilac/25 px-3 py-1 text-[13px] text-ink">
+      <a href="#/roadmap" className="inline-flex flex-none items-center gap-1.5 font-semibold underline-offset-2 hover:underline">
         <MapIcon size={14} />
         Roadmap
       </a>
-      <span className="text-ink/80">
+      <span className="min-w-0 truncate text-ink/80">
         Stage {step.stage + 1} of {stages.length}: {stage.title} · {state.steps.indexOf(step) + 1} of {state.steps.length}
       </span>
       {step.status === 'solved' &&
         (state.next ? (
-          <a href={roadmapHref(state.next.id)} className={`sm:ml-auto ${primaryButton} !py-1`}>
-            Next in roadmap: {titleOf(problems, state.next.id)}
-            <ArrowRight size={14} />
+          <a href={roadmapHref(state.next.id)} className={`ml-auto min-w-0 max-w-[65%] whitespace-nowrap ${primaryButton} !py-0.5`}>
+            <span className="truncate">Next in roadmap: {titleOf(problems, state.next.id)}</span>
+            <ArrowRight size={14} className="flex-none" />
           </a>
         ) : (
-          <span className="sm:ml-auto inline-flex items-center gap-1.5 font-semibold">
+          <span className="ml-auto inline-flex flex-none items-center gap-1.5 font-semibold">
             <PartyPopper size={14} /> Roadmap complete
           </span>
         ))}

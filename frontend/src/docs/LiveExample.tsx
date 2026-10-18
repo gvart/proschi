@@ -4,7 +4,8 @@ import { filesResolver } from '../playground/imports';
 import { encodeShareHash, type PlaybackTarget } from '../playground/share';
 import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
-import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
+import { UseCasePlayback } from '../components/UseCases/UseCasePlayback';
+import { PLAYBACK_EDGE_TYPES } from '../components/UseCases/playbackView';
 import './live.css';
 
 interface LiveExampleProps {
@@ -57,6 +58,7 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
   const current = scenarios[Math.min(selected, scenarios.length - 1)];
   const playing = run > 0 && current;
   const editor = editorHref ?? `${siteRoot}app/${encodeShareHash(source, playing ? current.target : undefined, imports)}`;
+  const played = useMemo(() => (playing ? { ...playing.played, id: `${playing.key}#${run}` } : undefined), [playing, run]);
   const label = `Diagram of the example${playing ? `, playing ${current.label}` : ''}`;
 
   return (
@@ -99,19 +101,18 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
         </a>
       </div>
       <div className={`live__stage ${playing ? 'live__stage--playing' : ''}`} role="region" aria-label={label}>
-        {playing ? (
-          <UseCasePlayer
-            key={`${current.key}#${run}`}
-            useCase={current.played}
-            nodes={nodes}
-            edges={edges}
-            onBack={() => setRun(0)}
-            showHeader={false}
-            autoPlay
-          />
-        ) : (
-          <DiagramCanvas nodes={nodes} edges={edges} fitKey={String(settled)} compact />
-        )}
+        {/* One canvas throughout: Play and Replay restyle it rather than swapping it for another. */}
+        <UseCasePlayback
+          // A new run gets a new id, so Replay starts over without remounting the canvas.
+          useCase={played}
+          nodes={nodes}
+          edges={edges}
+          onBack={() => setRun(0)}
+          showHeader={false}
+          autoPlay
+        >
+          {(view) => <DiagramCanvas nodes={view.nodes} edges={view.edges} edgeTypes={PLAYBACK_EDGE_TYPES} fitKey={String(settled)} compact />}
+        </UseCasePlayback>
       </div>
     </div>
   );

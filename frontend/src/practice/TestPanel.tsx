@@ -1,4 +1,4 @@
-import { AlertCircle, AlertTriangle, CheckCircle2, ClipboardCheck, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
+import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, FlaskConical, PartyPopper, Play, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { celebrate } from '../design/celebrate';
 import { primaryButton, subBar } from '../components/Playground/ui';
@@ -22,13 +22,17 @@ interface TestPanelProps {
   celebration?: ReactNode;
   /** After a failed run, the known mistake it matches (MistakePanel), under the results. */
   mistake?: ReactNode;
+  /** Folded down to its bar (the problem page's tests before the first run): only the bar shows. */
+  collapsed?: boolean;
+  /** Folds or unfolds the panel; shows a toggle in the bar when given. */
+  onToggle?: () => void;
 }
 
 const viewButton = (on: boolean) =>
-  `inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
+  `flex-none inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
-export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review, celebration, mistake }: TestPanelProps) {
+export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, community, review, celebration, mistake, collapsed = false, onToggle }: TestPanelProps) {
   const [view, setView] = useState<'tests' | 'review'>('tests');
   // A new run brings the tests back into view.
   const [shownRun, setShownRun] = useState(run);
@@ -36,6 +40,11 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
     setShownRun(run);
     setView('tests');
   }
+  // Picking a view unfolds a folded panel.
+  const show = (v: 'tests' | 'review') => {
+    setView(v);
+    if (collapsed) onToggle?.();
+  };
   const errors = diagnostics.filter((d) => d.severity === 'error').length;
   const failed = run?.results.filter((r) => !r.passed) ?? [];
   const passed = run?.results.filter((r) => r.passed) ?? [];
@@ -51,14 +60,14 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
   }, [solved, hasCelebration]);
   return (
     <div className="h-full flex flex-col bg-surface">
-      <div className={`flex items-center gap-2 px-3 py-2 ${subBar}`}>
+      <div className={`flex-none flex items-center gap-2 h-11 px-3 ${subBar}`}>
         {review ? (
           <>
-            <button onClick={() => setView('tests')} aria-pressed={view === 'tests'} className={viewButton(view === 'tests')}>
+            <button onClick={() => show('tests')} aria-pressed={view === 'tests'} className={viewButton(view === 'tests')}>
               <FlaskConical size={14} />
               Tests
             </button>
-            <button onClick={() => setView('review')} aria-pressed={view === 'review'} className={viewButton(view === 'review')}>
+            <button onClick={() => show('review')} aria-pressed={view === 'review'} className={viewButton(view === 'review')}>
               <ClipboardCheck size={14} />
               Review
             </button>
@@ -70,23 +79,38 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
           </>
         )}
         {run && !run.blocked && (
-          <span className={`text-sm tabular-nums ${run.solved ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'text-ink/75'}`}>
-            {run.passed} / {run.results.length} passed{stale ? ' · edited since' : ''}
+          <span className={`min-w-0 truncate text-sm tabular-nums ${run.solved ? 'font-semibold text-emerald-700 dark:text-emerald-300' : 'text-ink/75'}`}>
+            {/* On phones the bar is tight: "passed" is for screen readers only there. */}
+            {run.passed} / {run.results.length}
+            <span className="max-sm:sr-only"> passed</span>
+            {stale ? ' · edited since' : ''}
           </span>
         )}
         <button
           onClick={onRun}
           data-tour="run"
-          className={`ml-auto ${primaryButton}`}
+          className={`ml-auto flex-none whitespace-nowrap ${primaryButton}`}
         >
           <Play size={14} />
           Run tests
         </button>
+        {onToggle && (
+          <button
+            type="button"
+            onClick={onToggle}
+            aria-expanded={!collapsed}
+            aria-label={collapsed ? 'Show the test results' : 'Hide the test results'}
+            title={collapsed ? 'Show the test results' : 'Hide the test results'}
+            className="inline-flex items-center justify-center w-8 h-8 rounded border-bw-1 border-transparent text-ink/75 hover:border-ink hover:text-ink"
+          >
+            {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
+          </button>
+        )}
       </div>
 
       {/* Kept mounted, so switching views keeps the review. */}
-      {review && <div className={`flex-1 min-h-0 overflow-y-auto ${view === 'review' ? '' : 'hidden'}`}>{review}</div>}
-      <div className={`flex-1 min-h-0 overflow-y-auto text-sm ${review && view === 'review' ? 'hidden' : ''}`}>
+      {review && <div className={`flex-1 min-h-0 overflow-y-auto ${view === 'review' && !collapsed ? '' : 'hidden'}`}>{review}</div>}
+      <div className={`flex-1 min-h-0 overflow-y-auto text-sm ${collapsed || (review && view === 'review') ? 'hidden' : ''}`}>
         {!run && <p className="px-3 py-4 text-muted">Run the tests to check your design against the problem’s requirements.</p>}
 
         {run?.blocked === 'no-engine' && (
@@ -113,7 +137,8 @@ export default function TestPanel({ run, stale, diagnostics, onRun, onSelect, co
         {/* Failures first, with their fixes; what passes folds away below them. */}
         {failed.length > 0 && <ResultList results={failed} />}
         {mistake}
-        {diagnostics.length > 0 && (
+        {/* Not before the first run: the editor marks them as you type, and a fresh page should be quiet. */}
+        {run && diagnostics.length > 0 && (
           <ul className="border-t border-ink/10 bg-paper text-xs">
             {diagnostics.map((d, i) => (
               <li key={i}>
