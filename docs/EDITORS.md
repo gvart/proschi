@@ -460,7 +460,7 @@ A document with `traffic { … }` gets a capacity model, and its
 everywhere: in the web editor, on the command line and in the language
 server. The model is deterministic and analytical, so it runs in milliseconds
 on every change. The syntax is in the [language reference](LANGUAGE.md); the
-formulas are in the [design](design/hld-and-practice.md#2-simulation).
+formulas are in [How the simulation works](https://proschi.app/docs/model/).
 
 ### The model
 
@@ -687,9 +687,9 @@ and flow test, with what was measured and how to fix what fails.
   your file is an error (*capacity is set by the problem; change the design
   (replicas, shards, caching) instead*) and is ignored, except `shards <n>`.
 
-Each problem is a folder of plain files (`problem.md`, `given.proschi`,
-`starter.proschi`, `solution.proschi`, `wrong/*.proschi`) in
-`frontend/src/practice/problems/`. Two commands help write them:
+For contributors writing practice problems: each problem is a folder of
+plain files (the statement, the given design, the reference solution and the
+wrong designs) in the Proschi repository. Two commands help write them:
 
 ```sh
 proschi problem new seat-map                  # scaffold a folder that already passes the check
