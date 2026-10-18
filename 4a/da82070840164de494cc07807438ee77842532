@@ -1,0 +1,49 @@
+frontend/package.json
+  s_db735640dfb4b4::t_f542c2c6ab0065 37
+frontend/e2e/playback.e2e.ts
+  s_db735640dfb4b4::t_f542c2c6ab0065 1-135
+frontend/src/components/Diagram/useFitOnChange.ts
+  s_db735640dfb4b4::t_f542c2c6ab0065 21-25,28-29,41,50-51,53-54,65-66,68-69,75,77,81
+frontend/src/docs/live.css
+  s_db735640dfb4b4::t_f542c2c6ab0065 90-91,93-102,113-119
+frontend/src/components/UseCases/playbackClock.ts
+  s_db735640dfb4b4::t_f542c2c6ab0065 1-69
+frontend/src/components/UseCases/playbackView.test.ts
+  s_db735640dfb4b4::t_f542c2c6ab0065 1-49
+CHANGELOG.md
+  s_db735640dfb4b4::t_f542c2c6ab0065 20-23,104-109
+frontend/src/components/Diagram/DiagramCanvas.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 2,27-28,31,39
+frontend/src/components/Demo/LiveDemo.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 6-7,207-230
+frontend/src/components/Playground/Playground.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 14,109-110,126-127,218-221,955-993,995-998,1000-1072,1236-1237,1248-1249,1272,1279,1281,1290,1292,1315,1372-1373,1396,1413-1417,1442,1453,1455-1456,1483,1519,1524
+frontend/src/components/UseCases/playbackView.ts
+  s_db735640dfb4b4::t_f542c2c6ab0065 1-133
+frontend/src/docs/LiveExample.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 7-8,61,104-115
+frontend/src/components/UseCases/UseCasePlayback.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 1,21-22,28-29,40,50-52,60-61,66-72,76-83,86,95-96,99-100,104,108,112,114,123,127-128,130-133,135-136,143-144,150,156,158,161,168,172,175,177-178,185,189,199-200,206,212,215-217,220,222,241-242,245-258,260,282,360,398,405,416,418-420,441-456,460,464-504
+frontend/src/embed/embed.css
+  s_db735640dfb4b4::t_f542c2c6ab0065 37-45
+frontend/src/components/UseCases/AnimatedPlaybackEdge.tsx
+  s_db735640dfb4b4::t_f542c2c6ab0065 1,4,14-15,17-21,31,33-39,42-46,48-80,82-85,87-90,92-109,111-122,125,129-132
+frontend/package-lock.json
+  s_db735640dfb4b4::t_330e10f0d913e6 31,5866-5875
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4ada82070840164de494cc07807438ee77842532",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
