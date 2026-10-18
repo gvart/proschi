@@ -1,0 +1,51 @@
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+docs/QUICKSTART.md
+  s_db735640dfb4b4::t_45c331c7283f63 22
+docs/EDITORS.md
+  s_db735640dfb4b4::t_45c331c7283f63 511
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+docs/design/hld-and-practice.md
+  s_db735640dfb4b4::t_45c331c7283f63 301
+docs/LANGUAGE.md
+  s_db735640dfb4b4::t_45c331c7283f63 96,495,588-589
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+frontend/src/practice/problems/job-queue/lesson.md
+  s_db735640dfb4b4::t_293c692fa48616 37,77
+frontend/src/practice/problems/push-gateway/problem.md
+  s_db735640dfb4b4::t_293c692fa48616 87
+frontend/src/practice/problems/push-gateway/wrong/registry-in-postgres.proschi
+  s_db735640dfb4b4::t_293c692fa48616 13
+frontend/src/practice/problems/push-gateway/solution.proschi
+  s_db735640dfb4b4::t_293c692fa48616 6
+CHANGELOG.md
+  s_db735640dfb4b4::t_306d9127ef08a9 13-19
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_db735640dfb4b4::t_45c331c7283f63 53-54,181
+frontend/src/practice/problems/push-gateway/lesson.md
+  s_db735640dfb4b4::t_293c692fa48616 160,169,172-173,176-177,181-182
+frontend/src/practice/problems/push-gateway/wrong/broadcast-to-every-server.proschi
+  s_db735640dfb4b4::t_293c692fa48616 13
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c7e0e196f6293d1c45b77da1e2c3d72798eb3291",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
