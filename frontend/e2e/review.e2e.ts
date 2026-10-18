@@ -156,6 +156,19 @@ test.describe('daily review', () => {
         return { focused: h.contains(document.activeElement), top: r.top >= header.bottom - 1, bottom: r.bottom <= window.innerHeight };
       });
 
+    /**
+     * Waits for the smooth scroll that brings a revealed answer into view to end. Next is sticky, so
+     * it passes Playwright's stability check while the page scrolls, then moves once it unsticks: a
+     * click in that window can press on Next and release beside it.
+     */
+    const scrollSettled = (page: Page) =>
+      expect
+        .poll(() => page.evaluate(() => new Promise<boolean>((done) => {
+          const y = window.scrollY;
+          requestAnimationFrame(() => requestAnimationFrame(() => requestAnimationFrame(() => done(window.scrollY === y))));
+        })))
+        .toBe(true);
+
     test('the next card takes focus and shows its top below the header', async ({ page }) => {
       await page.goto('practice/#/review');
       await today(page).getByRole('button', { name: 'Start review · 10 cards' }).click();
@@ -164,6 +177,7 @@ test.describe('daily review', () => {
       let c = card(page, 1);
       await c.getByLabel('Your estimate').fill('2.3k');
       await c.getByRole('button', { name: 'Check' }).click();
+      await scrollSettled(page);
       await c.getByRole('button', { name: 'Too easy' }).click();
       expect(await page.evaluate(() => window.scrollY)).toBeGreaterThan(0);
 
@@ -194,6 +208,7 @@ test.describe('daily review', () => {
         } else {
           await c.getByRole('listitem').first().getByRole('button').click();
         }
+        await scrollSettled(page);
         await c.getByRole('button', { name: 'Next' }).click();
       }
       const c = card(page, 4);
