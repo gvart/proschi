@@ -1,5 +1,5 @@
 import ReactFlow, { Background, BackgroundVariant, Controls, ReactFlowProvider } from 'reactflow';
-import type { Edge, Node } from 'reactflow';
+import type { Edge, EdgeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
@@ -24,9 +24,11 @@ interface DiagramCanvasProps {
   still?: boolean;
   /** Glide to each new fit over this many ms instead of jumping. */
   fitDuration?: number;
+  /** Custom edge types (a stable object), e.g. the playback edge of a canvas that plays use cases. */
+  edgeTypes?: EdgeTypes;
 }
 
-function Canvas({ nodes, edges, compact, fitKey, still, fitDuration }: DiagramCanvasProps) {
+function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes }: DiagramCanvasProps) {
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey ?? ''}`, { duration: fitDuration });
 
   return (
@@ -34,6 +36,7 @@ function Canvas({ nodes, edges, compact, fitKey, still, fitDuration }: DiagramCa
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
+      edgeTypes={edgeTypes}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}

@@ -3,7 +3,8 @@ import { parse } from '../../dsl';
 import CodeEditor from '../Playground/CodeEditor';
 import DiagramCanvas from '../Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../Diagram/useDiagramLayout';
-import { UseCasePlayer } from '../UseCases/UseCasePlayback';
+import { UseCasePlayback } from '../UseCases/UseCasePlayback';
+import { PLAYBACK_EDGE_TYPES } from '../UseCases/playbackView';
 import { DEMO_FILE, DEMO_SCRIPT, DEMO_SOURCE, TOUR_END, Tour, captionAt, chapterAt, sourceAt, type TourFrame } from './demoScript';
 import { demoEditorTheme, editorLabel, typingCaret } from './demoTheme';
 import './demo.css';
@@ -203,21 +204,30 @@ export default function LiveDemo({ editorHref, still = false }: LiveDemoProps) {
 
         <div className="demo__canvas">
           <div className="demo__flow">
-            {played ? (
-              <UseCasePlayer
-                useCase={played}
-                nodes={nodes}
-                edges={edges}
-                onBack={NO_OP}
-                showHeader={false}
-                bare
-                autoPlay={touring ? running && step?.kind === 'play' : true}
-                onFinished={touring ? () => tour.played() : () => setFreePlay(undefined)}
-                onStepChange={setPlayStep}
-              />
-            ) : (
-              <DiagramCanvas nodes={nodes} edges={edges} fitKey={String(settled)} still compact fitDuration={still ? 0 : 400} />
-            )}
+            {/* One canvas throughout: playing a scenario restyles it rather than swapping it for another. */}
+            <UseCasePlayback
+              useCase={played}
+              nodes={nodes}
+              edges={edges}
+              onBack={NO_OP}
+              showHeader={false}
+              bare
+              autoPlay={touring ? running && step?.kind === 'play' : true}
+              onFinished={touring ? () => tour.played() : () => setFreePlay(undefined)}
+              onStepChange={setPlayStep}
+            >
+              {(view) => (
+                <DiagramCanvas
+                  nodes={view.nodes}
+                  edges={view.edges}
+                  edgeTypes={PLAYBACK_EDGE_TYPES}
+                  fitKey={String(settled)}
+                  still
+                  compact
+                  fitDuration={still ? 0 : 400}
+                />
+              )}
+            </UseCasePlayback>
             {nodes.length === 0 && <p className="demo__empty">The diagram appears here as you type.</p>}
           </div>
           <div className="demo__caption" aria-hidden="true">
