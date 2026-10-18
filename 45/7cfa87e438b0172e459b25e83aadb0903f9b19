@@ -1,0 +1,42 @@
+frontend/src/practice/ProblemPage.tsx
+  s_db735640dfb4b4::t_4510533d9eb674 543
+  s_db735640dfb4b4::t_3ed70529d38e50 3,13,26,47,60-64,73-75,88,93-96,99-104,110-137,140-141,152,155-156,158-162,271-273,291-432,440,458,463-478,484-493,495-498,500-505,507,509-542,544-546,549
+frontend/src/practice/LessonHost.tsx
+  s_db735640dfb4b4::t_4510533d9eb674 15-16,28,81-83
+  s_db735640dfb4b4::t_7e967cd2a1c8e5 32-33
+  s_db735640dfb4b4::t_e9a0e7e777c18a 4
+  s_db735640dfb4b4::t_1e23a4e3058541 1-3,5-14,17-27,29-31,34-80,84-93
+frontend/src/practice/progress.ts
+  s_db735640dfb4b4::t_24b22be3f5e71f 87
+frontend/src/practice/RoadmapView.tsx
+  s_db735640dfb4b4::t_d6c4f06c954ee4 338-340
+  s_db735640dfb4b4::t_4256dbb63213a4 327-329,333,343
+frontend/src/onboarding/PracticeTour.tsx
+  s_db735640dfb4b4::t_5d5d22eb5e3e49 80
+frontend/src/practice/PracticeApp.tsx
+  s_db735640dfb4b4::t_34a4bf432960ef 210
+  s_db735640dfb4b4::t_24b22be3f5e71f 58
+frontend/src/practice/practiceLayout.css
+  s_db735640dfb4b4::t_22a0258745835b 7,13-28
+  s_db735640dfb4b4::t_39ff4923016975 1-6,8-12
+frontend/package.json
+  s_db735640dfb4b4::t_0621a36a2ed9c7 37
+frontend/package-lock.json
+  s_db735640dfb4b4::t_0e050d48ed08fa 31,5866-5875
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "457cfa87e438b0172e459b25e83aadb0903f9b19",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
