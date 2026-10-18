@@ -1,0 +1,25 @@
+frontend/src/components/Playground/CodeEditor.tsx
+  s_db735640dfb4b4::t_7eaa1e5bb06660 12
+  s_db735640dfb4b4::t_8d7b22ae3f42f5 80-81
+frontend/src/components/Playground/tabKeymap.test.ts
+  s_db735640dfb4b4::t_979cef7460df21 9-12
+  s_db735640dfb4b4::t_824ad6775096da 1-8,13-70
+frontend/src/components/Playground/tabKeymap.ts
+  s_db735640dfb4b4::t_056a994dd3d291 1-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "dcfae231a7ddc08349e3a95a320ec966ab038041",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
