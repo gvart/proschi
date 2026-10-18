@@ -78,10 +78,14 @@ test.describe('practice hub', () => {
       ['Roadmap', /#\/roadmap$/, 'Interview prep roadmap'],
       ['Problems', /#\/$/, 'System design practice'],
     ];
+    // The bar of sections stays in the same place on every section, the home (with its Today panel) too.
+    const barTop = async () => (await hubNav(page).boundingBox())?.y;
+    const top = await barTop();
     for (const [tab, url, heading] of tabs) {
       await hubNav(page).getByRole('link', { name: tab, exact: true }).click();
       await expect(page).toHaveURL(url);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
+      expect(await barTop()).toBe(top);
       await expect(hubNav(page).getByRole('link', { name: tab, exact: true })).toHaveAttribute('aria-current', 'page');
       await expect(hubNav(page).locator('[aria-current="page"]')).toHaveCount(1);
       await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(1);

@@ -27,7 +27,7 @@ import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import TodayPanel from './hub/TodayPanel';
-import { hubTabOf } from './hub/tabs';
+import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
 import { track } from '../services/metrics';
@@ -37,16 +37,33 @@ const ProblemRoute = lazy(() => import('./ProblemRoute'));
 // A roadmap article, e.g. "How to approach a system design interview".
 const GuideRoute = lazy(() => import('./GuideRoute'));
 // Daily review, with every card (virtual:practice-cards).
-const ReviewRoute = lazy(() => import('./review/ReviewRoute'));
+const loadReviewCode = () => import('./review/ReviewRoute');
+const ReviewRoute = lazy(loadReviewCode);
 // The daily challenge, with every card too.
-const ChallengeRoute = lazy(() => import('./challenge/ChallengeRoute'));
+const loadChallengeCode = () => import('./challenge/ChallengeRoute');
+const ChallengeRoute = lazy(loadChallengeCode);
 // Scale or Fail, the system design game: the engine, the simulation and the content.
-const ArcadeRoute = lazy(() => import('../game/ui/ArcadeRoute'));
+const loadArcadeCode = () => import('../game/ui/ArcadeRoute');
+const ArcadeRoute = lazy(loadArcadeCode);
 // Progress: the level, streak, skill map, roadmap, badges and problems solved, with the cards' topics.
-const ProgressRoute = lazy(() => import('./skills/ProgressRoute'));
+const loadProgressCode = () => import('./skills/ProgressRoute');
+const ProgressRoute = lazy(loadProgressCode);
 // The account and settings page; public profiles, with the cards' topics.
 const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
+
+/** The hub's sections whose code loads on first use: pointing at one's link starts loading it, so the click rarely waits. */
+const SECTION_CODE: Partial<Record<HubTab, () => Promise<unknown>>> = { review: loadReviewCode, challenge: loadChallengeCode, arcade: loadArcadeCode, progress: loadProgressCode };
+const preloadSection = (tab: HubTab) => void SECTION_CODE[tab]?.().catch(() => undefined);
+
+/** A page whose code is still loading: holds a screen's height, so the footer does not jump up and back down when it arrives. */
+function PageLoading({ label }: { label: string }) {
+  return (
+    <div className="min-h-[100dvh] pt-10">
+      <PaneLoading label={label} />
+    </div>
+  );
+}
 
 /** The roadmap's stages with the problems this build has. */
 const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
@@ -239,6 +256,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         {hubTab ? (
           <PracticeHub
             tab={hubTab}
+            onIntent={preloadSection}
             streak={streak}
             today={
               hubTab === 'problems' ? (
@@ -251,23 +269,23 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>
             ) : onProgress ? (
-              <Suspense fallback={<PaneLoading label="Loading your progress…" />}>
+              <Suspense fallback={<PageLoading label="Loading your progress…" />}>
                 <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} />
               </Suspense>
             ) : onArcade ? (
-              <Suspense fallback={<PaneLoading label="Loading Scale or Fail…" />}>
+              <Suspense fallback={<PageLoading label="Loading Scale or Fail…" />}>
                 <ArcadeRoute account={account} activity={activity} focusDaily={route === 'arcade/daily'} />
               </Suspense>
             ) : onChallenge ? (
-              <Suspense fallback={<PaneLoading label="Loading today’s challenge…" />}>
+              <Suspense fallback={<PageLoading label="Loading today’s challenge…" />}>
                 <ChallengeRoute account={account} activity={activity} />
               </Suspense>
             ) : onReview ? (
-              <Suspense fallback={<PaneLoading label="Loading your cards…" />}>
+              <Suspense fallback={<PageLoading label="Loading your cards…" />}>
                 <ReviewRoute account={account} activity={activity} topic={route.slice('review/'.length) || undefined} />
               </Suspense>
             ) : guide ? (
-              <Suspense fallback={<PaneLoading label={`Loading ${guide.title}…`} />}>
+              <Suspense fallback={<PageLoading label={`Loading ${guide.title}…`} />}>
                 <GuideRoute guide={guide} startHref="#/roadmap" startLabel="Go to the roadmap" />
               </Suspense>
             ) : (
@@ -286,12 +304,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             )}
           </PracticeHub>
         ) : onMe ? (
-          <Suspense fallback={<PaneLoading label="Loading your settings…" />}>
+          <Suspense fallback={<PageLoading label="Loading your settings…" />}>
             <AccountRoute account={account} />
           </Suspense>
         ) : (
           profileId !== undefined && (
-            <Suspense fallback={<PaneLoading label="Loading the profile…" />}>
+            <Suspense fallback={<PageLoading label="Loading the profile…" />}>
               <PublicProfileRoute id={profileId} />
             </Suspense>
           )

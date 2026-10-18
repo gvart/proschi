@@ -194,16 +194,16 @@ test.describe('no sideways scrolling on a phone', () => {
     }
   });
 
-  test('practice hub on the narrowest phone: the bar scrolls, the page does not', async ({ page }) => {
+  test('practice hub on the narrowest phone: every section shows at once, the page does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     for (const path of ['practice/', 'practice/#/progress']) {
       await visit(page, path);
       const bar = page.getByRole('navigation', { name: 'Practice sections' });
       await expect(bar).toBeVisible();
-      // The tabs scroll sideways inside the bar: the last one is reachable.
-      const last = bar.getByRole('link', { name: 'Progress' });
-      await last.scrollIntoViewIfNeeded();
-      await expect(last).toBeInViewport();
+      // A grid of three by two, all in view without scrolling.
+      for (const name of ['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']) {
+        await expect(bar.getByRole('link', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      }
       await expectNoHorizontalOverflow(page, `${path} at 320px`);
     }
   });

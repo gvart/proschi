@@ -63,6 +63,13 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Clearer practice navigation.** Problems, Roadmap, Review, Challenge,
+  Arcade and Progress are now one row of buttons at the top of every
+  practice page, the current one in yellow, and the bar no longer moves
+  when you switch. On a phone they show as a grid of three by two instead
+  of a strip that scrolled sideways. Switching to a section whose code is
+  still loading keeps the page's height instead of collapsing to a small
+  spinner and growing back, and pointing at a section starts loading it.
 - **Running a problem's tests shows that they are running.** The Run tests
   button spins and the last results dim for a moment before the new
   verdict appears.
