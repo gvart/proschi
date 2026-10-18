@@ -298,13 +298,22 @@ function tocHtml(toc: TocEntry[]): string {
   return `<ol class="toc__list">\n${items.join('\n')}\n</ol>`
 }
 
+/** The reading order: the sidebar's pages from top to bottom, then any page it leaves out. Previous / next follow it. */
+export function readingOrder(config: SiteConfig): DocPage[] {
+  const slugs = new Set(config.nav.flatMap((g) => g.items.flatMap((i) => (i.page !== undefined ? [i.page] : []))))
+  const bySlug = new Map(config.pages.map((p) => [p.slug, p]))
+  const inNav = [...slugs].flatMap((s) => bySlug.get(s) ?? [])
+  return [...inNav, ...config.pages.filter((p) => !slugs.has(p.slug))]
+}
+
 function pagerHtml(config: SiteConfig, page: DocPage): string {
-  const i = config.pages.indexOf(page)
+  const order = readingOrder(config)
+  const i = order.indexOf(page)
   const link = (p: DocPage | undefined, rel: 'prev' | 'next') =>
     p
       ? `<a class="pager__link pager__link--${rel}" href="${pageHref(page.slug, p.slug)}" rel="${rel}"><span class="pager__dir">${rel === 'prev' ? 'Previous' : 'Next'}</span><span class="pager__title">${escapeHtml(p.title)}</span></a>`
       : '<span></span>'
-  return `<nav class="pager" aria-label="Previous and next page">\n${link(config.pages[i - 1], 'prev')}\n${link(config.pages[i + 1], 'next')}\n</nav>`
+  return `<nav class="pager" aria-label="Previous and next page">\n${link(order[i - 1], 'prev')}\n${link(order[i + 1], 'next')}\n</nav>`
 }
 
 /** The page's body content: sidebar, article, "On this page" and pager, around the shell placeholders. */
