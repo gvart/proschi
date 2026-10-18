@@ -19,7 +19,7 @@ api -> db : SQL
 
 That is a diagram already. The tech stack picks the icon, and later the
 numbers the simulation uses: `[PostgreSQL]` is a database, `[Redis]` a cache,
-`[Kafka]` a queue. About 210 of them are known, with the names people
+`[Kafka]` a message broker. About 210 of them are known, with the names people
 usually write (`[Postgres]`, `[S3]`, `[k8s]`).
 
 ## 2. A request that flows

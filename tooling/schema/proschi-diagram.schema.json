@@ -254,6 +254,7 @@
             "database",
             "cache",
             "queue",
+            "broker",
             "storage",
             "cdn",
             "serverless",
@@ -283,6 +284,7 @@
             "NoSQL Database",
             "Cache",
             "Message Queue",
+            "Message Broker",
             "Object Storage",
             "CDN",
             "Load Balancer",
@@ -497,6 +499,7 @@
             "search",
             "analytics",
             "queue",
+            "broker",
             "storage",
             "external",
             "other"
@@ -840,6 +843,7 @@
                 "search",
                 "analytics",
                 "queue",
+                "broker",
                 "storage",
                 "external",
                 "other"

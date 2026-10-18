@@ -111,6 +111,7 @@ export const GENERIC_TECH: Record<Kind, string> = {
   search: 'Search Engine',
   analytics: 'Data Warehouse',
   queue: 'Message Queue',
+  broker: 'Message Broker',
   storage: 'Object Storage',
   external: 'Third Party API',
   other: 'Service',

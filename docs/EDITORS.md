@@ -486,7 +486,7 @@ formulas are in [How the simulation works](https://proschi.app/docs/model/).
   | database, partitioned (MongoDB, Bigtable, Firestore, Spanner) | 20k | 5 ms | 99.99% | $500 | yes | strong |
   | search (Elasticsearch) | 3k | 15 ms | 99.9% | $400 | yes | eventual |
   | analytics (BigQuery, InfluxDB, TimescaleDB) | 200 | 500 ms | 99.9% | $300 | yes | eventual |
-  | queue (Kafka, SQS, Pub/Sub, …) | 50k | 5 ms | 99.99% | $200 | yes | strong |
+  | queue and broker (SQS, Kafka, Pub/Sub, …) | 50k | 5 ms | 99.99% | $200 | yes | strong |
   | storage (S3, Blob Storage, …) | 5k | 30 ms | 99.99% | $50 | yes | eventual |
   | external (payment, email, third-party APIs) | 1k | 200 ms | 99.9% | $0 | no | — |
 

@@ -12,7 +12,7 @@ describe('focus themes', () => {
       keyword: '#9AA7C7',
       string: '#A8BFA0',
       number: '#C7B08A',
-      selection: '#2A2E38',
+      selection: '#3A3F5F',
       cursor: '#FFD23F',
     });
     expect(FOCUS_PALETTE.light).toMatchObject({
@@ -28,6 +28,12 @@ describe('focus themes', () => {
   it('keep the yellow cursor as the dark theme’s only accent', () => {
     const accents = Object.entries(FOCUS_PALETTE.dark).filter(([, hex]) => hex === '#FFD23F');
     expect(accents.map(([key]) => key)).toEqual(['cursor']);
+  });
+
+  it('let the selection show through the active line', () => {
+    // CodeMirror draws the selection under the lines; an opaque active line would hide it.
+    expect(FOCUS_PALETTE.dark.activeLine).toMatch(/^#[0-9A-F]{8}$/);
+    expect(FOCUS_PALETTE.light.activeLine).toMatch(/^#[0-9A-F]{8}$/);
   });
 
   it('are picked by mode', () => {

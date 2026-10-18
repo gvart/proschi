@@ -9,10 +9,10 @@ import type { DiagramNode, Kind } from './types';
  */
 
 /** Every kind, in the order of the profile table. */
-export const KINDS: readonly Kind[] = ['client', 'edge', 'cdn', 'loadbalancer', 'gateway', 'dns', 'service', 'function', 'cache', 'database', 'search', 'analytics', 'queue', 'storage', 'external', 'other'];
+export const KINDS: readonly Kind[] = ['client', 'edge', 'cdn', 'loadbalancer', 'gateway', 'dns', 'service', 'function', 'cache', 'database', 'search', 'analytics', 'queue', 'broker', 'storage', 'external', 'other'];
 
 /** Kinds that hold data: where an `entity` may live. */
-export const DATA_STORE_KINDS: readonly Kind[] = ['cache', 'database', 'search', 'analytics', 'queue', 'storage'];
+export const DATA_STORE_KINDS: readonly Kind[] = ['cache', 'database', 'search', 'analytics', 'queue', 'broker', 'storage'];
 
 /**
  * The sub-kinds of `edge` (§7.5). `any edge` matches all of them, and an edge
@@ -34,6 +34,7 @@ const BY_TYPE: Partial<Record<ComponentType, Kind>> = {
   cache: 'cache',
   database: 'database',
   queue: 'queue',
+  broker: 'broker',
   storage: 'storage',
   external: 'external',
 };
@@ -64,6 +65,7 @@ export const TYPE_OF_KIND: Record<Kind, ComponentType> = {
   search: 'database',
   analytics: 'database',
   queue: 'queue',
+  broker: 'broker',
   storage: 'storage',
   external: 'external',
   other: 'shape',
@@ -83,7 +85,8 @@ const KIND_WORDS: [RegExp, Kind][] = [
   [/gateway|\bapim?\b.*manage/, 'gateway'],
   [/\bwaf\b|firewall/, 'edge'],
   [/cache|memcache/, 'cache'],
-  [/queue|\bmq\b|mq$|broker|event.?stream|\bbus\b|topic|pub.?sub|event.?hub|kafka/, 'queue'],
+  [/broker|event.?stream|event.?log|\bbus\b|topic|pub.?sub|event.?hub|kafka|kinesis|pulsar|redpanda|jetstream|\bnats\b/, 'broker'],
+  [/queue|\bmq\b|mq$/, 'queue'],
   [/search|lucene|\bindex\b/, 'search'],
   [/warehouse|analytic|olap|data.?lake|lakehouse|time.?series|\btsdb\b/, 'analytics'],
   [/bucket|blob|object.?stor|storage|\bfs\b|file.?system|\bnas\b|\bdisk\b|volume/, 'storage'],
@@ -109,7 +112,11 @@ export function isEdge(kind: Kind): boolean {
   return EDGE_KINDS.includes(kind);
 }
 
-/** Whether a node of kind `actual` is selected by `any <wanted>`: `any edge` also picks the edge sub-kinds. */
+/**
+ * Whether a node of kind `actual` is selected by `any <wanted>`: `any edge`
+ * also picks the edge sub-kinds, and `any queue` also picks brokers (both
+ * take a message and hand it on later; `any broker` picks brokers only).
+ */
 export function kindMatches(actual: Kind, wanted: Kind): boolean {
-  return actual === wanted || (wanted === 'edge' && isEdge(actual));
+  return actual === wanted || (wanted === 'edge' && isEdge(actual)) || (wanted === 'queue' && actual === 'broker');
 }

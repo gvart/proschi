@@ -268,6 +268,14 @@ usecase "Create order" {
     expect(square).not.toMatch(/ (class|style)="/);
   });
 
+  it('draws a broker as its own kind, with the broker glyph', async () => {
+    const svg = await renderArchitectureSvg(parse('events [Redpanda]\njobs [Message Queue]').diagram);
+    expect(svg).toContain('<g data-node="events" data-kind="broker">');
+    expect(svg).toContain('<g data-node="jobs" data-kind="queue">');
+    expect(techIcon('AWS SNS', 0, 0, 16, '#000', 'broker')).toBe(techIcon('Message Broker', 0, 0, 16, '#000', 'broker'));
+    expect(techIcon('Message Broker', 0, 0, 16, '#000', 'broker')).not.toBe(techIcon('Message Queue', 0, 0, 16, '#000', 'queue'));
+  });
+
   it('places nodes where the canvas does, honouring pinned positions', async () => {
     const pinned = parse('a "A" [REST API] pos 500,40\nb "B" [Redis] pos 100,300\na -> b').diagram;
     const svg = await renderArchitectureSvg(pinned);

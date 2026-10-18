@@ -50,7 +50,8 @@ generic tech of its kind and put the product in the name:
 | database | `Database`, `NoSQL Database`, `PostgreSQL`, `MySQL`, `MariaDB`, `SQL Server`, `Oracle`, `SQLite`, `AWS RDS`, `AWS Aurora`, `GCP Cloud SQL`, `Azure SQL`, `CockroachDB`, `GCP Spanner`, `DynamoDB`, `Cassandra`, `ScyllaDB`, `MongoDB`, `Azure Cosmos DB`, `GCP Firestore`, `GCP Bigtable`, `Neo4j`, `etcd` |
 | search | `Search Engine`, `Elasticsearch`, `OpenSearch`, `Solr`, `Algolia`, `Meilisearch` |
 | analytics | `Data Warehouse`, `GCP BigQuery`, `Snowflake`, `AWS Redshift`, `ClickHouse`, `InfluxDB`, `TimescaleDB`, `Prometheus` |
-| queue | `Message Queue`, `Kafka`, `AWS MSK`, `RabbitMQ`, `AWS SQS`, `AWS SNS`, `AWS Kinesis`, `AWS EventBridge`, `GCP Pub/Sub`, `NATS`, `Azure Service Bus`, `Azure Event Hubs`, `Apache Pulsar`, `Redpanda` |
+| queue | `Message Queue`, `AWS SQS`, `Azure Queue Storage`, `Redis Queue` (`any queue` also selects brokers) |
+| broker | `Message Broker`, `Kafka`, `AWS MSK`, `RabbitMQ`, `AWS SNS`, `AWS Kinesis`, `AWS EventBridge`, `GCP Pub/Sub`, `NATS`, `Azure Service Bus`, `Azure Event Hubs`, `Apache Pulsar`, `Redpanda` |
 | storage | `Object Storage`, `AWS S3`, `GCP Cloud Storage`, `Azure Blob Storage`, `MinIO`, `Cloudflare R2`, `AWS EFS` |
 | external | `Third Party API`, `Payment Gateway`, `Email Service`, `SMS Service`, `Push Service`, `Auth Service`, `Stripe`, `PayPal`, `Adyen`, `Twilio`, `SendGrid`, `Mailgun`, `Auth0`, `Okta`, `AWS Cognito`, `AWS SES`, `APNs`, `FCM`, `OpenAI`, `Google Maps` |
 | other (text) | `Text Note`, `Sticky Note`, `Comment` |
@@ -177,7 +178,7 @@ fallback), `U starts at X`, `[in U] X calls Y`,
 | relational db | 20k reads / 5k writes per shard (replicas add reads only) | 5 ms | 99.95% | $400 |
 | NoSQL db | 20k | 5 ms | 99.99% | $500 |
 | search | 3k | 15 ms | 99.9% | $400 |
-| queue | 50k | 5 ms | 99.99% | $200 |
+| queue, broker | 50k | 5 ms | 99.99% | $200 |
 | storage | 5k | 30 ms | 99.99% | $50 |
 | external | 1k | 200 ms | 99.9% | $0 |
 

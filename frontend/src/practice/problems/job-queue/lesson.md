@@ -34,7 +34,7 @@ Slack ran all its background work through one Redis-backed job queue. When worke
 
 - *Enqueuing never touches Redis*: Enqueue starts at the web app, writes to a queue before answering, never calls a cache, and there is no connection at all from the web app to a cache.
 - *The web app enqueues through a stateless gateway*: on the Enqueue path a service comes before the queue, and the web app has no direct connection to any queue.
-- *Only the relay moves jobs from Kafka to Redis*: Relay starts at the queue, its `"Relayed"` scenario writes to the cache before it finishes, and Run job starts at the workers and reads the cache, never Kafka.
+- *Only the relay moves jobs from Kafka to Redis*: Relay starts at Kafka (a broker, which `any queue` also selects), its `"Relayed"` scenario writes to the cache before it finishes, and Run job starts at the workers and reads the cache, never Kafka.
 - *A full Redis leaves the job in Kafka*: Relay has a scenario where the call to the cache fails and the use case still completes.
 
 ## Back-of-the-envelope
@@ -74,7 +74,7 @@ A service replica (`[Go]` is a service) handles 2k requests a second, so 33k ÷ 
 servers-for-peak-load
 ```
 
-**What the simulation does with it.** Kafka is a queue node with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica and, unlike a relational database in the model, takes writes on every replica. The services are the bottleneck: with the M/M/c queueing formula, a big pool at 70% still answers in about its base 10 ms, a single replica at 70% in more than three times that. Enqueue's p99 (gateway hop plus Kafka hop, with their exponential tails) is comfortably inside 50 ms when nothing is hot.
+**What the simulation does with it.** Kafka is a broker node, simulated like a queue with 50k writes per replica, so three brokers are lightly loaded. Redis is a cache with 100k operations per replica and, unlike a relational database in the model, takes writes on every replica. The services are the bottleneck: with the M/M/c queueing formula, a big pool at 70% still answers in about its base 10 ms, a single replica at 70% in more than three times that. Enqueue's p99 (gateway hop plus Kafka hop, with their exponential tails) is comfortably inside 50 ms when nothing is hot.
 
 **Cost.** A service replica is $100 a month, a Kafka broker $200, a Redis replica $150. The web app and workers already take $1,200 of the $8,000. The budget deliberately forces you to size, not guess.
 

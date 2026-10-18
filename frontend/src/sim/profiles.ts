@@ -65,6 +65,8 @@ const RELATIONAL: Row = {
   consistency: 'strong',
 };
 
+const QUEUE: Row = { rps: 50_000, latencyMs: 5, availability: 0.9999, costUsd: 200, durable: true, consistency: 'strong' };
+
 /** Defaults by kind. */
 export const KIND_PROFILES: Record<Kind, Row> = {
   client: { ...NEUTRAL, bandwidthMBps: 10 },
@@ -81,7 +83,9 @@ export const KIND_PROFILES: Record<Kind, Row> = {
   database: RELATIONAL,
   search: { rps: 3_000, latencyMs: 15, availability: 0.999, costUsd: 400, durable: true, consistency: 'eventual' },
   analytics: { rps: 200, latencyMs: 500, availability: 0.999, costUsd: 300, durable: true, consistency: 'eventual' },
-  queue: { rps: 50_000, latencyMs: 5, availability: 0.9999, costUsd: 200, durable: true, consistency: 'strong' },
+  queue: QUEUE,
+  // Same numbers as a queue for now: both take a message and hand it on later.
+  broker: QUEUE,
   storage: { rps: 5_000, latencyMs: 30, availability: 0.9999, costUsd: 50, durable: true, consistency: 'eventual' },
   external: { rps: 1_000, latencyMs: 200, availability: 0.999, costUsd: 0, durable: false },
   other: NEUTRAL,
