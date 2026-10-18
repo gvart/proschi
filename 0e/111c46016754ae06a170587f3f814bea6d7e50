@@ -1,0 +1,25 @@
+frontend/plugins/docsSite.test.ts
+  s_db735640dfb4b4::t_3468ae4d3f49ad 52-61
+  s_db735640dfb4b4::t_adf0ec11536af5 6
+docs/site.json
+  s_db735640dfb4b4::t_955551b86f2994 2,80,114-120
+frontend/plugins/docsSite.ts
+  s_db735640dfb4b4::t_6bf0f227319ed2 301-308,310-311
+  s_db735640dfb4b4::t_188f58f6e068ab 316
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "0e111c46016754ae06a170587f3f814bea6d7e50",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
