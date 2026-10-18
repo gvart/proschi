@@ -10,6 +10,13 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
+  Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
+  Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with
+  their own icon and colour and a generic `[Message Broker]`. SQS and other
+  plain queues stay `queue`. A broker is simulated exactly like a queue,
+  and `any queue` still selects brokers, so existing tests keep passing;
+  `any broker` selects brokers only.
 - **One account control on every page.** The header shows a Sign in
   button when signed out and your name with a menu when signed in, now
   also in the editor, the docs, problem and card pages and the 404 page.

@@ -157,7 +157,7 @@ stateful-gateways
 
 Calling push servers directly, every sender would need registry access, wait for the whole delivery and carry retry logic for dead servers, and one service's burst would hit the fleet unfiltered.
 
-A durable queue (Kafka at Netflix) in between fixes that. The sender's job ends at "the queue has it": one fast, highly available write. Message processors consume at their own pace and do the lookup and delivery. A burst becomes consumer lag (messages waiting in the queue) instead of failed requests, and partitioning by customer keeps one customer's messages in order.
+A durable message broker (Kafka at Netflix) in between fixes that. The sender's job ends at "the broker has it": one fast, highly available write. Message processors consume at their own pace and do the lookup and delivery. A burst becomes consumer lag (messages waiting in the broker) instead of failed requests, and partitioning by customer keeps one customer's messages in order.
 
 The cost is a little latency and one more system to run. A single sender that needs synchronous confirmation of delivery gains nothing from the extra hop.
 
@@ -166,20 +166,20 @@ The cost is a little latency and one more system to run. A single sender that ne
 title "Decoupled producer"
 
 producer "Producer"  [REST API] x2
-queue    "Queue"     [Kafka]    x3
+broker   "Broker"    [Kafka]    x3
 worker   "Consumer"  [Go]       x2
 
-producer -> queue  : produce
-queue    -> worker : consume
+producer -> broker : produce
+broker   -> worker : consume
 
 usecase "Publish" {
-  producer -> queue    : PRODUCE events {"user": "user-7"}
-  queue   --> producer : ack
+  producer -> broker   : PRODUCE events {"user": "user-7"}
+  broker  --> producer : ack
 }
 
 usecase "Consume" {
-  queue   -> worker : Event user-7
-  worker --> queue  : commit offset
+  broker  -> worker  : Event user-7
+  worker --> broker  : commit offset
 }
 ```
 ````
