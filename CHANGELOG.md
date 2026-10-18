@@ -56,6 +56,15 @@ deployed from `main` and ships with the same changes.
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").
 ### Changed
+- **Practice problems open on their lesson, then a calmer workspace.** An
+  unread lesson comes first, as a page of its own with "Start the
+  challenge" at the top and the bottom. The workspace then shows the
+  problem, the editor and the diagram side by side in panes you can resize
+  by dragging. The tests stay folded under them until the first run. The
+  tests panel shows no warnings before you run. The **Lesson** button opens
+  the lesson in a drawer beside your work, and anything you revealed or
+  answered in it stays open. Phones follow the same steps, with Problem,
+  Code, Diagram and Tests tabs. The roadmap banner is a single slim line.
 - **Landing page SEO.** A shorter title and meta description that fit in
   search results, the main keywords in the hero heading (read by search
   engines and screen readers, not shown), and Twitter title and

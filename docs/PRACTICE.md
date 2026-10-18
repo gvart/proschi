@@ -93,15 +93,19 @@ text. Headings get ids from their text, GitHub style
 ## `lesson.md`
 
 The lesson teaches the ideas behind the problem before the solver tries it:
-each roadmap step is *Learn → Challenge → Review*. A problem opened from the
-roadmap (`practice/#/roadmap/<id>`) shows its lesson first, with a table of
-contents and a **Start the challenge** button; once that was pressed the
-browser remembers it and later visits open the problem;
-`practice/#/roadmap/<id>/lesson` always opens on the lesson. Lessons are never
-locked: on the roadmap only a step's challenge waits (until every earlier step
-is solved, and signed out past stage 1), and the address of a locked challenge
-shows the roadmap with what unlocks it. From the list the lesson is a tab next to the statement, and
-`practice/#/<id>/lesson` opens on it; these lessons need no sign-in. The static page `practice/<id>/` shows the
+each roadmap step is *Learn → Challenge → Review*. A problem
+(`practice/#/<id>`, or `practice/#/roadmap/<id>` from the roadmap) opens on
+its lesson, a page of its own with a table of contents and a **Start the
+challenge** button at the top and the bottom; once that was pressed the
+browser remembers it and later visits open the workspace (the statement, the
+editor and the diagram in resizable panes, the tests folded under them until
+the first run). There the **Lesson** button opens the lesson in a drawer,
+and a failed run's common mistake links to its section.
+`practice/#/<id>/lesson` and `practice/#/roadmap/<id>/lesson` always open on
+the lesson. Lessons are never locked: on the roadmap only a step's challenge
+waits (until every earlier step is solved, and signed out past stage 1), and
+the address of a locked challenge shows the roadmap with what unlocks it;
+lessons need no sign-in. The static page `practice/<id>/` shows the
 lesson under the statement as an article with heading anchors, and the
 roadmap shows each step's reading time (about 200 words a minute).
 
