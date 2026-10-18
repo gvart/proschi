@@ -63,6 +63,9 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Running a problem's tests shows that they are running.** The Run tests
+  button spins and the last results dim for a moment before the new
+  verdict appears.
 - **Docs that are easier to follow.** The previous / next links follow the
   sidebar, starting with *Why Proschi*. The language reference explains
   parallel steps, starts each high-level design block with what it is for,

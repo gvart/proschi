@@ -44,6 +44,16 @@ describe('TestPanel before the first run', () => {
   it('folded, shows its bar with a toggle and hides the results', () => {
     const html = renderToStaticMarkup(<TestPanel stale={false} diagnostics={[]} onRun={() => {}} onSelect={() => {}} collapsed onToggle={() => {}} />);
     expect(html).toMatch(/aria-expanded="false" aria-label="Show the test results"/);
-    expect(html).toMatch(/<div class="[^"]*\bhidden\b[^"]*"><p[^>]*>Run the tests/);
+    expect(html).toMatch(/<div class="[^"]*\bhidden\b[^"]*"><div[^>]*><p[^>]*>Run the tests/);
+  });
+});
+
+describe('TestPanel while running', () => {
+  it('spins and disables the button, says so, and dims the last results', () => {
+    const html = renderToStaticMarkup(<TestPanel run={{ results: [result('Passing one', true)], passed: 1, solved: false }} running stale={false} diagnostics={[]} onRun={() => {}} onSelect={() => {}} />);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*aria-busy="true"[^>]*>.*?Run tests<\/button>/);
+    expect(html).toContain('Running the tests against the simulation');
+    expect(html).toMatch(/class="pointer-events-none opacity-40[^"]*"/);
+    expect(html).toContain('Passing one');
   });
 });
