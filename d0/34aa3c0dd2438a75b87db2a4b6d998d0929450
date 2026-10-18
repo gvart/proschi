@@ -1,0 +1,64 @@
+frontend/src/practice/validate.ts
+  s_6c86026863aad3::t_8714eecd2891d6 6
+frontend/src/practice/Markdown.tsx
+  s_6c86026863aad3::t_8714eecd2891d6 4,9
+frontend/src/onboarding/cheatSheetSections.ts
+  s_6c86026863aad3::t_8714eecd2891d6 1-128
+frontend/src/practice/profile/reminderForm.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 1-28
+frontend/src/practice/LessonView.tsx
+  s_6c86026863aad3::t_8714eecd2891d6 4
+frontend/src/practice/profile/EmailReminders.tsx
+  s_6c86026863aad3::t_8714eecd2891d6 6
+frontend/plugins/practicePages.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 3
+frontend/src/onboarding/CheatSheet.tsx
+  s_6c86026863aad3::t_8714eecd2891d6 5
+frontend/src/practice/practice.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 4
+frontend/src/practice/lesson.ts
+  s_6c86026863aad3::t_8714eecd2891d6 48
+frontend/src/docs/docs.css
+  s_6c86026863aad3::t_8714eecd2891d6 560
+docs/PRACTICE.md
+  s_6c86026863aad3::t_8714eecd2891d6 85
+frontend/plugins/practicePages.ts
+  s_6c86026863aad3::t_8714eecd2891d6 6
+frontend/src/practice/lessonBlocks.ts
+  s_6c86026863aad3::t_8714eecd2891d6 3
+frontend/src/security/untrusted.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 9
+frontend/src/practice/MistakePanel.tsx
+  s_6c86026863aad3::t_8714eecd2891d6 7
+frontend/plugins/practiceCards.ts
+  s_6c86026863aad3::t_8cff0b19b4b18c 90-101
+frontend/src/practice/lesson.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 6
+frontend/plugins/practiceListings.ts
+  s_6c86026863aad3::t_75ce3e07c3645e 61,67-79
+  s_6c86026863aad3::t_bdacb3046dfbff 80
+frontend/plugins/cardPages.ts
+  s_6c86026863aad3::t_8714eecd2891d6 6
+frontend/src/onboarding/cheatSheetSections.test.ts
+  s_6c86026863aad3::t_8714eecd2891d6 1-78
+tooling/build.mjs
+  s_6c86026863aad3::t_f89f05f5130259 32
+frontend/plugins/cardText.ts
+  s_6c86026863aad3::t_8714eecd2891d6 2
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d034aa3c0dd2438a75b87db2a4b6d998d0929450",
+  "prompts": {},
+  "sessions": {
+    "s_6c86026863aad3": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7bd040a7-0b30-4639-a47b-bff61d170108",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
