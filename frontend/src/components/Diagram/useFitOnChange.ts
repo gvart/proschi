@@ -18,7 +18,14 @@ interface FitOptions {
   wrapper?: RefObject<HTMLElement | null>;
   /** Fit the diagram into the part of the pane that is not covered; a change re-fits. */
   inset?: FitInset;
+  /**
+   * A change re-fits too, gliding there (unless motion is reduced) when it is
+   * the only thing that changed: e.g. playback, which resizes the pane in place.
+   */
+  glide?: string;
 }
+
+const GLIDE_MS = 300;
 
 /**
  * Fits the view once the nodes are measured after `key` changes (nodes added
@@ -31,7 +38,7 @@ interface FitOptions {
  * and when the pane is shown again its resize observer corrects that a moment
  * later; fitting in between would centre the diagram in the wrong box.
  */
-export function useFitOnChange(key: string, { duration, wrapper, inset }: FitOptions = {}) {
+export function useFitOnChange(key: string, { duration, wrapper, inset, glide = '' }: FitOptions = {}) {
   const { fitView, setViewport } = useReactFlow();
   const store = useStoreApi();
   const measured = useNodesInitialized();
@@ -40,8 +47,11 @@ export function useFitOnChange(key: string, { duration, wrapper, inset }: FitOpt
   const paneSize = useStore((s) => `${s.width}x${s.height}`);
   const top = Math.max(0, Math.round(inset?.top ?? 0));
   const bottom = Math.max(0, Math.round(inset?.bottom ?? 0));
-  const fitKey = `${key}|${top}|${bottom}`;
+  const baseKey = `${key}|${top}|${bottom}`;
+  const fitKey = `${baseKey}|${glide}`;
   const fitted = useRef<string | undefined>(undefined);
+  /** The base key of the last fit, to tell a glide-only change. */
+  const fittedBase = useRef<string | undefined>(undefined);
   useEffect(() => {
     if (!measured || !sized || fitted.current === fitKey) return;
     const frame = requestAnimationFrame(() => {
@@ -52,17 +62,21 @@ export function useFitOnChange(key: string, { duration, wrapper, inset }: FitOpt
       }
       const { domNode, width, height, getNodes, minZoom, maxZoom, nodeOrigin } = store.getState();
       if (!domNode?.offsetWidth || Math.abs(domNode.offsetWidth - width) > 1 || Math.abs(domNode.offsetHeight - height) > 1) return;
+      const reduced = typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const gliding = fittedBase.current === baseKey && !reduced;
       fitted.current = fitKey;
+      fittedBase.current = baseKey;
+      const ms = gliding ? GLIDE_MS : duration;
       const free = height - top - bottom;
       if ((top || bottom) && free > height / 4) {
         const nodes = getNodes().filter((n) => !n.hidden);
         if (nodes.length === 0) return;
         const viewport = getViewportForBounds(getNodesBounds(nodes, nodeOrigin), width, free, minZoom, Math.min(maxZoom, FIT_MAX_ZOOM), PADDING);
-        setViewport({ ...viewport, y: viewport.y + top }, { duration });
+        setViewport({ ...viewport, y: viewport.y + top }, { duration: ms });
       } else {
-        fitView({ padding: PADDING, maxZoom: FIT_MAX_ZOOM, duration });
+        fitView({ padding: PADDING, maxZoom: FIT_MAX_ZOOM, duration: ms });
       }
     });
     return () => cancelAnimationFrame(frame);
-  }, [fitKey, measured, sized, paneSize, fitView, setViewport, duration, wrapper, store, top, bottom]);
+  }, [fitKey, baseKey, measured, sized, paneSize, fitView, setViewport, duration, wrapper, store, top, bottom]);
 }

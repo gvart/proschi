@@ -34,7 +34,7 @@ usecase "U" {
   api ->> q : Evt
   api --> user : 429
 }`),
-    ).toEqual(['cache', 'CDN', 'queue', 'fan-out', 'sharding', 'replication', 'rate limiting', 'async', 'error paths']);
+    ).toEqual(['cache', 'CDN', 'broker', 'fan-out', 'sharding', 'replication', 'rate limiting', 'async', 'error paths']);
   });
 
   it('tags every example but the basic one', () => {

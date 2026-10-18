@@ -93,7 +93,7 @@ catalog name.
 | Functions | `AWS Lambda`, `GCP Cloud Functions`, `GCP Cloud Run`, `Azure Functions`, `Cloudflare Workers` |
 | Relational and NoSQL | `PostgreSQL`, `MySQL`, `MariaDB`, `SQL Server`, `Oracle`, `AWS Aurora`, `AWS RDS`, `GCP Cloud SQL`, `CockroachDB`, `GCP Spanner`, `DynamoDB`, `Cassandra`, `ScyllaDB`, `MongoDB`, `Azure Cosmos DB`, `Neo4j`, `etcd` |
 | Caches | `Redis`, `Valkey`, `Memcached`, `AWS ElastiCache`, `GCP Memorystore`, `Hazelcast` |
-| Queues and streams | `Kafka`, `AWS Kinesis`, `AWS SQS`, `AWS SNS`, `RabbitMQ`, `GCP Pub/Sub`, `NATS`, `AWS EventBridge`, `Azure Service Bus`, `Apache Pulsar`, `Redpanda` |
+| Queues and brokers | `AWS SQS`, `Kafka`, `AWS Kinesis`, `AWS SNS`, `RabbitMQ`, `GCP Pub/Sub`, `NATS`, `AWS EventBridge`, `Azure Service Bus`, `Apache Pulsar`, `Redpanda` |
 | Search and analytics | `Elasticsearch`, `OpenSearch`, `Solr`, `GCP BigQuery`, `Snowflake`, `AWS Redshift`, `ClickHouse`, `InfluxDB`, `TimescaleDB` |
 | Storage | `AWS S3`, `GCP Cloud Storage`, `Azure Blob Storage`, `MinIO`, `Cloudflare R2` |
 | Edge | `AWS CloudFront`, `Fastly`, `Akamai`, `Cloudflare`, `AWS Load Balancer`, `nginx`, `Envoy`, `HAProxy`, `Kubernetes Ingress`, `AWS API Gateway`, `Kong`, `AWS Route53`, `AWS WAF` |
@@ -492,7 +492,7 @@ entity Url in db "One short code and where it points" {
   `optional`. Types are free identifiers: `string`, `int`, `time`, `uuid`,
   `json`, …
 - `in <node>` places the entity in a store. It is a warning when that node is
-  not a data store: a cache, database, search, analytics, queue or storage
+  not a data store: a cache, database, search, analytics, queue, broker or storage
   node (see [kinds](#selectors-and-kinds)).
 
 ### Decisions
@@ -585,7 +585,8 @@ A node's kind comes from its tech stack (an unknown tech: from its name, see
 | `database` | Database, PostgreSQL, MySQL, Aurora, RDS, CockroachDB, Spanner, DynamoDB, Cassandra, ScyllaDB, MongoDB, Cosmos DB, Neo4j, … |
 | `search` | Search Engine, Elasticsearch, OpenSearch, Solr, Algolia |
 | `analytics` | Data Warehouse, BigQuery, Snowflake, Redshift, ClickHouse, InfluxDB, TimescaleDB |
-| `queue` | Message Queue, Kafka, SQS, SNS, Kinesis, Pub/Sub, RabbitMQ, NATS, Service Bus, … |
+| `queue` | Message Queue, SQS, Azure Queue Storage, Redis Queue, ZeroMQ; `any queue` also selects brokers |
+| `broker` | Message Broker, Kafka, Redpanda, Pulsar, Kinesis, MSK, SNS, EventBridge, Pub/Sub, RabbitMQ, NATS, Service Bus, Event Hubs; simulated like a queue |
 | `storage` | Object Storage, S3, Blob Storage, Cloud Storage, MinIO, R2, EFS, EBS |
 | `external` | Third Party API, Payment Gateway, Stripe, Twilio, SendGrid, Auth0, Email/SMS Service |
 | `other` | groups, text nodes and the Note shape |

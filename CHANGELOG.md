@@ -10,6 +10,17 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
+  Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
+  Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with
+  their own icon and colour and a generic `[Message Broker]`. SQS and other
+  plain queues stay `queue`. A broker is simulated exactly like a queue,
+  and `any queue` still selects brokers, so existing tests keep passing;
+  `any broker` selects brokers only.
+- **Resize the editor's panes.** Drag the splitter between the code and
+  the diagram (or focus it and use the arrow keys); the diagram re-fits
+  and the size is remembered in this browser. Phones keep one pane at a
+  time.
 - **One account control on every page.** The header shows a Sign in
   button when signed out and your name with a menu when signed in, now
   also in the editor, the docs, problem and card pages and the 404 page.
@@ -99,6 +110,12 @@ deployed from `main` and ships with the same changes.
 - The design review no longer announces an AI reviewer.
 
 ### Fixed
+- **Playing a use case no longer flickers.** In the editor, the docs'
+  live examples and the landing page demo, Play, Replay and leaving
+  playback restyle the diagram already on screen instead of swapping in a
+  new canvas: no flash, no jump, and the packet moves smoothly without
+  redrawing the whole diagram on every frame. In the editor the diagram
+  glides to fit the room left by the step panel.
 - A test that names a missing use case suggests adding it
   (`Add usecase "Redirect" { … }`); an existing name is suggested only
   for a likely typo.
@@ -116,6 +133,12 @@ deployed from `main` and ships with the same changes.
 - Edge labels no longer hide behind a node beside a long edge.
 - The arcade wave summary says "Trust is full (100)" instead of
   "Trust +0 (+5 clean)".
+- Selected text in the editor is clearly visible in both themes, also on
+  the cursor's line.
+- Tab in the editor accepts the open completion; otherwise it indents at
+  the cursor (or indents the selected lines), and Shift-Tab outdents.
+- The header's "Open the editor" button no longer drifts toward the
+  pointer and over the theme toggle.
 
 ## [0.10.0] - 2026-10-08
 

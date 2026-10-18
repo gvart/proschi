@@ -69,7 +69,7 @@ export default function Header({ base, current, compact = false, children, actio
           {accountSlot && <div data-account="" data-base={base} hidden />}
           <ThemeToggle />
           {!compact && (
-            <Button href={siteHref(base, EDITOR_LINK.href)} variant="primary" size="sm" magnetic className="ps-header__cta" trailing={<ArrowIcon />}>
+            <Button href={siteHref(base, EDITOR_LINK.href)} variant="primary" size="sm" className="ps-header__cta" trailing={<ArrowIcon />}>
               Open<span className="ps-hide-sm"> the</span> editor
             </Button>
           )}

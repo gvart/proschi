@@ -26,7 +26,7 @@ describe('example document', () => {
       parent: 'vpc',
     });
     expect(diagram.nodes.find((n) => n.id === 'vpc')).toMatchObject({ kind: 'group', techStack: 'Logical Group' });
-    expect(diagram.nodes.find((n) => n.id === 'events')).toMatchObject({ type: 'queue', parent: undefined });
+    expect(diagram.nodes.find((n) => n.id === 'events')).toMatchObject({ type: 'broker', parent: undefined });
   });
 
   it('builds use case steps with responses and parallel groups', () => {
@@ -68,7 +68,7 @@ describe('nodes', () => {
     ['PostgreSQL 16', 'PostgreSQL', 'database'],
     ['redis 7.2', 'Redis', 'database'],
     ['Route 53', 'AWS Route53', 'cdn'],
-    ['pubsub', 'GCP Pub/Sub', 'queue'],
+    ['pubsub', 'GCP Pub/Sub', 'broker'],
     ['NodeJS', 'Node.js', 'service'],
     ['ALB', 'AWS Load Balancer', 'cdn'],
     ['k8s', 'Kubernetes', 'container'],
@@ -99,7 +99,7 @@ describe('nodes', () => {
     expect(diagram.nodes[0]).toMatchObject({ techStack: 'Postgress', inferredKind: 'database' });
     expect(diagnostics.map((d) => d.message)).toEqual([
       "Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]",
-      "Unknown tech stack 'Kafak'. Did you mean 'Kafka'? Until then it is simulated as a generic queue, like [Message Queue]",
+      "Unknown tech stack 'Kafak'. Did you mean 'Kafka'? Until then it is simulated as a generic broker, like [Message Broker]",
     ]);
   });
 

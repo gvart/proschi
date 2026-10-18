@@ -2,7 +2,6 @@ import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react
 import { basicSetup } from 'codemirror';
 import { EditorView, keymap } from '@codemirror/view';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
-import { indentWithTab } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
@@ -10,6 +9,7 @@ import { format, formattedOffset } from '../../dsl/format';
 import { proschiCompletions, proschiLanguage, toCmDiagnostics, type TechChoice } from './proschiLanguage';
 import { editorLayout, focusThemeFor } from './editorThemes';
 import { useEditorTheme } from './useEditorTheme';
+import { tabKeymap } from './tabKeymap';
 
 export interface CodeEditorHandle {
   goTo: (line: number, col: number) => void;
@@ -77,7 +77,8 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
         doc: value,
         extensions: [
           basicSetup,
-          keymap.of([indentWithTab, { key: 'Shift-Alt-f', run: formatDocument, preventDefault: true }]),
+          tabKeymap,
+          keymap.of([{ key: 'Shift-Alt-f', run: formatDocument, preventDefault: true }]),
           proschiLanguage,
           autocompletion({ override: [proschiCompletions(() => nodeIdsRef.current, () => techsRef.current)] }),
           lintGutter(),

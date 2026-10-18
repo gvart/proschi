@@ -10,7 +10,7 @@ import "problem.proschi"
 
 lb         "Load Balancer"     [AWS Load Balancer] x2 @edge "Layer 4, with a long idle timeout for persistent connections"
 push       "Zuul Push Servers" [Java]              x14 @edge "Netty servers holding the WebSocket and SSE connections; each knows its own connections in memory"
-kafka      "Push Queue"        [Kafka]             x3 @edge "Messages from every sender, partitioned by customer"
+kafka      "Push Broker"       [Kafka]             x3 @edge "Messages from every sender, partitioned by customer"
 processors "Message Processor" [Java]              x16 @edge "Hand every message to every push server"
 
 device     -> lb         : WebSocket / SSE
