@@ -1,0 +1,58 @@
+frontend/src/utils/canvasColors.ts
+  s_db735640dfb4b4::t_ebb5e7c69f62ff 13
+frontend/src/types/canvas.ts
+  s_db735640dfb4b4::t_fd3fab56dc7e9a 9
+frontend/src/dsl/parser.ts
+  s_db735640dfb4b4::t_8905e4395eb336 142,1902
+frontend/src/playground/gallery.ts
+  s_db735640dfb4b4::t_8905e4395eb336 15,28,46
+frontend/src/dsl/kinds.ts
+  s_db735640dfb4b4::t_fd3fab56dc7e9a 12,15,37,68,88-89,115-119,121
+frontend/src/sim/access.ts
+  s_db735640dfb4b4::t_8905e4395eb336 21
+  s_db735640dfb4b4::t_dcec1abbe8d8eb 2,17-18
+frontend/src/dsl/types.ts
+  s_db735640dfb4b4::t_fd3fab56dc7e9a 162
+frontend/src/dsl/importDesign.ts
+  s_db735640dfb4b4::t_8905e4395eb336 114
+frontend/src/dsl/parser.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 29,71,102
+frontend/src/dsl/mermaid.ts
+  s_db735640dfb4b4::t_8905e4395eb336 106
+frontend/src/sim/profiles.ts
+  s_db735640dfb4b4::t_8905e4395eb336 68-69,86-88
+frontend/src/utils/iconMapping.tsx
+  s_db735640dfb4b4::t_ebb5e7c69f62ff 34,206-208,266-268,298,305,391,412,424
+frontend/src/dsl/v2.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 305
+frontend/src/playground/gallery.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 37
+frontend/src/sim/profiles.test.ts
+  s_db735640dfb4b4::t_b35e58fd83f1e3 48-49,147-153,158-159
+frontend/src/docs/model.html
+  s_db735640dfb4b4::t_8963bb33dda654 330,392-393
+frontend/src/catalog/catalog.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 54-55,57-61,122-125
+frontend/src/dsl/sections.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 309,533
+frontend/src/dsl/kinds.test.ts
+  s_db735640dfb4b4::t_0795e699a9d8b8 38-44,46,93-100,102
+frontend/src/catalog/componentCatalog.ts
+  s_db735640dfb4b4::t_ebb5e7c69f62ff 50-51,120-123,158,191-193,237-246
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "26fed9e117a51b8a0bb2d86083456811ff9b7971",
+  "prompts": {},
+  "sessions": {
+    "s_db735640dfb4b4": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "1ab854b5-b8ed-4a99-b2a2-6dc5c73bd549",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
