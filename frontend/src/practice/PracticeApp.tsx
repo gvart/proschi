@@ -55,7 +55,7 @@ const roadmap = roadmapFor(ROADMAP, problems.map((p) => p.id));
 const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].id] };
 
 /**
- * `#/` is the list, `#/<problem id>` a problem (`#/<problem id>/lesson` opens
+ * `#/` is the list, `#/<problem id>` a problem (on its lesson until read; `#/<problem id>/lesson` always opens
  * on its lesson), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
@@ -207,9 +207,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           account={account}
           {...(fromRoadmap
             ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
-            : lessonRoute
-              ? { openLesson: 'always' as const }
-              : {})}
+            : { openLesson: lessonRoute ? ('always' as const) : ('unread' as const) })}
         />
       </Suspense>
     );

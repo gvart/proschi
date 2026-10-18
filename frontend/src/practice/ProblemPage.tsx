@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
+import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
@@ -9,6 +10,7 @@ import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
 import LessonView from './LessonView';
+import LessonHost from './LessonHost';
 import TestPanel from './TestPanel';
 import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
@@ -21,6 +23,7 @@ import { recordRunStats } from './runStats';
 import { notifyActivity } from './skills/activity';
 import type { Problem } from './types';
 import HelpMenu from '../onboarding/HelpMenu';
+import { useIsPhone } from '../onboarding/layout';
 import Menu, { MenuItem } from '../components/Playground/Menu';
 import Header from '../design/Header';
 import { startMode, type StartMode } from '../onboarding/seen';
@@ -41,6 +44,7 @@ import { appendHistory, loadGuided, loadHistory, loadSession, saveGuided, saveSe
 import InterviewPanel, { InterviewClock } from './modes/InterviewPanel';
 import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
+import './practiceLayout.css';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 // On phones, Help's items join Reset in one "More" menu (MoreMenu).
@@ -53,15 +57,21 @@ const MistakePanel = lazy(() => import('./MistakePanel'));
 
 const PARSE_DELAY_MS = 150;
 
-type Pane = 'lesson' | 'statement' | 'code' | 'diagram' | 'tests';
+/** The lesson first, as a page of its own; then the workspace, with the lesson in a drawer. */
+type Stage = 'lesson' | 'workspace';
+
+/** The workspace's panes; phones show one at a time, as tabs. */
+export type Pane = 'statement' | 'code' | 'diagram' | 'tests';
 
 const PANES: { id: Pane; label: string; icon: typeof BookOpen }[] = [
-  { id: 'lesson', label: 'Lesson', icon: GraduationCap },
   { id: 'statement', label: 'Problem', icon: BookOpen },
   { id: 'code', label: 'Code', icon: Code2 },
   { id: 'diagram', label: 'Diagram', icon: Network },
   { id: 'tests', label: 'Tests', icon: FlaskConical },
 ];
+
+/** The tests' bar (TestPanel's h-11) and the line above it: all that shows of the folded tests. */
+const TESTS_BAR_PX = 46;
 
 interface ProblemPageProps {
   problem: Problem;
@@ -75,35 +85,60 @@ interface ProblemPageProps {
   banner?: ReactNode;
   /**
    * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson),
-   * or `unread` until "Start the challenge" was pressed once (from the roadmap).
+   * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
    */
   openLesson?: 'always' | 'unread';
 }
 
-/** The pane a problem opens on. */
-function initialPane(problem: Problem, openLesson: ProblemPageProps['openLesson']): Pane {
-  if (problem.lesson === undefined || !openLesson) return 'statement';
-  return openLesson === 'always' || !lessonRead(problem.id) ? 'lesson' : 'statement';
+/** The stage a problem opens on. */
+function initialStage(problem: Problem, openLesson: ProblemPageProps['openLesson']): Stage {
+  if (problem.lesson === undefined || !openLesson) return 'workspace';
+  return openLesson === 'always' || !lessonRead(problem.id) ? 'lesson' : 'workspace';
 }
 
-/** LeetCode-like: the statement on the left, the editor and diagram in the middle, tests at the bottom. Tabs on phones. */
+/**
+ * A problem in two stages: its lesson as a page to read, then "Start the
+ * challenge" opens the workspace (the statement, the editor and the diagram
+ * side by side in resizable panes, the tests folded under them until the
+ * first run). The lesson stays a click away, in a drawer. Tabs on phones.
+ */
 export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
-  const [pane, setPaneState] = useState<Pane>(() => initialPane(problem, openLesson));
-  // The left column on desktop: the lesson or the statement (on phones, `pane` alone decides).
-  const [aside, setAside] = useState<'lesson' | 'statement'>(() => (pane === 'lesson' ? 'lesson' : 'statement'));
-  // Stable, so the tour's steps (which depend on it) are not rebuilt on every render.
-  const setPane = useCallback((p: Pane) => {
-    setPaneState(p);
-    if (p === 'lesson' || p === 'statement') setAside(p);
-  }, []);
   const hasLesson = problem.lesson !== undefined;
-  const panes = hasLesson ? PANES : PANES.filter((p) => p.id !== 'lesson');
+  const [stage, setStage] = useState<Stage>(() => initialStage(problem, openLesson));
+  const [drawer, setDrawer] = useState(false);
+  // A heading to bring into view once the drawer shows (openLessonAt).
+  const [lessonTarget, setLessonTarget] = useState<string>();
+  const phone = useIsPhone();
+  // The pane shown on phones.
+  const [pane, setPaneState] = useState<Pane>('statement');
+  // Desktop: the tests are folded to their bar until the first run or until unfolded.
+  const testsPanel = usePanelRef();
+  const [testsOpen, setTestsOpen] = useState(false);
+  // Bumped when a splitter is let go, so the diagram fits its new size.
+  const [fitTick, setFitTick] = useState(0);
+  const refit = useCallback(() => setFitTick((n) => n + 1), []);
+  const openTests = useCallback(
+    (size = '40%') => {
+      const panel = testsPanel.current;
+      if (panel?.isCollapsed()) panel.resize(size);
+    },
+    [testsPanel],
+  );
+  // Stable, so the tour's steps (which depend on it) are not rebuilt on every render.
+  const setPane = useCallback(
+    (p: Pane) => {
+      setPaneState(p);
+      if (p === 'tests') openTests();
+    },
+    [openTests],
+  );
   const startChallenge = () => {
     markLessonRead(problem.id);
-    setPane('statement');
+    setStage('workspace');
+    setDrawer(false);
     // practice/#/<id>/lesson becomes the problem's own address, so a reload opens the challenge.
     if (/\/lesson$/.test(window.location.hash)) {
       try {
@@ -114,13 +149,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     }
   };
   const editorRef = useRef<CodeEditorHandle>(null);
-  const lessonRef = useRef<HTMLDivElement>(null);
+  const lessonScroll = useRef<HTMLDivElement>(null);
   /** Opens the lesson at a heading, e.g. from a mistake's link. */
   const openLessonAt = (id: string) => {
-    setPane('lesson');
-    // Once the lesson is shown.
-    requestAnimationFrame(() => lessonRef.current?.querySelector(`[id="${CSS.escape(id)}"]`)?.scrollIntoView({ block: 'start' }));
+    setDrawer(true);
+    setLessonTarget(id);
   };
+  useEffect(() => {
+    if (!drawer || !lessonTarget) return;
+    lessonScroll.current?.querySelector(`[id="${CSS.escape(lessonTarget)}"]`)?.scrollIntoView({ block: 'start' });
+    setLessonTarget(undefined);
+  }, [drawer, lessonTarget]);
   const zen = useZenMode();
   const keyboard = useKeyboardViewport();
   const status = statusOf(progress, problem.id);
@@ -229,7 +268,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         if (result.solved) notifyActivity();
       });
     }
-    setPane('tests');
+    setPaneState('tests');
+    // Taller while tests fail, so the failures and their fixes have room.
+    openTests(result.solved ? '40%' : '50%');
   };
 
   const startTour = () => {
@@ -247,9 +288,148 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     editorRef.current?.goTo(loc.line, loc.col);
   };
 
-  const show = (p: Pane) => `${pane === p ? 'flex' : 'hidden'} md:flex`;
-  const asideShown = pane === 'lesson' || pane === 'statement';
-  const lessonShown = hasLesson && aside === 'lesson';
+  const toggleTests = () => {
+    const panel = testsPanel.current;
+    if (!panel) return;
+    if (panel.isCollapsed()) panel.resize('40%');
+    else panel.collapse();
+  };
+
+  const inLesson = hasLesson && stage === 'lesson';
+  const lessonButton = (className: string) =>
+    hasLesson && (
+      <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
+        <GraduationCap size={15} aria-hidden="true" />
+        Lesson
+      </button>
+    );
+
+  const statement = (
+    <div data-tour="statement" className="h-full overflow-y-auto bg-surface">
+      {interviewOn && interview ? (
+        <InterviewPanel
+          problemId={problem.id}
+          statement={problem.statement}
+          interview={interview}
+          session={session}
+          dispatch={dispatchInterview}
+          onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
+          onExit={exitInterview}
+          onRestart={() => setSession(undefined)}
+        >
+          <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
+        </InterviewPanel>
+      ) : (
+        <>
+          {guidedOn && guidedSteps && (
+            <GuidedPanel
+              steps={guidedSteps}
+              progress={guidedState}
+              onCheck={(step) =>
+                evaluateChecks(guidedSteps[step]?.checks ?? [], parseSolution(problem, source).diagram, () => {
+                  const r = runTests(parseSolution(problem, source), engine);
+                  return r.blocked ? undefined : r.results;
+                })
+              }
+              onPass={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'pass', step }, guidedSteps.length) }))}
+              onSkip={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'skip', step }, guidedSteps.length) }))}
+              onRestart={() => updateGuided((g) => ({ ...g, done: [] }))}
+              onExit={() => updateGuided((g) => ({ ...g, active: false }))}
+            />
+          )}
+          <Statement
+            problem={problem}
+            solved={status === 'solved'}
+            onUseSolution={() => setSource(problem.solution)}
+            modes={
+              (interview || (guidedSteps && !guidedOn)) && (
+                <div className="flex flex-wrap items-center gap-2" aria-label="Practice modes" role="group">
+                  {interview && (
+                    <button type="button" onClick={openInterview} className={outlineButton} title="Practise the interview: clarify, estimate, design and wrap up against the clock">
+                      <Timer size={14} aria-hidden="true" />
+                      Interview mode
+                    </button>
+                  )}
+                  {guidedSteps && !guidedOn && (
+                    <button type="button" onClick={openGuided} className={outlineButton} title="Build the design step by step, with a check after each step">
+                      <Compass size={14} aria-hidden="true" />
+                      Guided walkthrough
+                    </button>
+                  )}
+                </div>
+              )
+            }
+          />
+        </>
+      )}
+    </div>
+  );
+
+  const editor = (
+    <EditorZone data-tour="practice-code" className="h-full min-w-0 flex flex-col">
+      <ZenCollapse zen={zen.zen}>
+        <div className="px-3 py-1.5 text-xs font-mono text-muted border-b border-ink/15">
+          solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
+        </div>
+      </ZenCollapse>
+      <div className="flex-1 min-h-0">
+        <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+      </div>
+    </EditorZone>
+  );
+
+  const diagramPane = (
+    <section aria-label="Diagram" className="h-full min-w-0 flex flex-col">
+      <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}:${fitTick}`} engine={engine} onSelect={goTo} zen={zen.zen} />
+    </section>
+  );
+
+  const tests = (
+    <section data-tour="tests" className="h-full flex flex-col">
+      <TestPanel
+        run={run?.result}
+        stale={!!run && run.source !== source}
+        diagnostics={diagnostics}
+        onRun={runNow}
+        onSelect={goTo}
+        collapsed={!phone && !testsOpen}
+        onToggle={phone ? undefined : toggleTests}
+        review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
+        mistake={
+          // Not for the untouched starter: it fails everything, so no one mistake describes it.
+          run && !run.result.blocked && !run.result.solved && problem.wrong?.length && run.source.trim() !== problem.starter.trim() ? (
+            <Suspense fallback={null}>
+              <MistakePanel problem={problem} engine={engine} results={run.result.results} onLesson={openLessonAt} />
+            </Suspense>
+          ) : undefined
+        }
+        celebration={
+          firstSolve && run?.result.solved ? (
+            <Suspense fallback={null}>
+              <SolveCelebration problem={problem} engine={engine} runs={firstSolve.runs} metrics={firstSolve.metrics} before={firstSolve.before} account={account} />
+            </Suspense>
+          ) : undefined
+        }
+        community={
+          run && !run.result.blocked && (community || serverNote) ? (
+            <>
+              {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
+              {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
+              {community && (
+                <ProblemBoards
+                  problemId={problem.id}
+                  signedIn={account.state.status === 'signed-in'}
+                  refresh={statsRefresh}
+                  // The first-solve card offers it itself: once per page.
+                  onOptIn={account.state.status === 'signed-in' && !account.state.user.publicProfile && !firstSolve ? () => void account.update({ publicProfile: true }) : undefined}
+                />
+              )}
+            </>
+          ) : undefined
+        }
+      />
+    </section>
+  );
 
   return (
     <div
@@ -257,6 +437,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       style={keyboard.style}
       data-zen={zen.zen || undefined}
       data-keyboard={keyboard.open || undefined}
+      data-stage={inLesson ? 'lesson' : 'workspace'}
     >
       <ZenCollapse zen={zen.zen}>
       <Header base="../" current="practice" compact>
@@ -274,195 +455,98 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             <CompanyBadge company={problem.company} />
           </span>
         )}
-        {interviewOn && session && (
+        {interviewOn && session && !inLesson && (
           <span className="ml-auto">
             <InterviewClock session={session} dispatch={dispatchInterview} />
           </span>
         )}
-        {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
-        <span className={`hidden sm:flex ${interviewOn && session ? '' : 'ml-auto'}`}>
-          <button onClick={reset} className={toolButton} title="Start over from the starter code">
-            <RotateCcw size={14} />
-            Reset
-          </button>
-        </span>
-        <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
-        <ZenButton zen={zen} className={iconButton} />
+        {inLesson ? (
+          <span className="ml-auto" />
+        ) : (
+          <>
+            {/* From sm up the lesson, Reset and Help have their own buttons; on phones Reset and Help share "More", so the row does not wrap. */}
+            <span className={`hidden sm:flex items-center gap-1 ${interviewOn && session ? '' : 'ml-auto'}`}>
+              {lessonButton(outlineButton)}
+              <button onClick={reset} className={toolButton} title="Start over from the starter code">
+                <RotateCcw size={14} />
+                Reset
+              </button>
+            </span>
+            <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
+            <ZenButton zen={zen} className={iconButton} />
+          </>
+        )}
         <AccountMenu account={account} />
         <HelpMenu className="hidden sm:block" tourLabel="Take the practice tour" onTour={startTour} />
       </Header>
       {banner}
 
-      {/* The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target. */}
-      <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill md:hidden bg-surface">
-        {panes.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            role="tab"
-            data-tour={`tab-${id}`}
-            aria-selected={pane === id}
-            onClick={() => setPane(id)}
-            className={hasLesson ? 'ps-tab !px-2' : 'ps-tab'}
-          >
-            {/* Five tabs fit a phone only without their icons. */}
-            <Icon size={15} className={hasLesson ? 'hidden min-[480px]:block' : undefined} aria-hidden="true" />
-            {label}
-          </button>
-        ))}
-      </div>
+      {phone && !inLesson && (
+        // The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target.
+        <div className="flex items-stretch bg-surface border-b-bw-1 border-ink">
+          <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill flex-1 min-w-0 !border-b-0">
+            {PANES.map(({ id, label, icon: Icon }) => (
+              <button key={id} role="tab" data-tour={`tab-${id}`} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
+                <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
+                {label}
+              </button>
+            ))}
+          </div>
+          {lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
+        </div>
+      )}
       </ZenCollapse>
 
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <aside
-          data-tour="statement"
-          className={`${asideShown ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 min-w-0 ${lessonShown ? 'md:w-[44%] md:max-w-[760px]' : 'md:w-[32%] md:max-w-[560px]'} flex-col overflow-y-auto md:border-r-bw-2 border-ink bg-surface`}
-        >
-          {hasLesson && (
-            <div role="tablist" aria-label="Lesson or problem" className="hidden md:flex sticky top-0 z-10 gap-1 border-b-bw-1 border-ink bg-surface px-3 py-1.5">
-              {(['lesson', 'statement'] as const).map((id) => (
-                <button
-                  key={id}
-                  role="tab"
-                  aria-selected={aside === id}
-                  onClick={() => setPane(id)}
-                  className={`inline-flex items-center gap-1.5 rounded px-2.5 py-1 text-sm font-semibold border-bw-1 ${aside === id ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`}
-                >
-                  {id === 'lesson' ? <GraduationCap size={15} /> : <BookOpen size={15} />}
-                  {id === 'lesson' ? 'Lesson' : 'Problem'}
-                </button>
-              ))}
-            </div>
-          )}
-          {/* Both stay mounted, so the hints already shown survive switching. */}
-          {hasLesson && (
-            <div ref={lessonRef} className={`${lessonShown ? '' : 'hidden'} px-4 py-4`}>
-              <LessonView source={problem.lesson!} onStart={startChallenge} onRead={() => markLessonRead(problem.id)} />
-            </div>
-          )}
-          <div className={lessonShown ? 'hidden' : undefined}>
-            {interviewOn && interview ? (
-              <InterviewPanel
-                problemId={problem.id}
-                statement={problem.statement}
-                interview={interview}
-                session={session}
-                dispatch={dispatchInterview}
-                onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
-                onExit={exitInterview}
-                onRestart={() => setSession(undefined)}
-              >
-                <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
-              </InterviewPanel>
-            ) : (
-              <>
-                {guidedOn && guidedSteps && (
-                  <GuidedPanel
-                    steps={guidedSteps}
-                    progress={guidedState}
-                    onCheck={(step) =>
-                      evaluateChecks(guidedSteps[step]?.checks ?? [], parseSolution(problem, source).diagram, () => {
-                        const r = runTests(parseSolution(problem, source), engine);
-                        return r.blocked ? undefined : r.results;
-                      })
-                    }
-                    onPass={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'pass', step }, guidedSteps.length) }))}
-                    onSkip={(step) => updateGuided((g) => ({ ...g, ...guidedReducer(g, { type: 'skip', step }, guidedSteps.length) }))}
-                    onRestart={() => updateGuided((g) => ({ ...g, done: [] }))}
-                    onExit={() => updateGuided((g) => ({ ...g, active: false }))}
-                  />
-                )}
-                <Statement
-                  problem={problem}
-                  solved={status === 'solved'}
-                  onUseSolution={() => setSource(problem.solution)}
-                  modes={
-                    (interview || (guidedSteps && !guidedOn)) && (
-                      <div className="flex flex-wrap items-center gap-2" aria-label="Practice modes" role="group">
-                        {interview && (
-                          <button type="button" onClick={openInterview} className={outlineButton} title="Practise the interview: clarify, estimate, design and wrap up against the clock">
-                            <Timer size={14} aria-hidden="true" />
-                            Interview mode
-                          </button>
-                        )}
-                        {guidedSteps && !guidedOn && (
-                          <button type="button" onClick={openGuided} className={outlineButton} title="Build the design step by step, with a check after each step">
-                            <Compass size={14} aria-hidden="true" />
-                            Guided walkthrough
-                          </button>
-                        )}
-                      </div>
-                    )
-                  }
-                />
-              </>
-            )}
-          </div>
-        </aside>
-
-        <div className={`${asideShown ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 min-w-0 flex-col`}>
-          <div className={`${pane === 'tests' ? 'hidden' : 'flex'} md:flex flex-1 min-h-0 flex-col lg:flex-row`}>
-            <EditorZone data-tour="practice-code" className={`${show('code')} flex-1 min-h-0 min-w-0 flex-col lg:border-r-bw-2`}>
-              <ZenCollapse zen={zen.zen}>
-                <div className="px-3 py-1.5 text-xs font-mono text-muted border-b border-ink/15">
-                  solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
-                </div>
-              </ZenCollapse>
-              <div className="flex-1 min-h-0">
-                <CodeEditor ref={editorRef} value={source} onChange={setSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+      {!inLesson &&
+        (phone ? (
+          <div className="flex-1 min-h-0 flex flex-col">
+            {([['statement', statement], ['code', editor], ['diagram', diagramPane], ['tests', tests]] as const).map(([id, content]) => (
+              <div key={id} className={pane === id ? 'flex-1 min-h-0' : 'hidden'}>
+                {content}
               </div>
-            </EditorZone>
-            <section className={`${show('diagram')} flex-1 min-h-0 min-w-0 flex-col border-t-bw-2 lg:border-t-0 border-ink`}>
-              <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}`} engine={engine} onSelect={goTo} zen={zen.zen} />
-            </section>
+            ))}
           </div>
-          {/* Taller while tests fail, so the failures and their fixes have room. */}
-          <section data-tour="tests" className={`${show('tests')} flex-1 md:flex-none min-h-0 ${run && !run.result.solved ? 'md:h-[55%]' : 'md:h-[36%]'} flex-col md:border-t-bw-2 border-ink`}>
-            <TestPanel
-              run={run?.result}
-              stale={!!run && run.source !== source}
-              diagnostics={diagnostics}
-              onRun={runNow}
-              onSelect={goTo}
-              review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
-              mistake={
-                // Not for the untouched starter: it fails everything, so no one mistake describes it.
-                run && !run.result.blocked && !run.result.solved && problem.wrong?.length && run.source.trim() !== problem.starter.trim() ? (
-                  <Suspense fallback={null}>
-                    <MistakePanel problem={problem} engine={engine} results={run.result.results} onLesson={openLessonAt} />
-                  </Suspense>
-                ) : undefined
-              }
-              celebration={
-                firstSolve && run?.result.solved ? (
-                  <Suspense fallback={null}>
-                    <SolveCelebration problem={problem} engine={engine} runs={firstSolve.runs} metrics={firstSolve.metrics} before={firstSolve.before} account={account} />
-                  </Suspense>
-                ) : undefined
-              }
-              community={
-                run && !run.result.blocked && (community || serverNote) ? (
-                  <>
-                    {serverNote && <p className="m-3 rounded-md border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-amber-800 dark:text-amber-200">{serverNote}</p>}
-                    {community && <CommunityStats stats={community} canSignIn={account.state.status === 'signed-out' && account.state.providers.length > 0} />}
-                    {community && (
-                      <ProblemBoards
-                        problemId={problem.id}
-                        signedIn={account.state.status === 'signed-in'}
-                        refresh={statsRefresh}
-                        // The first-solve card offers it itself: once per page.
-                        onOptIn={account.state.status === 'signed-in' && !account.state.user.publicProfile && !firstSolve ? () => void account.update({ publicProfile: true }) : undefined}
-                      />
-                    )}
-                  </>
-                ) : undefined
-              }
-            />
-          </section>
-        </div>
-      </div>
+        ) : (
+          <Group orientation="vertical" className="flex-1 min-h-0" onLayoutChanged={refit}>
+            <Panel id="workspace" minSize="25%">
+              <Group orientation="horizontal" className="h-full" onLayoutChanged={refit}>
+                <Panel id="statement" defaultSize="30%" minSize="18%" maxSize="55%">
+                  {statement}
+                </Panel>
+                <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the problem and the editor" />
+                <Panel id="code" defaultSize="36%" minSize="20%">
+                  {editor}
+                </Panel>
+                <Separator className="ps-splitter w-[var(--bw-1)]" aria-label="Resize the editor and the diagram" />
+                <Panel id="diagram" minSize="16%">
+                  {diagramPane}
+                </Panel>
+              </Group>
+            </Panel>
+            <Separator className="ps-splitter h-[var(--bw-1)]" aria-label="Resize the tests" />
+            <Panel
+              id="tests"
+              panelRef={testsPanel}
+              collapsible
+              collapsedSize={TESTS_BAR_PX}
+              defaultSize={TESTS_BAR_PX}
+              minSize="22%"
+              maxSize="80%"
+              onResize={(size) => setTestsOpen(size.inPixels > TESTS_BAR_PX + 1)}
+            >
+              {tests}
+            </Panel>
+          </Group>
+        ))}
+
+      {hasLesson && (
+        <LessonHost mode={inLesson ? 'page' : drawer ? 'drawer' : 'closed'} onClose={() => setDrawer(false)} scrollRef={lessonScroll} title={problem.title}>
+          <LessonView source={problem.lesson!} onStart={inLesson ? startChallenge : undefined} large={inLesson} onRead={() => markLessonRead(problem.id)} />
+        </LessonHost>
+      )}
 
       <ZenStatus zen={zen} />
-      {tour === 'tour' && (
+      {tour === 'tour' && !inLesson && (
         <Suspense fallback={null}>
           <PracticeTour key={tourRun} setPane={setPane} runs={runs} runTests={runNow} onClose={() => setTour(null)} />
         </Suspense>
