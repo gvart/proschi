@@ -1,22 +1,21 @@
 # Proschi language reference
 
-Proschi documents describe an architecture (nodes, groups, connections) and
-use cases (step-by-step request flows) as plain text. The parser lives in
-`frontend/src/dsl/` and never throws: problems come back as diagnostics with a
-line and column, and everything else still renders.
+A Proschi document describes an architecture (nodes, groups and the
+connections between them) and its use cases (request flows, step by step) as
+plain text. A mistake never stops the diagram: each problem is reported with
+its line and column, and everything else still renders.
 
-The parser is the definition of the language. The same code powers the web
-editor, the `proschi` command line and the language server, so every editor
-reports the same problems. See [Editor support](EDITORS.md) for VS Code,
-IntelliJ, Neovim, Helix, Sublime Text and CI, and the [grammar](#grammar) below
-for a summary of the syntax.
+The web editor, the command line and the editor plugins all read documents
+the same way, so they report the same problems. See
+[Editor support](EDITORS.md) for VS Code, IntelliJ, Neovim and CI, and the
+[grammar](#grammar) at the end of this page for the whole syntax at a glance.
 
 ```proschi
 title "E-Commerce Platform"
 
 group vpc "AWS VPC" {
   gateway "API Gateway"   [AWS API Gateway] @Platform
-  orders  "Order Service" [REST API]        @Orders "Handles order processing"
+  orders  "Order Service" [REST API]        @Orders "Handles orders"
 }
 ordersDb "Orders DB"   [PostgreSQL]
 events   "OrderEvents" [Kafka]
@@ -45,46 +44,53 @@ usecase "Create order" {
 ```
 
 The architecture is written once. Any number of use cases can play over it,
-and each use case can branch into scenarios (success and error paths) with
-`alt`. A document can also carry a [high-level design](#high-level-design):
-traffic, requirements, capacity, the data model, decisions and tests.
+and each use case can branch into [scenarios](#scenarios), such as a success
+path and its error paths. A document can also carry a
+[high-level design](#high-level-design): traffic, requirements, capacity, the
+data model, decisions and tests.
 
-The canonical style is what `proschi fmt` (or *Format code* in the editor)
-produces: two spaces per block and aligned columns in runs of similar lines; see
-[Formatting](EDITORS.md#formatting).
+The usual layout is two spaces per block, with similar lines lined up in
+columns. *Format code* in the editor (or [proschi fmt](EDITORS.md#formatting))
+does it for you.
 
 ## Statements
 
+Each line of a document is one statement. The syntax column uses square
+brackets around optional parts; the brackets of a tech stack, such as
+`[Redis]`, are literal.
+
 | Statement | Syntax | Notes |
 |---|---|---|
-| Title | `title "Text" ["Summary"]` | The optional second string is the system summary. |
-| Import | `import "path.proschi"` | Top level only. Adds everything the file declares. See [Imports](#imports). |
-| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3]` | Parts after the id may come in any order; the first string is the name, the second the description. `x3` sets the number of replicas (default 1). |
-| Group | `group id ["Name"] [Style] [pos x,y] { … }` | Holds nodes, nested groups and connections. Style is a grouping tech: `Logical Group` (default), `Network Boundary`, `Security Zone`, `Service Group`. |
-| Connection | `a -> b [: label]` | Architecture edge. Undeclared ids become plain nodes automatically. |
-| Use case | `usecase "Name" ["Description"] { steps }` | Top level only. |
-| Parallel steps | `par { steps }` | Inside a use case or an `alt` block; steps in one block run in parallel. Cannot be nested. |
-| Scenario | `alt "Name" [when "condition"] { steps }` | Inside a use case or another `alt`. See [Scenarios](#scenarios). |
-| Traffic, requirements, capacity | `traffic { … }`, `requirements { … }`, `capacity { … }` | Top level only. See [High-level design](#high-level-design). |
-| Entity | `entity Name [in store] ["Description"] { fields }` | Top level only. The data model. |
-| Decision | `decision "Title" { … }` or `decision "Title" because "Reason"` | Top level only. |
-| Test | `test "Name" { assertions }` | Top level only. Flow assertions. |
-| Comment | `# …` | Anywhere a token can start. A `#` inside quotes or a JSON payload is kept. |
+| Title | `title "Text" ["Summary"]` | The optional second string is a one-line summary of the system. |
+| Import | `import "infra.proschi"` | Top level only. Adds everything that file declares. See [Imports](#imports). |
+| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. |
+| Group | `group id ["Name"] [Style] { … }` | Holds nodes, nested groups and connections. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
+| Connection | `a -> b [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. |
+| Use case | `usecase "Name" ["Description"] { … }` | Top level only. A request flow, step by step. See [Use case steps](#use-case-steps). |
+| Parallel steps | `par { … }` | Inside a use case or a scenario. See [Parallel steps](#parallel-steps). |
+| Scenario | `alt "Name" [when "condition"] { … }` | Inside a use case or another scenario. See [Scenarios](#scenarios). |
+| Traffic, requirements, capacity | `traffic { … }` and the like | Top level only. See [High-level design](#high-level-design). |
+| Entity | `entity Name [in store] { … }` | Top level only. Part of the data model. |
+| Decision | `decision "Title" { … }` | Top level only. Why the design is this way. |
+| Test | `test "Name" { … }` | Top level only. Checks on the request flows. |
+| Comment | `# …` | Anywhere, to the end of the line. A # inside quotes or a JSON payload is just text. |
 
-- **Ids** are letters, digits and `_`, starting with a letter or `_`.
-- **Tech** names a technology from the catalog (about 210 of them, see [Tech stacks](#tech-stacks)), e.g. `[AWS Lambda]`, `[Redis]` or `[Spring Boot]`. It decides the node's icon, its [kind](#selectors-and-kinds) and its default numbers in the simulation.
-- **Annotation tech stacks** (`Text Note`, `Sticky Note`, `Comment`) make text nodes. The description, or else the name, becomes the text.
+- **Ids** are letters, digits and underscores, and don't start with a digit.
+- **The tech stack** names a technology from the catalog (about 210 of them,
+  see [Tech stacks](#tech-stacks)), such as AWS Lambda, Redis or Spring Boot.
+  It decides the node's icon, its [kind](#selectors-and-kinds) and its default
+  numbers in the simulation.
+- **Notes.** The tech stacks Text Note, Sticky Note and Comment make text
+  nodes. The description, or else the name, becomes the text.
 
 ### Tech stacks
 
-The catalog lives in `frontend/src/catalog/componentCatalog.ts`; the editor's
-and the language server's completion list all of it. Each entry has the names
-people usually write as aliases, so `[S3]`, `[Amazon S3]` and `[AWS S3]` are
-the same node, and so are `[Postgres]` and `[PostgreSQL]`, `[ALB]` and
-`[AWS Load Balancer]`, `[k8s]` and `[Kubernetes]`. Matching ignores case,
-spaces and punctuation (`[route 53]`, `[pubsub]`, `[nodejs]`) and a trailing
-version (`[PostgreSQL 16]`, `[Redis 7.2]`). The parse output always holds the
-catalog name.
+The editor and the language server complete the whole catalog. Each entry
+also answers to the names people usually write, so S3, Amazon S3 and AWS S3
+are the same tech, and so are Postgres and PostgreSQL, ALB and AWS Load
+Balancer, k8s and Kubernetes. Case, spaces and punctuation don't matter
+(route 53, pubsub, nodejs), and neither does a version at the end
+(PostgreSQL 16, Redis 7.2).
 
 | Group | Examples |
 |---|---|
@@ -110,7 +116,8 @@ warning names the closest catalog tech when there is one, and the language
 server offers to replace the name with it:
 
 ```text
-Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'? Until then it is simulated as a generic database, like [Database]
+Unknown tech stack 'Postgress'. Did you mean 'PostgreSQL'?
+Until then it is simulated as a generic database, like [Database]
 ```
 
 To keep a product name the catalog lacks without the warning, use the generic
@@ -119,153 +126,195 @@ in the node's name or description.
 
 ## Use case steps
 
+A use case is a list of steps. Each step is an arrow between two nodes and a
+label, and the kind of arrow says what happens:
+
 | Arrow | Meaning |
 |---|---|
-| `a -> b : …` | Synchronous request |
-| `a ->> b : …` | Asynchronous, fire and forget. It becomes async request/response if a reply follows. |
-| `b --> a : …` | Response to the latest unanswered request from `a` to `b` |
-| `a -x b : …` | Failed call: the request never gets an answer (timeout, connection refused). It cannot be answered with `-->`. |
+| `a -> b : …` | A synchronous request: a waits for the answer. |
+| `a ->> b : …` | An asynchronous message, fire and forget. If a reply follows, it is an async request and response. |
+| `b --> a : …` | The response to the latest unanswered request from a to b. |
+| `a -x b : …` | A failed call: the request never gets an answer (a timeout, a refused connection). Nothing can answer it. |
 
-How a step label is read:
+The label is free text, but some shapes mean something:
 
-- A request label may start with `x<N>` (fan-out: the step happens N times per
-  request) and `~<size>` (payload size), in either order, e.g.
-  `worker -> feeds : x200 LPUSH feed:{follower}` or
-  `client -> blobs : ~2MB PUT /files/{id}`. They are removed before the rest of
-  the label is read. See [Fan-out and payload size](#fan-out-and-payload-size).
-- `POST /orders` sets the HTTP method and endpoint. Only the standard verbs count: GET, POST, PUT, PATCH, DELETE, HEAD, OPTIONS.
-- The path may be a template with `{param}` segments, e.g. `GET /orders/{id}`. Braces inside the path are part of it, not a payload.
-- After the method and path, `json …`, `xml …` or `text …` sets the payload format and body. A body that starts with `{`, `[` or `<` is recognised without a keyword.
-- A JSON payload can span several lines. It continues until its brackets balance.
-- Any other text becomes the step name, e.g. `INSERT order` or `OrderCreated {…}`.
-- On a response, a leading three-digit number is the status code, e.g. `201 {"id": 1}`.
+```proschi fragment
+api -> orders  : POST /orders {"sku": "A1"}   # method, path, JSON body
+orders -> db   : INSERT order                 # a step name
+orders --> api : 201 {"id": 42}               # status code and body
+feed -> cache  : x200 LPUSH feed:{follower}   # 200 times per request
+web -> blobs   : ~2MB PUT /files/{id}         # a 2 MB payload
+```
 
-`proschi check` can compare these steps with the OpenAPI specs of the services
-they call: endpoints, status codes and JSON payloads. See
+- **HTTP.** A label that starts with a standard method (GET, POST, PUT,
+  PATCH, DELETE, HEAD or OPTIONS) and a path sets the endpoint. The path may
+  have placeholders such as /orders/{id}.
+- **Payload.** After the path, a body that starts with a brace, a square
+  bracket or an angle bracket is read as JSON or XML. You can also name the
+  format with the words json, xml or text. A JSON body may span several
+  lines; it continues until its brackets balance.
+- **Step name.** Any other text names the step, such as INSERT order or
+  OrderCreated.
+- **Status.** On a response, a leading three-digit number is the status code.
+- **Fan-out and size.** A request label may start with a count (x200) and a
+  payload size (~2MB), in either order. See
+  [Fan-out and payload size](#fan-out-and-payload-size).
+
+The command line can compare these steps with the OpenAPI specs of the
+services they call: endpoints, status codes and JSON payloads. See
 [Checking against OpenAPI](EDITORS.md#checking-against-openapi).
 
 ### Fan-out and payload size
 
-| Prefix | Meaning | Parse output |
-|---|---|---|
-| `x<N>` | The step happens N times per request (N ≥ 1). Load counts N calls; latency counts the step once (batched or parallel). | `multiplier` |
-| `~<size>` | Payload size: a number (decimals allowed) and `B`, `KB`, `MB`, `GB` or `TB`. Units are decimal: 1 MB = 1000 KB. It adds transfer time and egress cost. | `sizeBytes` |
+Two optional prefixes on a request label tell the simulation how much work a
+step really is:
 
-A prefix counts only at the start of a request label and only when followed
-by whitespace or the end of the label, so `xml payload`, `x-request-id` and
-`GET /x200` are ordinary labels. `x0`, a prefix given twice and a malformed
-size (`~2mb`, `~2`, `~MB`) are errors at the prefix. Response (`-->`) labels
-and connection labels outside use cases are read as written.
+| Prefix | Meaning |
+|---|---|
+| `x<N>` | The step happens N times per request (N is 1 or more). Load counts all N calls; latency counts the step once, as if they were batched or parallel. |
+| `~<size>` | The payload size: a number and B, KB, MB, GB or TB. Units are decimal (1 MB is 1000 KB). It adds transfer time and egress cost. |
+
+A prefix counts only at the very start of a request label and only when a
+space or the end of the label follows, so labels such as "xml payload",
+"x-request-id" or "GET /x200" are read as written. A zero count, a prefix
+given twice and a malformed size (lower-case units, a missing unit or number)
+are errors. Responses and connection labels never have prefixes.
 
 ### Reads and writes
 
-Every request step has an `access`, `read` or `write`:
+The simulation counts reads and writes separately, because a store usually
+handles far fewer writes than reads. Each request step is one or the other:
 
-1. With an HTTP method: `POST`, `PUT`, `PATCH` and `DELETE` write; `GET`,
-   `HEAD` and `OPTIONS` read.
-2. Otherwise the first word of the label (after any prefixes, compared
-   case-insensitively, the whole word) decides. The words in the table below
-   write.
-3. Everything else reads: GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, GEOSEARCH,
-   GetItem, MGET, an event name such as `OrderPlaced`, …
+1. **With an HTTP method:** POST, PUT, PATCH and DELETE write; GET, HEAD
+   and OPTIONS read.
+2. **Otherwise the first word of the label decides** (after any prefixes,
+   ignoring case, whole words only). The verbs in the table below write.
+3. **Everything else reads:** GET, SELECT, QUERY, SCAN, FETCH, LOOKUP, an
+   event name such as OrderPlaced, and so on.
 
 | Write verbs | Typical labels |
 |---|---|
-| INSERT, UPDATE, UPSERT, DELETE, CREATE | `INSERT order`, `UPDATE seat SET held` |
-| PUT, SET, WRITE, APPEND, SAVE, STORE, UPLOAD, COMMIT, RECORD, MARK | `PUT pastes/k7Qz2`, `STORE body`, `MARK paid` |
-| PUTITEM, UPDATEITEM, DELETEITEM, BATCHWRITEITEM | DynamoDB: `PutItem Url` |
-| INCR, INCRBY, DECR, HINCRBY, LPUSH, RPUSH, ZADD, HSET, SADD, XADD, MSET, GEOADD | Redis: `INCR rate:42`, `ZADD feed:7 p_981` |
-| RESERVE, HOLD, BOOK, CHARGE | claiming a resource or money: `HOLD seat 12A`, `CHARGE card` |
-| PUBLISH, SEND, ENQUEUE, PRODUCE, EMIT, NOTIFY | handing something on: `EMIT OrderShipped`, `NOTIFY bob` |
+| INSERT, UPDATE, UPSERT, DELETE, CREATE | INSERT order, UPDATE seat SET held |
+| PUT, SET, WRITE, APPEND, SAVE, STORE, UPLOAD, COMMIT, RECORD, MARK | PUT pastes/k7Qz2, STORE body, MARK paid |
+| PUTITEM, UPDATEITEM, DELETEITEM, BATCHWRITEITEM | DynamoDB: PutItem Url |
+| INCR, INCRBY, DECR, HINCRBY, LPUSH, RPUSH, ZADD, HSET, SADD, XADD, MSET, GEOADD | Redis: INCR rate:42, ZADD feed:7 p_981 |
+| RESERVE, HOLD, BOOK, CHARGE | claiming a resource or money: HOLD seat 12A, CHARGE card |
+| PUBLISH, SEND, ENQUEUE, PRODUCE, EMIT, NOTIFY | handing something on: EMIT OrderShipped, NOTIFY bob |
 
-Words that only start like a verb (`Stored`, `Booking`, `Notification`) read.
+Words that only start like a verb (Stored, Booking, Notification) read.
+Requirements about durable writes count write steps only.
 
-`durable` requirements and `writes X before responding` count write steps
-only, and reads and writes load a store's read and write capacity separately.
+The protocol of a step is inferred too: an async arrow, or a queue or broker
+as the target means messaging; an HTTP method means REST, or GraphQL, gRPC
+or SOAP when the target's tech stack says so; anything else is "other".
 
-How the protocol is inferred:
+### Steps follow the architecture
 
-| Condition | Protocol |
-|---|---|
-| `->>` arrow, or a queue target | `MESSAGING` |
-| An HTTP method and a `GraphQL`, `gRPC` or `SOAP API` target | `GRAPHQL`, `GRPC` or `SOAP` |
-| Any other HTTP method | `REST` |
-| Anything else | `OTHER` |
-
-Steps should follow the architecture: when a step goes between two nodes that
-no connection joins (in either direction), the parser warns
-`No connection between 'a' and 'b' in the architecture; add 'a -> b'`. For a
-response the suggested connection points the way the request went. Calls of a
-node to itself are fine, and a document without any connection (only use
-cases) is not checked. The language server offers a quick fix that adds the
-connection.
+When a step goes between two nodes that no connection joins (in either
+direction), you get a warning that suggests the connection to add, and the
+language server can add it for you. A node calling itself is fine, and a
+document without any connections (only use cases) is not checked.
 
 ## Scenarios
 
-One endpoint rarely has one outcome. `alt` blocks split a use case into
-scenarios without copying the steps they share:
+One endpoint rarely has one outcome. Scenario blocks, written with the word
+alt, split a use case into its outcomes without copying the steps they share.
+Pick a scenario in the example and press Play:
 
 ```proschi
+gateway  "API Gateway"   [AWS API Gateway]
+orders   "Order Service" [REST API]
+ordersDb "Orders DB"     [PostgreSQL]
+audit    "Audit log"     [AWS SQS]
+
+gateway -> orders   : HTTP
+orders  -> ordersDb : SQL
+gateway -> audit    : Publish
+
 usecase "Get order" {
-  gateway -> orders : GET /api/orders/42      # shared by every scenario
+  gateway -> orders : GET /api/orders/42   # shared by every scenario
 
   alt "Found" {
     orders -> ordersDb  : SELECT order 42
-    orders --> gateway : 200 {"id": 42}
-  } alt "Not found" {
+    orders --> gateway  : 200 {"id": 42}
+  } alt "Not found" when "no order has that id" {
     orders -> ordersDb  : SELECT order 42
-    orders --> gateway : 404 {"error": "not_found"}
+    orders --> gateway  : 404 {"error": "not_found"}
   } alt "DB timeout" {
     orders -x ordersDb  : SELECT order 42
-    orders --> gateway : 504
+    orders --> gateway  : 504
   }
 
-  gateway ->> audit : OrderViewed               # shared again, after every branch
+  gateway ->> audit : OrderViewed          # shared again, after them
 }
 ```
 
-- `alt` blocks that follow each other directly are one set of alternatives.
-  Close one and open the next on the same line (`} alt "B" {`) or on the next
-  line; a step between two blocks starts a new set.
-- Each branch becomes a scenario. Steps before a set are shared by all its
-  branches, and steps after it are added to every branch.
-- `alt` blocks can be nested. Nested sets, and several sets one after another,
-  multiply: two sets of two branches give four scenarios, named like
-  `A › X`. A use case keeps at most 32 scenarios; the parser warns past that.
-- A response inside a branch can answer a request made before the branch.
-- A scenario is an **error path** when the use case's first request is answered
-  with a 4xx or 5xx status, or fails with `-x`. Playback draws error replies and
-  failed calls in red.
-- A use case without `alt` has a single scenario.
+- **A set of alternatives.** Scenario blocks that follow each other directly
+  are one set: close one and open the next on the same line, as above, or on
+  the next line. A step between two blocks starts a new set.
+- **Shared steps.** Each branch becomes a scenario. Steps before a set are
+  shared by all its branches, and steps after it are added to every branch.
+  A response inside a branch may answer a request made before it.
+- **Nesting.** Scenario blocks can be nested. Nested sets, and several sets
+  in a row, multiply: two sets of two branches give four scenarios, named
+  like "A › X". A use case keeps at most 32 scenarios.
+- **Error paths.** A scenario is an error path when the use case's first
+  request is answered with a 4xx or 5xx status, or fails. Playback draws
+  error replies and failed calls in red.
+- **When.** A branch can say when it happens, as "Not found" does above. The
+  condition is free text; the editor shows it on the scenario's tooltip and
+  during playback. For nested branches the conditions are joined with a dot,
+  such as "cache miss · db down".
+- A use case without scenario blocks has a single scenario. In links, a
+  scenario is named by its name in lower case with dashes (not-found).
 
-A branch can say when it happens: `alt "Not found" when "no order has that id" {`
-(also `} alt "…" when "…" {`). The condition is free text in quotes; `when` is
-a keyword only in this position, so it still works as an id elsewhere. The
-editor shows the condition on the scenario tab's tooltip and as a *When:* line
-during playback. For nested branches the conditions on the path are joined
-with ` · `, e.g. `cache miss · db down`.
+### Parallel steps
 
-Scenario ids are the slugged branch names (`not-found`, `a-x`), used in links.
+Steps in a par block run at the same time, for example a write to the
+database and an event to a queue. The use case waits for the slowest of
+them, so its latency is the longest step in the block, not the sum. Use one
+when a service fans work out and doesn't need one result to start the next.
+
+```proschi
+user   "Shopper"      [Browser]
+api    "Checkout API" [REST API]
+db     "Orders DB"    [PostgreSQL]
+events "Order events" [AWS SNS]
+mail   "Email"        [SendGrid]
+
+user -> api   : HTTPS
+api -> db     : SQL
+api -> events : Publish
+api -> mail   : HTTPS
+
+usecase "Checkout" {
+  user -> api : POST /checkout
+  par {
+    api -> db      : INSERT order
+    api ->> events : OrderPlaced
+    api -> mail    : SEND receipt
+  }
+  api --> user : 201
+}
+```
+
+A par block goes inside a use case or a scenario block. It holds steps only:
+it cannot contain another par block or a scenario block.
 
 ### Grouping by endpoint
 
-The use case picker in the editor groups use cases by the HTTP method and path
-of their first step, e.g. all `POST /api/orders` flows together. Use cases
-that don't start with an HTTP call are listed under *Other flows*.
+The use case picker in the editor groups use cases by the HTTP method and
+path of their first step, so all the flows of one endpoint sit together.
+Use cases that don't start with an HTTP call are listed under *Other flows*.
 
-**Path templates.** Calls to the same endpoint with different ids share a
-group:
+Calls to the same endpoint with different ids share a group:
 
-1. A path with a `{param}` segment groups by itself: `GET /orders/{id}`.
-2. Otherwise, a concrete path joins a template endpoint of another use case in
-   the document with the same method that matches it, where `{param}` stands
-   for exactly one non-empty segment: `GET /orders/order-789` joins
-   `GET /orders/{id}`.
-3. Otherwise, segments that are all digits or a UUID are read as `{id}`:
-   `GET /orders/42` and `GET /orders/43` group as `GET /orders/{id}`.
-
-The use case's `endpoint` stays the literal path; the group key is
-`endpointGroup` in the parse output.
+1. A path with a placeholder groups by itself: GET /orders/{id}.
+2. Otherwise, a concrete path joins a placeholder path of another use case
+   with the same method that it matches, where a placeholder stands for
+   exactly one path segment: GET /orders/order-789 joins GET /orders/{id}.
+3. Otherwise, segments that are all digits or a UUID count as an id, so
+   GET /orders/42 and GET /orders/43 group as GET /orders/{id}.
 
 ## Imports
 
@@ -294,19 +343,29 @@ usecase "Place order" {
 }
 ```
 
-- The path is relative to the importing file. Imports may be nested: an imported file can import others.
-- Everything an imported file declares (nodes, groups, connections, use cases) becomes part of the diagram. The importing document's `title` names it; titles of imported files are ignored.
-- A file imported along several paths (`a` and `b` both import `infra`) is included once. An import cycle is an error on the import that closes it: `Import cycle: a.proschi → b.proschi → a.proschi`. A file that does not exist is an error: `Cannot find 'x.proschi'`.
-- Ids are shared by all files: declaring the same id in two files is an error at the later declaration, naming the file and line of the first. Use case ids stay unique too (a repeated name gets a `-2` suffix).
-- Undeclared ids become plain nodes only after every file is read, so a use case file may use nodes its imports declare.
-- Problems in an imported file are reported with that file's path (`file` in `proschi parse` output).
+- **Paths** are relative to the importing file. An imported file can import
+  others in turn.
+- **Everything is shared.** Everything an imported file declares (nodes,
+  groups, connections, use cases) becomes part of the diagram. The importing
+  document's title names it; titles of imported files are ignored.
+- **Once only.** A file imported along several paths is included once. An
+  import cycle is an error on the import that closes it, and so is a file
+  that does not exist.
+- **Ids stay unique across files.** Declaring the same id in two files is an
+  error at the later one, naming the file and line of the first.
+- **Undeclared ids** become plain nodes only after every file is read, so a
+  use case file may use nodes its imports declare.
+- Problems in an imported file are reported with that file's path.
 
-Where imports are resolved:
+Where imports are found:
 
-| Where | Resolved against |
-|---|---|
-| Web editor | The diagrams saved in the browser, by file name. A diagram opened from a `.proschi` file keeps its name; others are named after their title when they are created, e.g. `title "Shop Infra"` → `shop-infra.proschi`. The name stays when the title changes, so imports keep working; rename it with the pencil in the *Diagrams* menu, where it is shown. A path that matches no saved name exactly falls back to the one diagram with the same file name. |
-| `proschi check` / `parse`, language server | The file system. The language server prefers the text of open, unsaved documents. |
+- **In the web editor**, among the diagrams saved in your browser, by file
+  name. A diagram opened from a .proschi file keeps its name; a new one is
+  named after its title (Shop Infra becomes shop-infra.proschi) and keeps that
+  name when the title changes. Rename it with the pencil in the *Diagrams*
+  menu.
+- **On the command line and in editor plugins**, on disk. The language
+  server prefers the text of open, unsaved documents.
 
 In the web editor, nodes and connections from imported files are drawn like
 any other, but canvas edits only change the open document: moving, renaming or
@@ -316,21 +375,47 @@ files with the file name in front; clicking one opens that diagram.
 
 ## High-level design
 
-Beyond what talks to what, a document can say how much traffic flows, how fast
-and reliable the system must be, what data lives where and why it is built
-this way. These statements are blocks at the top level; each line inside a
-block follows that block's own rules. The design they describe is in
-[docs/design/hld-and-practice.md](design/hld-and-practice.md); how the
+The architecture says what talks to what. A high-level design adds the rest
+of what a design review asks about: how much traffic comes in, how fast and
+reliable the system must be, what each node can take, what data lives where,
+why it is built this way, and checks that keep it that way. Add these blocks
+when you want the simulation to test the design, not only draw it. How the
 simulation turns them into numbers, and how far to trust those numbers, is on
 [How the simulation works](https://proschi.app/docs/model/).
 
-```proschi fragment
-title "URL Shortener" "Turns long URLs into short codes and redirects visitors"
+Each one is a block at the top level of the document. Here is a complete URL
+shortener that uses all of them; open it in the editor to see its results:
 
+```proschi
+title "URL Shortener" "Short codes that redirect to long URLs"
+
+user  "Visitor"       [Browser]
 api   "Shortener API" [REST API]   x12
-cache "Code cache"    [Redis]      x2
+cache "Code cache"    [Redis]      x3
 db    "URL store"     [PostgreSQL] x3
-# … connections and the use cases "Redirect" and "Shorten"
+
+user -> api   : HTTPS
+api  -> cache : RESP
+api  -> db    : SQL
+
+usecase "Redirect" {
+  user -> api : GET /{code}
+  alt "Cache hit" {
+    api -> cache : GET code
+    api --> user : 301
+  } alt "Cache miss" {
+    api -> cache : GET code
+    api -> db    : SELECT url
+    api -> cache : SET code
+    api --> user : 301
+  }
+}
+
+usecase "Shorten" {
+  user -> api  : POST /urls {"target": "https://example.com"}
+  api  -> db   : INSERT url
+  api --> user : 201 {"code": "k7Qz2"}
+}
 
 traffic {
   "Redirect" 100k rps mix "Cache hit" 90%, "Cache miss" 10%
@@ -346,7 +431,8 @@ requirements {
 }
 
 capacity {
-  db 20k rps latency 4ms
+  api 15k rps
+  db  20k rps latency 4ms
 }
 
 entity Url in db "One short code and where it points" {
@@ -356,8 +442,8 @@ entity Url in db "One short code and where it points" {
 }
 
 decision "Cache redirects in Redis" {
-  because "Reads outnumber writes 100:1 and p99 must stay under 100 ms"
-  rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
+  because "Reads outnumber writes 100:1; p99 must stay under 100 ms"
+  rejected "Read replicas only" "5 ms a read, many replicas at 100k rps"
 }
 
 test "Redirects are served from the cache" {
@@ -366,36 +452,43 @@ test "Redirects are served from the cache" {
 }
 ```
 
-The *URL shortener HLD* example in the editor is a complete document using
-every statement.
+The *URL shortener HLD* example in the editor is a larger version of the
+same design.
 
-The words that open these blocks are keywords only in that shape (`traffic {`,
-`entity Name …`, `decision "…" {` or `decision "…" because`, `test "…" {`),
-so older documents that use them as node ids, e.g. `test "Test runner"
-[REST API]`, still parse. A malformed line inside a block is an error on that
-line and the rest of the block is still read; a misplaced block (inside a
-group or a use case) is an error and its lines are skipped. Imported files
-contribute all of these sections. In the parse output each section is left
-out when the document has none.
+Some rules hold for every block:
+
+- **The opening words are keywords only in that shape** (traffic followed by
+  a brace, entity followed by a name, and so on), so older documents that use
+  them as node ids still work.
+- **A broken line is skipped, not the block.** A malformed line inside a
+  block is an error on that line, and the rest of the block is still read. A
+  block inside a group or a use case is an error, and its lines are skipped.
+- **Imported files** contribute their blocks too.
 
 ### Quantities
 
-A quantity is a number, an optional magnitude and an optional unit:
+Every number in these blocks is a quantity: a number, an optional magnitude
+(k, m or b for thousand, million and billion) and a unit. You need them for
+rates, latencies, percentages, costs and bandwidth.
 
-| Part | Values |
-|---|---|
-| Number | `120`, `99.95` |
-| Magnitude | `k` (thousand), `m` (million), `b` (billion) |
-| Unit | `rps`, `rpm`, `rpd` (requests per second, minute, day); `ms`, `s`; `%`; `usd/month`; `MB/s`, `GB/s` (bandwidth); `usd/GB` (egress price) |
+| Kind | Units | Examples |
+|---|---|---|
+| Rate | rps, rpm, rpd (requests per second, minute, day) | `100k rps`, `6k rpm` |
+| Duration | ms, s | `50ms`, `1.5s` |
+| Share or availability | % | `99.9%` |
+| Cost | usd/month, usd/GB (egress price) | `3000 usd/month` |
+| Bandwidth | MB/s, GB/s | `500 MB/s` |
 
-The unit may be attached (`50ms`, `99.9%`, `100krps`) or one space away
-(`50 ms`, `100k rps`). Rates are normalised to requests per second (`6k rpm` is
-100 rps), durations to milliseconds (`1.5s` is 1500 ms) and bandwidth to
-megabytes per second (`1 GB/s` is 1000 MB/s). `ms` is always
-milliseconds. A statement that wants a unit reports a quantity without one, or
-with the wrong one: `'100k' needs a unit: expected a rate, e.g. 100k rps, 6k rpm or 1m rpd`.
+The unit may be attached or one space away (50ms or 50 ms). Rates become
+requests per second (6k rpm is 100 rps), durations milliseconds, bandwidth
+megabytes per second. A quantity without the unit a statement expects is an
+error that says which unit it wants.
 
 ### Traffic
+
+**What it is for:** the load. It says how many requests per second each use
+case gets, and how they split over its scenarios. Without traffic the
+simulation has nothing to measure, so add it before requirements or capacity.
 
 ```proschi fragment
 traffic {
@@ -404,17 +497,21 @@ traffic {
 }
 ```
 
-- One line per use case: `"<use case>" <rate>`.
-- `mix` splits the use case's traffic over its scenarios by their full names
-  (`A › B` for nested branches; a use case without `alt` has one scenario,
-  named like the use case). Without `mix`, all traffic goes to the first
+- One line per use case: its name in quotes, then a rate.
+- **mix** splits that traffic over the scenarios, by their full names (with
+  "A › B" for nested ones). Without it, all the traffic goes to the first
   scenario.
-- Shares should add up to 100%. Otherwise there is a warning and they are
-  scaled to fit. In the parse output shares are fractions (`0.9`).
-- Unknown use case or scenario names are warnings, checked once every file is
-  read. A second line for the same use case is an error.
+- The shares should add up to 100%; otherwise they are scaled to fit, with a
+  warning.
+- An unknown use case or scenario name is a warning. Two lines for the same
+  use case are an error.
 
 ### Requirements
+
+**What it is for:** the targets the design must meet, such as a latency, an
+availability, a budget or surviving a failure. Each requirement becomes a
+check that passes or fails in the editor's *Results* tab and on the command
+line, so you see at once when a change breaks one.
 
 ```proschi fragment
 requirements {
@@ -430,54 +527,56 @@ requirements {
 }
 ```
 
-| Requirement | Meaning |
+| Requirement | Holds when |
 |---|---|
-| `p50`, `p90`, `p95`, `p99` or `p999` `["Use case"] < <duration>` | Latency percentile of the use case (or of every use case with traffic) under its traffic, over all its scenarios mixed by their shares |
-| `p99 "Use case" scenario "S" < <duration>` | The same for one scenario of the use case. An unknown scenario is a warning. |
-| `availability ["Use case"] >= <percent>` | Computed availability of the use case |
-| `durable "Use case"` | Every success scenario writes to a durable node, synchronously, before the entry request is answered |
-| `survive any node failure` | Losing any single node instance keeps every use case working: with replicas, the node does not saturate and every latency requirement that held still holds |
-| `survive failure of <selector>` | The same, for the selected nodes only |
-| `cost <= <usd/month>` | Sum of replica costs and egress |
-
-`<=` is also accepted for latency and `>` for availability. Each requirement
-becomes a test that the simulation evaluates.
+| Latency: `p99 "U" < 50ms` | That percentile of the use case's latency, over all its scenarios mixed by their shares, is under the limit. p50, p90, p95, p99 and p999 work; leave out the use case to check every use case that has traffic, or add `scenario "S"` to check one scenario. |
+| Availability: `availability "U" >= 99.9%` | The computed availability of the use case (or of every use case) is at least that. |
+| Durability: `durable "U"` | Every success scenario writes to a durable store, synchronously, before the first request is answered. |
+| Failures: `survive any node failure` | Losing any single node instance keeps every use case working: nothing saturates and every latency target that held still holds. `survive failure of` a [selector](#selectors-and-kinds) checks only those nodes. |
+| Budget: `cost <= 3000 usd/month` | Replicas plus egress cost at most that much. |
 
 ### Capacity
 
+**What it is for:** your own numbers. Every node starts with the default
+profile of its tech stack (on [How the simulation works](https://proschi.app/docs/model/#profiles)).
+When you know better, from a benchmark, a vendor's limits or production,
+put it here, one line per node id, the parts in any order. The numbers are
+per replica.
+
 ```proschi fragment
 capacity {
-  db    20k rps latency 4ms availability 99.95% cost 400 usd/month durable
-  cache 150k rps
+  db    20k rps latency 4ms availability 99.95% cost 400 usd/month
+  cache 150k rps volatile
   users reads 30k rps writes 8k rps shards 4 consistency strong
   blobs bandwidth 500 MB/s egress 0.05 usd/GB
   pay   timeout 300ms
 }
 ```
 
-Per-replica overrides of the default profile of a node, one line per node id,
-parts in any order:
+| Part | Meaning |
+|---|---|
+| a rate | Requests per second per replica, reads and writes alike |
+| reads, writes | Separate read and write capacity per replica |
+| shards | Number of shards. A store with a single primary scales writes with shards, not replicas. |
+| size S, M or L | The instance size: the default capacity ×1, ×2 or ×4, for ×1, ×1.8 or ×3.5 the cost. An explicit rate or cost wins. |
+| latency | Latency per call |
+| availability | Availability per replica |
+| cost | Monthly cost per replica |
+| durable, volatile | Whether a write there survives a crash |
+| consistency strong, consistency eventual | Which of the selectors any strong store and any eventual store match it |
+| bandwidth | Network bandwidth per replica, for transfer time |
+| egress | Price per GB the node sends to clients and third parties |
+| timeout | What a failed call to the node costs; 1 s by default |
 
-| Part | Meaning | Parse output |
-|---|---|---|
-| `<rate>` | Requests per second per replica, reads and writes alike | `rps` |
-| `reads <rate>`, `writes <rate>` | Separate read and write capacity per replica | `readRps`, `writeRps` |
-| `shards <n>` | Number of shards (n ≥ 1). Single-primary stores scale writes with shards, not replicas. | `shards` |
-| `size S`, `size M` or `size L` | Instance size: the tech's default capacity ×1, ×2 or ×4 for ×1, ×1.8 or ×3.5 the cost. An explicit rate or cost wins. | `size` |
-| `latency <duration>` | Latency per call | `latencyMs` |
-| `availability <percent>` | Availability per replica | `availability` |
-| `cost <usd/month>` | Monthly cost per replica | `costUsd` |
-| `durable` or `volatile` | Whether a write there is durable | `durable` |
-| `consistency strong` or `consistency eventual` | What `any strong store` / `any eventual store` match | `consistency` |
-| `bandwidth <MB/s or GB/s>` | Network bandwidth per replica, for transfer time (and, for nodes you run, how many bytes they can move) | `bandwidthMBps` |
-| `egress <usd/GB>` | Price of data the node sends to clients and third parties (internet egress) | `egressUsdPerGb` |
-| `timeout <duration>` | What a failed call (`-x`) to the node costs; 1 000 ms by default | `timeoutMs` |
-
-An unknown node id is a warning, and so are `shards` or `consistency` on a
-node that is not a data store. A part given twice, a rate together with
-`reads` or `writes`, and a second line for the same node are errors.
+An unknown node id is a warning, and so are shards or consistency on a node
+that is not a data store. A part given twice, a rate together with reads or
+writes, and a second line for the same node are errors.
 
 ### Entities
+
+**What it is for:** the data model. An entity names a kind of record, its
+fields and the store that holds it, so a reader sees what lives where.
+Entities are documentation: the simulation does not use them.
 
 ```proschi fragment
 entity Url in db "One short code and where it points" {
@@ -487,31 +586,40 @@ entity Url in db "One short code and where it points" {
 }
 ```
 
-- `entity <Name> [in <node id>] ["Description"] {`, then one field per line:
-  `<name> <type> {flag}` with the flags `key`, `index`, `unique` and
-  `optional`. Types are free identifiers: `string`, `int`, `time`, `uuid`,
-  `json`, …
-- `in <node>` places the entity in a store. It is a warning when that node is
-  not a data store: a cache, database, search, analytics, queue, broker or storage
-  node (see [kinds](#selectors-and-kinds)).
+- The first line is the entity's name, then optionally **in** and the id of
+  the node that stores it, and a description in quotes.
+- Then one field per line: a name, a type and any of the flags key, index,
+  unique and optional. Types are free words, such as string, int, time or
+  uuid.
+- Placing an entity in a node that is not a data store (a cache, database,
+  search, analytics, queue, broker or storage node, see
+  [kinds](#selectors-and-kinds)) is a warning.
 
 ### Decisions
 
+**What it is for:** the reasons behind the design. A decision records what
+was chosen, why, and which options were rejected and why, next to the
+diagram they explain. Like entities, decisions are documentation.
+
 ```proschi fragment
 decision "Cache redirects in Redis" {
-  because "Reads outnumber writes 100:1 and p99 must stay under 50 ms"
-  rejected "Read replicas only" "About 5 ms per read and many replicas at 100k rps"
+  because "Reads outnumber writes 100:1; p99 must stay under 50 ms"
+  rejected "Read replicas only" "5 ms a read, many replicas at 100k rps"
   rejected "Memcached" "No replication; losing a node empties the cache"
 }
-decision "Base62 codes from a counter" because "Short, unique, no collisions to retry"
+decision "Base62 codes from a counter" because "Short and unique"
 ```
 
-`because "<reason>"` at most once, and any number of
-`rejected "<option>" "<reason>"`. The one-line form takes only `because`.
+A decision has at most one **because** and any number of **rejected** lines,
+each with the option and the reason. The one-line form takes only because.
 
 ### Tests
 
-Tests check how the design works. Every assertion line in a test must hold.
+**What it is for:** rules about how requests flow, which pictures can't
+enforce. Requirements check numbers; tests check structure, such as "the
+redirect reads the cache before the database" or "clients never reach a
+database directly". Every line in a test must hold, and they run with the
+requirements.
 
 ```proschi fragment
 test "Redirect is served from the cache" {
@@ -529,47 +637,50 @@ test "Checkout answers before slow work" {
 }
 ```
 
+In the table, U is a use case and S a scenario, each a name in quotes, and X
+and Y are [selectors](#selectors-and-kinds). After U you may add
+`scenario "S"` to check one scenario only.
+
 | Assertion | Holds when |
 |---|---|
-| `U [scenario S] calls X` | some scenario of U (or S) has a step to a node matching X |
-| `U [scenario S] every scenario calls X` | every scenario of U calls X |
-| `U [scenario S] never calls X` | no scenario of U (or S) calls X |
-| `U [scenario S] calls X before Y` | in every scenario that calls Y, X is called earlier; and some scenario calls Y |
-| `U [scenario S] calls Y after X` | in every scenario that calls both, the last call to Y comes after the first call to X; and some scenario calls both |
-| `U [scenario S] never waits for X` | no synchronous (`->`) call to X happens before U's entry response. Async sends and calls after the response are fine; it also holds when X is never called |
-| `U [scenario S] writes X before responding` | every success scenario has a synchronous, non-failed step to X before the entry response |
-| `U [scenario S] responds <status>` | some scenario's entry response has that status (`201`, or a class `2xx`/`4xx`/`5xx`) |
-| `U has scenario S` | the scenario exists |
-| `U handles failure of X` | some success scenario of U contains a failed call (`-x`) to X |
-| `U starts at X` | U's entry request is sent by a node matching X |
-| `[in U] X calls Y` | some step (of U, or of any use case) is sent by a node matching X to a node matching Y |
-| `[in U] X never calls Y` | no step (of U, or of any use case) is sent by X to Y |
-| `no path from X to Y` | no connection or step goes directly from a node matching X to a node matching Y |
-| `X has replicas >= <n>` | every node matching X has at least n replicas |
+| `U calls X` | Some scenario of U has a step to X. |
+| `U every scenario calls X` | Every scenario of U calls X. |
+| `U never calls X` | No scenario of U calls X. |
+| `U calls X before Y` | In every scenario that calls Y, X is called earlier, and some scenario calls Y. |
+| `U calls Y after X` | In every scenario that calls both, the last call to Y comes after the first call to X, and some scenario calls both. |
+| `U never waits for X` | No synchronous call to X happens before U's first request is answered. Async sends and later calls are fine. |
+| `U writes X before responding` | Every success scenario has a synchronous, successful step to X before the answer. |
+| `U responds 201` | Some scenario answers with that status, or a class such as 4xx. |
+| `U has scenario S` | The scenario exists. |
+| `U handles failure of X` | Some success scenario of U contains a failed call to X. |
+| `U starts at X` | U's first request is sent by X. |
+| `X calls Y` | Some step, in any use case, is sent by X to Y. Start with `in "U"` to look at one use case. |
+| `X never calls Y` | No step is sent by X to Y. |
+| `no path from X to Y` | No connection or step goes directly from X to Y. |
+| `X has replicas >= 2` | Every node matching X has at least that many replicas. |
 
-`U` and `S` are a use case and a scenario name in quotes. An assertion that
-starts with a quoted use case is about that use case (`"U" calls X`: some step
-reaches X); one that starts with a selector or `in "U"` is about the sender
-(`X calls Y`: a step sent by X). `has scenario`, `handles failure of` and
-`starts at` are about the whole use case and take no `scenario`. Order in a scenario
-is the sequence order, requests and responses interleaved. Unknown use cases,
-scenarios (after `scenario`) and nodes are warnings; a test without
-assertions is a warning and two tests with one name are an error.
+An assertion that starts with a use case is about steps that reach X; one
+that starts with a selector is about the sender. Order is the order of the
+sequence, requests and responses interleaved. Unknown use cases, scenarios
+and nodes are warnings, a test without assertions is a warning, and two tests
+with one name are an error.
 
 ### Selectors and kinds
 
-`X` and `Y` above, and `survive failure of`, take a selector:
+**What it is for:** naming several nodes at once. Tests and the failure
+requirement take a selector instead of a single node, so a rule such as
+"never calls any database" keeps holding when you add a database.
 
 | Selector | Matches |
 |---|---|
-| `db` | the node with that id |
-| `[PostgreSQL]` | every node with that tech stack |
-| `any database` | every node of that kind |
-| `any strong store`, `any eventual store` | every data store of that consistency (relational databases and queues are strong; caches, most NoSQL stores, search, CDNs and object storage listings are eventual; `capacity { x consistency … }` overrides) |
-| `X or Y [or Z]` | a node matching any of them, e.g. `never calls any cache or any database` |
+| `db` | The node with that id |
+| `[PostgreSQL]` | Every node with that tech stack |
+| `any database` | Every node of that kind (see the table below) |
+| `any strong store`, `any eventual store` | Every data store with that consistency. Relational databases and queues are strong; caches, most NoSQL stores, search, CDNs and object storage are eventual. A capacity line can change it. |
+| `X or Y` | A node matching any of them, as in never calls any cache or any database |
 
-A node's kind comes from its tech stack (an unknown tech: from its name, see
-[Tech stacks](#tech-stacks)):
+A node's kind comes from its tech stack, or for an unknown tech, from its
+name (see [Tech stacks](#tech-stacks)):
 
 | Kind | Tech stacks (examples) |
 |---|---|
@@ -593,39 +704,44 @@ A node's kind comes from its tech stack (an unknown tech: from its name, see
 
 ## Editing on the canvas
 
-The text is the source of truth. Edits on the diagram are written back into it:
+The text is the source of truth. What you do on the diagram is written back
+into it, and each edit changes only the part of the line it is about, so
+comments and alignment survive:
 
-| Canvas action | Text change |
+| On the canvas | In the text |
 |---|---|
-| Drag a node or group | Adds or updates `pos x,y` on its declaration. Positions of group members are relative to the group. |
-| Double-click a node | Sets its display name: `id "New name"`. |
-| Drag from one node's dot to another's | Adds a connection, `a -> b`. |
-| **Add component**, then pick one | Declares it above the first use case: `redis "Redis" [Redis]`. Dragged onto the canvas instead, it also gets `pos x,y` where it was dropped. |
-| Select a node, then change its settings | Name, tech (`[Redis]`), replicas (`x3`), owner (`@team`) and description edit its declaration. Capacity, latency, availability, cost and (for data stores) shards edit its line in the `capacity` block, which is added when there is none. |
-| Select a connection, then change its label | `a -> b : label`. A label with a JSON or XML payload is edited in the text. |
-| Select, then **Delete** | Removes the node and its connections, or the connection. |
-| **Auto-layout** button | Removes every `pos x,y`. |
+| Drag a node or group | Its position is added or updated (`pos x,y`). Positions inside a group are relative to the group. |
+| Double-click a node | Its display name changes. |
+| Drag from one node's dot to another's | A connection is added. |
+| **Add component**, then pick one | A declaration is added above the first use case, with a position if you dropped it on the canvas. |
+| Select a node, then change its settings | Name, tech stack, replicas, owner and description change its declaration. Capacity, latency, availability, cost and shards change its line in the capacity block, which is added when there is none. |
+| Select a connection, then change its label | The label changes. A label with a JSON or XML payload is edited in the text. |
+| Select, then **Delete** | The node and its connections, or the connection, are removed. |
+| **Auto-layout** | Every position is removed. |
 
-Each edit changes only the part of the line it is about, so comments and alignment survive.
+A node that was only referenced, never declared, gets a declaration line
+above the first use case.
 
-With a `traffic` block, **Overlay: load** draws the simulation on the canvas:
-each node is coloured by how busy it is at the traffic's rates, shows its
-replicas, shards and utilisation, and requests flow along the connections
-(hollow dots for async work, red ones falling off a node past 100%).
-
-A node that was only referenced, never declared, gets a declaration line above the first use case.
+With traffic in the document, **Overlay: load** draws the simulation on the
+canvas: each node is coloured by how busy it is, shows its replicas, shards
+and utilisation, and requests flow along the connections (hollow dots for
+async work, red ones falling off a node past 100%).
 
 ## Links
 
-The address bar always holds the whole document: `#code=…`. When the document
-imports other files, their text travels along as `&imports=…` (a compressed map
-of path to source), so the link renders the same for someone who has none of
-the files. Those files stay attached to the diagram opened from the link and
-win over saved diagrams of the same name. While a use case is playing, the link also names the use case, the scenario (for use cases with `alt` blocks) and the step, e.g. `#code=…&uc=create-order&alt=db-down&step=2`, so a shared link opens playback at that step of that scenario.
+The address bar always holds the whole document, so copying it shares the
+diagram. Imported files travel along in the link, so it renders the same for
+someone who has none of them. While a use case is playing, the link also
+names the use case, the scenario and the step, so a shared link opens
+playback right there:
 
-`app/?example=<id>` opens one of the bundled examples (`hello`, `ecommerce`,
-`serverless`, `login`, `events` or `url-shortener`); the address bar then turns
-into a `#code=…` link like any other.
+```text
+https://proschi.app/app/#code=…&uc=create-order&alt=db-down&step=2
+```
+
+To open one of the bundled examples, add its name to the editor's address:
+app/?example=url-shortener. The examples are hello, ecommerce, serverless,
+login, events and url-shortener.
 
 ## Grammar
 

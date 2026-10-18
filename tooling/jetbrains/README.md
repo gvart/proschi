@@ -3,11 +3,9 @@
 A plugin for IntelliJ IDEA, WebStorm, PyCharm and the other JetBrains IDEs
 (2025.3 and newer) that adds support for Proschi diagrams (`*.proschi`).
 
-> **Status: first version, not yet published.** It was written without
-> access to the IntelliJ SDK (the build sandbox could not reach JetBrains'
-> servers), so it has not been compiled or run yet. The CI workflow
-> (`.github/workflows/jetbrains.yml`) is the first real build. See
-> [What has been verified](#what-has-been-verified).
+Install it from the
+[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi):
+*Settings → Plugins → Marketplace*, search for **Proschi**.
 
 ## Features
 

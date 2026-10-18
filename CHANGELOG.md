@@ -36,8 +36,8 @@ deployed from `main` and ships with the same changes.
   Reformat Code), *Check File*, *Run Tests*, a diagram preview tool window
   that fits the diagrams to its width and follows the IDE theme, and *Open
   in Proschi*, with a settings page for the server, CLI and Node.js paths.
-  Not on the JetBrains Marketplace yet; build it with `./gradlew buildPlugin`
-  (see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
+  Install it from the
+  [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi).
 - **The language server sends semantic tokens** for node ids, tech stacks
   and teams, so editors can color them apart from other names.
 - **`proschi render`, the VS Code preview and HLD exports draw in the
@@ -63,6 +63,14 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Docs that are easier to follow.** The previous / next links follow the
+  sidebar, starting with *Why Proschi*. The language reference explains
+  parallel steps, starts each high-level design block with what it is for,
+  uses plain words instead of strings of code, and its scenario and design
+  examples are complete diagrams. Wide tables and the model page's formulas
+  and default profiles fit the column without scrolling sideways. *Editor
+  support* links the plugins on the JetBrains Marketplace and Open VSX, and
+  the contributor guides have their own *Contribute* group.
 - The server keeps each account's last active day (a date, at most one
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").

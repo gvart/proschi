@@ -1,5 +1,5 @@
 {
-  "$comment": "The docs on the site (/docs/), built from these files by frontend/plugins/docsSite.ts. `pages` is the reading order (previous / next links); `source` is relative to this folder. Every page needs a stub at frontend/docs/<slug>/index.html (the docs home: frontend/docs/index.html). `nav` is the sidebar: an item names a page (with an optional anchor), or an `href` from the site root or an absolute URL.",
+  "$comment": "The docs on the site (/docs/), built from these files by frontend/plugins/docsSite.ts. `pages` lists the pages; `source` is relative to this folder. The previous / next links follow the sidebar (`nav`) order. Every page needs a stub at frontend/docs/<slug>/index.html (the docs home: frontend/docs/index.html). `nav` is the sidebar: an item names a page (with an optional anchor), or an `href` from the site root or an absolute URL.",
   "pages": [
     {
       "slug": "",
@@ -77,7 +77,7 @@
   "nav": [
     {
       "title": "Start",
-      "items": [{ "page": "quickstart" }, { "page": "" }]
+      "items": [{ "page": "" }, { "page": "quickstart" }]
     },
     {
       "title": "Language",
@@ -111,10 +111,15 @@
       "items": [
         { "href": "practice/", "label": "Solving problems" },
         { "href": "practice/cards/", "label": "Review cards" },
-        { "page": "numbers" },
+        { "href": "practice/#/arcade", "label": "Scale or Fail" },
+        { "page": "numbers" }
+      ]
+    },
+    {
+      "title": "Contribute",
+      "items": [
         { "page": "practice-authoring", "label": "Writing problems" },
         { "page": "cards-authoring", "label": "Writing cards" },
-        { "href": "practice/#/arcade", "label": "Scale or Fail" },
         { "page": "game-authoring", "label": "Writing for the game" }
       ]
     },

@@ -105,8 +105,9 @@ number.
 
 ## Where next
 
-- **Learn the language**: groups, async calls, `par`, payloads, imports and
-  the high-level design blocks are in the [language reference](LANGUAGE.md).
+- **Learn the language**: groups, async calls,
+  [parallel steps](LANGUAGE.md#parallel-steps), payloads, imports and the
+  high-level design blocks are in the [language reference](LANGUAGE.md).
 - **Practise**: [system design problems](https://proschi.app/practice/) whose
   tests tell you in the browser whether your design holds up.
 - **Use your own editor**: VS Code, IntelliJ, Neovim and CI support is in
