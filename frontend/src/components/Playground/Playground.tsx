@@ -11,6 +11,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
   AlertCircle,
@@ -105,9 +106,10 @@ import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
 import type { CoverBand } from '../../onboarding/Tour';
 import type { FitInset } from '../Diagram/useFitOnChange';
+import { PlaybackMiniMap, UseCasePlayback } from '../UseCases/UseCasePlayback';
+import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
 
 // Panes that are not visible at start load on first use.
-const UseCasePlayer = lazy(() => import('../UseCases/UseCasePlayback').then((m) => ({ default: m.UseCasePlayer })));
 const HldView = lazy(() => import('../Hld/HldView'));
 const ResultsPanel = lazy(() => import('../Analysis/ResultsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
@@ -121,6 +123,8 @@ const StarterCard = lazy(() => import('../../onboarding/StarterCard'));
 
 const noop = () => {};
 const LEGACY_SOURCE_KEY = 'proschi.playground.source';
+/** The splitter's position between the code and diagram panes. */
+const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
@@ -211,6 +215,10 @@ export default function Playground() {
   const shortLinkRef = useRef<{ key: string; id: string; url: string } | null>(null);
   const [shortening, setShortening] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  /** The code and diagram panes' sizes, as last set with the splitter. */
+  const [splitLayout] = useState(() => loadJson<Layout | undefined>(SPLIT_KEY, undefined));
+  /** Bumped when the splitter is let go, so the diagram re-fits its new width. */
+  const [splitMoves, setSplitMoves] = useState(0);
   // Phones show one pane at a time.
   const [mobilePane, setMobilePane] = useState<'code' | 'diagram'>(initialMobilePane);
   const [view, setView] = useState<View>(initialView);
@@ -944,102 +952,124 @@ export default function Playground() {
         </div>
       </ZenCollapse>
 
-      <div className="flex-1 min-h-0 flex flex-col md:flex-row">
-        <EditorZone
-          id="pane-panel-code"
-          data-tour="code"
-          className={`${mobilePane === 'code' ? 'flex' : 'hidden'} md:flex flex-1 md:flex-none min-h-0 md:w-[42%] md:max-w-[720px] flex-col md:border-r-bw-2`}
-        >
-          <div className="flex-1 min-h-0">
-            <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
-          </div>
-          <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
-        </EditorZone>
-
-        <section id="pane-panel-diagram" className={`${mobilePane === 'diagram' ? 'flex' : 'hidden'} md:flex flex-col flex-1 min-h-0 min-w-0`}>
-          <ZenCollapse zen={zen.zen}>
-            {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
-            {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
-              <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
-            )}
-          </ZenCollapse>
-          <div id={playing ? undefined : `view-panel-${view}`} className="flex-1 min-h-0 relative">
-            <Suspense fallback={<PaneLoading />}>
-              {playing && playedUseCase ? (
-                <UseCasePlayer
-                  useCase={playedUseCase}
-                  nodes={nodes}
-                  edges={edges}
-                  onBack={stopPlaying}
-                  initialStep={initialStep}
-                  onStepChange={setPlayStep}
-                  showHeader={false}
-                />
-              ) : view === 'results' ? (
-                <ResultsPanel
-                  diagram={diagram}
-                  analysis={simulation.analysis}
-                  results={simulation.results}
-                  onSelect={selectDiagnostic}
-                  review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
-                />
-              ) : view === 'hld' ? (
-                <HldView
-                  diagram={diagram}
-                  nodes={nodes}
-                  edges={edges}
-                  analysis={simulation.analysis}
-                  results={simulation.results}
-                  onOpenResults={() => setView('results')}
-                />
-              ) : (
-                <ReactFlowProvider>
-                  <DiagramView
-                    nodes={shownNodes}
-                    overlay={overlay}
-                    canOverlay={canOverlay}
-                    onToggleOverlay={() => setOverlayOn((on) => !on)}
-                    edges={edges}
-                    onNodesChange={setNodes}
-                    onEdgesChange={setEdges}
-                    title={diagram.title}
-                    hasPinnedNodes={diagram.nodes.some((n) => n.position)}
-                    importedNodes={importedNodes}
-                    onMoveNodes={moveNodes}
-                    onConnectNodes={connectNodes}
-                    onRenameNode={renameFromCanvas}
-                    onAddNode={addFromCanvas}
-                    onEdit={editSource}
-                    diagram={diagram}
-                    onResetLayout={() => editSource(clearPositions)}
-                    onDelete={deleteFromCanvas}
-                    fitKey={`${mobilePane}:${layoutSettled}`}
-                    imageRequest={imageRequest}
-                    onImageDone={() => setImageRequest(null)}
-                    notice={notice}
-                    onNotice={setNotice}
-                    cover={tour === 'tour' ? tourCover : null}
-                  />
-                </ReactFlowProvider>
+      {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
+      <Group
+        id="playground-split"
+        className="flex-1 min-h-0 max-md:[&>[data-mobile-hidden]]:!hidden"
+        defaultLayout={splitLayout}
+        onLayoutChanged={(layout, meta) => {
+          if (!meta.isUserInteraction) return;
+          saveJson(SPLIT_KEY, layout);
+          setSplitMoves((n) => n + 1);
+        }}
+      >
+        <SplitPanel id="code" defaultSize="42%" minSize="240px" maxSize="75%" data-mobile-hidden={mobilePane !== 'code' || undefined} className="flex">
+          <EditorZone
+            id="pane-panel-code"
+            data-tour="code"
+            className="flex flex-1 min-h-0 min-w-0 flex-col"
+          >
+            <div className="flex-1 min-h-0">
+              <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
+            </div>
+            <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
+          </EditorZone>
+        </SplitPanel>
+        <Separator
+          aria-label="Resize the code and diagram panes"
+          className="hidden md:block w-[2px] bg-ink outline-none transition-colors hover:bg-pop-pink focus-visible:bg-pop-pink data-[separator=active]:bg-pop-pink"
+        />
+        <SplitPanel id="diagram" minSize="320px" data-mobile-hidden={mobilePane !== 'diagram' || undefined} className="flex">
+          <section id="pane-panel-diagram" className="flex flex-col flex-1 min-h-0 min-w-0">
+            <ZenCollapse zen={zen.zen}>
+              {!playing && <ViewTabs view={view} onChange={setView} results={simulation.results} />}
+              {hasScenarios && useCase && scenario && (view === 'diagram' || playing) && (
+                <ScenarioBar useCase={useCase} current={playing ? scenario.id : undefined} onPick={pickScenario} />
               )}
-            </Suspense>
-            {nodes.length === 0 && !playing && view === 'diagram' &&
-              (isBlank(source) ? (
-                <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
-                  <Suspense fallback={null}>
-                    <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
-                  </Suspense>
-                </div>
-              ) : (
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <p className="text-sm text-muted">
-                    Start typing, e.g. <code className="px-1 bg-ink/5 rounded font-mono">api -&gt; db</code>
-                  </p>
-                </div>
-              ))}
-          </div>
-        </section>
-      </div>
+            </ZenCollapse>
+            <div id={playing ? undefined : `view-panel-${view}`} className="flex-1 min-h-0 relative">
+              <Suspense fallback={<PaneLoading />}>
+                {view === 'results' && !playing ? (
+                  <ResultsPanel
+                    diagram={diagram}
+                    analysis={simulation.analysis}
+                    results={simulation.results}
+                    onSelect={selectDiagnostic}
+                    review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
+                  />
+                ) : view === 'hld' && !playing ? (
+                  <HldView
+                    diagram={diagram}
+                    nodes={nodes}
+                    edges={edges}
+                    analysis={simulation.analysis}
+                    results={simulation.results}
+                    onOpenResults={() => setView('results')}
+                  />
+                ) : (
+                  // Playback restyles this same canvas, so pressing Play does not swap, re-lay-out or re-fit it.
+                  <UseCasePlayback
+                    useCase={playing ? playedUseCase : undefined}
+                    nodes={shownNodes}
+                    edges={edges}
+                    onBack={stopPlaying}
+                    initialStep={initialStep}
+                    onStepChange={setPlayStep}
+                    showHeader={false}
+                  >
+                    {(pv) => (
+                      <ReactFlowProvider>
+                        <DiagramView
+                          nodes={pv.nodes}
+                          playback={pv}
+                          overlay={overlay}
+                          canOverlay={canOverlay}
+                          onToggleOverlay={() => setOverlayOn((on) => !on)}
+                          edges={pv.edges}
+                          onNodesChange={setNodes}
+                          onEdgesChange={setEdges}
+                          title={diagram.title}
+                          hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                          importedNodes={importedNodes}
+                          onMoveNodes={moveNodes}
+                          onConnectNodes={connectNodes}
+                          onRenameNode={renameFromCanvas}
+                          onAddNode={addFromCanvas}
+                          onEdit={editSource}
+                          diagram={diagram}
+                          onResetLayout={() => editSource(clearPositions)}
+                          onDelete={deleteFromCanvas}
+                          fitKey={`${mobilePane}:${layoutSettled}`}
+                        glideKey={String(splitMoves)}
+                          imageRequest={imageRequest}
+                          onImageDone={() => setImageRequest(null)}
+                          notice={notice}
+                          onNotice={setNotice}
+                          cover={tour === 'tour' ? tourCover : null}
+                        />
+                      </ReactFlowProvider>
+                    )}
+                  </UseCasePlayback>
+                )}
+              </Suspense>
+              {nodes.length === 0 && !playing && view === 'diagram' &&
+                (isBlank(source) ? (
+                  <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+                    <Suspense fallback={null}>
+                      <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
+                    </Suspense>
+                  </div>
+                ) : (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                    <p className="text-sm text-muted">
+                      Start typing, e.g. <code className="px-1 bg-ink/5 rounded font-mono">api -&gt; db</code>
+                    </p>
+                  </div>
+                ))}
+            </div>
+          </section>
+        </SplitPanel>
+      </Group>
 
       {showExamples && (
         <Suspense fallback={<PaneLoading overlay />}>
@@ -1203,6 +1233,8 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
+  glideKey: string;
   /** An image to export (the Export menu in the header), made once the nodes are drawn. */
   imageRequest: ImageRequest | null;
   onImageDone: () => void;
@@ -1213,6 +1245,8 @@ interface DiagramViewProps {
   onNotice: (message: string) => void;
   /** A band of the screen covered by a floating card; fitting keeps the diagram clear of it. */
   cover?: CoverBand | null;
+  /** The use case playing over the diagram, if any; the canvas is read-only meanwhile. */
+  playback: PlaybackView;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -1235,13 +1269,16 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  glideKey,
   imageRequest,
   onImageDone,
   importedNodes,
   notice,
   onNotice,
   cover,
+  playback,
 }: DiagramViewProps) {
+  const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
   const [paletteOpen, setPaletteOpen] = useState(false);
@@ -1250,9 +1287,9 @@ function DiagramView({
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
   const selectedNode = selection.nodes.length === 1 ? diagram.nodes.find((n) => n.id === selection.nodes[0].id) : undefined;
   const selectedEdge = selection.edges.length === 1 ? diagram.edges.find((e) => e.id === selection.edges[0].id) : undefined;
-  const showSettings = single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
+  const showSettings = !playing && single !== undefined && single.id !== closedSettings && (selectedNode !== undefined || selectedEdge !== undefined);
   const selectionCount = selection.nodes.length + selection.edges.length;
-  const hasSelection = selectionCount > 0;
+  const hasSelection = !playing && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
@@ -1275,7 +1312,7 @@ function DiagramView({
   };
 
   const deleteSelection = () => {
-    if (selection.nodes.length === 0 && selection.edges.length === 0) return;
+    if (playing || (selection.nodes.length === 0 && selection.edges.length === 0)) return;
     onDelete(
       selection.nodes.map((n) => n.id),
       selection.edges.map((e) => e.id).filter((id) => !id.startsWith('step:')),
@@ -1332,7 +1369,8 @@ function DiagramView({
   }, [coverKey, fitKey]);
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset });
+  // The exception: playback and the splitter resize a pane that stays shown, and there the diagram glides to its new fit.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
@@ -1355,7 +1393,7 @@ function DiagramView({
       }}
       onDrop={(e) => {
         const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
-        if (!tech) return;
+        if (!tech || playing) return;
         e.preventDefault();
         setPaletteOpen(false);
         onAddNode(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
@@ -1372,6 +1410,11 @@ function DiagramView({
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
+        edgeTypes={PLAYBACK_EDGE_TYPES}
+        // Playing a use case shows it over this canvas, read-only.
+        nodesDraggable={!playing}
+        nodesConnectable={!playing}
+        elementsSelectable={!playing}
         onNodesChange={handleNodesChange}
         onEdgesChange={handleEdgesChange}
         onNodeDragStart={(_event, _node, dragged) => {
@@ -1396,7 +1439,7 @@ function DiagramView({
           if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
         }}
         onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
-        onNodeDoubleClick={(_event, node) => promptRename(node)}
+        onNodeDoubleClick={(_event, node) => !playing && promptRename(node)}
         onSelectionChange={handleSelectionChange}
         // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
         deleteKeyCode={null}
@@ -1407,9 +1450,10 @@ function DiagramView({
         proOptions={{ hideAttribution: true }}
       >
         <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
-        {overlay && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
+        {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false} />
-        <Panel position="top-left">
+        {playing && <PlaybackMiniMap view={playback} />}
+        {!playing && <Panel position="top-left">
           <div className="relative">
             <button
               type="button"
@@ -1436,7 +1480,7 @@ function DiagramView({
               </div>
             )}
           </div>
-        </Panel>
+        </Panel>}
         {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
@@ -1472,12 +1516,12 @@ function DiagramView({
             )}
           </Panel>
         )}
-        {nodes.length > 0 && !(hasSelection && !showSettings) && (
+        {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
             Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
         )}
-        {nodes.length > 0 && (
+        {nodes.length > 0 && !playing && (
           <Panel position="top-right" className="flex items-center gap-1">
             {canOverlay && (
               <button
