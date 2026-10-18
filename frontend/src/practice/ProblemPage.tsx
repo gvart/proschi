@@ -56,6 +56,8 @@ const SolveCelebration = lazy(() => import('./SolveCelebration'));
 const MistakePanel = lazy(() => import('./MistakePanel'));
 
 const PARSE_DELAY_MS = 150;
+/** How long a run shows as running: the tests take milliseconds, and a run with no beat between click and verdict feels like nothing happened. */
+const RUN_DELAY_MS = 450;
 
 /** The lesson first, as a page of its own; then the workspace, with the lesson in a drawer. */
 type Stage = 'lesson' | 'workspace';
@@ -237,8 +239,20 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
   const { nodes, edges, settled } = useDiagramLayout(diagram);
 
+  const [running, setRunning] = useState(false);
+  const runTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(runTimer.current), []);
   const runNow = () => {
-    // Run on what is in the editor right now, not the debounced parse.
+    if (running) return;
+    setRunning(true);
+    setPaneState('tests');
+    runTimer.current = setTimeout(() => {
+      setRunning(false);
+      finishRun();
+    }, RUN_DELAY_MS);
+  };
+  const finishRun = () => {
+    // Run on what was in the editor at the click, not the debounced parse.
     const result = runTests(parseSolution(problem, source), engine);
     setRun({ result, source });
     setRuns((n) => n + 1);
@@ -391,6 +405,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         stale={!!run && run.source !== source}
         diagnostics={diagnostics}
         onRun={runNow}
+        running={running}
         onSelect={goTo}
         collapsed={!phone && !testsOpen}
         onToggle={phone ? undefined : toggleTests}
