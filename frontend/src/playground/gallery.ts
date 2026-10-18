@@ -12,6 +12,7 @@ import type { Diagram, Kind } from '../dsl/types';
 const KIND_TAGS: Partial<Record<Kind, string>> = {
   cache: 'cache',
   queue: 'queue',
+  broker: 'broker',
   cdn: 'CDN',
   loadbalancer: 'load balancing',
   gateway: 'API gateway',
@@ -24,7 +25,7 @@ const KIND_TAGS: Partial<Record<Kind, string>> = {
 
 /** The order tags are listed in: architecture patterns first, then flow traits. */
 export const TAG_ORDER = [
-  'cache', 'CDN', 'queue', 'fan-out', 'sharding', 'replication', 'rate limiting', 'load balancing', 'API gateway',
+  'cache', 'CDN', 'queue', 'broker', 'fan-out', 'sharding', 'replication', 'rate limiting', 'load balancing', 'API gateway',
   'search', 'analytics', 'object storage', 'serverless', 'external API', 'async', 'error paths', 'HLD',
 ];
 
@@ -42,7 +43,7 @@ export function patternTags(diagram: Diagram): string[] {
   if (diagram.capacity?.some((c) => (c.shards ?? 1) > 1) || /shard|partition/i.test(text)) tags.add('sharding');
   if (diagram.nodes.some((n) => (n.replicas ?? 1) > 1 && isDataStore(kinds.get(n.id) ?? 'other')) || /replica|follower|standby/i.test(text)) tags.add('replication');
   if (/rate.?limit|throttl|token.?bucket/i.test(text) || steps.some((s) => s.statusCode === 429)) tags.add('rate limiting');
-  const fanOutQueue = diagram.nodes.some((n) => kinds.get(n.id) === 'queue' && diagram.edges.filter((e) => e.source === n.id).length > 1);
+  const fanOutQueue = diagram.nodes.some((n) => (kinds.get(n.id) === 'queue' || kinds.get(n.id) === 'broker') && diagram.edges.filter((e) => e.source === n.id).length > 1);
   if (fanOutQueue || steps.some((s) => (s.multiplier ?? 1) > 1) || /fan.?out/i.test(text)) tags.add('fan-out');
   if (steps.some((s) => s.executionType !== 'SYNC_REQUEST_RESPONSE')) tags.add('async');
   if (diagram.useCases.some((u) => u.scenarios.some((s) => s.outcome === 'error'))) tags.add('error paths');

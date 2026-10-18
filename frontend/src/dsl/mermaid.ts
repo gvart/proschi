@@ -103,6 +103,7 @@ function nodeShape(node: DiagramNode, label: string): string {
     case 'database':
       return `[("${label}")]`;
     case 'queue':
+    case 'broker':
       return `[["${label}"]]`;
     default:
       return `["${label}"]`;

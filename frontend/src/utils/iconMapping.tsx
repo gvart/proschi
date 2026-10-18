@@ -31,6 +31,7 @@ import {
   DoorOpen,
   Bell,
   KeyRound,
+  RadioTower,
 } from 'lucide-react';
 import {
   // AWS Icons
@@ -202,9 +203,9 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
 
   // AWS Messaging
   'AWS SQS': <SiAmazonsqs className="w-5 h-5" />,
-  'AWS SNS': <MessageSquare className="w-5 h-5" />,
-  'AWS EventBridge': <MessageSquare className="w-5 h-5" />,
-  'AWS Kinesis': <MessageSquare className="w-5 h-5" />,
+  'AWS SNS': <RadioTower className="w-5 h-5" />,
+  'AWS EventBridge': <RadioTower className="w-5 h-5" />,
+  'AWS Kinesis': <RadioTower className="w-5 h-5" />,
 
   // AWS CDN/Network
   'AWS CloudFront': <Globe className="w-5 h-5" />,
@@ -262,9 +263,9 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   'Azure Cache for Redis': <SiRedis className="w-5 h-5" />,
 
   // Azure Messaging
-  'Azure Service Bus': <MessageSquare className="w-5 h-5" />,
-  'Azure Event Hubs': <MessageSquare className="w-5 h-5" />,
-  'Azure Event Grid': <MessageSquare className="w-5 h-5" />,
+  'Azure Service Bus': <RadioTower className="w-5 h-5" />,
+  'Azure Event Hubs': <RadioTower className="w-5 h-5" />,
+  'Azure Event Grid': <RadioTower className="w-5 h-5" />,
   'Azure Queue Storage': <MessageSquare className="w-5 h-5" />,
 
   // Azure CDN/Network
@@ -294,14 +295,14 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   Hazelcast: <Database className="w-5 h-5" />,
   Aerospike: <Database className="w-5 h-5" />,
 
-  // Message Queues
+  // Queues & Brokers
   Kafka: <SiApachekafka className="w-5 h-5" />,
   RabbitMQ: <SiRabbitmq className="w-5 h-5" />,
   SQS: <MessageSquare className="w-5 h-5" />,
   'Redis Queue': <SiRedis className="w-5 h-5" />,
   NATS: <SiNatsdotio className="w-5 h-5" />,
   'Apache Pulsar': <SiApachepulsar className="w-5 h-5" />,
-  ActiveMQ: <MessageSquare className="w-5 h-5" />,
+  ActiveMQ: <RadioTower className="w-5 h-5" />,
   ZeroMQ: <MessageSquare className="w-5 h-5" />,
 
   // External Systems
@@ -387,6 +388,7 @@ export const componentTypeColors: Record<ComponentType, string> = {
   service: 'bg-blue-500',
   database: 'bg-green-500',
   queue: 'bg-purple-500',
+  broker: 'bg-fuchsia-500',
   external: 'bg-orange-500',
   serverless: 'bg-yellow-500',
   compute: 'bg-indigo-500',
@@ -407,7 +409,7 @@ export const categoryIcons: Record<string, ReactElement> = {
   'Azure Services': <Cloud className="w-5 h-5" />,
   Databases: <Database className="w-5 h-5" />,
   'Cache & In-Memory': <Layers className="w-5 h-5" />,
-  'Message Queues': <MessageSquare className="w-5 h-5" />,
+  'Queues & Brokers': <MessageSquare className="w-5 h-5" />,
   'External Systems': <ExternalLink className="w-5 h-5" />,
   Annotations: <StickyNote className="w-5 h-5" />,
   Grouping: <FolderOpen className="w-5 h-5" />,
@@ -419,6 +421,7 @@ export const typeIcons: Record<ComponentType, ReactElement> = {
   service: <Server className="w-5 h-5" />,
   database: <Database className="w-5 h-5" />,
   queue: <MessageSquare className="w-5 h-5" />,
+  broker: <RadioTower className="w-5 h-5" />,
   external: <ExternalLink className="w-5 h-5" />,
   serverless: <Zap className="w-5 h-5" />,
   compute: <Cpu className="w-5 h-5" />,

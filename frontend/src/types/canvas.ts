@@ -6,6 +6,7 @@ export type ComponentType =
   | 'service'
   | 'database'
   | 'queue'
+  | 'broker'
   | 'external'
   | 'serverless'
   | 'compute'
