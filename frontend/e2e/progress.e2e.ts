@@ -91,10 +91,12 @@ test.describe('progress page', () => {
     await expect(toast(page)).toHaveCount(0);
 
     await page.getByRole('link', { name: 'Problems' }).first().click();
-    // The reference solution solves it on the first run (and costs the same as the reference).
-    await expect(toast(page)).toContainText('2 new badges');
+    // The reference solution solves it on the first run (and costs the same as the reference); the
+    // problem's lesson, read before the challenge (fixtures.ts), is a first lesson.
+    await expect(toast(page)).toContainText('3 new badges');
     await expect(toast(page)).toContainText('First design');
     await expect(toast(page)).toContainText('Clean run');
+    await expect(toast(page)).toContainText('First lesson');
     await toast(page).getByRole('button', { name: 'Dismiss' }).click();
     await expect(toast(page)).toHaveCount(0);
     await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();

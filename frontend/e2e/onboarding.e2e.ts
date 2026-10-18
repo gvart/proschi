@@ -294,6 +294,18 @@ test.describe('practice tour', () => {
     await clickThrough(page, practiceTour(page), steps, 'Practice tour');
   });
 
+  test.describe('on a problem whose lesson is unread', () => {
+    test.use({ lessons: 'fresh' });
+
+    test('waits for the lesson, then starts with the challenge', async ({ page }) => {
+      await page.goto('practice/#/url-shortener');
+      await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+      await expect(practiceTour(page)).toHaveCount(0);
+      await page.getByRole('button', { name: 'Start the challenge' }).first().click();
+      await expect(practiceTour(page)).toHaveAccessibleName('Practice tour: Read the problem');
+    });
+  });
+
   test('Help on the problem list replays it on the first problem', async ({ page }) => {
     await page.goto('practice/?tour=0');
     await page.getByRole('button', { name: 'Help' }).click();

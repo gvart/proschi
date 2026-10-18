@@ -1,8 +1,9 @@
 import { expect, test, waitForCanvas } from './fixtures';
 
 /**
- * Lessons: a roadmap step opens on its lesson ("Learn"), "Start the
- * challenge" switches to the problem, and a revisit goes straight to it.
+ * Lessons: a problem opens on its lesson (a page of its own) until it is
+ * read, "Start the challenge" opens the workspace, where the lesson is a
+ * drawer away, and a revisit goes straight to the workspace.
  * The e2e build has no accounts, so the roadmap is open.
  */
 test.describe('lessons', () => {
@@ -14,10 +15,13 @@ test.describe('lessons', () => {
     await step.click();
     await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
 
+    // The lesson is the page: nothing of the workspace yet.
     const lesson = page.getByRole('article', { name: 'Lesson' });
     await expect(lesson).toBeVisible();
     await expect(lesson.getByRole('heading', { level: 2, name: "What you'll learn" })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Lesson' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByRole('button', { name: 'Run tests' })).toHaveCount(0);
+    await expect(page.locator('.cm-content')).toHaveCount(0);
+    await expect(lesson.getByRole('button', { name: 'Start the challenge' })).toHaveCount(2);
 
     // The table of contents scrolls to a section.
     await lesson.getByRole('navigation', { name: 'Lesson contents' }).getByRole('button', { name: /Common mistakes/ }).click();
@@ -26,12 +30,24 @@ test.describe('lessons', () => {
     await lesson.getByRole('button', { name: 'Start the challenge' }).first().click();
     await expect(lesson).toHaveCount(0);
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await expect(page.getByRole('tab', { name: 'Problem' })).toHaveAttribute('aria-selected', 'true');
     await waitForCanvas(page);
+    // The tests stay folded to their bar until the first run.
+    await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show the test results' })).toHaveAttribute('aria-expanded', 'false');
 
-    // The lesson stays one click away.
-    await page.getByRole('tab', { name: 'Lesson' }).click();
-    await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+    // The lesson stays one click away, in a drawer that keeps the focus and gives it back on Escape.
+    const open = page.getByRole('button', { name: 'Lesson', exact: true });
+    await open.click();
+    const drawer = page.getByRole('dialog', { name: 'Lesson' });
+    await expect(drawer).toHaveAttribute('aria-modal', 'true');
+    await expect(drawer.getByRole('article', { name: 'Lesson' })).toBeVisible();
+    await expect(drawer.getByRole('button', { name: 'Start the challenge' })).toHaveCount(0);
+    await expect(drawer.getByRole('button', { name: 'Close the lesson' })).toBeFocused();
+    await page.keyboard.press('Shift+Tab');
+    expect(await drawer.evaluate((el) => el.contains(document.activeElement))).toBe(true);
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
+    await expect(open).toBeFocused();
 
     // Read once: opening the step again goes straight to the problem.
     await page.reload();
@@ -39,13 +55,53 @@ test.describe('lessons', () => {
     await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
   });
 
-  test('from the list a problem opens on its statement, with the lesson a tab away', async ({ page }) => {
+  test('from the list a problem whose lesson was read opens on its workspace, with the lesson in a drawer', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await page.getByRole('tab', { name: 'Lesson' }).click();
-    await expect(page.getByRole('article', { name: 'Lesson' }).getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
+    await page.getByRole('button', { name: 'Lesson', exact: true }).click();
+    await expect(page.getByRole('dialog', { name: 'Lesson' }).getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
     // A ```proschi block in the lesson is highlighted.
     await expect(page.locator('pre[data-lang="proschi"] .font-bold').first()).toBeAttached();
+    // A click beside the drawer closes it.
+    await page.mouse.click(20, 400);
+    await expect(page.getByRole('dialog', { name: 'Lesson' })).toHaveCount(0);
+  });
+
+  test.describe('a lesson not read yet', () => {
+    test.use({ lessons: 'fresh' });
+
+    test('comes first from the list too, until the challenge is started', async ({ page }) => {
+      await page.goto('practice/');
+      await page.getByRole('main').getByRole('list').first().getByRole('link', { name: /URL shortener/i }).click();
+      await expect(page).toHaveURL(/#\/url-shortener$/);
+      const lesson = page.getByRole('article', { name: 'Lesson' });
+      await expect(lesson.getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Run tests' })).toHaveCount(0);
+      await lesson.getByRole('button', { name: 'Start the challenge' }).last().click();
+      await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
+      await page.reload();
+      await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
+    });
+  });
+
+  test('what was revealed in the lesson survives closing and reopening its drawer', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    const open = page.getByRole('button', { name: 'Lesson', exact: true });
+    await open.click();
+    const drawer = page.getByRole('dialog', { name: 'Lesson' });
+    const dive = drawer.locator('details[data-block="deepdive"]').first();
+    await dive.locator('summary').click();
+    const quiz = drawer.getByRole('region', { name: 'Quick check' }).first();
+    await quiz.getByLabel('Your estimate in database reads/s').fill('5k');
+    await quiz.getByRole('button', { name: 'Check' }).first().click();
+    await expect(quiz.getByRole('status').first()).toContainText(/(Correct|Close enough): the answer/);
+
+    await page.keyboard.press('Escape');
+    await expect(drawer).toHaveCount(0);
+    await open.click();
+    await expect(dive).toHaveAttribute('open');
+    await expect(quiz.getByRole('status').first()).toContainText(/(Correct|Close enough): the answer/);
   });
 
   test('lesson blocks: the summary, key numbers, a deep dive that opens and a quick check graded in place', async ({ page }) => {
@@ -112,8 +168,8 @@ test.describe('lessons', () => {
       await page.goto('practice/#/url-shortener/lesson');
       const lesson = page.getByRole('article', { name: 'Lesson' });
       await expect(lesson).toBeVisible();
-      // Every tab fits, the last one included.
-      await expect(page.getByRole('tab', { name: 'Tests' })).toBeInViewport({ ratio: 0.99 });
+      // The lesson stage is the lesson alone: no tabs yet.
+      await expect(page.getByRole('tablist', { name: 'View', exact: true })).toHaveCount(0);
       const table = lesson.getByRole('region', { name: 'Table' }).first();
       await table.scrollIntoViewIfNeeded();
       const box = await table.boundingBox();
@@ -124,6 +180,10 @@ test.describe('lessons', () => {
       await lesson.getByRole('button', { name: 'Start the challenge' }).first().click();
       await expect(page).toHaveURL(/#\/url-shortener$/);
       await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
+      // Every tab fits, the last one included, and the lesson's button after them.
+      await expect(page.getByRole('tab', { name: 'Tests' })).toBeInViewport({ ratio: 0.99 });
+      await expect(page.getByRole('button', { name: 'Lesson', exact: true })).toBeInViewport({ ratio: 0.99 });
+      expect(await noPageScroll()).toBe(true);
 
       for (const path of ['practice/url-shortener/', 'practice/approach/', 'practice/#/roadmap/approach']) {
         await page.goto(path);
