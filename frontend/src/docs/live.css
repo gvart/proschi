@@ -87,8 +87,19 @@
   height: 340px;
   background: rgb(var(--c-paper));
 }
+/* Playing adds the step panel and controls below the canvas, which keeps its
+   size, so the diagram does not move when Play is pressed. */
 .live__stage--playing {
-  height: 560px;
+  height: auto;
+}
+.live__stage--playing .pc-playback__canvas {
+  flex: none;
+  height: 340px;
+}
+/* A fixed height, so the page below does not shift from one step to the next. */
+.live__stage--playing .pc-playback__steps {
+  height: 200px;
+  max-height: none;
 }
 /* The player's minimap is for big diagrams; here it would crowd the small canvas. */
 .live__stage .react-flow__minimap {
@@ -99,6 +110,12 @@
     height: 300px;
   }
   .live__stage--playing {
-    height: 600px;
+    height: auto;
+  }
+  .live__stage--playing .pc-playback__canvas {
+    height: 300px;
+  }
+  .live__stage--playing .pc-playback__steps {
+    height: 240px;
   }
 }

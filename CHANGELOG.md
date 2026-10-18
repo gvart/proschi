@@ -17,6 +17,10 @@ deployed from `main` and ships with the same changes.
   plain queues stay `queue`. A broker is simulated exactly like a queue,
   and `any queue` still selects brokers, so existing tests keep passing;
   `any broker` selects brokers only.
+- **Resize the editor's panes.** Drag the splitter between the code and
+  the diagram (or focus it and use the arrow keys); the diagram re-fits
+  and the size is remembered in this browser. Phones keep one pane at a
+  time.
 - **One account control on every page.** The header shows a Sign in
   button when signed out and your name with a menu when signed in, now
   also in the editor, the docs, problem and card pages and the 404 page.
@@ -97,6 +101,12 @@ deployed from `main` and ships with the same changes.
 - The design review no longer announces an AI reviewer.
 
 ### Fixed
+- **Playing a use case no longer flickers.** In the editor, the docs'
+  live examples and the landing page demo, Play, Replay and leaving
+  playback restyle the diagram already on screen instead of swapping in a
+  new canvas: no flash, no jump, and the packet moves smoothly without
+  redrawing the whole diagram on every frame. In the editor the diagram
+  glides to fit the room left by the step panel.
 - A test that names a missing use case suggests adding it
   (`Add usecase "Redirect" { … }`); an existing name is suggested only
   for a likely typo.

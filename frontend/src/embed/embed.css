@@ -34,6 +34,15 @@ body {
   min-height: 0;
   height: auto;
 }
+/* The frame has a fixed height: the canvas gives up room to the step panel. */
+.embed .live__stage--playing .pc-playback__canvas {
+  flex: 1;
+  height: auto;
+}
+.embed .live__stage--playing .pc-playback__steps {
+  height: auto;
+  max-height: 35%;
+}
 
 .embed .live__title {
   min-width: 0;
