@@ -139,6 +139,7 @@ const GENERIC_TECH: Record<Kind, string> = {
   search: 'Search Engine',
   analytics: 'Data Warehouse',
   queue: 'Message Queue',
+  broker: 'Message Broker',
   storage: 'Object Storage',
   external: 'Third Party API',
   other: 'Note',
@@ -1898,7 +1899,7 @@ export function parseSize(text: string): { value: number } | { error: string } {
 }
 
 function inferProtocol(isAsync: boolean, method: string | undefined, target: DiagramNode | undefined): Protocol {
-  if (isAsync || target?.type === 'queue') return 'MESSAGING';
+  if (isAsync || target?.type === 'queue' || target?.type === 'broker') return 'MESSAGING';
   if (!method) return 'OTHER';
   switch (target?.techStack) {
     case 'GraphQL':

@@ -10,6 +10,7 @@ export const TAILWIND_HEX: Record<string, string> = {
   'bg-blue-500': '#3b82f6',
   'bg-green-500': '#22c55e',
   'bg-purple-500': '#a855f7',
+  'bg-fuchsia-500': '#d946ef',
   'bg-orange-500': '#f97316',
   'bg-yellow-400': '#facc15',
   'bg-yellow-500': '#eab308',

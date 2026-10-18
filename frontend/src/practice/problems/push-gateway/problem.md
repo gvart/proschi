@@ -84,7 +84,7 @@ the one server, among many, that holds a device's connection.
   QCon New York 2018 ([summary on InfoQ](https://www.infoq.com/news/2018/07/zuul-push-messaging/)):
   persistent WebSocket and SSE connections to Netty-based Zuul Push
   servers, a push registry in Dynomite (Redis with sharding and
-  replication), a push library that writes to a Kafka queue, message
+  replication), a push library that writes to Kafka, message
   processors that look the customer up and deliver or drop the message,
   5.5 million connected clients at the time, and auto-scaling by open
   connections.

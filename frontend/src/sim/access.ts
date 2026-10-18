@@ -1,5 +1,5 @@
 import { accessOf, type Access } from '../dsl/access';
-import { kindOf } from '../dsl/kinds';
+import { kindMatches, kindOf } from '../dsl/kinds';
 import type { Diagram, DiagramStep } from '../dsl/types';
 
 /**
@@ -14,10 +14,10 @@ export function stepAccess(step: Pick<DiagramStep, 'access' | 'httpMethod' | 'st
 
 /**
  * Access of the steps of `diagram`: as `stepAccess`, except that a request to
- * a queue is always a write, whatever the arrow and the label (§7.2): the
- * queue stores the message, `api ->> jobs : OrderPlaced` included.
+ * a queue or a broker is always a write, whatever the arrow and the label
+ * (§7.2): it stores the message, `api ->> jobs : OrderPlaced` included.
  */
 export function accessIn(diagram: Pick<Diagram, 'nodes'>): (step: DiagramStep) => Access {
-  const queues = new Set(diagram.nodes.filter((n) => kindOf(n) === 'queue').map((n) => n.id));
+  const queues = new Set(diagram.nodes.filter((n) => kindMatches(kindOf(n), 'queue')).map((n) => n.id));
   return (step) => (queues.has(step.toServiceId) ? 'write' : stepAccess(step));
 }

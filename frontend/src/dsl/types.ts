@@ -159,6 +159,7 @@ export type Kind =
   | 'search'
   | 'analytics'
   | 'queue'
+  | 'broker'
   | 'storage'
   | 'external'
   | 'other';

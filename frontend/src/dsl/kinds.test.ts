@@ -35,8 +35,15 @@ describe('kindOf', () => {
     ['Elasticsearch', 'search'],
     ['GCP BigQuery', 'analytics'],
     ['InfluxDB', 'analytics'],
-    ['Kafka', 'queue'],
+    ['Kafka', 'broker'],
+    ['Redpanda', 'broker'],
+    ['Apache Pulsar', 'broker'],
+    ['AWS Kinesis', 'broker'],
+    ['NATS JetStream', 'broker'],
+    ['RabbitMQ', 'broker'],
+    ['Message Broker', 'broker'],
     ['AWS SQS', 'queue'],
+    ['Message Queue', 'queue'],
     ['AWS S3', 'storage'],
     ['Azure Blob Storage', 'storage'],
     ['Payment Gateway', 'external'],
@@ -83,8 +90,16 @@ describe('kindOf', () => {
     expect(isEdge('service')).toBe(false);
   });
 
+  it('lets any queue also match brokers, and any broker only brokers', () => {
+    expect(kindMatches('broker', 'queue')).toBe(true);
+    expect(kindMatches('queue', 'queue')).toBe(true);
+    expect(kindMatches('broker', 'broker')).toBe(true);
+    expect(kindMatches('queue', 'broker')).toBe(false);
+    expect(isKind('broker')).toBe(true);
+  });
+
   it('knows which kinds store data', () => {
-    expect(KINDS.filter(isDataStore)).toEqual(['cache', 'database', 'search', 'analytics', 'queue', 'storage']);
+    expect(KINDS.filter(isDataStore)).toEqual(['cache', 'database', 'search', 'analytics', 'queue', 'broker', 'storage']);
     expect(isKind('cache')).toBe(true);
     expect(isKind('node')).toBe(false);
   });

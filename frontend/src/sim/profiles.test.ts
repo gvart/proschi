@@ -45,7 +45,8 @@ describe('kindOf', () => {
     ['database', 'Elasticsearch', 'search'],
     ['database', 'GCP BigQuery', 'analytics'],
     ['database', 'InfluxDB', 'analytics'],
-    ['queue', 'Kafka', 'queue'],
+    ['broker', 'Kafka', 'broker'],
+    ['queue', 'AWS SQS', 'queue'],
     ['storage', 'AWS S3', 'storage'],
     ['external', 'Payment Gateway', 'external'],
   ])('%s %s is %s', (type, tech, kind) => {
@@ -143,11 +144,19 @@ describe('profileOf', () => {
     expect(profileOf(node('service', 'REST API'), { node: 'n', timeoutMs: 250, loc }).timeoutMs).toBe(250);
   });
 
+  it('simulates a broker exactly like a queue, for now', () => {
+    const { kind: brokerKind, ...broker } = profileOf(node('broker', 'Kafka'));
+    const { kind: queueKind, ...queue } = profileOf(node('queue', 'AWS SQS'));
+    expect([brokerKind, queueKind]).toEqual(['broker', 'queue']);
+    expect(broker).toEqual(queue);
+  });
+
   it('gives data stores a consistency (§7.4), and nothing else one', () => {
     const consistency = (type: DiagramNode['type'], tech: DiagramNode['techStack']) => profileOf(node(type, tech)).consistency;
     expect(consistency('database', 'PostgreSQL')).toBe('strong');
     expect(consistency('database', 'GCP Spanner')).toBe('strong');
-    expect(consistency('queue', 'Kafka')).toBe('strong');
+    expect(consistency('broker', 'Kafka')).toBe('strong');
+    expect(consistency('queue', 'AWS SQS')).toBe('strong');
     expect(consistency('database', 'DynamoDB')).toBe('eventual');
     expect(consistency('database', 'Cassandra')).toBe('eventual');
     expect(consistency('cache', 'Redis')).toBe('eventual');

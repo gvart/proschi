@@ -47,7 +47,8 @@ export const componentCatalog = [
   { type: 'database', techStack: 'Database', category: 'Generic Components', searchTerms: 'database relational sql db', aliases: ['DB', 'RDBMS', 'SQL Database', 'Relational Database', 'SQL'] },
   { type: 'database', techStack: 'NoSQL Database', category: 'Generic Components', searchTerms: 'nosql key value document wide column database', profile: 'nosql', aliases: ['NoSQL', 'NoSQL DB', 'Key-Value Store', 'KV Store', 'Document Store', 'Document Database', 'Wide-Column Store'] },
   { type: 'cache', techStack: 'Cache', category: 'Generic Components', searchTerms: 'cache in-memory key value', aliases: ['In-Memory Cache', 'Distributed Cache'] },
-  { type: 'queue', techStack: 'Message Queue', category: 'Generic Components', searchTerms: 'queue message broker topic stream event bus', aliases: ['Queue', 'Message Broker', 'Broker', 'Event Bus', 'Topic', 'Event Stream', 'Stream'] },
+  { type: 'queue', techStack: 'Message Queue', category: 'Generic Components', searchTerms: 'queue message job task', aliases: ['Queue', 'Job Queue', 'Task Queue'] },
+  { type: 'broker', techStack: 'Message Broker', category: 'Generic Components', searchTerms: 'message broker topic stream event bus log pub sub', aliases: ['Broker', 'Event Bus', 'Topic', 'Event Stream', 'Stream', 'Event Log'] },
   { type: 'storage', techStack: 'Object Storage', category: 'Generic Components', searchTerms: 'object storage blob bucket files', aliases: ['Object Store', 'Blob Store', 'Blob Storage', 'Bucket', 'Storage', 'File Storage'] },
   { type: 'cdn', techStack: 'CDN', category: 'Generic Components', searchTerms: 'cdn content delivery network edge cache', kind: 'cdn', aliases: ['Content Delivery Network', 'Edge Cache'] },
   { type: 'cdn', techStack: 'Load Balancer', category: 'Generic Components', searchTerms: 'load balancer lb reverse proxy', kind: 'loadbalancer', aliases: ['LB', 'Reverse Proxy', 'L7 Load Balancer', 'L4 Load Balancer'] },
@@ -116,10 +117,10 @@ export const componentCatalog = [
 
   // AWS Messaging
   { type: 'queue', techStack: 'AWS SQS', category: 'AWS Services', searchTerms: 'aws sqs queue message', aliases: ['Amazon SQS', 'Simple Queue Service'] },
-  { type: 'queue', techStack: 'AWS SNS', category: 'AWS Services', searchTerms: 'aws sns notification topic pubsub', aliases: ['SNS', 'Amazon SNS', 'Simple Notification Service'] },
-  { type: 'queue', techStack: 'AWS EventBridge', category: 'AWS Services', searchTerms: 'aws eventbridge event bus', aliases: ['EventBridge', 'Amazon EventBridge'] },
-  { type: 'queue', techStack: 'AWS Kinesis', category: 'AWS Services', searchTerms: 'aws kinesis stream data', aliases: ['Kinesis', 'Amazon Kinesis', 'Kinesis Data Streams'] },
-  { type: 'queue', techStack: 'AWS MSK', category: 'AWS Services', searchTerms: 'aws msk managed kafka stream', aliases: ['MSK', 'Amazon MSK', 'Managed Streaming for Kafka'] },
+  { type: 'broker', techStack: 'AWS SNS', category: 'AWS Services', searchTerms: 'aws sns notification topic pubsub', aliases: ['SNS', 'Amazon SNS', 'Simple Notification Service'] },
+  { type: 'broker', techStack: 'AWS EventBridge', category: 'AWS Services', searchTerms: 'aws eventbridge event bus', aliases: ['EventBridge', 'Amazon EventBridge'] },
+  { type: 'broker', techStack: 'AWS Kinesis', category: 'AWS Services', searchTerms: 'aws kinesis stream data', aliases: ['Kinesis', 'Amazon Kinesis', 'Kinesis Data Streams'] },
+  { type: 'broker', techStack: 'AWS MSK', category: 'AWS Services', searchTerms: 'aws msk managed kafka stream', aliases: ['MSK', 'Amazon MSK', 'Managed Streaming for Kafka'] },
 
   // AWS CDN/Network
   { type: 'cdn', techStack: 'AWS CloudFront', category: 'AWS Services', searchTerms: 'aws cloudfront cdn edge', kind: 'cdn', aliases: ['CloudFront', 'Amazon CloudFront'] },
@@ -154,7 +155,7 @@ export const componentCatalog = [
   { type: 'cache', techStack: 'GCP Memorystore', category: 'GCP Services', searchTerms: 'gcp google memorystore redis memcached cache', aliases: ['Memorystore'] },
 
   // GCP Messaging
-  { type: 'queue', techStack: 'GCP Pub/Sub', category: 'GCP Services', searchTerms: 'gcp google pubsub pub/sub message queue', aliases: ['Pub/Sub', 'Google Pub/Sub', 'Cloud Pub/Sub'] },
+  { type: 'broker', techStack: 'GCP Pub/Sub', category: 'GCP Services', searchTerms: 'gcp google pubsub pub/sub message queue', aliases: ['Pub/Sub', 'Google Pub/Sub', 'Cloud Pub/Sub'] },
 
   // GCP CDN/Network
   { type: 'cdn', techStack: 'GCP Cloud CDN', category: 'GCP Services', searchTerms: 'gcp google cloud cdn edge', kind: 'cdn', aliases: ['Cloud CDN', 'Google Cloud CDN'] },
@@ -187,9 +188,9 @@ export const componentCatalog = [
   { type: 'database', techStack: 'Azure AI Search', category: 'Azure Services', searchTerms: 'azure ai cognitive search', kind: 'search', aliases: ['Azure Cognitive Search', 'Azure Search'] },
 
   // Azure Messaging
-  { type: 'queue', techStack: 'Azure Service Bus', category: 'Azure Services', searchTerms: 'azure service bus queue message', aliases: ['Service Bus'] },
-  { type: 'queue', techStack: 'Azure Event Hubs', category: 'Azure Services', searchTerms: 'azure event hubs stream', aliases: ['Event Hubs', 'Event Hub'] },
-  { type: 'queue', techStack: 'Azure Event Grid', category: 'Azure Services', searchTerms: 'azure event grid', aliases: ['Event Grid'] },
+  { type: 'broker', techStack: 'Azure Service Bus', category: 'Azure Services', searchTerms: 'azure service bus queue message', aliases: ['Service Bus'] },
+  { type: 'broker', techStack: 'Azure Event Hubs', category: 'Azure Services', searchTerms: 'azure event hubs stream', aliases: ['Event Hubs', 'Event Hub'] },
+  { type: 'broker', techStack: 'Azure Event Grid', category: 'Azure Services', searchTerms: 'azure event grid', aliases: ['Event Grid'] },
   { type: 'queue', techStack: 'Azure Queue Storage', category: 'Azure Services', searchTerms: 'azure queue storage message', aliases: ['Azure Queue', 'Azure Queues'] },
 
   // Azure CDN/Network
@@ -233,16 +234,16 @@ export const componentCatalog = [
   { type: 'cache', techStack: 'KeyDB', category: 'Cache & In-Memory', searchTerms: 'keydb redis cache memory' },
   { type: 'cache', techStack: 'Dragonfly', category: 'Cache & In-Memory', searchTerms: 'dragonfly dragonflydb redis cache memory', aliases: ['DragonflyDB'] },
 
-  // Message Queues
-  { type: 'queue', techStack: 'Kafka', category: 'Message Queues', searchTerms: 'kafka message queue stream', aliases: ['Apache Kafka', 'Confluent', 'Confluent Kafka', 'Kafka Topic'] },
-  { type: 'queue', techStack: 'RabbitMQ', category: 'Message Queues', searchTerms: 'rabbitmq message queue amqp', aliases: ['Rabbit', 'AMQP'] },
-  { type: 'queue', techStack: 'SQS', category: 'Message Queues', searchTerms: 'sqs queue aws message' },
-  { type: 'queue', techStack: 'Redis Queue', category: 'Message Queues', searchTerms: 'redis queue message', aliases: ['Redis Streams', 'Redis Pub/Sub'] },
-  { type: 'queue', techStack: 'NATS', category: 'Message Queues', searchTerms: 'nats message queue', aliases: ['NATS JetStream', 'JetStream'] },
-  { type: 'queue', techStack: 'Apache Pulsar', category: 'Message Queues', searchTerms: 'pulsar message queue stream', aliases: ['Pulsar'] },
-  { type: 'queue', techStack: 'ActiveMQ', category: 'Message Queues', searchTerms: 'activemq message queue', aliases: ['Apache ActiveMQ', 'Amazon MQ'] },
-  { type: 'queue', techStack: 'ZeroMQ', category: 'Message Queues', searchTerms: 'zeromq zmq message queue', aliases: ['ZMQ', '0MQ'] },
-  { type: 'queue', techStack: 'Redpanda', category: 'Message Queues', searchTerms: 'redpanda kafka stream queue' },
+  // Queues & Brokers: a queue hands each message to one consumer; a broker routes or logs it for many.
+  { type: 'broker', techStack: 'Kafka', category: 'Queues & Brokers', searchTerms: 'kafka message broker event stream log topic', aliases: ['Apache Kafka', 'Confluent', 'Confluent Kafka', 'Kafka Topic'] },
+  { type: 'broker', techStack: 'RabbitMQ', category: 'Queues & Brokers', searchTerms: 'rabbitmq message broker queue amqp', aliases: ['Rabbit', 'AMQP'] },
+  { type: 'queue', techStack: 'SQS', category: 'Queues & Brokers', searchTerms: 'sqs queue aws message' },
+  { type: 'queue', techStack: 'Redis Queue', category: 'Queues & Brokers', searchTerms: 'redis queue message', aliases: ['Redis Streams', 'Redis Pub/Sub'] },
+  { type: 'broker', techStack: 'NATS', category: 'Queues & Brokers', searchTerms: 'nats message broker stream', aliases: ['NATS JetStream', 'JetStream'] },
+  { type: 'broker', techStack: 'Apache Pulsar', category: 'Queues & Brokers', searchTerms: 'pulsar message broker stream', aliases: ['Pulsar'] },
+  { type: 'broker', techStack: 'ActiveMQ', category: 'Queues & Brokers', searchTerms: 'activemq message broker queue', aliases: ['Apache ActiveMQ', 'Amazon MQ'] },
+  { type: 'queue', techStack: 'ZeroMQ', category: 'Queues & Brokers', searchTerms: 'zeromq zmq message queue', aliases: ['ZMQ', '0MQ'] },
+  { type: 'broker', techStack: 'Redpanda', category: 'Queues & Brokers', searchTerms: 'redpanda kafka message broker stream' },
 
   // Search
   { type: 'database', techStack: 'OpenSearch', category: 'Search', searchTerms: 'opensearch elasticsearch search', kind: 'search' },
