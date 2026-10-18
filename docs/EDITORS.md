@@ -1,87 +1,66 @@
 # Editor support
 
-Proschi ships as three pieces that any editor can load. All of them come from
-`tooling/` and are built from the same parser the web editor runs
-(`frontend/src/dsl`), so an IDE, CI and the browser always agree on what is
-valid.
+Proschi works in your own editor and in CI, not only in the browser. The
+editor plugins, the command line and the web editor all run the same parser,
+so they always agree on what is valid.
 
-| Piece | File | Gives you |
-|---|---|---|
-| TextMate grammar | `tooling/grammar/proschi.tmLanguage.json` | Syntax highlighting |
-| Language server (LSP, stdio) | `proschi-language-server` | Errors and warnings as you type, quick fixes (add a missing connection, replace an unknown tech stack with the suggested one), completion (keywords, node ids, the whole tech catalog with its aliases), hover, go to definition, find references, outline, formatting, links on import paths, failing requirements and tests |
-| Command line | `proschi check` / `proschi parse` / `proschi fmt` / `proschi render` / `proschi test` / `proschi analyze` / `proschi problem` | Validation in CI and pre-commit hooks, optionally [against OpenAPI specs](#checking-against-openapi); the parsed diagram as JSON; formatting; SVG, Markdown and HTML output (see [Rendering and export](#rendering-and-export)); requirements, tests and the capacity table (see [Simulation and tests](#simulation-and-tests)); checking and scaffolding practice problems (see [Practice](#practice)) |
-| JSON Schema | `tooling/schema/proschi-diagram.schema.json` | The shape of `proschi parse` output, for tools in any language |
+| Editor | Install |
+|---|---|
+| IntelliJ IDEA, WebStorm, PyCharm and other JetBrains IDEs | [Proschi on the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi) |
+| VSCodium, Cursor, Windsurf, Gitpod and other editors that use Open VSX | [Proschi on Open VSX](https://open-vsx.org/extension/gvart/proschi) |
+| VS Code | The `.vsix` file from [Open VSX](https://open-vsx.org/extension/gvart/proschi) (see [VS Code](#vs-code)) |
+| Neovim, Helix, Sublime Text and any editor with a language server client | The `proschi` npm package, then a few lines of setup (below) |
 
-## Releasing
+Everything else is built on three pieces:
 
-Maintainers: bump `version` in both `tooling/package.json` and
-`tooling/vscode/package.json` and merge. Then push the tag
-`tooling-v<version>`:
-
-```sh
-git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
-```
-
-On a phone, creating a GitHub release with that new tag (*Releases → Draft a
-new release*) does the same, and so does running the workflow by hand on
-`main` (*Actions → Release tooling → Run workflow*), which tags the version in
-`tooling/package.json`. The *Release tooling* workflow tests, publishes
-`proschi` to npm through Trusted Publishing (no token in the repository),
-attaches the `.vsix` to the GitHub release, creating the release if needed,
-and publishes the extension to the VS Code Marketplace and Open VSX. Those two
-need the repository secrets `VSCE_PAT` (an Azure DevOps token with the
-Marketplace *Manage* scope for the publisher `gvart`) and `OVSX_PAT` (an
-Open VSX access token, with the namespace `gvart` created once); while a
-secret is missing, its step is skipped with a notice. The tag also pins the
-[GitHub Action](#github-action).
-
-The JetBrains plugin is released on its own: bump `pluginVersion` in
-`tooling/jetbrains/gradle.properties`, merge, and push the tag
-`jetbrains-v<version>`. The *JetBrains plugin* workflow signs it and publishes
-it to the JetBrains Marketplace once its secrets are set up (see
-[tooling/jetbrains/README.md](https://github.com/gvart/proschi/blob/main/tooling/jetbrains/README.md)).
+- **A language server** (`proschi-language-server`): errors and warnings as
+  you type, quick fixes (add a missing connection, replace an unknown tech
+  stack), completion of keywords, node ids and the whole tech catalog, hover,
+  go to definition, find references, outline, formatting and failing
+  requirements and tests.
+- **A command line** (`proschi`): checks files in CI and pre-commit hooks,
+  optionally [against OpenAPI specs](#checking-against-openapi); formats them;
+  renders SVG, Markdown and HTML (see [Rendering and export](#rendering-and-export));
+  runs requirements and tests (see [Simulation and tests](#simulation-and-tests)).
+- **A TextMate grammar** for syntax highlighting, and a JSON Schema of the
+  parsed diagram for tools in any language. Both are in the
+  [Proschi repository](https://github.com/gvart/proschi/tree/main/tooling).
 
 ## Install
 
-The command-line tool and the language server are the `proschi` package on
-npm (Node 18 or newer):
+The command line and the language server are the `proschi` package on npm
+(Node 18 or newer):
 
 ```sh
-npm install -g proschi     # puts `proschi` and `proschi-language-server` on PATH
+npm install -g proschi     # puts proschi and proschi-language-server on PATH
 npx proschi check docs/    # or run it without installing
-```
-
-The VS Code extension is `proschi-<version>.vsix`, attached to every
-[GitHub release](https://github.com/gvart/proschi/releases).
-
-To build both from the repository instead:
-
-```sh
-cd tooling
-npm ci
-npm run build              # dist/cli.cjs, dist/server.cjs
-npm install -g .           # puts `proschi` and `proschi-language-server` on PATH
-npm run package:vscode     # dist/proschi.vsix
 ```
 
 ## VS Code
 
-Install `proschi-<version>.vsix` from the latest release, or the
-`tooling/dist/proschi.vsix` you built (Extensions view → `…` → *Install from
-VSIX…*, or `code --install-extension proschi-<version>.vsix`). It bundles
-the grammar and the language server; nothing else is needed.
+Editors that use Open VSX (VSCodium, Cursor, Windsurf, Gitpod) find
+**Proschi** in their Extensions view, or install it from
+[Open VSX](https://open-vsx.org/extension/gvart/proschi).
+
+In VS Code, download the `.vsix` from the
+[Open VSX page](https://open-vsx.org/extension/gvart/proschi) (*Download*),
+then *Extensions view → … → Install from VSIX…*, or run
+`code --install-extension proschi-<version>.vsix`. Every
+[GitHub release](https://github.com/gvart/proschi/releases) has the same file.
+
+The extension bundles the grammar and the language server; nothing else is
+needed.
 
 ## IntelliJ IDEA and other JetBrains IDEs
 
 ### The Proschi plugin
 
-`tooling/jetbrains` is a plugin for JetBrains IDEs 2025.3 and newer
-(IntelliJ IDEA in the free and paid tiers, WebStorm, PyCharm, GoLand and the
-others). It is not on the JetBrains Marketplace yet. To build it, run
-`./gradlew buildPlugin` (JDK 21), then *Settings → Plugins → ⚙ → Install
-Plugin from Disk…* and pick the zip in `build/distributions/`. It brings:
+Install [Proschi from the JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi):
+*Settings → Plugins → Marketplace*, search for **Proschi**. It works in
+JetBrains IDEs 2025.3 and newer (IntelliJ IDEA in the free and paid tiers,
+WebStorm, PyCharm, GoLand and the others) and brings:
 
-- highlighting, bracket matching and comment toggling from the TextMate grammar;
+- highlighting, bracket matching and comment toggling;
 - the language server through the IDE's built-in LSP client: errors and
   warnings as you type, quick fixes, completion, hover, go to definition,
   find usages, *Structure*, and formatting with *Reformat Code*;
@@ -89,18 +68,17 @@ Plugin from Disk…* and pick the zip in `build/distributions/`. It brings:
   each time you save) and *Open in Proschi* (the web editor with the diagram
   in the link).
 
-It needs Node.js 18 or newer. It runs `proschi-language-server` and `proschi`
-from PATH (`npm install -g proschi`), or else through `npx`. You can set the
-paths in *Settings → Languages & Frameworks → Proschi*. See
-[tooling/jetbrains/README.md](https://github.com/gvart/proschi/blob/main/tooling/jetbrains/README.md)
-for how it works.
+It needs Node.js 18 or newer. It runs the language server and the command
+line from PATH (`npm install -g proschi`), or else through `npx`. You can set
+the paths in *Settings → Languages & Frameworks → Proschi*.
 
 ### Without the plugin (LSP4IJ)
 
 For IntelliJ IDEA open-source builds, Android Studio or IDE versions before
 2025.3, which the plugin doesn't support:
 
-1. **Highlighting.** Unzip `proschi.vsix` (it is a zip file), then
+1. **Highlighting.** Download the `.vsix` from
+   [Open VSX](https://open-vsx.org/extension/gvart/proschi) and unzip it (it is a zip file), then
    *Settings → Editor → TextMate Bundles → +* and pick its `extension` folder.
 2. **Validation and completion.** Install the
    [LSP4IJ](https://plugins.jetbrains.com/plugin/23257-lsp4ij) plugin, then
@@ -139,8 +117,9 @@ language-servers = ["proschi"]
 
 ## Sublime Text
 
-Copy `tooling/grammar/proschi.tmLanguage.json` into your `Packages/User`
-folder for highlighting. For validation, install the LSP package and add to
+Download the grammar,
+[proschi.tmLanguage.json](https://github.com/gvart/proschi/blob/main/tooling/grammar/proschi.tmLanguage.json),
+into your *Packages/User* folder for highlighting. For validation, install the LSP package and add to
 *LSP.sublime-settings*:
 
 ```json
@@ -234,11 +213,10 @@ always read-only), the action skips the comment with a notice and the summary
 stays in the job summary; the checks still run. It never pushes to the
 repository.
 
-The action is a folder of this repository, so it is referenced as
-`gvart/proschi/action@<ref>`; each `tooling-v<version>` tag pins the action
-and the `proschi` version it runs (a branch such as `@main` runs the
-version in `tooling/package.json` there, or the latest release while that
-one is not on npm yet).
+The action lives in the Proschi repository, so it is referenced as
+`gvart/proschi/action@<ref>`. Each `tooling-v<version>` tag pins the action
+and the `proschi` version it runs; a branch such as `@main` runs the version
+on that branch, or the latest release while that one is not on npm yet.
 
 Elsewhere, call the CLI directly:
 

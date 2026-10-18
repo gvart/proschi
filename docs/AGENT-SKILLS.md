@@ -7,9 +7,10 @@ Terraform, Kubernetes, docker-compose, application code, OpenAPI specs) into
 a Proschi model, checks it with the [`proschi` CLI](EDITORS.md#install) until
 it is clean, and gives you a link that opens it in the editor.
 
-The skills are in [`plugin/skills/`](../plugin/skills/) in the open
-[Agent Skills](https://agentskills.io) format: one folder per skill with a
-`SKILL.md` and a one-page cheat-sheet of the language.
+The skills are published in the
+[Proschi repository](https://github.com/gvart/proschi/tree/main/plugin/skills)
+in the open [Agent Skills](https://agentskills.io) format: one folder per
+skill, with its instructions and a one-page cheat-sheet of the language.
 
 | Skill | What it does |
 |---|---|
