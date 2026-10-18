@@ -107,6 +107,12 @@ deployed from `main` and ships with the same changes.
 - Edge labels no longer hide behind a node beside a long edge.
 - The arcade wave summary says "Trust is full (100)" instead of
   "Trust +0 (+5 clean)".
+- Selected text in the editor is clearly visible in both themes, also on
+  the cursor's line.
+- Tab in the editor accepts the open completion; otherwise it indents at
+  the cursor (or indents the selected lines), and Shift-Tab outdents.
+- The header's "Open the editor" button no longer drifts toward the
+  pointer and over the theme toggle.
 
 ## [0.10.0] - 2026-10-08
 

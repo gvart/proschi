@@ -17,11 +17,13 @@ export const FOCUS_PALETTE = {
     keyword: '#9AA7C7',
     string: '#A8BFA0',
     number: '#C7B08A',
-    selection: '#2A2E38',
+    // The site's blue accent over the background: plainly visible, text stays readable.
+    selection: '#3A3F5F',
     cursor: '#FFD23F',
     // Derived: quieter than the text, louder than the background.
     gutter: '#4B4F5A',
-    activeLine: '#1B1C21',
+    // Translucent, so the selection (drawn under the text) shows through on the cursor's line.
+    activeLine: '#FFFFFF06',
     activeGutter: '#8A8F9B',
     panel: '#1E1F25',
     border: '#2A2C33',
@@ -33,10 +35,10 @@ export const FOCUS_PALETTE = {
     keyword: '#3D4FB8',
     string: '#2F7A55',
     number: '#9A5B00',
-    selection: '#EAE4D0',
+    selection: '#D8DCF8',
     cursor: '#2A2A2A',
     gutter: '#B3AE9F',
-    activeLine: '#FBF7EA',
+    activeLine: '#B48C0010',
     activeGutter: '#5B5B5B',
     panel: '#F6F1E3',
     border: '#E7E1CF',
