@@ -84,7 +84,7 @@ export function withRun(progress: Progress, problem: Problem, solved: boolean): 
 
 /**
  * Lessons (and roadmap guides) read in this browser, `{ [id]: true }`: a
- * problem opened from the roadmap shows its lesson first until it is read,
+ * problem shows its lesson first until it is read,
  * the roadmap marks what was read, and the reading badges count it. Signed
  * in, reads also go to the account (PracticeApp), which sends back the
  * reads of other devices.

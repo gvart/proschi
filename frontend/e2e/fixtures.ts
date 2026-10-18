@@ -16,7 +16,10 @@ const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
 export const ONBOARDING_KEY = 'proschi.onboarding';
 
-export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void }>({
+/** The key src/practice/progress.ts keeps the lessons read in. */
+export const LESSONS_KEY = 'proschi.lessons';
+
+export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void }>({
   /**
    * First-run tours would cover the pages most tests look at, so by default
    * every page starts with them marked as seen. Tests of the tours themselves
@@ -33,6 +36,43 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
             // Storage blocked: the tours fall back to memory.
           }
         }, ONBOARDING_KEY);
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+  /**
+   * A problem opens on its lesson until the lesson is read, which would put
+   * a page of reading in front of every test of the workspace. By default,
+   * opening `practice/#/<problem id>` (loaded or navigated to) marks that
+   * problem's lesson read just before the page reads it, so the workspace
+   * opens as for someone who has read it. Only the lesson of the problem
+   * opened is marked; `#/<id>/lesson` and `#/roadmap/…` are left alone, and
+   * so is every other lesson. Tests of the lesson stage use
+   * `test.use({ lessons: 'fresh' })`.
+   */
+  lessons: ['skip', { option: true }],
+  lessonsSkipped: [
+    async ({ context, lessons }, use) => {
+      if (lessons === 'skip') {
+        await context.addInitScript((key) => {
+          // The hub's own pages: not problems.
+          const PAGES = new Set(['roadmap', 'review', 'progress', 'challenge', 'arcade', 'me']);
+          const markRead = () => {
+            if (!window.location.pathname.includes('/practice/')) return;
+            const id = /^#\/([a-z0-9-]+)$/.exec(window.location.hash)?.[1];
+            if (!id || PAGES.has(id)) return;
+            try {
+              const read = JSON.parse(window.localStorage.getItem(key) ?? '{}');
+              if (read[id] !== true) window.localStorage.setItem(key, JSON.stringify({ ...read, [id]: true }));
+            } catch {
+              // Storage blocked: the lesson shows first.
+            }
+          };
+          markRead();
+          // Registered before the app's own listener, so it runs first.
+          window.addEventListener('hashchange', markRead);
+        }, LESSONS_KEY);
       }
       await use();
     },

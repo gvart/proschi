@@ -1,0 +1,28 @@
+/* The lesson drawer (LessonHost.tsx): slides in from the right over a dimmed workspace. */
+@keyframes ps-drawer {
+  from {
+    transform: translateX(24px);
+    opacity: 0;
+  }
+}
+
+@keyframes ps-fade {
+  from {
+    opacity: 0;
+  }
+}
+
+/* The workspace's splitters (ProblemPage.tsx): a line in the borders' ink, lit while hovered, focused or dragged. */
+.ps-splitter {
+  background: rgb(var(--c-ink));
+  outline: none;
+  transition:
+    background-color 120ms ease-out,
+    box-shadow 120ms ease-out;
+}
+.ps-splitter[data-separator='hover'],
+.ps-splitter[data-separator='focus'],
+.ps-splitter[data-separator='active'] {
+  background: rgb(var(--c-blue));
+  box-shadow: 0 0 0 1px rgb(var(--c-blue));
+}
