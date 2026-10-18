@@ -18,6 +18,7 @@ instead.
 - [Adding a game scenario](#adding-a-game-scenario)
 - [Reporting issues and suggesting problems](#reporting-issues-and-suggesting-problems)
 - [Code style and conventions](#code-style-and-conventions)
+- [Releasing](#releasing)
 
 ## Getting set up
 
@@ -390,3 +391,11 @@ full reference; this is the checklist.
   ([step 6 above](#adding-a-new-problem)).
 - By contributing you agree that your work is released under the
   [MIT license](LICENSE).
+
+## Releasing
+
+Maintainers: bump the version in `tooling/package.json` and
+`tooling/vscode/package.json`, add a section to the changelog, and push a
+`tooling-v<version>` tag. The JetBrains plugin has its own
+`jetbrains-v<version>` tag. [Releasing](docs/EDITORS.md#releasing) has the
+details.
