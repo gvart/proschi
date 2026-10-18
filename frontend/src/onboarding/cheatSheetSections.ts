@@ -1,6 +1,6 @@
 /**
  * The syntax cheat-sheet in the Help menu. Read top to bottom, its snippets
- * form one valid document: cheatsheet.test.ts parses them together with the
+ * form one valid document: cheatSheetSections.test.ts parses them together with the
  * real parser (no errors, no warnings) and checks the arrows and the links
  * against docs/LANGUAGE.md, so the sheet cannot drift from the language.
  */

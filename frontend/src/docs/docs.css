@@ -557,7 +557,7 @@
   margin-bottom: 0;
 }
 
-/* Lesson blocks (src/practice/markdown.ts): the static fallback of the app's. */
+/* Lesson blocks (src/practice/markdownReader.ts): the static fallback of the app's. */
 .lesson-block {
   margin: 1.4em 0;
   padding: 12px 18px;

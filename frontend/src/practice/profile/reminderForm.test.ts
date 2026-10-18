@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { browserTimeZone, isEmailAddress, REMINDER_KINDS } from './emailReminders';
+import { browserTimeZone, isEmailAddress, REMINDER_KINDS } from './reminderForm';
 
 describe('email reminders form helpers', () => {
   it('accepts plausible addresses only', () => {

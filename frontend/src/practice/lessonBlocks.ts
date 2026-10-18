@@ -1,6 +1,6 @@
 /**
  * The lesson blocks' names and fences (docs/PRACTICE.md, "Lesson blocks"),
- * shared by the Markdown reader (markdown.ts) and the lesson check
+ * shared by the Markdown reader (markdownReader.ts) and the lesson check
  * (lesson.ts). Pure, with no imports.
  */
 

@@ -1,12 +1,12 @@
 import { lazy, Suspense, useMemo, type ReactNode } from 'react';
 import { ChevronRight, KeyRound, Lightbulb, MessagesSquare, TriangleAlert, Zap, type LucideIcon } from 'lucide-react';
 import { highlightLines, type TokenClass } from '../landing/highlight';
-import { CALLOUT_TITLES, TLDR_TITLE, parseInline, parseMarkdown, type Block, type CalloutTone, type Inline } from './markdown';
+import { CALLOUT_TITLES, TLDR_TITLE, parseInline, parseMarkdown, type Block, type CalloutTone, type Inline } from './markdownReader';
 
 // The cards load only when a lesson quizzes some, so a statement never ships them.
 const LessonQuiz = lazy(() => import('./LessonQuiz'));
 
-/** Renders a problem statement or a lesson; see markdown.ts for what it understands. */
+/** Renders a problem statement or a lesson; see markdownReader.ts for what it understands. */
 export default function Markdown({ source, blocks: given, large = false }: { source: string; /** Already parsed (e.g. for a table of contents). */ blocks?: Block[]; /** Article text size instead of the side panel's. */ large?: boolean }) {
   const blocks = useMemo(() => given ?? parseMarkdown(source), [given, source]);
   return (

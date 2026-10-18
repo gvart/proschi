@@ -3,7 +3,7 @@ import { Mail, Play, RotateCcw, Trash2 } from 'lucide-react';
 import { api, ApiError, type EmailPrefs } from '../../services/api';
 import { track } from '../../services/metrics';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
-import { browserTimeZone, isEmailAddress, REMINDER_KINDS, type ReminderKind } from './emailReminders';
+import { browserTimeZone, isEmailAddress, REMINDER_KINDS, type ReminderKind } from './reminderForm';
 
 /**
  * Email reminders on the account page (`#/me`), signed in only: an address

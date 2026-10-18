@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from '../dsl';
 import { FIRST_RUN_SOURCE } from '../playground/exampleLink';
 import { nameTarget } from './nameTarget';
-import { ARROWS, CHEAT_SECTIONS, cheatSheetDocument } from './cheatsheet';
+import { ARROWS, CHEAT_SECTIONS, cheatSheetDocument } from './cheatSheetSections';
 import { STARTER_TEMPLATE } from './template';
 
 const languageMd = readFileSync(new URL('../../../docs/LANGUAGE.md', import.meta.url), 'utf8');

@@ -40,7 +40,6 @@ export function lessonMinutes(problemsDir: string, guideDir: string): { lessons:
  */
 export function practiceListings(problemsDir: string): Plugin {
   const read = (watch?: (file: string) => void) => {
-    watch?.(problemsDir)
     const files: Record<string, string> = {}
     for (const folder of readdirSync(problemsDir)) {
       const file = join(problemsDir, folder, 'problem.md')
@@ -57,14 +56,27 @@ export function practiceListings(problemsDir: string): Plugin {
     load(id) {
       if (id === LESSONS_RESOLVED) {
         // `import { lessons, guides } from 'virtual:practice-lessons'`: reading times for the roadmap, without the texts.
-        this.addWatchFile(problemsDir)
         const { lessons, guides } = lessonMinutes(problemsDir, guideDir)
         for (const folder of Object.keys(lessons)) this.addWatchFile(join(problemsDir, folder, 'lesson.md'))
-        if (existsSync(guideDir)) this.addWatchFile(guideDir)
+        for (const guide of Object.keys(guides)) this.addWatchFile(join(guideDir, `${guide}.md`))
         return `export const lessons = ${JSON.stringify(lessons)}\nexport const guides = ${JSON.stringify(guides)}\n`
       }
       if (id !== RESOLVED) return
       return `export default ${JSON.stringify(read((file) => this.addWatchFile(file)))}`
+    },
+    configureServer(server) {
+      // A problem or guide added or removed rebuilds both lists. Not addWatchFile on the folders: in dev that
+      // makes each folder an import of the module, which Vite cannot resolve.
+      const stale = (file: string) => {
+        if (!file.startsWith(problemsDir) && !file.startsWith(guideDir)) return
+        for (const id of [RESOLVED, LESSONS_RESOLVED]) {
+          const mod = server.moduleGraph.getModuleById(id)
+          if (mod) server.moduleGraph.invalidateModule(mod)
+        }
+        server.ws.send({ type: 'full-reload' })
+      }
+      server.watcher.on('add', stale)
+      server.watcher.on('unlink', stale)
     },
     transformIndexHtml(html) {
       if (!html.includes('<!--roadmap:') && !html.includes('<!--practice:')) return html

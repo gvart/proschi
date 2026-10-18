@@ -2,7 +2,7 @@ import { Fragment, useEffect, useId, useRef, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { ExternalLink, X } from 'lucide-react';
 import { highlightLines, type TokenClass } from '../landing/highlight';
-import { ARROWS, CHEAT_SECTIONS } from './cheatsheet';
+import { ARROWS, CHEAT_SECTIONS } from './cheatSheetSections';
 import { LANGUAGE_URL, MODEL_URL } from './links';
 
 const TOKEN_CLASS: Record<TokenClass, string> = {

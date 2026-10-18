@@ -82,7 +82,7 @@ lines are dropped). It says what to build: a short context, then
 `## Functional requirements` (name every use case in bold, e.g.
 `**Redirect**`, and the scenario names the tests refer to), `## Scale`,
 `## Constraints` and `## What is given`. The renderer
-(`frontend/src/practice/markdown.ts`) understands headings, paragraphs, bullet
+(`frontend/src/practice/markdownReader.ts`) understands headings, paragraphs, bullet
 and numbered lists (one level of nesting), fenced code (```` ```proschi ````
 blocks, also ```` ```proschi fragment ````, are highlighted), GFM pipe tables
 (they scroll in their own box on phones), `>` blockquotes (shown as a

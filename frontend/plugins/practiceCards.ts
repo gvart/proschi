@@ -38,7 +38,6 @@ export interface CardsSummary {
  * fails the build instead of shipping; `proschi cards check` lists them all.
  */
 export function readCards(cardsDir: string, watch?: (file: string) => void): { topics: Topic[]; cards: Card[] } {
-  watch?.(cardsDir)
   const tags = join(cardsDir, 'tags.json')
   watch?.(tags)
   const topics = readTopics(readFileSync(tags, 'utf8'))
@@ -46,7 +45,6 @@ export function readCards(cardsDir: string, watch?: (file: string) => void): { t
   for (const topic of readdirSync(cardsDir).sort()) {
     const folder = join(cardsDir, topic)
     if (!statSync(folder).isDirectory()) continue
-    watch?.(folder)
     for (const name of readdirSync(folder).sort()) {
       if (!name.endsWith('.md')) continue
       watch?.(join(folder, name))
@@ -89,6 +87,18 @@ export function practiceCards(cardsDir: string): Plugin {
       return `export default ${JSON.stringify(id === RESOLVED ? cardsBundle(content) : cardsSummary(content))}`
     },
     configureServer(server: ViteDevServer) {
+      // A card added or removed rebuilds the bundles. Not addWatchFile on the folders: in dev that makes each
+      // folder an import of the module, which Vite cannot resolve.
+      const stale = (file: string) => {
+        if (!file.startsWith(cardsDir)) return
+        for (const id of [RESOLVED, SUMMARY_RESOLVED]) {
+          const mod = server.moduleGraph.getModuleById(id)
+          if (mod) server.moduleGraph.invalidateModule(mod)
+        }
+        server.ws.send({ type: 'full-reload' })
+      }
+      server.watcher.on('add', stale)
+      server.watcher.on('unlink', stale)
       server.middlewares.use((req, res, next) => {
         if (req.url?.split('?')[0] !== `/${CARDS_JSON}` || !existsSync(cardsDir)) return next()
         res.setHeader('Content-Type', 'application/json')
