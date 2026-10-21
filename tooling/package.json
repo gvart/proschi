@@ -56,7 +56,7 @@
     "react-dom": "^19.3.0",
     "react-icons": "5.5.0",
     "typescript": "~5.9.3",
-    "vitest": "^3.2.7",
+    "vitest": "^5.0.3",
     "vscode-languageclient": "^10.1.2",
     "vscode-languageserver": "^10.1.2",
     "vscode-languageserver-textdocument": "^1.0.15",
