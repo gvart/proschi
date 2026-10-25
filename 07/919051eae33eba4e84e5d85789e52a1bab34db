@@ -1,0 +1,26 @@
+frontend/src/dsl/layoutFixtures/order-fulfillment.proschi
+  s_6084dd8c702c72::t_0fb962ea0dae4c 1-126
+frontend/package.json
+  s_6084dd8c702c72::t_32f383c68f589b 14
+frontend/src/dsl/layoutMetrics.ts
+  s_6084dd8c702c72::t_43b4cee27d0804 1-207
+frontend/src/dsl/layoutMetrics.test.ts
+  s_6084dd8c702c72::t_8be19b9f954a23 1-16,19-35
+  s_6084dd8c702c72::t_e938a192461ecd 17-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "07919051eae33eba4e84e5d85789e52a1bab34db",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
