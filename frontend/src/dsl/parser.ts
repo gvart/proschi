@@ -26,11 +26,14 @@ import type {
   Entity,
   FlowTest,
   Kind,
+  LayoutDirection,
+  LayoutHints,
   LegendEntry,
   ParseOptions,
   ParseResult,
   Percentile,
   Quantity,
+  Rank,
   Requirement,
   ResolvedImport,
   Selector,
@@ -111,6 +114,7 @@ export const MAX_SCENARIOS = 32;
  * quadratic (a crafted share link could freeze the tab).
  */
 export const MAX_ALT_DEPTH = 16;
+const DIRECTIONS: LayoutDirection[] = ['down', 'right', 'up', 'left'];
 /** `x3` on a node declaration: its replica count. */
 const REPLICAS = /^x(\d+)$/;
 const PERCENTILES: Record<string, Percentile> = { p50: 50, p90: 90, p95: 95, p99: 99, p999: 99.9 };
@@ -210,6 +214,9 @@ class Parser {
   private readonly tests: FlowTest[] = [];
   private readonly blocks: BlockSpan[] = [];
   private readonly legend: LegendEntry[] = [];
+  private readonly layout: LayoutHints = {};
+  /** Where each top-level layout hint was set, for the duplicate warning. */
+  private readonly layoutLocs: { direction?: SourceLoc; ordered?: SourceLoc } = {};
   /** `.tag` uses, resolved against the legend once every file is read. */
   private readonly tagRefs: { tag: string; loc: SourceLoc; target: { style?: ElementStyle } }[] = [];
   /** Checks of use case, scenario and node names, run once every file is read and use cases are built. */
@@ -253,6 +260,7 @@ class Parser {
       ...(this.decisions.length ? { decisions: this.decisions } : {}),
       ...(this.tests.length ? { tests: this.tests } : {}),
       ...(this.legend.length ? { legend: this.legend } : {}),
+      ...(Object.keys(this.layout).length ? { layout: this.layout } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -381,6 +389,15 @@ class Parser {
         if (second?.kind === 'string' && tokens[tokens.length - 1].kind === 'lbrace') this.parseTest(tokens, line);
         else this.parseNode(tokens, line);
         break;
+      // Keywords only as `direction <word>` and `layout <word>`, so a node may still be called direction or layout.
+      case 'direction':
+        if (this.isHint(tokens)) this.parseDirection(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
+      case 'layout':
+        if (this.isHint(tokens)) this.parseLayoutMode(tokens, line);
+        else this.parseNode(tokens, line);
+        break;
       default:
         this.parseNode(tokens, line);
     }
@@ -400,6 +417,91 @@ class Parser {
       if (summary) this.summary = summary.value;
     }
     this.expectEnd(tokens, summary ? 3 : 2, line);
+  }
+
+  /** `direction right`, `layout ordered`: a keyword and one plain word that is not a node part. */
+  private isHint(tokens: Token[]): boolean {
+    const second = tokens[1];
+    return tokens.length === 2 && second.kind === 'ident' && !['pos', 'critical', 'color', 'rank'].includes(second.value) && !REPLICAS.test(second.value);
+  }
+
+  /** `direction down|right|up|left`: at the top level for the whole diagram, inside a group for its members. */
+  private parseDirection(tokens: Token[], line: number) {
+    const [keyword, value] = tokens;
+    const loc = this.locOf(value, line);
+    if (!DIRECTIONS.includes(value.value as LayoutDirection)) {
+      this.error(`Unknown direction '${value.value}'; use direction down, right, up or left`, loc);
+      return;
+    }
+    const direction = value.value as LayoutDirection;
+    const top = this.top();
+    if (top?.kind === 'group') {
+      const group = this.nodes.get(top.id);
+      if (!group || group.loc !== top.loc) return;
+      if (group.direction) this.warning(`Group '${group.id}' already has direction ${group.direction}; this one is ignored`, this.locOf(keyword, line));
+      else group.direction = direction;
+      return;
+    }
+    if (top) {
+      this.error('direction is only allowed at the top level or inside a group', this.locOf(keyword, line));
+      return;
+    }
+    // Like title, an imported file's direction is ignored: the root document lays out the diagram.
+    if (this.file !== undefined) return;
+    if (this.layoutLocs.direction) {
+      this.warning(`direction is already set ${this.where(this.layoutLocs.direction, loc)}; this one is ignored`, this.locOf(keyword, line));
+      return;
+    }
+    this.layout.direction = direction;
+    this.layoutLocs.direction = loc;
+  }
+
+  /** `layout ordered`: lay edges out by declaration order. */
+  private parseLayoutMode(tokens: Token[], line: number) {
+    const [keyword, value] = tokens;
+    const loc = this.locOf(value, line);
+    if (value.value !== 'ordered') {
+      this.error(`Unknown layout mode '${value.value}'; the only one is layout ordered`, loc);
+      return;
+    }
+    if (this.top()) {
+      this.error('layout ordered applies to the whole diagram; write it at the top level', this.locOf(keyword, line));
+      return;
+    }
+    if (this.file !== undefined) return;
+    if (this.layoutLocs.ordered) {
+      this.warning(`layout ordered is already set ${this.where(this.layoutLocs.ordered, loc)}`, this.locOf(keyword, line));
+      return;
+    }
+    this.layout.ordered = true;
+    this.layoutLocs.ordered = loc;
+  }
+
+  /**
+   * `rank 2`, `rank first`, `rank last` at `i` in a node or group header.
+   * Returns how many tokens it used (0 when the token is something else), or
+   * undefined after reporting an error.
+   */
+  private readRank(tokens: Token[], i: number, line: number, current: { rank?: Rank }): number | undefined {
+    const t = tokens[i];
+    if (!isWord(t, 'rank')) return 0;
+    const value = tokens[i + 1];
+    const help = 'a layer number from 0 (rank 0, rank 1, …), rank first or rank last';
+    if (current.rank !== undefined) {
+      this.error(`A node takes one rank; rank ${current.rank} is already set`, this.locOf(t, line));
+      return undefined;
+    }
+    if (value?.kind === 'number' && /^\d+$/.test(value.value)) {
+      current.rank = Number(value.value);
+      return 2;
+    }
+    if (value?.kind === 'ident' && (value.value === 'first' || value.value === 'last')) {
+      current.rank = value.value;
+      return 2;
+    }
+    const numeric = value?.kind === 'number' || value?.kind === 'quantity';
+    this.error(numeric ? `'${value.value}' is not a layer number; use ${help}` : `Expected ${help} after rank`, this.locOf(value ?? t, line));
+    return undefined;
   }
 
   private parseImport(tokens: Token[], line: number) {
@@ -484,7 +586,14 @@ class Parser {
     }
     let position: { x: number; y: number } | undefined;
     const style: StyleParts = {};
+    const ranked: { rank?: Rank } = {};
     while (i < tokens.length && tokens[i].kind !== 'lbrace') {
+      const rankUsed = this.readRank(tokens, i, line, ranked);
+      if (rankUsed === undefined) return;
+      if (rankUsed) {
+        i += rankUsed;
+        continue;
+      }
       if (tokens[i].kind === 'ident' && tokens[i].value === 'pos') {
         const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
         if (x?.kind !== 'number' || comma?.kind !== 'comma' || y?.kind !== 'number') {
@@ -509,6 +618,7 @@ class Parser {
 
     const loc = this.locOf(idToken, line);
     const group: DiagramNode = { id: idToken.value, kind: 'group', name, type: 'group', techStack, parent: this.currentGroup(), position, loc };
+    if (ranked.rank !== undefined) group.rank = ranked.rank;
     this.applyStyle(group, style);
     this.addNode(group);
     this.stack.push({ kind: 'group', id: idToken.value, loc });
@@ -634,7 +744,8 @@ class Parser {
 
     for (let i = 1; i < tokens.length; i++) {
       const t = tokens[i];
-      const used = this.readStylePart(tokens, i, line, style, true);
+      const styleUsed = this.readStylePart(tokens, i, line, style, true);
+      const used = styleUsed === 0 ? this.readRank(tokens, i, line, node) : styleUsed;
       if (used === undefined) return;
       if (used > 0) {
         i += used - 1;

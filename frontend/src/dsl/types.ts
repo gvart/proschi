@@ -58,6 +58,20 @@ export type DiagramStep = FlowStep & {
 
 export type DiagramNodeKind = 'component' | 'group' | 'text';
 
+/** Where edges flow in the auto layout: `direction down|right|up|left`. */
+export type LayoutDirection = 'down' | 'right' | 'up' | 'left';
+
+/** A layout layer: 0, 1, 2, … from the top (in the flow's direction), or the first or last one. */
+export type Rank = number | 'first' | 'last';
+
+/** Top-level layout hints; see docs/LANGUAGE.md, "Steering the layout". */
+export interface LayoutHints {
+  /** `direction right`: the flow of the whole diagram (default down). */
+  direction?: LayoutDirection;
+  /** `layout ordered`: edges follow declaration order, so what is declared first sits higher. */
+  ordered?: boolean;
+}
+
 export interface DiagramNode {
   id: string;
   kind: DiagramNodeKind;
@@ -87,6 +101,10 @@ export interface DiagramNode {
   tag?: string;
   /** `critical`: drawn with a warning badge. */
   critical?: boolean;
+  /** `rank 2` / `rank first` / `rank last`: the layer the auto layout puts it in, among the nodes and groups that share its parent. */
+  rank?: Rank;
+  /** `direction right` inside a group: where edges flow among its members. Groups only. */
+  direction?: LayoutDirection;
   /** Fill and border from `color` and `tag` (explicit color first); absent when neither is set. */
   style?: ElementStyle;
   loc: SourceLoc;
@@ -177,6 +195,8 @@ export interface Diagram {
   tests?: FlowTest[];
   /** The `legend` block's entries, in order; absent when there is no legend. */
   legend?: LegendEntry[];
+  /** `direction` and `layout ordered` at the top level; absent when neither is used. */
+  layout?: LayoutHints;
 }
 
 /** Simulation class of a node (docs/design/hld-and-practice.md §2.1). */

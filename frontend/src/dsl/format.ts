@@ -173,7 +173,7 @@ function classify(lines: string[]): Entry[] {
     }
 
     const oneLineDecision = first.value === 'decision' && second?.kind === 'string' && third?.kind === 'ident' && third.value === 'because';
-    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex'].includes(t.kind))) {
+    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex'].includes(t.kind))) {
       let k = 1;
       const take = (kind: Token['kind']) => (tokens[k]?.kind === kind ? source(raw, tokens[k++]) : '');
       const cells: NodeEntry['cells'] = [first.value, take('string'), take('tech'), take('team'), join(raw, tokens.slice(k))];
@@ -192,6 +192,18 @@ function classify(lines: string[]): Entry[] {
   }
 
   return entries;
+}
+
+/** `direction right` or `layout ordered`, recognised by the same shape as the parser: a statement, not a node. */
+function isLayoutHint(tokens: Token[]): boolean {
+  const [first, second] = tokens;
+  return (
+    tokens.length === 2 &&
+    (first.value === 'direction' || first.value === 'layout') &&
+    second.kind === 'ident' &&
+    !['pos', 'critical', 'color', 'rank'].includes(second.value) &&
+    !/^x\d+$/.test(second.value)
+  );
 }
 
 /** The section a top-level line opens, recognised by the same shapes as the parser. */

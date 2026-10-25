@@ -115,7 +115,7 @@ export function clearPositions(source: string): string {
 }
 
 /** Words that start statements, so a new node never takes them as its id. */
-const RESERVED = new Set(['title', 'summary', 'group', 'usecase', 'par', 'alt', 'import', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos']);
+const RESERVED = new Set(['title', 'summary', 'group', 'usecase', 'par', 'alt', 'import', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos', 'direction', 'layout', 'rank']);
 
 /** An id based on `base` (a name or a tech) that no node uses yet: `redis`, `redis2`, … */
 export function uniqueId(source: string, base: string): string {
