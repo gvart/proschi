@@ -454,6 +454,8 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   const titles = mainNodes.filter((n) => n.kind === 'group' && unmovedInMain(n.id)).map((n) => titleBand(boxAt(n.id), n.name));
   const routes: Record<string, EdgeRoute> = {};
   const routed = new Map((result.edges ?? []).map((e) => [e.id, e as ElkExtendedEdge & { container?: string }]));
+  /** Ends that run through one port of a separately laid-out group to one member, by port. */
+  const bundles = new Map<string, { id: string; atStart: boolean; box: Box }[]>();
   for (const layoutEdge of edges) {
     const parts = layoutEdge.via ? [routed.get(`${layoutEdge.id}\u0000in`), routed.get(`${layoutEdge.id}\u0000out`)] : [routed.get(layoutEdge.id)];
     const flipped = reversed.has(layoutEdge.id);
@@ -475,13 +477,17 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     let points = parts.flatMap((p) => sectionPoints(p!.sections!).map((q) => ({ x: originOf(p!).x + q.x, y: originOf(p!).y + q.y })));
     if (flipped) points.reverse();
     // An end on a separately laid-out group runs on from the port to the member inside.
-    const leg = (group: string, member: string, port: Point) => {
-      const box = separate.get(group)!.members.get(member);
+    const leg = (group: string, member: string, port: Point, atStart: boolean) => {
+      const inside = separate.get(group)!.members.get(member);
       const g = elkAbsolute.get(group)!;
-      return box ? sidePoint({ x: g.x + box.x, y: g.y + box.y, width: box.width, height: box.height }, port) : port;
+      if (!inside) return port;
+      const box = { x: g.x + inside.x, y: g.y + inside.y, width: inside.width, height: inside.height };
+      const key = `${group}\u0000${member}\u0000${Math.round(port.x)},${Math.round(port.y)}`;
+      bundles.set(key, [...(bundles.get(key) ?? []), { id: layoutEdge.id, atStart, box }]);
+      return sidePoint(box, port);
     };
-    if (sourceMember && sourceMember !== source) points = [leg(source, sourceMember, points[0]), ...points];
-    if (targetMember && targetMember !== target) points = [...points, leg(target, targetMember, points[points.length - 1])];
+    if (sourceMember && sourceMember !== source) points = [leg(source, sourceMember, points[0], true), ...points];
+    if (targetMember && targetMember !== target) points = [...points, leg(target, targetMember, points[points.length - 1], false)];
     points = simplify(points);
     if (!sourceMember && !targetMember) points = dropJogs(points, boxAt(source), boxAt(target));
     routes[layoutEdge.id] = {
@@ -491,6 +497,7 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
       to: finalAbsolute(to),
     };
   }
+  for (const ends of bundles.values()) if (ends.length > 1) fanOut(ends, routes);
   // Routes inside a separately laid-out group move with it.
   for (const [group, own] of separate) {
     const g = finalAbsolute(group);
@@ -531,6 +538,46 @@ function mirrorLayout(root: ElkNode, axis: 'x' | 'y') {
     for (const sec of e.sections ?? []) for (const p of [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint]) p[axis] = size - p[axis];
     for (const l of e.labels ?? []) l[axis] = size - (l[axis] ?? 0) - span(l);
   }
+}
+
+/** How far apart edges that share a port meet their member, at most, and how far before it they part. */
+const FAN_STEP = 24;
+const FAN_LENGTH = 16;
+
+/**
+ * Edges into (or out of) one member of a separately laid-out group share the
+ * group's port, so they would all meet the member in one point. Just before
+ * the member they part, side by side along its border, ordered by where
+ * their other ends are so they do not cross.
+ */
+function fanOut(ends: { id: string; atStart: boolean; box: Box }[], routes: Record<string, EdgeRoute>) {
+  const near = (route: EdgeRoute, atStart: boolean) => (atStart ? route.points[0] : route.points[route.points.length - 1]);
+  const far = (route: EdgeRoute, atStart: boolean) => (atStart ? route.points[route.points.length - 1] : route.points[0]);
+  const live = ends.filter((e) => routes[e.id]?.points.length >= 2);
+  if (live.length < 2) return;
+  const box = live[0].box;
+  const end = near(routes[live[0].id], live[0].atStart);
+  // Along the side the edges meet: x on the top or bottom, y on the left or right.
+  const axis: 'x' | 'y' = Math.abs(end.y - box.y) < 0.5 || Math.abs(end.y - box.y - box.height) < 0.5 ? 'x' : 'y';
+  const other: 'x' | 'y' = axis === 'x' ? 'y' : 'x';
+  const span = axis === 'x' ? box.width : box.height;
+  const step = Math.min(FAN_STEP, span / (live.length + 1));
+  live.sort((a, b) => far(routes[a.id], a.atStart)[axis] - far(routes[b.id], b.atStart)[axis]);
+  live.forEach((e, i) => {
+    const offset = (i - (live.length - 1) / 2) * step;
+    if (Math.abs(offset) < 0.5) return;
+    const route = routes[e.id];
+    const points = e.atStart ? [...route.points].reverse() : [...route.points];
+    const last = points[points.length - 1];
+    const before = points[points.length - 2];
+    // The last leg must run straight into the side for there to be room to step over.
+    if (Math.abs(before[axis] - last[axis]) > 0.5) return;
+    const room = last[other] - before[other];
+    const turn = last[other] - Math.sign(room) * Math.min(FAN_LENGTH, Math.abs(room) / 2);
+    const at = (a: number, o: number): Point => (axis === 'x' ? { x: a, y: o } : { x: o, y: a });
+    points.splice(points.length - 1, 1, at(last[axis], turn), at(last[axis] + offset, turn), at(last[axis] + offset, last[other]));
+    route.points = simplify(e.atStart ? points.reverse() : points);
+  });
 }
 
 /** Absolute boxes of a layout whose members are placed relative to their group. */
