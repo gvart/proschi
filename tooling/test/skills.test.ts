@@ -53,6 +53,7 @@ describe('agent skills', () => {
   it.each(skills)('%s carries the same cheat-sheet as the others', (s) => {
     const sheet = (d: string) => readFileSync(join(skillsDir, d, 'references', 'proschi-cheatsheet.md'), 'utf8');
     expect(sheet(s)).toBe(sheet('infra-to-proschi'));
+    expect(sheet(s)).not.toContain('TODO');
     expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-cheatsheet.md)');
   });
 

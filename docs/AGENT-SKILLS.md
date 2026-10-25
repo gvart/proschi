@@ -34,7 +34,9 @@ declarations, so the skills have the agent:
 
 - point every connection from caller to callee, so requests flow from the
   clients at the top down to the data;
-- declare tier by tier, in the order the diagram should be read;
+- declare tier by tier, in the order the diagram should be read, and pin
+  that order with `layout ordered`, `rank` and `direction` when the edges
+  alone don't;
 - group by a real boundary (network, cluster, team, tier), even a group of one;
 - draw one connection to a group instead of one per member, and avoid
   connections that cross groups and `a -> b` plus `b -> a` pairs;

@@ -71,21 +71,19 @@ Mark anything you could not read or had to infer: `# GUESS:`, `# UNREADABLE:`.
 
 ## 4. Keep the source's reading order
 
-The auto-layout knows nothing about the picture's positions. Edges decide
-the rows (a callee lands below its caller); declaration order and hints
-carry the rest:
+The auto-layout knows nothing about the picture's positions; declaration
+order and the hints carry them:
 
 - [ ] Declare band by band, top to bottom, and left to right inside a band;
       inside each group in the same way. A box that only one zone talks to
       is declared next to that zone.
-- [ ] Keep the arrows as drawn even when most point up (a pull-based
-      design); the hints place things, not the arrows.
-- [ ] Side-by-side zones (two regions, two clouds) → wrap them in a group
-      with `direction right` (TODO-HINTS: per-group direction is best effort).
-- [ ] Boxes the source lines up in one row → the same `rank N`; a box at the
-      very top or bottom → `rank first` / `rank last` (TODO-HINTS).
-- [ ] Left-to-right order still wrong after reordering → `layout ordered`
-      at the top (TODO-HINTS).
+- [ ] `layout ordered` at the top, so the bands keep the declared order even
+      where arrows point up (keep the arrows as drawn).
+- [ ] Each band gets a `rank`: `rank 0` for the top band, `rank 1` for the
+      next, on the boxes and group headers in it. Boxes in one band with an
+      edge between them can't share a row: give the callee the next rank.
+- [ ] A zone drawn as a row (Kafka topics, a cluster) → `direction right`
+      inside its group. Side-by-side zones (two regions) → the same `rank`.
 - [ ] `pos x,y` only to nudge one or two nodes at the very end.
 
 ## 5. Validate
@@ -114,7 +112,7 @@ cheat-sheet) next to the source image and check:
 - [ ] The cheat-sheet's review checklist: crossings, edges against the flow,
       stranded nodes, sprawl.
 
-Fix the file (order, group edges, hints, regrouping; `pos` last), `check`,
+Fix the file (order, group edges, ranks, regrouping; `pos` last), `check`,
 render again. Stop after about five rounds and say what still differs.
 
 ## 7. Hand over

@@ -68,8 +68,9 @@ right-angle routes. What steers it:
 - **Edge direction.** Arrows go caller → callee, so a request flows from the
   clients at the top down to the data at the bottom. Messages flow the same
   way: `api -> queue`, `queue -> worker`.
-- **Edges decide the rows**: a callee lands below its caller. **Declaration
-  order** decides left to right within a row and breaks ties. An edge that
+- **Edges decide the rows**: a callee lands below its caller (unless
+  `layout ordered`, below). **Declaration order** decides left to right
+  within a row and breaks ties. An edge that
   closes a cycle and points back at an earlier node is laid out reversed (it
   keeps its arrowhead), so declare the entry point of a loop first.
 - **Groups** are laid out as one block. A connection may end on a group:
@@ -104,28 +105,34 @@ svc_c -> prom : Metrics
 services -> prom : Metrics
 ```
 
-**Layout hints**, when edges and order are not enough (TODO-HINTS: syntax
-provisional, semantics may still change):
+**Layout hints**, when edges and order are not enough:
 
 ```proschi fragment
-layout ordered          # top level: keep declaration order strictly in each row
-direction right         # top level: the whole diagram flows left to right
+layout ordered            # top level: declared first sits higher, whatever the arrows
+iam "IAM" [Auth Service] rank 0
 group aws "AWS" rank 1 {
-  direction right       # in a group: its members flow left to right (best effort)
-  api "API" [Go] rank first
+  api "API" [Go]
+}
+group kafka "Kafka" rank 2 {
+  direction right         # this group reads as a row, even unconnected topics
+  orders "Order Events" [Kafka]
+  eta    "ETA updates"  [Kafka]
 }
 audit "Audit log" [Database] rank last
 ```
 
-- `direction down|right|up|left`: a pipeline or a chain of hops reads left
-  to right; two side-by-side zones (regions, clouds) → `direction right` in a
-  group that wraps them. Per group it is best effort (TODO-HINTS).
-- `rank N|first|last` on a node or a group header pins it to a layer;
-  things with the same rank line up in one row. Use it to put peers in one
-  row or pull a stranded node next to what it serves (TODO-HINTS).
-- `layout ordered`: rows keep declaration order even when it costs a
-  crossing. For copying a source diagram's left-to-right order; try without
-  it first (TODO-HINTS).
+- `layout ordered` (top level): every edge is laid out by declaration order,
+  so the file's order is the top-to-bottom order even when arrows point up.
+  The first thing to try when the reading order matters (always for a
+  diagram copied from an image).
+- `rank N|first|last` on a node or group header: orders layers among
+  siblings (top-level items with each other, a group's members with each
+  other); lower comes first. Same rank = same row, unless an edge connects
+  them (the target drops a row), so give connected nodes different ranks.
+  Ranks are relative; unranked nodes go where their edges pull them.
+- `direction down|right|up|left`: at the top it turns the whole diagram; in a
+  group it sets that group's flow (a row of topics, a pipeline). Such a group
+  is laid out on its own and placed as one box.
 - `pos x,y` pins one node; others still auto-layout. Only for a final
   touch-up of one or two nodes: pinned nodes don't move when the diagram
   changes, so they go stale.
@@ -149,7 +156,7 @@ crops tall images). Fix and render again until none of these is true:
 - [ ] Legend colors don't match what the tags should show.
 
 Fix in this order: edge direction, declaration order, fan-out to a group,
-regrouping, hints, and `pos` last. Stop after about five rounds and tell the
+regrouping, `layout ordered`, `rank`, `direction`, and `pos` last. Stop after about five rounds and tell the
 user what still looks wrong.
 
 ## Tech stacks (`[Tech]`) and kinds
