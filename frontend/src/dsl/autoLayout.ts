@@ -244,6 +244,7 @@ export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkIns
   };
 
   const boxAt = (id: string) => ({ ...elkAbsolute.get(id)!, width: placed.get(id)?.width ?? 0, height: placed.get(id)?.height ?? 0 });
+  const titles = diagram.nodes.filter((n) => n.kind === 'group' && unmoved(n.id)).map((n) => titleBand(boxAt(n.id), n.name));
   const routes: Record<string, EdgeRoute> = {};
   for (const edge of result.edges ?? []) {
     const sections = edge.sections ?? [];
@@ -254,7 +255,7 @@ export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkIns
     const shift = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
     const label = edge.labels?.[0];
     routes[edge.id] = {
-      points: dropJogs(simplify(flipped ? sectionPoints(sections).map(shift).reverse() : sectionPoints(sections).map(shift)), boxAt(source), boxAt(target)),
+      points: avoidTitles(dropJogs(simplify(flipped ? sectionPoints(sections).map(shift).reverse() : sectionPoints(sections).map(shift)), boxAt(source), boxAt(target)), titles),
       ...(label?.x !== undefined && label.y !== undefined ? { label: shift({ x: label.x + (label.width ?? 0) / 2, y: label.y + (label.height ?? 0) / 2 }) } : {}),
       from: elkAbsolute.get(source)!,
       to: elkAbsolute.get(target)!,
@@ -352,6 +353,53 @@ function dropJogs(points: Point[], source: Box, target: Box): Point[] {
 }
 
 type Box = Point & { width: number; height: number };
+
+/** Where a group draws its name (GroupNode: icon, then the name in 12px bold capitals), plus a few px; the right edge is for edges to step around it. */
+interface TitleBand {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  /** Inside the group's right border, where a detour must stay left of. */
+  limit: number;
+}
+
+function titleBand(group: Box, name: string): TitleBand {
+  return { x0: group.x + 8, x1: group.x + 40 + name.length * 11, y0: group.y, y1: group.y + 36, limit: group.x + group.width - 12 };
+}
+
+/**
+ * ELK routes an edge into a group straight down through its top padding, so
+ * it can strike through the group's name. A vertical leg that crosses a name
+ * steps right around it, just above the group's border, and back.
+ */
+function avoidTitles(points: Point[], bands: TitleBand[]): Point[] {
+  let out = points;
+  for (const band of bands) {
+    const next: Point[] = [out[0]];
+    for (let i = 1; i < out.length; i++) {
+      const [p, q] = [out[i - 1], out[i]];
+      const top = Math.min(p.y, q.y);
+      const bottom = Math.max(p.y, q.y);
+      const xr = band.x1 + 12;
+      const crosses = Math.abs(p.x - q.x) < 0.5 && p.x > band.x0 && p.x < band.x1 && top < band.y0 - 10 && bottom > band.y1 + 14 && xr < band.limit;
+      if (crosses) {
+        const above = band.y0 - 10;
+        const below = band.y1 + 4;
+        const detour = [
+          { x: p.x, y: above },
+          { x: xr, y: above },
+          { x: xr, y: below },
+          { x: p.x, y: below },
+        ];
+        next.push(...(q.y > p.y ? detour : detour.reverse()));
+      }
+      next.push(q);
+    }
+    out = next;
+  }
+  return out === points ? points : simplify(out);
+}
 
 /**
  * ELK sizes groups for its own placement; members pinned with `pos` can sit

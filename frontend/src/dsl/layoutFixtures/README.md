@@ -30,7 +30,7 @@ order, network-simplex placement, inline labels, cards at their drawn height.
 
 | fixture | nodes | edges | unrouted | crossings | totalLength | maxLength | bends | overlaps | throughNodes | cornerEnds | width | height | aspect |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| order-fulfillment | 50 | 57 | 0 | 17 | 58622 | 3874 | 166 | 0 | 0 | 0 | 4032 | 3016 | 1.34 |
+| order-fulfillment | 50 | 57 | 0 | 17 | 58908 | 3874 | 178 | 0 | 0 | 0 | 4032 | 3016 | 1.34 |
 | ecommerce | 7 | 6 | 0 | 0 | 1833 | 555 | 8 | 0 | 0 | 0 | 800 | 749 | 1.07 |
 | events | 6 | 5 | 0 | 0 | 1169 | 390 | 8 | 0 | 0 | 0 | 760 | 538 | 1.41 |
 | url-shortener | 5 | 4 | 0 | 0 | 492 | 306 | 2 | 0 | 0 | 0 | 520 | 498 | 1.04 |

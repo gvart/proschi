@@ -100,6 +100,25 @@ describe('edge routes', () => {
     expect(back[0].y).toBeGreaterThan(back[back.length - 1].y);
   });
 
+  it("steps around a group's name instead of striking it through", async () => {
+    const diagram = parse('a\ngroup g "Order Fulfillment" {\n  b\n}\na -> b').diagram;
+    const { nodes, routes } = await layoutGraph(diagram);
+    const g = nodes.find((n) => n.id === 'g')!;
+    const name = { x0: g.position.x + 8, x1: g.position.x + 40 + 'Order Fulfillment'.length * 11, y0: g.position.y, y1: g.position.y + 36 };
+    const points = routes[diagram.edges[0].id].points;
+    expect(points.length).toBeGreaterThan(2);
+    points.slice(1).forEach((q, i) => {
+      const p = points[i];
+      const vertical = Math.abs(p.x - q.x) < 0.5;
+      const through = vertical && p.x > name.x0 && p.x < name.x1 && Math.min(p.y, q.y) < name.y1 && Math.max(p.y, q.y) > name.y0;
+      expect(through, JSON.stringify([p, q])).toBe(false);
+    });
+    // It still ends on b's top, pointing down.
+    const [before, end] = points.slice(-2);
+    expect(before.x).toBe(end.x);
+    expect(end.y - before.y).toBeGreaterThanOrEqual(10);
+  });
+
   it('drops the route of an edge whose end is pinned elsewhere', async () => {
     const diagram = parse('a pos 900,40\nb\nc\na -> b\nb -> c').diagram;
     const { routes } = await layoutGraph(diagram);
