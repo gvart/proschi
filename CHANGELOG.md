@@ -21,6 +21,11 @@ deployed from `main` and ships with the same changes.
   and colors are errors. The editor, VS Code and JetBrains highlight the new
   words, and the new "Colors and legend" example (`?example=styled`) shows
   all of it.
+- **Colors in the Mermaid export.** The Mermaid architecture flowchart (Copy
+  Mermaid, the `.mmd` download, `proschi render --format md` and the HLD
+  Markdown) now keeps the diagram's colors: a `classDef` per style for nodes,
+  `style` for colored groups, and `linkStyle` for tagged connections,
+  including dashed and dotted lines. Mermaid has no legend, so it is left out.
 - **Layout hints.** `layout ordered` lays edges out in declaration order,
   so what is declared first sits higher. `rank 0`, `rank 1`, … (or
   `rank first` / `rank last`) on a node or group puts it in a row among its

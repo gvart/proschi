@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { examples, parse } from './index';
 import { escapeMermaid, toMermaidArchitecture, toMermaidSequence } from './mermaid';
+import { PALETTE, tint } from './palette';
 import { buildSequence, sequenceMessages, shorten } from './sequence';
 
 const lines = (text: string) => text.trimEnd().split('\n').map((l) => l.trim());
@@ -201,6 +202,101 @@ describe('toMermaidArchitecture', () => {
   it('draws text nodes as notes', () => {
     const out = lines(toMermaidArchitecture(diagramOf('note "N" [Sticky Note] "Remember"\n')));
     expect(out).toContain('note_>"Remember"]');
+  });
+});
+
+describe('toMermaidArchitecture colors', () => {
+  const light = (base: string) => tint(base, 'light');
+  const classDef = (name: string, base: string, extra = '') => {
+    const t = light(base);
+    return `classDef ${name} fill:${t.fill},stroke:${t.line},color:${t.text}${extra}`;
+  };
+
+  it('styles each category with one classDef shared by its nodes', () => {
+    const out = lines(toMermaidArchitecture(diagramOf(`web [Browser]
+api [REST API]
+worker [Worker]
+db [PostgreSQL]
+q [Kafka]
+cdn [CloudFront]
+pay [Third Party API]
+`)));
+    expect(out).toContain(classDef('gray', PALETTE.gray));
+    expect(out).toContain(classDef('blue', PALETTE.blue));
+    expect(out).toContain(classDef('green', PALETTE.green));
+    expect(out).toContain(classDef('orange', PALETTE.orange));
+    expect(out).toContain(classDef('purple', PALETTE.purple));
+    expect(out).toContain(classDef('pink', PALETTE.pink));
+    expect(out).toContain('class api,worker blue');
+    expect(out.filter((l) => l.startsWith('classDef blue'))).toHaveLength(1);
+  });
+
+  it('uses an explicit color over the category, by name or hex', () => {
+    const out = lines(toMermaidArchitecture(diagramOf('api [REST API] color teal\nvendor [REST API] color #0891B2\n')));
+    expect(out).toContain(classDef('teal', PALETTE.teal));
+    expect(out).toContain('class api teal');
+    expect(out).toContain(classDef('c0891b2', '#0891b2'));
+    expect(out).toContain('class vendor c0891b2');
+    expect(out.some((l) => l.startsWith('classDef blue'))).toBe(false);
+  });
+
+  it('applies tag colors and dashes to nodes and edges, and leaves the legend out', () => {
+    const out = lines(toMermaidArchitecture(diagramOf(`legend {
+  planned "Planned" blue dashed
+  old "Deprecated" red dotted
+}
+a [REST API]
+b [REST API] .old
+c [PostgreSQL]
+a -> b : x
+a -> c .planned
+b -> c .planned
+c -> a .old
+`)));
+    expect(out).toContain(classDef('red_dotted', PALETTE.red, ',stroke-dasharray:2 4'));
+    expect(out).toContain('class b red_dotted');
+    expect(out).toContain(`linkStyle 1,2 stroke:${light(PALETTE.blue).line},stroke-dasharray:7 5`);
+    expect(out).toContain(`linkStyle 3 stroke:${light(PALETTE.red).line},stroke-dasharray:2 4`);
+    expect(out.join('\n')).not.toMatch(/legend|Planned|Deprecated/);
+  });
+
+  it('styles a colored subgraph with its group fill', () => {
+    const out = lines(toMermaidArchitecture(diagramOf('group core "Core" color teal {\n  api [REST API]\n}\ngroup plain "Plain" {\n  x [REST API]\n}\n')));
+    const t = light(PALETTE.teal);
+    expect(out).toContain(`style core fill:${t.groupFill},stroke:${t.line},color:${t.text}`);
+    expect(out.some((l) => l.startsWith('style plain'))).toBe(false);
+  });
+
+  it('writes a small diagram', () => {
+    expect(toMermaidArchitecture(diagramOf(`legend {
+  planned "Planned" blue dashed
+}
+web "Web" [Browser]
+group core "Core" color teal {
+  api "API" [REST API]
+}
+db "DB" [PostgreSQL]
+web -> api
+api -> db .planned
+`))).toMatchInlineSnapshot(`
+  "flowchart LR
+    web["Web<br/>[Browser]"]
+    subgraph core["Core"]
+      api["API<br/>[REST API]"]
+    end
+    db[("DB<br/>[PostgreSQL]")]
+    web --> api
+    api --> db
+    classDef gray fill:#edeef0,stroke:#525761,color:#111111
+    classDef blue fill:#e7f0fe,stroke:#2f62b6,color:#111111
+    classDef green fill:#e4f8ec,stroke:#1d9348,color:#111111
+    class web gray
+    class api blue
+    class db green
+    style core fill:#f1fbfa,stroke:#13897c,color:#111111
+    linkStyle 1 stroke:#2f62b6,stroke-dasharray:7 5
+  "
+`);
   });
 });
 

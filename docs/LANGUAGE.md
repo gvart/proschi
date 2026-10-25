@@ -178,6 +178,8 @@ orders -> legacy .deprecated : sync orders
 - One tag per node, group or connection. Tags style the architecture, so use
   case steps take none.
 - An unknown tag or color name is an error that names the closest match.
+- The Mermaid export keeps the colors and dashes but not the legend, which
+  Mermaid cannot draw.
 - `critical` draws a warning badge on the node's top-right corner, for the
   parts whose failure matters most.
 
