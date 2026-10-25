@@ -722,6 +722,12 @@ comments and alignment survive:
 A node that was only referenced, never declared, gets a declaration line
 above the first use case.
 
+Without positions, the layout flows top-down along the connections and
+routes each one at right angles around the boxes. Declaration order breaks
+ties: nodes declared earlier go further left, and in a cycle of connections
+the node declared first goes higher. A node with `pos x,y` keeps its place,
+and its connections take a simple right-angled path to it.
+
 With traffic in the document, **Overlay: load** draws the simulation on the
 canvas: each node is coloured by how busy it is, shows its replicas, shards
 and utilisation, and requests flow along the connections (hollow dots for

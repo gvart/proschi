@@ -63,6 +63,13 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Tidier automatic layout for large diagrams.** Connections are drawn as
+  right-angled routes around the boxes, with an arrowhead and the label on
+  the line, in the editor and in `proschi render`. When connections form a
+  cycle, the node declared first goes higher. On a 50-node benchmark
+  diagram, crossings drop from 116 to 17 and no connection passes through
+  a box any more. While you drag a node its connections take a simple
+  right-angled path until the next layout.
 - **Clearer practice navigation.** Problems, Roadmap, Review, Challenge,
   Arcade and Progress are now one row of buttons at the top of every
   practice page, the current one in yellow, and the bar no longer moves
