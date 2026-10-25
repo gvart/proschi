@@ -1,6 +1,9 @@
 import type { ElkEdgeSection, ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
+import type { EdgeRoute, Point } from '../types/canvas';
 import type { Diagram, DiagramNode, LayoutDirection as LayoutHintDirection, Rank } from './types';
 import { countCrossings, countOutOfOrder, toRects } from './layoutMetrics';
+
+export type { EdgeRoute, Point };
 
 /**
  * ELK auto-layout of a diagram, free of React Flow so the canvas
@@ -106,11 +109,6 @@ export function bundledElk(): Promise<ElkInstance> {
   return elkPromise;
 }
 
-export interface Point {
-  x: number;
-  y: number;
-}
-
 export interface LaidOutNode {
   id: string;
   /** Top-left corner, relative to the enclosing group when there is one. */
@@ -120,21 +118,6 @@ export interface LaidOutNode {
   height: number;
   /** The enclosing group, when it exists. */
   parent?: string;
-}
-
-/**
- * An edge's orthogonal route, in absolute canvas coordinates: from a point on
- * the source's border, through every bend, to a point on the target's border.
- * `from` and `to` are the absolute top-left corners of the two nodes it was
- * routed for, so a drawing can tell when a node has moved since and the route
- * no longer fits.
- */
-export interface EdgeRoute {
-  points: Point[];
-  /** Centre of the label, placed by ELK in space it kept free. */
-  label?: Point;
-  from: Point;
-  to: Point;
 }
 
 export interface Layout {
