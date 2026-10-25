@@ -1,0 +1,28 @@
+tooling/schema/proschi-diagram.schema.json
+  s_6084dd8c702c72::t_10d7c2863df717 48-49,226-232,553-567,582-633,649-655
+tooling/src/render/svg.ts
+  s_6084dd8c702c72::t_058f7f95358315 32-38,41,44
+tooling/src/schema.ts
+  s_6084dd8c702c72::t_e5502cc155c00a 55,95,117-120,125-144
+tooling/src/render/architecture.ts
+  s_6084dd8c702c72::t_6760a6bf97a860 3-4,13-15,67-68,81-86,89-91,101,109-117,133-135,138,146,167-215,217,223
+tooling/test/render.test.ts
+  s_6084dd8c702c72::t_4c010a54af0c87 369-403
+  s_6084dd8c702c72::t_520a64157eaa83 11
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "971b133b94abcb583f36142d262d81c29bebca29",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
