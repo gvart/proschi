@@ -124,7 +124,8 @@ describe('fromMermaid: round trips', () => {
     const { source: imported, warnings } = fromMermaid(exportAll(source));
     const back = parse(imported);
     expect(back.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
-    expect(warnings.filter((w) => !/payload that does not close/.test(w.message))).toEqual([]);
+    // The export's colors (classDef, class, style, linkStyle) are not imported, only reported.
+    expect(warnings.filter((w) => !/payload that does not close|^Ignored \d+ styling line/.test(w.message))).toEqual([]);
     // Same nodes (group styles and note kinds are not in Mermaid) and connections, and the same use cases and scenarios.
     const nodes = (d: typeof diagram) => d.nodes.map((n) => [n.id, n.kind === 'component' ? n.techStack : n.kind]).sort();
     expect(nodes(back.diagram)).toEqual(nodes(diagram));

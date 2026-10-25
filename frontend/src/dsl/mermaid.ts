@@ -1,4 +1,5 @@
-import type { Diagram, DiagramNode } from './types';
+import type { Dash, Diagram, DiagramNode } from './types';
+import { COLOR_NAMES, DASH_ARRAY, PALETTE, nodeBaseColor, tint } from './palette';
 import { buildSequence, findScenario, type SequenceMessage } from './sequence';
 
 /**
@@ -140,5 +141,56 @@ export function toMermaidArchitecture(diagram: Diagram): string {
     // Spaces around the arrow keep ids starting with `o` or `x` from reading as other arrow types.
     lines.push(`  ${id(edge.source)} -->${label} ${id(edge.target)}`);
   }
+  lines.push(...colorLines(diagram, id));
   return lines.join('\n') + '\n';
+}
+
+/** A class name for a base color and dash: the palette name, or `c` and the hex digits. */
+function className(base: string, dash: Dash | undefined): string {
+  const name = COLOR_NAMES.find((n) => PALETTE[n] === base) ?? `c${base.slice(1)}`;
+  return dash ? `${name}_${dash}` : name;
+}
+
+function dashArray(dash: Dash | undefined): string {
+  return dash ? `,stroke-dasharray:${DASH_ARRAY[dash]}` : '';
+}
+
+/**
+ * The diagram's colors in light-theme hex, as on the canvas (palette.ts): a
+ * `classDef` per distinct node style with its `class` assignments, a `style`
+ * per colored subgraph, and a `linkStyle` per distinct tagged edge style.
+ * Mermaid has no legend, so the legend block itself is left out.
+ */
+function colorLines(diagram: Diagram, id: (id: string) => string): string[] {
+  const classes = new Map<string, { def: string; members: string[] }>();
+  const groups: string[] = [];
+  for (const node of diagram.nodes) {
+    const base = nodeBaseColor(node);
+    if (!base) continue;
+    const t = tint(base, 'light');
+    const dash = node.style?.dash;
+    if (node.kind === 'group') {
+      groups.push(`  style ${id(node.id)} fill:${t.groupFill},stroke:${t.line},color:${t.text}${dashArray(dash)}`);
+      continue;
+    }
+    const name = className(base, dash);
+    const entry = classes.get(name) ?? { def: `fill:${t.fill},stroke:${t.line},color:${t.text}${dashArray(dash)}`, members: [] };
+    entry.members.push(id(node.id));
+    classes.set(name, entry);
+  }
+
+  const links = new Map<string, number[]>();
+  diagram.edges.forEach((edge, i) => {
+    const { color, dash } = edge.style ?? {};
+    if (!color && !dash) return;
+    const key = [color && `stroke:${tint(color, 'light').line}`, dash && `stroke-dasharray:${DASH_ARRAY[dash]}`].filter(Boolean).join(',');
+    links.set(key, [...(links.get(key) ?? []), i]);
+  });
+
+  return [
+    ...[...classes].map(([name, { def }]) => `  classDef ${name} ${def}`),
+    ...[...classes].map(([name, { members }]) => `  class ${members.join(',')} ${name}`),
+    ...groups,
+    ...[...links].map(([key, indexes]) => `  linkStyle ${indexes.join(',')} ${key}`),
+  ];
 }

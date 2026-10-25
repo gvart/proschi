@@ -418,6 +418,11 @@ to *Share* in the header (on narrow screens, the download icon):
 Paste the Mermaid source into a Markdown file on GitHub or GitLab inside a
 ` ```mermaid ` block and it renders there.
 
+The architecture flowchart keeps the diagram's [colors](LANGUAGE.md#colors-and-legend)
+in their light-theme values: a `classDef` per node style, `style` for a
+colored group, and `linkStyle` for a tagged connection, with its dash.
+Mermaid has no legend, so the `legend` block is left out.
+
 **Command line.** `proschi render` writes static files, for docs sites,
 READMEs and wikis:
 
