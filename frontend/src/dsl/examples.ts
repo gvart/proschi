@@ -310,6 +310,52 @@ test "Visitors only enter through the load balancer" {
 }
 `;
 
+export const styledExample = `title "Order Fulfillment" "Who owns what, and what changes next quarter"
+
+# Each legend entry is a style: apply it with .tag on nodes, groups and connections.
+legend {
+  owned      "Owned by Order Fulfillment" green
+  handover   "Handed over to POS in Q4"   blue
+  planned    "Planned flow"               blue dashed
+  deprecated "Deprecated"                 red dashed
+}
+
+shopper "Shopper"     [Actor]
+gateway "API Gateway" [API Gateway]
+
+group fulfillment "Order Fulfillment" .owned {
+  orders   "Order Service"   [REST API]   @fulfillment critical
+  picking  "Picking Service" [REST API]   @fulfillment
+  ordersDb "Orders DB"       [PostgreSQL] critical
+}
+
+group pos "Point of Sale" .handover {
+  store "Store Service" [REST API] @pos
+}
+
+events  "Order Events" [Kafka]
+legacy  "Legacy ERP"   [SOAP API]        .deprecated
+carrier "Carrier API"  [Third Party API] color #0891b2
+
+shopper -> gateway
+gateway -> orders             : place order
+orders  -> ordersDb
+orders  -> events             : OrderPlaced
+events  -> picking            : consume
+picking -> carrier            : book pickup
+orders  -> legacy .deprecated : sync orders
+events  -> store .planned     : consume
+
+usecase "Place an order" {
+  shopper  -> gateway  : POST /orders
+  gateway  -> orders   : POST /orders
+  orders   -> ordersDb : INSERT order
+  orders  ->> events   : OrderPlaced
+  orders  --> gateway  : 201
+  gateway --> shopper  : 201
+}
+`;
+
 export interface Example {
   id: string;
   name: string;
@@ -324,4 +370,5 @@ export const examples: Example[] = [
   { id: 'login', name: 'Login with sessions', description: 'Log in with success, wrong-password and outage scenarios, plus log out.', source: loginExample },
   { id: 'events', name: 'Event-driven checkout', description: 'Kafka fan-out to several consumers.', source: eventDrivenExample },
   { id: 'url-shortener', name: 'URL shortener HLD', description: 'A high-level design: traffic, requirements, capacity, data model, decisions and flow tests.', source: urlShortenerExample },
+  { id: 'styled', name: 'Colors and legend', description: 'Ownership drawn with colors, a legend, tags on groups and connections, and critical nodes.', source: styledExample },
 ];

@@ -1,6 +1,7 @@
-import { memo } from 'react';
+import { memo, type CSSProperties } from 'react';
 import { Handle, Position } from 'reactflow';
 import { NodeResizer } from '@reactflow/node-resizer';
+import { TriangleAlert } from 'lucide-react';
 import type { NodeProps } from 'reactflow';
 import type { ComponentMetadata } from '../../types/canvas';
 import { getTechStackIcon } from '../../utils/iconMapping';
@@ -25,8 +26,14 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
       data-selected={selected || undefined}
       data-load={o ? (o.down ? 'down' : o.saturated ? 'over' : u !== undefined && u >= 0.9 ? 'hot' : 'ok') : undefined}
       data-stack={o?.replicas && o.replicas > 1 ? Math.min(2, o.replicas - 1) : undefined}
-      style={o ? { background: heat(u, o.down) } : undefined}
+      // The load overlay wins over the node's colors while it is on (D4).
+      style={o ? { background: heat(u, o.down) } : tintVars(data)}
     >
+      {data.critical && (
+        <span className="pc-node__critical" role="img" aria-label="Critical" title="Critical">
+          <TriangleAlert size={13} strokeWidth={2.5} aria-hidden="true" />
+        </span>
+      )}
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected && !data.fixedSize} minWidth={180} minHeight={80} />
 
       <Handle type="target" position={Position.Top} className="pc-handle" />
@@ -46,6 +53,16 @@ const ComponentNode = ({ data, selected }: NodeProps<ComponentMetadata>) => {
     </div>
   );
 };
+
+/** The node's colors as custom properties, so playback and overlay styles in canvas.css still win. */
+function tintVars(data: ComponentMetadata): CSSProperties | undefined {
+  if (!data.backgroundColor && !data.borderColor && !data.borderStyle) return undefined;
+  return {
+    ...(data.backgroundColor ? { '--pc-fill': data.backgroundColor } : {}),
+    ...(data.borderColor ? { '--pc-line': data.borderColor } : {}),
+    ...(data.borderStyle ? { '--pc-dash': data.borderStyle } : {}),
+  } as CSSProperties;
+}
 
 /** Replicas, size, shards and how busy the node is, with a bar; "down" when it is. */
 function LoadBadge({ overlay: o }: { overlay: NodeOverlay }) {

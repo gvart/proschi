@@ -3,6 +3,7 @@ import { tokenizeLine } from './lexer';
 import { parse } from './parser';
 import { format } from './format';
 import { setEdgeLabel } from './edit';
+import { toMetadata, withEdgeStyles } from './toCanvas';
 
 const errors = (src: string) => parse(src).diagnostics.filter((d) => d.severity === 'error').map((d) => d.message);
 
@@ -158,5 +159,32 @@ describe('edit: edge labels keep the tag', () => {
     const src = 'legend {\n  p blue\n}\na -> b .p : old\n';
     expect(setEdgeLabel(src, 'a->b', 'new')).toBe('legend {\n  p blue\n}\na -> b .p : new\n');
     expect(setEdgeLabel(src, 'a->b', null)).toBe('legend {\n  p blue\n}\na -> b .p\n');
+  });
+});
+
+describe('toCanvas styling', () => {
+  const { diagram } = parse(`${LEGEND}api [Go] critical\nold [Go] .old\nnote "N" [Note]\ngroup g .planned {\n}\napi -> old .planned : x\napi -> note`);
+
+  it('gives nodes and groups theme-aware colors, the dash and the critical flag', () => {
+    const [api, old, note, g] = diagram.nodes.map(toMetadata);
+    expect(api).toMatchObject({
+      critical: true,
+      backgroundColor: 'color-mix(in srgb, #3b82f6 12%, rgb(var(--c-surface)))',
+      borderColor: 'color-mix(in srgb, #3b82f6 72%, rgb(var(--c-ink)))',
+    });
+    expect(api.borderStyle).toBeUndefined();
+    expect(old).toMatchObject({ tag: 'old', borderStyle: 'dotted', borderColor: expect.stringContaining('#ef4444') });
+    expect(note.backgroundColor).toBeUndefined();
+    expect(g).toMatchObject({ borderStyle: 'dashed', backgroundColor: 'color-mix(in srgb, #3b82f6 6%, rgb(var(--c-surface)))' });
+  });
+
+  it('puts the tag stroke in the edge style only', () => {
+    const edges = withEdgeStyles(diagram, diagram.edges.map((e) => ({ id: e.id, style: { strokeWidth: 3 } })));
+    expect(edges[0]).toEqual({
+      id: 'api->old',
+      style: { strokeWidth: 3, stroke: 'color-mix(in srgb, #3b82f6 72%, rgb(var(--c-ink)))', strokeDasharray: '7 5' },
+      data: { tag: 'planned' },
+    });
+    expect(edges[1]).toEqual({ id: 'api->note', style: { strokeWidth: 3 } });
   });
 });
