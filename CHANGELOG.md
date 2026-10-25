@@ -10,6 +10,12 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Agent skills that draw readable diagrams.** A new `image-to-proschi`
+  skill recreates a screenshot or image of an architecture diagram, keeping
+  its legend and reading order. Every skill now teaches edge direction,
+  declaration order by tier, grouping, one edge to a group instead of one per
+  member, when to use a legend, tags and `critical`, and a mandatory step
+  that renders the diagram and fixes crossings and sprawl before finishing.
 - **Colors, a legend and a critical marker.** Nodes are now tinted by
   category (clients, edge, services, data stores, queues, external) in
   calm colors that work in light and dark. `color teal` or `color #0891b2`

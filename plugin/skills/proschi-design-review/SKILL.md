@@ -65,6 +65,13 @@ Look for each of these; skip what does not apply.
   `test "…" { no path from any client to any database }`.
 - Missing gateway, auth or rate limiting where the prose says there is one.
 
+**Readability** (render it: `npx proschi@latest render --out /tmp/proschi-review design.proschi`, then look)
+- Crossing edges, edges pointing up against the flow, stranded nodes,
+  sprawl; declarations out of tier order (clients first, data last).
+- One edge per group member where one edge to the group would say it;
+  `a -> b` plus `b -> a` pairs.
+- `color` with no legend, a legend no tag uses, `critical` on most nodes.
+
 **Requirements honesty**
 - Targets with no use case behind them, use cases with traffic but no
   latency target, `capacity` overrides with no source for the number.
@@ -94,7 +101,9 @@ npx proschi@latest test design.proschi
 npx proschi@latest analyze design.proschi
 ```
 
-Iterate until `check` is clean and the tests that should pass do. Add a
+Render and look at the diagram again (mandatory; the cheat-sheet's *Render
+and review* checklist). Iterate until `check` is clean, the tests that
+should pass do, and the render reads well. Add a
 `test` or requirement for each fixed risk so it cannot come back, and a
 `decision "…" { because "…" rejected "…" "…" }` for each trade-off the
 user chose. Report before/after numbers.

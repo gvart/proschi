@@ -28,7 +28,7 @@ function frontMatter(text: string): Record<string, string> {
 
 describe('agent skills', () => {
   it('are all listed in skills/README.md', () => {
-    expect(skills.length).toBeGreaterThanOrEqual(5);
+    expect(skills).toEqual(expect.arrayContaining(['infra-to-proschi', 'image-to-proschi']));
     const readme = readFileSync(join(skillsDir, 'README.md'), 'utf8');
     for (const s of skills) expect(readme).toContain(`(${s}/SKILL.md)`);
   });
@@ -46,11 +46,14 @@ describe('agent skills', () => {
     // Every skill validates its output and ends with a share link.
     expect(text).toContain('proschi@latest check');
     expect(text).toContain('proschi@latest share-link');
+    // ...and renders the diagram to look at it before handing over.
+    expect(text).toContain('proschi@latest render --out');
   });
 
   it.each(skills)('%s carries the same cheat-sheet as the others', (s) => {
     const sheet = (d: string) => readFileSync(join(skillsDir, d, 'references', 'proschi-cheatsheet.md'), 'utf8');
     expect(sheet(s)).toBe(sheet('infra-to-proschi'));
+    expect(sheet(s)).not.toContain('TODO');
     expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-cheatsheet.md)');
   });
 
@@ -81,5 +84,9 @@ describe('Claude Code plugin marketplace', () => {
     expect(marketplace).toMatchObject({ name: 'proschi', owner: { name: expect.any(String) } });
     expect(marketplace.plugins).toEqual([expect.objectContaining({ name: plugin.name, source: './plugin' })]);
     expect(plugin.name).toBe('proschi');
+  });
+
+  it('names every skill in the plugin description', () => {
+    for (const s of skills) expect(marketplace.plugins[0].description).toContain(s);
   });
 });

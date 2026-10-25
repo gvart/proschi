@@ -55,6 +55,118 @@ api -> crm .planned
   one to a node, a group header or a connection (before the `:` label). A hex
   in a legend line needs `color #hex` (a bare `#` starts a comment).
 - `critical` puts a warning badge on a node. Unknown tags and colors are errors.
+- Use a legend for what the reader must tell apart: ownership (team A / team
+  B), lifecycle (planned, deprecated), criticality. No legend → no `color`:
+  the category tints already say "service", "store", "queue". `critical` only
+  on the few nodes whose failure stops the business.
+
+## Layout: diagrams that read well
+
+Without `pos`, the layout is layered and top-down along the connections, with
+right-angle routes. What steers it:
+
+- **Edge direction.** Arrows go caller → callee, so a request flows from the
+  clients at the top down to the data at the bottom. Messages flow the same
+  way: `api -> queue`, `queue -> worker`.
+- **Edges decide the rows**: a callee lands below its caller (unless
+  `layout ordered`, below). **Declaration order** decides left to right
+  within a row and breaks ties. An edge that
+  closes a cycle and points back at an earlier node is laid out reversed (it
+  keeps its arrowhead), so declare the entry point of a loop first.
+- **Groups** are laid out as one block. A connection may end on a group:
+  `gw -> services` is one edge to all its members. Use case steps still need
+  node-to-node connections.
+
+Rules, in the order they pay off:
+
+1. Declare tier by tier, in reading order: clients, edge, services, async
+   (queues, workers), stores, then externals and cross-cutting tools
+   (monitoring, logging). Within a tier, left to right. Declare a node that
+   only one part uses next to that part.
+2. One edge per pair, from the caller. No `a -> b` plus `b -> a`: name the
+   reply in the label (`Order status [poll]`).
+3. Fan-out: one source to many alike targets (every service sends metrics,
+   the gateway routes to all services) is one edge to their group.
+4. Group by a real boundary: network, cluster, team or tier. A one-member
+   group is fine when it is one. Nest at most two levels.
+5. Keep edges inside groups where you can: a node that only talks to one
+   group's members probably belongs in it.
+6. Fewer, bigger boxes read better: a cache or database only one service
+   uses can go in its description unless an edge or use case needs it. Names
+   longer than about 18 characters are cut on the card; put the rest in the
+   description.
+
+```proschi fragment
+# Bad: one edge per member; the metrics lines cross the whole request path.
+svc_a -> prom : Metrics
+svc_b -> prom : Metrics
+svc_c -> prom : Metrics
+# Good: one edge from the group, declared after the request path.
+services -> prom : Metrics
+```
+
+**Layout hints**, when edges and order are not enough (full reference:
+<https://proschi.app/docs/language/#steering-the-layout>):
+
+```proschi fragment
+layout ordered            # top level: declared first sits higher, whatever the arrows
+iam "IAM" [Auth Service] rank 0
+group aws "AWS" rank 1 {
+  api "API" [Go]
+}
+group kafka "Kafka" rank 2 {
+  direction right         # this group reads as a row, even unconnected topics
+  orders "Order Events" [Kafka]
+  eta    "ETA updates"  [Kafka]
+}
+audit "Audit log" [Database] rank last
+```
+
+- `layout ordered` (top level): every edge is laid out by declaration order,
+  so the file's order is the top-to-bottom order even when arrows point up.
+  Cheap and usually the biggest win: start every new diagram with it.
+- `rank N|first|last` on a node or group header: orders layers among
+  siblings (top-level items with each other, a group's members with each
+  other); lower comes first. Same rank = same row, unless an edge connects
+  them (the target drops a row), so give connected nodes different ranks.
+  Ranks are relative; unranked nodes go where their edges pull them.
+- `direction down|right|up|left`: at the top it turns the whole diagram; in a
+  group it sets that group's flow (a row of topics, a pipeline). Such a group
+  is laid out on its own and placed as one box; groups nested in it inherit
+  the direction unless they set their own. Two zones side by side that an
+  edge joins: wrap them in a `direction right` group, `direction down` in each.
+- Recipe: reading-order declarations + `layout ordered`; then `rank` on
+  group tiers; then on a top row of externals only where alignment matters;
+  then `direction right` in groups that read as a row. A single hint can
+  make the layout worse (it is noisy): render after **each** hint and keep
+  it only if the render got better.
+- `pos x,y` pins one node; others still auto-layout. Only for a final
+  touch-up of one or two nodes: pinned nodes don't move when the diagram
+  changes, so they go stale.
+
+**Render and review (mandatory after any architecture change).**
+
+```sh
+npx proschi@latest render --out /tmp/proschi-review file.proschi   # architecture.svg
+```
+
+Look at the whole image: open it in a browser, or turn it into a PNG if you
+only read raster images (`rsvg-convert -w 2000 architecture.svg -o
+review.png`, `magick`, or a headless-browser screenshot; macOS `qlmanage -t`
+crops tall images). Fix and render again until none of these is true:
+
+- [ ] Edges cross, or labels sit on top of each other.
+- [ ] An edge points up or backwards against the flow.
+- [ ] A node is stranded far from everything it connects to.
+- [ ] Sprawl: one very wide row, or long edges looping around groups.
+- [ ] The order is not the one you meant (clients first, data last).
+- [ ] Legend colors don't match what the tags should show.
+
+Fix in this order: edge direction, declaration order, fan-out to a group,
+regrouping, then hints one at a time, and `pos` last. Render after each
+change; revert any change that adds crossings or sprawl. Never assume a
+hint helped without looking. Stop after about five rounds and tell the
+user what still looks wrong.
 
 ## Tech stacks (`[Tech]`) and kinds
 
@@ -218,6 +330,7 @@ npx proschi@latest check file.proschi          # errors + warnings (exit 1 on er
 npx proschi@latest test file.proschi           # requirements and test blocks
 npx proschi@latest analyze file.proschi        # capacity table: load, p99, availability, cost, SPOFs
 npx proschi@latest fmt file.proschi            # canonical layout
+npx proschi@latest render --out /tmp/review file.proschi           # architecture.svg, to review the layout
 npx proschi@latest render --format hld-md --out docs file.proschi   # HLD document
 npx proschi@latest import mermaid diagram.mmd -o file.proschi       # Mermaid → Proschi
 npx proschi@latest import openapi openapi.yaml -o file.proschi      # OpenAPI → use cases

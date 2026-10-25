@@ -11,6 +11,7 @@ whole language on one page.
 | Skill | Use it to |
 |---|---|
 | [`infra-to-proschi`](infra-to-proschi/SKILL.md) | Model an existing system from docs, Mermaid, Terraform, CloudFormation, CDK, Kubernetes, Helm or docker-compose |
+| [`image-to-proschi`](image-to-proschi/SKILL.md) | Recreate a screenshot or image of an architecture diagram: inventory, legend → `legend` and tags, the source's reading order, then compare the render with the image |
 | [`code-to-usecases`](code-to-usecases/SKILL.md) | Write `usecase` request flows (responses, async, `par`, `alt` failures) from routes, handlers, consumers and clients, or from an OpenAPI spec |
 | [`proschi-capacity-plan`](proschi-capacity-plan/SKILL.md) | Add traffic, requirements and replicas from SLOs or load, run `proschi analyze`, fix bottlenecks |
 | [`proschi-design-review`](proschi-design-review/SKILL.md) | Review a design: single points of failure, saturation, missing failure scenarios, cost waste, with concrete edits |
@@ -18,7 +19,9 @@ whole language on one page.
 | [`proschi-hld-doc`](proschi-hld-doc/SKILL.md) | Generate a high-level design document (`proschi render --format hld-md`) |
 
 Every skill validates its output with `npx proschi check` and `test`,
-iterates until clean, and ends with a link that opens the diagram in the
+iterates until clean, renders the diagram with `npx proschi render` and looks
+at it (crossings, edges against the flow, stranded nodes, sprawl) before
+finishing, and ends with a link that opens the diagram in the
 web editor (`npx proschi share-link <file>`). They need Node 18 or newer;
 `share-link` and `import` need `proschi` 0.9 or newer.
 
@@ -64,6 +67,7 @@ Without `degit`: `git clone --depth 1 https://github.com/gvart/proschi /tmp/pros
 
 Keep each `SKILL.md` short (under ~200 lines) with one worked example; the
 `references/proschi-cheatsheet.md` files are identical copies (so each skill
-folder works on its own). `tooling/test/skills.test.ts` checks the front
+folder works on its own); its *Layout* section holds the shared rules for
+readable diagrams and the render-and-review checklist. `tooling/test/skills.test.ts` checks the front
 matter, that the copies match, and that every full ` ```proschi ` example
 passes `check --strict`, `fmt --check` and `test`.
