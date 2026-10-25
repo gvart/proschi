@@ -37,10 +37,14 @@ export interface ComponentMetadata {
   // For text nodes
   textContent?: string;
   fontSize?: number;
-  // For group nodes
+  // Fill and border (CSS, theme-aware) of components and groups: from `color`, a tag or the category (dsl/palette.ts)
   backgroundColor?: string;
   borderColor?: string;
   borderStyle?: 'solid' | 'dashed' | 'dotted';
+  /** `.tag`: the legend entry the node is styled by. */
+  tag?: string;
+  /** `critical`: drawn with a warning badge. */
+  critical?: boolean;
 }
 
 export interface CanvasNode {
@@ -57,4 +61,7 @@ export interface CanvasEdge {
   label?: string;
   labelStyle?: React.CSSProperties;
   labelBgStyle?: React.CSSProperties;
+  /** Stroke color and dash of a tagged edge. */
+  style?: React.CSSProperties;
+  data?: { tag: string };
 }

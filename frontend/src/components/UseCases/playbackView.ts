@@ -121,7 +121,7 @@ export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: 
       style: {
         ...edge.style,
         // The line is ink; the packet riding it (AnimatedPlaybackEdge) carries the accent.
-        stroke: isActive ? (isError ? CANVAS_FAIL : CANVAS_INK) : CANVAS_EDGE,
+        stroke: isActive ? (isError ? CANVAS_FAIL : CANVAS_INK) : (edge.style?.stroke ?? CANVAS_EDGE),
         strokeWidth: isActive ? 3 : 2,
         strokeDasharray: isActive && step?.failed ? '6 4' : edge.style?.strokeDasharray,
         opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : onPath ? 0.45 : 0.12,

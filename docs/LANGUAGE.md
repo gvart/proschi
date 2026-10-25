@@ -63,9 +63,10 @@ brackets around optional parts; the brackets of a tech stack, such as
 |---|---|---|
 | Title | `title "Text" ["Summary"]` | The optional second string is a one-line summary of the system. |
 | Import | `import "infra.proschi"` | Top level only. Adds everything that file declares. See [Imports](#imports). |
-| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. |
-| Group | `group id ["Name"] [Style] { … }` | Holds nodes, nested groups and connections. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
-| Connection | `a -> b [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. |
+| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3] [color c] [.tag] [critical]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. See [Colors and legend](#colors-and-legend) for the last three. |
+| Group | `group id ["Name"] [Style] [pos x,y] [color c] [.tag] { … }` | Holds nodes, nested groups and connections. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
+| Connection | `a -> b [.tag] [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. The tag goes before the colon, because the label runs to the end of the line. |
+| Legend | `legend { … }` | Top level only. Named styles that `.tag` applies. See [Colors and legend](#colors-and-legend). |
 | Use case | `usecase "Name" ["Description"] { … }` | Top level only. A request flow, step by step. See [Use case steps](#use-case-steps). |
 | Parallel steps | `par { … }` | Inside a use case or a scenario. See [Parallel steps](#parallel-steps). |
 | Scenario | `alt "Name" [when "condition"] { … }` | Inside a use case or another scenario. See [Scenarios](#scenarios). |
@@ -73,7 +74,7 @@ brackets around optional parts; the brackets of a tech stack, such as
 | Entity | `entity Name [in store] { … }` | Top level only. Part of the data model. |
 | Decision | `decision "Title" { … }` | Top level only. Why the design is this way. |
 | Test | `test "Name" { … }` | Top level only. Checks on the request flows. |
-| Comment | `# …` | Anywhere, to the end of the line. A # inside quotes or a JSON payload is just text. |
+| Comment | `# …` | Anywhere, to the end of the line. A # inside quotes or a JSON payload is just text, and so is a hex color right after `color` (`color #3b82f6`). |
 
 - **Ids** are letters, digits and underscores, and don't start with a digit.
 - **The tech stack** names a technology from the catalog (about 210 of them,
@@ -123,6 +124,60 @@ Until then it is simulated as a generic database, like [Database]
 To keep a product name the catalog lacks without the warning, use the generic
 tech of its kind instead (`[Database]`, `[Message Queue]`) and put the product
 in the node's name or description.
+
+## Colors and legend
+
+Nodes are tinted by their category, so a diagram reads at a glance without any
+styling: clients gray, edge components (CDN, load balancer, gateway, DNS, WAF)
+purple, services and functions blue, data stores green, queues and brokers
+orange, external services pink. Groups and notes stay neutral. The tints are
+soft and follow the light and dark theme; text keeps the theme's ink color.
+
+`color` sets a node's or group's color by hand. It takes a palette name (gray,
+blue, teal, green, yellow, orange, red, purple, pink) or a hex value (`#3b82f6`
+or `#38f`). From a hex value Proschi derives a fill light enough for the text
+and a matching border, in both themes.
+
+```proschi
+api    "Order API" [REST API] color teal
+vendor "Vendor"    [Third Party API] color #0891b2
+group retail "Point of Sale" color blue {
+  store [REST API]
+}
+```
+
+A `legend` block names styles and explains them. Each line is an id, a label,
+and optionally a color and `dashed` or `dotted`. `.id` applies the style to a
+node, a group or a connection, and the legend is drawn in a corner of the
+canvas and in exported images. On a node or group the color sets the fill and
+the border, and the dash applies to the border; on a connection they set the
+line.
+
+```proschi
+legend {
+  owned      "Owned by Order Fulfillment" green
+  handover   "Handed over to POS in Q4"   blue
+  planned    "Planned flow"               blue dashed
+  deprecated "Deprecated"                 red dashed
+}
+
+group fulfillment "Order Fulfillment" .owned {
+  orders "Order Service" [REST API] critical
+}
+legacy "Legacy ERP" [SOAP API] .deprecated
+
+orders -> legacy .deprecated : sync orders
+```
+
+- An explicit `color` wins over the tag's color, and the tag's color wins over
+  the category's. While the load overlay is on, it colors the nodes instead.
+- A hex color in a legend line needs the word: `old "Old" color #ef4444`. A
+  bare `#` starts a comment.
+- One tag per node, group or connection. Tags style the architecture, so use
+  case steps take none.
+- An unknown tag or color name is an error that names the closest match.
+- `critical` draws a warning badge on the node's top-right corner, for the
+  parts whose failure matters most.
 
 ## Use case steps
 
@@ -747,7 +802,7 @@ https://proschi.app/app/#code=…&uc=create-order&alt=db-down&step=2
 
 To open one of the bundled examples, add its name to the editor's address:
 app/?example=url-shortener. The examples are hello, ecommerce, serverless,
-login, events and url-shortener.
+login, events, url-shortener and styled.
 
 ## Grammar
 
@@ -761,13 +816,18 @@ line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | node | connection
              | group-open | usecase-open | par-open | alt-open | close
-             | traffic | requirements | capacity | entity | decision | test ;
+             | traffic | requirements | capacity | entity | decision | test | legend ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative file path *)
-node         = id , { string | tech | team | position | replicas } ;  (* 1st string: name, 2nd: description *)
-connection   = id , arrow , id , [ ":" , label ] ;
-group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
+node         = id , { string | tech | team | position | replicas | color | tag | "critical" } ;  (* 1st string: name, 2nd: description *)
+connection   = id , arrow , id , [ tag ] , [ ":" , label ] ;
+group-open   = "group" , id , [ string ] , [ tech ] , { position | color | tag } , "{" ;
+legend       = "legend" , "{" , { id , [ string ] , { color-value | color | "dashed" | "dotted" } } , "}" ;
+color        = "color" , ( color-value | hex ) ;
+color-value  = "gray" | "blue" | "teal" | "green" | "yellow" | "orange" | "red" | "purple" | "pink" ;
+hex          = "#" , hex-digit , hex-digit , hex-digit , [ hex-digit , hex-digit , hex-digit ] ;  (* only after "color" *)
+tag          = "." , id ;                                (* one token, e.g. .planned *)
 usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
 par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;

@@ -20,15 +20,17 @@ object ProschiColors {
     @JvmField val NODE: TextAttributesKey = createTextAttributesKey("PROSCHI_NODE", DefaultLanguageHighlighterColors.INSTANCE_FIELD)
     @JvmField val TECH: TextAttributesKey = createTextAttributesKey("PROSCHI_TECH", DefaultLanguageHighlighterColors.METADATA)
     @JvmField val TEAM: TextAttributesKey = createTextAttributesKey("PROSCHI_TEAM", DefaultLanguageHighlighterColors.METADATA)
+    @JvmField val TAG: TextAttributesKey = createTextAttributesKey("PROSCHI_TAG", DefaultLanguageHighlighterColors.CONSTANT)
 }
 
-/** The server's token types (tooling/src/server.ts): `variable` node ids, `type` tech stacks, `decorator` teams. */
+/** The server's token types (tooling/src/server.ts): `variable` node ids, `type` tech stacks, `decorator` teams, `enumMember` legend tags. */
 class ProschiSemanticTokensSupport : LspSemanticTokensSupport() {
     override fun getTextAttributesKey(tokenType: String, modifiers: List<String>): TextAttributesKey? =
         when (tokenType) {
             "variable" -> ProschiColors.NODE
             "type" -> ProschiColors.TECH
             "decorator" -> ProschiColors.TEAM
+            "enumMember" -> ProschiColors.TAG
             else -> super.getTextAttributesKey(tokenType, modifiers)
         }
 }
@@ -43,20 +45,25 @@ class ProschiColorSettingsPage : ColorSettingsPage {
 
     override fun getDemoText(): String =
         """
-        <node>api</node> "Order API" <tech>[REST API]</tech> <team>@orders</team>
+        legend {
+          <tag>owned</tag> "Owned by us" green
+        }
+
+        <node>api</node> "Order API" <tech>[REST API]</tech> <team>@orders</team> <tag>.owned</tag>
         <node>db</node>  "Orders DB" <tech>[PostgreSQL]</tech> <team>@orders</team>
 
-        <node>api</node> -> <node>db</node> : SQL
+        <node>api</node> -> <node>db</node> <tag>.owned</tag> : SQL
         """.trimIndent()
 
     override fun getAdditionalHighlightingTagToDescriptorMap(): Map<String, TextAttributesKey> =
-        mapOf("node" to ProschiColors.NODE, "tech" to ProschiColors.TECH, "team" to ProschiColors.TEAM)
+        mapOf("node" to ProschiColors.NODE, "tech" to ProschiColors.TECH, "team" to ProschiColors.TEAM, "tag" to ProschiColors.TAG)
 
     override fun getAttributeDescriptors(): Array<AttributesDescriptor> =
         arrayOf(
             AttributesDescriptor("Node id", ProschiColors.NODE),
             AttributesDescriptor("Tech stack", ProschiColors.TECH),
             AttributesDescriptor("Team", ProschiColors.TEAM),
+            AttributesDescriptor("Legend tag", ProschiColors.TAG),
         )
 
     override fun getColorDescriptors(): Array<ColorDescriptor> = ColorDescriptor.EMPTY_ARRAY

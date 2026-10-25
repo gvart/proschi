@@ -42,6 +42,8 @@ import {
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
+import { withEdgeStyles } from '../../dsl/toCanvas';
+import Legend from '../Canvas/Legend';
 import { useAutoLayout } from '../Diagram/useDiagramLayout';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from '../Diagram/useFitOnChange';
 import { loadJson, saveJson } from '../../services/storage';
@@ -364,7 +366,7 @@ export default function Playground() {
   useEffect(() => {
     setEdges((previous) => {
       const selected = new Set(previous.filter((e) => e.selected).map((e) => e.id));
-      return toFlowEdges(diagram).map((e) => (selected.has(e.id) ? { ...e, selected: true } : e));
+      return withEdgeStyles(diagram, toFlowEdges(diagram)).map((e) => (selected.has(e.id) ? { ...e, selected: true } : e));
     });
   }, [diagram]);
 
@@ -1337,7 +1339,8 @@ function DiagramView({
       }
       try {
         if (!ready || !viewport) throw new Error('the diagram is not on screen');
-        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format));
+        const legend = wrapperRef.current?.querySelector<HTMLElement>('.pc-legend') ?? undefined;
+        await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
       } catch (error) {
         console.error('Export failed:', error);
         window.alert('Sorry, the image could not be exported.');
@@ -1521,32 +1524,37 @@ function DiagramView({
             Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
         )}
-        {nodes.length > 0 && !playing && (
-          <Panel position="top-right" className="flex items-center gap-1">
-            {canOverlay && (
-              <button
-                type="button"
-                onClick={onToggleOverlay}
-                aria-pressed={overlay !== undefined}
-                title="Show how busy each node is and the requests flowing, at the traffic block's rates"
-                className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
-              >
-                <Gauge size={16} />
-                <span className="whitespace-nowrap">
-                  <span className="hidden sm:inline">Overlay: </span>load
-                </span>
-              </button>
+        {nodes.length > 0 && (!playing || diagram.legend) && (
+          <Panel position="top-right" className="flex flex-col items-end gap-2">
+            {!playing && (
+              <div className="flex items-center gap-1">
+                {canOverlay && (
+                  <button
+                    type="button"
+                    onClick={onToggleOverlay}
+                    aria-pressed={overlay !== undefined}
+                    title="Show how busy each node is and the requests flowing, at the traffic block's rates"
+                    className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
+                  >
+                    <Gauge size={16} />
+                    <span className="whitespace-nowrap">
+                      <span className="hidden sm:inline">Overlay: </span>load
+                    </span>
+                  </button>
+                )}
+                {hasPinnedNodes && (
+                  <button
+                    onClick={onResetLayout}
+                    title="Remove every pos x,y and lay the diagram out automatically"
+                    className={toolButton}
+                  >
+                    <LayoutGrid size={16} />
+                    Auto-layout
+                  </button>
+                )}
+              </div>
             )}
-            {hasPinnedNodes && (
-              <button
-                onClick={onResetLayout}
-                title="Remove every pos x,y and lay the diagram out automatically"
-                className={toolButton}
-              >
-                <LayoutGrid size={16} />
-                Auto-layout
-              </button>
-            )}
+            {diagram.legend && <Legend entries={diagram.legend} />}
           </Panel>
         )}
       </ReactFlow>

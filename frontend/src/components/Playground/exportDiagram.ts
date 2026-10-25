@@ -36,14 +36,54 @@ function paperColor(): string {
   return channels ? `rgb(${channels})` : '#ffffff';
 }
 
+/** Space between the diagram and the legend in an exported image. */
+const LEGEND_GAP = 32;
+
 /**
  * Renders the whole diagram (not just the visible part) to PNG or SVG.
  * `nodes` must be React Flow's internal nodes so nested positions are absolute.
+ * A `legend` element (the canvas's legend panel) is copied to the right of the
+ * diagram, aligned with its bottom.
  */
-export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport: HTMLElement, fileName: string) {
+export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport: HTMLElement, fileName: string, legend?: HTMLElement) {
   // html-to-image is only needed here, so it loads on the first export.
   const { toPng, toSvg } = await import('html-to-image');
-  const bounds = getRectOfNodes(nodes);
+  const bounds = { ...getRectOfNodes(nodes) };
+  const copy = legend ? placeLegend(legend, viewport, bounds) : undefined;
+  try {
+    await renderImage(format, viewport, bounds, fileName, toPng, toSvg);
+  } finally {
+    copy?.remove();
+  }
+}
+
+/** Puts a copy of the legend into the viewport at the diagram's bottom right and grows `bounds` to take it in. */
+function placeLegend(legend: HTMLElement, viewport: HTMLElement, bounds: { x: number; y: number; width: number; height: number }): HTMLElement {
+  const copy = legend.cloneNode(true) as HTMLElement;
+  copy.style.position = 'absolute';
+  // The whole legend, not the scrolled panel.
+  copy.style.maxHeight = 'none';
+  // As wide as on screen: placed absolutely, it would otherwise shrink and wrap its labels.
+  copy.style.width = `${legend.offsetWidth}px`;
+  copy.style.left = `${bounds.x + bounds.width + LEGEND_GAP}px`;
+  viewport.appendChild(copy);
+  const { offsetWidth: w, offsetHeight: h } = copy;
+  const top = Math.min(bounds.y, bounds.y + bounds.height - h);
+  copy.style.top = `${bounds.y + bounds.height - h}px`;
+  bounds.width += LEGEND_GAP + w;
+  bounds.height += bounds.y - top;
+  bounds.y = top;
+  return copy;
+}
+
+async function renderImage(
+  format: 'png' | 'svg',
+  viewport: HTMLElement,
+  bounds: { x: number; y: number; width: number; height: number },
+  fileName: string,
+  toPng: typeof import('html-to-image').toPng,
+  toSvg: typeof import('html-to-image').toSvg,
+) {
   const width = Math.ceil(bounds.width + PADDING * 2);
   const height = Math.ceil(bounds.height + PADDING * 2);
   const options = {

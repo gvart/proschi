@@ -4,6 +4,7 @@ import type { EditorView } from '@codemirror/view';
 import type { Text } from '@codemirror/state';
 import type { Diagnostic as CmDiagnostic } from '@codemirror/lint';
 import { componentCatalog } from '../../catalog/componentCatalog';
+import { COLOR_NAMES } from '../../dsl/palette';
 import type { Diagnostic } from '../../dsl';
 
 interface LexState {
@@ -12,9 +13,15 @@ interface LexState {
   depth: number;
   /** Inside a traffic, requirements, capacity, entity, decision or test block, whose own words are keywords. */
   inSection: boolean;
+  /** Inside the legend block, where palette names and dashes are words of their own. */
+  inLegend?: boolean;
 }
 
-const KEYWORDS = /^(title|import|group|usecase|par|alt|pos)\b/;
+const KEYWORDS = /^(title|import|group|usecase|par|alt|pos|color|critical)\b/;
+/** The palette of `color <name>` (dsl/palette.ts). */
+const COLOR_NAME = new RegExp(`^(?:${COLOR_NAMES.join('|')})\\b`);
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![\w])/;
+const LEGEND_HEADER = /^\s*legend\s*\{\s*(?:#.*)?$/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
@@ -44,12 +51,17 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.sol() && state.depth <= 0) {
       state.inLabel = false;
       state.depth = 0;
-      if (/^\s*\}/.test(stream.string)) state.inSection = false;
+      if (/^\s*\}/.test(stream.string)) state.inSection = state.inLegend = false;
       else if (!state.inSection && SECTION_HEADER.test(stream.string)) state.inSection = true;
+      else if (!state.inSection && LEGEND_HEADER.test(stream.string)) state.inSection = state.inLegend = true;
     }
     if (stream.eatSpace()) return null;
     // Section words count on header lines and inside the block; the one-line decision has its own.
     const sectionLine = state.inSection || ONE_LINE_DECISION.test(stream.string);
+
+    const afterColor = !state.inLabel && /\bcolor\s+$/.test(stream.string.slice(0, stream.pos));
+    // `color #3b82f6`: right after `color` a # is a hex color, not a comment.
+    if (afterColor && stream.match(HEX_COLOR)) return 'atom';
 
     const afterSpace = stream.pos === 0 || /\s/.test(stream.string[stream.pos - 1]);
     if (stream.peek() === '#' && afterSpace && state.depth <= 0) {
@@ -77,7 +89,11 @@ export const proschiStreamParser: StreamParser<LexState> = {
     if (stream.match(/^(->>|-->|->|-x(?!\w))/)) return 'operator';
     if (stream.match(QUANTITY)) return 'number';
     if (stream.match(/^[<>]=?/)) return 'operator';
-    if (sectionLine && stream.match(SECTION_WORDS)) return 'keyword';
+    if ((afterColor || (state.inLegend && stream.string.slice(0, stream.pos).trim())) && stream.match(COLOR_NAME)) return 'atom';
+    if (state.inLegend && stream.match(/^(legend|dashed|dotted|color)\b/)) return 'keyword';
+    if (!state.inLegend && sectionLine && stream.match(SECTION_WORDS)) return 'keyword';
+    // `.planned`: a legend tag on a node, group or connection.
+    if (stream.match(/^\.[A-Za-z_]\w*/)) return 'attributeName';
     // `x3` after a node id is its replica count.
     if (!sectionLine && stream.string.slice(0, stream.pos).trim() && stream.match(/^x\d+\b/)) return 'number';
     if (stream.match(KEYWORDS)) return 'keyword';
@@ -118,6 +134,7 @@ const keywordOptions: Completion[] = [
   { label: 'usecase', type: 'keyword', apply: 'usecase "', detail: 'usecase "Name" { … }' },
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
   { label: 'alt', type: 'keyword', apply: 'alt "', detail: 'alt "Scenario" { … }' },
+  snippetCompletion('legend {\n\t${tag} "${What it means}" ${blue}\n}', { label: 'legend', type: 'keyword', detail: 'styles that .tag applies' }),
   // The high-level design sections, top level only.
   snippetCompletion('traffic {\n\t"${Use case}" ${100 rps}\n}', { label: 'traffic', type: 'keyword', detail: 'requests per use case' }),
   snippetCompletion('requirements {\n\tp99 < ${200ms}\n}', { label: 'requirements', type: 'keyword', detail: 'latency, availability, durability, cost' }),

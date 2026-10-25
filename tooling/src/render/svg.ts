@@ -29,12 +29,19 @@ export const COLORS = {
 };
 
 /** A card as on the canvas: `fill`, an ink border of `stroke` px and the hard 3px shadow (`--sh-sm`). */
-export function card(x: number, y: number, w: number, h: number, o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean } = {}): string {
+export function card(
+  x: number,
+  y: number,
+  w: number,
+  h: number,
+  o: { fill?: string; stroke?: number; rx?: number; shadow?: boolean; line?: string; dash?: string } = {},
+): string {
   const sw = o.stroke ?? 3;
   const rx = o.rx ?? 4;
+  const dash = o.dash ? ` stroke-dasharray="${o.dash}"` : '';
   return [
     o.shadow === false ? '' : `<rect x="${r(x + 3)}" y="${r(y + 3)}" width="${r(w)}" height="${r(h)}" rx="${rx}" fill="${T.shadow}"/>`,
-    `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${COLORS.border}" stroke-width="${sw}"/>`,
+    `<rect x="${r(x + sw / 2)}" y="${r(y + sw / 2)}" width="${r(w - sw)}" height="${r(h - sw)}" rx="${rx}" fill="${o.fill ?? COLORS.surface}" stroke="${o.line ?? COLORS.border}" stroke-width="${sw}"${dash}/>`,
   ]
     .filter(Boolean)
     .join('\n');

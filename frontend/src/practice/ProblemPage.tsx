@@ -753,7 +753,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen }: D
         ) : tab === 'analysis' && analysis ? (
           <AnalysisPanel diagram={diagram} analysis={analysis} onSelect={onSelect} />
         ) : (
-          <DiagramCanvas nodes={nodes} edges={edges} fitKey={fitKey} />
+          <DiagramCanvas nodes={nodes} edges={edges} fitKey={fitKey} legend={diagram.legend} />
         )}
         {nodes.length === 0 && tab === 'diagram' && (
           <p className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">Your design appears here as you type.</p>
