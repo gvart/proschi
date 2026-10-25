@@ -7,10 +7,12 @@ import { layoutGraph, simplify } from './autoLayout';
 import { fallbackRoute } from './edgePath';
 import { computeMetrics, formatMetrics, toRects, type LayoutMetrics, type Polyline, type Rect } from './layoutMetrics';
 import orderFulfillment from './layoutFixtures/order-fulfillment.proschi?raw';
+import orderFulfillmentHinted from './layoutFixtures/order-fulfillment-hinted.proschi?raw';
 
 /** The layout benchmark: `npm run layout:metrics` prints the table. */
 const FIXTURES: Record<string, string> = {
   'order-fulfillment': orderFulfillment,
+  'order-fulfillment-hinted': orderFulfillmentHinted,
   ecommerce: ecommerceExample,
   events: eventDrivenExample,
   'url-shortener': urlShortenerExample,
@@ -67,5 +69,28 @@ describe('layout metrics', () => {
     expect(rows['order-fulfillment'].aspect).toBeGreaterThan(0.6);
     expect(rows['order-fulfillment'].aspect).toBeLessThan(2);
     for (const name of ['ecommerce', 'events', 'url-shortener']) expect(rows[name].crossings).toBe(0);
+    // With hints (layoutFixtures/README.md): about as many crossings and as long as without, in the reference's shape.
+    expect(rows['order-fulfillment-hinted'].crossings).toBeLessThanOrEqual(22);
+    expect(rows['order-fulfillment-hinted'].totalLength).toBeLessThanOrEqual(64_000);
+    expect(rows['order-fulfillment-hinted'].maxLength).toBeLessThanOrEqual(5000);
+  }, 30_000);
+
+  it('steers the hinted fixture into the shape of the reference', async () => {
+    const { diagram } = parse(orderFulfillmentHinted);
+    const rects = new Map(toRects((await layoutGraph(diagram)).nodes, diagram).map((r) => [r.id, r]));
+    const top = (id: string) => rects.get(id)!.y;
+    const bottom = (id: string) => rects.get(id)!.y + rects.get(id)!.height;
+    // The third-party systems ranked 0 form the top row, above AWS region 1.
+    const row = diagram.nodes.filter((n) => n.rank === 0).map((n) => top(n.id));
+    expect(row.length).toBe(11);
+    expect(new Set(row).size).toBe(1);
+    expect(row[0]).toBe(Math.min(...[...rects.values()].map((r) => r.y)));
+    // Then region 1, region 2, Kafka and GCP, one below the other.
+    expect(bottom('awsCore')).toBeLessThan(top('awsMgmt'));
+    expect(bottom('awsMgmt')).toBeLessThan(top('kafka'));
+    expect(bottom('kafka')).toBeLessThan(top('gcp'));
+    // Kafka laid out to the right: its topics in one row.
+    const topics = diagram.nodes.filter((n) => n.parent === 'kafka').map((n) => rects.get(n.id)!);
+    expect(new Set(topics.map((t) => t.y)).size).toBe(1);
   }, 30_000);
 });

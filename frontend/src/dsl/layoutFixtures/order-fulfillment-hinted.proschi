@@ -1,0 +1,130 @@
+# order-fulfillment.proschi with layout hints, written the way an author
+# would steer it towards the hand-drawn reference: edges follow declaration
+# order, the third-party systems around the Order Fulfillment API form the
+# top row, then AWS region 1, region 2, the Kafka cluster as one row and GCP
+# at the bottom. layoutMetrics.test.ts measures both versions.
+title "Order Fulfillment"
+layout ordered
+
+suggestion "Suggestion Engine" [Third Party API] @CustomerFulfillmentScience rank 0
+qcCart     "QC-Cart"           [Third Party API] @Growth                     rank 0
+otv2       "OTv2"              [Third Party API] @VendorGrowth               rank 0
+pam        "PAM"               [Third Party API] @PickerPerformance          rank 0
+penguin    "Penguin"           [Third Party API] @LogisticsRiderTech         rank 0
+iam        "IAM"               [Third Party API] @AAA                        rank 0
+
+firebase "Firebase"          [FCM]             @DeliveryHero        rank 0
+pelican  "Pelican"           [Third Party API] @Pelican
+invoices "Invoice Generator" [Third Party API] @Various             rank 0
+opd      "OPD"               [Third Party API] @InventoryManagement rank 0
+rooster  "Rooster"           [Third Party API] @Logistics           rank 0
+
+group awsCore "AWS region 1" rank 1 {
+  group ofCore "Order Fulfillment API" {
+    ofApi      "Order Fulfillment API" [Kotlin]          @OrderFulfillment
+    qcRounding "qc rounding"           [Third Party API]
+    ofRedis    "OF cache"              [AWS ElastiCache] @OrderFulfillment
+    ofDb       "OF database"           [AWS Aurora]      @OrderFulfillment
+  }
+  warehouse "of-warehouse-service" [Kotlin]  @OrderFulfillment
+  sns       "Order topic"          [AWS SNS] @OrderFulfillment
+  posDirect "of-pos-direct"        [Kotlin]  @OrderFulfillment
+  fanout    "of-event-fanout"      [Kotlin]  @OrderFulfillment
+  riderEta  "of-rider-eta"         [Kotlin]  @OrderFulfillment
+}
+
+group awsMgmt "AWS region 2" rank 2 {
+  sqs      "Ops queue"         [AWS SQS]    @OrderFulfillment
+  mgmtApi  "OF Management API" [Node.js]    @OrderFulfillment
+  opsPanel "Ops portal Plugin" [React]      @OrderFulfillment
+  search   "Ops search"        [OpenSearch] @OrderFulfillment
+}
+
+tracking "Order Tracking Service" [Third Party API] @Logistics rank 0
+
+group kafka "Kafka cluster" rank 3 {
+  direction right
+  orderEvents   "Order Events"                [Kafka] @OrderFulfillment
+  etaUpdates    "Rider ETA updates"           [Kafka] @OrderFulfillment
+  whEvents      "Warehouse Events"            [Kafka] @InventoryManagement
+  posEvents     "[Internal] POS Order events" [Kafka] @POS
+  webhookEvents "Webhook Messages"            [Kafka] @VendorFoundation
+}
+
+im           "IM"                   [Third Party API] @InventoryManagement
+availability "Product Availability" [Third Party API] @InventoryManagement
+hurrier      "Hurrier"              [Third Party API] @Logistics           rank 3
+dataStreams  "Data Streams"         [Kafka]
+vendorLeft   "Vendor Service"       [Third Party API] @VendorFoundation    rank 3
+
+group gcp "GCP" rank 4 {
+  orderEventSvc "order-event-service" [Kotlin]  @POS
+  inboxSvc      "inbox-event-service" [Kotlin]  @POS
+  posDb         "POS document DB"     [MongoDB] @POS
+  posApi        "POS API"             [Kotlin]  @POS
+}
+
+dispatcher  "qc-event-dispatcher" [Third Party API] @VendorFoundation
+apiClients  "API Clients"         [Third Party API]
+supergraph  "Supergraph"          [GraphQL]         @QCPricing
+vendorRight "Vendor Service"      [Third Party API] @VendorFoundation
+partnerApi  "Partner API"         [Third Party API] @VendorFoundation
+assortment  "Assortment API"      [Third Party API] @PartnersIntegrations
+
+ofApi         -> firebase      : Push Notification
+firebase      -> pelican       : Push notification
+invoices      -> ofApi         : Invoice [http]
+ofApi         -> pelican       : Order Activity [http]
+pelican       -> ofApi         : Order Activity [http]
+opd           -> ofApi         : Product Hydration [grpc]
+rooster       -> ofApi         : Starting points and Picker shifts [http]
+ofApi         -> qcCart        : Cart updates
+qcCart        -> ofApi         : Promo Information
+ofApi         -> suggestion    : Order Configuration [grpc]
+ofApi         -> otv2          : Order Transmission [http]
+otv2          -> ofApi         : Order Transmission [http]
+warehouse     -> ofApi
+fanout        -> otv2          : Callbacks to OTv2 [http]
+ofApi         -> sns           : Events (Orders, warehouses)
+sns           -> pam           : Warehouse Events
+sns           -> sqs
+penguin       -> sqs           : Picker clock in/out
+sqs           -> mgmtApi       : Events (Orders, Warehouses, Picker Shifts)
+mgmtApi       -> iam           : Create Namespace [http]
+mgmtApi       -> opsPanel
+mgmtApi       -> search
+mgmtApi       -> ofApi         : Store configs, invoices, cancellations
+ofApi         -> posDirect     : Orders and Order Events [grpc]
+ofApi         -> orderEvents   : Order Events
+orderEvents   -> fanout
+posDirect     -> orderEvents   : Order Events
+orderEvents   -> im
+orderEvents   -> availability
+riderEta      -> etaUpdates    : Curated rider ETA updates
+tracking      -> riderEta      : Order details (polling) [http]
+etaUpdates    -> mgmtApi       : Rider ETA updates
+kafka         -> mgmtApi       : Order Events
+whEvents      -> warehouse
+orderEvents   -> orderEventSvc : Order Events
+orderEventSvc -> posEvents     : Filtered Events
+hurrier       -> dataStreams
+dataStreams   -> orderEventSvc : Delivered Event [kafka]
+vendorLeft    -> orderEventSvc : Vendor Info [grpc]
+posEvents     -> inboxSvc
+inboxSvc      -> webhookEvents
+webhookEvents -> dispatcher
+dispatcher    -> apiClients
+dispatcher    -> posDb
+supergraph    -> inboxSvc      : Promotions [graphQL]
+vendorRight   -> inboxSvc      : Vendor Info [grpc]
+inboxSvc      -> posDb
+posDb         -> posApi
+inboxSvc      -> posDirect     : Update order [grpc]
+posApi        -> posDirect     : Update order [grpc]
+opd           -> posApi        : Get product by SKU [grpc]
+apiClients    -> partnerApi    : External Requests [http]
+partnerApi    -> posApi        : Partner actions [grpc]
+assortment    -> posApi
+qcRounding    -> ofRedis
+ofApi         -> qcRounding
+ofApi         -> ofDb
