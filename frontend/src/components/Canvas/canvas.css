@@ -133,6 +133,11 @@
   border: 2px solid rgb(var(--c-ink)) !important;
   background: rgb(var(--c-surface)) !important;
 }
+/* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
+.pc-handle--hidden {
+  opacity: 0;
+  pointer-events: none;
+}
 
 /* Playback (UseCasePlayback): the nodes of the current step, and the one that failed. */
 .react-flow__node.pc-active .pc-node {

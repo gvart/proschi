@@ -160,6 +160,10 @@ deployed from `main` and ships with the same changes.
 - The design review no longer announces an AI reviewer.
 
 ### Fixed
+- **Connections to and from a group show on the web canvas.** An edge
+  such as `gw -> services`, where `services` is a group, was left out of
+  the editor, docs and practice canvases (the CLI render drew it). It is
+  now drawn with its route, label, tag style and arrowhead.
 - **Playing a use case no longer flickers.** In the editor, the docs'
   live examples and the landing page demo, Play, Replay and leaving
   playback restyle the diagram already on screen instead of swapping in a
