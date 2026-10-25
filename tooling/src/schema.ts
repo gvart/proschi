@@ -93,6 +93,14 @@ export function diagramSchema() {
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
           legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
+          layout: object(
+            {
+              direction: { enum: ['down', 'right', 'up', 'left'], description: '`direction right`: where edges flow in the whole diagram.' },
+              ordered: { ...bool, description: '`layout ordered`: edges follow declaration order.' },
+            },
+            [],
+            'Top-level layout hints; left out when the document uses none.',
+          ),
         },
         ['nodes', 'edges', 'useCases'],
       ),
@@ -117,6 +125,11 @@ export function diagramSchema() {
           color: { ...str, description: '`color teal` or `color #3b82f6`, as written.' },
           tag: { ...str, description: '`.owned`: the legend entry the node or group is styled by.' },
           critical: { ...bool, description: '`critical`: drawn with a warning badge.' },
+          rank: {
+            oneOf: [{ type: 'integer', minimum: 0 }, { enum: ['first', 'last'] }],
+            description: '`rank 2`, `rank first`, `rank last`: the layout layer among the nodes and groups that share its parent.',
+          },
+          direction: { enum: ['down', 'right', 'up', 'left'], description: '`direction right` inside a group: where edges flow among its members.' },
           style: { $ref: '#/$defs/style' },
           loc,
         },

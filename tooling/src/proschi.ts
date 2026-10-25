@@ -49,6 +49,9 @@ export const KEYWORDS: { label: string; detail: string; snippet: string }[] = [
   { label: 'par', detail: 'Steps that run in parallel', snippet: 'par {\n\t$0\n}' },
   { label: 'alt', detail: 'One scenario of a use case', snippet: 'alt "${1:Scenario}" {\n\t$0\n}' },
   { label: 'legend', detail: 'Styles that .tag applies: owned "Owned by us" green', snippet: 'legend {\n\t${1:tag} "${2:What it means}" ${3:blue}$0\n}' },
+  // Layout hints (docs/LANGUAGE.md, "Steering the layout").
+  { label: 'direction', detail: 'Where edges flow: down, right, up or left (top level or in a group)', snippet: 'direction ${1|down,right,up,left|}' },
+  { label: 'layout ordered', detail: 'Lay edges out by declaration order (top level)', snippet: 'layout ordered' },
   // High-level design sections (top level).
   { label: 'traffic', detail: 'Requests per use case: "Use case" 100 rps', snippet: 'traffic {\n\t"${1:Use case}" ${2:100 rps}$0\n}' },
   { label: 'requirements', detail: 'Latency, availability, durability, resilience, cost', snippet: 'requirements {\n\tp99 < ${1:200ms}$0\n}' },

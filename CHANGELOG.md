@@ -27,6 +27,16 @@ deployed from `main` and ships with the same changes.
   and colors are errors. The editor, VS Code and JetBrains highlight the new
   words, and the new "Colors and legend" example (`?example=styled`) shows
   all of it.
+- **Layout hints.** `layout ordered` lays edges out in declaration order,
+  so what is declared first sits higher. `rank 0`, `rank 1`, … (or
+  `rank first` / `rank last`) on a node or group puts it in a row among its
+  siblings. `direction right` (or down, up, left) turns the whole diagram, or
+  only the members of a group, such as a Kafka cluster's topics in one row.
+  Without hints a diagram is laid out exactly as before. The editor, VS Code
+  and JetBrains highlight and complete the new words, and the "Colors and
+  legend" example now uses `layout ordered`, so Order Events stays below
+  the services around it. See "Steering the layout" in the language
+  reference.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with

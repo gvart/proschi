@@ -320,6 +320,11 @@ legend {
   deprecated "Deprecated"                 red dashed
 }
 
+# Lay edges out in the order things are declared, top to bottom: Order Events
+# stays below the services around it, and the Picking Service reads from it
+# with a short hop up instead of a detour around the group.
+layout ordered
+
 shopper "Shopper"     [Actor]
 gateway "API Gateway" [API Gateway]
 
@@ -329,13 +334,13 @@ group fulfillment "Order Fulfillment" .owned {
   ordersDb "Orders DB"       [PostgreSQL] critical
 }
 
-group retail "Point of Sale" .handover {
-  store "Store Service" [REST API] @pos
-}
-
 events  "Order Events" [Kafka]
 legacy  "Legacy ERP"   [SOAP API]        .deprecated
 carrier "Carrier API"  [Third Party API] color #0891b2
+
+group retail "Point of Sale" .handover {
+  store "Store Service" [REST API] @pos
+}
 
 shopper -> gateway
 gateway -> orders             : place order

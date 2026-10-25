@@ -63,10 +63,12 @@ brackets around optional parts; the brackets of a tech stack, such as
 |---|---|---|
 | Title | `title "Text" ["Summary"]` | The optional second string is a one-line summary of the system. |
 | Import | `import "infra.proschi"` | Top level only. Adds everything that file declares. See [Imports](#imports). |
-| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3] [color c] [.tag] [critical]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. See [Colors and legend](#colors-and-legend) for the last three. |
-| Group | `group id ["Name"] [Style] [pos x,y] [color c] [.tag] { … }` | Holds nodes, nested groups and connections. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
+| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3] [color c] [.tag] [critical] [rank N]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. See [Colors and legend](#colors-and-legend) for color, tag and critical, and [Steering the layout](#steering-the-layout) for rank. |
+| Group | `group id ["Name"] [Style] [pos x,y] [color c] [.tag] [rank N] { … }` | Holds nodes, nested groups and connections, and optionally a `direction`. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
 | Connection | `a -> b [.tag] [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. The tag goes before the colon, because the label runs to the end of the line. |
 | Legend | `legend { … }` | Top level only. Named styles that `.tag` applies. See [Colors and legend](#colors-and-legend). |
+| Direction | `direction down\|right\|up\|left` | At the top level, where edges flow in the whole diagram (default down). Inside a group, where they flow among its members. See [Steering the layout](#steering-the-layout). |
+| Ordered layout | `layout ordered` | Top level only. Edges follow declaration order, so what is declared first sits higher. See [Steering the layout](#steering-the-layout). |
 | Use case | `usecase "Name" ["Description"] { … }` | Top level only. A request flow, step by step. See [Use case steps](#use-case-steps). |
 | Parallel steps | `par { … }` | Inside a use case or a scenario. See [Parallel steps](#parallel-steps). |
 | Scenario | `alt "Name" [when "condition"] { … }` | Inside a use case or another scenario. See [Scenarios](#scenarios). |
@@ -178,6 +180,70 @@ orders -> legacy .deprecated : sync orders
 - An unknown tag or color name is an error that names the closest match.
 - `critical` draws a warning badge on the node's top-right corner, for the
   parts whose failure matters most.
+
+## Steering the layout
+
+The diagram is laid out automatically, top to bottom along the edges. Three
+hints steer that layout. They only change positions and routes, not what the
+diagram means. A document without them is laid out exactly as before.
+
+```proschi
+title "Order Fulfillment"
+layout ordered
+
+shopper "Shopper" [Actor]       rank 0
+pricing "Pricing" [Third Party API] rank 0
+
+group core "Core services" rank 1 {
+  orders "Order Service" [REST API]
+}
+
+group kafka "Kafka cluster" rank 2 {
+  direction right
+  placed  "Order placed"  [Kafka]
+  shipped "Order shipped" [Kafka]
+}
+
+group data "Data" rank 3 {
+  db [PostgreSQL]
+}
+
+shopper -> orders
+orders  -> pricing : quote
+orders  -> placed
+orders  -> shipped
+orders  -> db
+```
+
+- `layout ordered` lays every edge out in declaration order: of two
+  connected nodes, the one declared first sits higher, even when the edge
+  points up (`orders -> pricing` above). Declare things in reading order,
+  for example clients and external systems, then services, then data. By
+  default only edges that close a cycle are turned like this, and the
+  others point down.
+- `rank N` on a node or a group header pins it to a layer among the nodes
+  and groups that share its parent: top-level nodes and groups with each
+  other, members of a group with each other. A lower rank sits higher, and
+  equal ranks line up in one row. `rank first` and `rank last` put a node
+  above or below everything else in its parent. Ranks order the layers, they
+  don't count them: nodes without a rank still go where their edges pull
+  them, which can be between two ranks or above rank 0.
+- `direction down|right|up|left` at the top level turns the whole diagram.
+  Inside a group it sets where edges flow among its members. Members with no
+  edge between them line up the same way, so `direction right` in a Kafka
+  cluster puts its topics in one row.
+
+A few things the layout can't do:
+
+- Two connected nodes can't share a row, because an edge always runs from
+  one layer to another. Of two connected nodes with the same rank, the target
+  goes one layer lower, so give them different ranks.
+- A group with its own direction is laid out separately and placed as one
+  box. Its members keep the order a layout without that hint would give
+  them. An edge into it ends at its border, straight across from the member
+  it reaches, and runs on in a straight line to that member.
+- In a parent where something has a rank, every label sits on its edge in a
+  layer of its own, and the diagram gets a little taller.
 
 ## Use case steps
 
@@ -816,13 +882,17 @@ line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | node | connection
              | group-open | usecase-open | par-open | alt-open | close
-             | traffic | requirements | capacity | entity | decision | test | legend ;
+             | traffic | requirements | capacity | entity | decision | test | legend
+             | direction | layout ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative file path *)
-node         = id , { string | tech | team | position | replicas | color | tag | "critical" } ;  (* 1st string: name, 2nd: description *)
+node         = id , { string | tech | team | position | replicas | color | tag | "critical" | rank } ;  (* 1st string: name, 2nd: description *)
 connection   = id , arrow , id , [ tag ] , [ ":" , label ] ;
-group-open   = "group" , id , [ string ] , [ tech ] , { position | color | tag } , "{" ;
+group-open   = "group" , id , [ string ] , [ tech ] , { position | color | tag | rank } , "{" ;
+direction    = "direction" , ( "down" | "right" | "up" | "left" ) ;   (* alone on its line *)
+layout       = "layout" , "ordered" ;                   (* alone on its line *)
+rank         = "rank" , ( digit , { digit } | "first" | "last" ) ;
 legend       = "legend" , "{" , { id , [ string ] , { color-value | color | "dashed" | "dotted" } } , "}" ;
 color        = "color" , ( color-value | hex ) ;
 color-value  = "gray" | "blue" | "teal" | "green" | "yellow" | "orange" | "red" | "purple" | "pink" ;
@@ -894,6 +964,8 @@ Where each statement may appear:
 | `import` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
+| `direction` | ✓ | ✓ | | |
+| `layout ordered` | ✓ | | | |
 | connection (`a -> b`) | ✓ | ✓ | as a step | as a step |
 | `usecase` | ✓ | | | |
 | `par` | | | ✓ | |

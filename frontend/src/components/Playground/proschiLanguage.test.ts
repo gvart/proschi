@@ -212,6 +212,35 @@ describe('style highlighting', () => {
     expect(highlight('teal -> db')[0]).toEqual(['teal', 'variableName']);
   });
 
+  it('highlights the layout hints, and nodes named like them', () => {
+    expect(highlight('direction right')).toEqual([
+      ['direction', 'keyword'],
+      ['right', 'atom'],
+    ]);
+    expect(highlight('  layout ordered # tidy')).toEqual([
+      ['layout', 'keyword'],
+      ['ordered', 'atom'],
+      ['# tidy', 'comment'],
+    ]);
+    expect(highlight('api [Go] rank 2 x2')).toEqual([
+      ['api', 'variableName'],
+      ['[Go]', 'typeName'],
+      ['rank', 'keyword'],
+      ['2', 'number'],
+      ['x2', 'number'],
+    ]);
+    expect(highlight('group g "G" rank last {').slice(3, 5)).toEqual([
+      ['rank', 'keyword'],
+      ['last', 'atom'],
+    ]);
+    expect(highlight('direction [Go]')[0]).toEqual(['direction', 'variableName']);
+    expect(highlight('layout -> rank')).toEqual([
+      ['layout', 'variableName'],
+      ['->', 'operator'],
+      ['rank', 'variableName'],
+    ]);
+  });
+
   it('highlights the legend block', () => {
     const lines = highlightDoc('legend {\n  planned "Planned" blue dashed\n  blue "B" color #fff\n}\nblue [Go]');
     expect(lines[0][0]).toEqual(['legend', 'keyword']);
