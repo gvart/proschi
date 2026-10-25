@@ -59,7 +59,7 @@ describe('layout metrics', () => {
     for (const [name, source] of Object.entries(FIXTURES)) rows[name] = await measure(source, name);
     if (process.env.LAYOUT_METRICS) console.log(`\n${formatMetrics(rows)}\n`);
     for (const [name, m] of Object.entries(rows)) {
-      expect({ name, overlaps: m.overlaps, throughNodes: m.throughNodes, unrouted: m.unrouted }).toEqual({ name, overlaps: 0, throughNodes: 0, unrouted: 0 });
+      expect({ name, overlaps: m.overlaps, throughNodes: m.throughNodes, unrouted: m.unrouted, cornerEnds: m.cornerEnds }).toEqual({ name, overlaps: 0, throughNodes: 0, unrouted: 0, cornerEnds: 0 });
     }
     // Before routed edges (React Flow beziers on ELK's placement): 116 crossings, 29 edges through nodes.
     expect(rows['order-fulfillment'].crossings).toBeLessThanOrEqual(22);

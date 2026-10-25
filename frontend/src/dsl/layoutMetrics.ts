@@ -49,6 +49,8 @@ export interface LayoutMetrics {
   overlaps: number;
   /** Edges drawn across a node that is neither of their ends. */
   throughNodes: number;
+  /** Edge ends within a few px of a corner of their node (they read as touching the neighbour). */
+  cornerEnds: number;
   width: number;
   height: number;
   /** Width over height of the bounding box. */
@@ -153,6 +155,14 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
     if (hit) throughNodes++;
   }
 
+  const byId = new Map(rects.map((r) => [r.id, r]));
+  const nearCorner = (p: Point, r: Rect | undefined) =>
+    !!r && [r.x, r.x + r.width].some((x) => Math.abs(p.x - x) < 8) && [r.y, r.y + r.height].some((y) => Math.abs(p.y - y) < 8);
+  const cornerEnds = lines.reduce(
+    (n, l) => n + (nearCorner(l.points[0], byId.get(l.source)) ? 1 : 0) + (nearCorner(l.points[l.points.length - 1], byId.get(l.target)) ? 1 : 0),
+    0,
+  );
+
   const lengths = lines.map((l) => length(l.points));
   const xs = [...rects.flatMap((r) => [r.x, r.x + r.width]), ...lines.flatMap((l) => l.points.map((p) => p.x))];
   const ys = [...rects.flatMap((r) => [r.y, r.y + r.height]), ...lines.flatMap((l) => l.points.map((p) => p.y))];
@@ -169,6 +179,7 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
     bends: lines.reduce((sum, l) => sum + l.bends, 0),
     overlaps,
     throughNodes,
+    cornerEnds,
     width: Math.round(width),
     height: Math.round(height),
     aspect: height ? Math.round((width / height) * 100) / 100 : 0,
@@ -177,7 +188,7 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
 
 /** A table of metrics per fixture, for the console. */
 export function formatMetrics(rows: Record<string, LayoutMetrics>): string {
-  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'unrouted', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'width', 'height', 'aspect'];
+  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'unrouted', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'cornerEnds', 'width', 'height', 'aspect'];
   const names = Object.keys(rows);
   const nameWidth = Math.max(7, ...names.map((n) => n.length));
   const widths = columns.map((c) => Math.max(c.length, ...names.map((n) => String(rows[n][c]).length)));

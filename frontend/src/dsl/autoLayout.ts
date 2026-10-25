@@ -62,12 +62,13 @@ function rootOptions(options: LayoutOptions): Record<string, string> {
     // Straighter, shorter edges than BRANDES_KOEPF on big graphs.
     'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
     'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
-    'elk.layered.nodePlacement.networkSimplex.nodeFlexibility.default': 'PORT_POSITION',
     'elk.edgeLabels.placement': 'CENTER',
     'elk.layered.unnecessaryBendpoints': 'false',
     ...options.elk,
   };
 }
+
+const vertical = (direction: LayoutDirection = 'DOWN') => direction === 'DOWN' || direction === 'UP';
 
 function groupOptions(options: LayoutOptions, id: string): Record<string, string> {
   const direction = options.groups?.[id]?.direction;
@@ -75,7 +76,8 @@ function groupOptions(options: LayoutOptions, id: string): Record<string, string
     // Matches GroupNode's minimum size so the drawn box and the layout agree.
     'elk.padding': '[top=56,left=24,bottom=24,right=24]',
     'elk.nodeSize.constraints': 'MINIMUM_SIZE',
-    'elk.nodeSize.minimum': '(300, 200)',
+    // ELK applies this before turning its left-to-right layout to vertical, so a vertical layout needs it transposed.
+    'elk.nodeSize.minimum': vertical(options.direction) ? '(200, 300)' : '(300, 200)',
     ...SPACING,
     ...(direction ? { 'elk.direction': direction } : {}),
   };

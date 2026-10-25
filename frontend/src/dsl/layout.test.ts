@@ -43,6 +43,14 @@ describe('layoutDiagram', () => {
   });
 });
 
+describe('group size', () => {
+  it('keeps a small group at the minimum size, not taller', async () => {
+    const { nodes } = await layoutGraph(parse('a\ngroup g {\n  b\n}\na -> b').diagram);
+    const g = nodes.find((n) => n.id === 'g')!;
+    expect([g.width, g.height]).toEqual([300, 200]);
+  });
+});
+
 describe('pinned group members', () => {
   it('grows the group to contain a member dragged outside it', async () => {
     const nodes = await layoutDiagram(parse('group g {\n  a\n  b pos 900,700\n}').diagram);

@@ -73,6 +73,7 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
   const dx = MARGIN - minX;
   const dy = MARGIN - minY;
   const body: string[] = [];
+  const titles: string[] = [];
 
   // Groups first (outermost first), then edges, then cards on top, as on the canvas.
   const depth = (n: DiagramNode): number => {
@@ -91,9 +92,14 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
     body.push(
       `<g data-node="${esc(p.node.id)}" data-kind="group">`,
       `<rect x="${r(x + 1)}" y="${r(y + 1)}" width="${r(p.width - 2)}" height="${r(p.height - 2)}" rx="10" ${frame}/>`,
+      '</g>',
+    );
+    // The title and description go over the edges (with a halo), so an edge entering the group does not strike them through.
+    titles.push(
+      `<g data-group-title="${esc(p.node.id)}">`,
       techIcon('Logical Group', x + 14, y + 13, 14, t?.line ?? COLORS.text),
-      text(x + 34, y + 24, fit(p.node.name.toUpperCase(), p.width - 52, 12, true), { size: 12, weight: 700, fill: t?.line ?? COLORS.text, opacity: t ? 1 : 0.8, spacing: 1 }),
-      p.node.description ? text(x + 14, y + 48, fit(p.node.description, p.width - 28, 13), { size: 13, fill: COLORS.muted }) : '',
+      halo(text(x + 34, y + 24, fit(p.node.name.toUpperCase(), p.width - 52, 12, true), { size: 12, weight: 700, fill: t?.line ?? COLORS.text, opacity: t ? 1 : 0.8, spacing: 1 })),
+      p.node.description ? halo(text(x + 14, y + 48, fit(p.node.description, p.width - 28, 13), { size: 13, fill: COLORS.muted })) : '',
       '</g>',
     );
   }
@@ -111,6 +117,8 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
     body.push(drawEdge(edge.id, edge.label, points, route?.label ? shift(route.label) : labelPoint(points), edgeStroke(edge)));
   }
 
+  body.push(...titles);
+
   for (const p of all) {
     if (p.node.kind === 'group') continue;
     body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : drawCard(p, dx, dy));
@@ -127,6 +135,11 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
 
   if (diagram.nodes.length === 0) body.push(text(MARGIN, MARGIN + 16, 'Empty diagram', { fill: COLORS.muted }));
   return svgDocument(maxX - minX + MARGIN * 2, maxY - minY + MARGIN * 2, diagram.title ?? 'Architecture', body.filter(Boolean));
+}
+
+/** A paper-coloured outline behind the letters, so lines underneath stop short of them. */
+function halo(textElement: string): string {
+  return textElement.replace('<text ', `<text paint-order="stroke" stroke="${COLORS.background}" stroke-width="5" stroke-linejoin="round" `);
 }
 
 /** React Flow's handle (`.pc-handle`): a 9px square centred on (cx, cy). */

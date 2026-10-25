@@ -11,7 +11,8 @@ Columns: `unrouted` counts edges the layout gave no route (they use the
 fallback), `crossings` counts edge segments that cross, the lengths are in
 px, `bends` counts the turns of all edges, `overlaps` counts boxes that
 overlap where neither contains the other, `throughNodes` counts edges that
-cross a node that isn't one of their ends, and `aspect` is width over height.
+cross a node that isn't one of their ends, `cornerEnds` counts edge ends
+within 8 px of a corner of their node, and `aspect` is width over height.
 
 Before: ELK layered positions, edges drawn as React Flow beziers from the
 bottom handle to the top handle (the beziers were sampled; an S-curve
@@ -27,13 +28,20 @@ counts as two bends).
 After: orthogonal ELK routes, cycles broken by declaration order, model
 order, network-simplex placement, inline labels, cards at their drawn height.
 
-| fixture | nodes | edges | unrouted | crossings | totalLength | maxLength | bends | overlaps | throughNodes | width | height | aspect |
-|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| order-fulfillment | 50 | 57 | 0 | 17 | 58776 | 4054 | 166 | 0 | 0 | 3952 | 3068 | 1.29 |
-| ecommerce | 7 | 6 | 0 | 0 | 1833 | 555 | 8 | 0 | 0 | 800 | 749 | 1.07 |
-| events | 6 | 5 | 0 | 0 | 671 | 172 | 4 | 0 | 0 | 680 | 530 | 1.28 |
-| url-shortener | 5 | 4 | 0 | 0 | 324 | 146 | 2 | 0 | 0 | 520 | 498 | 1.04 |
+| fixture | nodes | edges | unrouted | crossings | totalLength | maxLength | bends | overlaps | throughNodes | cornerEnds | width | height | aspect |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| order-fulfillment | 50 | 57 | 0 | 17 | 58622 | 3874 | 166 | 0 | 0 | 0 | 4032 | 3016 | 1.34 |
+| ecommerce | 7 | 6 | 0 | 0 | 1833 | 555 | 8 | 0 | 0 | 0 | 800 | 749 | 1.07 |
+| events | 6 | 5 | 0 | 0 | 1169 | 390 | 8 | 0 | 0 | 0 | 760 | 538 | 1.41 |
+| url-shortener | 5 | 4 | 0 | 0 | 492 | 306 | 2 | 0 | 0 | 0 | 520 | 498 | 1.04 |
 
 Orthogonal routes are longer than beziers between the same points, so total
 length on the small examples is not directly comparable. The ecommerce
 example is also taller because ELK now leaves room for each label.
+
+Tried and dropped: network-simplex placement with movable ports (shorter
+edges, but ports slid onto node corners), a second layout pass that gives
+busy nodes ports on their left and right sides (23 crossings, 13% longer),
+and layering every edge by declaration order, not only cycles (9 crossings
+and 46,629 px on the fixture, but it turns edges upward in documents whose
+order isn't top-down).
