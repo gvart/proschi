@@ -1,7 +1,8 @@
-import type { CSSProperties } from 'react';
 import type { CanvasEdge, CanvasNode, ComponentMetadata } from '../types/canvas';
 import { DASH_ARRAY, cssTint, nodeBaseColor } from './palette';
 import type { Diagram, DiagramEdge, DiagramNode } from './types';
+
+type CSSProperties = NonNullable<CanvasEdge['style']>;
 
 export const NODE_TYPE: Record<DiagramNode['kind'], string> = {
   component: 'componentNode',
