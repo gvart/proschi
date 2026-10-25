@@ -1519,42 +1519,42 @@ function DiagramView({
             )}
           </Panel>
         )}
-        {nodes.length > 0 && (diagram.legend || (!playing && !(hasSelection && !showSettings))) && (
-          <Panel position="bottom-right" className="flex flex-col items-end gap-2">
-            {diagram.legend && <Legend entries={diagram.legend} />}
-            {!playing && !(hasSelection && !showSettings) && (
-              <div className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
-                Drag to pin · select to edit settings · drag between dots to connect · Delete removes
-              </div>
-            )}
+        {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
+          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
+            Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
         )}
-        {nodes.length > 0 && !playing && (
-          <Panel position="top-right" className="flex items-center gap-1">
-            {canOverlay && (
-              <button
-                type="button"
-                onClick={onToggleOverlay}
-                aria-pressed={overlay !== undefined}
-                title="Show how busy each node is and the requests flowing, at the traffic block's rates"
-                className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
-              >
-                <Gauge size={16} />
-                <span className="whitespace-nowrap">
-                  <span className="hidden sm:inline">Overlay: </span>load
-                </span>
-              </button>
+        {nodes.length > 0 && (!playing || diagram.legend) && (
+          <Panel position="top-right" className="flex flex-col items-end gap-2">
+            {!playing && (
+              <div className="flex items-center gap-1">
+                {canOverlay && (
+                  <button
+                    type="button"
+                    onClick={onToggleOverlay}
+                    aria-pressed={overlay !== undefined}
+                    title="Show how busy each node is and the requests flowing, at the traffic block's rates"
+                    className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent aria-pressed:shadow-brutal-sm`}
+                  >
+                    <Gauge size={16} />
+                    <span className="whitespace-nowrap">
+                      <span className="hidden sm:inline">Overlay: </span>load
+                    </span>
+                  </button>
+                )}
+                {hasPinnedNodes && (
+                  <button
+                    onClick={onResetLayout}
+                    title="Remove every pos x,y and lay the diagram out automatically"
+                    className={toolButton}
+                  >
+                    <LayoutGrid size={16} />
+                    Auto-layout
+                  </button>
+                )}
+              </div>
             )}
-            {hasPinnedNodes && (
-              <button
-                onClick={onResetLayout}
-                title="Remove every pos x,y and lay the diagram out automatically"
-                className={toolButton}
-              >
-                <LayoutGrid size={16} />
-                Auto-layout
-              </button>
-            )}
+            {diagram.legend && <Legend entries={diagram.legend} />}
           </Panel>
         )}
       </ReactFlow>

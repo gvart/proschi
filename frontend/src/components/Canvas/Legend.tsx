@@ -4,7 +4,7 @@ import type { LegendEntry } from '../../dsl/types';
 import './canvas.css';
 
 /**
- * The `legend` block, drawn in a canvas corner: one row per entry, with a
+ * The `legend` block, drawn in the canvas's top-right corner: one row per entry, with a
  * swatch in the entry's fill, border color and dash. The image export copies
  * this element next to the diagram (exportDiagram.ts).
  */

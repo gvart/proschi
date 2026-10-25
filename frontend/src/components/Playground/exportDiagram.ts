@@ -61,6 +61,8 @@ export async function exportImage(format: 'png' | 'svg', nodes: Node[], viewport
 function placeLegend(legend: HTMLElement, viewport: HTMLElement, bounds: { x: number; y: number; width: number; height: number }): HTMLElement {
   const copy = legend.cloneNode(true) as HTMLElement;
   copy.style.position = 'absolute';
+  // The whole legend, not the scrolled panel.
+  copy.style.maxHeight = 'none';
   copy.style.left = `${bounds.x + bounds.width + LEGEND_GAP}px`;
   viewport.appendChild(copy);
   const { offsetWidth: w, offsetHeight: h } = copy;

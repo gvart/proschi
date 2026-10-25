@@ -28,7 +28,7 @@ interface DiagramCanvasProps {
   fitDuration?: number;
   /** Custom edge types (a stable object), e.g. the playback edge of a canvas that plays use cases. */
   edgeTypes?: EdgeTypes;
-  /** The diagram's legend, drawn in the bottom-right corner. */
+  /** The diagram's legend, drawn in the top-right corner. */
   legend?: LegendEntry[];
 }
 
@@ -58,7 +58,7 @@ function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes, 
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
       {!compact && !still && <Controls showInteractive={false} />}
       {legend && (
-        <Panel position="bottom-right">
+        <Panel position="top-right">
           <Legend entries={legend} />
         </Panel>
       )}
