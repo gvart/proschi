@@ -4,7 +4,8 @@ import { describe, expect, it } from 'vitest';
 import { parse } from './index';
 import { ecommerceExample, eventDrivenExample, urlShortenerExample } from './examples';
 import { layoutGraph, simplify } from './autoLayout';
-import { bezierPolyline, computeMetrics, formatMetrics, toRects, type LayoutMetrics, type Polyline, type Rect } from './layoutMetrics';
+import { fallbackRoute } from './edgePath';
+import { computeMetrics, formatMetrics, toRects, type LayoutMetrics, type Polyline, type Rect } from './layoutMetrics';
 import orderFulfillment from './layoutFixtures/order-fulfillment.proschi?raw';
 
 /** The layout benchmark: `npm run layout:metrics` prints the table. */
@@ -40,7 +41,11 @@ async function measure(source: string, name = ''): Promise<LayoutMetrics> {
     .filter((e) => byId.has(e.source) && byId.has(e.target) && e.source !== e.target)
     .map((e) => {
       const route = routes[e.id];
-      if (!route) return bezierPolyline(e.id, byId.get(e.source)!, byId.get(e.target)!);
+      if (!route) {
+        // What the canvas draws without a route.
+        const points = fallbackRoute(byId.get(e.source)!, byId.get(e.target)!);
+        return { id: e.id, source: e.source, target: e.target, points, bends: points.length - 2 };
+      }
       const points = simplify(route.points);
       return { id: e.id, source: e.source, target: e.target, points, bends: points.length - 2, routed: true };
     });

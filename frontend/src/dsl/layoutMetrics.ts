@@ -71,28 +71,6 @@ export function toRects(boxes: LaidOutNode[], diagram: Diagram): Rect[] {
   });
 }
 
-/** React Flow's default bezier from the bottom of `s` to the top of `t`, sampled (the canvas before routed edges). */
-export function bezierPolyline(id: string, s: Rect, t: Rect, samples = 24): Polyline {
-  const sx = s.x + s.width / 2;
-  const sy = s.y + s.height;
-  const tx = t.x + t.width / 2;
-  const ty = t.y;
-  const offset = (d: number) => (d >= 0 ? 0.5 * d : 0.25 * 25 * Math.sqrt(-d));
-  const c1y = sy + offset(ty - sy);
-  const c2y = ty - offset(ty - sy);
-  const points: Point[] = [];
-  for (let i = 0; i <= samples; i++) {
-    const u = i / samples;
-    const a = (1 - u) ** 3;
-    const b = 3 * (1 - u) ** 2 * u;
-    const c = 3 * (1 - u) * u ** 2;
-    const d = u ** 3;
-    points.push({ x: a * sx + b * sx + c * tx + d * tx, y: a * sy + b * c1y + c * c2y + d * ty });
-  }
-  // An S-curve turns twice; a straight drop does not turn.
-  return { id, source: s.id, target: t.id, points, bends: Math.abs(sx - tx) > 1 ? 2 : 0 };
-}
-
 const length = (points: Point[]) => points.slice(1).reduce((sum, p, i) => sum + Math.hypot(p.x - points[i].x, p.y - points[i].y), 0);
 
 function cross(o: Point, a: Point, b: Point): number {

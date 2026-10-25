@@ -1,5 +1,6 @@
 import type { TechName, TechStack } from '../catalog/componentCatalog';
 import type { NodeOverlay } from '../sim/overlay';
+import type { EdgeRoute } from '../dsl/autoLayout';
 
 export type ComponentType =
   | 'shape'
@@ -29,6 +30,8 @@ export interface ComponentMetadata {
   description?: string;
   /** Load drawn over the node while the diagram is simulated (sim/overlay.ts). */
   overlay?: NodeOverlay;
+  /** Routes of the edges leaving this node, by edge id, from the auto layout (Canvas/RoutedEdge.tsx). */
+  routes?: Record<string, EdgeRoute>;
   /** Laid out by the page (the Arcade's rows): no resize handles. */
   fixedSize?: boolean;
   // For text nodes

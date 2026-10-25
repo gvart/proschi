@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { ecommerceExample, parse } from './index';
 import { layoutDiagram, provisionalLayout } from './layout';
+import { layoutGraph } from './autoLayout';
 
 const overlaps = (a: { x: number; y: number; w: number; h: number }, b: typeof a) =>
   a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
@@ -48,6 +49,62 @@ describe('pinned group members', () => {
     const group = nodes.find((n) => n.id === 'g')!;
     expect(Number(group.style?.width)).toBeGreaterThanOrEqual(900 + 240);
     expect(Number(group.style?.height)).toBeGreaterThanOrEqual(700 + 84);
+  });
+});
+
+describe('edge routes', () => {
+  type Abs = { x: number; y: number; w: number; h: number };
+  const onBorder = (p: { x: number; y: number }, b: Abs) =>
+    ((Math.abs(p.y - b.y) < 1 || Math.abs(p.y - (b.y + b.h)) < 1) && p.x >= b.x - 1 && p.x <= b.x + b.w + 1) ||
+    ((Math.abs(p.x - b.x) < 1 || Math.abs(p.x - (b.x + b.w)) < 1) && p.y >= b.y - 1 && p.y <= b.y + b.h + 1);
+
+  it("routes every edge orthogonally from border to border, at the cards' drawn size", async () => {
+    const diagram = parse(ecommerceExample).diagram;
+    const { nodes, routes } = await layoutGraph(diagram);
+    const abs = (id: string): Abs => {
+      const b = nodes.find((n) => n.id === id)!;
+      const p = b.parent ? abs(b.parent) : { x: 0, y: 0 };
+      return { x: p.x + b.position.x, y: p.y + b.position.y, w: b.width, h: b.height };
+    };
+    for (const n of nodes.filter((n) => diagram.nodes.find((d) => d.id === n.id)!.kind === 'component')) {
+      expect([n.width, n.height]).toEqual([240, 84]);
+    }
+    for (const edge of diagram.edges) {
+      const route = routes[edge.id];
+      expect(route, edge.id).toBeDefined();
+      route.points.slice(1).forEach((p, i) => {
+        const q = route.points[i];
+        expect(Math.abs(p.x - q.x) < 0.01 || Math.abs(p.y - q.y) < 0.01).toBe(true);
+      });
+      expect(onBorder(route.points[0], abs(edge.source)), `${edge.id} start`).toBe(true);
+      expect(onBorder(route.points[route.points.length - 1], abs(edge.target)), `${edge.id} end`).toBe(true);
+      expect(route.from).toEqual({ x: abs(edge.source).x, y: abs(edge.source).y });
+    }
+  });
+
+  it('breaks a cycle by declaration order, the route still running from source to target', async () => {
+    const diagram = parse('a\nb\na -> b\nb -> a : back').diagram;
+    const { nodes, routes } = await layoutGraph(diagram);
+    const y = Object.fromEntries(nodes.map((n) => [n.id, n.position.y]));
+    expect(y.a).toBeLessThan(y.b);
+    const back = routes[diagram.edges[1].id].points;
+    // b -> a starts at b (below) and ends at a (above).
+    expect(back[0].y).toBeGreaterThan(back[back.length - 1].y);
+  });
+
+  it('drops the route of an edge whose end is pinned elsewhere', async () => {
+    const diagram = parse('a pos 900,40\nb\nc\na -> b\nb -> c').diagram;
+    const { routes } = await layoutGraph(diagram);
+    expect(routes[diagram.edges[0].id]).toBeUndefined();
+    expect(routes[diagram.edges[1].id]).toBeDefined();
+  });
+
+  it('hands the routes to the canvas on the source node', async () => {
+    const diagram = parse(ecommerceExample).diagram;
+    const nodes = await layoutDiagram(diagram);
+    const gateway = nodes.find((n) => n.id === 'gateway')!;
+    const ids = diagram.edges.filter((e) => e.source === 'gateway').map((e) => e.id);
+    expect(Object.keys(gateway.data.routes ?? {}).sort()).toEqual(ids.sort());
   });
 });
 

@@ -8,14 +8,17 @@ import type { Diagram, DiagramNode } from './types';
  */
 
 // The canvas cards' rendered sizes (ComponentNode), so edge routes end on their borders.
-const COMPONENT_SIZE = { width: 240, height: 72 };
-const COMPONENT_WITH_TEAM_SIZE = { width: 240, height: 92 };
+const COMPONENT_SIZE = { width: 240, height: 60 };
+const COMPONENT_WITH_TEAM_SIZE = { width: 240, height: 84 };
 const TEXT_SIZE = { width: 240, height: 110 };
 
 /** Edge labels: the canvas draws them in 11px JetBrains Mono on a padded chip. */
 const LABEL_CHAR_WIDTH = 6.7;
 const LABEL_PAD = 12;
 const LABEL_HEIGHT = 18;
+
+/** Labels sit on their edge (the chip covers the line), as on the canvas, not beside it. */
+const INLINE_LABEL = { 'elk.edgeLabels.inline': 'true' };
 
 /** Space kept between a group's edge and a member that was dragged near it. */
 const GROUP_MARGIN = 24;
@@ -59,8 +62,8 @@ function rootOptions(options: LayoutOptions): Record<string, string> {
     // Straighter, shorter edges than BRANDES_KOEPF on big graphs.
     'elk.layered.nodePlacement.strategy': 'NETWORK_SIMPLEX',
     'elk.layered.compaction.postCompaction.strategy': 'EDGE_LENGTH',
+    'elk.layered.nodePlacement.networkSimplex.nodeFlexibility.default': 'PORT_POSITION',
     'elk.edgeLabels.placement': 'CENTER',
-    'elk.layered.edgeLabels.sideSelection': 'SMART_DOWN',
     'elk.layered.unnecessaryBendpoints': 'false',
     ...options.elk,
   };
@@ -182,7 +185,7 @@ export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkIns
   for (const e of diagram.edges) {
     if (!canConnect(e.source, e.target)) continue;
     connected.add(pair(e.source, e.target));
-    const labels = e.label ? [{ text: e.label, width: Math.ceil(e.label.length * LABEL_CHAR_WIDTH + LABEL_PAD), height: LABEL_HEIGHT }] : undefined;
+    const labels = e.label ? [{ text: e.label, width: Math.ceil(e.label.length * LABEL_CHAR_WIDTH + LABEL_PAD), height: LABEL_HEIGHT, layoutOptions: INLINE_LABEL }] : undefined;
     edges.push({ id: e.id, sources: [e.source], targets: [e.target], ...(labels ? { labels } : {}) });
   }
   // A step only shapes the layout between nodes no edge connects, and once
@@ -238,6 +241,7 @@ export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkIns
     return !!a && Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
   };
 
+  const boxAt = (id: string) => ({ ...elkAbsolute.get(id)!, width: placed.get(id)?.width ?? 0, height: placed.get(id)?.height ?? 0 });
   const routes: Record<string, EdgeRoute> = {};
   for (const edge of result.edges ?? []) {
     const sections = edge.sections ?? [];
@@ -248,7 +252,7 @@ export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkIns
     const shift = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
     const label = edge.labels?.[0];
     routes[edge.id] = {
-      points: simplify(flipped ? sectionPoints(sections).map(shift).reverse() : sectionPoints(sections).map(shift)),
+      points: dropJogs(simplify(flipped ? sectionPoints(sections).map(shift).reverse() : sectionPoints(sections).map(shift)), boxAt(source), boxAt(target)),
       ...(label?.x !== undefined && label.y !== undefined ? { label: shift({ x: label.x + (label.width ?? 0) / 2, y: label.y + (label.height ?? 0) / 2 }) } : {}),
       from: elkAbsolute.get(source)!,
       to: elkAbsolute.get(target)!,
@@ -319,6 +323,33 @@ export function simplify(points: Point[]): Point[] {
   }
   return out;
 }
+
+/**
+ * ELK sometimes ends a route with a jog of a few pixels just before a node
+ * (where ports are spread out); slide that last (or first) leg over so the
+ * line runs straight in, as long as it still meets the node's side.
+ */
+function dropJogs(points: Point[], source: Box, target: Box): Point[] {
+  const JOG = 10;
+  const MARGIN = 6;
+  const fix = (pts: Point[], box: Box): Point[] => {
+    const n = pts.length;
+    if (n < 4) return pts;
+    const [a, b, c, d] = pts.slice(n - 4);
+    const vertical = Math.abs(c.x - d.x) < 0.5 && Math.abs(a.x - b.x) < 0.5 && Math.abs(b.y - c.y) < 0.5;
+    const horizontal = Math.abs(c.y - d.y) < 0.5 && Math.abs(a.y - b.y) < 0.5 && Math.abs(b.x - c.x) < 0.5;
+    if (vertical && Math.abs(b.x - c.x) < JOG && b.x > box.x + MARGIN && b.x < box.x + box.width - MARGIN) {
+      return simplify([...pts.slice(0, n - 3), { x: b.x, y: d.y }]);
+    }
+    if (horizontal && Math.abs(b.y - c.y) < JOG && b.y > box.y + MARGIN && b.y < box.y + box.height - MARGIN) {
+      return simplify([...pts.slice(0, n - 3), { x: d.x, y: b.y }]);
+    }
+    return pts;
+  };
+  return fix(fix(points, target).reverse(), source).reverse();
+}
+
+type Box = Point & { width: number; height: number };
 
 /**
  * ELK sizes groups for its own placement; members pinned with `pos` can sit

@@ -2,9 +2,10 @@ import type { Edge, Node } from 'reactflow';
 import type { FlowStep } from '../../dsl/types';
 import { CANVAS_EDGE, CANVAS_FAIL, CANVAS_INK } from '../../utils/canvasColors';
 import { AnimatedPlaybackEdge } from './AnimatedPlaybackEdge';
+import RoutedEdge from '../Canvas/RoutedEdge';
 
 /** The edge types of a canvas that can play a use case; pass to `<ReactFlow edgeTypes>`. */
-export const PLAYBACK_EDGE_TYPES = { playback: AnimatedPlaybackEdge };
+export const PLAYBACK_EDGE_TYPES = { default: RoutedEdge, playback: AnimatedPlaybackEdge };
 
 /** A use case (or one scenario of it) being played. `condition` is the `when "…"` text of the scenario. */
 export interface PlayedUseCase {
