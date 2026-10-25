@@ -1,0 +1,22 @@
+frontend/src/dsl/autoLayout.ts
+  s_6084dd8c702c72::t_c64fe9294d8671 457-458,480-481,483-487,489-490,500,543-580
+  s_6084dd8c702c72::t_18ad3074343460 581-582
+frontend/src/dsl/layoutMetrics.test.ts
+  s_6084dd8c702c72::t_db17417330428e 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "55da4b4dd94c8d617c3df36215f08bd3e9632242",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
