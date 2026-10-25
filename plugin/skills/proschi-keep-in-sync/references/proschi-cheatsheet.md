@@ -123,8 +123,7 @@ audit "Audit log" [Database] rank last
 
 - `layout ordered` (top level): every edge is laid out by declaration order,
   so the file's order is the top-to-bottom order even when arrows point up.
-  The first thing to try when the reading order matters (always for a
-  diagram copied from an image).
+  Cheap and usually the biggest win: start every new diagram with it.
 - `rank N|first|last` on a node or group header: orders layers among
   siblings (top-level items with each other, a group's members with each
   other); lower comes first. Same rank = same row, unless an edge connects
@@ -133,6 +132,11 @@ audit "Audit log" [Database] rank last
 - `direction down|right|up|left`: at the top it turns the whole diagram; in a
   group it sets that group's flow (a row of topics, a pipeline). Such a group
   is laid out on its own and placed as one box.
+- Recipe: reading-order declarations + `layout ordered`; then `rank` on
+  group tiers; then on a top row of externals only where alignment matters;
+  then `direction right` in groups that read as a row. A single hint can
+  make the layout worse (it is noisy): render after **each** hint and keep
+  it only if the render got better.
 - `pos x,y` pins one node; others still auto-layout. Only for a final
   touch-up of one or two nodes: pinned nodes don't move when the diagram
   changes, so they go stale.
@@ -156,7 +160,9 @@ crops tall images). Fix and render again until none of these is true:
 - [ ] Legend colors don't match what the tags should show.
 
 Fix in this order: edge direction, declaration order, fan-out to a group,
-regrouping, `layout ordered`, `rank`, `direction`, and `pos` last. Stop after about five rounds and tell the
+regrouping, then hints one at a time, and `pos` last. Render after each
+change; revert any change that adds crossings or sprawl. Never assume a
+hint helped without looking. Stop after about five rounds and tell the
 user what still looks wrong.
 
 ## Tech stacks (`[Tech]`) and kinds

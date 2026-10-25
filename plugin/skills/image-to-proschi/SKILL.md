@@ -79,9 +79,11 @@ order and the hints carry them:
       is declared next to that zone.
 - [ ] `layout ordered` at the top, so the bands keep the declared order even
       where arrows point up (keep the arrows as drawn).
-- [ ] Each band gets a `rank`: `rank 0` for the top band, `rank 1` for the
-      next, on the boxes and group headers in it. Boxes in one band with an
-      edge between them can't share a row: give the callee the next rank.
+- [ ] Render now (step 6) before adding any other hint. Then add them one
+      at a time, rendering after each and reverting any that adds crossings:
+- [ ] `rank` on the group tiers first (`rank 0` for the top zone, `rank 1`
+      for the next); a top row of single boxes only where alignment
+      matters. Boxes with an edge between them can't share a rank.
 - [ ] A zone drawn as a row (Kafka topics, a cluster) → `direction right`
       inside its group. Side-by-side zones (two regions) → the same `rank`.
 - [ ] `pos x,y` only to nudge one or two nodes at the very end.
@@ -112,8 +114,9 @@ cheat-sheet) next to the source image and check:
 - [ ] The cheat-sheet's review checklist: crossings, edges against the flow,
       stranded nodes, sprawl.
 
-Fix the file (order, group edges, ranks, regrouping; `pos` last), `check`,
-render again. Stop after about five rounds and say what still differs.
+Fix the file (order, group edges, regrouping, then one hint at a time;
+`pos` last), `check`, render again. Keep a change only if the render got
+better; revert one that adds crossings. Stop after about five rounds and say what still differs.
 
 ## 7. Hand over
 
