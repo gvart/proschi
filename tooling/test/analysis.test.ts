@@ -182,6 +182,23 @@ describe('analysis', () => {
     expect(at('api -x db')).toEqual([['api', 'node'], ['db', 'node']]);
     expect(semanticTokens(a).some((t) => t.line === lineOf('usecase "Place order"'))).toBe(false);
   });
+
+  it('tokenizes legend tags and keeps tokens after a hex color', () => {
+    const src = 'legend {\n  owned "Owned" green\n}\napi [Go] color #3b82f6 .owned @team\nowned [Go]\napi -> owned .owned : x .owned';
+    const tokens = semanticTokens(analyze(src)).map((t) => [t.line, src.split('\n')[t.line].substr(t.character, t.length), t.kind]);
+    expect(tokens).toEqual([
+      [1, 'owned', 'tag'],
+      [3, 'api', 'node'],
+      [3, '[Go]', 'tech'],
+      [3, '.owned', 'tag'],
+      [3, '@team', 'team'],
+      [4, 'owned', 'node'],
+      [4, '[Go]', 'tech'],
+      [5, 'api', 'node'],
+      [5, 'owned', 'node'],
+      [5, '.owned', 'tag'],
+    ]);
+  });
 });
 
 function applyEdit(text: string, { range, newText }: TextEdit): string {

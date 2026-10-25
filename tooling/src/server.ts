@@ -70,8 +70,8 @@ function publishDependents(uri: string) {
   }
 }
 
-// Standard token types, so every theme colours them: node ids, tech stacks, teams.
-const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator' };
+// Standard token types, so every theme colours them: node ids, tech stacks, teams, legend tags.
+const TOKEN_TYPE: Record<TokenKind, string> = { node: 'variable', tech: 'type', team: 'decorator', tag: 'enumMember' };
 const TOKEN_TYPES = Object.values(TOKEN_TYPE);
 
 connection.onInitialize(() => ({
