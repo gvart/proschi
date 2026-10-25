@@ -5,14 +5,16 @@ import { parse } from './index';
 import { ecommerceExample, eventDrivenExample, urlShortenerExample } from './examples';
 import { layoutGraph, simplify } from './autoLayout';
 import { fallbackRoute } from './edgePath';
-import { computeMetrics, formatMetrics, toRects, type LayoutMetrics, type Polyline, type Rect } from './layoutMetrics';
+import { computeMetrics, countOutOfOrder, formatMetrics, toRects, type LayoutMetrics, type Polyline, type Rect } from './layoutMetrics';
 import orderFulfillment from './layoutFixtures/order-fulfillment.proschi?raw';
 import orderFulfillmentHinted from './layoutFixtures/order-fulfillment-hinted.proschi?raw';
+import microservices from './layoutFixtures/microservices.proschi?raw';
 
 /** The layout benchmark: `npm run layout:metrics` prints the table. */
 const FIXTURES: Record<string, string> = {
   'order-fulfillment': orderFulfillment,
   'order-fulfillment-hinted': orderFulfillmentHinted,
+  microservices,
   ecommerce: ecommerceExample,
   events: eventDrivenExample,
   'url-shortener': urlShortenerExample,
@@ -59,7 +61,7 @@ describe('layout metrics', () => {
   it('measures every benchmark diagram', async () => {
     const rows: Record<string, LayoutMetrics> = {};
     for (const [name, source] of Object.entries(FIXTURES)) rows[name] = await measure(source, name);
-    if (process.env.LAYOUT_METRICS) console.log(`\n${formatMetrics(rows)}\n`);
+    if (process.env.LAYOUT_METRICS || process.env.LAYOUT_ELK) console.log(`\n${formatMetrics(rows)}\n`);
     for (const [name, m] of Object.entries(rows)) {
       expect({ name, overlaps: m.overlaps, throughNodes: m.throughNodes, unrouted: m.unrouted, cornerEnds: m.cornerEnds }).toEqual({ name, overlaps: 0, throughNodes: 0, unrouted: 0, cornerEnds: 0 });
     }
@@ -73,7 +75,26 @@ describe('layout metrics', () => {
     expect(rows['order-fulfillment-hinted'].crossings).toBeLessThanOrEqual(11);
     expect(rows['order-fulfillment-hinted'].totalLength).toBeLessThanOrEqual(64_000);
     expect(rows['order-fulfillment-hinted'].maxLength).toBeLessThanOrEqual(4500);
-  }, 30_000);
+    // Laid out in the order it was written (see the next test); before, 12 pairs were out of order.
+    expect(rows.microservices.crossings).toBe(0);
+    expect(rows.microservices.outOfOrder).toBeLessThanOrEqual(5);
+  }, 120_000);
+
+  it('keeps siblings in declaration order where it costs no crossings', async () => {
+    const { diagram } = parse(microservices);
+    const rects = toRects((await layoutGraph(diagram)).nodes, diagram);
+    const x = (id: string) => rects.find((r) => r.id === id)!.x;
+    // Declared A, B, C: left to right (they came out C, A, B).
+    expect(x('svc_a')).toBeLessThan(x('svc_b'));
+    expect(x('svc_b')).toBeLessThan(x('svc_c'));
+    // Inside every group, members side by side are in declaration order.
+    for (const group of diagram.nodes.filter((n) => n.kind === 'group')) {
+      expect({ group: group.id, outOfOrder: countOutOfOrder(rects.filter((r) => r.ancestors[0] === group.id)) }).toEqual({ group: group.id, outOfOrder: 0 });
+    }
+    // The registry, declared before the auth server and the load balancer, is left of both (it was mirrored).
+    expect(x('registry')).toBeLessThan(x('auth'));
+    expect(x('auth')).toBeLessThan(x('lb'));
+  }, 120_000);
 
   it('steers the hinted fixture into the shape of the reference', async () => {
     const { diagram } = parse(orderFulfillmentHinted);
@@ -92,5 +113,5 @@ describe('layout metrics', () => {
     // Kafka laid out to the right: its topics in one row.
     const topics = diagram.nodes.filter((n) => n.parent === 'kafka').map((n) => rects.get(n.id)!);
     expect(new Set(topics.map((t) => t.y)).size).toBe(1);
-  }, 30_000);
+  }, 120_000);
 });

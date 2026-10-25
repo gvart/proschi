@@ -1,0 +1,84 @@
+title "Components of a Microservice Architecture"
+layout ordered
+
+# NOTE: the source has no legend; its fills (pink, cyan, green services, a
+# yellow auth box, dashed zones) carry no stated meaning, so no `color`.
+# The blue lines with envelope icons are clearly deliberate: async messages.
+legend {
+  async "Async messages" blue
+}
+
+# Band 1: clients
+web    "Web app"       [Browser]
+server "Server client" [VM] # GUESS: server-stack icon = a backend caller
+mobile "Mobile app"    [Mobile App]
+
+# Band 2: registry and gateway (1, 2)
+gw       "API Gateway"      [API Gateway]
+registry "Service Registry" [Service]     "Service discovery"
+
+# Band 3: service layer (3) and authorization (4)
+admin "Admin Access" [Actor]
+group services "Service Layer" rank 1 {
+  svc_a "Service A" [Service] x3
+  svc_b "Service B" [Service] x3
+  svc_c "Service C" [Service] x3
+}
+auth "Auth Server" [Auth Service] "Authorization Server"
+
+# Band 4: metrics, messaging (7), load balancer, cache (6), logging (9)
+prom "Prometheus" [Prometheus]
+group messaging "Distributed Messaging" rank 2 {
+  broker "Messaging" [Message Broker] "Distributed Messaging"
+}
+qmi   "Queue Mgmt UI"     [Actor]         "Queue Management Interface"
+lb    "Load Balancer"     [Load Balancer]
+cache "Distributed Cache" [Redis]
+
+group elk "Logging (ELK)" rank 2 {
+  logstash "Logstash"      [Service]       "Logstash"
+  es       "Elasticsearch" [Elasticsearch]
+  kibana   "Kibana"        [Service]       "Kibana"
+}
+
+# Band 5: dashboards (8) and database layer (5)
+grafana "Grafana" [Service] "Grafana dashboards"
+group db "Database Layer" rank 3 {
+  db_primary "Primary DB" [Database]
+  db_rep1    "Replica 1"  [Database]
+  db_rep2    "Replica 2"  [Database]
+}
+
+# Band 6: people reading the dashboards
+metrics_viz "Metrics viewer" [Actor] "Metrics Visualization"
+logs_viz    "Logs viewer"    [Actor] "Logs Visualization"
+
+web    -> gw
+server -> gw
+mobile -> gw
+gw     -> registry : Lookup
+gw     -> services
+
+admin -> auth
+auth  -> services
+
+# GUESS: the blue lines have no arrowheads; drawn from each service to the broker
+services -> broker .async : Messages
+qmi      -> broker
+services -> lb
+lb       -> cache
+lb       -> db
+
+db_primary -> db_rep1 : Replication
+db_primary -> db_rep2 : Replication
+db_rep1    -> db_rep2 # GUESS: undirected line between the replicas
+
+services    -> prom : Metrics
+prom        -> grafana
+metrics_viz -> grafana
+
+services -> logstash : Logs
+auth     -> logstash
+logstash -> es
+es       -> kibana
+logs_viz -> kibana

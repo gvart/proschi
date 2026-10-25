@@ -51,6 +51,10 @@ export interface LayoutMetrics {
   throughNodes: number;
   /** Edge ends within a few px of a corner of their node (they read as touching the neighbour). */
   cornerEnds: number;
+  /** Pairs of edge ends on one node closer than CROWDED px apart: edges bundled at one point. */
+  crowdedEnds: number;
+  /** Pairs of siblings side by side in one row against their declaration order (rects come in declaration order; for a top-down flow). */
+  outOfOrder: number;
   width: number;
   height: number;
   /** Width over height of the bounding box. */
@@ -120,9 +124,13 @@ function segmentHitsRect(a: Point, b: Point, r: Rect, inset = 4): boolean {
   return true;
 }
 
+/** Edge ends on one node closer than this read as one bundle. */
+const CROWDED = 20;
+
 const intersects = (a: Rect, b: Rect) => a.x < b.x + b.width - 0.5 && b.x < a.x + a.width - 0.5 && a.y < b.y + b.height - 0.5 && b.y < a.y + a.height - 0.5;
 
-export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics {
+/** How many times two edges cross (a pair of segments crossing counts once). */
+export function countCrossings(lines: { points: Point[] }[]): number {
   let crossings = 0;
   for (let i = 0; i < lines.length; i++) {
     for (let j = i + 1; j < lines.length; j++) {
@@ -135,6 +143,31 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
       }
     }
   }
+  return crossings;
+}
+
+/**
+ * Pairs of siblings (same group, or both at the top level) side by side in
+ * one row, the one declared later on the left. `rects` come in declaration
+ * order; rows run across a top-down flow (`across: 'y'` reads columns, for a
+ * flow to the right).
+ */
+export function countOutOfOrder(rects: Rect[], across: 'x' | 'y' = 'x'): number {
+  const along = across === 'x' ? 'y' : 'x';
+  const size = (r: Rect, axis: 'x' | 'y') => (axis === 'x' ? r.width : r.height);
+  let outOfOrder = 0;
+  for (let i = 0; i < rects.length; i++) {
+    for (let j = i + 1; j < rects.length; j++) {
+      const [a, b] = [rects[i], rects[j]];
+      const sameRow = a[along] < b[along] + size(b, along) - 0.5 && b[along] < a[along] + size(a, along) - 0.5;
+      if (a.ancestors[0] === b.ancestors[0] && sameRow && a[across] > b[across]) outOfOrder++;
+    }
+  }
+  return outOfOrder;
+}
+
+export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics {
+  const crossings = countCrossings(lines);
 
   let overlaps = 0;
   for (let i = 0; i < rects.length; i++) {
@@ -163,6 +196,16 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
     0,
   );
 
+  const ends = new Map<string, Point[]>();
+  for (const l of lines) {
+    ends.set(l.source, [...(ends.get(l.source) ?? []), l.points[0]]);
+    ends.set(l.target, [...(ends.get(l.target) ?? []), l.points[l.points.length - 1]]);
+  }
+  let crowdedEnds = 0;
+  for (const points of ends.values()) {
+    for (let i = 0; i < points.length; i++) for (let j = i + 1; j < points.length; j++) if (Math.hypot(points[i].x - points[j].x, points[i].y - points[j].y) < CROWDED) crowdedEnds++;
+  }
+
   const lengths = lines.map((l) => length(l.points));
   const xs = [...rects.flatMap((r) => [r.x, r.x + r.width]), ...lines.flatMap((l) => l.points.map((p) => p.x))];
   const ys = [...rects.flatMap((r) => [r.y, r.y + r.height]), ...lines.flatMap((l) => l.points.map((p) => p.y))];
@@ -180,6 +223,8 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
     overlaps,
     throughNodes,
     cornerEnds,
+    crowdedEnds,
+    outOfOrder: countOutOfOrder(rects),
     width: Math.round(width),
     height: Math.round(height),
     aspect: height ? Math.round((width / height) * 100) / 100 : 0,
@@ -188,7 +233,7 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
 
 /** A table of metrics per fixture, for the console. */
 export function formatMetrics(rows: Record<string, LayoutMetrics>): string {
-  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'unrouted', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'cornerEnds', 'width', 'height', 'aspect'];
+  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'unrouted', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'cornerEnds', 'crowdedEnds', 'outOfOrder', 'width', 'height', 'aspect'];
   const names = Object.keys(rows);
   const nameWidth = Math.max(7, ...names.map((n) => n.length));
   const widths = columns.map((c) => Math.max(c.length, ...names.map((n) => String(rows[n][c]).length)));
