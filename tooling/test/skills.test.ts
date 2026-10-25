@@ -57,8 +57,25 @@ describe('agent skills', () => {
     expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-cheatsheet.md)');
   });
 
+  it('keep the cheat-sheet short enough to skim', () => {
+    const sheet = readFileSync(join(skillsDir, 'infra-to-proschi', 'references', 'proschi-cheatsheet.md'), 'utf8');
+    expect(sheet.split('\n').length).toBeLessThanOrEqual(160);
+  });
+
+  // The simulation detail lives only in the skills that size or review a design.
+  const simSkills = ['proschi-capacity-plan', 'proschi-design-review'];
+  it.each(simSkills)('%s carries the simulation reference', (s) => {
+    const sim = (d: string) => readFileSync(join(skillsDir, d, 'references', 'proschi-simulation.md'), 'utf8');
+    expect(sim(s)).toBe(sim(simSkills[0]));
+    expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-simulation.md)');
+  });
+
   const dir = mkdtempSync(join(tmpdir(), 'proschi-skills-'));
-  const files = [...skills.map((s) => join(s, 'SKILL.md')), join('infra-to-proschi', 'references', 'proschi-cheatsheet.md')];
+  const files = [
+    ...skills.map((s) => join(s, 'SKILL.md')),
+    join('infra-to-proschi', 'references', 'proschi-cheatsheet.md'),
+    join('proschi-capacity-plan', 'references', 'proschi-simulation.md'),
+  ];
   const examples = files.flatMap((f) =>
     [...readFileSync(join(skillsDir, f), 'utf8').matchAll(/```proschi\n([\s\S]*?)```/g)].map((m, i) => [`${f} #${i + 1}`, m[1]] as const),
   );

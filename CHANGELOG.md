@@ -42,6 +42,10 @@ deployed from `main` and ships with the same changes.
   declaration order by tier, grouping, one edge to a group instead of one per
   member, when to use a legend, tags and `critical`, and a mandatory step
   that renders the diagram and fixes crossings and sprawl before finishing.
+  The shared cheat-sheet is now a short core (about 150 lines) that agents
+  can skim; the simulation numbers and use case step rules moved into the
+  skills that need them, and every drawing skill declares siblings in the
+  source's reading order so the layout doesn't mirror it.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with

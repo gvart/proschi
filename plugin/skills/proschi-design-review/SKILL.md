@@ -10,8 +10,10 @@ Goal: a short, prioritised review backed by the simulation's numbers, where
 every finding comes with the exact edit that fixes it; edits applied only
 when the user wants them; the result validated and shared.
 
-Syntax and the simulation's defaults:
-[references/proschi-cheatsheet.md](references/proschi-cheatsheet.md).
+Syntax: [references/proschi-cheatsheet.md](references/proschi-cheatsheet.md).
+The `traffic`, `requirements`, `capacity`, `entity`, `decision` and `test`
+blocks, test assertions and the simulation's defaults:
+[references/proschi-simulation.md](references/proschi-simulation.md).
 
 ## 1. Gather the facts
 

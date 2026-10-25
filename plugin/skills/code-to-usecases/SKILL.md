@@ -70,12 +70,39 @@ a scenario is an error path only when that first request gets a 4xx/5xx or
 a `-x`. If the request passes through a proxy or gateway, answer each hop
 inside each branch (`api --> gw : 404`, `gw --> user : 404`).
 
+Step rules (the cheat-sheet has the arrows):
+
+- Labels: `GET /orders/{id}` sets method and path (standard verbs only),
+  then a JSON body (may span lines until brackets balance) or `json`/`xml`/
+  `text …`. Responses start with a status: `201 {"id": 1}`. Other text is a
+  step name: `SELECT order`, `INCR rate:42`, `OrderPlaced {…}`.
+- Prefixes on requests: `x200` (fan-out), `~2MB` (payload size), in either order.
+- Reads vs writes: POST/PUT/PATCH/DELETE write, GET reads. Without a method
+  the first word decides: INSERT, UPDATE, UPSERT, DELETE, CREATE, PUT, SET,
+  WRITE, SAVE, STORE, UPLOAD, RECORD, MARK, INCR, LPUSH, ZADD, HSET, XADD,
+  PutItem, RESERVE, HOLD, CHARGE, PUBLISH, SEND, ENQUEUE, EMIT, NOTIFY write;
+  everything else reads. A request to a queue is always a write.
+- `-->` answers the latest unanswered request from the other side; `-x` is
+  never answered. `par` blocks do not nest.
+- `alt` blocks that touch (`} alt "B" {`) are one set of alternatives; steps
+  before a set are shared, steps after it are appended to every branch.
+  Nested sets multiply (max 32 scenarios); a nested scenario is `A › B`.
+- A consumer reading from a queue: `events ->> worker : OrderPlaced`, with
+  the connection `events -> worker` (or `worker -> events`).
+
 Mark anything you inferred rather than read with a comment:
 `# GUESS: retries handled by the SDK`.
 
 ## 4. Assert what the code guarantees
 
-Add a `test` block for behaviour that should not regress, e.g.:
+Add a `test` block for behaviour that should not regress. Lines (U = a use
+case name, optional `scenario "S"` after it; X/Y = `id`, `[Tech]`,
+`any <kind>`, `any strong store`, `any eventual store`, `X or Y`):
+`U calls X`, `U every scenario calls X`, `U never calls X`, `U calls X before Y`,
+`U never waits for X`, `U writes X before responding`, `U responds 2xx|4xx|201`,
+`U has scenario "S"`, `U handles failure of X` (a success scenario survives a
+`-x` to X), `U starts at X`, `[in U] X calls Y`, `no path from X to Y`,
+`X has replicas >= n`. For example:
 
 ```proschi fragment
 test "Checkout stays fast" {

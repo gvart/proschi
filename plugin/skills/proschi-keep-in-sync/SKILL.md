@@ -51,8 +51,14 @@ dependency bumps with the same role. Say "no architecture change" and stop.
   breaks `traffic`, `requirements`, `test` and links.
 - Match the existing style (groups, teams, label conventions, comments).
 - Declare a new node next to its tier or in its group, not at the end of the
-  file: declaration order is the layout's reading order. New edges go from
-  the caller. If the file has a `legend`, tag the new parts.
+  file, and in its left-to-right place among its siblings: declaration order
+  is the layout's reading order, so the existing order stays and doesn't
+  flip. New edges go from the caller. If the file has a `legend`, tag the
+  new parts.
+- Step labels: method and path for HTTP (`POST /orders`); otherwise start
+  with a verb, which decides read or write (INSERT, UPDATE, SET, PUBLISH,
+  SEND … write; SELECT, LOOKUP … read). Responses start with a status. Full
+  step rules: the `code-to-usecases` skill.
 - New use cases need a line in `traffic` if the file has one; add the
   scenarios to its `mix`.
 - Anything you inferred rather than read: `# GUESS: …`.

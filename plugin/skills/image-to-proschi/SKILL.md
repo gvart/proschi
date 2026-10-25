@@ -13,6 +13,8 @@ rendered and looked at, and a share link for the user.
 
 Read [references/proschi-cheatsheet.md](references/proschi-cheatsheet.md)
 first, above all its *Layout* section and the colors and legend syntax.
+This skill adds what reading a picture needs: the inventory, the legend
+mapping and keeping the source's order.
 
 ## 1. Inventory before you write any Proschi
 
@@ -77,6 +79,9 @@ order and the hints carry them:
 - [ ] Declare band by band, top to bottom, and left to right inside a band;
       inside each group in the same way. A box that only one zone talks to
       is declared next to that zone.
+- [ ] Siblings always in the source's left-to-right order (top-to-bottom for
+      a vertical stack): the layout places them in declaration order, so
+      the render keeps the picture's order and does not mirror it.
 - [ ] `layout ordered` at the top, so the bands keep the declared order even
       where arrows point up (keep the arrows as drawn).
 - [ ] Render now (step 6) before adding any other hint. Then add them one
@@ -108,8 +113,10 @@ generic one of its kind, with the product in the name).
 npx proschi@latest render --out /tmp/proschi-review diagram.proschi
 ```
 
-Put `/tmp/proschi-review/architecture.svg` (as a PNG if needed; see the
-cheat-sheet) next to the source image and check:
+Put `/tmp/proschi-review/architecture.svg` next to the source image. If you
+only read raster images, convert it first (`rsvg-convert -w 2000
+architecture.svg -o review.png`, `magick`, or a headless-browser screenshot;
+macOS `qlmanage -t` crops tall images). Check:
 
 - [ ] Every inventoried component, group and edge is there (recount).
 - [ ] The bands read in the same order; groups sit where the source has them.

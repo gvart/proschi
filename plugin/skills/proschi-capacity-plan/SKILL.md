@@ -11,8 +11,10 @@ must meet, its replicas/shards/capacity are sized so `npx proschi@latest test`
 passes with headroom, and the user gets a short explanation of what limits
 the design, what it costs, and a share link.
 
-Syntax: [references/proschi-cheatsheet.md](references/proschi-cheatsheet.md)
-(the `traffic`, `requirements`, `capacity` blocks and the simulation defaults).
+Syntax: [references/proschi-cheatsheet.md](references/proschi-cheatsheet.md).
+The `traffic`, `requirements`, `capacity` and `test` blocks, the simulation
+defaults and how latency and availability are computed:
+[references/proschi-simulation.md](references/proschi-simulation.md).
 
 Needs a design with use cases. If it has none, write them first (the
 `code-to-usecases` skill): traffic is per use case and scenario.
