@@ -20,3 +20,7 @@ Shared source of truth for the multi-agent run. Delete in the final change.
 
 ## Acceptance test
 A fresh agent with only the skills and the reference image produces a well-structured diagram; compared side by side with the reference.
+
+## Post assets (before/after)
+- Before: skills + engine at `50b1ad3` (main before this work), prompt saved in `post/before/prompt.md`, microservices reference image.
+- After: same prompt, final branch. Side-by-side pairs (canvas + CLI SVG) collected into one folder for the write-up.
