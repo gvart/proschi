@@ -11,6 +11,7 @@
     "test": "vitest run",
     "e2e": "playwright test",
     "build:accounts": "VITE_ACCOUNTS=true vite build --outDir dist-accounts --emptyOutDir",
+    "layout:metrics": "LAYOUT_METRICS=1 vitest run src/dsl/layoutMetrics.test.ts",
     "e2e:build": "npm run build && npm run build:accounts && playwright test"
   },
   "dependencies": {
