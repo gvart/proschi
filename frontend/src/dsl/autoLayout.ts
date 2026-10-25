@@ -158,8 +158,9 @@ export async function layoutBoxes(diagram: Diagram, getElk: () => Promise<ElkIns
  *
  * The document's layout hints steer it (docs/LANGUAGE.md, "Steering the
  * layout"): `direction` turns the flow, `rank` pins nodes to a layer and
- * `layout ordered` lays every edge out by declaration order. Without them
- * the layout is exactly what it was before they existed.
+ * `layout ordered` lays every edge out by declaration order. Of the layouts
+ * in VARIANTS, the one with the fewest crossings wins, and among those the
+ * one with the fewest siblings out of declaration order.
  */
 export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkInstance> = bundledElk, options: LayoutOptions = {}): Promise<Layout> {
   const base = { ...options, direction: options.direction ?? elkDirection(diagram.layout?.direction), ordered: options.ordered ?? diagram.layout?.ordered };

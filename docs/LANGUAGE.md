@@ -183,9 +183,13 @@ orders -> legacy .deprecated : sync orders
 
 ## Steering the layout
 
-The diagram is laid out automatically, top to bottom along the edges. Three
-hints steer that layout. They only change positions and routes, not what the
-diagram means. A document without them is laid out exactly as before.
+The diagram is laid out automatically, top to bottom along the edges.
+Nodes side by side in a row come in the order they are declared, left to
+right, wherever that doesn't add crossings: members of a group always do
+when nothing else is in the way, and a layout that would come out mirrored
+is turned round. Declare things in reading order and the diagram reads the
+same way. Three hints steer the layout further. They only change positions
+and routes, not what the diagram means.
 
 ```proschi
 title "Order Fulfillment"
@@ -241,7 +245,10 @@ A few things the layout can't do:
 - A group with its own direction is laid out separately and placed as one
   box. Its members keep the order a layout without that hint would give
   them. An edge into it ends at its border, straight across from the member
-  it reaches, and runs on in a straight line to that member.
+  it reaches, and runs on in a straight line to that member. Several edges
+  to one member share that way in and part just before the member.
+- Fewer crossings come first: when declaration order would cost a crossing,
+  the row keeps the order with fewer crossings.
 - In a parent where something has a rank, every label sits on its edge in a
   layer of its own, and the diagram gets a little taller.
 
