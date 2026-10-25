@@ -161,3 +161,100 @@ describe('provisionalLayout', () => {
     expect(Number(group.style?.height)).toBeGreaterThanOrEqual(700 + 84);
   });
 });
+
+describe('layout hints', () => {
+  type Abs = { x: number; y: number; w: number; h: number };
+  const laidOut = async (source: string) => {
+    const { diagram, diagnostics } = parse(source);
+    expect(diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+    const layout = await layoutGraph(diagram);
+    const abs = (id: string): Abs => {
+      const b = layout.nodes.find((n) => n.id === id)!;
+      const p = b.parent ? abs(b.parent) : { x: 0, y: 0 };
+      return { x: p.x + b.position.x, y: p.y + b.position.y, w: b.width, h: b.height };
+    };
+    return { diagram, ...layout, abs };
+  };
+  const onBorder = (p: { x: number; y: number }, b: Abs) =>
+    ((Math.abs(p.y - b.y) < 1 || Math.abs(p.y - (b.y + b.h)) < 1) && p.x >= b.x - 1 && p.x <= b.x + b.w + 1) ||
+    ((Math.abs(p.x - b.x) < 1 || Math.abs(p.x - (b.x + b.w)) < 1) && p.y >= b.y - 1 && p.y <= b.y + b.h + 1);
+
+  it('lines up nodes of the same rank, lower ranks higher', async () => {
+    const { abs } = await laidOut('a rank 0\nb\nc rank 1\nd rank 1\ne\na -> b\nb -> c\nd -> e');
+    expect(abs('c').y).toBe(abs('d').y);
+    expect(abs('a').y).toBeLessThan(abs('b').y);
+    expect(abs('b').y).toBeLessThan(abs('c').y);
+    expect(abs('e').y).toBeGreaterThan(abs('d').y);
+  });
+
+  it('keeps a rank against the direction of an edge, the route still running from source to target', async () => {
+    const { diagram, routes, abs } = await laidOut('a rank 1\nb rank 0\na -> b');
+    expect(abs('b').y).toBeLessThan(abs('a').y);
+    const points = routes[diagram.edges[0].id].points;
+    expect(onBorder(points[0], abs('a'))).toBe(true);
+    expect(onBorder(points[points.length - 1], abs('b'))).toBe(true);
+  });
+
+  it('puts rank first above and rank last below everything', async () => {
+    const { abs } = await laidOut('a\nb\nc\nlogs rank first\nusers rank last\na -> b\nb -> c\nc -> logs\nusers -> a');
+    for (const id of ['a', 'b', 'c']) {
+      expect(abs('logs').y).toBeLessThan(abs(id).y);
+      expect(abs('users').y).toBeGreaterThan(abs(id).y);
+    }
+  });
+
+  it('ranks groups among top-level nodes, and members within their group', async () => {
+    const { abs } = await laidOut('x\ngroup g "G" rank 0 {\n  a\n  b rank 0\n  c rank 0\n  a -> b\n}\ny rank 0\nx -> a');
+    // One layer: y sits within g's height; x, unranked, goes where its edge pulls it, above them.
+    expect(abs('y').y).toBeGreaterThanOrEqual(abs('g').y);
+    expect(abs('y').y + abs('y').h).toBeLessThanOrEqual(abs('g').y + abs('g').h);
+    expect(abs('x').y + abs('x').h).toBeLessThan(abs('g').y);
+    expect(abs('b').y).toBe(abs('c').y);
+    expect(abs('a').y).toBeLessThan(abs('b').y);
+  });
+
+  it('turns the whole diagram with a top-level direction', async () => {
+    const right = await laidOut('direction right\na\nb\na -> b');
+    expect(right.abs('b').x).toBeGreaterThan(right.abs('a').x + right.abs('a').w);
+    expect(right.abs('b').y).toBe(right.abs('a').y);
+    const up = await laidOut('direction up\na\nb\na -> b');
+    expect(up.abs('b').y + up.abs('b').h).toBeLessThan(up.abs('a').y);
+  });
+
+  it('lays out a group in its own direction, with routes into it ending on the member', async () => {
+    const { diagram, routes, abs } = await laidOut('x\ngroup g "Kafka" {\n  direction right\n  a\n  b\n  c\n  a -> b\n  b -> c\n}\nz\nx -> b\nc -> z');
+    expect(abs('a').y).toBe(abs('b').y);
+    expect(abs('b').x).toBeGreaterThan(abs('a').x + abs('a').w);
+    expect(abs('c').x).toBeGreaterThan(abs('b').x + abs('b').w);
+    expect(abs('x').y).toBeLessThan(abs('g').y);
+    expect(abs('z').y).toBeGreaterThan(abs('g').y + abs('g').h);
+    const g = abs('g');
+    for (const id of ['a', 'b', 'c']) {
+      const m = abs(id);
+      expect(m.x).toBeGreaterThanOrEqual(g.x + 24);
+      expect(m.y).toBeGreaterThanOrEqual(g.y + 56);
+      expect(m.x + m.w).toBeLessThanOrEqual(g.x + g.w);
+    }
+    for (const edge of diagram.edges) {
+      const route = routes[edge.id];
+      expect(route, edge.id).toBeDefined();
+      route.points.slice(1).forEach((p, i) => {
+        const q = route.points[i];
+        expect(Math.abs(p.x - q.x) < 0.01 || Math.abs(p.y - q.y) < 0.01, `${edge.id} orthogonal`).toBe(true);
+      });
+      expect(onBorder(route.points[0], abs(edge.source)), `${edge.id} start`).toBe(true);
+      expect(onBorder(route.points[route.points.length - 1], abs(edge.target)), `${edge.id} end`).toBe(true);
+      expect(route.from).toEqual({ x: abs(edge.source).x, y: abs(edge.source).y });
+      expect(route.to).toEqual({ x: abs(edge.target).x, y: abs(edge.target).y });
+    }
+  });
+
+  it('lays every edge out by declaration order with layout ordered, and only then', async () => {
+    const plain = await laidOut('b\na\na -> b');
+    expect(plain.abs('a').y).toBeLessThan(plain.abs('b').y);
+    const ordered = await laidOut('layout ordered\nb\na\na -> b');
+    expect(ordered.abs('b').y).toBeLessThan(ordered.abs('a').y);
+    const points = ordered.routes[ordered.diagram.edges[0].id].points;
+    expect(onBorder(points[0], ordered.abs('a'))).toBe(true);
+  });
+});
