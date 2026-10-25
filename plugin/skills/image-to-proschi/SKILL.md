@@ -52,9 +52,11 @@ pick the meaning the reader needs most and put the other in a comment.
   `[Node.js]`, an AWS icon → its catalog tech); a box labelled with a team →
   the closest kind (`[Service]`, `[Third Party API]`) and `@team-name`. The
   same system drawn twice → one node, with a comment.
-- **Icons inside a box** (a cache, a DB, a search index) → their own nodes,
-  declared right after the box, connected from it, in a group with it if the
-  picture puts them inside it.
+- **Icons inside a box** (a cache, a DB, a search index) → the box's
+  description (`"Kotlin; ElastiCache Redis, RDS"`), unless an arrow from
+  elsewhere ends on them: then their own node, declared right after the box.
+- **Names**: about 18 characters fit on a card. Longer → a shorter name and
+  the full text in the description (`"Order Fulfillment API"` → `"OF API"`).
 - **Groups**: one per drawn boundary; an untitled one is named after its
   badge (`group aws "AWS eu-west-1"`, `[Network Boundary]` for a cloud or
   VPC). A cluster drawn with topics inside → a group of topic nodes. A box
@@ -69,17 +71,21 @@ Mark anything you could not read or had to infer: `# GUESS:`, `# UNREADABLE:`.
 
 ## 4. Keep the source's reading order
 
-The auto-layout knows nothing about the picture's positions; declaration
-order and hints carry them:
+The auto-layout knows nothing about the picture's positions. Edges decide
+the rows (a callee lands below its caller); declaration order and hints
+carry the rest:
 
 - [ ] Declare band by band, top to bottom, and left to right inside a band;
-      inside each group in the same way.
-- [ ] Prefer edges that run down the picture. If most arrows in the source
-      point up (a pull-based design), keep them, and use the hints below.
-- [ ] A side-by-side pair of zones (two regions, two clouds) → `direction
-      right` (TODO-HINTS) at the top or in a wrapping group.
-- [ ] Nodes the source lines up in one row → the same `rank N` (TODO-HINTS).
-- [ ] A row where left-to-right order matters → strict order (TODO-HINTS).
+      inside each group in the same way. A box that only one zone talks to
+      is declared next to that zone.
+- [ ] Keep the arrows as drawn even when most point up (a pull-based
+      design); the hints place things, not the arrows.
+- [ ] Side-by-side zones (two regions, two clouds) → wrap them in a group
+      with `direction right` (TODO-HINTS: per-group direction is best effort).
+- [ ] Boxes the source lines up in one row → the same `rank N`; a box at the
+      very top or bottom → `rank first` / `rank last` (TODO-HINTS).
+- [ ] Left-to-right order still wrong after reordering → `layout ordered`
+      at the top (TODO-HINTS).
 - [ ] `pos x,y` only to nudge one or two nodes at the very end.
 
 ## 5. Validate
@@ -124,8 +130,8 @@ logos, curved routes, exact positions).
 ## Worked example
 
 Picture: top, a "Mobile app" box. Middle, a green zone "Checkout (team
-Payments)" with "Checkout API [Go]" (warning badge) and a Redis icon inside
-it. Bottom, a yellow "Stripe [External]" box. A red dashed arrow from the
+Payments)" with "Checkout API [Go]" (warning badge) above a "Session cache
+[Redis]" box. Bottom, a yellow "Stripe [External]" box. A red dashed arrow from the
 API to a grey "Legacy invoicing" box. Legend: green = owned by Payments,
 yellow = external, red dashed = deprecated flow.
 
@@ -142,7 +148,7 @@ app "Mobile app" [Mobile App]
 
 group checkout "Checkout" .owned {
   api   "Checkout API"  [Go]    @payments critical
-  cache "Session cache" [Redis] # drawn as an icon inside the API box
+  cache "Session cache" [Redis]
 }
 
 stripe  "Stripe"           [Stripe]          .external

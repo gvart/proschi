@@ -68,9 +68,10 @@ right-angle routes. What steers it:
 - **Edge direction.** Arrows go caller → callee, so a request flows from the
   clients at the top down to the data at the bottom. Messages flow the same
   way: `api -> queue`, `queue -> worker`.
-- **Declaration order.** Earlier nodes go higher and further left. An edge
-  that closes a cycle and points back at an earlier node is laid out reversed
-  (it keeps its arrowhead), so declare the entry point of a loop first.
+- **Edges decide the rows**: a callee lands below its caller. **Declaration
+  order** decides left to right within a row and breaks ties. An edge that
+  closes a cycle and points back at an earlier node is laid out reversed (it
+  keeps its arrowhead), so declare the entry point of a loop first.
 - **Groups** are laid out as one block. A connection may end on a group:
   `gw -> services` is one edge to all its members. Use case steps still need
   node-to-node connections.
@@ -79,7 +80,8 @@ Rules, in the order they pay off:
 
 1. Declare tier by tier, in reading order: clients, edge, services, async
    (queues, workers), stores, then externals and cross-cutting tools
-   (monitoring, logging). Within a tier, left to right.
+   (monitoring, logging). Within a tier, left to right. Declare a node that
+   only one part uses next to that part.
 2. One edge per pair, from the caller. No `a -> b` plus `b -> a`: name the
    reply in the label (`Order status [poll]`).
 3. Fan-out: one source to many alike targets (every service sends metrics,
@@ -88,9 +90,13 @@ Rules, in the order they pay off:
    group is fine when it is one. Nest at most two levels.
 5. Keep edges inside groups where you can: a node that only talks to one
    group's members probably belongs in it.
+6. Fewer, bigger boxes read better: a cache or database only one service
+   uses can go in its description unless an edge or use case needs it. Names
+   longer than about 18 characters are cut on the card; put the rest in the
+   description.
 
 ```proschi fragment
-# Bad: 3 x 3 edges, the metrics and log lines cross the whole request path.
+# Bad: one edge per member; the metrics lines cross the whole request path.
 svc_a -> prom : Metrics
 svc_b -> prom : Metrics
 svc_c -> prom : Metrics
@@ -98,14 +104,28 @@ svc_c -> prom : Metrics
 services -> prom : Metrics
 ```
 
-**Hints** (TODO-HINTS: syntax pending), when declaration order is not enough:
+**Layout hints**, when edges and order are not enough (TODO-HINTS: syntax
+provisional, semantics may still change):
 
-- `direction right` (TODO-HINTS), at the top or in a group: a pipeline or a
-  chain of hops that reads left to right.
-- `rank N` (TODO-HINTS) on a node: put it in the same row as its peers, or
-  pull a stranded node up next to what it serves.
-- strict order (TODO-HINTS): keep declaration order inside each row even
-  when it costs a crossing; for copying a source diagram's left-to-right order.
+```proschi fragment
+layout ordered          # top level: keep declaration order strictly in each row
+direction right         # top level: the whole diagram flows left to right
+group aws "AWS" rank 1 {
+  direction right       # in a group: its members flow left to right (best effort)
+  api "API" [Go] rank first
+}
+audit "Audit log" [Database] rank last
+```
+
+- `direction down|right|up|left`: a pipeline or a chain of hops reads left
+  to right; two side-by-side zones (regions, clouds) → `direction right` in a
+  group that wraps them. Per group it is best effort (TODO-HINTS).
+- `rank N|first|last` on a node or a group header pins it to a layer;
+  things with the same rank line up in one row. Use it to put peers in one
+  row or pull a stranded node next to what it serves (TODO-HINTS).
+- `layout ordered`: rows keep declaration order even when it costs a
+  crossing. For copying a source diagram's left-to-right order; try without
+  it first (TODO-HINTS).
 - `pos x,y` pins one node; others still auto-layout. Only for a final
   touch-up of one or two nodes: pinned nodes don't move when the diagram
   changes, so they go stale.
