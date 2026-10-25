@@ -102,3 +102,35 @@ How the engine does it (autoLayout.ts):
   straight across from the member they reach, and a short straight leg
   joins the port and the member. ELK can't route those legs around other
   members, so a port goes on whichever side has a clear way in.
+
+## Declaration order and spread edge ends
+
+`microservices.proschi` recreates a published microservices diagram, written
+in its reading order (it uses `layout ordered` and group ranks). Two more
+columns measure what it needs: `outOfOrder` counts pairs of siblings side by
+side in one row with the one declared later on the left, and `crowdedEnds`
+counts pairs of edge ends on one node less than 20 px apart.
+
+layoutGraph now tries up to four layouts: as is, with every group's members
+forced into declaration order (ELK's `forceNodeModelOrder` on groups), and
+each of those mirrored (ELK gets every list reversed and the result is turned
+back; not when a group has its own direction). It keeps the one with the
+fewest crossings, then the fewest siblings out of order, so crossings never go
+up. Edges through one port of a group with its own direction now part just
+before the member instead of meeting it in one point.
+
+| fixture | crossings before | after | outOfOrder before | after | crowdedEnds before | after |
+|---|---|---|---|---|---|---|
+| order-fulfillment | 17 | 17 | 20 | 20 | 0 | 0 |
+| order-fulfillment-hinted | 9 | 9 | 36 | 36 | 9 | 0 |
+| microservices | 2 | 0 | 12 | 5 | 0 | 0 |
+
+The microservices services now come out A, B, C (they were C, A, B), and the
+registry, auth server and logging are no longer mirrored. The five pairs left
+out of order would each cost crossings. Tried and dropped: forcing
+declaration order everywhere (78 crossings on the hinted fixture, 11 on
+microservices), only in groups as the one layout (32 and 29 on the two
+order-fulfillment fixtures), ELK's `crossingCounterNodeInfluence` (13 on the
+hinted fixture, and very slow), and one port per edge end on a group with its
+own direction (13 to 28 crossings on the hinted fixture, depending on the
+order of the ports).

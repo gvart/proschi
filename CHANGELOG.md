@@ -31,7 +31,7 @@ deployed from `main` and ships with the same changes.
   `rank first` / `rank last`) on a node or group puts it in a row among its
   siblings. `direction right` (or down, up, left) turns the whole diagram, or
   only the members of a group, such as a Kafka cluster's topics in one row.
-  Without hints a diagram is laid out exactly as before. The editor, VS Code
+  The editor, VS Code
   and JetBrains highlight and complete the new words, and the "Colors and
   legend" example now uses `layout ordered`, so Order Events stays below
   the services around it. See "Steering the layout" in the language
@@ -98,6 +98,11 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Diagrams read in the order they are written.** Nodes side by side in a
+  row now come left to right in declaration order wherever that costs no
+  crossing: a group's members keep their order, and a layout that came out
+  mirrored is turned round. Edges into one member of a group with its own
+  `direction` now meet it side by side instead of in one point.
 - **Tidier automatic layout for large diagrams.** Connections are drawn as
   right-angled routes around the boxes, with an arrowhead and the label on
   the line, in the editor and in `proschi render`. When connections form a

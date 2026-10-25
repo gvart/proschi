@@ -1,5 +1,6 @@
 import type { ElkEdgeSection, ElkExtendedEdge, ElkNode } from 'elkjs/lib/elk-api';
 import type { Diagram, DiagramNode, LayoutDirection as LayoutHintDirection, Rank } from './types';
+import { countCrossings, countOutOfOrder, toRects } from './layoutMetrics';
 
 /**
  * ELK auto-layout of a diagram, free of React Flow so the canvas
@@ -80,7 +81,10 @@ const vertical = (direction: LayoutDirection = 'DOWN') => direction === 'DOWN' |
 const GROUP_PAD = { top: 56, left: 24, side: 24 };
 const GROUP_MIN = { width: 300, height: 200 };
 
-function groupOptions(options: LayoutOptions): Record<string, string> {
+/** Keeps the members of a container in declaration order, whatever the crossings. */
+const FORCE_ORDER = { 'elk.layered.crossingMinimization.forceNodeModelOrder': 'true' };
+
+function groupOptions(options: LevelOptions): Record<string, string> {
   return {
     // Matches GroupNode's minimum size so the drawn box and the layout agree.
     'elk.padding': '[top=56,left=24,bottom=24,right=24]',
@@ -88,6 +92,7 @@ function groupOptions(options: LayoutOptions): Record<string, string> {
     // ELK applies this before turning its left-to-right layout to vertical, so a vertical layout needs it transposed.
     'elk.nodeSize.minimum': vertical(options.direction) ? '(200, 300)' : '(300, 200)',
     ...SPACING,
+    ...(options.groupOrder ? FORCE_ORDER : {}),
   };
 }
 
@@ -153,16 +158,47 @@ export async function layoutBoxes(diagram: Diagram, getElk: () => Promise<ElkIns
  *
  * The document's layout hints steer it (docs/LANGUAGE.md, "Steering the
  * layout"): `direction` turns the flow, `rank` pins nodes to a layer and
- * `layout ordered` lays every edge out by declaration order. Without them
- * the layout is exactly what it was before they existed.
+ * `layout ordered` lays every edge out by declaration order. Of the layouts
+ * in VARIANTS, the one with the fewest crossings wins, and among those the
+ * one with the fewest siblings out of declaration order.
  */
 export async function layoutGraph(diagram: Diagram, getElk: () => Promise<ElkInstance> = bundledElk, options: LayoutOptions = {}): Promise<Layout> {
-  const { nodes, routes } = await layoutLevel(diagram, getElk, {
-    ...options,
-    direction: options.direction ?? elkDirection(diagram.layout?.direction),
-    ordered: options.ordered ?? diagram.layout?.ordered,
-  });
+  const base = { ...options, direction: options.direction ?? elkDirection(diagram.layout?.direction), ordered: options.ordered ?? diagram.layout?.ordered };
+  let best: { level: Level; score: [number, number] } | undefined;
+  const groups = diagram.nodes.some((n) => n.kind === 'group');
+  let canMirror = true;
+  for (const variant of VARIANTS) {
+    if ((variant.groupOrder && !groups) || (variant.mirror && !canMirror)) continue;
+    const level = await layoutLevel(diagram, getElk, { ...base, ...variant });
+    if (variant.mirror && !level.mirrored) {
+      canMirror = false;
+      continue;
+    }
+    const s = score(diagram, level, base.direction ?? 'DOWN');
+    if (!best || s[0] < best.score[0] || (s[0] === best.score[0] && s[1] < best.score[1])) best = { level, score: s };
+  }
+  const { nodes, routes } = best!.level;
   return { nodes, routes };
+}
+
+/**
+ * The ways layoutGraph tries to lay a diagram out: as is, with every group's
+ * members in declaration order, and each of those mirrored (ELK given every
+ * list reversed, the result turned back), which is where ELK's sweeps often
+ * land a diagram the right way round. Never more crossings than the plain
+ * layout; the fewest siblings out of declaration order breaks the tie.
+ */
+interface LevelOptions extends LayoutOptions {
+  groupOrder?: boolean;
+  mirror?: boolean;
+}
+
+const VARIANTS: Pick<LevelOptions, 'groupOrder' | 'mirror'>[] = [{}, { mirror: true }, { groupOrder: true }, { groupOrder: true, mirror: true }];
+
+/** How a layout reads: edge crossings first, then siblings out of declaration order. */
+function score(diagram: Diagram, level: Level, flow: LayoutDirection): [number, number] {
+  const crossings = countCrossings(Object.values(level.routes));
+  return [crossings, countOutOfOrder(toRects(level.nodes, diagram), vertical(flow) ? 'x' : 'y')];
 }
 
 const elkDirection = (direction: LayoutHintDirection | undefined): LayoutDirection | undefined => direction?.toUpperCase() as LayoutDirection | undefined;
@@ -170,6 +206,8 @@ const elkDirection = (direction: LayoutHintDirection | undefined): LayoutDirecti
 /** A layout, plus the nodes that are where ELK put them (not moved by a `pos`), so routes to them hold. */
 interface Level extends Layout {
   unmoved: Set<string>;
+  /** Laid out mirrored (LevelOptions); not when a group is laid out on its own. */
+  mirrored?: boolean;
 }
 
 /** An edge as handed to ELK; an end on a group laid out on its own goes through a port on its border. */
@@ -201,7 +239,7 @@ interface Separate {
 }
 
 /** `declared`: declaration order, which steers edge directions; ELK sees the nodes in `diagram.nodes` order. */
-async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>, options: LayoutOptions, declared = new Map(diagram.nodes.map((n, i) => [n.id, i]))): Promise<Level> {
+async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>, options: LevelOptions, declared = new Map(diagram.nodes.map((n, i) => [n.id, i]))): Promise<Level> {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const parentOf = (id: string) => {
     const p = byId.get(id)?.parent;
@@ -226,6 +264,8 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   const outermost = diagram.nodes.filter((n) => isSeparate(n.id) && carrierOf(n.id) === n.id);
   // Laid out on its own, a group's members keep their order whatever the edges
   // around it, so they take the order a layout with the group in the main flow gives them.
+  // A group laid out on its own would need its inside mirrored too, against its own flow.
+  if (options.mirror && outermost.length) return { nodes: [], routes: {}, unmoved: new Set(), mirrored: false };
   const across = new Map<string, number>();
   if (outermost.length) {
     const inline = Object.fromEntries(outermost.map((g) => [g.id, { direction: flowAt(parentOf(g.id)) }]));
@@ -352,8 +392,11 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     return [{ id: e.id, sources: [source], targets: [target], ...(e.labels ? { labels: e.labels } : {}) }];
   });
 
+  const mirrored = !!options.mirror;
+  if (mirrored) reverseOrder(roots, elkEdges);
   const elk = await getElk();
   const result = await elk.layout({ id: 'root', layoutOptions: rootOptions(options, interactive.has(undefined), interactive.size > 0), children: roots, edges: elkEdges });
+  if (mirrored) mirrorLayout(result, vertical(flow) ? 'x' : 'y');
 
   // ELK's absolute positions, before `pos` overrides any of them.
   const placed = new Map<string, ElkNode>();
@@ -412,6 +455,8 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   const titles = mainNodes.filter((n) => n.kind === 'group' && unmovedInMain(n.id)).map((n) => titleBand(boxAt(n.id), n.name));
   const routes: Record<string, EdgeRoute> = {};
   const routed = new Map((result.edges ?? []).map((e) => [e.id, e as ElkExtendedEdge & { container?: string }]));
+  /** Ends that run through one port of a separately laid-out group to one member, by port. */
+  const bundles = new Map<string, { id: string; atStart: boolean; box: Box }[]>();
   for (const layoutEdge of edges) {
     const parts = layoutEdge.via ? [routed.get(`${layoutEdge.id}\u0000in`), routed.get(`${layoutEdge.id}\u0000out`)] : [routed.get(layoutEdge.id)];
     const flipped = reversed.has(layoutEdge.id);
@@ -433,13 +478,17 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     let points = parts.flatMap((p) => sectionPoints(p!.sections!).map((q) => ({ x: originOf(p!).x + q.x, y: originOf(p!).y + q.y })));
     if (flipped) points.reverse();
     // An end on a separately laid-out group runs on from the port to the member inside.
-    const leg = (group: string, member: string, port: Point) => {
-      const box = separate.get(group)!.members.get(member);
+    const leg = (group: string, member: string, port: Point, atStart: boolean) => {
+      const inside = separate.get(group)!.members.get(member);
       const g = elkAbsolute.get(group)!;
-      return box ? sidePoint({ x: g.x + box.x, y: g.y + box.y, width: box.width, height: box.height }, port) : port;
+      if (!inside) return port;
+      const box = { x: g.x + inside.x, y: g.y + inside.y, width: inside.width, height: inside.height };
+      const key = `${group}\u0000${member}\u0000${Math.round(port.x)},${Math.round(port.y)}`;
+      bundles.set(key, [...(bundles.get(key) ?? []), { id: layoutEdge.id, atStart, box }]);
+      return sidePoint(box, port);
     };
-    if (sourceMember && sourceMember !== source) points = [leg(source, sourceMember, points[0]), ...points];
-    if (targetMember && targetMember !== target) points = [...points, leg(target, targetMember, points[points.length - 1])];
+    if (sourceMember && sourceMember !== source) points = [leg(source, sourceMember, points[0], true), ...points];
+    if (targetMember && targetMember !== target) points = [...points, leg(target, targetMember, points[points.length - 1], false)];
     points = simplify(points);
     if (!sourceMember && !targetMember) points = dropJogs(points, boxAt(source), boxAt(target));
     routes[layoutEdge.id] = {
@@ -449,6 +498,7 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
       to: finalAbsolute(to),
     };
   }
+  for (const ends of bundles.values()) if (ends.length > 1) fanOut(ends, routes);
   // Routes inside a separately laid-out group move with it.
   for (const [group, own] of separate) {
     const g = finalAbsolute(group);
@@ -457,7 +507,78 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
       routes[id] = { points: route.points.map(move), ...(route.label ? { label: move(route.label) } : {}), from: move(route.from), to: move(route.to) };
     }
   }
-  return { nodes: boxes, routes, unmoved };
+  return { nodes: boxes, routes, unmoved, mirrored };
+}
+
+/** Reverses every list ELK reads model order from: the children of each container, and the edges. */
+function reverseOrder(roots: ElkNode[], edges: ElkExtendedEdge[]) {
+  const reverse = (nodes: ElkNode[]) => {
+    nodes.reverse();
+    for (const n of nodes) if (n.children) reverse(n.children);
+  };
+  reverse(roots);
+  edges.reverse();
+}
+
+/** Turns ELK's result over across `axis` (x: left for right), in place: nodes, ports, edge routes and labels. */
+function mirrorLayout(root: ElkNode, axis: 'x' | 'y') {
+  const dim = axis === 'x' ? 'width' : 'height';
+  const span = (n: { width?: number; height?: number }) => n[dim] ?? 0;
+  const containers = new Map<string, ElkNode>([[root.id, root]]);
+  const flip = (node: ElkNode) => {
+    for (const c of node.children ?? []) {
+      c[axis] = span(node) - (c[axis] ?? 0) - span(c);
+      containers.set(c.id, c);
+      flip(c);
+    }
+    for (const p of node.ports ?? []) p[axis] = span(node) - (p[axis] ?? 0) - span(p);
+  };
+  flip(root);
+  for (const e of (root.edges ?? []) as (ElkExtendedEdge & { container?: string })[]) {
+    const size = span(containers.get(e.container ?? root.id) ?? root);
+    for (const sec of e.sections ?? []) for (const p of [sec.startPoint, ...(sec.bendPoints ?? []), sec.endPoint]) p[axis] = size - p[axis];
+    for (const l of e.labels ?? []) l[axis] = size - (l[axis] ?? 0) - span(l);
+  }
+}
+
+/** How far apart edges that share a port meet their member, at most, and how far before it they part. */
+const FAN_STEP = 24;
+const FAN_LENGTH = 16;
+
+/**
+ * Edges into (or out of) one member of a separately laid-out group share the
+ * group's port, so they would all meet the member in one point. Just before
+ * the member they part, side by side along its border, ordered by where
+ * their other ends are so they do not cross.
+ */
+function fanOut(ends: { id: string; atStart: boolean; box: Box }[], routes: Record<string, EdgeRoute>) {
+  const near = (route: EdgeRoute, atStart: boolean) => (atStart ? route.points[0] : route.points[route.points.length - 1]);
+  const far = (route: EdgeRoute, atStart: boolean) => (atStart ? route.points[route.points.length - 1] : route.points[0]);
+  const live = ends.filter((e) => routes[e.id]?.points.length >= 2);
+  if (live.length < 2) return;
+  const box = live[0].box;
+  const end = near(routes[live[0].id], live[0].atStart);
+  // Along the side the edges meet: x on the top or bottom, y on the left or right.
+  const axis: 'x' | 'y' = Math.abs(end.y - box.y) < 0.5 || Math.abs(end.y - box.y - box.height) < 0.5 ? 'x' : 'y';
+  const other: 'x' | 'y' = axis === 'x' ? 'y' : 'x';
+  const span = axis === 'x' ? box.width : box.height;
+  const step = Math.min(FAN_STEP, span / (live.length + 1));
+  live.sort((a, b) => far(routes[a.id], a.atStart)[axis] - far(routes[b.id], b.atStart)[axis]);
+  live.forEach((e, i) => {
+    const offset = (i - (live.length - 1) / 2) * step;
+    if (Math.abs(offset) < 0.5) return;
+    const route = routes[e.id];
+    const points = e.atStart ? [...route.points].reverse() : [...route.points];
+    const last = points[points.length - 1];
+    const before = points[points.length - 2];
+    // The last leg must run straight into the side for there to be room to step over.
+    if (Math.abs(before[axis] - last[axis]) > 0.5) return;
+    const room = last[other] - before[other];
+    const turn = last[other] - Math.sign(room) * Math.min(FAN_LENGTH, Math.abs(room) / 2);
+    const at = (a: number, o: number): Point => (axis === 'x' ? { x: a, y: o } : { x: o, y: a });
+    points.splice(points.length - 1, 1, at(last[axis], turn), at(last[axis] + offset, turn), at(last[axis] + offset, last[other]));
+    route.points = simplify(e.atStart ? points.reverse() : points);
+  });
 }
 
 /** Absolute boxes of a layout whose members are placed relative to their group. */
