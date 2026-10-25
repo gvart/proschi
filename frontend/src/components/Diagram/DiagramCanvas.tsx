@@ -1,9 +1,11 @@
-import ReactFlow, { Background, BackgroundVariant, Controls, ReactFlowProvider } from 'reactflow';
+import ReactFlow, { Background, BackgroundVariant, Controls, Panel, ReactFlowProvider } from 'reactflow';
 import type { Edge, EdgeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
+import Legend from '../Canvas/Legend';
+import type { LegendEntry } from '../../dsl/types';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 
 /**
@@ -26,9 +28,11 @@ interface DiagramCanvasProps {
   fitDuration?: number;
   /** Custom edge types (a stable object), e.g. the playback edge of a canvas that plays use cases. */
   edgeTypes?: EdgeTypes;
+  /** The diagram's legend, drawn in the top-right corner. */
+  legend?: LegendEntry[];
 }
 
-function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes }: DiagramCanvasProps) {
+function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes, legend }: DiagramCanvasProps) {
   useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey ?? ''}`, { duration: fitDuration });
 
   return (
@@ -53,6 +57,11 @@ function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes }
     >
       <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
       {!compact && !still && <Controls showInteractive={false} />}
+      {legend && (
+        <Panel position="top-right">
+          <Legend entries={legend} />
+        </Panel>
+      )}
     </ReactFlow>
   );
 }

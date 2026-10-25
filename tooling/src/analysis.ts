@@ -89,7 +89,7 @@ function payloadLines(lines: string[]): boolean[] {
   });
 }
 
-export type TokenKind = 'node' | 'tech' | 'team';
+export type TokenKind = 'node' | 'tech' | 'team' | 'tag';
 
 export interface Token {
   line: number;
@@ -99,23 +99,42 @@ export interface Token {
 }
 
 // Strings, comments and labels (free text after `:`) are consumed so nothing inside them
-// becomes a token; arrows so the `x` of `-x` is not taken for a node.
-const TOKEN = /"(?:[^"\\]|\\.)*"?|#.*|:.*|->>|-->|->|-x(?![A-Za-z0-9_])|\[[^\]\n]*\]|@[A-Za-z0-9_-]+|[A-Za-z_][A-Za-z0-9_]*/g;
+// becomes a token; arrows so the `x` of `-x` is not taken for a node; a hex color after
+// `color` so it is not read as a comment.
+const TOKEN =
+  /"(?:[^"\\]|\\.)*"?|(?<=\bcolor\s+)#[0-9a-fA-F]{3,6}(?![A-Za-z0-9_])|#.*|:.*|->>|-->|->|-x(?![A-Za-z0-9_])|\[[^\]\n]*\]|@[A-Za-z0-9_-]+|\.[A-Za-z_][A-Za-z0-9_]*|[A-Za-z_][A-Za-z0-9_]*/g;
 
 /**
  * Semantic tokens for what the TextMate grammar cannot tell apart: node ids
- * (only declared or implicit nodes), tech stacks (`[PostgreSQL]`) and teams (`@orders`).
+ * (only declared or implicit nodes), tech stacks (`[PostgreSQL]`), teams (`@orders`),
+ * and legend tags (`.planned`, and the entry ids of the legend block).
  */
 export function semanticTokens(analysis: Analysis): Token[] {
   const nodes = new Set(analysis.diagram.nodes.map((n) => n.id));
+  const legend = analysis.diagram.legend ?? [];
+  const tags = new Set(legend.map((e) => e.id));
+  // 0-based line → column of a legend entry id written in this document.
+  const entryAt = new Map(legend.filter((e) => e.loc.file === undefined).map((e) => [e.loc.line - 1, e.loc.col - 1]));
   const payload = payloadLines(analysis.lines);
   const out: Token[] = [];
   analysis.lines.forEach((text, line) => {
     if (payload[line]) return;
     for (const m of text.matchAll(TOKEN)) {
       const word = m[0];
-      const kind: TokenKind | null = word[0] === '[' ? 'tech' : word[0] === '@' ? 'team' : /^[A-Za-z_]/.test(word) && nodes.has(word) ? 'node' : null;
-      if (kind) out.push({ line, character: m.index ?? 0, length: word.length, kind });
+      const at = m.index ?? 0;
+      const kind: TokenKind | null =
+        word[0] === '['
+          ? 'tech'
+          : word[0] === '@'
+            ? 'team'
+            : word[0] === '.'
+              ? tags.has(word.slice(1)) ? 'tag' : null
+              : entryAt.get(line) === at
+                ? 'tag'
+                : /^[A-Za-z_]/.test(word) && nodes.has(word)
+                  ? 'node'
+                  : null;
+      if (kind) out.push({ line, character: at, length: word.length, kind });
     }
   });
   return out;

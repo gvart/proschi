@@ -5,6 +5,7 @@ import { endpointGroupKey } from './paths';
 import { DATA_STORE_KINDS, KINDS, TYPE_OF_KIND, isDataStore, isKind, kindFromName, kindOf } from './kinds';
 import { parseQuantity } from './quantity';
 import { accessOf } from './access';
+import { COLOR_NAMES, editDistance, resolveColor, suggestColor } from './palette';
 import type {
   FlowStep,
   Protocol,
@@ -20,9 +21,12 @@ import type {
   DiagramScenario,
   DiagramStep,
   DiagramUseCase,
+  Dash,
+  ElementStyle,
   Entity,
   FlowTest,
   Kind,
+  LegendEntry,
   ParseOptions,
   ParseResult,
   Percentile,
@@ -79,7 +83,7 @@ type Frame =
   | SectionFrame;
 
 /** The top-level blocks of docs/design/hld-and-practice.md §1, whose lines are read by their own rules. */
-type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+type Section = 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend';
 
 interface SectionFrame {
   kind: 'section';
@@ -205,6 +209,9 @@ class Parser {
   private readonly decisions: Decision[] = [];
   private readonly tests: FlowTest[] = [];
   private readonly blocks: BlockSpan[] = [];
+  private readonly legend: LegendEntry[] = [];
+  /** `.tag` uses, resolved against the legend once every file is read. */
+  private readonly tagRefs: { tag: string; loc: SourceLoc; target: { style?: ElementStyle } }[] = [];
   /** Checks of use case, scenario and node names, run once every file is read and use cases are built. */
   private readonly deferred: (() => void)[] = [];
   private built: DiagramUseCase[] = [];
@@ -222,6 +229,7 @@ class Parser {
     // file may refer to nodes its imports declare.
     this.parseFile();
     this.createImplicitNodes();
+    this.resolveTags();
     // Connections from every file count, so a use case file may rely on its imports' connections.
     for (const e of this.edges) this.connected.add(`${e.source}|${e.target}`).add(`${e.target}|${e.source}`);
 
@@ -244,6 +252,7 @@ class Parser {
       ...(this.entities.length ? { entities: this.entities } : {}),
       ...(this.decisions.length ? { decisions: this.decisions } : {}),
       ...(this.tests.length ? { tests: this.tests } : {}),
+      ...(this.legend.length ? { legend: this.legend } : {}),
     };
 
     const order = (d: Diagnostic) => this.fileOrder.get(d.file) ?? 0;
@@ -355,6 +364,7 @@ class Parser {
       case 'traffic':
       case 'requirements':
       case 'capacity':
+      case 'legend':
         if (second?.kind === 'lbrace') this.openSection(first.value, tokens, line);
         else this.parseNode(tokens, line);
         break;
@@ -473,14 +483,22 @@ class Parser {
       else this.warning(`'${tech.value}' is not a group style; using ${DEFAULT_GROUP_TECH}`, this.locOf(tech, line));
     }
     let position: { x: number; y: number } | undefined;
-    if (tokens[i]?.kind === 'ident' && tokens[i].value === 'pos') {
-      const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
-      if (x?.kind !== 'number' || comma?.kind !== 'comma' || y?.kind !== 'number') {
-        this.error('Expected pos x,y', this.locOf(tokens[i], line));
-        return;
+    const style: StyleParts = {};
+    while (i < tokens.length && tokens[i].kind !== 'lbrace') {
+      if (tokens[i].kind === 'ident' && tokens[i].value === 'pos') {
+        const [x, comma, y] = [tokens[i + 1], tokens[i + 2], tokens[i + 3]];
+        if (x?.kind !== 'number' || comma?.kind !== 'comma' || y?.kind !== 'number') {
+          this.error('Expected pos x,y', this.locOf(tokens[i], line));
+          return;
+        }
+        position = { x: Number(x.value), y: Number(y.value) };
+        i += 4;
+        continue;
       }
-      position = { x: Number(x.value), y: Number(y.value) };
-      i += 4;
+      const used = this.readStylePart(tokens, i, line, style, false);
+      if (used === undefined) return;
+      if (used === 0) break;
+      i += used;
     }
 
     if (tokens[i]?.kind !== 'lbrace') {
@@ -490,7 +508,9 @@ class Parser {
     this.expectEnd(tokens, i + 1, line);
 
     const loc = this.locOf(idToken, line);
-    this.addNode({ id: idToken.value, kind: 'group', name, type: 'group', techStack, parent: this.currentGroup(), position, loc });
+    const group: DiagramNode = { id: idToken.value, kind: 'group', name, type: 'group', techStack, parent: this.currentGroup(), position, loc };
+    this.applyStyle(group, style);
+    this.addNode(group);
     this.stack.push({ kind: 'group', id: idToken.value, loc });
   }
 
@@ -610,9 +630,16 @@ class Parser {
 
     const node: DiagramNode = { id: idToken.value, kind: 'component', name: idToken.value, type: 'shape', techStack: DEFAULT_TECH, parent: this.currentGroup(), loc };
     let strings = 0;
+    const style: StyleParts = {};
 
     for (let i = 1; i < tokens.length; i++) {
       const t = tokens[i];
+      const used = this.readStylePart(tokens, i, line, style, true);
+      if (used === undefined) return;
+      if (used > 0) {
+        i += used - 1;
+        continue;
+      }
       if (t.kind === 'string' && strings < 2) {
         if (strings++ === 0) node.name = t.value;
         else node.description = t.value;
@@ -648,18 +675,25 @@ class Parser {
       }
     }
 
+    this.applyStyle(node, style);
     this.addNode(node);
   }
 
   private parseConnection(tokens: Token[], index: number): number {
     const line = index + 1;
-    const [fromToken, arrowToken, toToken, labelToken] = tokens;
+    const [fromToken, arrowToken, toToken] = tokens;
+    const tagToken = tokens[3]?.kind === 'tag' ? tokens[3] : undefined;
+    const labelToken = tokens[tagToken ? 4 : 3];
 
     if (toToken?.kind !== 'ident') {
       this.error('Expected a target id after the arrow', this.locOf(toToken ?? arrowToken, line));
       return index;
     }
-    if (tokens.length > 4 || (labelToken && labelToken.kind !== 'label')) {
+    if (tagToken && tokens[4]?.kind === 'tag') {
+      this.error('A connection takes one tag', this.locOf(tokens[4], line));
+      return index;
+    }
+    if (tokens.length > (tagToken ? 5 : 4) || (labelToken && labelToken.kind !== 'label')) {
       this.error('Expected : before the connection label', this.locOf(labelToken, line));
       return index;
     }
@@ -692,7 +726,12 @@ class Parser {
     this.references.push({ id: from, loc: this.locOf(fromToken, line) }, { id: to, loc: this.locOf(toToken, line) });
 
     const top = this.top();
-    if (top?.kind === 'usecase' || top?.kind === 'alt' || top?.kind === 'par') {
+    const inUseCase = top?.kind === 'usecase' || top?.kind === 'alt' || top?.kind === 'par';
+    if (tagToken && inUseCase) {
+      this.error('Tags style connections in the architecture, not use case steps', this.locOf(tagToken, line));
+      return lastLine;
+    }
+    if (inUseCase) {
       const body = this.currentBody()!;
       body.openAlt = undefined;
       // Fan-out and payload size prefixes belong to requests; a response label is read as before.
@@ -717,7 +756,12 @@ class Parser {
       // Counted in a map: scanning every edge made many duplicate connections quadratic.
       const count = this.edgeCount.get(base) ?? 0;
       this.edgeCount.set(base, count + 1);
-      this.edges.push({ id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || undefined, loc });
+      const edge: DiagramEdge = { id: count ? `${base}#${count + 1}` : base, source: from, target: to, label: unquote(label) || undefined, loc };
+      if (tagToken) {
+        edge.tag = tagToken.value;
+        this.tagRefs.push({ tag: tagToken.value, loc: this.locOf(tagToken, line), target: edge });
+      }
+      this.edges.push(edge);
     }
     return lastLine;
   }
@@ -775,7 +819,7 @@ class Parser {
       this.skipSection(section, tokens, line);
       return false;
     }
-    if (section === 'traffic' || section === 'requirements' || section === 'capacity') this.expectEnd(tokens, 2, line);
+    if (section === 'traffic' || section === 'requirements' || section === 'capacity' || section === 'legend') this.expectEnd(tokens, 2, line);
     this.stack.push({ kind: 'section', section, ...fill, loc });
     return true;
   }
@@ -797,6 +841,8 @@ class Parser {
         return this.parseRequirement(tokens, line);
       case 'capacity':
         return this.parseCapacityLine(tokens, line);
+      case 'legend':
+        return this.parseLegendLine(tokens, line);
       case 'entity':
         return this.parseField(frame.entity!, tokens, line);
       case 'decision':
@@ -806,6 +852,116 @@ class Parser {
         if (assertion) frame.test!.assertions.push(assertion);
         return;
       }
+    }
+  }
+
+  /**
+   * Reads one style part of a node or group header at `i`: `color <name|#hex>`,
+   * `.tag` and, on nodes, `critical`. Returns how many tokens it used (0 when
+   * the token is something else), or undefined after reporting an error.
+   */
+  private readStylePart(tokens: Token[], i: number, line: number, parts: StyleParts, isNode: boolean): number | undefined {
+    const t = tokens[i];
+    if (t.kind === 'tag') {
+      if (parts.tag) {
+        this.error(`A ${isNode ? 'node' : 'group'} takes one tag; '.${parts.tag.value}' is already set`, this.locOf(t, line));
+        return undefined;
+      }
+      parts.tag = { value: t.value, loc: this.locOf(t, line) };
+      return 1;
+    }
+    if (isWord(t, 'color')) {
+      const value = this.readColor(tokens[i + 1], t, line);
+      if (value === undefined) return undefined;
+      parts.color = value;
+      return 2;
+    }
+    if (isNode && isWord(t, 'critical')) {
+      parts.critical = true;
+      return 1;
+    }
+    return 0;
+  }
+
+  /** The color in `token`, a palette name or `#hex`, or undefined after reporting an error. */
+  private readColor(token: Token | undefined, after: Token, line: number): { name: string; hex: string } | undefined {
+    const choices = `${COLOR_NAMES.join(', ')}, or a hex value after color, like color #3b82f6`;
+    if (token?.kind !== 'ident' && token?.kind !== 'hex') {
+      this.error(`Expected a color after ${after.value}: ${choices}`, this.locOf(token ?? after, line));
+      return undefined;
+    }
+    const hex = resolveColor(token.value);
+    if (!hex) {
+      const suggestion = suggestColor(token.value);
+      this.error(`Unknown color '${token.value}'.${suggestion ? ` Did you mean '${suggestion}'?` : ''} Use ${choices}`, this.locOf(token, line));
+      return undefined;
+    }
+    return { name: token.value, hex };
+  }
+
+  private applyStyle(node: DiagramNode, parts: StyleParts) {
+    if (parts.color) {
+      node.color = parts.color.name;
+      node.style = { color: parts.color.hex };
+    }
+    if (parts.critical) node.critical = true;
+    if (parts.tag) {
+      node.tag = parts.tag.value;
+      this.tagRefs.push({ tag: parts.tag.value, loc: parts.tag.loc, target: node });
+    }
+  }
+
+  /** `owned "Owned by Order Fulfillment" green dashed`: an id, a label, then a color and a dash in any order. */
+  private parseLegendLine(tokens: Token[], line: number) {
+    const [idToken] = tokens;
+    if (idToken.kind !== 'ident') {
+      this.error('Expected a legend entry, e.g. owned "Owned by us" green', this.locOf(idToken, line));
+      return;
+    }
+    const loc = this.locOf(idToken, line);
+    const entry: LegendEntry = { id: idToken.value, label: idToken.value, loc };
+    let i = 1;
+    if (tokens[i]?.kind === 'string') entry.label = tokens[i++].value;
+    for (; i < tokens.length; i++) {
+      const t = tokens[i];
+      if (isWord(t, 'dashed') || isWord(t, 'dotted')) {
+        entry.dash = t.value as Dash;
+        continue;
+      }
+      if (t.kind === 'ident') {
+        // A palette name may stand alone; a hex value needs `color` (a bare # starts a comment).
+        const keyword = t.value === 'color';
+        const color = this.readColor(keyword ? tokens[i + 1] : t, t, line);
+        if (!color) return;
+        entry.colorName = color.name;
+        entry.color = color.hex;
+        if (keyword) i++;
+        continue;
+      }
+      this.error(`Unexpected ${describe(t)} in legend entry; expected a color, dashed or dotted`, this.locOf(t, line));
+      return;
+    }
+    const existing = this.legend.find((e) => e.id === entry.id);
+    if (existing) {
+      this.error(`Duplicate legend entry '${entry.id}' (first declared ${this.where(existing.loc, loc)})`, loc);
+      return;
+    }
+    this.legend.push(entry);
+  }
+
+  /** Applies each `.tag` once every file is read; an unknown tag is an error. An explicit `color` wins over the tag's (D4). */
+  private resolveTags() {
+    const entries = new Map(this.legend.map((e) => [e.id, e]));
+    for (const ref of this.tagRefs) {
+      const entry = entries.get(ref.tag);
+      if (!entry) {
+        const close = [...entries.keys()].find((id) => editDistance(id, ref.tag) <= 2);
+        const hint = close ? ` Did you mean '.${close}'?` : '';
+        this.error(`Unknown tag '.${ref.tag}'; add it to the legend, e.g. legend { ${ref.tag} "What it means" blue }.${hint}`, ref.loc);
+        continue;
+      }
+      const color = ref.target.style?.color ?? entry.color;
+      if (color || entry.dash) ref.target.style = { ...(color ? { color } : {}), ...(entry.dash ? { dash: entry.dash } : {}) };
     }
   }
 
@@ -1806,6 +1962,13 @@ interface ParsedSelector {
   atoms: SelectorAtom[];
 }
 
+/** Style parts read from a node or group header. */
+interface StyleParts {
+  color?: { name: string; hex: string };
+  tag?: { value: string; loc: SourceLoc };
+  critical?: boolean;
+}
+
 function isWord(token: Token | undefined, word: string): boolean {
   return token?.kind === 'ident' && token.value === word;
 }
@@ -1926,6 +2089,8 @@ function describe(token: Token): string {
       return `[${token.value}]`;
     case 'team':
       return `@${token.value}`;
+    case 'tag':
+      return `tag '.${token.value}'`;
     case 'label':
       return "':'";
     case 'lbrace':

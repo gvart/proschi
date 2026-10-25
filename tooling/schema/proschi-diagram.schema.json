@@ -45,7 +45,8 @@
             "capacity",
             "entity",
             "decision",
-            "test"
+            "test",
+            "legend"
           ]
         },
         "start": {
@@ -222,6 +223,13 @@
             "$ref": "#/$defs/test"
           },
           "description": "`test` blocks of flow assertions."
+        },
+        "legend": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/legendEntry"
+          },
+          "description": "Entries of the `legend` block, in order."
         }
       },
       "required": [
@@ -542,6 +550,21 @@
           "minimum": 1,
           "description": "`x3`: number of replicas; absent means 1."
         },
+        "color": {
+          "type": "string",
+          "description": "`color teal` or `color #3b82f6`, as written."
+        },
+        "tag": {
+          "type": "string",
+          "description": "`.owned`: the legend entry the node or group is styled by."
+        },
+        "critical": {
+          "type": "boolean",
+          "description": "`critical`: drawn with a warning badge."
+        },
+        "style": {
+          "$ref": "#/$defs/style"
+        },
         "loc": {
           "$ref": "#/$defs/loc"
         }
@@ -552,6 +575,58 @@
         "name",
         "type",
         "techStack",
+        "loc"
+      ],
+      "additionalProperties": false
+    },
+    "style": {
+      "type": "object",
+      "description": "Resolved fill and border (or stroke) from `color` and the tag; an explicit color wins.",
+      "properties": {
+        "color": {
+          "type": "string",
+          "description": "Base color as #rrggbb."
+        },
+        "dash": {
+          "enum": [
+            "dashed",
+            "dotted"
+          ]
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "legendEntry": {
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "label": {
+          "type": "string"
+        },
+        "colorName": {
+          "type": "string",
+          "description": "The color as written: a palette name or #hex."
+        },
+        "color": {
+          "type": "string",
+          "description": "Base color as #rrggbb."
+        },
+        "dash": {
+          "enum": [
+            "dashed",
+            "dotted"
+          ]
+        },
+        "loc": {
+          "$ref": "#/$defs/loc"
+        }
+      },
+      "required": [
+        "id",
+        "label",
         "loc"
       ],
       "additionalProperties": false
@@ -570,6 +645,13 @@
         },
         "label": {
           "type": "string"
+        },
+        "tag": {
+          "type": "string",
+          "description": "`a -> b .planned`: the legend entry the edge is styled by."
+        },
+        "style": {
+          "$ref": "#/$defs/style"
         },
         "loc": {
           "$ref": "#/$defs/loc"

@@ -81,6 +81,35 @@ export interface DiagramNode {
   implicit?: boolean;
   /** `x3`: number of replicas; absent means 1. See docs/design/hld-and-practice.md §1.3. */
   replicas?: number;
+  /** `color teal` / `color #3b82f6`, as written. */
+  color?: string;
+  /** `.owned`: the legend entry the node or group is styled by. */
+  tag?: string;
+  /** `critical`: drawn with a warning badge. */
+  critical?: boolean;
+  /** Fill and border from `color` and `tag` (explicit color first); absent when neither is set. */
+  style?: ElementStyle;
+  loc: SourceLoc;
+}
+
+/** How a line is drawn: a node's or group's border, an edge's stroke. */
+export type Dash = 'dashed' | 'dotted';
+
+/** A resolved style: the base color as a hex value (see dsl/palette.ts) and the dash. */
+export interface ElementStyle {
+  color?: string;
+  dash?: Dash;
+}
+
+/** One line of `legend { … }`: a named style that `.id` applies. */
+export interface LegendEntry {
+  id: string;
+  label: string;
+  /** The color as written, a palette name or `#hex`. */
+  colorName?: string;
+  /** The resolved base color as a hex value. */
+  color?: string;
+  dash?: Dash;
   loc: SourceLoc;
 }
 
@@ -89,6 +118,10 @@ export interface DiagramEdge {
   source: string;
   target: string;
   label?: string;
+  /** `a -> b .planned`: the legend entry the edge is styled by. */
+  tag?: string;
+  /** Stroke color and dash from the tag. */
+  style?: ElementStyle;
   loc: SourceLoc;
 }
 
@@ -142,6 +175,8 @@ export interface Diagram {
   entities?: Entity[];
   decisions?: Decision[];
   tests?: FlowTest[];
+  /** The `legend` block's entries, in order; absent when there is no legend. */
+  legend?: LegendEntry[];
 }
 
 /** Simulation class of a node (docs/design/hld-and-practice.md §2.1). */
@@ -290,7 +325,7 @@ export interface DiagramImport {
 
 /** Where a top-level section block of the root document starts and ends (1-based lines, the `}` line included). */
 export interface BlockSpan {
-  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test';
+  kind: 'traffic' | 'requirements' | 'capacity' | 'entity' | 'decision' | 'test' | 'legend';
   start: number;
   end: number;
 }

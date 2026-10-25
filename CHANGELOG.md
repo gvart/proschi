@@ -10,6 +10,17 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Colors, a legend and a critical marker.** Nodes are now tinted by
+  category (clients, edge, services, data stores, queues, external) in
+  calm colors that work in light and dark. `color teal` or `color #0891b2`
+  sets a node's or group's color. A `legend { owned "Owned by us" green }`
+  block names styles (a color, and `dashed` or `dotted`), and `.owned`
+  applies one to a node, a group or a connection (`a -> b .planned : label`).
+  The legend is drawn on the canvas, in PNG and SVG exports and by
+  `proschi render`. `critical` puts a warning badge on a node. Unknown tags
+  and colors are errors. The editor, VS Code and JetBrains highlight the new
+  words, and the new "Colors and legend" example (`?example=styled`) shows
+  all of it.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with

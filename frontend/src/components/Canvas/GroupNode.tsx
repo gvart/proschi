@@ -6,7 +6,7 @@ import type { ComponentMetadata } from '../../types/canvas';
 import { CANVAS_ACCENT } from '../../utils/canvasColors';
 import './canvas.css';
 
-/** A dashed frame around its members; explicit colours in the data still win. */
+/** A dashed frame around its members; a color or tag (dsl/palette.ts) tints it. */
 function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
   const custom = {
     ...(data.backgroundColor ? { backgroundColor: data.backgroundColor } : {}),

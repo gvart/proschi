@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { Edge, Node } from 'reactflow';
 import type { Diagram } from '../../dsl';
 import { layoutDiagram, provisionalLayout, toFlowEdges } from '../../dsl/layout';
+import { withEdgeStyles } from '../../dsl/toCanvas';
 import { settleNodes } from './settle';
 
 /**
@@ -62,7 +63,7 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, 
 export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge[]; settled: number } {
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
-  useEffect(() => setEdges(toFlowEdges(diagram)), [diagram]);
+  useEffect(() => setEdges(withEdgeStyles(diagram, toFlowEdges(diagram))), [diagram]);
   const settled = useAutoLayout(diagram, setNodes, { everyLayout: true });
   return { nodes, edges, settled };
 }

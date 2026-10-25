@@ -313,7 +313,8 @@ export function setEdgeLabel(source: string, edgeId: string, label: string | nul
   const current = tokens.find((t) => t.kind === 'label');
   if (current && bracketDepth(current.value) > 0) return source;
   const clean = label ? cleanText(label) : '';
-  const target = tokens[2];
+  // The label goes after the target, or after its `.tag`.
+  const target = tokens[3]?.kind === 'tag' ? tokens[3] : tokens[2];
   if (!target) return source;
   const from = end(target);
   const to = current ? end(current) : from;

@@ -92,7 +92,7 @@ function focusTheme(mode: ResolvedTheme): Extension {
     { tag: [t.comment, t.lineComment, t.blockComment], color: c.comment, fontStyle: 'italic' },
     { tag: [t.keyword, t.controlKeyword, t.definitionKeyword], color: c.keyword },
     { tag: [t.string, t.special(t.string)], color: c.string },
-    { tag: [t.number, t.integer, t.float], color: c.number },
+    { tag: [t.number, t.integer, t.float, t.atom], color: c.number },
     // Kinds ([Redis]) and attributes (@team) read as annotations, not as more colour.
     { tag: [t.typeName, t.attributeName], color: c.keyword, fontStyle: 'italic' },
     { tag: [t.operator, t.punctuation, t.brace, t.bracket], color: c.comment },

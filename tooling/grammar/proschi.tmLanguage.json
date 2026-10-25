@@ -13,6 +13,9 @@
       "include": "#section"
     },
     {
+      "include": "#legend"
+    },
+    {
       "include": "#decision-line"
     },
     {
@@ -29,6 +32,9 @@
     },
     {
       "include": "#node-id"
+    },
+    {
+      "include": "#style"
     },
     {
       "include": "#string"
@@ -402,6 +408,81 @@
       "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx, 500 MB/s, 0.05 usd/GB.",
       "name": "constant.numeric.proschi",
       "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month|usd/GB|MB/s|GB/s)\\b| %)?"
+    },
+    "style": {
+      "comment": "`color <name>|#hex`, `critical` and `.tag` on nodes, groups and connections. Right after `color` a # is a hex color, not a comment.",
+      "patterns": [
+        {
+          "include": "#color"
+        },
+        {
+          "name": "keyword.other.critical.proschi",
+          "match": "(?<=\\s)critical(?![A-Za-z0-9_])"
+        },
+        {
+          "include": "#tag"
+        }
+      ]
+    },
+    "color": {
+      "match": "\\b(color)\\s+(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![A-Za-z0-9_])|[A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.other.color.proschi"
+        },
+        "2": {
+          "name": "constant.other.color.proschi"
+        }
+      }
+    },
+    "tag": {
+      "name": "entity.other.attribute-name.tag.proschi",
+      "match": "(?<![A-Za-z0-9_])\\.[A-Za-z_][A-Za-z0-9_]*"
+    },
+    "legend": {
+      "comment": "The legend block: one style per line, `id \"Label\" <color> [dashed|dotted]`.",
+      "name": "meta.block.legend.proschi",
+      "begin": "^\\s*(legend)(?=\\s*\\{\\s*(?:#.*)?$)",
+      "end": "^\\s*(\\})",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.block.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#color"
+        },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#node-id"
+        },
+        {
+          "name": "constant.other.color.proschi",
+          "match": "\\b(?:gray|blue|teal|green|yellow|orange|red|purple|pink)\\b"
+        },
+        {
+          "name": "keyword.other.proschi",
+          "match": "\\b(?:dashed|dotted)\\b"
+        },
+        {
+          "name": "punctuation.section.block.begin.proschi",
+          "match": "\\{"
+        },
+        {
+          "include": "#identifier"
+        }
+      ]
     }
   }
 }
