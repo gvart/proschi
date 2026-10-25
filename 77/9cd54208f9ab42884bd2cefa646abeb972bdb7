@@ -1,0 +1,111 @@
+frontend/src/dsl/style.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 1-190
+frontend/src/components/Playground/proschiLanguage.ts
+  s_6084dd8c702c72::t_a36848117bf25f 7,16-17,20-24,54,56,62-65,92-96,137
+CHANGELOG.md
+  s_6084dd8c702c72::t_a36848117bf25f 13-23
+frontend/src/dsl/types.ts
+  s_6084dd8c702c72::t_a36848117bf25f 84-112,121-124,178-179,328
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+frontend/src/components/Playground/editorThemes.ts
+  s_6084dd8c702c72::t_a36848117bf25f 95
+frontend/src/dsl/format.ts
+  s_6084dd8c702c72::t_a36848117bf25f 84-85,148-158,160,176,285,288,290,293-294
+frontend/src/components/Canvas/canvas.css
+  s_6084dd8c702c72::t_a36848117bf25f 66,68-69,71,95-109,243-278
+tooling/grammar/proschi.tmLanguage.json
+  s_6084dd8c702c72::t_a36848117bf25f 15-17,36-38,411-485
+tooling/src/render/architecture.ts
+  s_6084dd8c702c72::t_a5b5cf5eae2385 15-16,71-72,111,227-228,232,234
+  s_6084dd8c702c72::t_a36848117bf25f 4-5,85-90,93-95,119-127,143-145,148,156,177-225,230-231,233
+docs/LANGUAGE.md
+  s_6084dd8c702c72::t_a36848117bf25f 66-69,77,128-181,805,819,823-830
+frontend/src/components/UseCases/playbackView.ts
+  s_6084dd8c702c72::t_a36848117bf25f 124
+frontend/src/dsl/examples.ts
+  s_6084dd8c702c72::t_a36848117bf25f 313-358,373
+tooling/src/proschi.ts
+  s_6084dd8c702c72::t_a36848117bf25f 51
+frontend/src/components/Playground/Playground.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 45-46,369,1342-1343,1527-1555,1557
+tooling/test/analysis.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 185-201
+tooling/jetbrains/src/main/kotlin/app/proschi/jetbrains/lsp/ProschiHighlighting.kt
+  s_6084dd8c702c72::t_a36848117bf25f 23,26,33,48-52,55,59,66
+frontend/src/components/Canvas/Legend.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 1-31
+tooling/test/grammar.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 194-223
+docs/impl/colors-and-layout.md
+  s_6084dd8c702c72::t_a36848117bf25f 23-26
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+tooling/src/render/svg.ts
+  s_6084dd8c702c72::t_a36848117bf25f 32-38,41,44
+frontend/src/dsl/lexer.ts
+  s_6084dd8c702c72::t_a36848117bf25f 13-14,34-35,59-67,145-150
+  s_6084dd8c702c72::t_d4942b70c1f9e7 151
+frontend/src/dsl/parser.ts
+  s_6084dd8c702c72::t_a36848117bf25f 8,24-25,29,86,212-214,232,255,367,486-496,498-501,511-513,633,637-642,678,684-686,692-696,729-734,759-764,822,844-845,858-967,1965-1971,2092-2093
+frontend/src/dsl/palette.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 1-68
+tooling/src/schema.ts
+  s_6084dd8c702c72::t_a36848117bf25f 55,95,117-120,125-144
+tooling/src/server.ts
+  s_6084dd8c702c72::t_a36848117bf25f 73-74
+frontend/src/components/Diagram/DiagramCanvas.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 1,8-9,34-35,38,63-67
+tooling/schema/proschi-diagram.schema.json
+  s_6084dd8c702c72::t_a36848117bf25f 48-49,226-232,553-567,582-633,649-655
+frontend/src/components/Playground/exportDiagram.ts
+  s_6084dd8c702c72::t_a36848117bf25f 39-41,45-46,48,51-86
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+frontend/src/components/Diagram/useDiagramLayout.ts
+  s_6084dd8c702c72::t_a36848117bf25f 5,66
+frontend/src/components/Playground/proschiLanguage.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 185-233
+frontend/src/dsl/toCanvas.ts
+  s_6084dd8c702c72::t_a36848117bf25f 1,3-4,38,57-66,69-92
+frontend/src/practice/ProblemPage.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 756
+frontend/src/components/Canvas/ComponentNode.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 1,4,29-30,32-36,57-65
+  s_6084dd8c702c72::t_0b6a9ade0a8d6f 66
+frontend/src/components/Canvas/GroupNode.tsx
+  s_6084dd8c702c72::t_a36848117bf25f 9
+frontend/src/dsl/edit.ts
+  s_6084dd8c702c72::t_a36848117bf25f 316-317
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+frontend/src/dsl/palette.ts
+  s_6084dd8c702c72::t_a36848117bf25f 1-178
+tooling/src/analysis.ts
+  s_6084dd8c702c72::t_a36848117bf25f 92,102-105,109-110,114-117,124-137
+tooling/test/render.test.ts
+  s_6084dd8c702c72::t_a36848117bf25f 11,380-413
+  s_6084dd8c702c72::t_1c94d8c3951fcf 414
+frontend/src/types/canvas.ts
+  s_6084dd8c702c72::t_a36848117bf25f 40,44-47,64-66
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_6084dd8c702c72::t_a36848117bf25f 35-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "779cd54208f9ab42884bd2cefa646abeb972bdb7",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
