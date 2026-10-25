@@ -8,6 +8,7 @@ import { examples, parse } from '../src/proschi';
 import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } from '../src/render';
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
 import { techIcon } from '../src/render/icons';
+import { PALETTE, tint } from '../../frontend/src/dsl/palette';
 import { COLORS, esc, fit, textWidth } from '../src/render/svg';
 
 async function capture(argv: string[]) {
@@ -363,5 +364,40 @@ describe('VS Code preview', () => {
     const content = await renderPreviewContent('api -> db\n');
     expect(content.ok).toBe(true);
     expect(content.html).toContain('Add a <code>usecase</code>');
+  });
+});
+
+describe('colors, legend and critical in the architecture SVG', () => {
+  const styled = parse(`legend {
+  owned "Owned & run" green
+  planned "Planned flow" blue dashed
+}
+api "API" [REST API] critical
+db [PostgreSQL] color #ff0000
+group g "G" .owned {
+  w [Go]
+}
+api -> db .planned : sync
+api -> w
+`).diagram;
+
+  it('tints cards by category and color, frames tagged groups, and strokes tagged edges', async () => {
+    const svg = await renderArchitectureSvg(styled);
+    expectWellFormed(svg);
+    const blue = tint(PALETTE.blue, 'light');
+    const green = tint(PALETTE.green, 'light');
+    expect(svg).toContain(`fill="${blue.fill}" stroke="${blue.line}"`);
+    expect(svg).toContain(`stroke="${tint('#ff0000', 'light').line}"`);
+    expect(svg).toContain(`fill="${green.groupFill}" stroke="${green.line}"`);
+    expect(svg).toMatch(new RegExp(`<path d="M[^"]+" fill="none" stroke="${blue.line}" stroke-width="2" stroke-dasharray="7 5"/>`));
+    expect(svg.match(/data-critical="true"/g)).toHaveLength(1);
+  });
+
+  it('draws the legend with one swatch per entry, escaped', async () => {
+    const svg = await renderArchitectureSvg(styled);
+    expect(svg).toContain('data-legend="true"');
+    expect(svg.match(/data-entry="/g)).toHaveLength(2);
+    expect(svg).toContain('>Owned &amp; run<');
+    expect(await renderArchitectureSvg(parse('a').diagram)).not.toContain('data-legend');
   });
 });
