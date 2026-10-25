@@ -1,7 +1,9 @@
 import { useRef, type RefObject } from 'react';
-import { BaseEdge, getBezierPath } from 'reactflow';
+import { BaseEdge } from 'reactflow';
 import type { EdgeProps } from 'reactflow';
 import { usePlaybackProgress } from './playbackClock';
+import { EdgeHead } from '../Canvas/RoutedEdge';
+import { hasMarker, useEdgeGeometry } from '../Canvas/useEdgeGeometry';
 
 // The design system's packet (src/design/tokens.css): pink, ink-outlined, red when the answer is an error.
 // Token colours go through `style` (CSS variables do not work in SVG presentation attributes), so they follow the theme.
@@ -15,17 +17,14 @@ const FAIL_AT = 55;
 const FLOWING = { strokeDasharray: 5, animation: 'dashdraw 0.5s linear infinite' };
 
 /**
- * Every edge of a canvas that can play a use case. Idle, it draws like React
- * Flow's default edge; on the current step it carries the packet. The edge
+ * Every edge of a canvas that can play a use case. Idle, it draws like
+ * RoutedEdge (along its layout route); on the current step it carries the packet. The edge
  * type never changes between the two, so starting playback does not remount it.
  */
 export function AnimatedPlaybackEdge({
-  sourceX,
-  sourceY,
-  targetX,
-  targetY,
-  sourcePosition,
-  targetPosition,
+  id,
+  source,
+  target,
   style = {},
   markerEnd,
   markerStart,
@@ -39,11 +38,13 @@ export function AnimatedPlaybackEdge({
   interactionWidth,
 }: EdgeProps) {
   const pathRef = useRef<SVGPathElement>(null);
-  const [edgePath, labelX, labelY] = getBezierPath({ sourceX, sourceY, sourcePosition, targetX, targetY, targetPosition });
+  const geometry = useEdgeGeometry(id, source, target);
   const isActive = !!data?.isActive;
   const failed = !!data?.failed;
   // Re-renders this edge once, when the packet arrives, not on every tick.
   const arrived = usePlaybackProgress((p) => isActive && p >= 100);
+  if (!geometry) return null;
+  const { path: edgePath, labelX, labelY } = geometry;
 
   return (
     <>
@@ -62,13 +63,14 @@ export function AnimatedPlaybackEdge({
         labelBgBorderRadius={labelBgBorderRadius}
         interactionWidth={interactionWidth}
       />
+      {!hasMarker(markerEnd) && <EdgeHead d={geometry.head} style={style} />}
       {isActive && (
         <>
           {/* Hidden path the packet's position is measured along */}
           <path ref={pathRef} d={edgePath} fill="none" stroke="none" style={{ visibility: 'hidden', pointerEvents: 'none' }} />
           <Packet
             pathRef={pathRef}
-            from={{ x: sourceX, y: sourceY }}
+            from={geometry.start}
             isRequestResponse={!!data?.isRequestResponse}
             isError={!!data?.isError}
             failed={failed}

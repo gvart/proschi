@@ -218,8 +218,19 @@ usecase "Create order" {
     // No class or style attributes leak from the React icons.
     expect(svg).not.toMatch(/ (class|style)="/);
     expect(svg).toContain('>HTTP &amp; &quot;json&quot;<');
-    // Edges end at the handles, without arrowheads, as on the canvas.
+    // Edges follow their orthogonal routes, with RoutedEdge's own arrowhead rather than a marker, as on the canvas.
     expect(svg).not.toContain('marker-end');
+    const edges = [...svg.matchAll(/<g data-edge="[^"]+">\n<path d="([^"]+)" fill="none"[^>]*\/>\n<path d="(M[^"]+Z)" fill="[^"]+"\/>/g)];
+    expect(edges.length).toBe(diagram.edges.length);
+    for (const [, d] of edges) expect(d).toMatch(/^M[\d.]+,[\d.]+( (L|Q)[\d.,]+( [\d.,]+)?)+$/);
+  });
+
+  it('draws an edge between pinned nodes along the fallback route between their facing sides', async () => {
+    const pinned = parse('a "A" [REST API] pos 0,0\nb "B" [Redis] pos 400,0\na -> b : call').diagram;
+    const svg = await renderArchitectureSvg(pinned);
+    const d = svg.match(/<g data-edge="[^"]+">\n<path d="([^"]+)"/)![1];
+    // From A's right side straight across to B's left side (cut back for the arrowhead).
+    expect(d).toBe('M272,68 L422,68');
   });
 
   it('draws numbered requests, responses, self-calls, par regions, and errors in red', () => {

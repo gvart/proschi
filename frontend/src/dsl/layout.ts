@@ -1,14 +1,16 @@
 import type { Edge, Node } from 'reactflow';
 import type { ComponentMetadata } from '../types/canvas';
 import type { Diagram } from './types';
-import { bundledElk, layoutBoxes, type LaidOutNode } from './autoLayout';
+import { bundledElk, layoutGraph, type EdgeRoute, type LaidOutNode, type Layout } from './autoLayout';
 import { ElkWorkerUnavailable, workerElk } from './elkWorker';
 import { NODE_TYPE, toMetadata } from './toCanvas';
 
 /**
  * Positions every node for the canvas. The placement itself lives in
  * autoLayout.ts (shared with `proschi render`); this turns it into React Flow
- * nodes, with group members positioned relative to their group.
+ * nodes, with group members positioned relative to their group. Each
+ * edge's route rides on its source node (`data.routes`), where the edge
+ * component (Canvas/RoutedEdge.tsx) reads it together with where the node is now.
  *
  * In the browser ELK runs in a Web Worker (elkWorker.ts); where there is no
  * Worker (tests in Node) or it cannot start, ELK runs on this thread.
@@ -16,21 +18,22 @@ import { NODE_TYPE, toMetadata } from './toCanvas';
 
 let useWorker = typeof Worker !== 'undefined';
 
-async function placeBoxes(diagram: Diagram): Promise<LaidOutNode[]> {
+async function place(diagram: Diagram): Promise<Layout> {
   if (useWorker) {
     try {
-      return await layoutBoxes(diagram, workerElk);
+      return await layoutGraph(diagram, workerElk);
     } catch (error) {
       if (!(error instanceof ElkWorkerUnavailable)) throw error;
       console.warn('Laying out on the main thread:', error);
       useWorker = false;
     }
   }
-  return layoutBoxes(diagram, bundledElk);
+  return layoutGraph(diagram, bundledElk);
 }
 
 export async function layoutDiagram(diagram: Diagram): Promise<Node<ComponentMetadata>[]> {
-  return toFlowNodes(diagram, await placeBoxes(diagram));
+  const { nodes, routes } = await place(diagram);
+  return toFlowNodes(diagram, nodes, routes);
 }
 
 // Matches autoLayout's node sizes closely enough for a first frame.
@@ -82,15 +85,19 @@ export function provisionalLayout(diagram: Diagram): Node<ComponentMetadata>[] {
   return toFlowNodes(diagram, [...boxes.values()]);
 }
 
-function toFlowNodes(diagram: Diagram, laidOut: LaidOutNode[]): Node<ComponentMetadata>[] {
+function toFlowNodes(diagram: Diagram, laidOut: LaidOutNode[], routes: Record<string, EdgeRoute> = {}): Node<ComponentMetadata>[] {
   const boxes = new Map(laidOut.map((b) => [b.id, b]));
+  const bySource = new Map<string, Record<string, EdgeRoute>>();
+  for (const edge of diagram.edges) {
+    if (routes[edge.id]) bySource.set(edge.source, { ...bySource.get(edge.source), [edge.id]: routes[edge.id] });
+  }
   return diagram.nodes.map((node): Node<ComponentMetadata> => {
     const box = boxes.get(node.id)!;
     const rfNode: Node<ComponentMetadata> = {
       id: node.id,
       type: NODE_TYPE[node.kind],
       position: box.position,
-      data: toMetadata(node),
+      data: bySource.has(node.id) ? { ...toMetadata(node), routes: bySource.get(node.id) } : toMetadata(node),
     };
     if (box.parent) rfNode.parentNode = box.parent;
     if (node.kind === 'group') {

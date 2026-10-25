@@ -4,6 +4,7 @@ import 'reactflow/dist/style.css';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
 import TextNode from '../Canvas/TextNode';
+import RoutedEdge from '../Canvas/RoutedEdge';
 import Legend from '../Canvas/Legend';
 import type { LegendEntry } from '../../dsl/types';
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
@@ -14,6 +15,8 @@ import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
  */
 
 const nodeTypes = { componentNode: ComponentNode, groupNode: GroupNode, textNode: TextNode };
+/** Plain edges follow their layout route (RoutedEdge). */
+const ROUTED_EDGE_TYPES: EdgeTypes = { default: RoutedEdge };
 
 interface DiagramCanvasProps {
   nodes: Node[];
@@ -26,7 +29,7 @@ interface DiagramCanvasProps {
   still?: boolean;
   /** Glide to each new fit over this many ms instead of jumping. */
   fitDuration?: number;
-  /** Custom edge types (a stable object), e.g. the playback edge of a canvas that plays use cases. */
+  /** Custom edge types (a stable object), e.g. the playback edge of a canvas that plays use cases; plain edges are routed by default. */
   edgeTypes?: EdgeTypes;
   /** The diagram's legend, drawn in the top-right corner. */
   legend?: LegendEntry[];
@@ -40,7 +43,7 @@ function Canvas({ nodes, edges, compact, fitKey, still, fitDuration, edgeTypes, 
       nodes={nodes}
       edges={edges}
       nodeTypes={nodeTypes}
-      edgeTypes={edgeTypes}
+      edgeTypes={edgeTypes ?? ROUTED_EDGE_TYPES}
       nodesDraggable={false}
       nodesConnectable={false}
       elementsSelectable={false}
