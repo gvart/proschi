@@ -6,7 +6,8 @@ Gemini CLI and others) to turn what a repository already has into
 CLI. Each folder is one skill in the open
 [Agent Skills](https://agentskills.io) format: a `SKILL.md` with `name` and
 `description` front matter, and a `references/proschi-cheatsheet.md` with the
-whole language on one page.
+core of the language (the rest is in the
+[language reference](https://proschi.app/docs/language/)).
 
 | Skill | Use it to |
 |---|---|
@@ -68,6 +69,10 @@ Without `degit`: `git clone --depth 1 https://github.com/gvart/proschi /tmp/pros
 Keep each `SKILL.md` short (under ~200 lines) with one worked example; the
 `references/proschi-cheatsheet.md` files are identical copies (so each skill
 folder works on its own); its *Layout* section holds the shared rules for
-readable diagrams and the render-and-review checklist. `tooling/test/skills.test.ts` checks the front
-matter, that the copies match, and that every full ` ```proschi ` example
-passes `check --strict`, `fmt --check` and `test`.
+readable diagrams and the render-and-review checklist. Keep the cheat-sheet
+to what every skill needs (at most 160 lines); detail that only some skills
+need goes in those skills, like `references/proschi-simulation.md` in
+`proschi-capacity-plan` and `proschi-design-review`. `tooling/test/skills.test.ts`
+checks the front matter, that the copies match, the cheat-sheet's length,
+and that every full ` ```proschi ` example passes `check --strict`,
+`fmt --check` and `test`.

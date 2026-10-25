@@ -109,10 +109,15 @@ a dependency. At the end, list the guesses for the user to confirm.
 ## 6. Order, colors and legend
 
 The file's order is the diagram's reading order. Follow the
-[layout rules](references/proschi-cheatsheet.md#layout-diagrams-that-read-well):
+[layout rules](references/proschi-cheatsheet.md#layout):
 
 - [ ] Declarations go tier by tier: clients, edge, services, queues and
       workers, stores, externals, then monitoring and logging.
+- [ ] Siblings in the left-to-right (or top-to-bottom) order of the source:
+      a Mermaid or wiki diagram's order, or the order the docs list them.
+      The layout keeps declaration order, so it won't mirror the source.
+- [ ] Then the hints, one at a time, rendering after each: `layout ordered`,
+      `rank` on group tiers, `direction right` in row-like groups.
 - [ ] Inside each group, members are in the order they are called.
 - [ ] Every edge points caller → callee, down the tiers; no `a -> b` plus `b -> a`.
 - [ ] No `color` unless the sources mark something the reader must tell
@@ -142,7 +147,7 @@ npx proschi@latest render --out /tmp/proschi-review architecture.proschi
 
 Look at the whole of `/tmp/proschi-review/architecture.svg` (as a PNG if you
 can only read raster images; see the cheat-sheet) and walk the checklist in
-the [cheat-sheet](references/proschi-cheatsheet.md#layout-diagrams-that-read-well):
+the [cheat-sheet](references/proschi-cheatsheet.md#layout):
 crossings, edges pointing up, stranded nodes, sprawl, the wrong order. Fix
 the file, `check` and render again. Don't hand over a diagram you have not
 looked at.

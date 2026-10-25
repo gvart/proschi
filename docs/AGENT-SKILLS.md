@@ -10,7 +10,11 @@ it is clean, and gives you a link that opens it in the editor.
 The skills are published in the
 [Proschi repository](https://github.com/gvart/proschi/tree/main/plugin/skills)
 in the open [Agent Skills](https://agentskills.io) format: one folder per
-skill, with its instructions and a one-page cheat-sheet of the language.
+skill, with its instructions and a short cheat-sheet of the language's core
+(nodes, edges, groups, colors and legend, layout hints, techs, the CLI).
+The skills that size or review a design also carry a reference for the
+simulation's blocks and numbers; everything else points to the
+[language reference](LANGUAGE.md).
 
 | Skill | What it does |
 |---|---|
