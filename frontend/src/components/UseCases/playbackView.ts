@@ -2,9 +2,10 @@ import type { Edge, Node } from 'reactflow';
 import type { FlowStep } from '../../dsl/types';
 import { CANVAS_EDGE, CANVAS_FAIL, CANVAS_INK } from '../../utils/canvasColors';
 import { AnimatedPlaybackEdge } from './AnimatedPlaybackEdge';
+import RoutedEdge from '../Canvas/RoutedEdge';
 
 /** The edge types of a canvas that can play a use case; pass to `<ReactFlow edgeTypes>`. */
-export const PLAYBACK_EDGE_TYPES = { playback: AnimatedPlaybackEdge };
+export const PLAYBACK_EDGE_TYPES = { default: RoutedEdge, playback: AnimatedPlaybackEdge };
 
 /** A use case (or one scenario of it) being played. `condition` is the `when "…"` text of the scenario. */
 export interface PlayedUseCase {
@@ -120,7 +121,7 @@ export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: 
       style: {
         ...edge.style,
         // The line is ink; the packet riding it (AnimatedPlaybackEdge) carries the accent.
-        stroke: isActive ? (isError ? CANVAS_FAIL : CANVAS_INK) : CANVAS_EDGE,
+        stroke: isActive ? (isError ? CANVAS_FAIL : CANVAS_INK) : (edge.style?.stroke ?? CANVAS_EDGE),
         strokeWidth: isActive ? 3 : 2,
         strokeDasharray: isActive && step?.failed ? '6 4' : edge.style?.strokeDasharray,
         opacity: isActive ? 1 : edge.data?.hiddenUntilActive ? 0 : onPath ? 0.45 : 0.12,

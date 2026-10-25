@@ -63,10 +63,12 @@
 .pc-node {
   height: 100%;
   min-width: 180px;
+  position: relative;
   padding: 10px 12px;
-  background: rgb(var(--c-surface));
+  /* --pc-fill, --pc-line and --pc-dash: the node's colors (dsl/palette.ts), set inline by ComponentNode. */
+  background: var(--pc-fill, rgb(var(--c-surface)));
   color: rgb(var(--c-ink));
-  border: var(--bw-2) solid rgb(var(--c-ink));
+  border: var(--bw-2) var(--pc-dash, solid) var(--pc-line, rgb(var(--c-ink)));
   border-radius: var(--r-sm);
   box-shadow: var(--sh-sm);
   font-family: var(--font-sans);
@@ -89,6 +91,21 @@
   border-radius: var(--r-sm);
   background: rgb(var(--c-paper));
   color: rgb(var(--c-ink));
+}
+/* `critical`: a warning badge on the top-right corner. */
+.pc-node__critical {
+  position: absolute;
+  top: -11px;
+  right: -11px;
+  display: grid;
+  place-items: center;
+  width: 22px;
+  height: 22px;
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: 50%;
+  background: rgb(var(--c-yellow));
+  color: #111111;
+  box-shadow: 1px 1px 0 rgb(var(--c-ink));
 }
 .pc-node__icon svg {
   width: 18px;
@@ -115,6 +132,11 @@
   border-radius: 1px !important;
   border: 2px solid rgb(var(--c-ink)) !important;
   background: rgb(var(--c-surface)) !important;
+}
+/* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
+.pc-handle--hidden {
+  opacity: 0;
+  pointer-events: none;
 }
 
 /* Playback (UseCasePlayback): the nodes of the current step, and the one that failed. */
@@ -222,6 +244,42 @@
   font-stretch: 110%;
   letter-spacing: 0.08em;
   text-transform: uppercase;
+}
+/* The legend: one row per entry, a swatch drawn like the nodes and edges it styles. */
+.pc-legend {
+  min-width: 160px;
+  max-width: 280px;
+  /* A long legend scrolls rather than running into the controls below it. */
+  max-height: 45vh;
+  overflow-y: auto;
+  padding: 10px 12px;
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  box-shadow: var(--sh-sm);
+  font: 500 12px / 1.35 var(--font-sans);
+}
+.pc-legend__title {
+  margin-bottom: 6px;
+  color: rgb(var(--c-muted));
+  font: 700 10px / 1 var(--font-sans);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.pc-legend__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.pc-legend__swatch {
+  flex: none;
+  width: 22px;
+  height: 14px;
+  border: 2px solid rgb(var(--c-ink));
+  border-radius: 3px;
+  background: rgb(var(--c-surface));
 }
 .pc-group__desc {
   margin-top: 6px;

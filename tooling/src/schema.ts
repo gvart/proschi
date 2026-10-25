@@ -52,7 +52,7 @@ export function diagramSchema() {
     $defs: {
       block: object(
         {
-          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test'] },
+          kind: { enum: ['traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'legend'] },
           start: { type: 'integer', minimum: 1, description: "1-based line of the block's opening line." },
           end: { type: 'integer', minimum: 1, description: "1-based line of its closing `}`." },
         },
@@ -92,6 +92,15 @@ export function diagramSchema() {
           entities: array('entity', '`entity` blocks: the data model.'),
           decisions: array('decision', '`decision` statements.'),
           tests: array('test', '`test` blocks of flow assertions.'),
+          legend: array('legendEntry', 'Entries of the `legend` block, in order.'),
+          layout: object(
+            {
+              direction: { enum: ['down', 'right', 'up', 'left'], description: '`direction right`: where edges flow in the whole diagram.' },
+              ordered: { ...bool, description: '`layout ordered`: edges follow declaration order.' },
+            },
+            [],
+            'Top-level layout hints; left out when the document uses none.',
+          ),
         },
         ['nodes', 'edges', 'useCases'],
       ),
@@ -113,11 +122,39 @@ export function diagramSchema() {
           position: object({ x: { type: 'number' }, y: { type: 'number' } }, ['x', 'y'], 'Explicit `pos x,y`.'),
           implicit: { ...bool, description: 'Created because a connection or step referenced an undeclared id.' },
           replicas: { type: 'integer', minimum: 1, description: '`x3`: number of replicas; absent means 1.' },
+          color: { ...str, description: '`color teal` or `color #3b82f6`, as written.' },
+          tag: { ...str, description: '`.owned`: the legend entry the node or group is styled by.' },
+          critical: { ...bool, description: '`critical`: drawn with a warning badge.' },
+          rank: {
+            oneOf: [{ type: 'integer', minimum: 0 }, { enum: ['first', 'last'] }],
+            description: '`rank 2`, `rank first`, `rank last`: the layout layer among the nodes and groups that share its parent.',
+          },
+          direction: { enum: ['down', 'right', 'up', 'left'], description: '`direction right` inside a group: where edges flow among its members.' },
+          style: { $ref: '#/$defs/style' },
           loc,
         },
         ['id', 'kind', 'name', 'type', 'techStack', 'loc'],
       ),
-      edge: object({ id: str, source: str, target: str, label: str, loc }, ['id', 'source', 'target', 'loc']),
+      style: object(
+        { color: { ...str, description: 'Base color as #rrggbb.' }, dash: { enum: ['dashed', 'dotted'] } },
+        [],
+        'Resolved fill and border (or stroke) from `color` and the tag; an explicit color wins.',
+      ),
+      legendEntry: object(
+        {
+          id: str,
+          label: str,
+          colorName: { ...str, description: 'The color as written: a palette name or #hex.' },
+          color: { ...str, description: 'Base color as #rrggbb.' },
+          dash: { enum: ['dashed', 'dotted'] },
+          loc,
+        },
+        ['id', 'label', 'loc'],
+      ),
+      edge: object(
+        { id: str, source: str, target: str, label: str, tag: { ...str, description: '`a -> b .planned`: the legend entry the edge is styled by.' }, style: { $ref: '#/$defs/style' }, loc },
+        ['id', 'source', 'target', 'loc'],
+      ),
       useCase: object(
         {
           id: str,

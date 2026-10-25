@@ -43,6 +43,29 @@ test.describe('editor', () => {
     await expect(page.getByText('No problems')).toBeVisible();
   });
 
+  test('connections to and from a group are drawn, also while dragging', async ({ page }) => {
+    const edges = page.locator('.react-flow__edge:visible');
+    const before = await edges.count();
+    await appendCode(page, '\nclient "Client" [Browser]\nclient -> vpc : HTTPS\nvpc -> events : Audit\n');
+    await expect(canvasNodes(page).filter({ hasText: 'Client' })).toBeVisible();
+    await expect(edges).toHaveCount(before + 2);
+    for (const label of ['HTTPS', 'Audit']) {
+      const edge = edges.filter({ hasText: label });
+      await expect(edge.locator('path.react-flow__edge-path')).toHaveAttribute('d', /\S/);
+      await expect(edge.locator('.pc-edge-head')).toBeAttached();
+    }
+
+    const path = edges.filter({ hasText: 'HTTPS' }).locator('path.react-flow__edge-path');
+    const routed = await path.getAttribute('d');
+    const box = (await canvasNodes(page).filter({ hasText: 'Client' }).boundingBox())!;
+    await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2 + 40, { steps: 5 });
+    await expect(path).not.toHaveAttribute('d', routed!);
+    await expect(edges).toHaveCount(before + 2);
+    await page.mouse.up();
+  });
+
   test('a component added from the palette is edited in its settings', async ({ page }) => {
     const before = await canvasNodes(page).count();
     await page.getByRole('button', { name: 'Add component' }).click();

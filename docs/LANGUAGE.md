@@ -63,9 +63,12 @@ brackets around optional parts; the brackets of a tech stack, such as
 |---|---|---|
 | Title | `title "Text" ["Summary"]` | The optional second string is a one-line summary of the system. |
 | Import | `import "infra.proschi"` | Top level only. Adds everything that file declares. See [Imports](#imports). |
-| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. |
-| Group | `group id ["Name"] [Style] { … }` | Holds nodes, nested groups and connections. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
-| Connection | `a -> b [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. |
+| Node | `id ["Name"] [Tech] [@team] ["Description"] [pos x,y] [x3] [color c] [.tag] [critical] [rank N]` | The parts after the id may come in any order. The first string is the name, the second the description; x3 means three replicas. See [Colors and legend](#colors-and-legend) for color, tag and critical, and [Steering the layout](#steering-the-layout) for rank. |
+| Group | `group id ["Name"] [Style] [pos x,y] [color c] [.tag] [rank N] { … }` | Holds nodes, nested groups and connections, and optionally a `direction`. The style is Logical Group (the default), Network Boundary, Security Zone or Service Group. |
+| Connection | `a -> b [.tag] [: label]` | An edge of the architecture. An id that was never declared becomes a plain node. The tag goes before the colon, because the label runs to the end of the line. |
+| Legend | `legend { … }` | Top level only. Named styles that `.tag` applies. See [Colors and legend](#colors-and-legend). |
+| Direction | `direction down\|right\|up\|left` | At the top level, where edges flow in the whole diagram (default down). Inside a group, where they flow among its members. See [Steering the layout](#steering-the-layout). |
+| Ordered layout | `layout ordered` | Top level only. Edges follow declaration order, so what is declared first sits higher. See [Steering the layout](#steering-the-layout). |
 | Use case | `usecase "Name" ["Description"] { … }` | Top level only. A request flow, step by step. See [Use case steps](#use-case-steps). |
 | Parallel steps | `par { … }` | Inside a use case or a scenario. See [Parallel steps](#parallel-steps). |
 | Scenario | `alt "Name" [when "condition"] { … }` | Inside a use case or another scenario. See [Scenarios](#scenarios). |
@@ -73,7 +76,7 @@ brackets around optional parts; the brackets of a tech stack, such as
 | Entity | `entity Name [in store] { … }` | Top level only. Part of the data model. |
 | Decision | `decision "Title" { … }` | Top level only. Why the design is this way. |
 | Test | `test "Name" { … }` | Top level only. Checks on the request flows. |
-| Comment | `# …` | Anywhere, to the end of the line. A # inside quotes or a JSON payload is just text. |
+| Comment | `# …` | Anywhere, to the end of the line. A # inside quotes or a JSON payload is just text, and so is a hex color right after `color` (`color #3b82f6`). |
 
 - **Ids** are letters, digits and underscores, and don't start with a digit.
 - **The tech stack** names a technology from the catalog (about 210 of them,
@@ -123,6 +126,133 @@ Until then it is simulated as a generic database, like [Database]
 To keep a product name the catalog lacks without the warning, use the generic
 tech of its kind instead (`[Database]`, `[Message Queue]`) and put the product
 in the node's name or description.
+
+## Colors and legend
+
+Nodes are tinted by their category, so a diagram reads at a glance without any
+styling: clients gray, edge components (CDN, load balancer, gateway, DNS, WAF)
+purple, services and functions blue, data stores green, queues and brokers
+orange, external services pink. Groups and notes stay neutral. The tints are
+soft and follow the light and dark theme; text keeps the theme's ink color.
+
+`color` sets a node's or group's color by hand. It takes a palette name (gray,
+blue, teal, green, yellow, orange, red, purple, pink) or a hex value (`#3b82f6`
+or `#38f`). From a hex value Proschi derives a fill light enough for the text
+and a matching border, in both themes.
+
+```proschi
+api    "Order API" [REST API] color teal
+vendor "Vendor"    [Third Party API] color #0891b2
+group retail "Point of Sale" color blue {
+  store [REST API]
+}
+```
+
+A `legend` block names styles and explains them. Each line is an id, a label,
+and optionally a color and `dashed` or `dotted`. `.id` applies the style to a
+node, a group or a connection, and the legend is drawn in a corner of the
+canvas and in exported images. On a node or group the color sets the fill and
+the border, and the dash applies to the border; on a connection they set the
+line.
+
+```proschi
+legend {
+  owned      "Owned by Order Fulfillment" green
+  handover   "Handed over to POS in Q4"   blue
+  planned    "Planned flow"               blue dashed
+  deprecated "Deprecated"                 red dashed
+}
+
+group fulfillment "Order Fulfillment" .owned {
+  orders "Order Service" [REST API] critical
+}
+legacy "Legacy ERP" [SOAP API] .deprecated
+
+orders -> legacy .deprecated : sync orders
+```
+
+- An explicit `color` wins over the tag's color, and the tag's color wins over
+  the category's. While the load overlay is on, it colors the nodes instead.
+- A hex color in a legend line needs the word: `old "Old" color #ef4444`. A
+  bare `#` starts a comment.
+- One tag per node, group or connection. Tags style the architecture, so use
+  case steps take none.
+- An unknown tag or color name is an error that names the closest match.
+- The Mermaid export keeps the colors and dashes but not the legend, which
+  Mermaid cannot draw.
+- `critical` draws a warning badge on the node's top-right corner, for the
+  parts whose failure matters most.
+
+## Steering the layout
+
+The diagram is laid out automatically, top to bottom along the edges.
+Nodes side by side in a row come in the order they are declared, left to
+right, wherever that doesn't add crossings: members of a group always do
+when nothing else is in the way, and a layout that would come out mirrored
+is turned round. Declare things in reading order and the diagram reads the
+same way. Three hints steer the layout further. They only change positions
+and routes, not what the diagram means.
+
+```proschi
+title "Order Fulfillment"
+layout ordered
+
+shopper "Shopper" [Actor]       rank 0
+pricing "Pricing" [Third Party API] rank 0
+
+group core "Core services" rank 1 {
+  orders "Order Service" [REST API]
+}
+
+group kafka "Kafka cluster" rank 2 {
+  direction right
+  placed  "Order placed"  [Kafka]
+  shipped "Order shipped" [Kafka]
+}
+
+group data "Data" rank 3 {
+  db [PostgreSQL]
+}
+
+shopper -> orders
+orders  -> pricing : quote
+orders  -> placed
+orders  -> shipped
+orders  -> db
+```
+
+- `layout ordered` lays every edge out in declaration order: of two
+  connected nodes, the one declared first sits higher, even when the edge
+  points up (`orders -> pricing` above). Declare things in reading order,
+  for example clients and external systems, then services, then data. By
+  default only edges that close a cycle are turned like this, and the
+  others point down.
+- `rank N` on a node or a group header pins it to a layer among the nodes
+  and groups that share its parent: top-level nodes and groups with each
+  other, members of a group with each other. A lower rank sits higher, and
+  equal ranks line up in one row. `rank first` and `rank last` put a node
+  above or below everything else in its parent. Ranks order the layers, they
+  don't count them: nodes without a rank still go where their edges pull
+  them, which can be between two ranks or above rank 0.
+- `direction down|right|up|left` at the top level turns the whole diagram.
+  Inside a group it sets where edges flow among its members. Members with no
+  edge between them line up the same way, so `direction right` in a Kafka
+  cluster puts its topics in one row.
+
+A few things the layout can't do:
+
+- Two connected nodes can't share a row, because an edge always runs from
+  one layer to another. Of two connected nodes with the same rank, the target
+  goes one layer lower, so give them different ranks.
+- A group with its own direction is laid out separately and placed as one
+  box. Its members keep the order a layout without that hint would give
+  them. An edge into it ends at its border, straight across from the member
+  it reaches, and runs on in a straight line to that member. Several edges
+  to one member share that way in and part just before the member.
+- Fewer crossings come first: when declaration order would cost a crossing,
+  the row keeps the order with fewer crossings.
+- In a parent where something has a rank, every label sits on its edge in a
+  layer of its own, and the diagram gets a little taller.
 
 ## Use case steps
 
@@ -722,6 +852,12 @@ comments and alignment survive:
 A node that was only referenced, never declared, gets a declaration line
 above the first use case.
 
+Without positions, the layout flows top-down along the connections and
+routes each one at right angles around the boxes. Declaration order breaks
+ties: nodes declared earlier go further left, and in a cycle of connections
+the node declared first goes higher. A node with `pos x,y` keeps its place,
+and its connections take a simple right-angled path to it.
+
 With traffic in the document, **Overlay: load** draws the simulation on the
 canvas: each node is coloured by how busy it is, shows its replicas, shards
 and utilisation, and requests flow along the connections (hollow dots for
@@ -741,7 +877,7 @@ https://proschi.app/app/#code=…&uc=create-order&alt=db-down&step=2
 
 To open one of the bundled examples, add its name to the editor's address:
 app/?example=url-shortener. The examples are hello, ecommerce, serverless,
-login, events and url-shortener.
+login, events, url-shortener and styled.
 
 ## Grammar
 
@@ -755,13 +891,22 @@ line         = [ statement ] [ comment ] newline ;
 
 statement    = title | import | node | connection
              | group-open | usecase-open | par-open | alt-open | close
-             | traffic | requirements | capacity | entity | decision | test ;
+             | traffic | requirements | capacity | entity | decision | test | legend
+             | direction | layout ;
 
 title        = "title" , ( string | id ) , [ string ] ;   (* 2nd string: summary *)
 import       = "import" , string ;                      (* a relative file path *)
-node         = id , { string | tech | team | position | replicas } ;  (* 1st string: name, 2nd: description *)
-connection   = id , arrow , id , [ ":" , label ] ;
-group-open   = "group" , id , [ string ] , [ tech ] , [ position ] , "{" ;
+node         = id , { string | tech | team | position | replicas | color | tag | "critical" | rank } ;  (* 1st string: name, 2nd: description *)
+connection   = id , arrow , id , [ tag ] , [ ":" , label ] ;
+group-open   = "group" , id , [ string ] , [ tech ] , { position | color | tag | rank } , "{" ;
+direction    = "direction" , ( "down" | "right" | "up" | "left" ) ;   (* alone on its line *)
+layout       = "layout" , "ordered" ;                   (* alone on its line *)
+rank         = "rank" , ( digit , { digit } | "first" | "last" ) ;
+legend       = "legend" , "{" , { id , [ string ] , { color-value | color | "dashed" | "dotted" } } , "}" ;
+color        = "color" , ( color-value | hex ) ;
+color-value  = "gray" | "blue" | "teal" | "green" | "yellow" | "orange" | "red" | "purple" | "pink" ;
+hex          = "#" , hex-digit , hex-digit , hex-digit , [ hex-digit , hex-digit , hex-digit ] ;  (* only after "color" *)
+tag          = "." , id ;                                (* one token, e.g. .planned *)
 usecase-open = "usecase" , ( string | id ) , [ string ] , "{" ;
 par-open     = "par" , "{" ;
 alt-open     = "alt" , ( string | id ) , [ "when" , string ] , "{" ;
@@ -828,6 +973,8 @@ Where each statement may appear:
 | `import` | ✓ | | | |
 | node | ✓ | ✓ | | |
 | `group` | ✓ | ✓ | | |
+| `direction` | ✓ | ✓ | | |
+| `layout ordered` | ✓ | | | |
 | connection (`a -> b`) | ✓ | ✓ | as a step | as a step |
 | `usecase` | ✓ | | | |
 | `par` | | | ✓ | |

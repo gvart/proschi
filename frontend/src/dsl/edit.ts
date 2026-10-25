@@ -115,7 +115,7 @@ export function clearPositions(source: string): string {
 }
 
 /** Words that start statements, so a new node never takes them as its id. */
-const RESERVED = new Set(['title', 'summary', 'group', 'usecase', 'par', 'alt', 'import', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos']);
+const RESERVED = new Set(['title', 'summary', 'group', 'usecase', 'par', 'alt', 'import', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos', 'direction', 'layout', 'rank']);
 
 /** An id based on `base` (a name or a tech) that no node uses yet: `redis`, `redis2`, … */
 export function uniqueId(source: string, base: string): string {
@@ -313,7 +313,8 @@ export function setEdgeLabel(source: string, edgeId: string, label: string | nul
   const current = tokens.find((t) => t.kind === 'label');
   if (current && bracketDepth(current.value) > 0) return source;
   const clean = label ? cleanText(label) : '';
-  const target = tokens[2];
+  // The label goes after the target, or after its `.tag`.
+  const target = tokens[3]?.kind === 'tag' ? tokens[3] : tokens[2];
   if (!target) return source;
   const from = end(target);
   const to = current ? end(current) : from;

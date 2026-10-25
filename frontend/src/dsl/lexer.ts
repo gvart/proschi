@@ -10,6 +10,8 @@ export type TokenKind =
   | 'number'  // 120, -40
   | 'quantity' // 50ms, 99.9%, 100k rps, 2.5: a number with a fraction or a unit (see quantity.ts)
   | 'op'      // < <= > >=
+  | 'tag'     // .planned: a legend entry, value without the dot
+  | 'hex'     // #3b82f6 right after `color`, value with the '#'
   | 'comma'
   | 'lbrace'
   | 'rbrace';
@@ -29,6 +31,8 @@ const IDENT_PART = /[A-Za-z0-9_]/;
 const TEAM_PART = /[A-Za-z0-9_-]/;
 const DIGIT = /[0-9]/;
 const LETTER = /[A-Za-z]/;
+/** `#rgb` or `#rrggbb` ending at a word boundary; only read as a color after `color`. */
+const HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![A-Za-z0-9_])/;
 /** Units that may follow a number after a space: `50 ms`, `100k rps`, `99.9 %`, `500 MB/s`, `0.05 usd/GB`. */
 const SEPARATE_UNIT = /^[ \t]+(rps|rpm|rpd|ms|s|%|usd\/month|usd\/GB|MB\/s|GB\/s)(?![A-Za-z0-9_/])/;
 
@@ -52,8 +56,15 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
       continue;
     }
 
-    // A comment starts wherever a token could start.
-    if (ch === '#') break;
+    // A comment starts wherever a token could start, except a hex color right after `color`.
+    if (ch === '#') {
+      const prev = tokens[tokens.length - 1];
+      const hex = prev?.kind === 'ident' && prev.value === 'color' ? HEX_COLOR.exec(text.slice(i)) : null;
+      if (!hex) break;
+      tokens.push({ kind: 'hex', value: hex[0], col: i + 1, length: hex[0].length });
+      i += hex[0].length;
+      continue;
+    }
 
     const start = i;
 
@@ -128,6 +139,13 @@ export function tokenizeLine(text: string, line: number): { tokens: Token[]; dia
     if (IDENT_START.test(ch)) {
       while (i < text.length && IDENT_PART.test(text[i])) i++;
       tokens.push({ kind: 'ident', value: text.slice(start, i), col: start + 1, length: i - start });
+      continue;
+    }
+
+    if (ch === '.' && IDENT_START.test(text[i + 1] ?? '')) {
+      i++;
+      while (i < text.length && IDENT_PART.test(text[i])) i++;
+      tokens.push({ kind: 'tag', value: text.slice(start + 1, i), col: start + 1, length: i - start });
       continue;
     }
 

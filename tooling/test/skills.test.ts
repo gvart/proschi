@@ -28,7 +28,7 @@ function frontMatter(text: string): Record<string, string> {
 
 describe('agent skills', () => {
   it('are all listed in skills/README.md', () => {
-    expect(skills.length).toBeGreaterThanOrEqual(5);
+    expect(skills).toEqual(expect.arrayContaining(['infra-to-proschi', 'image-to-proschi']));
     const readme = readFileSync(join(skillsDir, 'README.md'), 'utf8');
     for (const s of skills) expect(readme).toContain(`(${s}/SKILL.md)`);
   });
@@ -46,16 +46,36 @@ describe('agent skills', () => {
     // Every skill validates its output and ends with a share link.
     expect(text).toContain('proschi@latest check');
     expect(text).toContain('proschi@latest share-link');
+    // ...and renders the diagram to look at it before handing over.
+    expect(text).toContain('proschi@latest render --out');
   });
 
   it.each(skills)('%s carries the same cheat-sheet as the others', (s) => {
     const sheet = (d: string) => readFileSync(join(skillsDir, d, 'references', 'proschi-cheatsheet.md'), 'utf8');
     expect(sheet(s)).toBe(sheet('infra-to-proschi'));
+    expect(sheet(s)).not.toContain('TODO');
     expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-cheatsheet.md)');
   });
 
+  it('keep the cheat-sheet short enough to skim', () => {
+    const sheet = readFileSync(join(skillsDir, 'infra-to-proschi', 'references', 'proschi-cheatsheet.md'), 'utf8');
+    expect(sheet.split('\n').length).toBeLessThanOrEqual(160);
+  });
+
+  // The simulation detail lives only in the skills that size or review a design.
+  const simSkills = ['proschi-capacity-plan', 'proschi-design-review'];
+  it.each(simSkills)('%s carries the simulation reference', (s) => {
+    const sim = (d: string) => readFileSync(join(skillsDir, d, 'references', 'proschi-simulation.md'), 'utf8');
+    expect(sim(s)).toBe(sim(simSkills[0]));
+    expect(readFileSync(join(skillsDir, s, 'SKILL.md'), 'utf8')).toContain('](references/proschi-simulation.md)');
+  });
+
   const dir = mkdtempSync(join(tmpdir(), 'proschi-skills-'));
-  const files = [...skills.map((s) => join(s, 'SKILL.md')), join('infra-to-proschi', 'references', 'proschi-cheatsheet.md')];
+  const files = [
+    ...skills.map((s) => join(s, 'SKILL.md')),
+    join('infra-to-proschi', 'references', 'proschi-cheatsheet.md'),
+    join('proschi-capacity-plan', 'references', 'proschi-simulation.md'),
+  ];
   const examples = files.flatMap((f) =>
     [...readFileSync(join(skillsDir, f), 'utf8').matchAll(/```proschi\n([\s\S]*?)```/g)].map((m, i) => [`${f} #${i + 1}`, m[1]] as const),
   );
@@ -81,5 +101,9 @@ describe('Claude Code plugin marketplace', () => {
     expect(marketplace).toMatchObject({ name: 'proschi', owner: { name: expect.any(String) } });
     expect(marketplace.plugins).toEqual([expect.objectContaining({ name: plugin.name, source: './plugin' })]);
     expect(plugin.name).toBe('proschi');
+  });
+
+  it('names every skill in the plugin description', () => {
+    for (const s of skills) expect(marketplace.plugins[0].description).toContain(s);
   });
 });

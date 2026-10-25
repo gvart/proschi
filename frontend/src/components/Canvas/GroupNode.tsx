@@ -1,12 +1,12 @@
 import { memo } from 'react';
 import { NodeResizer } from '@reactflow/node-resizer';
-import type { NodeProps } from 'reactflow';
+import { Handle, Position, type NodeProps } from 'reactflow';
 import { FolderOpen } from 'lucide-react';
 import type { ComponentMetadata } from '../../types/canvas';
 import { CANVAS_ACCENT } from '../../utils/canvasColors';
 import './canvas.css';
 
-/** A dashed frame around its members; explicit colours in the data still win. */
+/** A dashed frame around its members; a color or tag (dsl/palette.ts) tints it. */
 function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
   const custom = {
     ...(data.backgroundColor ? { backgroundColor: data.backgroundColor } : {}),
@@ -24,6 +24,9 @@ function GroupNode({ data, selected }: NodeProps<ComponentMetadata>) {
         </div>
         {data.description && <div className="pc-group__desc">{data.description}</div>}
       </div>
+      {/* React Flow draws no edge to a node without handles, so `gw -> services` needs these. */}
+      <Handle type="target" position={Position.Top} className="pc-handle--hidden" isConnectable={false} />
+      <Handle type="source" position={Position.Bottom} className="pc-handle--hidden" isConnectable={false} />
     </div>
   );
 }

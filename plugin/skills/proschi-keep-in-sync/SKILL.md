@@ -50,6 +50,15 @@ dependency bumps with the same role. Say "no architecture change" and stop.
   connections; the use case file for flows). Keep ids stable: renaming an id
   breaks `traffic`, `requirements`, `test` and links.
 - Match the existing style (groups, teams, label conventions, comments).
+- Declare a new node next to its tier or in its group, not at the end of the
+  file, and in its left-to-right place among its siblings: the layout keeps
+  declaration order wherever that adds no crossings, so the existing order
+  stays. New edges go from the caller. If the file has a `legend`, tag the
+  new parts.
+- Step labels: method and path for HTTP (`POST /orders`); otherwise start
+  with a verb, which decides read or write (INSERT, UPDATE, SET, PUBLISH,
+  SEND … write; SELECT, LOOKUP … read). Responses start with a status. Full
+  step rules: the `code-to-usecases` skill.
 - New use cases need a line in `traffic` if the file has one; add the
   scenarios to its `mix`.
 - Anything you inferred rather than read: `# GUESS: …`.
@@ -63,6 +72,11 @@ npx proschi@latest fmt <changed files>
 npx proschi@latest check --strict .
 npx proschi@latest test .
 ```
+
+Then render each changed architecture and look at it (mandatory; the
+cheat-sheet's *Render and review* checklist). A new node must not land
+stranded or add crossings:
+`npx proschi@latest render --out /tmp/proschi-review <file>`.
 
 Fix until clean. If a requirement or test now fails because of the code
 change (e.g. a new synchronous call to a slow API breaks a p99 target or a

@@ -182,6 +182,84 @@ const complete = (doc: string, explicit = false) => {
   return proschiCompletions(() => ['gateway', 'orders'])(new CompletionContext(state, doc.length, explicit));
 };
 
+describe('style highlighting', () => {
+  it('highlights color, critical, tags, palette names and hex colors', () => {
+    expect(highlight('api "API" [Go] color teal critical .owned')).toEqual([
+      ['api', 'variableName'],
+      ['"API"', 'string'],
+      ['[Go]', 'typeName'],
+      ['color', 'keyword'],
+      ['teal', 'atom'],
+      ['critical', 'keyword'],
+      ['.owned', 'attributeName'],
+    ]);
+    expect(highlight('db color #3b82f6 # a comment')).toEqual([
+      ['db', 'variableName'],
+      ['color', 'keyword'],
+      ['#3b82f6', 'atom'],
+      ['# a comment', 'comment'],
+    ]);
+    const edge = highlight('a -> b .planned : x .y');
+    expect(edge.slice(0, 5)).toEqual([
+      ['a', 'variableName'],
+      ['->', 'operator'],
+      ['b', 'variableName'],
+      ['.planned', 'attributeName'],
+      [':', 'punctuation'],
+    ]);
+    // After the colon a dot word is part of the label.
+    expect(edge.slice(5).every(([, style]) => style === 'string')).toBe(true);
+    expect(highlight('teal -> db')[0]).toEqual(['teal', 'variableName']);
+  });
+
+  it('highlights the layout hints, and nodes named like them', () => {
+    expect(highlight('direction right')).toEqual([
+      ['direction', 'keyword'],
+      ['right', 'atom'],
+    ]);
+    expect(highlight('  layout ordered # tidy')).toEqual([
+      ['layout', 'keyword'],
+      ['ordered', 'atom'],
+      ['# tidy', 'comment'],
+    ]);
+    expect(highlight('api [Go] rank 2 x2')).toEqual([
+      ['api', 'variableName'],
+      ['[Go]', 'typeName'],
+      ['rank', 'keyword'],
+      ['2', 'number'],
+      ['x2', 'number'],
+    ]);
+    expect(highlight('group g "G" rank last {').slice(3, 5)).toEqual([
+      ['rank', 'keyword'],
+      ['last', 'atom'],
+    ]);
+    expect(highlight('direction [Go]')[0]).toEqual(['direction', 'variableName']);
+    expect(highlight('layout -> rank')).toEqual([
+      ['layout', 'variableName'],
+      ['->', 'operator'],
+      ['rank', 'variableName'],
+    ]);
+  });
+
+  it('highlights the legend block', () => {
+    const lines = highlightDoc('legend {\n  planned "Planned" blue dashed\n  blue "B" color #fff\n}\nblue [Go]');
+    expect(lines[0][0]).toEqual(['legend', 'keyword']);
+    expect(lines[1]).toEqual([
+      ['planned', 'variableName'],
+      ['"Planned"', 'string'],
+      ['blue', 'atom'],
+      ['dashed', 'keyword'],
+    ]);
+    expect(lines[2]).toEqual([
+      ['blue', 'variableName'],
+      ['"B"', 'string'],
+      ['color', 'keyword'],
+      ['#fff', 'atom'],
+    ]);
+    expect(lines[4][0]).toEqual(['blue', 'variableName']);
+  });
+});
+
 describe('toCmDiagnostics', () => {
   it('maps line/column to document offsets', () => {
     const src = 'a\nb [Nope]';

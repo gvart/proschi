@@ -13,6 +13,9 @@
       "include": "#section"
     },
     {
+      "include": "#legend"
+    },
+    {
       "include": "#decision-line"
     },
     {
@@ -25,10 +28,16 @@
       "include": "#import"
     },
     {
+      "include": "#layout-hint"
+    },
+    {
       "include": "#keyword"
     },
     {
       "include": "#node-id"
+    },
+    {
+      "include": "#style"
     },
     {
       "include": "#string"
@@ -100,6 +109,24 @@
         },
         "4": {
           "name": "punctuation.definition.string.end.proschi"
+        }
+      }
+    },
+    "layout-hint": {
+      "comment": "`direction down|right|up|left` (top level or in a group) and `layout ordered`: layout hints, each a statement of its own. Otherwise the words are node ids.",
+      "match": "^\\s*(?:(direction)\\s+(down|right|up|left)|(layout)\\s+(ordered))(?=\\s*(?:#|$))",
+      "captures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        },
+        "2": {
+          "name": "constant.language.direction.proschi"
+        },
+        "3": {
+          "name": "keyword.control.proschi"
+        },
+        "4": {
+          "name": "constant.language.layout.proschi"
         }
       }
     },
@@ -402,6 +429,92 @@
       "comment": "A number with an optional fraction, magnitude and unit, attached or one space away: 120, 2.5, 50ms, 100k rps, 99.9%, 4xx, 500 MB/s, 0.05 usd/GB.",
       "name": "constant.numeric.proschi",
       "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month|usd/GB|MB/s|GB/s)\\b| %)?"
+    },
+    "style": {
+      "comment": "`color <name>|#hex`, `critical`, `rank N|first|last` and `.tag` on nodes, groups and connections. Right after `color` a # is a hex color, not a comment.",
+      "patterns": [
+        {
+          "include": "#color"
+        },
+        {
+          "name": "keyword.other.critical.proschi",
+          "match": "(?<=\\s)critical(?![A-Za-z0-9_])"
+        },
+        {
+          "match": "(?<=\\s)(rank)\\s+(\\d+|first|last)(?![A-Za-z0-9_])",
+          "captures": {
+            "1": {
+              "name": "keyword.other.rank.proschi"
+            },
+            "2": {
+              "name": "constant.numeric.rank.proschi"
+            }
+          }
+        },
+        {
+          "include": "#tag"
+        }
+      ]
+    },
+    "color": {
+      "match": "\\b(color)\\s+(#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![A-Za-z0-9_])|[A-Za-z_][A-Za-z0-9_]*)",
+      "captures": {
+        "1": {
+          "name": "keyword.other.color.proschi"
+        },
+        "2": {
+          "name": "constant.other.color.proschi"
+        }
+      }
+    },
+    "tag": {
+      "name": "entity.other.attribute-name.tag.proschi",
+      "match": "(?<![A-Za-z0-9_])\\.[A-Za-z_][A-Za-z0-9_]*"
+    },
+    "legend": {
+      "comment": "The legend block: one style per line, `id \"Label\" <color> [dashed|dotted]`.",
+      "name": "meta.block.legend.proschi",
+      "begin": "^\\s*(legend)(?=\\s*\\{\\s*(?:#.*)?$)",
+      "end": "^\\s*(\\})",
+      "beginCaptures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        }
+      },
+      "endCaptures": {
+        "1": {
+          "name": "punctuation.section.block.end.proschi"
+        }
+      },
+      "patterns": [
+        {
+          "include": "#color"
+        },
+        {
+          "include": "#comment"
+        },
+        {
+          "include": "#string"
+        },
+        {
+          "include": "#node-id"
+        },
+        {
+          "name": "constant.other.color.proschi",
+          "match": "\\b(?:gray|blue|teal|green|yellow|orange|red|purple|pink)\\b"
+        },
+        {
+          "name": "keyword.other.proschi",
+          "match": "\\b(?:dashed|dotted)\\b"
+        },
+        {
+          "name": "punctuation.section.block.begin.proschi",
+          "match": "\\{"
+        },
+        {
+          "include": "#identifier"
+        }
+      ]
     }
   }
 }

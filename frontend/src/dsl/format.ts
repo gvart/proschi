@@ -81,6 +81,8 @@ interface ConnectionEntry extends Base {
   from: string;
   arrow: string;
   to: string;
+  /** `.planned` between the target and the label. */
+  tag?: string;
   label?: string;
   /** Payload lines after the first, already re-indented. */
   continuation: string[];
@@ -143,10 +145,19 @@ function classify(lines: string[]): Entry[] {
     }
 
     // Same shape test as the parser, so multi-line payloads are found the same way.
-    if (!inSection && first.kind === 'ident' && second?.kind === 'arrow' && third?.kind === 'ident' && tokens.length <= 4 && (!fourth || fourth.kind === 'label')) {
-      const entry: ConnectionEntry = { ...base, kind: 'connection', from: first.value, arrow: second.value, to: third.value, label: fourth?.value, continuation: [] };
+    const tag = fourth?.kind === 'tag' ? fourth : undefined;
+    const labelToken = tokens[tag ? 4 : 3];
+    if (
+      !inSection &&
+      first.kind === 'ident' &&
+      second?.kind === 'arrow' &&
+      third?.kind === 'ident' &&
+      tokens.length <= (tag ? 5 : 4) &&
+      (!labelToken || labelToken.kind === 'label')
+    ) {
+      const entry: ConnectionEntry = { ...base, kind: 'connection', from: first.value, arrow: second.value, to: third.value, tag: tag?.value, label: labelToken?.value, continuation: [] };
       const brackets = new BracketCounter();
-      if (fourth && brackets.feed(fourth.value) > 0) {
+      if (labelToken && brackets.feed(labelToken.value) > 0) {
         // The payload continues until its brackets balance; keep its own indentation relative to the step.
         const delta = indent(depth).length - width(leadingSpace(raw));
         while (i + 1 < lines.length) {
@@ -162,7 +173,7 @@ function classify(lines: string[]): Entry[] {
     }
 
     const oneLineDecision = first.value === 'decision' && second?.kind === 'string' && third?.kind === 'ident' && third.value === 'because';
-    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma'].includes(t.kind))) {
+    if (!inSection && first.kind === 'ident' && !KEYWORDS.has(first.value) && !oneLineDecision && !isLayoutHint(tokens) && tokens.slice(1).every((t) => ['string', 'tech', 'team', 'ident', 'number', 'comma', 'tag', 'hex'].includes(t.kind))) {
       let k = 1;
       const take = (kind: Token['kind']) => (tokens[k]?.kind === kind ? source(raw, tokens[k++]) : '');
       const cells: NodeEntry['cells'] = [first.value, take('string'), take('tech'), take('team'), join(raw, tokens.slice(k))];
@@ -181,6 +192,18 @@ function classify(lines: string[]): Entry[] {
   }
 
   return entries;
+}
+
+/** `direction right` or `layout ordered`, recognised by the same shape as the parser: a statement, not a node. */
+function isLayoutHint(tokens: Token[]): boolean {
+  const [first, second] = tokens;
+  return (
+    tokens.length === 2 &&
+    (first.value === 'direction' || first.value === 'layout') &&
+    second.kind === 'ident' &&
+    !['pos', 'critical', 'color', 'rank'].includes(second.value) &&
+    !/^x\d+$/.test(second.value)
+  );
 }
 
 /** The section a top-level line opens, recognised by the same shapes as the parser. */
@@ -271,15 +294,16 @@ function alignCells(run: CellsEntry[]): string[] {
   return run.map(({ cells }) => cells.map((c, i) => (i < cells.length - 1 ? pad(c, widths[i] + 1) : c)).join(''));
 }
 
-/** `from` and the arrow are right-aligned, so targets start in one column; then ` : label`. */
+/** `from` and the arrow are right-aligned, so targets start in one column; then ` .tag` and ` : label`. */
 function alignConnections(run: ConnectionEntry[]): string[] {
   const head = Math.max(...run.map((e) => len(e.from) + 1 + e.arrow.length));
+  const end = (e: ConnectionEntry) => (e.tag ? `${e.to} .${e.tag}` : e.to);
   const labelled = run.filter((e) => e.label !== undefined);
-  const target = labelled.length ? Math.max(...labelled.map((e) => len(e.to))) : 0;
+  const target = labelled.length ? Math.max(...labelled.map((e) => len(end(e)))) : 0;
   return run.map((e) => {
     const start = e.from + ' '.repeat(head - len(e.from) - e.arrow.length) + e.arrow + ' ';
-    if (e.label === undefined) return start + e.to;
-    return start + pad(e.to, target) + ' :' + (e.label ? ' ' + e.label : '');
+    if (e.label === undefined) return start + end(e);
+    return start + pad(end(e), target) + ' :' + (e.label ? ' ' + e.label : '');
   });
 }
 

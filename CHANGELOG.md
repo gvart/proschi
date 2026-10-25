@@ -10,6 +10,43 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
+- **Colors, a legend and a critical marker.** Nodes are now tinted by
+  category (clients, edge, services, data stores, queues, external) in
+  calm colors that work in light and dark. `color teal` or `color #0891b2`
+  sets a node's or group's color. A `legend { owned "Owned by us" green }`
+  block names styles (a color, and `dashed` or `dotted`), and `.owned`
+  applies one to a node, a group or a connection (`a -> b .planned : label`).
+  The legend is drawn on the canvas, in PNG and SVG exports and by
+  `proschi render`. `critical` puts a warning badge on a node. Unknown tags
+  and colors are errors. The editor, VS Code and JetBrains highlight the new
+  words, and the new "Colors and legend" example (`?example=styled`) shows
+  all of it.
+- **Colors in the Mermaid export.** The Mermaid architecture flowchart (Copy
+  Mermaid, the `.mmd` download, `proschi render --format md` and the HLD
+  Markdown) now keeps the diagram's colors: a `classDef` per style for nodes,
+  `style` for colored groups, and `linkStyle` for tagged connections,
+  including dashed and dotted lines. Mermaid has no legend, so it is left out.
+- **Layout hints.** `layout ordered` lays edges out in declaration order,
+  so what is declared first sits higher. `rank 0`, `rank 1`, … (or
+  `rank first` / `rank last`) on a node or group puts it in a row among its
+  siblings. `direction right` (or down, up, left) turns the whole diagram, or
+  only the members of a group, such as a Kafka cluster's topics in one row.
+  The editor, VS Code
+  and JetBrains highlight and complete the new words, and the "Colors and
+  legend" example now uses `layout ordered`, so Order Events stays below
+  the services around it. See "Steering the layout" in the language
+  reference.
+- **Agent skills that draw readable diagrams.** A new `image-to-proschi`
+  skill recreates a screenshot or image of an architecture diagram, keeping
+  its legend and reading order. Every skill now teaches edge direction,
+  declaration order by tier, grouping, one edge to a group instead of one per
+  member, when to use a legend, tags and `critical`, and a mandatory step
+  that renders the diagram and fixes crossings and sprawl before finishing.
+  The shared cheat-sheet is now a short core (about 150 lines) that agents
+  can skim; the simulation numbers and use case step rules moved into the
+  skills that need them, and every drawing skill declares siblings in the
+  source's reading order, which the layout keeps wherever that adds no
+  crossings.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with
@@ -46,7 +83,6 @@ deployed from `main` and ships with the same changes.
   upper-case group names, and pink step numbers in sequence diagrams.
 - **The VS Code preview fits the diagrams to the panel's width** instead of
   showing them at full size with scroll bars.
-
 - **Admin panel** at `/admin/`, signed in with a **passkey** (no username
   or password). The first passkey is registered with a one-time
   `ADMIN_SETUP_TOKEN` secret and only while none exists; more can be added
@@ -63,6 +99,18 @@ deployed from `main` and ships with the same changes.
   links answer "not found" while blocked.
 
 ### Changed
+- **Diagrams read in the order they are written.** Nodes side by side in a
+  row now come left to right in declaration order wherever that costs no
+  crossing: a group's members keep their order, and a layout that came out
+  mirrored is turned round. Edges into one member of a group with its own
+  `direction` now meet it side by side instead of in one point.
+- **Tidier automatic layout for large diagrams.** Connections are drawn as
+  right-angled routes around the boxes, with an arrowhead and the label on
+  the line, in the editor and in `proschi render`. When connections form a
+  cycle, the node declared first goes higher. On a 50-node benchmark
+  diagram, crossings drop from 116 to 17 and no connection passes through
+  a box any more. While you drag a node its connections take a simple
+  right-angled path until the next layout.
 - **Clearer practice navigation.** Problems, Roadmap, Review, Challenge,
   Arcade and Progress are now one row of buttons at the top of every
   practice page, the current one in yellow, and the bar no longer moves
@@ -84,7 +132,6 @@ deployed from `main` and ships with the same changes.
 - The server keeps each account's last active day (a date, at most one
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").
-### Changed
 - **Practice problems open on their lesson, then a calmer workspace.** An
   unread lesson comes first, as a page of its own with "Start the
   challenge" at the top and the bottom. The workspace then shows the
@@ -128,6 +175,10 @@ deployed from `main` and ships with the same changes.
 - The design review no longer announces an AI reviewer.
 
 ### Fixed
+- **Connections to and from a group show on the web canvas.** An edge
+  such as `gw -> services`, where `services` is a group, was left out of
+  the editor, docs and practice canvases (the CLI render drew it). It is
+  now drawn with its route, label, tag style and arrowhead.
 - **Playing a use case no longer flickers.** In the editor, the docs'
   live examples and the landing page demo, Play, Replay and leaving
   playback restyle the diagram already on screen instead of swapping in a

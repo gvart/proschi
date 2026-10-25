@@ -191,6 +191,56 @@ describe('TextMate grammar', () => {
     ]);
   });
 
+  it('scopes color, critical, tags and the legend block', () => {
+    const [node] = tokenize('api "API" [Go] color teal critical .owned');
+    expect(node.slice(-4)).toEqual([
+      ['color', 'keyword.other.color.proschi'],
+      ['teal', 'constant.other.color.proschi'],
+      ['critical', 'keyword.other.critical.proschi'],
+      ['.owned', 'entity.other.attribute-name.tag.proschi'],
+    ]);
+    const [hex] = tokenize('db color #3b82f6 # note');
+    expect(hex.slice(1)).toEqual([
+      ['color', 'keyword.other.color.proschi'],
+      ['#3b82f6', 'constant.other.color.proschi'],
+      ['# note', 'comment.line.number-sign.proschi'],
+    ]);
+    expect(scopeOf(tokenize('a -> b .planned : x'), '.planned')).toBe('entity.other.attribute-name.tag.proschi');
+    expect(scopeOf(tokenize('group g "G" .owned color blue {'), '.owned')).toBe('entity.other.attribute-name.tag.proschi');
+    const lines = tokenize('legend {\n  planned "Planned" blue dashed\n  old "Old" color #fff\n}\ncritical [Go]');
+    expect(lines[0][0]).toEqual(['legend', 'keyword.control.proschi']);
+    expect(lines[1]).toEqual([
+      ['planned', 'variable.other.node.proschi'],
+      ['"', 'punctuation.definition.string.begin.proschi'],
+      ['Planned', 'string.quoted.double.proschi'],
+      ['"', 'punctuation.definition.string.end.proschi'],
+      ['blue', 'constant.other.color.proschi'],
+      ['dashed', 'keyword.other.proschi'],
+    ]);
+    expect(scopeOf(lines, '#fff')).toBe('constant.other.color.proschi');
+    expect(lines[4][0]).toEqual(['critical', 'variable.other.node.proschi']);
+  });
+
+  it('scopes the layout hints, and keeps nodes named like them', () => {
+    const lines = tokenize('direction right\nlayout ordered # tidy\ngroup g {\n  direction down\n}\napi [Go] rank 2\ndb rank first\ndirection [Go]\nlayout -> rank');
+    expect(lines[0]).toEqual([
+      ['direction', 'keyword.control.proschi'],
+      ['right', 'constant.language.direction.proschi'],
+    ]);
+    expect(lines[1].slice(0, 2)).toEqual([
+      ['layout', 'keyword.control.proschi'],
+      ['ordered', 'constant.language.layout.proschi'],
+    ]);
+    expect(scopeOf([lines[3]], 'direction')).toBe('keyword.control.proschi');
+    expect(lines[5].slice(-2)).toEqual([
+      ['rank', 'keyword.other.rank.proschi'],
+      ['2', 'constant.numeric.rank.proschi'],
+    ]);
+    expect(scopeOf([lines[6]], 'first')).toBe('constant.numeric.rank.proschi');
+    expect(lines[7][0]).toEqual(['direction', 'variable.other.node.proschi']);
+    expect(lines[8][0]).toEqual(['layout', 'variable.other.node.proschi']);
+  });
+
   it('keeps nodes named like section keywords, and scopes replicas', () => {
     expect(tokenize('test "Runner" [REST API]')[0][0]).toEqual(['test', 'variable.other.node.proschi']);
     expect(scopeOf(tokenize('api "API" [REST API] @links x3'), 'x3')).toBe('constant.numeric.replicas.proschi');
