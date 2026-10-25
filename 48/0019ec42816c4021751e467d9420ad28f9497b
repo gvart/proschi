@@ -1,0 +1,32 @@
+frontend/src/dsl/mermaid.test.ts
+  s_6084dd8c702c72::t_29264c5c480e27 4
+  s_6084dd8c702c72::t_0b9d16a024936a 281-299
+  s_6084dd8c702c72::t_a3005ece3e5ac0 208-280,300-302
+docs/LANGUAGE.md
+  s_6084dd8c702c72::t_220c5ee688a557 181-182
+docs/EDITORS.md
+  s_6084dd8c702c72::t_e521d4eb9a33ff 421-425
+frontend/src/dsl/importMermaid.test.ts
+  s_6084dd8c702c72::t_6194e1d3b000fa 127-128
+frontend/src/dsl/mermaid.ts
+  s_6084dd8c702c72::t_33788a03949e14 144,147-196
+  s_6084dd8c702c72::t_bf0407b70e8060 1-2
+CHANGELOG.md
+  s_6084dd8c702c72::t_c9a3c2ebccb04a 24-28
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "480019ec42816c4021751e467d9420ad28f9497b",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
