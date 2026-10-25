@@ -52,9 +52,10 @@ api -> erp .planned : sync orders
 ## Layout
 
 Top-down along the edges. **Edges decide the rows** (a callee sits below its
-caller); **declaration order decides left to right** within a row. So
-declare siblings in the left-to-right (or top-to-bottom) order the diagram
-should be read, or the source shows: the layout keeps it, never mirrors it.
+caller); **declaration order decides left to right** within a row wherever
+it adds no crossings (fewer crossings win). So declare siblings in the
+left-to-right (or top-to-bottom) order the diagram should be read, or the
+source shows.
 
 - Tier by tier: clients, edge, services, queues and workers, stores,
   externals, monitoring. A node one part uses goes next to it.

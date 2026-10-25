@@ -80,8 +80,8 @@ order and the hints carry them:
       inside each group in the same way. A box that only one zone talks to
       is declared next to that zone.
 - [ ] Siblings always in the source's left-to-right order (top-to-bottom for
-      a vertical stack): the layout places them in declaration order, so
-      the render keeps the picture's order and does not mirror it.
+      a vertical stack): the layout keeps declaration order wherever that
+      adds no crossings, so the render follows the picture's order.
 - [ ] `layout ordered` at the top, so the bands keep the declared order even
       where arrows point up (keep the arrows as drawn).
 - [ ] Render now (step 6) before adding any other hint. Then add them one

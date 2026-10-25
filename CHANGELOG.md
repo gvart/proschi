@@ -45,7 +45,8 @@ deployed from `main` and ships with the same changes.
   The shared cheat-sheet is now a short core (about 150 lines) that agents
   can skim; the simulation numbers and use case step rules moved into the
   skills that need them, and every drawing skill declares siblings in the
-  source's reading order so the layout doesn't mirror it.
+  source's reading order, which the layout keeps wherever that adds no
+  crossings.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with

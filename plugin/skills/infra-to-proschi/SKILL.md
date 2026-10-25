@@ -115,7 +115,7 @@ The file's order is the diagram's reading order. Follow the
       workers, stores, externals, then monitoring and logging.
 - [ ] Siblings in the left-to-right (or top-to-bottom) order of the source:
       a Mermaid or wiki diagram's order, or the order the docs list them.
-      The layout keeps declaration order, so it won't mirror the source.
+      The layout keeps declaration order wherever that adds no crossings.
 - [ ] Then the hints, one at a time, rendering after each: `layout ordered`,
       `rank` on group tiers, `direction right` in row-like groups.
 - [ ] Inside each group, members are in the order they are called.
