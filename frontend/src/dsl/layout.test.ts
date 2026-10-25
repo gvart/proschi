@@ -195,6 +195,25 @@ describe('layout hints', () => {
     expect(onBorder(points[points.length - 1], abs('b'))).toBe(true);
   });
 
+  it('puts the target of an edge between two nodes of one rank a layer lower, its label on the route', async () => {
+    const { diagram, routes, abs } = await laidOut('a rank 0\nb rank 0\nc rank 0\nd rank 1\na -> b : calls\nc -> d : a long label here');
+    expect(abs('a').y).toBe(abs('c').y);
+    expect(abs('b').y).toBeGreaterThan(abs('a').y + abs('a').h);
+    expect(abs('d').y).toBeGreaterThan(abs('b').y);
+    for (const edge of diagram.edges) {
+      const { points, label } = routes[edge.id];
+      expect(onBorder(points[0], abs(edge.source))).toBe(true);
+      expect(onBorder(points[points.length - 1], abs(edge.target))).toBe(true);
+      // The label sits on the line, between the two nodes.
+      expect(label).toBeDefined();
+      const on = points.slice(1).some((q, i) => {
+        const p = points[i];
+        return Math.min(p.x, q.x) - 0.5 <= label!.x && label!.x <= Math.max(p.x, q.x) + 0.5 && Math.min(p.y, q.y) - 0.5 <= label!.y && label!.y <= Math.max(p.y, q.y) + 0.5;
+      });
+      expect(on, edge.id).toBe(true);
+    }
+  });
+
   it('puts rank first above and rank last below everything', async () => {
     const { abs } = await laidOut('a\nb\nc\nlogs rank first\nusers rank last\na -> b\nb -> c\nc -> logs\nusers -> a');
     for (const id of ['a', 'b', 'c']) {

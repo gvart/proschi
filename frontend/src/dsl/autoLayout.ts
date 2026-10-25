@@ -181,6 +181,8 @@ interface LayoutEdge {
   sourceMember?: string;
   targetMember?: string;
   labels?: ElkExtendedEdge['labels'];
+  /** A node standing in for the label (rankLayers), which the edge is handed to ELK in two halves through. */
+  via?: string;
 }
 
 type Side = 'NORTH' | 'SOUTH' | 'WEST' | 'EAST';
@@ -225,7 +227,14 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     const ids = new Set(inside.map((n) => n.id));
     // The group's direct members become the sub-layout's top level: their parent is not in it.
     const sub: Diagram = { ...diagram, nodes: inside, edges: diagram.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
-    const level = await layoutLevel(sub, getElk, { ...options, direction: ownDirection(group.id) });
+    const direction = ownDirection(group.id)!;
+    // Members that no edge connects line up along the group's direction too, not across it. ELK
+    // only packs unconnected parts when it lays out one level at a time, which is the same without nested groups.
+    const along = {
+      'elk.aspectRatio': direction === 'RIGHT' || direction === 'LEFT' ? '100' : '0.01',
+      ...(inside.some((n) => n.kind === 'group') ? {} : { 'elk.hierarchyHandling': 'SEPARATE_CHILDREN' }),
+    };
+    const level = await layoutLevel(sub, getElk, { ...options, direction, elk: { ...along, ...options.elk } });
     const rects = absoluteBoxes(level.nodes);
     // Sized around what the layout placed; members pinned with `pos` are grown around later.
     const top = level.nodes.filter((b) => !b.parent);
@@ -318,16 +327,20 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   }
 
   const reversed = orientEdges(edges, new Map(diagram.nodes.map((n, i) => [n.id, i])), !!options.ordered);
-  const interactive = rankLayers(mainNodes, edges, reversed, elkNodes, parentOf, flow);
+  const interactive = rankLayers(mainNodes, edges, reversed, elkNodes, roots, parentOf, flow);
   // After rankLayers, which may turn edges: a port's side depends on which way its edge runs.
   const ports = attachPorts(edges, separate, elkNodes, flow);
 
-  const elkEdges: ElkExtendedEdge[] = edges.map((e) => ({
-    id: e.id,
-    sources: [ports.get(`${e.id}\u0000source`) ?? e.source],
-    targets: [ports.get(`${e.id}\u0000target`) ?? e.target],
-    ...(e.labels ? { labels: e.labels } : {}),
-  }));
+  const elkEdges: ElkExtendedEdge[] = edges.flatMap((e) => {
+    const [source, target] = [ports.get(`${e.id}\u0000source`) ?? e.source, ports.get(`${e.id}\u0000target`) ?? e.target];
+    if (e.via) {
+      return [
+        { id: `${e.id}\u0000in`, sources: [source], targets: [`${e.via}\u0000in`] },
+        { id: `${e.id}\u0000out`, sources: [`${e.via}\u0000out`], targets: [target] },
+      ];
+    }
+    return [{ id: e.id, sources: [source], targets: [target], ...(e.labels ? { labels: e.labels } : {}) }];
+  });
 
   const elk = await getElk();
   const result = await elk.layout({ id: 'root', layoutOptions: rootOptions(options, interactive.has(undefined), interactive.size > 0), children: roots, edges: elkEdges });
@@ -388,20 +401,26 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   const boxAt = (id: string): Box => ({ ...elkAbsolute.get(id)!, width: placed.get(id)?.width ?? 0, height: placed.get(id)?.height ?? 0 });
   const titles = mainNodes.filter((n) => n.kind === 'group' && unmovedInMain(n.id)).map((n) => titleBand(boxAt(n.id), n.name));
   const routes: Record<string, EdgeRoute> = {};
-  const byEdge = new Map(edges.map((e) => [e.id, e]));
-  for (const edge of result.edges ?? []) {
-    const sections = edge.sections ?? [];
-    const layoutEdge = byEdge.get(edge.id)!;
-    const flipped = reversed.has(edge.id);
+  const routed = new Map((result.edges ?? []).map((e) => [e.id, e as ElkExtendedEdge & { container?: string }]));
+  for (const layoutEdge of edges) {
+    const parts = layoutEdge.via ? [routed.get(`${layoutEdge.id}\u0000in`), routed.get(`${layoutEdge.id}\u0000out`)] : [routed.get(layoutEdge.id)];
+    const flipped = reversed.has(layoutEdge.id);
     // The diagram's source and target, which a flipped edge had the other way round.
     const [source, target] = flipped ? [layoutEdge.target, layoutEdge.source] : [layoutEdge.source, layoutEdge.target];
     const [sourceMember, targetMember] = flipped ? [layoutEdge.targetMember, layoutEdge.sourceMember] : [layoutEdge.sourceMember, layoutEdge.targetMember];
     const [from, to] = [sourceMember ?? source, targetMember ?? target];
-    if (edge.id.startsWith('step\u0000') || sections.length === 0 || !unmoved.has(source) || !unmoved.has(target) || !unmoved.has(from) || !unmoved.has(to)) continue;
-    const origin = elkAbsolute.get((edge as ElkExtendedEdge & { container?: string }).container ?? 'root') ?? { x: 0, y: 0 };
-    const shift = (p: Point) => ({ x: origin.x + p.x, y: origin.y + p.y });
-    const label = edge.labels?.[0];
-    let points = sectionPoints(sections).map(shift);
+    if (layoutEdge.id.startsWith('step\u0000') || parts.some((p) => !p?.sections?.length) || !unmoved.has(source) || !unmoved.has(target) || !unmoved.has(from) || !unmoved.has(to)) continue;
+    const originOf = (e: ElkExtendedEdge & { container?: string }) => elkAbsolute.get(e.container ?? 'root') ?? { x: 0, y: 0 };
+    const shift = (p: Point) => ({ x: originOf(parts[0]!).x + p.x, y: originOf(parts[0]!).y + p.y });
+    // Through the label's stand-in, the two halves join up across it; the label sits at its centre.
+    const stand = layoutEdge.via ? boxAt(layoutEdge.via) : undefined;
+    const label = parts[0]!.labels?.[0];
+    const labelAt = stand
+      ? { x: stand.x + stand.width / 2, y: stand.y + stand.height / 2 }
+      : label?.x !== undefined && label.y !== undefined
+        ? shift({ x: label.x + (label.width ?? 0) / 2, y: label.y + (label.height ?? 0) / 2 })
+        : undefined;
+    let points = parts.flatMap((p) => sectionPoints(p!.sections!).map((q) => ({ x: originOf(p!).x + q.x, y: originOf(p!).y + q.y })));
     if (flipped) points.reverse();
     // An end on a separately laid-out group runs on from the port to the member inside.
     const leg = (group: string, member: string, port: Point) => {
@@ -413,9 +432,9 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     if (targetMember && targetMember !== target) points = [...points, leg(target, targetMember, points[points.length - 1])];
     points = simplify(points);
     if (!sourceMember && !targetMember) points = dropJogs(points, boxAt(source), boxAt(target));
-    routes[edge.id] = {
+    routes[layoutEdge.id] = {
       points: avoidTitles(points, titles),
-      ...(label?.x !== undefined && label.y !== undefined ? { label: shift({ x: label.x + (label.width ?? 0) / 2, y: label.y + (label.height ?? 0) / 2 }) } : {}),
+      ...(labelAt ? { label: labelAt } : {}),
       from: finalAbsolute(from),
       to: finalAbsolute(to),
     };
@@ -528,9 +547,13 @@ function rankLayers(
   edges: LayoutEdge[],
   reversed: Set<string>,
   elkNodes: Map<string, ElkNode>,
+  roots: ElkNode[],
   parentOf: (id: string) => string | undefined,
   flow: LayoutDirection,
 ): Set<string | undefined> {
+  const sign = flow === 'UP' || flow === 'LEFT' ? -1 : 1;
+  const place = (node: ElkNode, layer: number, i: number) =>
+    Object.assign(node, flow === 'DOWN' || flow === 'UP' ? { x: i, y: layer * LAYER_STEP * sign } : { x: layer * LAYER_STEP * sign, y: i });
   const containers = new Set(nodes.filter((n) => n.rank !== undefined).map((n) => parentOf(n.id)));
   const rankOf = new Map(nodes.map((n) => [n.id, n.rank]));
   for (const container of containers) {
@@ -550,10 +573,36 @@ function rankLayers(
       if (reversed.has(edge.id)) reversed.delete(edge.id);
       else reversed.add(edge.id);
     }
-    children.forEach((id, i) => {
-      const along = layers.get(id)! * LAYER_STEP * (flow === 'UP' || flow === 'LEFT' ? -1 : 1);
-      Object.assign(elkNodes.get(id)!, flow === 'DOWN' || flow === 'UP' ? { x: i, y: along } : { x: along, y: i });
-    });
+    // Nodes go in even layers; the odd ones between are for labels.
+    children.forEach((id, i) => place(elkNodes.get(id)!, 2 * layers.get(id)!, i));
+    // ELK turns a centred label into a node of its own before layering, which
+    // interactive layering cannot place. A real stand-in node is placed here instead,
+    // in a label layer the edge passes through, and the edge runs through it.
+    const siblings = container === undefined ? roots : elkNodes.get(container)!.children!;
+    for (const { edge, a, b } of links) {
+      const label = edge.labels?.[0];
+      delete edge.labels;
+      const [top, bottom] = [Math.min(layers.get(a)!, layers.get(b)!), Math.max(layers.get(a)!, layers.get(b)!)];
+      if (!label || top === bottom) continue;
+      const id = `${edge.id}\u0000label`;
+      const [width, height] = [label.width ?? 0, label.height ?? 0];
+      const inSide = IN_SIDE[flow];
+      const at = (side: Side) => (side === 'NORTH' ? { x: width / 2, y: 0 } : side === 'SOUTH' ? { x: width / 2, y: height } : side === 'WEST' ? { x: 0, y: height / 2 } : { x: width, y: height / 2 });
+      const stand: ElkNode = {
+        id,
+        width,
+        height,
+        layoutOptions: { 'elk.portConstraints': 'FIXED_POS' },
+        ports: [
+          { id: `${id}\u0000in`, ...at(inSide), width: 0, height: 0, layoutOptions: { 'elk.port.side': inSide } },
+          { id: `${id}\u0000out`, ...at(OPPOSITE[inSide]), width: 0, height: 0, layoutOptions: { 'elk.port.side': OPPOSITE[inSide] } },
+        ],
+      };
+      place(stand, 2 * top + 1 + 2 * Math.floor((bottom - top - 1) / 2), siblings.length);
+      siblings.push(stand);
+      elkNodes.set(id, stand);
+      edge.via = id;
+    }
     if (container !== undefined) elkNodes.get(container)!.layoutOptions = { ...elkNodes.get(container)!.layoutOptions, ...INTERACTIVE_LAYERING };
   }
   return containers;
@@ -561,41 +610,82 @@ function rankLayers(
 
 const INTERACTIVE_LAYERING = { 'elk.layered.layering.strategy': 'INTERACTIVE' };
 
+function reachable(succ: Map<string, Set<string>>, from: string, to: string): boolean {
+  const seen = new Set([from]);
+  const stack = [from];
+  while (stack.length) {
+    const id = stack.pop()!;
+    if (id === to) return true;
+    for (const next of succ.get(id) ?? []) {
+      if (!seen.has(next)) {
+        seen.add(next);
+        stack.push(next);
+      }
+    }
+  }
+  return false;
+}
+
+/** How far down its rank each member goes: the longest path to it over edges among the members (in declaration order, skipping those that close a cycle). */
+function depthsWithin(members: string[], links: [string, string][]): Map<string, number> {
+  const inside = new Set(members);
+  const succ = new Map(members.map((m) => [m, new Set<string>()]));
+  for (const [a, b] of links) {
+    if (inside.has(a) && inside.has(b) && a !== b && !reachable(succ, b, a)) succ.get(a)!.add(b);
+  }
+  const depth = new Map(members.map((m) => [m, 0]));
+  // At most members.length rounds: the graph is acyclic.
+  for (let round = 0, changed = true; changed && round < members.length; round++) {
+    changed = false;
+    for (const [a, next] of succ) {
+      for (const b of next) {
+        if (depth.get(b)! < depth.get(a)! + 1) {
+          depth.set(b, depth.get(a)! + 1);
+          changed = true;
+        }
+      }
+    }
+  }
+  return depth;
+}
+
 /**
- * Layers for the children of one container: ranks first (one layer per rank,
- * in order; `first` above and `last` below everything), then each edge in
+ * Layers for the children of one container: ranks first (in order, `first`
+ * above and `last` below everything; see depthsWithin), then each edge in
  * declaration order unless it would close a cycle, laid out longest-path and
  * then each node moved, within what its constraints allow, to where its edges
  * are shortest.
  */
 export function assignLayers(children: string[], links: [string, string][], rankOf: (id: string) => Rank | undefined): Map<string, number> {
   const key = (r: Rank) => (r === 'first' ? -Infinity : r === 'last' ? Infinity : r);
-  const unitOf = new Map(children.map((c) => [c, rankOf(c) === undefined ? c : `\u0000rank ${key(rankOf(c)!)}`]));
-  const units = [...new Set(unitOf.values())];
+  // ELK cannot draw an edge within a layer, so of two connected nodes of one
+  // rank the target goes a layer lower: a rank is a run of layers, one per depth.
+  const unitOf = new Map<string, string>();
+  const chain: { unit: string; key: number }[] = [];
+  const keys = [...new Set(children.map(rankOf).filter((r): r is Rank => r !== undefined).map(key))].sort((a, b) => a - b);
+  for (const k of keys) {
+    const members = children.filter((c) => rankOf(c) !== undefined && key(rankOf(c)!) === k);
+    const depth = depthsWithin(members, links);
+    const deepest = Math.max(...depth.values());
+    for (let d = 0; d <= deepest; d++) chain.push({ unit: `\u0000rank ${k} ${d}`, key: k });
+    for (const m of members) unitOf.set(m, `\u0000rank ${k} ${depth.get(m)}`);
+  }
+  for (const c of children) if (!unitOf.has(c)) unitOf.set(c, c);
+  const units = [...new Set([...chain.map((c) => c.unit), ...unitOf.values()])];
   const succ = new Map(units.map((u) => [u, new Set<string>()]));
   const pred = new Map(units.map((u) => [u, new Set<string>()]));
   const add = (a: string, b: string) => {
     succ.get(a)!.add(b);
     pred.get(b)!.add(a);
   };
-  const reaches = (from: string, to: string) => {
-    const seen = new Set([from]);
-    const stack = [from];
-    while (stack.length) {
-      const id = stack.pop()!;
-      if (id === to) return true;
-      for (const next of succ.get(id)!) if (!seen.has(next)) seen.add(next), stack.push(next);
-    }
-    return false;
-  };
+  const reaches = (from: string, to: string) => reachable(succ, from, to);
 
-  const ranks = [...new Set(children.map(rankOf).filter((r): r is Rank => r !== undefined).map(key))].sort((a, b) => a - b).map((k) => `\u0000rank ${k}`);
-  ranks.slice(1).forEach((r, i) => add(ranks[i], r));
-  const first = '\u0000rank -Infinity';
-  const last = '\u0000rank Infinity';
+  chain.slice(1).forEach((c, i) => add(chain[i].unit, c.unit));
+  const firsts = chain.filter((c) => c.key === -Infinity).map((c) => c.unit);
+  const lasts = chain.filter((c) => c.key === Infinity).map((c) => c.unit);
   for (const u of units) {
-    if (succ.has(first) && u !== first) add(first, u);
-    if (succ.has(last) && u !== last && u !== first) add(u, last);
+    if (firsts.length && !firsts.includes(u)) add(firsts[firsts.length - 1], u);
+    if (lasts.length && !lasts.includes(u) && !firsts.includes(u)) add(u, lasts[0]);
   }
 
   const degree = new Map(units.map((u) => [u, 0]));
