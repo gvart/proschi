@@ -1,0 +1,27 @@
+frontend/src/components/Canvas/useEdgeGeometry.ts
+  s_6084dd8c702c72::t_3a41720fdcca84 4
+frontend/src/dsl/edgePath.ts
+  s_6084dd8c702c72::t_3a41720fdcca84 19-21,104-116
+  s_6084dd8c702c72::t_d86745aed0c13a 117
+tooling/src/render/architecture.ts
+  s_6084dd8c702c72::t_0278e1f1010100 63-68
+  s_6084dd8c702c72::t_f923881c6c1c6e 1-2,12,42-43,95-101,154-159,164-165
+tooling/test/render.test.ts
+  s_6084dd8c702c72::t_660ab866df0b8e 220,222-232
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "3f03bc239f0dca1c01ed0952c2300a7050552264",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
