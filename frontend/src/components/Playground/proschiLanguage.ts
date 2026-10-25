@@ -23,6 +23,8 @@ const COLOR_NAME = new RegExp(`^(?:${COLOR_NAMES.join('|')})\\b`);
 const HEX_COLOR = /^#(?:[0-9a-fA-F]{6}|[0-9a-fA-F]{3})(?![\w])/;
 const LEGEND_HEADER = /^\s*legend\s*\{\s*(?:#.*)?$/;
 const HTTP_METHOD = /^(GET|POST|PUT|PATCH|DELETE|HEAD|OPTIONS)\b/;
+/** `direction right`, `layout ordered`: layout hints, statements of their own (any other use of the words is a node id). */
+const LAYOUT_HINT = /^\s*(?:direction\s+(?:down|right|up|left)|layout\s+ordered)\s*(?:#.*)?$/;
 /** `when` is a keyword only right after an alt name: `alt "Name" when "condition" {`. */
 const AFTER_ALT_NAME = /^\s*(\}\s*)?alt\s+("(?:[^"\\]|\\.)*"|\w+)\s+$/;
 
@@ -97,6 +99,14 @@ export const proschiStreamParser: StreamParser<LexState> = {
     // `x3` after a node id is its replica count.
     if (!sectionLine && stream.string.slice(0, stream.pos).trim() && stream.match(/^x\d+\b/)) return 'number';
     if (stream.match(KEYWORDS)) return 'keyword';
+    if (!state.inSection && LAYOUT_HINT.test(stream.string)) {
+      if (stream.match(/^(direction|layout)\b/)) return 'keyword';
+      if (stream.match(/^(down|right|up|left|ordered)\b/)) return 'atom';
+    }
+    // `rank 2`, `rank first`: a node or group part.
+    const before = stream.string.slice(0, stream.pos);
+    if (!sectionLine && before.trim() && stream.match(/^rank(?=\s+(?:\d+|first|last)\b)/)) return 'keyword';
+    if (/\brank\s+$/.test(before) && stream.match(/^(first|last)\b/)) return 'atom';
     if (AFTER_ALT_NAME.test(stream.string.slice(0, stream.pos)) && stream.match(/^when\b/)) return 'keyword';
     if (stream.match(/^[A-Za-z_]\w*/)) return 'variableName';
     if (stream.eat(':')) {
@@ -135,6 +145,9 @@ const keywordOptions: Completion[] = [
   { label: 'par', type: 'keyword', apply: 'par {', detail: 'parallel steps' },
   { label: 'alt', type: 'keyword', apply: 'alt "', detail: 'alt "Scenario" { … }' },
   snippetCompletion('legend {\n\t${tag} "${What it means}" ${blue}\n}', { label: 'legend', type: 'keyword', detail: 'styles that .tag applies' }),
+  // Layout hints (docs/LANGUAGE.md, "Steering the layout").
+  snippetCompletion('direction ${right}', { label: 'direction', type: 'keyword', detail: 'down, right, up or left' }),
+  { label: 'layout ordered', type: 'keyword', detail: 'edges follow declaration order' },
   // The high-level design sections, top level only.
   snippetCompletion('traffic {\n\t"${Use case}" ${100 rps}\n}', { label: 'traffic', type: 'keyword', detail: 'requests per use case' }),
   snippetCompletion('requirements {\n\tp99 < ${200ms}\n}', { label: 'requirements', type: 'keyword', detail: 'latency, availability, durability, cost' }),

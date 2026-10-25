@@ -230,6 +230,27 @@
             "$ref": "#/$defs/legendEntry"
           },
           "description": "Entries of the `legend` block, in order."
+        },
+        "layout": {
+          "type": "object",
+          "description": "Top-level layout hints; left out when the document uses none.",
+          "properties": {
+            "direction": {
+              "enum": [
+                "down",
+                "right",
+                "up",
+                "left"
+              ],
+              "description": "`direction right`: where edges flow in the whole diagram."
+            },
+            "ordered": {
+              "type": "boolean",
+              "description": "`layout ordered`: edges follow declaration order."
+            }
+          },
+          "required": [],
+          "additionalProperties": false
         }
       },
       "required": [
@@ -561,6 +582,30 @@
         "critical": {
           "type": "boolean",
           "description": "`critical`: drawn with a warning badge."
+        },
+        "rank": {
+          "oneOf": [
+            {
+              "type": "integer",
+              "minimum": 0
+            },
+            {
+              "enum": [
+                "first",
+                "last"
+              ]
+            }
+          ],
+          "description": "`rank 2`, `rank first`, `rank last`: the layout layer among the nodes and groups that share its parent."
+        },
+        "direction": {
+          "enum": [
+            "down",
+            "right",
+            "up",
+            "left"
+          ],
+          "description": "`direction right` inside a group: where edges flow among its members."
         },
         "style": {
           "$ref": "#/$defs/style"
