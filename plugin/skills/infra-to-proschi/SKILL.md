@@ -177,6 +177,7 @@ queue, worker, stores, externals):
 
 ```proschi
 title "Shop" "Online shop: catalogue, checkout and order emails"
+layout ordered
 
 user "Customer" [Browser]
 

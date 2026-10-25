@@ -85,7 +85,11 @@ order and the hints carry them:
       for the next); a top row of single boxes only where alignment
       matters. Boxes with an edge between them can't share a rank.
 - [ ] A zone drawn as a row (Kafka topics, a cluster) → `direction right`
-      inside its group. Side-by-side zones (two regions) → the same `rank`.
+      inside its group.
+- [ ] Side-by-side zones (two regions): the same `rank` works only when no
+      edge joins them. Otherwise wrap them in one group with `direction
+      right`, and put `direction down` inside each zone (nested groups
+      inherit the direction).
 - [ ] `pos x,y` only to nudge one or two nodes at the very end.
 
 ## 5. Validate
@@ -138,6 +142,7 @@ yellow = external, red dashed = deprecated flow.
 
 ```proschi
 title "Checkout"
+layout ordered
 
 legend {
   owned      "Owned by Payments" green

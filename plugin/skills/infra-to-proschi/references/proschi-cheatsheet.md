@@ -105,7 +105,8 @@ svc_c -> prom : Metrics
 services -> prom : Metrics
 ```
 
-**Layout hints**, when edges and order are not enough:
+**Layout hints**, when edges and order are not enough (full reference:
+<https://proschi.app/docs/language/#steering-the-layout>):
 
 ```proschi fragment
 layout ordered            # top level: declared first sits higher, whatever the arrows
@@ -131,7 +132,9 @@ audit "Audit log" [Database] rank last
   Ranks are relative; unranked nodes go where their edges pull them.
 - `direction down|right|up|left`: at the top it turns the whole diagram; in a
   group it sets that group's flow (a row of topics, a pipeline). Such a group
-  is laid out on its own and placed as one box.
+  is laid out on its own and placed as one box; groups nested in it inherit
+  the direction unless they set their own. Two zones side by side that an
+  edge joins: wrap them in a `direction right` group, `direction down` in each.
 - Recipe: reading-order declarations + `layout ordered`; then `rank` on
   group tiers; then on a top row of externals only where alignment matters;
   then `direction right` in groups that read as a row. A single hint can
