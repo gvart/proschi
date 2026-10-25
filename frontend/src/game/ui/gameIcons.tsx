@@ -75,8 +75,6 @@ import type { IconName } from '../engine/icons';
  * keep the bundle to these icons. `file-signature` and `bar-chart-3` are
  * lucide's old names for FilePenLine and ChartColumn.
  */
-// The map is the point of this module, next to the component that reads it.
-// eslint-disable-next-line react-refresh/only-export-components
 export const GAME_ICON: Record<IconName, LucideIcon> = {
   'piggy-bank': PiggyBank,
   heart: Heart,

@@ -2,8 +2,7 @@ import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import type { OutputAsset } from 'rollup'
-import { build } from 'vite'
+import { build, type Rollup } from 'vite'
 import { describe, expect, it } from 'vitest'
 import { CARDS_JSON, cardsBundle, cardsSummary, practiceCards, readCards } from './practiceCards'
 
@@ -61,8 +60,8 @@ describe('practice cards plugin', () => {
       plugins: [practiceCards(dir)],
       build: { write: false, rollupOptions: { input: entry } },
     })
-    const output = (Array.isArray(result) ? result[0] : result) as { output: (OutputAsset | { type: 'chunk'; code: string })[] }
-    const json = output.output.find((o): o is OutputAsset => o.type === 'asset' && o.fileName === CARDS_JSON)
+    const output = (Array.isArray(result) ? result[0] : result) as { output: (Rollup.OutputAsset | { type: 'chunk'; code: string })[] }
+    const json = output.output.find((o): o is Rollup.OutputAsset => o.type === 'asset' && o.fileName === CARDS_JSON)
     expect(json).toBeDefined()
     const bundle = JSON.parse(String(json!.source))
     expect(bundle).toMatchObject({ format: 1, cards: [{ id: 'a', decks: ['sample'] }] })

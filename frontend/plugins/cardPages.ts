@@ -1,7 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OutputAsset } from 'rollup'
-import type { Plugin, ViteDevServer } from 'vite'
+import type { Plugin, Rollup, ViteDevServer } from 'vite'
 import type { Card, Topic } from '../src/learn/cards'
 import { parseInline, parseMarkdown } from '../src/practice/markdownReader.ts'
 import { SITE_ORIGIN } from './docsSite'
@@ -498,8 +497,8 @@ export function cardPages(cardsDir: string, problemsDir: string, { ogImages = fa
       // After Vite's HTML plugin has written the templates, with their assets linked.
       order: 'post',
       async handler(_, bundle) {
-        const topicTemplate = bundle[TOPIC_TEMPLATE] as OutputAsset | undefined
-        const cardTemplate = bundle[CARD_TEMPLATE] as OutputAsset | undefined
+        const topicTemplate = bundle[TOPIC_TEMPLATE] as Rollup.OutputAsset | undefined
+        const cardTemplate = bundle[CARD_TEMPLATE] as Rollup.OutputAsset | undefined
         if (!topicTemplate || !cardTemplate) return
         delete bundle[TOPIC_TEMPLATE]
         delete bundle[CARD_TEMPLATE]
