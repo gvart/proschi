@@ -1,0 +1,35 @@
+plugin/skills/proschi-keep-in-sync/SKILL.md
+  s_6084dd8c702c72::t_b94461a194a467 71-73
+  s_6084dd8c702c72::t_b42b692a33aacd 53-55,70
+  s_6084dd8c702c72::t_eec38d6d6877a6 74
+plugin/skills/code-to-usecases/SKILL.md
+  s_6084dd8c702c72::t_b42b692a33aacd 22-23,105-108
+  s_6084dd8c702c72::t_4062778ae0aaa4 109
+plugin/skills/proschi-capacity-plan/SKILL.md
+  s_6084dd8c702c72::t_b42b692a33aacd 86-89
+plugin/skills/infra-to-proschi/SKILL.md
+  s_6084dd8c702c72::t_abb51d0f0cbb60 158-159,175-176,186,189,197-198
+  s_6084dd8c702c72::t_f3ff1694ff386b 143-144
+  s_6084dd8c702c72::t_02a172389ec074 74,76-77,94-95,109-123,137-141,145-150
+  s_6084dd8c702c72::t_296534a1fb4ac2 142
+plugin/skills/proschi-design-review/SKILL.md
+  s_6084dd8c702c72::t_b42b692a33aacd 68-74,104-106
+plugin/skills/proschi-hld-doc/SKILL.md
+  s_6084dd8c702c72::t_b42b692a33aacd 72-77
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d2fa22d0d9b7d3a3d68749eab1fa573a3ad32a1a",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
