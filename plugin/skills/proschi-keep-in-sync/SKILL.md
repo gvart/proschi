@@ -51,9 +51,9 @@ dependency bumps with the same role. Say "no architecture change" and stop.
   breaks `traffic`, `requirements`, `test` and links.
 - Match the existing style (groups, teams, label conventions, comments).
 - Declare a new node next to its tier or in its group, not at the end of the
-  file, and in its left-to-right place among its siblings: declaration order
-  is the layout's reading order, so the existing order stays and doesn't
-  flip. New edges go from the caller. If the file has a `legend`, tag the
+  file, and in its left-to-right place among its siblings: the layout keeps
+  declaration order wherever that adds no crossings, so the existing order
+  stays. New edges go from the caller. If the file has a `legend`, tag the
   new parts.
 - Step labels: method and path for HTTP (`POST /orders`); otherwise start
   with a verb, which decides read or write (INSERT, UPDATE, SET, PUBLISH,
