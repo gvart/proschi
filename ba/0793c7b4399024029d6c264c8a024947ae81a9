@@ -1,0 +1,21 @@
+docs/AGENT-SKILLS.md
+  s_6084dd8c702c72::t_86521e01aa6073 18,26-45,98
+CHANGELOG.md
+  s_6084dd8c702c72::t_86521e01aa6073 13-18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ba0793c7b4399024029d6c264c8a024947ae81a9",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
