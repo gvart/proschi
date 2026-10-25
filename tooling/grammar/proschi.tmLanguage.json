@@ -28,6 +28,9 @@
       "include": "#import"
     },
     {
+      "include": "#layout-hint"
+    },
+    {
       "include": "#keyword"
     },
     {
@@ -106,6 +109,24 @@
         },
         "4": {
           "name": "punctuation.definition.string.end.proschi"
+        }
+      }
+    },
+    "layout-hint": {
+      "comment": "`direction down|right|up|left` (top level or in a group) and `layout ordered`: layout hints, each a statement of its own. Otherwise the words are node ids.",
+      "match": "^\\s*(?:(direction)\\s+(down|right|up|left)|(layout)\\s+(ordered))(?=\\s*(?:#|$))",
+      "captures": {
+        "1": {
+          "name": "keyword.control.proschi"
+        },
+        "2": {
+          "name": "constant.language.direction.proschi"
+        },
+        "3": {
+          "name": "keyword.control.proschi"
+        },
+        "4": {
+          "name": "constant.language.layout.proschi"
         }
       }
     },
@@ -410,7 +431,7 @@
       "match": "\\b\\d+(?:\\.\\d+)?(?:[A-Za-z]+(?:/[A-Za-z]+)?|%)?(?: (?:rps|rpm|rpd|ms|s|usd/month|usd/GB|MB/s|GB/s)\\b| %)?"
     },
     "style": {
-      "comment": "`color <name>|#hex`, `critical` and `.tag` on nodes, groups and connections. Right after `color` a # is a hex color, not a comment.",
+      "comment": "`color <name>|#hex`, `critical`, `rank N|first|last` and `.tag` on nodes, groups and connections. Right after `color` a # is a hex color, not a comment.",
       "patterns": [
         {
           "include": "#color"
@@ -418,6 +439,17 @@
         {
           "name": "keyword.other.critical.proschi",
           "match": "(?<=\\s)critical(?![A-Za-z0-9_])"
+        },
+        {
+          "match": "(?<=\\s)(rank)\\s+(\\d+|first|last)(?![A-Za-z0-9_])",
+          "captures": {
+            "1": {
+              "name": "keyword.other.rank.proschi"
+            },
+            "2": {
+              "name": "constant.numeric.rank.proschi"
+            }
+          }
         },
         {
           "include": "#tag"
