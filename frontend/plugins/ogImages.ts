@@ -59,7 +59,7 @@ const h = (type: string, style: Record<string, unknown>, children?: Node['props'
 function tree(card: OgCard): Node {
   const title = clip(card.title, 70)
   const titleSize = title.length > 44 ? 60 : title.length > 24 ? 72 : 88
-  return h('div', { width: OG_WIDTH, height: OG_HEIGHT, display: 'flex', flexDirection: 'column', background: PAPER, padding: 56, fontFamily: 'Bricolage Grotesque', color: INK }, [
+  return h('div', { width: OG_WIDTH, height: OG_HEIGHT, boxSizing: 'border-box', display: 'flex', flexDirection: 'column', background: PAPER, padding: 56, fontFamily: 'Bricolage Grotesque', color: INK }, [
     h(
       'div',
       { display: 'flex', flexDirection: 'column', flexGrow: 1, border: `4px solid ${INK}`, background: '#FFFFFF', padding: '44px 52px', boxShadow: `12px 12px 0 ${INK}` },

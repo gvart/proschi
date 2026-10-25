@@ -5,7 +5,7 @@ import { describe, expect, it } from 'vitest';
 
 // The GitHub Action's script (action/run.mjs) is plain JavaScript; a computed
 // specifier keeps TypeScript from looking for its types.
-const script = '../../action/run.mjs';
+const script = new URL('../../action/run.mjs', import.meta.url).href;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const action: any = await import(script);
 

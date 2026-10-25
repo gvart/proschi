@@ -1,7 +1,6 @@
 import { existsSync, readFileSync, readdirSync } from 'node:fs'
 import { join } from 'node:path'
-import type { OutputAsset } from 'rollup'
-import type { Plugin, ViteDevServer } from 'vite'
+import type { Plugin, Rollup, ViteDevServer } from 'vite'
 // With the extension: the folder also holds Markdown.tsx, which esbuild would otherwise pick.
 import { CALLOUT_TITLES, TLDR_TITLE, parseInline, parseMarkdown, safeHref, slugger, type Block, type Inline } from '../src/practice/markdownReader.ts'
 import { compareProblems, readProblemMd, LESSON_MD, RESERVED_IDS, type ProblemMeta } from '../src/practice/problemFiles'
@@ -445,7 +444,7 @@ export function practicePages(problemsDir: string, { guideDir = join(problemsDir
       // After Vite's HTML plugin has written the template, with its assets linked.
       order: 'post',
       async handler(_, bundle) {
-        const template = bundle[TEMPLATE] as OutputAsset | undefined
+        const template = bundle[TEMPLATE] as Rollup.OutputAsset | undefined
         if (!template) return
         const html = String(template.source)
         delete bundle[TEMPLATE]

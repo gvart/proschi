@@ -32,7 +32,7 @@ export function siteShell(): Plugin {
       configFile: false,
       root: config.root,
       logLevel: 'error',
-      esbuild: { jsx: 'automatic' },
+      oxc: { jsx: { runtime: 'automatic' } },
     }).then((result) => result.module);
     return built;
   };

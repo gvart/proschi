@@ -13,6 +13,8 @@ interface State {
 }
 
 /** A link to a new GitHub issue with the error filled in: the message and stack only, never the user's designs. */
+// Kept next to the component that uses it.
+// eslint-disable-next-line react-refresh/only-export-components
 export function issueHref(where: string, error: Error): string {
   const body = [`Something went wrong in ${where}.`, '', '```', String(error.stack ?? error.message).slice(0, 1500), '```', '', `Page: ${location.pathname}`, `Browser: ${navigator.userAgent}`].join('\n');
   const params = new URLSearchParams({ title: `Crash in ${where}: ${error.message.slice(0, 80)}`, body });

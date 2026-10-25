@@ -32,23 +32,9 @@ import {
   Bell,
   KeyRound,
   RadioTower,
+  Mail,
 } from 'lucide-react';
 import {
-  // AWS Icons
-  SiAmazonwebservices,
-  SiAwslambda,
-  SiAmazonapigateway,
-  SiAmazonec2,
-  SiAmazonecs,
-  SiAmazoneks,
-  SiAwsfargate,
-  SiAmazons3,
-  SiAmazonrds,
-  SiAmazondynamodb,
-  SiAmazonelasticache,
-  SiAmazonsqs,
-  SiAmazonroute53,
-  SiAwselasticloadbalancing,
   // Database icons
   SiPostgresql,
   SiMysql,
@@ -61,7 +47,6 @@ import {
   SiInfluxdb,
   SiMariadb,
   SiSqlite,
-  SiOracle,
   // Queue icons
   SiApachekafka,
   SiRabbitmq,
@@ -99,7 +84,6 @@ import {
   SiScylladb,
   SiApachehbase,
   SiEtcd,
-  SiAmazondocumentdb,
   SiOpensearch,
   SiApachesolr,
   SiMeilisearch,
@@ -110,7 +94,6 @@ import {
   SiDatabricks,
   SiPrometheus,
   SiTimescale,
-  SiAmazonredshift,
   SiGooglebigquery,
   SiGooglecloudspanner,
   SiGooglecloudstorage,
@@ -123,16 +106,15 @@ import {
   SiPaypal,
   SiAdyen,
   SiBraintree,
-  SiTwilio,
-  SiSendgrid,
   SiMailgun,
   SiAuth0,
   SiOkta,
   SiGooglemaps,
-  SiOpenai,
   SiFirebase,
-  SiAmazonsimpleemailservice,
 } from 'react-icons/si';
+import { FaAws } from 'react-icons/fa6';
+import { GrOracle } from 'react-icons/gr';
+import { TbBrandOpenai, TbBrandTwilio } from 'react-icons/tb';
 
 /** Icons of tech stacks that have their own; the rest get their component type's (`typeIcons`). */
 export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
@@ -181,36 +163,36 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   'SOAP API': <Server className="w-5 h-5" />,
 
   // AWS Serverless
-  'AWS Lambda': <SiAwslambda className="w-5 h-5" />,
-  'AWS API Gateway': <SiAmazonapigateway className="w-5 h-5" />,
+  'AWS Lambda': <Zap className="w-5 h-5" />,
+  'AWS API Gateway': <DoorOpen className="w-5 h-5" />,
 
   // AWS Compute
-  'AWS EC2': <SiAmazonec2 className="w-5 h-5" />,
-  'AWS ECS': <SiAmazonecs className="w-5 h-5" />,
-  'AWS EKS': <SiAmazoneks className="w-5 h-5" />,
-  'AWS Fargate': <SiAwsfargate className="w-5 h-5" />,
+  'AWS EC2': <Cpu className="w-5 h-5" />,
+  'AWS ECS': <Container className="w-5 h-5" />,
+  'AWS EKS': <Container className="w-5 h-5" />,
+  'AWS Fargate': <Container className="w-5 h-5" />,
 
   // AWS Storage
-  'AWS S3': <SiAmazons3 className="w-5 h-5" />,
+  'AWS S3': <HardDrive className="w-5 h-5" />,
   'AWS EBS': <HardDrive className="w-5 h-5" />,
   'AWS EFS': <HardDrive className="w-5 h-5" />,
 
   // AWS Database
-  'AWS RDS': <SiAmazonrds className="w-5 h-5" />,
-  'AWS DynamoDB': <SiAmazondynamodb className="w-5 h-5" />,
-  'AWS ElastiCache': <SiAmazonelasticache className="w-5 h-5" />,
-  'AWS Aurora': <SiAmazonrds className="w-5 h-5" />,
+  'AWS RDS': <Database className="w-5 h-5" />,
+  'AWS DynamoDB': <Database className="w-5 h-5" />,
+  'AWS ElastiCache': <Database className="w-5 h-5" />,
+  'AWS Aurora': <Database className="w-5 h-5" />,
 
   // AWS Messaging
-  'AWS SQS': <SiAmazonsqs className="w-5 h-5" />,
+  'AWS SQS': <MessageSquare className="w-5 h-5" />,
   'AWS SNS': <RadioTower className="w-5 h-5" />,
   'AWS EventBridge': <RadioTower className="w-5 h-5" />,
   'AWS Kinesis': <RadioTower className="w-5 h-5" />,
 
   // AWS CDN/Network
   'AWS CloudFront': <Globe className="w-5 h-5" />,
-  'AWS Route53': <SiAmazonroute53 className="w-5 h-5" />,
-  'AWS Load Balancer': <SiAwselasticloadbalancing className="w-5 h-5" />,
+  'AWS Route53': <Network className="w-5 h-5" />,
+  'AWS Load Balancer': <Shuffle className="w-5 h-5" />,
 
   // GCP Serverless
   'GCP Cloud Functions': <Zap className="w-5 h-5" />,
@@ -287,7 +269,7 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   TimescaleDB: <SiTimescale className="w-5 h-5" />,
   MariaDB: <SiMariadb className="w-5 h-5" />,
   SQLite: <SiSqlite className="w-5 h-5" />,
-  Oracle: <SiOracle className="w-5 h-5" />,
+  Oracle: <GrOracle className="w-5 h-5" />,
   'SQL Server': <Database className="w-5 h-5" />,
 
   // Cache & In-Memory
@@ -317,16 +299,16 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   PayPal: <SiPaypal className="w-5 h-5" />,
   Adyen: <SiAdyen className="w-5 h-5" />,
   Braintree: <SiBraintree className="w-5 h-5" />,
-  Twilio: <SiTwilio className="w-5 h-5" />,
-  SendGrid: <SiSendgrid className="w-5 h-5" />,
+  Twilio: <TbBrandTwilio className="w-5 h-5" />,
+  SendGrid: <Mail className="w-5 h-5" />,
   Mailgun: <SiMailgun className="w-5 h-5" />,
   Auth0: <SiAuth0 className="w-5 h-5" />,
   Okta: <SiOkta className="w-5 h-5" />,
   'Google Maps': <SiGooglemaps className="w-5 h-5" />,
   APNs: <Bell className="w-5 h-5" />,
   FCM: <SiFirebase className="w-5 h-5" />,
-  OpenAI: <SiOpenai className="w-5 h-5" />,
-  'AWS SES': <SiAmazonsimpleemailservice className="w-5 h-5" />,
+  OpenAI: <TbBrandOpenai className="w-5 h-5" />,
+  'AWS SES': <Mail className="w-5 h-5" />,
   'AWS Cognito': <KeyRound className="w-5 h-5" />,
 
   // Stores, search and analytics
@@ -334,8 +316,8 @@ export const techStackIcons: Partial<Record<TechStack, ReactElement>> = {
   ScyllaDB: <SiScylladb className="w-5 h-5" />,
   HBase: <SiApachehbase className="w-5 h-5" />,
   etcd: <SiEtcd className="w-5 h-5" />,
-  'AWS DocumentDB': <SiAmazondocumentdb className="w-5 h-5" />,
-  'AWS Redshift': <SiAmazonredshift className="w-5 h-5" />,
+  'AWS DocumentDB': <Database className="w-5 h-5" />,
+  'AWS Redshift': <BarChart3 className="w-5 h-5" />,
   'AWS OpenSearch': <SiOpensearch className="w-5 h-5" />,
   OpenSearch: <SiOpensearch className="w-5 h-5" />,
   Solr: <SiApachesolr className="w-5 h-5" />,
@@ -404,7 +386,7 @@ export const componentTypeColors: Record<ComponentType, string> = {
 export const categoryIcons: Record<string, ReactElement> = {
   'Generic Shapes': <Box className="w-5 h-5" />,
   Services: <Server className="w-5 h-5" />,
-  'AWS Services': <SiAmazonwebservices className="w-5 h-5" />,
+  'AWS Services': <FaAws className="w-5 h-5" />,
   'GCP Services': <SiGooglecloud className="w-5 h-5" />,
   'Azure Services': <Cloud className="w-5 h-5" />,
   Databases: <Database className="w-5 h-5" />,

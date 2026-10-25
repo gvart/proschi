@@ -7,6 +7,16 @@ updates:
     groups:
       frontend-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # 0.12 crashes laying out groups, and the layout benchmarks are tuned to 0.10.
+      - dependency-name: elkjs
+        versions: [">=0.11.0"]
+      # typescript-eslint doesn't support TypeScript 7 yet; move the whole repo at once.
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
+      # 1.64's Chromium fails about 20 e2e tests (aborted view transitions, timeouts); upgrade on its own.
+      - dependency-name: "@playwright/test"
+        versions: [">=1.57.0"]
 
   - package-ecosystem: npm
     directory: /tooling
@@ -15,6 +25,16 @@ updates:
     groups:
       tooling-minor-and-patch:
         update-types: [minor, patch]
+    ignore:
+      # Kept with the frontend's.
+      - dependency-name: elkjs
+        versions: [">=0.11.0"]
+      # Must not be newer than the extension's engines.vscode (vscode/package.json).
+      - dependency-name: "@types/vscode"
+        update-types: [version-update:semver-major, version-update:semver-minor]
+      # Moves with the frontend's (above).
+      - dependency-name: typescript
+        update-types: [version-update:semver-major]
 
   - package-ecosystem: github-actions
     directory: /
