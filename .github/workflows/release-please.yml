@@ -1,0 +1,57 @@
+name: Release Please
+
+# Every push to main updates the release pull request: the next version
+# (from the conventional commit titles since the last release), the
+# CHANGELOG.md section and the version in tooling/package.json,
+# tooling/package-lock.json, tooling/vscode/package.json and
+# tooling/jetbrains/gradle.properties. Merging that pull request makes the
+# next run tag `tooling-v<version>` and create the GitHub release.
+#
+# A tag or release made with GITHUB_TOKEN starts no other workflow, so the
+# publish job starts the publishing workflows itself, on the new tag.
+# workflow_dispatch is the one event GITHUB_TOKEN may trigger. npm Trusted
+# Publishing checks the name of the top-level workflow, so release-tooling.yml
+# has to run as its own workflow, not as a reusable one called from here.
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: release-please
+  cancel-in-progress: false
+
+permissions: {}
+
+jobs:
+  release-please:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # the release branch, tags and releases
+      pull-requests: write # the release pull request
+      issues: write # labels on the release pull request
+    outputs:
+      release_created: ${{ steps.release.outputs.release_created }}
+      tag_name: ${{ steps.release.outputs.tag_name }}
+    steps:
+      - uses: googleapis/release-please-action@v5
+        id: release
+        with:
+          config-file: release-please-config.json
+          manifest-file: .release-please-manifest.json
+
+  publish:
+    needs: release-please
+    if: needs.release-please.outputs.release_created == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write # workflow_dispatch
+    env:
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+      TAG: ${{ needs.release-please.outputs.tag_name }}
+    steps:
+      - name: Publish npm, the VS Code Marketplace and Open VSX
+        run: gh workflow run release-tooling.yml --ref "$TAG"
+      - name: Publish the JetBrains plugin
+        run: gh workflow run jetbrains.yml --ref "$TAG"

@@ -5,9 +5,9 @@ All notable changes to Proschi are documented here. The format is based on
 (the `proschi` npm package and the VS Code extension) follows
 [Semantic Versioning](https://semver.org/). Versions are tagged
 `tooling-v<version>`; the web app at <https://proschi.app/> is
-deployed from `main` and ships with the same changes.
-
-## [Unreleased]
+deployed from `main` and ships with the same changes. From 0.12.0 on,
+[release-please](https://github.com/googleapis/release-please) writes each
+section from the conventional commit titles of the merged pull requests.
 
 ## [0.11.0] - 2026-10-25
 
@@ -1075,7 +1075,6 @@ deployed from `main` and ships with the same changes.
   grammar, a JSON Schema for the parsed diagram and a VS Code extension,
   released on tag push.
 
-[Unreleased]: https://github.com/gvart/proschi/compare/tooling-v0.11.0...HEAD
 [0.11.0]: https://github.com/gvart/proschi/compare/tooling-v0.10.0...tooling-v0.11.0
 [0.10.0]: https://github.com/gvart/proschi/compare/tooling-v0.9.0...tooling-v0.10.0
 [0.9.0]: https://github.com/gvart/proschi/compare/tooling-v0.8.0...tooling-v0.9.0
