@@ -200,7 +200,8 @@ interface Separate {
   leaves: (Box & { id: string })[];
 }
 
-async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>, options: LayoutOptions): Promise<Level> {
+/** `declared`: declaration order, which steers edge directions; ELK sees the nodes in `diagram.nodes` order. */
+async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>, options: LayoutOptions, declared = new Map(diagram.nodes.map((n, i) => [n.id, i]))): Promise<Level> {
   const byId = new Map(diagram.nodes.map((n) => [n.id, n]));
   const parentOf = (id: string) => {
     const p = byId.get(id)?.parent;
@@ -222,8 +223,17 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
   };
 
   const separate = new Map<string, Separate>();
-  for (const group of diagram.nodes.filter((n) => isSeparate(n.id) && carrierOf(n.id) === n.id)) {
-    const inside = diagram.nodes.filter((n) => isAncestor(byId, group.id, n.id));
+  const outermost = diagram.nodes.filter((n) => isSeparate(n.id) && carrierOf(n.id) === n.id);
+  // Laid out on its own, a group's members keep their order whatever the edges
+  // around it, so they take the order a layout with the group in the main flow gives them.
+  const across = new Map<string, number>();
+  if (outermost.length) {
+    const inline = Object.fromEntries(outermost.map((g) => [g.id, { direction: flowAt(parentOf(g.id)) }]));
+    const preview = absoluteBoxes((await layoutLevel(diagram, getElk, { ...options, groups: { ...options.groups, ...inline } }, declared)).nodes);
+    for (const [id, b] of preview) across.set(id, flow === 'DOWN' || flow === 'UP' ? b.x + b.width / 2 : b.y + b.height / 2);
+  }
+  for (const group of outermost) {
+    const inside = diagram.nodes.filter((n) => isAncestor(byId, group.id, n.id)).sort((a, b) => (across.get(a.id) ?? 0) - (across.get(b.id) ?? 0));
     const ids = new Set(inside.map((n) => n.id));
     // The group's direct members become the sub-layout's top level: their parent is not in it.
     const sub: Diagram = { ...diagram, nodes: inside, edges: diagram.edges.filter((e) => ids.has(e.source) && ids.has(e.target)) };
@@ -234,7 +244,7 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
       'elk.aspectRatio': direction === 'RIGHT' || direction === 'LEFT' ? '100' : '0.01',
       ...(inside.some((n) => n.kind === 'group') ? {} : { 'elk.hierarchyHandling': 'SEPARATE_CHILDREN' }),
     };
-    const level = await layoutLevel(sub, getElk, { ...options, direction, elk: { ...along, ...options.elk } });
+    const level = await layoutLevel(sub, getElk, { ...options, direction, elk: { ...along, ...options.elk } }, declared);
     const rects = absoluteBoxes(level.nodes);
     // Sized around what the layout placed; members pinned with `pos` are grown around later.
     const top = level.nodes.filter((b) => !b.parent);
@@ -326,7 +336,7 @@ async function layoutLevel(diagram: Diagram, getElk: () => Promise<ElkInstance>,
     }
   }
 
-  const reversed = orientEdges(edges, new Map(diagram.nodes.map((n, i) => [n.id, i])), !!options.ordered);
+  const reversed = orientEdges(edges, declared, !!options.ordered);
   const interactive = rankLayers(mainNodes, edges, reversed, elkNodes, roots, parentOf, flow);
   // After rankLayers, which may turn edges: a port's side depends on which way its edge runs.
   const ports = attachPorts(edges, separate, elkNodes, flow);
@@ -566,24 +576,25 @@ function rankLayers(
       const [a, b] = [childOf(e.source), childOf(e.target)];
       return a !== undefined && b !== undefined && a !== b ? [{ edge: e, a, b }] : [];
     });
-    const layers = assignLayers(children, links.map((l) => [l.a, l.b]), (id) => rankOf.get(id));
+    const layers = assignLayers(children, links.map((l): Link => [l.a, l.b, l.edge.labels?.length ? 2 : 1]), (id) => rankOf.get(id));
     for (const { edge, a, b } of links) {
       if (layers.get(a)! <= layers.get(b)!) continue;
       flipEdge(edge);
       if (reversed.has(edge.id)) reversed.delete(edge.id);
       else reversed.add(edge.id);
     }
-    // Nodes go in even layers; the odd ones between are for labels.
-    children.forEach((id, i) => place(elkNodes.get(id)!, 2 * layers.get(id)!, i));
+    children.forEach((id, i) => place(elkNodes.get(id)!, layers.get(id)!, i));
     // ELK turns a centred label into a node of its own before layering, which
     // interactive layering cannot place. A real stand-in node is placed here instead,
-    // in a label layer the edge passes through, and the edge runs through it.
+    // in a layer between the ends (labelled edges span two at least, as in ELK), and the
+    // edge runs through it. It comes right after the edge's upper end in model order.
     const siblings = container === undefined ? roots : elkNodes.get(container)!.children!;
     for (const { edge, a, b } of links) {
       const label = edge.labels?.[0];
       delete edge.labels;
       const [top, bottom] = [Math.min(layers.get(a)!, layers.get(b)!), Math.max(layers.get(a)!, layers.get(b)!)];
-      if (!label || top === bottom) continue;
+      // Without a layer between its ends (a rank held it close), the label goes on the line, without room kept for it.
+      if (!label || bottom - top < 2) continue;
       const id = `${edge.id}\u0000label`;
       const [width, height] = [label.width ?? 0, label.height ?? 0];
       const inSide = IN_SIDE[flow];
@@ -598,8 +609,8 @@ function rankLayers(
           { id: `${id}\u0000out`, ...at(OPPOSITE[inSide]), width: 0, height: 0, layoutOptions: { 'elk.port.side': OPPOSITE[inSide] } },
         ],
       };
-      place(stand, 2 * top + 1 + 2 * Math.floor((bottom - top - 1) / 2), siblings.length);
-      siblings.push(stand);
+      place(stand, top + Math.floor((bottom - top) / 2), siblings.length);
+      siblings.splice(siblings.indexOf(elkNodes.get(layers.get(a)! < layers.get(b)! ? a : b)!) + 1, 0, stand);
       elkNodes.set(id, stand);
       edge.via = id;
     }
@@ -626,12 +637,122 @@ function reachable(succ: Map<string, Set<string>>, from: string, to: string): bo
   return false;
 }
 
+/**
+ * Network simplex layering (Gansner et al., "A Technique for Drawing Directed
+ * Graphs", as in ELK's default layering): moves the layers in `layer`, a
+ * feasible start, to where the weighted edge lengths in total are smallest
+ * while every edge spans at least its `minlen`.
+ */
+function networkSimplex(nodes: string[], edges: { u: string; v: string; minlen: number; weight: number }[], layer: Map<string, number>) {
+  const slack = (e: (typeof edges)[number]) => layer.get(e.v)! - layer.get(e.u)! - e.minlen;
+  const incident = new Map(nodes.map((n) => [n, [] as number[]]));
+  edges.forEach((e, i) => {
+    incident.get(e.u)!.push(i);
+    incident.get(e.v)!.push(i);
+  });
+  const other = (i: number, n: string) => (edges[i].u === n ? edges[i].v : edges[i].u);
+  const done = new Set<string>();
+  for (const start of nodes) {
+    if (done.has(start)) continue;
+    // A spanning tree of tight edges for start's component, shifting the tree onto the nearest edge.
+    const inTree = new Set([start]);
+    const tree = new Set<number>();
+    const grow = () => {
+      for (let changed = true; changed; ) {
+        changed = false;
+        for (const n of [...inTree]) {
+          for (const i of incident.get(n)!) {
+            const m = other(i, n);
+            if (!inTree.has(m) && slack(edges[i]) === 0) {
+              inTree.add(m);
+              tree.add(i);
+              changed = true;
+            }
+          }
+        }
+      }
+    };
+    grow();
+    for (;;) {
+      let best = -1;
+      for (const n of inTree) for (const i of incident.get(n)!) if (!inTree.has(other(i, n)) && (best < 0 || slack(edges[i]) < slack(edges[best]))) best = i;
+      if (best < 0) break;
+      const delta = inTree.has(edges[best].u) ? slack(edges[best]) : -slack(edges[best]);
+      for (const n of inTree) layer.set(n, layer.get(n)! + delta);
+      grow();
+    }
+    for (const n of inTree) done.add(n);
+    if (tree.size === 0) continue;
+
+    // The tail side of a tree edge: what stays connected to its `u` without it.
+    const tailSide = (cut: number) => {
+      const side = new Set([edges[cut].u]);
+      const stack = [edges[cut].u];
+      while (stack.length) {
+        const n = stack.pop()!;
+        for (const i of incident.get(n)!) {
+          if (i === cut || !tree.has(i)) continue;
+          const m = other(i, n);
+          if (!side.has(m)) {
+            side.add(m);
+            stack.push(m);
+          }
+        }
+      }
+      return side;
+    };
+    const component = [...inTree];
+    for (let round = 0; round < 10 * component.length + 100; round++) {
+      let leave = -1;
+      let tail = new Set<string>();
+      for (const t of tree) {
+        const side = tailSide(t);
+        let cut = 0;
+        for (const n of component) {
+          for (const i of incident.get(n)!) {
+            if (edges[i].u !== n) continue;
+            const [fromTail, toTail] = [side.has(edges[i].u), side.has(edges[i].v)];
+            if (fromTail && !toTail) cut += edges[i].weight;
+            else if (!fromTail && toTail) cut -= edges[i].weight;
+          }
+        }
+        if (cut < 0) {
+          leave = t;
+          tail = side;
+          break;
+        }
+      }
+      if (leave < 0) break;
+      let enter = -1;
+      for (const n of component) {
+        for (const i of incident.get(n)!) {
+          if (edges[i].u !== n || tree.has(i)) continue;
+          if (!tail.has(edges[i].u) && tail.has(edges[i].v) && (enter < 0 || slack(edges[i]) < slack(edges[enter]))) enter = i;
+        }
+      }
+      if (enter < 0) break;
+      // Moving the tail side makes the entering edge tight.
+      const delta = slack(edges[enter]);
+      for (const n of tail) layer.set(n, layer.get(n)! + delta);
+      tree.delete(leave);
+      tree.add(enter);
+    }
+  }
+}
+
+/** An edge between two children of a container, and how many layers it spans at least: 2 with a label, which takes a layer of its own. */
+type Link = [from: string, to: string, length: number];
+
 /** How far down its rank each member goes: the longest path to it over edges among the members (in declaration order, skipping those that close a cycle). */
-function depthsWithin(members: string[], links: [string, string][]): Map<string, number> {
+function depthsWithin(members: string[], links: Link[]): Map<string, number> {
   const inside = new Set(members);
   const succ = new Map(members.map((m) => [m, new Set<string>()]));
-  for (const [a, b] of links) {
-    if (inside.has(a) && inside.has(b) && a !== b && !reachable(succ, b, a)) succ.get(a)!.add(b);
+  const length = new Map<string, number>();
+  for (const [a, b, len] of links) {
+    if (inside.has(a) && inside.has(b) && a !== b && !reachable(succ, b, a)) {
+      succ.get(a)!.add(b);
+      length.set(`${a}\u0000${b}`, Math.max(len, length.get(`${a}\u0000${b}`) ?? 1));
+    }
   }
   const depth = new Map(members.map((m) => [m, 0]));
   // At most members.length rounds: the graph is acyclic.
@@ -639,8 +760,9 @@ function depthsWithin(members: string[], links: [string, string][]): Map<string,
     changed = false;
     for (const [a, next] of succ) {
       for (const b of next) {
-        if (depth.get(b)! < depth.get(a)! + 1) {
-          depth.set(b, depth.get(a)! + 1);
+        const step = length.get(`${a}\u0000${b}`)!;
+        if (depth.get(b)! < depth.get(a)! + step) {
+          depth.set(b, depth.get(a)! + step);
           changed = true;
         }
       }
@@ -652,11 +774,11 @@ function depthsWithin(members: string[], links: [string, string][]): Map<string,
 /**
  * Layers for the children of one container: ranks first (in order, `first`
  * above and `last` below everything; see depthsWithin), then each edge in
- * declaration order unless it would close a cycle, laid out longest-path and
- * then each node moved, within what its constraints allow, to where its edges
- * are shortest.
+ * declaration order unless it would close a cycle, a labelled one two layers
+ * long; laid out longest-path, then by network simplex, so that without ranks
+ * the layers are about what ELK's own layering would choose.
  */
-export function assignLayers(children: string[], links: [string, string][], rankOf: (id: string) => Rank | undefined): Map<string, number> {
+export function assignLayers(children: string[], links: Link[], rankOf: (id: string) => Rank | undefined): Map<string, number> {
   const key = (r: Rank) => (r === 'first' ? -Infinity : r === 'last' ? Infinity : r);
   // ELK cannot draw an edge within a layer, so of two connected nodes of one
   // rank the target goes a layer lower: a rank is a run of layers, one per depth.
@@ -674,9 +796,13 @@ export function assignLayers(children: string[], links: [string, string][], rank
   const units = [...new Set([...chain.map((c) => c.unit), ...unitOf.values()])];
   const succ = new Map(units.map((u) => [u, new Set<string>()]));
   const pred = new Map(units.map((u) => [u, new Set<string>()]));
-  const add = (a: string, b: string) => {
+  /** How many layers apart the ends of each constraint must at least be. */
+  const minlen = new Map<string, number>();
+  const gap = (a: string, b: string) => minlen.get(`${a}\u0000${b}`) ?? 1;
+  const add = (a: string, b: string, length = 1) => {
     succ.get(a)!.add(b);
     pred.get(b)!.add(a);
+    minlen.set(`${a}\u0000${b}`, Math.max(length, gap(a, b)));
   };
   const reaches = (from: string, to: string) => reachable(succ, from, to);
 
@@ -688,14 +814,13 @@ export function assignLayers(children: string[], links: [string, string][], rank
     if (lasts.length && !lasts.includes(u) && !firsts.includes(u)) add(u, lasts[0]);
   }
 
-  const degree = new Map(units.map((u) => [u, 0]));
-  for (const [a, b] of links) {
+  /** Real edges per constraint; the rank chain only spaces layers and weighs nothing. */
+  const weight = new Map<string, number>();
+  for (const [a, b, length] of links) {
     const [ua, ub] = [unitOf.get(a)!, unitOf.get(b)!];
     if (ua === ub || (!succ.get(ua)!.has(ub) && reaches(ub, ua))) continue;
-    add(ua, ub);
-    // Moving a node down lengthens its incoming edges and shortens its outgoing ones.
-    degree.set(ua, degree.get(ua)! - 1);
-    degree.set(ub, degree.get(ub)! + 1);
+    add(ua, ub, length);
+    weight.set(`${ua}\u0000${ub}`, (weight.get(`${ua}\u0000${ub}`) ?? 0) + 1);
   }
 
   // Longest path from the top, in topological order.
@@ -704,26 +829,15 @@ export function assignLayers(children: string[], links: [string, string][], rank
   const ready = units.filter((u) => waiting.get(u) === 0);
   while (ready.length) {
     const u = ready.shift()!;
-    layer.set(u, Math.max(0, ...[...pred.get(u)!].map((p) => layer.get(p)! + 1)));
+    layer.set(u, Math.max(0, ...[...pred.get(u)!].map((p) => layer.get(p)! + gap(p, u))));
     for (const s of succ.get(u)!) {
       waiting.set(s, waiting.get(s)! - 1);
       if (waiting.get(s) === 0) ready.push(s);
     }
   }
 
-  // Each move shortens the edges in total, so this settles.
-  for (let sweep = 0, moved = true; moved && sweep < 100; sweep++) {
-    moved = false;
-    for (const u of units) {
-      const d = degree.get(u)!;
-      if (d === 0) continue;
-      const bound = d > 0 ? Math.max(...[...pred.get(u)!].map((p) => layer.get(p)! + 1)) : Math.min(...[...succ.get(u)!].map((s) => layer.get(s)! - 1));
-      if (Number.isFinite(bound) && bound !== layer.get(u)) {
-        layer.set(u, bound);
-        moved = true;
-      }
-    }
-  }
+  const constraints = units.flatMap((u) => [...succ.get(u)!].map((v) => ({ u, v, minlen: gap(u, v), weight: weight.get(`${u}\u0000${v}`) ?? 0 })));
+  networkSimplex(units, constraints, layer);
 
   const top = Math.min(...layer.values());
   return new Map(children.map((c) => [c, layer.get(unitOf.get(c)!)! - top]));

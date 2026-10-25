@@ -59,23 +59,37 @@ other, the topics side by side.
 
 | fixture | nodes | edges | unrouted | crossings | totalLength | maxLength | bends | overlaps | throughNodes | cornerEnds | width | height | aspect |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|
-| order-fulfillment (no hints) | 50 | 57 | 0 | 17 | 58908 | 3874 | 178 | 0 | 0 | 0 | 4032 | 3016 | 1.34 |
-| order-fulfillment-hinted | 50 | 57 | 0 | 19 | 59067 | 4526 | 236 | 0 | 0 | 0 | 3309 | 3854 | 0.86 |
-| only `layout ordered` | 50 | 57 | 0 | 11 | 49121 | 3145 | 175 | 0 | 0 | 0 | 2721 | 3590 | 0.76 |
-| ranks and `direction`, no `layout ordered` | 50 | 57 | 0 | 33 | 61821 | 4375 | 256 | 0 | 0 | 0 | 3375 | 3734 | 0.90 |
+| no hints | 50 | 57 | 0 | 17 | 58908 | 3874 | 178 | 0 | 0 | 0 | 4032 | 3016 | 1.34 |
+| `layout ordered` | 50 | 57 | 0 | 11 | 49121 | 3145 | 175 | 0 | 0 | 0 | 2721 | 3590 | 0.76 |
+| ordered + group ranks | 50 | 57 | 0 | 13 | 49993 | 3386 | 223 | 0 | 0 | 0 | | | |
+| ordered + top row + group ranks | 50 | 57 | 0 | 33 | 58681 | 3911 | 235 | 0 | 0 | 0 | | | |
+| ordered + `direction right` in Kafka | 50 | 57 | 0 | 26 | 49455 | 3327 | 219 | 0 | 0 | 0 | | | |
+| order-fulfillment-hinted (all of them) | 50 | 57 | 0 | 9 | 61038 | 3694 | 225 | 0 | 0 | 0 | 3429 | 3768 | 0.91 |
 
-The hinted layout has about as many crossings and as much edge length as the
-plain one, but it has the reference's shape: externals in one row on top,
-region 2 above the Kafka cluster (not below it), the topics in one row and
-GCP at the bottom. `layout ordered` alone gives the lowest numbers, but its
-externals are scattered over several rows. Ranks pin the rows, and the
-ordered mode keeps the edges between them short.
+The committed hints give the fewest crossings and the reference's shape:
+externals in one row on top, region 2 above the Kafka cluster (not below
+it), the topics in one row and GCP at the bottom. They cost about 20% more
+edge length than `layout ordered` alone, mostly because one aligned top row
+stretches the edges of externals that the plain layering would put next to
+their partners. `layout ordered` alone gives the shortest layout, but its
+externals are scattered over several rows.
+
+The partial combinations show that ELK's crossing minimization swings a lot
+on this graph. One rank more or less moves the count by ten or more in
+either direction (the top row alone: 33, with Hurrier and the Vendor
+Service ranked beside GCP: 27, with the Kafka row on top of that: 9), so
+crossings are a check here, not something to tune one hint at a time.
+Only two costs are steady: ranks align rows at the price of edge length,
+and a group with its own direction keeps its members in one order. The
+order it keeps is the order a layout with the group in the main flow would
+give them.
 
 How the engine does it (autoLayout.ts):
 
 - `rank`: in each container that has ranked children, autoLayout computes
-  the layers itself and passes them to ELK's interactive layering as
-  positions. Connected nodes of one rank can't share a layer (layered layouts
+  the layers itself, with network simplex like ELK, and passes them to ELK's
+  interactive layering as positions. With a single harmless rank the fixture
+  gets 13 crossings, against 11 with ELK's own layering. Connected nodes of one rank can't share a layer (layered layouts
   have no edges within a layer), so the target goes one layer lower. That's
   why the regions have ranks 1 and 2 and not one shared rank. ELK turns a
   centred label into a node of its own before layering, and interactive
@@ -83,7 +97,8 @@ How the engine does it (autoLayout.ts):
   stand-in node in a layer of its own, which the edge runs through.
 - `direction` in a group: with INCLUDE_CHILDREN, ELK gives every group the
   root's direction, so a group with its own direction is laid out on its
-  own and placed as one box. Edges across its border end at fixed ports
+  own (its members in the order a first layout with the group in the main
+  flow gives them) and placed as one box. Edges across its border end at fixed ports
   straight across from the member they reach, and a short straight leg
   joins the port and the member. ELK can't route those legs around other
   members, so a port goes on whichever side has a clear way in.

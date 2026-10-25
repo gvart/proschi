@@ -69,10 +69,10 @@ describe('layout metrics', () => {
     expect(rows['order-fulfillment'].aspect).toBeGreaterThan(0.6);
     expect(rows['order-fulfillment'].aspect).toBeLessThan(2);
     for (const name of ['ecommerce', 'events', 'url-shortener']) expect(rows[name].crossings).toBe(0);
-    // With hints (layoutFixtures/README.md): about as many crossings and as long as without, in the reference's shape.
-    expect(rows['order-fulfillment-hinted'].crossings).toBeLessThanOrEqual(22);
+    // With hints (layoutFixtures/README.md): fewer crossings than without, in the reference's shape.
+    expect(rows['order-fulfillment-hinted'].crossings).toBeLessThanOrEqual(11);
     expect(rows['order-fulfillment-hinted'].totalLength).toBeLessThanOrEqual(64_000);
-    expect(rows['order-fulfillment-hinted'].maxLength).toBeLessThanOrEqual(5000);
+    expect(rows['order-fulfillment-hinted'].maxLength).toBeLessThanOrEqual(4500);
   }, 30_000);
 
   it('steers the hinted fixture into the shape of the reference', async () => {
