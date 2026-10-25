@@ -19,7 +19,8 @@ Use cases play over nodes and connections. If the repo has a `.proschi` file
 with the architecture, put the use cases in it or in a new file that starts
 with `import "architecture.proschi"`. If there is none, write the nodes
 first (the `infra-to-proschi` skill; minimum: a client, each service, each
-store, each external API) and connect them.
+store, each external API) and connect them, declared in reading order
+(the cheat-sheet's *Layout* section).
 
 **OpenAPI shortcut.** With a spec, scaffold one use case per operation, then
 replace `api` with the real node id and fill in the downstream calls:
@@ -100,6 +101,11 @@ came (`b --> a` answers `a -> b`); a test that fails because the code really doe
 wait on something → tell the user, don't weaken the test silently. If the
 spec is available, `npx proschi@latest check --openapi svc=openapi.yaml usecases.proschi`
 also checks paths, status codes and bodies against it.
+
+**If you added or changed nodes or connections**, render the architecture and
+look at it before handing over (mandatory; the cheat-sheet's *Render and
+review* checklist): `npx proschi@latest render --out /tmp/proschi-review usecases.proschi`.
+A new node goes next to its tier in the file, not at the end.
 
 ## 6. Hand over
 

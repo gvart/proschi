@@ -83,6 +83,10 @@ repeat:
 
 Prefer topology changes (replicas, cache, async) over `capacity` overrides;
 override only with a source for the number. Keep `fmt` and `check` clean.
+A new node (a cache, a queue and its worker) goes next to its tier in the
+file, with edges from the caller; then render and review the diagram
+(mandatory, the cheat-sheet's *Render and review* checklist):
+`npx proschi@latest render --out /tmp/proschi-review design.proschi`.
 
 ## 4. Report and hand over
 

@@ -69,6 +69,12 @@ npx proschi@latest test design.proschi
 `render` refuses a document with errors, so fix them first. Failing tests
 are fine to render (they become Risks), but tell the user.
 
+The document embeds the architecture diagram, so review it first
+(mandatory): `npx proschi@latest render --out /tmp/proschi-review design.proschi`,
+look at `architecture.svg`, and walk the cheat-sheet's *Render and review*
+checklist. Fix crossings and sprawl in the model (order, group edges,
+hints), not in the output.
+
 ## 4. Render
 
 ```sh

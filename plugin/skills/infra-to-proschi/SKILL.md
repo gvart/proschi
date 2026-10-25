@@ -71,9 +71,10 @@ name (`order-api` → `order_api`). Owner teams from CODEOWNERS or labels →
 - VPC / VNet / network → `[Network Boundary]`; private subnets or a DMZ →
   `[Security Zone]`.
 - Kubernetes cluster or namespace, Compose project → `[Service Group]`.
-- Team or bounded context → plain `group` (Logical Group).
+- Team, bounded context or tier ("Data layer") → plain `group` (Logical Group).
 
-Nest at most two levels; skip a group with a single member.
+A group with one member is fine when it is a real boundary (a database in
+its own subnet). Nest at most two levels.
 
 ## 4. Connections
 
@@ -90,6 +91,8 @@ Add `a -> b : label` (caller → callee) for each dependency you can see:
   `aws_sns_topic_subscription` → topic → subscriber; LB target groups → service.
 - Labels: the protocol or purpose (`HTTPS`, `SQL`, `gRPC`, `Publish`,
   `Consume`). A consumer reads from a queue: `queue -> worker : Consume`.
+- One edge per pair, from the caller. Every member of a group calling the
+  same thing (metrics, logs, a shared auth check) → one edge from the group.
 
 ## 5. Mark guesses, never invent silently
 
@@ -103,7 +106,21 @@ api -> search : Query # GUESS: inferred from ELASTIC_URL in api env
 Prefer leaving a node unconnected (with a `# TODO:` comment) over inventing
 a dependency. At the end, list the guesses for the user to confirm.
 
-## 6. Validate and iterate
+## 6. Order, colors and legend
+
+The file's order is the diagram's reading order. Follow the
+[layout rules](references/proschi-cheatsheet.md#layout-diagrams-that-read-well):
+
+- [ ] Declarations go tier by tier: clients, edge, services, queues and
+      workers, stores, externals, then monitoring and logging.
+- [ ] Inside each group, members are in the order they are called.
+- [ ] Every edge points caller → callee, down the tiers; no `a -> b` plus `b -> a`.
+- [ ] No `color` unless the sources mark something the reader must tell
+      apart: ownership (CODEOWNERS, team labels), planned or deprecated parts.
+      Then a `legend` entry per meaning and a `.tag` on each node, group or edge.
+- [ ] `critical` only where a source says so (tier-0, on-call, SLO).
+
+## 7. Validate and iterate
 
 ```sh
 npx proschi@latest fmt architecture.proschi
@@ -117,7 +134,20 @@ requirements or tests, also run `npx proschi@latest test architecture.proschi`
 and make it pass (or report why it cannot). To add request flows next, use the
 `code-to-usecases` skill; for load and cost, `proschi-capacity-plan`.
 
-## 7. Hand over
+## 8. Render and review (mandatory)
+
+```sh
+npx proschi@latest render --out /tmp/proschi-review architecture.proschi
+```
+
+Look at the whole of `/tmp/proschi-review/architecture.svg` (as a PNG if you
+can only read raster images; see the cheat-sheet) and walk the checklist in
+the [cheat-sheet](references/proschi-cheatsheet.md#layout-diagrams-that-read-well):
+crossings, edges pointing up, stranded nodes, sprawl, the wrong order. Fix
+the file, `check` and render again. Don't hand over a diagram you have not
+looked at.
+
+## 9. Hand over
 
 ```sh
 npx proschi@latest share-link architecture.proschi
@@ -125,7 +155,8 @@ npx proschi@latest share-link architecture.proschi
 
 Give the user: the file path, the link (it opens the diagram in the web
 editor; the diagram is inside the link, nothing is uploaded), the list of
-guesses to confirm, and what you left out.
+guesses to confirm, what you left out, and anything the render still gets
+wrong.
 
 ## Worked example
 
@@ -141,7 +172,8 @@ services:
   rabbit: { image: "rabbitmq:3-management" }
 ```
 
-`architecture.proschi`:
+`architecture.proschi`, declared in reading order (client, proxy, API,
+queue, worker, stores, externals):
 
 ```proschi
 title "Shop" "Online shop: catalogue, checkout and order emails"
@@ -151,19 +183,19 @@ user "Customer" [Browser]
 group shop "Compose project: shop" [Service Group] {
   nginx  "Reverse proxy" [nginx]
   api    "Shop API"      [Node.js]    "Catalogue and checkout"
-  worker "Order worker"  [Node.js]    "Sends order confirmations" # from command: node src/worker.js
-  db     "Shop DB"       [PostgreSQL]
-  cache  "Product cache" [Redis]
   rabbit "Order events"  [RabbitMQ]
+  worker "Order worker"  [Node.js]    "Sends order confirmations" # from command: node src/worker.js
+  cache  "Product cache" [Redis]
+  db     "Shop DB"       [PostgreSQL]
 }
 stripe   "Stripe"   [Stripe]   # from STRIPE_API_KEY
 sendgrid "SendGrid" [SendGrid] # from SENDGRID_API_KEY
 
 user   -> nginx    : HTTPS # GUESS: port 443 published on nginx
 nginx  -> api      : HTTP
-api    -> db       : SQL
-api    -> cache    : GET/SET
 api    -> rabbit   : Publish
+api    -> cache    : GET/SET
+api    -> db       : SQL
 api    -> stripe   : HTTPS
 rabbit -> worker   : Consume
 worker -> db       : SQL
