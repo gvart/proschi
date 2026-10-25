@@ -10,12 +10,6 @@ deployed from `main` and ships with the same changes.
 ## [Unreleased]
 
 ### Added
-- **Agent skills that draw readable diagrams.** A new `image-to-proschi`
-  skill recreates a screenshot or image of an architecture diagram, keeping
-  its legend and reading order. Every skill now teaches edge direction,
-  declaration order by tier, grouping, one edge to a group instead of one per
-  member, when to use a legend, tags and `critical`, and a mandatory step
-  that renders the diagram and fixes crossings and sprawl before finishing.
 - **Colors, a legend and a critical marker.** Nodes are now tinted by
   category (clients, edge, services, data stores, queues, external) in
   calm colors that work in light and dark. `color teal` or `color #0891b2`
@@ -37,6 +31,12 @@ deployed from `main` and ships with the same changes.
   legend" example now uses `layout ordered`, so Order Events stays below
   the services around it. See "Steering the layout" in the language
   reference.
+- **Agent skills that draw readable diagrams.** A new `image-to-proschi`
+  skill recreates a screenshot or image of an architecture diagram, keeping
+  its legend and reading order. Every skill now teaches edge direction,
+  declaration order by tier, grouping, one edge to a group instead of one per
+  member, when to use a legend, tags and `critical`, and a mandatory step
+  that renders the diagram and fixes crossings and sprawl before finishing.
 - **A `broker` kind for message brokers and event logs.** Kafka, Redpanda,
   Pulsar, NATS, RabbitMQ, ActiveMQ, Kinesis, MSK, SNS, EventBridge,
   Pub/Sub, Service Bus, Event Hubs and Event Grid are now brokers, with
@@ -73,7 +73,6 @@ deployed from `main` and ships with the same changes.
   upper-case group names, and pink step numbers in sequence diagrams.
 - **The VS Code preview fits the diagrams to the panel's width** instead of
   showing them at full size with scroll bars.
-
 - **Admin panel** at `/admin/`, signed in with a **passkey** (no username
   or password). The first passkey is registered with a one-time
   `ADMIN_SETUP_TOKEN` secret and only while none exists; more can be added
@@ -118,7 +117,6 @@ deployed from `main` and ships with the same changes.
 - The server keeps each account's last active day (a date, at most one
   write a day) for the admin's active-user counts, and app events and an
   audit log of admin actions (docs/PRIVACY.md, "The site's operator").
-### Changed
 - **Practice problems open on their lesson, then a calmer workspace.** An
   unread lesson comes first, as a page of its own with "Start the
   challenge" at the top and the bottom. The workspace then shows the
