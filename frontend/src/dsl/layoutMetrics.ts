@@ -32,11 +32,15 @@ export interface Polyline {
   target: string;
   points: Point[];
   bends: number;
+  /** Drawn along a route from the layout, not by the fallback. */
+  routed?: boolean;
 }
 
 export interface LayoutMetrics {
   nodes: number;
   edges: number;
+  /** Edges the layout gave no route, drawn by the fallback. */
+  unrouted: number;
   crossings: number;
   totalLength: number;
   maxLength: number;
@@ -180,6 +184,7 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
   return {
     nodes: rects.length,
     edges: lines.length,
+    unrouted: lines.filter((l) => !l.routed).length,
     crossings,
     totalLength: Math.round(lengths.reduce((a, b) => a + b, 0)),
     maxLength: Math.round(Math.max(0, ...lengths)),
@@ -194,7 +199,7 @@ export function computeMetrics(rects: Rect[], lines: Polyline[]): LayoutMetrics 
 
 /** A table of metrics per fixture, for the console. */
 export function formatMetrics(rows: Record<string, LayoutMetrics>): string {
-  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'width', 'height', 'aspect'];
+  const columns: (keyof LayoutMetrics)[] = ['nodes', 'edges', 'unrouted', 'crossings', 'totalLength', 'maxLength', 'bends', 'overlaps', 'throughNodes', 'width', 'height', 'aspect'];
   const names = Object.keys(rows);
   const nameWidth = Math.max(7, ...names.map((n) => n.length));
   const widths = columns.map((c) => Math.max(c.length, ...names.map((n) => String(rows[n][c]).length)));
