@@ -1,0 +1,49 @@
+frontend/src/components/Canvas/canvas.css
+  s_6084dd8c702c72::t_1976308f698f39 66,68-69,71,95-109,243-275
+frontend/src/components/Diagram/useDiagramLayout.ts
+  s_6084dd8c702c72::t_966b957cc6b824 5,66
+frontend/src/components/Canvas/GroupNode.tsx
+  s_6084dd8c702c72::t_7f39fa13bdd55f 9
+frontend/src/practice/ProblemPage.tsx
+  s_6084dd8c702c72::t_3953bc18e3eb4e 756
+frontend/src/components/Playground/Playground.tsx
+  s_6084dd8c702c72::t_3058d3db80cbb7 46,1342-1343,1522-1529
+  s_6084dd8c702c72::t_966b957cc6b824 45,369
+frontend/src/components/Diagram/DiagramCanvas.tsx
+  s_6084dd8c702c72::t_3953bc18e3eb4e 1,7-8,31-32,35,60-64
+frontend/src/dsl/toCanvas.ts
+  s_6084dd8c702c72::t_00451b8a5aa08d 1,3-4,38,57-66,69-92
+frontend/src/components/Canvas/ComponentNode.tsx
+  s_6084dd8c702c72::t_7f39fa13bdd55f 1,4,29-30,32-36,57-65
+  s_6084dd8c702c72::t_23e7987d57f615 66
+frontend/src/types/canvas.ts
+  s_6084dd8c702c72::t_4358cef9a6cb0d 37,41-44,61-63
+frontend/src/components/Playground/exportDiagram.ts
+  s_6084dd8c702c72::t_5dd99420863ba8 39-41,45-46,48,51-82
+frontend/src/dsl/style.test.ts
+  s_6084dd8c702c72::t_386cbd74cef6af 6
+  s_6084dd8c702c72::t_e54e3f183f5bd8 164-190
+frontend/src/components/UseCases/playbackView.ts
+  s_6084dd8c702c72::t_a2c233c26857e1 123
+frontend/src/components/Canvas/Legend.tsx
+  s_6084dd8c702c72::t_3e578c96a4a0a8 1-31
+frontend/src/dsl/examples.ts
+  s_6084dd8c702c72::t_49f591c65f4fc3 313-337,339-358,373
+  s_6084dd8c702c72::t_a536ee0789b4a6 338
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c991e30d4940e55edf6a6d347aac4910fac0e073",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
