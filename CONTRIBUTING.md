@@ -186,10 +186,11 @@ is the checklist.
    Cards that prepare for the problem can name it in their front matter:
    `related: [seat-map]`.
 
-8. **Changelog and pull request.** Add a line under `## [Unreleased]` →
-   `### Added` in [CHANGELOG.md](CHANGELOG.md), run the
-   [checks](#checks-before-a-pull-request), and open a pull request. Pull
-   requests are squash-merged, so the title becomes the commit message.
+8. **Pull request.** Run the [checks](#checks-before-a-pull-request) and
+   open a pull request titled as a conventional commit, e.g.
+   `feat(practice): add the seat map problem`. Pull requests are
+   squash-merged, so the title becomes the commit message and the
+   [changelog](CHANGELOG.md) line.
 
 ## Adding a new card
 
@@ -316,9 +317,9 @@ types, the length limits and how to write a good card.
    the **answer** changes (people who learned the old one see it again);
    typo fixes and rewording keep it.
 
-7. **Changelog and pull request.** Add a line under `## [Unreleased]` in
-   [CHANGELOG.md](CHANGELOG.md), run the
-   [checks](#checks-before-a-pull-request), and open a pull request.
+7. **Pull request.** Run the [checks](#checks-before-a-pull-request) and
+   open a pull request titled as a conventional commit, e.g.
+   `feat(cards): add a card on leader leases`.
 
 Have a card idea or found a wrong answer, but don't want to write the file?
 [Suggest a card](https://github.com/gvart/proschi/issues/new?template=card-idea.md).
@@ -362,7 +363,7 @@ full reference; this is the checklist.
    `version` when a change can change a score; it starts a new leaderboard
    season.
 
-6. **Changelog and pull request**, as for problems and cards.
+6. **Pull request**, as for problems and cards.
 
 ## Reporting issues and suggesting problems
 
@@ -385,8 +386,11 @@ full reference; this is the checklist.
 - Proschi files are in canonical format (`node tooling/dist/cli.cjs fmt`).
 - Docs and prose: short sentences, plain words, real numbers. Problem
   lessons and cards are original writing; cite sources, don't copy them.
-- Pull requests are squash-merged. Add user-facing changes to
-  [CHANGELOG.md](CHANGELOG.md) under `[Unreleased]`.
+- Pull requests are squash-merged, and their titles are
+  [conventional commits](https://www.conventionalcommits.org/) (`feat: …`,
+  `fix(dsl): …`, `docs: …`). `feat`, `fix` and `perf` titles become the
+  [CHANGELOG.md](CHANGELOG.md) entries, so write them for users; don't edit
+  the changelog by hand.
 - A new problem changes the hard-coded problem counts
   ([step 6 above](#adding-a-new-problem)).
 - By contributing you agree that your work is released under the
@@ -394,18 +398,19 @@ full reference; this is the checklist.
 
 ## Releasing
 
-For maintainers. Bump `version` in both `tooling/package.json` and
-`tooling/vscode/package.json`, add a section to the changelog, and merge. Then push the tag
-`tooling-v<version>`:
+For maintainers. [release-please](https://github.com/googleapis/release-please)
+keeps a release pull request open and updates it on every push to `main`:
+the next version (from the conventional commit titles: `feat` bumps the
+minor version, `fix` and `perf` the patch), the new section in
+[CHANGELOG.md](CHANGELOG.md) and the version in `tooling/package.json`,
+`tooling/package-lock.json`, `tooling/vscode/package.json` and
+`tooling/jetbrains/gradle.properties`. To release, merge that pull request.
+release-please then tags `tooling-v<version>`, creates the GitHub release
+and starts the *Release tooling* and *JetBrains plugin* workflows on the tag.
+To publish a tag again, run *Release tooling* (or *JetBrains plugin*) by hand
+on that tag (*Actions → Run workflow → Use workflow from: Tags*).
 
-```sh
-git tag tooling-v0.2.0 origin/main && git push origin tooling-v0.2.0
-```
-
-On a phone, creating a GitHub release with that new tag (*Releases → Draft a
-new release*) does the same, and so does running the workflow by hand on
-`main` (*Actions → Release tooling → Run workflow*), which tags the version in
-`tooling/package.json`. The *Release tooling* workflow tests, publishes
+The *Release tooling* workflow tests, publishes
 `proschi` to npm through Trusted Publishing (no token in the repository),
 attaches the `.vsix` to the GitHub release, creating the release if needed,
 and publishes the extension to the VS Code Marketplace and Open VSX. Those two
@@ -415,8 +420,8 @@ Open VSX access token, with the namespace `gvart` created once); while a
 secret is missing, its step is skipped with a notice. The tag also pins the
 [GitHub Action](docs/EDITORS.md#github-action).
 
-The JetBrains plugin is released on its own: bump `pluginVersion` in
-`tooling/jetbrains/gradle.properties`, merge, and push the tag
-`jetbrains-v<version>`. The *JetBrains plugin* workflow signs it and publishes
-it to the [JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi)
-(see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)).
+The *JetBrains plugin* workflow signs the plugin and publishes it to the
+[JetBrains Marketplace](https://plugins.jetbrains.com/plugin/34955-proschi)
+(see [tooling/jetbrains/README.md](tooling/jetbrains/README.md)). Pushing a tag
+`jetbrains-v<pluginVersion>` still publishes the plugin on its own; the next
+release PR sets `pluginVersion` back in step with the tooling.

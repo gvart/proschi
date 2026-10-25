@@ -204,8 +204,11 @@ another IDE, change `intellijIdea(...)` in `build.gradle.kts` (for example
    `PRIVATE_KEY_PASSWORD` and `PUBLISH_TOKEN` environment variables that
    `build.gradle.kts` reads. Until all four exist, the publish job is skipped
    with a notice.
-9. **Release:** bump `pluginVersion` in `gradle.properties`, merge, then push
-   the tag `jetbrains-v<version>` (for example `git tag jetbrains-v0.8.0 origin/main && git push origin jetbrains-v0.8.0`).
+9. **Release:** release-please bumps `pluginVersion` in `gradle.properties`
+   with the tooling, and merging its release pull request runs the publish
+   job on the new `tooling-v<version>` tag (see "Releasing" in
+   `CONTRIBUTING.md`). To publish on its own, push the tag
+   `jetbrains-v<pluginVersion>` (for example `git tag jetbrains-v0.8.0 origin/main && git push origin jetbrains-v0.8.0`).
    A version with a suffix (`0.9.0-beta.1`) goes to the `beta` channel.
 10. **Screenshots for the Marketplace page** (1280×800 or larger): the editor
     with highlighting and an error underlined, completion of the tech catalog,

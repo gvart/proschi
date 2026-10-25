@@ -44,7 +44,11 @@ Live at <https://proschi.app/>.
 
 ## Conventions
 
-- PRs are squash-merged. Add user-facing changes to `CHANGELOG.md` under
-  `[Unreleased]`.
+- PRs are squash-merged, and PR titles must be conventional commits
+  (`feat: …`, `fix(dsl): …`): they become the commit messages that
+  release-please turns into the version bump and `CHANGELOG.md`. Don't edit
+  the changelog or the versions by hand. Merging release-please's release PR
+  tags `tooling-v<version>` and publishes npm, the VS Code Marketplace, Open
+  VSX and JetBrains (`.github/workflows/release-please.yml`).
 - Hard-coded problem counts (landing page, e2e tests, practice and tooling
   tests, `docs/PRACTICE.md`) must change whenever a problem is added.

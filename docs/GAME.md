@@ -726,4 +726,5 @@ run the same check.
    New mutators or bounties: an entry in `mutators.json` or `bounties.json`.
 4. `node tooling/dist/cli.cjs game lock`, then `game check`.
 5. `npm test` in `frontend/` and `tooling/`.
-6. Add the change to `CHANGELOG.md` under `[Unreleased]`.
+6. Open the pull request with a conventional commit title (`feat(game): …`);
+   release-please adds it to `CHANGELOG.md`.

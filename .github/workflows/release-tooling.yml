@@ -1,13 +1,19 @@
 name: Release tooling
 
-# Pushing a tag that starts with `tooling-v` (e.g. `tooling-v0.2.0`) publishes
-# the `proschi` npm package, attaches the VS Code extension to a GitHub
-# release for that tag and publishes the extension to the VS Code Marketplace
-# and Open VSX. The tag also pins the GitHub Action (gvart/proschi/action@tooling-v0.2.0),
-# which runs the npm package of the same version. Creating the release on github.com with a new tag works
-# too (it pushes the tag); the workflow then adds the extension to it.
-# Running the workflow by hand on `main` releases the version in
-# tooling/package.json and creates the tag and release itself.
+# Publishes the `proschi` npm package, attaches the VS Code extension to the
+# GitHub release of a `tooling-v<version>` tag and publishes the extension to
+# the VS Code Marketplace and Open VSX. The tag also pins the GitHub Action
+# (gvart/proschi/action@tooling-v0.2.0), which runs the npm package of the
+# same version.
+#
+# Normally release-please.yml starts it: merging the release pull request tags
+# the release, and that workflow then runs this one by hand on the new tag (a
+# tag made with GITHUB_TOKEN starts no workflow by itself). Other ways in:
+# - Running it by hand on a `tooling-v*` tag publishes that tag, e.g. to retry.
+# - Running it by hand on `main` publishes the version in tooling/package.json:
+#   its existing tag, or, when there is none, a new tag and release on main.
+# - Pushing a `tooling-v*` tag, or creating a release with a new tag on
+#   github.com, publishes that tag.
 #
 # Authentication: npm Trusted Publishing (GitHub OIDC). On npmjs.com the
 # package's trusted publisher names this repository, this workflow file
@@ -40,8 +46,8 @@ permissions:
 
 jobs:
   release:
-    # A manual run releases what is on main, nothing else.
-    if: github.event_name == 'push' || github.ref == 'refs/heads/main'
+    # A manual run publishes main or a release tag, nothing else.
+    if: github.event_name == 'push' || github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/tooling-v')
     runs-on: ubuntu-latest
     environment: npm
     defaults:
@@ -51,11 +57,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Resolve the release tag
         run: |
-          if [ "$GITHUB_EVENT_NAME" = workflow_dispatch ]; then
+          if [ "$GITHUB_REF" = refs/heads/main ]; then
             tag="tooling-v$(node -p "require('./package.json').version")"
             if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
-              echo "::error::$tag already exists; bump the version in tooling/package.json first"
-              exit 1
+              echo "::notice::$tag already exists; publishing it"
+              git fetch --depth=1 origin "refs/tags/$tag:refs/tags/$tag"
+              git checkout --quiet "$tag"
             fi
           else
             tag="$GITHUB_REF_NAME"
@@ -90,7 +97,7 @@ jobs:
         run: |
           file="dist/proschi-${VERSION#tooling-v}.vsix"
           cp dist/proschi.vsix "$file"
-          # Creates the tag too on a manual run.
+          # Creates the tag too on a manual run on main for an untagged version.
           gh release view "$VERSION" >/dev/null 2>&1 ||
             gh release create "$VERSION" --target "$GITHUB_SHA" --title "Proschi tooling ${VERSION#tooling-v}" --generate-notes
           gh release upload "$VERSION" "$file" --clobber
