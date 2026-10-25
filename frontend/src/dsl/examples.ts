@@ -329,7 +329,7 @@ group fulfillment "Order Fulfillment" .owned {
   ordersDb "Orders DB"       [PostgreSQL] critical
 }
 
-group pos "Point of Sale" .handover {
+group retail "Point of Sale" .handover {
   store "Store Service" [REST API] @pos
 }
 

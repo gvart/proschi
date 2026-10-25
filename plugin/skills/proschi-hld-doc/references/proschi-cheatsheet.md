@@ -32,6 +32,30 @@ api  -> db  : SQL
   declare every node with a tech to get the right icon and numbers.
 - Format with `npx proschi@latest fmt <file>` (aligns columns; never changes meaning).
 
+Colors, legend, tags and `critical` (all optional; nodes are tinted by category without them):
+
+```proschi
+legend {
+  owned   "Owned by us"  green
+  planned "Planned flow" blue dashed
+  old     "Deprecated"   color #ef4444 dotted
+}
+group core "Core" .owned {
+  api "Order API" [REST API] critical
+}
+erp "Legacy ERP" [SOAP API]        .old
+crm "CRM"        [Third Party API] color teal
+api -> erp .old : sync orders
+api -> crm .planned
+```
+
+- `color <name>|#hex` on nodes and groups. Names: gray, blue, teal, green,
+  yellow, orange, red, purple, pink. Precedence: `color` > tag > category.
+- `legend { id "Label" [color] [dashed|dotted] }` defines styles; `.id` applies
+  one to a node, a group header or a connection (before the `:` label). A hex
+  in a legend line needs `color #hex` (a bare `#` starts a comment).
+- `critical` puts a warning badge on a node. Unknown tags and colors are errors.
+
 ## Tech stacks (`[Tech]`) and kinds
 
 The tech decides the icon, the kind and the simulation defaults. Matching
