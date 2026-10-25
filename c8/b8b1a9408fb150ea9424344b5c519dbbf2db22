@@ -1,0 +1,21 @@
+docs/LANGUAGE.md
+  s_6084dd8c702c72::t_8ab83d786d636d 66-67,70-71,184-247,885-886,890,892-895,967-968
+CHANGELOG.md
+  s_6084dd8c702c72::t_8ab83d786d636d 24-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c8b8b1a9408fb150ea9424344b5c519dbbf2db22",
+  "prompts": {},
+  "sessions": {
+    "s_6084dd8c702c72": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "29c77e20-0839-4451-b0e3-6e51c2e9add7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
