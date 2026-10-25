@@ -63,6 +63,8 @@ function placeLegend(legend: HTMLElement, viewport: HTMLElement, bounds: { x: nu
   copy.style.position = 'absolute';
   // The whole legend, not the scrolled panel.
   copy.style.maxHeight = 'none';
+  // As wide as on screen: placed absolutely, it would otherwise shrink and wrap its labels.
+  copy.style.width = `${legend.offsetWidth}px`;
   copy.style.left = `${bounds.x + bounds.width + LEGEND_GAP}px`;
   viewport.appendChild(copy);
   const { offsetWidth: w, offsetHeight: h } = copy;
