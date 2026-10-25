@@ -1,4 +1,5 @@
-import { layoutBoxes } from '../../../frontend/src/dsl/autoLayout';
+import { layoutGraph, type Point } from '../../../frontend/src/dsl/autoLayout';
+import { fallbackRoute, labelPoint, roundedPath, snapToBottom, withHead } from '../../../frontend/src/dsl/edgePath';
 import type { Diagram, DiagramNode } from '../proschi';
 import { techIcon } from './icons';
 import { COLORS, MONO, card, esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
@@ -8,7 +9,7 @@ import { COLORS, MONO, card, esc, fit, r, svgDocument, text, textWidth, wrap } f
  * canvas's own top-down ELK layout (autoLayout.ts, so pinned `pos x,y`
  * positions hold), ComponentNode's monochrome cards with a thick ink border,
  * hard shadow and square handles, GroupNode's dashed frames, TextNode's notes,
- * and React Flow's bezier edges.
+ * and RoutedEdge's orthogonal edges along the layout's routes (edgePath.ts).
  */
 
 const MARGIN = 32;
@@ -38,7 +39,8 @@ function noteLines(node: DiagramNode, width: number): string[] {
 }
 
 export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
-  const boxes = new Map((await layoutBoxes(diagram)).map((b) => [b.id, b]));
+  const layout = await layoutGraph(diagram);
+  const boxes = new Map(layout.nodes.map((b) => [b.id, b]));
 
   // Absolute positions: group members are laid out relative to their group.
   const absolute = (id: string): { x: number; y: number } => {
@@ -58,10 +60,12 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
   }
 
   const all = [...placed.values()];
-  const minX = Math.min(0, ...all.map((p) => p.x));
-  const minY = Math.min(0, ...all.map((p) => p.y));
-  const maxX = Math.max(0, ...all.map((p) => p.x + p.width));
-  const maxY = Math.max(0, ...all.map((p) => p.y + p.height));
+  // Routes can run outside every box (around a group), so they count towards the size too.
+  const bends = Object.values(layout.routes).flatMap((route) => route.points);
+  const minX = Math.min(0, ...all.map((p) => p.x), ...bends.map((p) => p.x));
+  const minY = Math.min(0, ...all.map((p) => p.y), ...bends.map((p) => p.y));
+  const maxX = Math.max(0, ...all.map((p) => p.x + p.width), ...bends.map((p) => p.x));
+  const maxY = Math.max(0, ...all.map((p) => p.y + p.height), ...bends.map((p) => p.y));
   const dx = MARGIN - minX;
   const dy = MARGIN - minY;
   const body: string[] = [];
@@ -88,7 +92,13 @@ export async function renderArchitectureSvg(diagram: Diagram): Promise<string> {
     const s = placed.get(edge.source);
     const t = placed.get(edge.target);
     if (!s || !t || s === t) continue;
-    body.push(drawEdge(edge.id, edge.label, s.x + dx + s.width / 2, s.y + dy + s.height, t.x + dx + t.width / 2, t.y + dy));
+    const sBox = { x: s.x + dx, y: s.y + dy, width: s.width, height: s.height };
+    const tBox = { x: t.x + dx, y: t.y + dy, width: t.width, height: t.height };
+    const route = layout.routes[edge.id];
+    const shift = (p: Point) => ({ x: p.x + dx, y: p.y + dy });
+    // Cards here are drawn at their own height, so ends on a bottom move onto it.
+    const points = route ? snapToBottom(snapToBottom(route.points.map(shift), 'start', sBox), 'end', tBox) : fallbackRoute(sBox, tBox);
+    body.push(drawEdge(edge.id, edge.label, points, route?.label ? shift(route.label) : labelPoint(points)));
   }
 
   for (const p of all) {
@@ -141,23 +151,18 @@ function drawNote(p: Placed, dx: number, dy: number): string {
   ].join('\n');
 }
 
-/** React Flow's default (bezier) edge from the source's bottom handle to the target's top one, label at its middle. */
-function drawEdge(id: string, label: string | undefined, sx: number, sy: number, tx: number, ty: number): string {
-  const offset = (d: number) => (d >= 0 ? 0.5 * d : 0.25 * 25 * Math.sqrt(-d));
-  const c1y = sy + offset(ty - sy);
-  const c2y = ty - offset(ty - sy);
-  const out = [
-    `<g data-edge="${esc(id)}">`,
-    `<path d="M${r(sx)},${r(sy)} C${r(sx)},${r(c1y)} ${r(tx)},${r(c2y)} ${r(tx)},${r(ty)}" fill="none" stroke="${COLORS.line}" stroke-width="2"/>`,
-  ];
+/** RoutedEdge: the route with rounded bends and an arrowhead at the target, the label on the line. */
+function drawEdge(id: string, label: string | undefined, points: Point[], at: Point): string {
+  const stroke = COLORS.line;
+  const { points: line, head } = withHead(points);
+  const out = [`<g data-edge="${esc(id)}">`, `<path d="${roundedPath(line)}" fill="none" stroke="${stroke}" stroke-width="2"/>`];
+  if (head) out.push(`<path d="${head}" fill="${stroke}"/>`);
   if (label) {
-    const cx = sx * 0.125 + sx * 0.375 + tx * 0.375 + tx * 0.125;
-    const cy = sy * 0.125 + c1y * 0.375 + c2y * 0.375 + ty * 0.125;
     const shown = fit(label, 200, 11);
     const w = textWidth(shown, 11) + 12;
     out.push(
-      `<rect x="${r(cx - w / 2)}" y="${r(cy - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
-      text(cx, cy + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
+      `<rect x="${r(at.x - w / 2)}" y="${r(at.y - 9)}" width="${r(w)}" height="18" rx="2" fill="${COLORS.background}"/>`,
+      text(at.x, at.y + 4, shown, { size: 11, weight: 500, fill: COLORS.text, opacity: 0.8, anchor: 'middle', family: MONO }),
     );
   }
   out.push('</g>');

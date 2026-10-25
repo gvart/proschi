@@ -16,6 +16,9 @@ export interface Box {
 
 const CORNER = 8;
 
+/** Length and half-width of the arrowhead drawn at the target. */
+const HEAD = { length: 10, half: 5 };
+
 /** An SVG path through `points`, with each bend rounded off (by at most half of the shorter leg). */
 export function roundedPath(points: Point[], radius = CORNER): string {
   if (points.length === 0) return '';
@@ -97,4 +100,18 @@ export function snapToBottom(points: Point[], end: 'start' | 'end', box: Box): P
   const out = points.slice();
   out[i] = { x: p.x, y: bottom };
   return out;
+}
+
+/** The arrowhead at the end of `points`; the line is cut back to its base so it does not poke through the tip. */
+export function withHead(points: Point[]): { points: Point[]; head: string } {
+  const tip = points[points.length - 1];
+  const before = points[points.length - 2];
+  const len = Math.hypot(tip.x - before.x, tip.y - before.y);
+  if (len < HEAD.length) return { points, head: '' };
+  const ux = (tip.x - before.x) / len;
+  const uy = (tip.y - before.y) / len;
+  const base = { x: tip.x - ux * HEAD.length, y: tip.y - uy * HEAD.length };
+  const r = (n: number) => Math.round(n * 10) / 10;
+  const head = `M${r(tip.x)},${r(tip.y)} L${r(base.x - uy * HEAD.half)},${r(base.y + ux * HEAD.half)} L${r(base.x + uy * HEAD.half)},${r(base.y - ux * HEAD.half)} Z`;
+  return { points: [...points.slice(0, -1), base], head };
 }

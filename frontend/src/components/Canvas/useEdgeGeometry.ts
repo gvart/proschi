@@ -1,11 +1,8 @@
 import { useCallback } from 'react';
 import { useStore, type ReactFlowState } from 'reactflow';
 import type { Point } from '../../dsl/autoLayout';
-import { fallbackRoute, labelPoint, roundedPath, snapToBottom, type Box } from '../../dsl/edgePath';
+import { fallbackRoute, labelPoint, roundedPath, snapToBottom, withHead, type Box } from '../../dsl/edgePath';
 import type { ComponentMetadata } from '../../types/canvas';
-
-/** Length and half-width of the arrowhead drawn at the target. */
-const HEAD = { length: 10, half: 5 };
 
 export interface EdgeGeometry {
   path: string;
@@ -21,20 +18,6 @@ export interface EdgeGeometry {
 export const hasMarker = (marker: string | undefined) => !!marker && !/#'?\)$/.test(marker);
 
 const close = (a: Point, b: Point) => Math.abs(a.x - b.x) < 0.5 && Math.abs(a.y - b.y) < 0.5;
-
-/** The arrowhead at the end of `points`; the line is cut back to its base so it does not poke through the tip. */
-function withHead(points: Point[]): { points: Point[]; head: string } {
-  const tip = points[points.length - 1];
-  const before = points[points.length - 2];
-  const len = Math.hypot(tip.x - before.x, tip.y - before.y);
-  if (len < HEAD.length) return { points, head: '' };
-  const ux = (tip.x - before.x) / len;
-  const uy = (tip.y - before.y) / len;
-  const base = { x: tip.x - ux * HEAD.length, y: tip.y - uy * HEAD.length };
-  const r = (n: number) => Math.round(n * 10) / 10;
-  const head = `M${r(tip.x)},${r(tip.y)} L${r(base.x - uy * HEAD.half)},${r(base.y + ux * HEAD.half)} L${r(base.x + uy * HEAD.half)},${r(base.y - ux * HEAD.half)} Z`;
-  return { points: [...points.slice(0, -1), base], head };
-}
 
 /**
  * The geometry of edge `id`: along the route the auto layout gave it while
