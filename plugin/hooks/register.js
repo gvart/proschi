@@ -4435,7 +4435,7 @@ function loadDocument(input) {
   return {
     diagram,
     errors,
-    ...sim ? { overlay: sim.nodes, flows: sim.flows } : {},
+    ...sim ? { overlay: sim.nodes } : {},
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
@@ -4504,7 +4504,7 @@ var HEAVY_GLYPH = {
   [N | E | W]: "\u253B",
   [N | E | S | W]: "\u254B"
 };
-var Grid = class _Grid {
+var Grid = class {
   constructor(columns, rows) {
     this.columns = columns;
     this.rows = rows;
@@ -4521,15 +4521,6 @@ var Grid = class _Grid {
   bg;
   /** Line directions per cell, for cells drawn by `line`. */
   lines;
-  /** A copy to draw one animation frame on. */
-  copy() {
-    const grid = new _Grid(this.columns, this.rows);
-    grid.glyphs.set(this.glyphs);
-    grid.fg.set(this.fg);
-    grid.bg.set(this.bg);
-    grid.lines.set(this.lines);
-    return grid;
-  }
   inside(x, y) {
     return x >= 0 && y >= 0 && x < this.columns && y < this.rows;
   }
@@ -4809,6 +4800,7 @@ function buildScene(diagram, layout, maxColumns = 160) {
     const at = route?.label ? { x: cx(route.label.x), y: cy(route.label.y) } : labelPoint(path.cells);
     edges.push({ edge, path, ...edge.label ? { label: { x: Math.round(at.x), y: Math.round(at.y) } } : {} });
   }
+  compact(nodes, edges);
   let right = 0;
   let bottom = 0;
   for (const { node, rect } of nodes.values()) {
@@ -4917,6 +4909,89 @@ function fallbackPath(from, to) {
   const points = fallbackRoute(box(from), box(to)).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
   return routePath(points, from, to);
 }
+var LINE = 1;
+var FRAME = 2;
+var CARD = 3;
+function gapRows(a, b) {
+  if (a === CARD || b === CARD) return 1;
+  return a === FRAME && b === FRAME ? 1 : 0;
+}
+function gapColumns(a, b) {
+  if (a === CARD && b === CARD) return 3;
+  if (a === FRAME && b === FRAME) return 2;
+  return 1;
+}
+function squeeze(kinds, gap) {
+  const to = new Array(kinds.length).fill(-1);
+  let next = 0;
+  let prev = 0;
+  for (let i = 0; i < kinds.length; ) {
+    if (kinds[i]) {
+      prev = kinds[i];
+      to[i++] = next++;
+      continue;
+    }
+    let end = i;
+    while (end < kinds.length && !kinds[end]) end++;
+    if (end === kinds.length) break;
+    const keep = Math.min(end - i, prev ? gap(prev, kinds[end]) : MARGIN);
+    for (let k = 0; k < keep; k++) to[i + k] = next++;
+    i = end;
+  }
+  return to;
+}
+function compact(nodes, edges) {
+  const rows = [];
+  const cols = [];
+  const mark = (at, i, kind) => {
+    if (i >= 0) at[i] = Math.max(at[i] ?? 0, kind);
+  };
+  for (const { node, rect } of nodes.values()) {
+    if (node.kind === "group") {
+      mark(rows, rect.y, FRAME);
+      mark(rows, rect.y + rect.h - 1, FRAME);
+      mark(cols, rect.x, FRAME);
+      mark(cols, rect.x + rect.w - 1, FRAME);
+      for (let x = rect.x + 1; x < Math.min(rect.x + rect.w - 1, rect.x + 4 + node.name.length + 1); x++) mark(cols, x, FRAME);
+      continue;
+    }
+    const cast = stacked(node) ? 1 : 0;
+    for (let y = rect.y; y < rect.y + rect.h + cast; y++) mark(rows, y, CARD);
+    for (let x = rect.x; x < rect.x + rect.w + cast; x++) mark(cols, x, CARD);
+  }
+  for (const { edge, path, label } of edges) {
+    path.cells.forEach((c, i) => {
+      const last = i === path.cells.length - 1;
+      if (last || path.dirs[i] !== (N | S)) mark(rows, c.y, LINE);
+      if (last || path.dirs[i] !== (E | W)) mark(cols, c.x, LINE);
+    });
+    if (label && edge.label) {
+      mark(rows, label.y, LINE);
+      const left = label.x - Math.floor((edge.label.length + 2) / 2);
+      for (let x = left; x < left + edge.label.length + 2; x++) mark(cols, x, LINE);
+    }
+  }
+  const dense = (at) => Array.from({ length: at.length }, (_, i) => at[i] ?? 0);
+  const toRow = squeeze(dense(rows), gapRows);
+  const toCol = squeeze(dense(cols), gapColumns);
+  const row = (y) => toRow[y] ?? y;
+  const col = (x) => x < 0 ? x : toCol[x] ?? x;
+  for (const n of nodes.values()) {
+    const { x, y, w, h: h2 } = n.rect;
+    n.rect = { x: col(x), y: row(y), w: col(x + w - 1) - col(x) + 1, h: row(y + h2 - 1) - row(y) + 1 };
+  }
+  for (const e of edges) {
+    const cells = [];
+    const dirs = [];
+    e.path.cells.forEach((c, i) => {
+      if (toRow[c.y] === -1 || toCol[c.x] === -1) return;
+      cells.push({ x: col(c.x), y: row(c.y) });
+      dirs.push(e.path.dirs[i]);
+    });
+    e.path = { cells, dirs, head: e.path.head };
+    if (e.label) e.label = { x: col(e.label.x), y: row(e.label.y) };
+  }
+}
 
 // src/terminal/paint.ts
 var COLOR = {
@@ -5022,10 +5097,16 @@ var LINES = {
   dashed: { h: "\u254C", v: "\u254E" },
   dotted: { h: "\u2508", v: "\u250A" }
 };
-function frame(grid, r, color, dash = "solid") {
+var HEAVY_LINES = {
+  solid: { h: "\u2501", v: "\u2503" },
+  dashed: { h: "\u254D", v: "\u254F" },
+  dotted: { h: "\u2505", v: "\u2507" }
+};
+function frame(grid, r, color, dash = "solid", heavy = false) {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
-  const { h: h2, v } = LINES[dash];
+  const { h: h2, v } = (heavy ? HEAVY_LINES : LINES)[dash];
+  const [tl, tr, bl, br] = heavy ? "\u250F\u2513\u2517\u251B" : "\u256D\u256E\u2570\u256F";
   for (let x = r.x + 1; x < right; x++) {
     grid.set(x, r.y, h2, color);
     grid.set(x, bottom, h2, color);
@@ -5034,10 +5115,10 @@ function frame(grid, r, color, dash = "solid") {
     grid.set(r.x, y, v, color);
     grid.set(right, y, v, color);
   }
-  grid.set(r.x, r.y, "\u256D", color);
-  grid.set(right, r.y, "\u256E", color);
-  grid.set(r.x, bottom, "\u2570", color);
-  grid.set(right, bottom, "\u256F", color);
+  grid.set(r.x, r.y, tl, color);
+  grid.set(right, r.y, tr, color);
+  grid.set(r.x, bottom, bl, color);
+  grid.set(right, bottom, br, color);
 }
 function fill(grid, r, fg, bg) {
   for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ", fg, bg);
@@ -5102,7 +5183,7 @@ function drawCard(grid, scene, n, overlay, look, icons2) {
   const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== void 0) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid");
+  frame(grid, rect, color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid", true);
   const icon = iconOf(node, icons2);
   const tiled = icon !== void 0 && rect.w >= 22;
   if (tiled) {
@@ -5242,54 +5323,6 @@ function playAt(scene, steps, index, progress, tick = 0) {
   return { active, failing, pathNodes: pathNodes2, pathEdges, edges, packets, tick };
 }
 
-// src/terminal/traffic.ts
-var TRAFFIC_FRAME_MS = 120;
-var TRAFFIC_COLOR = { sync: 6061306, async: 9926138, drop: 15680580 };
-var GLYPH = { sync: "\u25CF", async: "\u25CB", drop: "\u2022" };
-function gapOf(rps) {
-  return Math.max(4, Math.min(8, Math.round(10 - 1.5 * Math.log10(rps + 1))));
-}
-function trafficAt(scene, flows, nodes, frame2) {
-  const out = [];
-  for (const f of flows) {
-    if (f.rps <= 0 || f.from === f.to) continue;
-    const path = stepPath(scene, f.from, f.to);
-    if (!path) continue;
-    const run = path.cells.length - 1;
-    const gap = gapOf(f.rps);
-    const kind = f.async ? "async" : "sync";
-    for (let i = (frame2 % gap + gap) % gap; i < run; i += gap) out.push({ at: path.cells[i], kind });
-  }
-  for (const [id, o] of Object.entries(nodes)) {
-    const n = scene.nodes.get(id);
-    if (!n || !o.saturated || o.down || o.utilization === void 0 || n.rect.w < 4) continue;
-    const { x, y, w, h: h2 } = n.rect;
-    const count = o.utilization >= 1.5 ? 3 : 2;
-    for (let k = 0; k < count; k++) {
-      const t = frame2 + k * 2;
-      const fall = t % 3;
-      const round2 = Math.floor(t / 3);
-      const column = x + 1 + (round2 * 7 + k * 11) % (w - 2);
-      if (fall < 2) out.push({ at: { x: column, y: y + h2 + fall }, kind: "drop" });
-    }
-  }
-  return out;
-}
-var onCard2 = (scene, c) => {
-  for (const { node, rect } of scene.nodes.values())
-    if (node.kind !== "group" && c.x >= rect.x && c.x < rect.x + rect.w && c.y >= rect.y && c.y < rect.y + rect.h) return true;
-  return false;
-};
-var isLine = (code) => code >= 9472 && code <= 9599 || code === 9650 || code === 9660 || code === 9658 || code === 9668;
-function drawTraffic(grid, scene, particles) {
-  for (const { at, kind } of particles) {
-    if (!grid.inside(at.x, at.y) || onCard2(scene, at)) continue;
-    const code = grid.glyphs[at.y * grid.columns + at.x];
-    if (kind === "drop" ? code !== 32 : !isLine(code)) continue;
-    grid.set(at.x, at.y, GLYPH[kind], TRAFFIC_COLOR[kind]);
-  }
-}
-
 // ../frontend/src/playground/useCaseGroups.ts
 function groupByEndpoint(useCases) {
   if (!useCases.some((u) => u.endpoint)) return [{ useCases }];
@@ -5307,7 +5340,7 @@ var PANE = "proschi-view";
 var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false };
 var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
 var players = atom({ plugin: "proschi", key: "player" }, IDLE);
-var FRAME = 50;
+var FRAME2 = 50;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
   "(or write a .proschi file) and Claude Code draws it as the architecture, with a player for its",
@@ -5319,7 +5352,6 @@ var pending = /* @__PURE__ */ new Set();
 var documents = /* @__PURE__ */ new Map();
 var scenes = /* @__PURE__ */ new Map();
 var timers = /* @__PURE__ */ new Map();
-var flowing = /* @__PURE__ */ new Map();
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
   const chosen = options.icons;
@@ -5478,11 +5510,10 @@ async function diagramView($, d, viewId, source) {
   const playing = player.mode === "play" ? pick : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, flows: doc.flows };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
   const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
-  if (!playing && view.flows?.length && flowing.get(viewId)?.scene !== scene) flow($, view, grid);
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
   return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
 }
@@ -5607,7 +5638,6 @@ function start($, view, pick, isPlaying = true) {
 }
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
-  stopFlow(view.viewId);
   if (steps && steps.length > 0) animate($, view, steps);
   await update($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
@@ -5619,7 +5649,7 @@ function animate($, view, steps) {
   stop(view.viewId);
   let started = -1;
   let tick = 0;
-  const timer = $.clock.every(FRAME, async () => {
+  const timer = $.clock.every(FRAME2, async () => {
     const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
     if (player.mode !== "play") return stop(view.viewId);
     const step = Math.max(0, Math.min(player.step, steps.length - 1));
@@ -5639,27 +5669,6 @@ function animate($, view, steps) {
     await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
   });
   timers.set(view.viewId, timer);
-}
-function stopFlow(viewId) {
-  flowing.get(viewId)?.timer.cancel();
-  flowing.delete(viewId);
-}
-var GONE = 5;
-function flow($, view, base) {
-  stopFlow(view.viewId);
-  const flows = view.flows ?? [];
-  let frame2 = 0;
-  let refused = 0;
-  const timer = $.clock.every(TRAFFIC_FRAME_MS, async () => {
-    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
-    if (player.mode === "play") return stopFlow(view.viewId);
-    const grid = base.copy();
-    drawTraffic(grid, view.scene, trafficAt(view.scene, flows, view.overlay ?? {}, frame2++));
-    const blitted = await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: grid.toBase64() });
-    refused = blitted.deny ? refused + 1 : 0;
-    if (refused >= GONE) stopFlow(view.viewId);
-  });
-  flowing.set(view.viewId, { scene: view.scene, timer });
 }
 async function copy($, surface, text, what) {
   const copied = await $.ui.copy({ text, surface });
