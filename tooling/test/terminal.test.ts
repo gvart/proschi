@@ -1,0 +1,116 @@
+import { describe, expect, it } from 'vitest';
+import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
+import { examples } from '../../frontend/src/dsl/examples';
+import { keyOf, loadDocument, missingImports } from '../src/terminal/document';
+import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
+import { COLOR, paint } from '../src/terminal/paint';
+import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
+import { buildScene } from '../src/terminal/scene';
+
+async function sceneOf(source: string, columns = 150) {
+  const doc = loadDocument({ source });
+  return { doc, scene: buildScene(doc.diagram, await layoutGraph(doc.diagram), columns) };
+}
+
+const example = (id: string) => examples.find((e) => e.id === id)!.source;
+
+describe('terminal grid', () => {
+  it('encodes cells as Raster takes them', () => {
+    const bytes = new Uint8Array([0, 1, 2, 250, 251, 252, 253]);
+    expect(base64(bytes)).toBe(Buffer.from(bytes).toString('base64'));
+    const grid = new Grid(1, 1);
+    grid.set(0, 0, '█', 0xff8800);
+    expect(grid.toBase64()).toBe(Buffer.from(new Uint32Array([0x2588, 0xff8800, DEFAULT]).buffer).toString('base64'));
+  });
+
+  it('joins crossing lines into one glyph', () => {
+    const grid = new Grid(1, 1);
+    grid.line(0, 0, 1 | 4, 0);
+    grid.line(0, 0, 2 | 8, 0);
+    expect(grid.toText()).toBe('┼');
+  });
+});
+
+describe('terminal scene', () => {
+  it('draws the browser layout as cards, edges and labels', async () => {
+    const { doc, scene } = await sceneOf(example('ecommerce'));
+    expect(paint(scene, { overlay: doc.overlay }).toText()).toMatchSnapshot();
+  });
+
+  it('draws groups, team lines and every example without throwing', async () => {
+    for (const { source } of examples) {
+      const { scene } = await sceneOf(source);
+      const text = paint(scene).toText();
+      for (const node of scene.diagram.nodes) if (node.kind === 'component') expect(text).toContain(node.name.slice(0, 10));
+    }
+  });
+
+  it('fits a wide diagram into the columns it is given', async () => {
+    const wide = await sceneOf(examples[1].source, 70);
+    expect(wide.scene.columns).toBeLessThanOrEqual(72);
+  });
+
+  it('puts the simulation on the cards of a document with traffic', async () => {
+    const { doc, scene } = await sceneOf(example('hello'));
+    expect(doc.overlay?.api.utilization).toBeGreaterThan(0);
+    expect(doc.tests.length).toBeGreaterThan(0);
+    expect(paint(scene, { overlay: doc.overlay }).toText()).toMatch(/┗━ x2 +\d+% ━/);
+  });
+});
+
+describe('terminal playback', () => {
+  it('plays one step per call, the packet out and back, as the editor does', async () => {
+    const { doc, scene } = await sceneOf(examples[0].source);
+    const steps = doc.diagram.useCases[0].scenarios[0].steps;
+    const first = steps[0];
+
+    const out = playAt(scene, steps, 0, 25);
+    expect([...out.active].sort()).toEqual([first.fromServiceId, first.toServiceId].sort());
+    expect(out.packets).toHaveLength(1);
+    const path = stepPath(scene, first.fromServiceId, first.toServiceId)!;
+    // A request-response call is half way out at 25% and back at the caller by 100%.
+    expect(out.packets[0].at).toEqual(path.cells[Math.round(0.5 * (path.cells.length - 1))]);
+    expect(playAt(scene, steps, 0, 100).packets).toHaveLength(0);
+    expect(playAt(scene, steps, 0, 100).edges[0].flowing).toBe(true);
+
+    const text = paint(scene, { play: out }).toText();
+    expect(text).toContain('■');
+    expect(text).toMatch(/[┃━]/);
+  });
+
+  it('fades what the scenario does not touch', async () => {
+    const { doc, scene } = await sceneOf(example('ecommerce'));
+    const steps = doc.diagram.useCases[0].scenarios[0].steps;
+    const play = playAt(scene, steps, 0, 50);
+    const off = doc.diagram.nodes.find((n) => n.kind === 'component' && !play.pathNodes.has(n.id));
+    expect(off).toBeDefined();
+    const grid = paint(scene, { play });
+    const rect = scene.nodes.get(off!.id)!.rect;
+    expect(grid.fg[rect.y * grid.columns + rect.x]).toBe(COLOR.fadedMore);
+  });
+
+  it('cuts a failed call off part way with a cross', async () => {
+    const { doc, scene } = await sceneOf('a "A" [REST API]\nb "B" [REST API]\na -> b\nusecase "U" {\n  a -x b : GET /x\n}\n');
+    const steps = doc.diagram.useCases[0].scenarios[0].steps;
+    expect(playAt(scene, steps, 0, 80).packets[0]).toMatchObject({ cut: true, error: true });
+    expect(paint(scene, { play: playAt(scene, steps, 0, 80) }).toText()).toContain('✗');
+  });
+
+  it('keeps the earlier steps of a parallel group current', () => {
+    const step = (parallelGroup?: number) => ({ parallelGroup }) as never;
+    expect(currentStepsOf([step(), step(1), step(1), step()], 2)).toHaveLength(2);
+  });
+});
+
+describe('terminal document', () => {
+  it('lists the imports it still needs, relative to the document', () => {
+    expect(missingImports({ source: 'import "shared/infra.proschi"\n', path: 'app/main.proschi' })).toEqual(['app/shared/infra.proschi']);
+  });
+
+  it('links to the editor, at a playback step when asked', () => {
+    const doc = loadDocument({ source: examples[0].source });
+    expect(doc.link()).toMatch(/^https:\/\/proschi\.app\/app\/#code=/);
+    expect(doc.link({ useCase: 'x', step: 2 })).toContain('&step=2');
+    expect(keyOf({ source: 'a' })).not.toBe(keyOf({ source: 'b' }));
+  });
+});
