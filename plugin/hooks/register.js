@@ -5346,8 +5346,7 @@ async function diagramView($, d, viewId, source) {
   const progress = timers.has(viewId) ? 0 : 100;
   const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  const failed = doc.tests.filter((t) => !t.passed);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), failed.map((t) => /* @__PURE__ */ h(ui.Text, { color: "red" }, "\u2717 ", t.name, ": ", t.message)), doc.tests.length > 0 && failed.length === 0 && /* @__PURE__ */ h(ui.Text, { color: "green" }, "\u2713 ", doc.tests.length, " requirements met"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1 }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
 }
 function useCaseBar($, view, doc, pick, player) {
   const { ui } = view.d;
@@ -5376,7 +5375,7 @@ function scenarioLabel(ui, u, s) {
 function playerHeader($, view, pick, player) {
   const { ui } = view.d;
   const { useCase } = pick;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
     const current = s.id === pick.scenario.id;
     return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => void start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s));
   })));
@@ -5384,21 +5383,78 @@ function playerHeader($, view, pick, player) {
 var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
 var LANGUAGE = { JSON: "json", XML: "xml", FREE_TEXT: void 0 };
 var chip = (ui, text, background) => /* @__PURE__ */ h(ui.Text, { backgroundColor: background, color: INK, bold: true }, ` ${text} `);
+var BODY_LINES = 8;
+function bodyRows(ui, label, text, format) {
+  const lines = text.replace(/\n+$/, "").split("\n");
+  const shown = lines.slice(0, BODY_LINES);
+  const more = lines.length - shown.length;
+  const language = LANGUAGE[format];
+  return {
+    nodes: [
+      label,
+      /* @__PURE__ */ h(ui.Code, { source: shown.join("\n"), wrap: "truncate-end", ...language ? { language } : {} }),
+      ...more > 0 ? [/* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2026 ", more, " more line", more === 1 ? "" : "s")] : []
+    ],
+    height: 1 + shown.length + (more > 0 ? 1 : 0)
+  };
+}
+function stepRows(ui, view, steps, at) {
+  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
+  const current = currentStepsOf(steps, at);
+  const nodes = [];
+  let height = 0;
+  const row = (node) => {
+    nodes.push(node);
+    height++;
+  };
+  const add = (rows) => {
+    nodes.push(...rows.nodes);
+    height += rows.height;
+  };
+  if (current.length > 1) {
+    row(
+      /* @__PURE__ */ h(ui.Text, { bold: true, color: "blue", wrap: "truncate-end" }, "\u26A1 Parallel Execution (", current.length, " steps running simultaneously)")
+    );
+  }
+  if (steps.length === 0) row(/* @__PURE__ */ h(ui.Text, { dimColor: true }, "This scenario has no steps."));
+  current.forEach((s, i) => {
+    const error = isErrorStep(s);
+    const call = `${s.httpMethod} ${s.endpoint}`.trim();
+    if (i > 0) row(/* @__PURE__ */ h(ui.Text, null, " "));
+    row(
+      /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe")))
+    );
+    row(
+      /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : "")
+    );
+    if (s.description) row(/* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, s.description.replace(/\s*\n\s*/g, " ")));
+    if (s.requestBody) add(bodyRows(ui, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT[s.requestFormat], ")"), s.requestBody, s.requestFormat));
+    if (s.responseBody && s.executionType !== "ASYNC_FIRE_AND_FORGET") {
+      const label = /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : "");
+      add(bodyRows(ui, label, s.responseBody, s.responseFormat));
+    }
+    if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(/* @__PURE__ */ h(ui.Text, { color: "red" }, "Answered with ", s.statusCode));
+    if (s.failed) {
+      row(
+        /* @__PURE__ */ h(ui.Text, { color: "red", wrap: "truncate-end" }, "No response: the call failed (timeout, connection refused or similar).")
+      );
+    }
+  });
+  return { nodes, height };
+}
 function stepPanel($, view, pick, step, player) {
   const { ui } = view.d;
   const { scenario } = pick;
   const steps = scenario.steps;
   const total = steps.length;
-  const name = (id) => view.scene.nodes.get(id)?.node.name ?? id;
-  const current = currentStepsOf(steps, step);
   const go = (to, isPlaying = false) => void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
-  const bar = Math.max(10, Math.min(60, view.d.columns - 30));
+  const rows = stepRows(ui, view, steps, step);
+  const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
+  const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
+  const controls = 5 + 5 + 12 + 5 + 5 + counter.length + 19 + 7;
+  const bar = Math.max(10, Math.min(60, view.scene.columns - 4 - controls));
   const filled = total === 0 ? 0 : Math.round(bar * (step + 1) / total);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1 }, scenario.condition && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), current.length > 1 && /* @__PURE__ */ h(ui.Text, { bold: true, color: "blue" }, "\u26A1 Parallel Execution (", current.length, " steps running simultaneously)"), total === 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true }, "This scenario has no steps."), current.map((s, i) => {
-    const error = isErrorStep(s);
-    const call = `${s.httpMethod} ${s.endpoint}`.trim();
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: i > 0 ? 1 : 0 }, /* @__PURE__ */ h(ui.Text, null, chip(ui, String(steps.indexOf(s) + 1), error ? "#ff3b30" : PINK), " ", /* @__PURE__ */ h(ui.Text, { bold: true }, s.stepName), s.failed && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Failed", "#fca5a5")), !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, String(s.statusCode), "#fca5a5")), s.executionType === "SYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Sync", "#86efac")), s.executionType === "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Fire & Forget", "#fdba74")), s.executionType === "ASYNC_REQUEST_RESPONSE" && /* @__PURE__ */ h(ui.Text, null, " ", chip(ui, "Async", "#d8b4fe"))), /* @__PURE__ */ h(ui.Text, { dimColor: true }, name(s.fromServiceId), " \u2192 ", name(s.toServiceId), call && call !== s.stepName ? `   ${call}` : ""), s.description && /* @__PURE__ */ h(ui.Text, null, s.description), s.requestBody && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Request (", FORMAT[s.requestFormat], ")"), /* @__PURE__ */ h(ui.Code, { source: s.requestBody, ...LANGUAGE[s.requestFormat] ? { language: LANGUAGE[s.requestFormat] } : {} })), s.responseBody && s.executionType !== "ASYNC_FIRE_AND_FORGET" && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { color: error ? "red" : void 0, dimColor: !error }, "Response (", FORMAT[s.responseFormat], ")", s.statusCode !== void 0 ? ` - ${s.statusCode}` : ""), /* @__PURE__ */ h(ui.Code, { source: s.responseBody, ...LANGUAGE[s.responseFormat] ? { language: LANGUAGE[s.responseFormat] } : {} })), !s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400 && /* @__PURE__ */ h(ui.Text, { color: "red" }, "Answered with ", s.statusCode), s.failed && /* @__PURE__ */ h(ui.Text, { color: "red" }, "No response: the call failed (timeout, connection refused or similar)."));
-  }), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u23EE", onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", onPress: () => go(step - 1) }), /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.scene.columns }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u23EE", onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", onPress: () => go(step - 1) }), /* @__PURE__ */ h(
     ui.Button,
     {
       key: `play-${view.viewId}`,
@@ -5406,7 +5462,7 @@ function stepPanel($, view, pick, step, player) {
       variant: "primary",
       onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u23ED", onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, "Step ", Math.min(step + 1, total), " of ", total), /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: "\u2715 Exit playback", dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
+  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u23ED", onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: "\u2715 Exit playback", dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 function start($, view, pick, isPlaying = true) {
   return setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
