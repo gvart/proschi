@@ -3,7 +3,7 @@ import { parse } from '../../../frontend/src/dsl/parser';
 import type { Diagram, Diagnostic } from '../../../frontend/src/dsl/types';
 import { encodeShareHash, type PlaybackTarget } from '../../../frontend/src/playground/share';
 import { analyze, runTests, type TestResult } from '../../../frontend/src/sim';
-import { analysisOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { analysisOverlay, type FlowOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
 
 /**
  * A Proschi document as the terminal view needs it: the diagram, its errors,
@@ -23,6 +23,8 @@ export interface Document {
   diagram: Diagram;
   errors: Diagnostic[];
   overlay?: Record<string, NodeOverlay>;
+  /** Requests per second along each connection at the `traffic` rates, for the dots that flow along them. */
+  flows?: FlowOverlay[];
   tests: TestResult[];
   /** The web editor's link to the document, opened at a playback step when given one. */
   link: (playback?: PlaybackTarget) => string;
@@ -40,10 +42,12 @@ export function loadDocument(input: Source): Document {
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
   const analysis = simulated ? analyze(diagram) : undefined;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : undefined;
+  const sim = analysis ? analysisOverlay(diagram, analysis) : undefined;
+  if (sim) for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   return {
     diagram,
     errors,
-    ...(analysis ? { overlay: analysisOverlay(diagram, analysis).nodes } : {}),
+    ...(sim ? { overlay: sim.nodes, flows: sim.flows } : {}),
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports),
   };

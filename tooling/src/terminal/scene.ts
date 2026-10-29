@@ -109,8 +109,8 @@ export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): 
   let right = 0;
   let bottom = 0;
   for (const { node, rect } of nodes.values()) {
-    // Cards cast a shadow one cell right and down.
-    const cast = node.kind === 'group' ? 0 : 1;
+    // A card with replicas has a second card behind it, one cell right and down.
+    const cast = stacked(node) ? 1 : 0;
     right = Math.max(right, rect.x + rect.w + cast);
     bottom = Math.max(bottom, rect.y + rect.h + cast);
   }
@@ -120,7 +120,10 @@ export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): 
       bottom = Math.max(bottom, c.y + 1);
     }
   for (const e of edges) if (e.label && e.edge.label) right = Math.max(right, e.label.x + Math.ceil(e.edge.label.length / 2) + 1);
-  const legendRows = diagram.legend?.length ? 2 : 0;
+  // The legend: a framed panel below the drawing, a row per entry.
+  const legend = diagram.legend ?? [];
+  const legendRows = legend.length ? legend.length + 3 : 0;
+  if (legend.length) right = Math.max(right, MARGIN + legendWidth(legend.map((e) => e.label)));
   return {
     diagram,
     columns: Math.min(512, Math.max(1, right + MARGIN)),
@@ -129,6 +132,16 @@ export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): 
     edges,
     legendRow: bottom + MARGIN,
   };
+}
+
+/** Whether a card is drawn with a second card behind it: it runs more than one replica. */
+export function stacked(node: DiagramNode, replicas?: number): boolean {
+  return node.kind === 'component' && (replicas ?? node.replicas ?? 1) > 1;
+}
+
+/** The legend panel's width: a border, a padding cell, the swatch and a gap, the longest label, a padding cell and a border. */
+export function legendWidth(labels: string[]): number {
+  return Math.max(10, 1 + 1 + 3 + 1 + Math.max(0, ...labels.map((l) => l.length)) + 1 + 1);
 }
 
 const contains = (r: Rect, c: Cell) => c.x >= r.x && c.x < r.x + r.w && c.y >= r.y && c.y < r.y + r.h;

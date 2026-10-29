@@ -146,7 +146,51 @@ for (const [icons, postgres] of [['nerd-font', '\ue76e'], ['symbols', '◉']] as
     on('ui.invalidate', () => ({ value: undefined }))
     await (await $.ui.mount(reply(FENCED))).unmount()
     const ui = await $.ui.mount(reply(FENCED))
-    expect(glyphs(await ui.find({ type: 'Raster' }))).toContain(`│ ${postgres} │ PostgreSQL`)
+    // The icon sits in the middle of its solid tile, left of the tech.
+    expect(glyphs(await ui.find({ type: 'Raster' }))).toMatch(new RegExp(`${postgres} {2,6}PostgreSQL`))
     await ui.unmount()
   })
 }
+
+test('traffic flows along the edges in diagram mode, and stops while a use case plays', async ($, on) => {
+  const clock = mock.clock(on)
+  const blits: string[] = []
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', (_, e) => {
+    blits.push('cells' in e ? e.cells : '')
+    return { value: {} }
+  })
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+  expect(await ui.find({ type: 'Select', key: 'uc-m1:0' })).toBeDefined()
+
+  await clock.advance(600)
+  const frames = blits.map(cells => glyphs({ props: { cells } }))
+  expect(frames.length).toBeGreaterThan(2)
+  expect(frames.every(f => f.includes('●'))).toBe(true)
+  expect(new Set(frames).size).toBeGreaterThan(2)
+
+  await ui.press({ key: 'play-m1:0' })
+  await ui.press({ key: 'play-m1:0' })
+  blits.length = 0
+  await clock.advance(2000)
+  expect(blits.map(cells => glyphs({ props: { cells } })).some(f => f.includes('●'))).toBe(false)
+  await ui.unmount()
+})
+
+test('Play and Pause are as wide as each other', async ($, on) => {
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', () => ({ value: {} }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+  await ui.press({ key: 'play-m1:0' })
+  const pause = (await ui.find({ key: 'play-m1:0' })) as unknown as { props: { label: string } }
+  await ui.press({ key: 'play-m1:0' })
+  const play = (await ui.find({ key: 'play-m1:0' })) as unknown as { props: { label: string } }
+  expect(pause.props.label).toMatch(/Pause/)
+  expect(play.props.label).toMatch(/Play/)
+  expect([...play.props.label].length).toBe([...pause.props.label].length)
+  await ui.unmount()
+})

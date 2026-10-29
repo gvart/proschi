@@ -1,10 +1,10 @@
 import { nodeBaseColor } from '../../../frontend/src/dsl/palette';
-import type { DiagramNode } from '../../../frontend/src/dsl/types';
+import type { Dash, DiagramNode } from '../../../frontend/src/dsl/types';
 import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { DEFAULT, E, Grid, N, S, W, hex } from './grid';
 import { iconOf, type IconStyle } from './icons';
 import type { Play } from './playback';
-import type { Path, Rect, Scene, SceneNode } from './scene';
+import { legendWidth, stacked, type Path, type Rect, type Scene, type SceneNode } from './scene';
 
 /**
  * Paints a scene into a grid the way the canvas draws it: dashed group
@@ -36,6 +36,10 @@ export const COLOR = {
   good: 0x22c55e,
   warn: 0xeab308,
   bad: 0xef4444,
+  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from yellow through pink to red. */
+  heatWarm: 0xffd23f,
+  heatHot: 0xff7ab4,
+  heatOver: 0xff6b61,
 };
 
 export interface PaintOptions {
@@ -67,12 +71,14 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
   const all = [...scene.nodes.values()];
 
   for (const g of all.filter((n) => n.node.kind === 'group').sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? 'path' : undefined);
+  // The cards behind cards with replicas, under the edges so a line leaving the front card crosses them.
+  for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
 
   for (const { edge, path } of scene.edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
     const off = !!play && !play.pathEdges.has(edge.id);
     const color = play ? (off ? COLOR.fadedMore : COLOR.faded) : own;
-    drawPath(grid, path, color, edge.style?.dash !== undefined, off);
+    drawPath(grid, path, color, off ? 'dotted' : edge.style?.dash);
   }
   // The current step's line: thick ink, red for an error, dashed for a call that never arrived; flowing once the packet is there.
   for (const active of play?.edges ?? []) {
@@ -95,13 +101,15 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
     for (let i = 0; i < text.length; i++) if (!onCard(scene, x + i, label.y)) grid.set(x + i, label.y, text[i], color);
   }
 
+  for (const g of all) if (g.node.kind === 'group') drawGroupDescription(grid, g, play ? 'path' : undefined);
+
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? '✗' : '■', packet.error ? COLOR.fail : COLOR.pink);
 
   for (const n of all) {
     if (n.node.kind === 'group') continue;
     const look = lookOf(play, n.node.id);
     if (n.node.kind === 'text') drawNote(grid, n, look);
-    else drawCard(grid, n, options.overlay?.[n.node.id], look, options.icons ?? 'nerd-font');
+    else drawCard(grid, scene, n, options.overlay?.[n.node.id], look, options.icons ?? 'nerd-font');
   }
 
   drawLegend(grid, scene);
@@ -116,14 +124,14 @@ function onCard(scene: Scene, x: number, y: number): boolean {
   return false;
 }
 
-/** An edge's line; dotted when playback fades it out, dashed for a dashed style. */
-function drawPath(grid: Grid, path: Path, color: number, dashed: boolean, dotted: boolean): void {
+/** An edge's line in its dash; playback draws the edges it fades out dotted. */
+function drawPath(grid: Grid, path: Path, color: number, dash: Dash | undefined): void {
   const { cells, dirs, head } = path;
+  const g = dash ? LINES[dash] : undefined;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
     const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
-    if (dotted && straight) grid.set(x, y, dirs[i] === (N | S) ? '┊' : '┈', color);
-    else if (dashed && straight) grid.set(x, y, dirs[i] === (N | S) ? '┆' : '╌', color);
+    if (g && straight) grid.set(x, y, dirs[i] === (N | S) ? g.v : g.h, color);
     else grid.line(x, y, dirs[i], color);
   }
   const last = cells[cells.length - 1];
@@ -135,16 +143,21 @@ function baseColor(node: DiagramNode, fallback: number): number {
   return base ? hex(base) : fallback;
 }
 
-const LIGHT = { h: '─', v: '│', dh: '╌', dv: '┆', tl: '╭', tr: '╮', bl: '╰', br: '╯' };
-/** A frame playback has faded out: dotted, so it recedes on any background. */
-const DOTTED = { ...LIGHT, h: '┈', v: '┊', dh: '┈', dv: '┊' };
+/**
+ * Straight runs of a line by its dash (palette.ts DASH_ARRAY): dashed as two
+ * long dashes a cell, dotted as four short ones, so the two tell apart.
+ */
+const LINES: Record<'solid' | Dash, { h: string; v: string }> = {
+  solid: { h: '─', v: '│' },
+  dashed: { h: '╌', v: '╎' },
+  dotted: { h: '┈', v: '┊' },
+};
 
-/** A frame with rounded corners, dashed when `dash`. */
-function frame(grid: Grid, r: Rect, color: number, dash: boolean, g = LIGHT): void {
+/** A frame with rounded corners, in a dash. */
+function frame(grid: Grid, r: Rect, color: number, dash: 'solid' | Dash = 'solid'): void {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
-  const h = dash ? g.dh : g.h;
-  const v = dash ? g.dv : g.v;
+  const { h, v } = LINES[dash];
   for (let x = r.x + 1; x < right; x++) {
     grid.set(x, r.y, h, color);
     grid.set(x, bottom, h, color);
@@ -153,10 +166,10 @@ function frame(grid: Grid, r: Rect, color: number, dash: boolean, g = LIGHT): vo
     grid.set(r.x, y, v, color);
     grid.set(right, y, v, color);
   }
-  grid.set(r.x, r.y, g.tl, color);
-  grid.set(right, r.y, g.tr, color);
-  grid.set(r.x, bottom, g.bl, color);
-  grid.set(right, bottom, g.br, color);
+  grid.set(r.x, r.y, '╭', color);
+  grid.set(right, r.y, '╮', color);
+  grid.set(r.x, bottom, '╰', color);
+  grid.set(right, bottom, '╯', color);
 }
 
 function fill(grid: Grid, r: Rect, fg: number, bg: number): void {
@@ -167,33 +180,92 @@ const fit = (text: string, room: number) => (text.length <= room ? text : room <
 
 function drawGroup(grid: Grid, { node, rect }: SceneNode, look: Look): void {
   const color = fade(look, baseColor(node, COLOR.muted));
-  frame(grid, rect, color, true);
+  frame(grid, rect, color, node.style?.dash ?? 'dashed');
   // The name as a chip in the group's color.
   grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
+}
+
+/** A group's description under its name, as the canvas shows it; drawn over the edges so it stays whole. */
+function drawGroupDescription(grid: Grid, { node, rect }: SceneNode, look: Look): void {
+  if (!node.description || rect.h <= 3) return;
+  grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, ' '), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
 }
 
 /** The canvas's icon tile: a square of the card's color left of the name, the icon dark on it. */
 const TILE = { w: 5, h: 3 };
 
+/** The fill of a busy card (utils/heat.ts); none below 70%, where the bar alone tells. */
+export function heatOf(overlay: NodeOverlay | undefined): number | undefined {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || u === undefined) return undefined;
+  if (overlay.saturated || u >= 1) return COLOR.heatOver;
+  if (u >= 0.9) return COLOR.heatHot;
+  return u >= 0.7 ? COLOR.heatWarm : undefined;
+}
+
+const replicasOf = (node: DiagramNode, overlay: NodeOverlay | undefined) => overlay?.replicas ?? node.replicas ?? 1;
+
+/** Whether the cells one right and one down of a card are free of other cards and inside the grid. */
+function stackRoom(grid: Grid, scene: Scene, { node, rect }: SceneNode): boolean {
+  const right = rect.x + rect.w;
+  const bottom = rect.y + rect.h;
+  if (!grid.inside(right, bottom)) return false;
+  for (const other of scene.nodes.values()) {
+    if (other.node === node || other.node.kind === 'group') continue;
+    const r = other.rect;
+    const hitsRight = right >= r.x && right < r.x + r.w && r.y <= bottom && r.y + r.h > rect.y + 1;
+    const hitsBottom = bottom >= r.y && bottom < r.y + r.h && r.x <= right && r.x + r.w > rect.x + 1;
+    if (hitsRight || hitsBottom) return false;
+  }
+  return true;
+}
+
+const stackShown = (grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined) => stacked(n.node, replicasOf(n.node, overlay)) && stackRoom(grid, scene, n);
+
+/** The edge of a second card behind a card with replicas (canvas.css `data-stack`), the count on it. */
+function drawStack(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined, look: Look): void {
+  if (!stackShown(grid, scene, n, overlay)) return;
+  const { node, rect } = n;
+  const color = look ? (look === 'off' ? COLOR.fadedMore : COLOR.faded) : overlay?.down ? COLOR.muted : baseColor(node, COLOR.line);
+  const right = rect.x + rect.w;
+  const bottom = rect.y + rect.h;
+  const { h, v } = LINES[look === 'off' ? 'dotted' : 'solid'];
+  for (let y = rect.y + 2; y < bottom; y++) grid.set(right, y, v, color);
+  for (let x = rect.x + 2; x < right; x++) grid.set(x, bottom, h, color);
+  grid.set(right, rect.y + 1, '╮', color);
+  grid.set(rect.x + 1, bottom, '╰', color);
+  grid.set(right, bottom, '╯', color);
+  const count = ` ×${replicasOf(node, overlay)} `;
+  if (rect.w > count.length + 4) grid.text(right - 1 - count.length, bottom, count, look === 'off' ? COLOR.fadedMore : COLOR.muted);
+}
+
 /**
  * A card: a light rounded border and a solid icon tile, both in the node's
  * color, or the accent while it is lit. On the scenario's path it turns grey
- * and keeps its ink; off it, it all turns grey and dotted.
+ * and keeps its ink; off it, it all turns grey and dotted. Under the load
+ * overlay (ComponentNode.tsx) a busy card fills with its heat, one past
+ * capacity turns its border red, one that is down turns grey and dotted, and
+ * the team line gives way to the numbers and a bar of how busy it is.
  */
-function drawCard(grid: Grid, { node, rect }: SceneNode, overlay: NodeOverlay | undefined, look: Look, icons: IconStyle): void {
+function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined, look: Look, icons: IconStyle): void {
+  const { node, rect } = n;
+  const down = !!overlay?.down;
+  const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
+  const heat = look ? undefined : heatOf(overlay);
   const accent = look === 'failing' ? COLOR.fail : look === 'lit' ? COLOR.pink : undefined;
-  const color = accent ?? fade(look, baseColor(node, COLOR.line));
-  const faded = look === 'path' || look === 'off';
-  const ink = look === 'off' ? COLOR.fadedMore : DEFAULT;
-  const muted = look === 'off' ? COLOR.fadedMore : COLOR.muted;
+  const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
+  const faded = look === 'path' || look === 'off' || down;
+  const ink = heat !== undefined ? COLOR.onColor : look === 'off' || down ? COLOR.fadedMore : DEFAULT;
+  const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
-  frame(grid, rect, color, node.style?.dash !== undefined && !accent, look === 'off' ? DOTTED : LIGHT);
+  if (heat !== undefined) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
+  frame(grid, rect, color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'));
 
   const icon = iconOf(node, icons);
   const tiled = icon !== undefined && rect.w >= 22;
   if (tiled) {
     const tile = { x: rect.x + 2, y: rect.y + 1, w: TILE.w, h: TILE.h };
-    if (faded) grid.set(tile.x + 2, tile.y + 1, icon, color);
+    if (faded) grid.set(tile.x + 2, tile.y + 1, icon, color, heat);
     else {
       fill(grid, tile, COLOR.onColor, color);
       grid.set(tile.x + 2, tile.y + 1, icon, COLOR.onColor, color);
@@ -201,34 +273,46 @@ function drawCard(grid: Grid, { node, rect }: SceneNode, overlay: NodeOverlay | 
   }
   const left = rect.x + (tiled ? 2 + TILE.w + 2 : 2);
   const room = rect.x + rect.w - 2 - left;
-  grid.text(left, rect.y + 1, fit(node.name, room), ink);
-  grid.text(left, rect.y + 2, fit(node.techStack, room), muted);
-  if (node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted);
+  grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
+  grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
   if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, ' ! ', look === 'off' ? muted : COLOR.critical);
+}
 
-  // The simulation's numbers sit in the bottom border: replicas, then how busy.
-  const badges: { text: string; color: number }[] = [];
-  const replicas = overlay?.replicas ?? (node.replicas && node.replicas > 1 ? node.replicas : undefined);
-  if (replicas) badges.push({ text: `x${replicas}`, color: muted });
-  if (overlay?.shards) badges.push({ text: `${overlay.shards} shards`, color: muted });
-  if (overlay?.utilization !== undefined) {
-    const u = overlay.utilization;
-    badges.push({ text: `${Math.round(u * 100)}%`, color: fade(look, overlay.saturated || u >= 1 ? COLOR.bad : u >= 0.7 ? COLOR.warn : COLOR.good) });
+/**
+ * The canvas's load badge in one row: replicas (unless the stack behind the
+ * card shows them), size, shards and how busy, or "down", then a bar of the
+ * utilisation. False when there is nothing to show.
+ */
+function loadRow(grid: Grid, at: { x: number; y: number; room: number }, node: DiagramNode, o: NodeOverlay, look: Look, heat: number | undefined, stack: boolean): boolean {
+  const u = o.utilization;
+  const replicas = replicasOf(node, o);
+  const parts = [
+    replicas > 1 && !stack ? `×${replicas}` : '',
+    o.size ?? '',
+    o.shards && o.shards > 1 ? `⧉${o.shards}` : '',
+    o.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '',
+  ].filter(Boolean);
+  if (parts.length === 0) return false;
+  const text = fit(parts.join(' · '), at.room);
+  const on = heat !== undefined;
+  const ink = on ? COLOR.onColor : look === 'off' || o.down ? COLOR.fadedMore : look ? COLOR.muted : DEFAULT;
+  grid.text(at.x, at.y, text, ink, Infinity, heat);
+  const bar = at.room - text.length - 1;
+  if (u === undefined || o.down || bar < 4) return true;
+  const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
+  for (let i = 0; i < bar; i++) {
+    const full = i < filled;
+    grid.set(at.x + text.length + 1 + i, at.y, full ? '━' : '─', on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
   }
-  let x = rect.x + 2;
-  const end = rect.x + rect.w - 2;
-  for (const b of badges) {
-    const text = ` ${b.text} `;
-    if (x + text.length > end) break;
-    grid.text(x, rect.y + rect.h - 1, text, b.color);
-    x += text.length;
-  }
+  return true;
 }
 
 function drawNote(grid: Grid, { node, rect }: SceneNode, look: Look): void {
   const muted = look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
-  frame(grid, rect, fade(look, COLOR.note), false, look === 'off' ? DOTTED : LIGHT);
+  frame(grid, rect, fade(look, COLOR.note), look === 'off' ? 'dotted' : 'solid');
   const room = rect.w - 4;
   grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === 'off' ? COLOR.fadedMore : DEFAULT);
   const words = (node.description ?? '').split(/\s+/).filter(Boolean);
@@ -245,18 +329,24 @@ function drawNote(grid: Grid, { node, rect }: SceneNode, look: Look): void {
   if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
 }
 
+/**
+ * The legend as the canvas's panel (Legend.tsx): a frame titled LEGEND, a
+ * row per entry with its swatch, a block of the entry's color for a fill or
+ * a run of its line for a dash.
+ */
 function drawLegend(grid: Grid, scene: Scene): void {
   const legend = scene.diagram.legend;
   if (!legend?.length) return;
-  let x = 1;
-  for (const entry of legend) {
+  const panel = { x: 1, y: scene.legendRow, w: legendWidth(legend.map((e) => e.label)), h: legend.length + 2 };
+  frame(grid, panel, COLOR.muted);
+  grid.text(panel.x + 2, panel.y, ' LEGEND ', COLOR.muted);
+  legend.forEach((entry, i) => {
+    const y = panel.y + 1 + i;
+    const x = panel.x + 2;
     const color = entry.color ? hex(entry.color) : DEFAULT;
-    // A swatch of the color itself, or a line for a dashed style.
-    if (entry.dash) grid.text(x, scene.legendRow, '╌╌', color);
-    else if (entry.color) grid.text(x, scene.legendRow, '  ', color, Infinity, color);
-    else grid.text(x, scene.legendRow, '■', color);
-    x += 3;
-    grid.text(x, scene.legendRow, entry.label, COLOR.muted);
-    x += entry.label.length + 3;
-  }
+    if (entry.dash) grid.text(x, y, LINES[entry.dash].h.repeat(3), color);
+    else if (entry.color) grid.text(x, y, '   ', color, Infinity, color);
+    else grid.text(x, y, '───', color);
+    grid.text(x + 4, y, fit(entry.label, panel.w - 8), DEFAULT);
+  });
 }

@@ -7,6 +7,8 @@ import { keyOf, loadDocument, missingImports, type Document, type Source } from 
 import { paint } from '../../tooling/src/terminal/paint'
 import { currentStepsOf, isErrorStep, playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
+import type { Grid } from '../../tooling/src/terminal/grid'
+import { drawTraffic, TRAFFIC_FRAME_MS, trafficAt } from '../../tooling/src/terminal/traffic'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
 import type { Player } from '../types'
@@ -48,6 +50,8 @@ const pending = new Set<string>()
 const documents = new Map<string, Document>()
 const scenes = new Map<string, Scene>()
 const timers = new Map<string, { cancel(): void }>()
+/** The traffic animation of each drawn diagram, by view, with the scene it draws. */
+const flowing = new Map<string, { scene: Scene; timer: { cancel(): void } }>()
 
 const FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm
 
@@ -205,6 +209,7 @@ interface View {
   rasterKey: string
   scene: Scene
   overlay: Document['overlay']
+  flows: Document['flows']
 }
 
 /** A stored player in the current shape: an older version stored `beat` instead of `step` and `mode`. */
@@ -222,6 +227,10 @@ function normal(p: Partial<Player> | undefined): Player {
 const PINK = '#ff5da2'
 const INK = '#111111'
 const YELLOW = '#ffd23f'
+
+/** Play and Pause as wide as each other, so swapping them moves nothing on the controls row. */
+const PAUSE = '❚❚ Pause'
+const PLAY = ' ▶ Play '
 
 /** The drawing of one document: the diagram with its use case picker or player and its links; undefined when it has errors. */
 async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source): Promise<RenderElement | undefined> {
@@ -255,17 +264,25 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
   const playing = player.mode === 'play' ? pick : undefined
   const steps = playing?.scenario.steps ?? []
   const step = Math.max(0, Math.min(player.step, steps.length - 1))
-  const view: View = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay }
+  const view: View = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, flows: doc.flows }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
   // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
   const progress = timers.has(viewId) ? 0 : 100
   const grid = paint(scene, { overlay: doc.overlay, icons, ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
+  if (!playing && view.flows?.length && flowing.get(viewId)?.scene !== scene) flow($, view, grid)
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step } : undefined)
 
   return (
     <ui.Box flexDirection="column">
-      {playing ? playerHeader($, view, playing, player) : doc.diagram.title && <ui.Text bold>{doc.diagram.title}</ui.Text>}
+      {playing
+        ? playerHeader($, view, playing, player)
+        : doc.diagram.title && (
+            <ui.Box flexDirection="column">
+              <ui.Text bold>{doc.diagram.title}</ui.Text>
+              {doc.diagram.summary && <ui.Text dimColor>{doc.diagram.summary}</ui.Text>}
+            </ui.Box>
+          )}
       <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
       {playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player)}
       <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={grid.columns}>
@@ -284,7 +301,7 @@ function useCaseBar($: EngineInterface, view: View, doc: Document, pick: Pick, p
   const count = (u: DiagramUseCase) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? '' : 's'}`
   const options = groups.flatMap(g => g.useCases.map(u => ({ value: u.id, label: `${g.label ? `${g.label} › ` : ''}${u.name} · ${count(u)}` })))
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1}>
+    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.scene.columns}>
       <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
         <ui.Text bold color={PINK}>
           Use case
@@ -497,7 +514,7 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
         <ui.Button key={`prev-${view.viewId}`} label="‹" onPress={() => go(step - 1)} />
         <ui.Button
           key={`play-${view.viewId}`}
-          label={player.isPlaying ? '❚❚ Pause' : '▶ Play'}
+          label={player.isPlaying ? PAUSE : PLAY}
           variant="primary"
           onPress={() => (player.isPlaying ? void setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))}
         />
@@ -522,6 +539,7 @@ function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): Pr
 /** Changes the player; with `steps`, the step it lands on animates (on and on while it plays). */
 async function setPlayer($: EngineInterface, view: View, fn: (p: Player) => Player, steps?: FlowStep[]): Promise<void> {
   stop(view.viewId)
+  stopFlow(view.viewId)
   // Started before the redraw, so the redraw draws the step's first frame rather than its last.
   if (steps && steps.length > 0) animate($, view, steps)
   await update($, memberOf(players, { requestId: view.viewId }), p => fn(normal(p)))
@@ -557,6 +575,37 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     await update($, memberOf(players, { requestId: view.viewId }), p => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }))
   })
   timers.set(view.viewId, timer)
+}
+
+function stopFlow(viewId: string): void {
+  flowing.get(viewId)?.timer.cancel()
+  flowing.delete(viewId)
+}
+
+/** Blits refused in a row before the traffic stops: the diagram is no longer drawn. */
+const GONE = 5
+
+/**
+ * The simulated requests flowing over a diagram in its diagram mode
+ * (FlowParticles.tsx): dots stepping along the edges on the painted `base`,
+ * a frame every TRAFFIC_FRAME_MS. Stops when the view starts playing or is
+ * no longer drawn; the next drawing starts it again.
+ */
+function flow($: EngineInterface, view: View, base: Grid): void {
+  stopFlow(view.viewId)
+  const flows = view.flows ?? []
+  let frame = 0
+  let refused = 0
+  const timer = $.clock.every(TRAFFIC_FRAME_MS, async () => {
+    const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
+    if (player.mode === 'play') return stopFlow(view.viewId)
+    const grid = base.copy()
+    drawTraffic(grid, view.scene, trafficAt(view.scene, flows, view.overlay ?? {}, frame++))
+    const blitted = await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: grid.toBase64() })
+    refused = blitted.deny ? refused + 1 : 0
+    if (refused >= GONE) stopFlow(view.viewId)
+  })
+  flowing.set(view.viewId, { scene: view.scene, timer })
 }
 
 /** Copies to the clipboard of the surface pressed on, and says whether it took. */

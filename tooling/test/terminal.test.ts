@@ -3,9 +3,10 @@ import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
 import { examples } from '../../frontend/src/dsl/examples';
 import { keyOf, loadDocument, missingImports } from '../src/terminal/document';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
-import { COLOR, paint } from '../src/terminal/paint';
+import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
 import { buildScene } from '../src/terminal/scene';
+import { drawTraffic, gapOf, trafficAt, TRAFFIC_COLOR } from '../src/terminal/traffic';
 
 async function sceneOf(source: string, columns = 150) {
   const doc = loadDocument({ source });
@@ -54,7 +55,97 @@ describe('terminal scene', () => {
     const { doc, scene } = await sceneOf(example('hello'));
     expect(doc.overlay?.api.utilization).toBeGreaterThan(0);
     expect(doc.tests.length).toBeGreaterThan(0);
-    expect(paint(scene, { overlay: doc.overlay }).toText()).toMatch(/╰─ x2 +\d+% ─/);
+    const text = paint(scene, { overlay: doc.overlay }).toText();
+    // The numbers and a bar take the team's row; the replicas sit on the card stacked behind.
+    expect(text).toMatch(/\d+% ━*─+ │/);
+    expect(text).toMatch(/╰─+ ×2 ─╯/);
+  });
+
+  it('fills a busy card with its heat, reddens one past capacity and greys one that is down', async () => {
+    const { doc, scene } = await sceneOf(STRESSED);
+    expect(doc.overlay?.db).toMatchObject({ saturated: true, size: 'L' });
+    const overlay = { ...doc.overlay!, api: { ...doc.overlay!.api, down: true } };
+    const grid = paint(scene, { overlay });
+    const db = scene.nodes.get('db')!.rect;
+    const api = scene.nodes.get('api')!.rect;
+    expect(grid.bg[(db.y + 1) * grid.columns + db.x + 1]).toBe(COLOR.heatOver);
+    expect(grid.fg[db.y * grid.columns + db.x]).toBe(COLOR.fail);
+    expect(grid.toText()).toMatch(/L · \d+%/);
+    expect(grid.glyph(api.x, api.y + 1)).toBe('┊');
+    expect(grid.toText()).toContain('down');
+    expect(heatOf({ utilization: 0.5 })).toBeUndefined();
+    expect(heatOf({ utilization: 0.95 })).toBe(COLOR.heatHot);
+    expect(heatOf({ utilization: 2, down: true })).toBeUndefined();
+  });
+
+  it('draws the legend as a panel, dashed and dotted lines apart, and group descriptions', async () => {
+    const { scene } = await sceneOf(STRESSED);
+    scene.nodes.get('back')!.node.description = 'Behind the gateway';
+    const text = paint(scene).toText();
+    expect(text).toMatch(/╭─ LEGEND ─+╮/);
+    expect(text).toMatch(/│ ╌╌╌ Old +│/);
+    expect(text).toMatch(/│ ┈┈┈ Maybe +│/);
+    expect(text).toContain('Behind the gateway');
+    // The dotted connection runs in dots, the dashed group frame in dashes.
+    expect(text).toMatch(/[┊┈]/);
+    expect(text).toMatch(/[╎╌]/);
+  });
+});
+
+const STRESSED = `web "Web" [Actor]
+api "API" [REST API] .old
+group back "Back end" {
+  db "DB" [PostgreSQL] x2
+}
+q "Q" [Kafka]
+web -> api
+api -> db .maybe : write
+api -> q
+legend {
+  old   "Old"   dashed
+  maybe "Maybe" dotted
+}
+usecase "Write" {
+  web -> api : POST /x
+  api -> db : INSERT
+  api ->> q : log
+}
+traffic {
+  "Write" 50k rps
+}
+capacity {
+  db size L
+}
+`;
+
+describe('terminal traffic', () => {
+  it('spaces the dots by how busy a connection is', () => {
+    expect(gapOf(1)).toBe(8);
+    expect(gapOf(100)).toBeLessThan(gapOf(1));
+    expect(gapOf(1e6)).toBe(4);
+  });
+
+  it('moves the dots a cell a frame along their edge, hollow for async, and drops requests off a saturated node', async () => {
+    const { doc, scene } = await sceneOf(STRESSED);
+    const flows = doc.flows!;
+    expect(flows.some((f) => f.async)).toBe(true);
+    const at = (frame: number) => trafficAt(scene, flows, doc.overlay!, frame);
+    const path = scene.edges.find((e) => e.edge.source === 'web')!.path.cells;
+    const onWeb = (frame: number) => at(frame).filter((p) => path.includes(p.at));
+    expect(onWeb(0).length).toBeGreaterThan(0);
+    const before = onWeb(0).map((p) => path.indexOf(p.at));
+    for (const p of onWeb(1)) expect(before).toContain(path.indexOf(p.at) - 1);
+    expect(at(0).some((p) => p.kind === 'async')).toBe(true);
+    expect([0, 1, 2].some((f) => at(f).some((p) => p.kind === 'drop'))).toBe(true);
+
+    const base = paint(scene, { overlay: doc.overlay });
+    const frame = base.copy();
+    drawTraffic(frame, scene, at(0));
+    expect(frame.toText()).toContain('●');
+    expect(frame.toText()).toContain('○');
+    expect(base.toText()).not.toContain('●');
+    const dot = at(0).find((p) => p.kind === 'sync' && frame.glyph(p.at.x, p.at.y) === '●')!;
+    expect(frame.fg[dot.at.y * frame.columns + dot.at.x]).toBe(TRAFFIC_COLOR.sync);
   });
 });
 
