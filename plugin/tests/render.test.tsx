@@ -221,3 +221,38 @@ test('Focus opens the block in a focused pane that Esc closes, with its player a
   expect(await hotkeyOf(p, 'explore-proschi-view:0')).toBe('x')
   await p.unmount()
 })
+
+test('Play and a step bring the diagram into view, in the transcript and in the pane', async ($, on) => {
+  // The harness moves no window for a plugin's $.ui.scroll: each call is refused, and the refusal, naming its target, goes to the debug log.
+  const logs: string[] = []
+  mock.clock(on)
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', () => ({ value: {} }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  on('ui.log', (_, e) => {
+    logs.push(e.text)
+    return { value: undefined }
+  })
+  const scrolledTo = () => logs.filter(line => line.startsWith('proschi: scroll to ')).map(line => line.slice('proschi: scroll to '.length).split(' refused')[0])
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+
+  // The Raster first; refused, the drawing's transcript row.
+  await ui.press({ key: 'play-m1:0' })
+  expect(scrolledTo()).toEqual(['{"key":"d-m1:0"}', '{"requestId":"m1"}'])
+  // Playback goes on all the same.
+  expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
+  await ui.press({ key: 'play-m1:0' })
+  logs.length = 0
+  await ui.press({ key: 'next-m1:0' })
+  expect(scrolledTo()[0]).toBe('{"key":"d-m1:0"}')
+  await ui.press({ key: 'focus-m1:0' })
+  await ui.unmount()
+
+  const p = await $.ui.mount(pane(true))
+  logs.length = 0
+  await p.press({ key: 'reset-proschi-view:0' })
+  expect(scrolledTo()).toEqual(['{"key":"d-proschi-view:0"}'])
+  await p.unmount()
+})

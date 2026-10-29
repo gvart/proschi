@@ -1,5 +1,5 @@
 import { atom, memberOf, read, update } from 'claude-code'
-import type { Elements, EngineInterface, On, PluginOptions, RenderElement, RenderNode, RenderSurface } from 'claude-code'
+import type { Elements, EngineInterface, On, PluginOptions, RenderElement, RenderNode, RenderSurface, UiScrollArgs } from 'claude-code'
 
 import type { Layout } from '../../frontend/src/dsl/autoLayout'
 import type { IconStyle } from '../../tooling/src/terminal/icons'
@@ -514,6 +514,7 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   const total = steps.length
   const go = async (to: number, isPlaying = false) => {
     await setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
+    await reveal($, view)
   }
   const rows = stepRows(ui, view, steps, step)
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height)
@@ -565,6 +566,28 @@ const hotkey = (view: View, key: string) => (view.inPane ? { hotkey: key } : {})
 /** Plays a scenario from its first step. */
 async function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): Promise<void> {
   await setPlayer($, view, p => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: 'play' }), pick.scenario.steps)
+  await reveal($, view)
+}
+
+/**
+ * Brings the diagram to the top of its window, the step panel under it: from a
+ * press, the one time the engine lets a plugin move a transcript row. Where the
+ * Raster is no target there, it scrolls to the start of the drawing's row.
+ */
+async function reveal($: EngineInterface, view: View): Promise<void> {
+  if (view.inPane) {
+    await scroll($, { to: { key: view.rasterKey }, in: PANE, block: 'start' })
+    return
+  }
+  const moved = await scroll($, { to: { key: view.rasterKey }, block: 'start' })
+  if (moved.deny) await scroll($, { to: { requestId: view.d.requestId }, block: 'start' })
+}
+
+/** Scrolls, a failure answered as a refusal (and noted in the debug log): a drawing that cannot move still plays. */
+async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: string }> {
+  const moved = await $.ui.scroll(args).catch((error: unknown) => ({ deny: String(error) }))
+  if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: 'debug' })
+  return moved
 }
 
 /**
@@ -627,6 +650,8 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     const last = step >= steps.length - 1
     if (last) stop(view.viewId)
     await update($, memberOf(players, { requestId: view.viewId }), p => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }))
+    // The pane's body is the plugin's to scroll: keep the step it moved on to in view.
+    if (view.inPane) await scroll($, { to: { key: `rows-${view.viewId}` }, in: PANE, block: 'nearest' })
   })
   timers.set(view.viewId, timer)
 }
