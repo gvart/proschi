@@ -6,7 +6,7 @@ import { E, N, S, W } from './grid';
 /**
  * The diagram in character cells: the browser's ELK layout (autoLayout.ts),
  * scaled so a 240px card is about 30 columns wide and 5 rows tall, and
- * squeezed sideways when it would not fit the terminal. Edge routes become
+ * squeezed sideways when it would not fit the terminal (`buildScene`). Edge routes become
  * runs of cells, each with the directions its line leaves in. The empty
  * rows and columns ELK's spacing leaves are then squeezed out (`compact`).
  */
@@ -59,9 +59,37 @@ const SX = 8;
 const SY = 12;
 /** Narrower than this (in pixels per column) and names stop being readable. */
 const MAX_SX = 16;
+/** How far a diagram that does not fit at MAX_SX is squeezed further, its names cut short, before it is drawn wider than asked. */
+const SQUEEZE_SX = 20;
 const MARGIN = 1;
 
+/**
+ * The scene at the widest scale that fits `maxColumns`. Compaction, and the
+ * cells that cards, gaps, labels and the legend take at any scale, keep the
+ * width from following the scale, so a scene that comes out too wide is
+ * redrawn narrower, past MAX_SX up to SQUEEZE_SX, until it fits. One that
+ * fits at no scale comes out wider than asked (`columns > maxColumns`); the
+ * caller says so rather than cutting it off.
+ */
 export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): Scene {
+  const widthPx = layoutWidth(diagram, layout);
+  let sx = Math.min(MAX_SX, Math.max(SX, widthPx / Math.max(1, maxColumns - 2 * MARGIN - 1)));
+  let scene = sceneAt(diagram, layout, sx);
+  for (let tries = 0; tries < 8 && scene.columns > maxColumns && sx < SQUEEZE_SX; tries++) {
+    sx = Math.min(SQUEEZE_SX, sx * Math.max(1.05, (scene.columns + 2) / maxColumns));
+    const narrower = sceneAt(diagram, layout, sx);
+    if (narrower.columns < scene.columns) scene = narrower;
+  }
+  return scene;
+}
+
+/** The layout's width in pixels, from the left edge of the drawing (or 0) to its right. */
+function layoutWidth(diagram: Diagram, layout: Layout): number {
+  const { xs, minX } = extent(diagram, layout);
+  return Math.max(1, ...xs) - minX;
+}
+
+function extent(diagram: Diagram, layout: Layout) {
   const boxes = new Map(layout.nodes.map((b) => [b.id, b]));
   const absolute = (id: string): Point => {
     const b = boxes.get(id);
@@ -74,10 +102,12 @@ export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): 
   const bends = Object.values(layout.routes).flatMap((r) => r.points);
   const xs = [...px.flatMap((p) => [p.at.x, p.at.x + p.box.width]), ...bends.map((p) => p.x)];
   const ys = [...px.flatMap((p) => [p.at.y, p.at.y + p.box.height]), ...bends.map((p) => p.y)];
-  const minX = Math.min(0, ...xs);
-  const minY = Math.min(0, ...ys);
-  const widthPx = Math.max(1, ...xs) - minX;
-  const sx = Math.min(MAX_SX, Math.max(SX, widthPx / Math.max(1, maxColumns - 2 * MARGIN - 1)));
+  return { px, xs, minX: Math.min(0, ...xs), minY: Math.min(0, ...ys) };
+}
+
+/** The scene at `sx` pixels per column. */
+function sceneAt(diagram: Diagram, layout: Layout, sx: number): Scene {
+  const { px, minX, minY } = extent(diagram, layout);
   const cx = (x: number) => Math.round((x - minX) / sx) + MARGIN;
   const cy = (y: number) => Math.round((y - minY) / SY) + MARGIN;
 
