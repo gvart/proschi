@@ -29,7 +29,6 @@ test('a proschi block in a reply draws as a diagram with its player', async ($, 
 
   const drawn = await $.ui.mount(reply(FENCED))
   expect(await drawn.find({ type: 'Raster' })).toBeDefined()
-  expect(await drawn.find({ type: 'Text', text: /availability/ })).toBeDefined()
   expect(await drawn.find({ type: 'Markdown', text: /Here is the design/ })).toBeDefined()
 
   // The diagram first, with a picker; Play opens the player on the scenario's first step.
@@ -96,6 +95,38 @@ test('Play moves the packet along its edge in place, then on to the next step', 
   const paused = blits.length
   await clock.advance(1000)
   expect(blits.length).toBe(paused)
+  await ui.unmount()
+})
+
+/** The terminal rows a step panel's body takes: a row per element, a Code's a row per line of its source. */
+function height(box: { children: unknown[] } | undefined): number {
+  return (box?.children ?? []).reduce<number>((n, child) => {
+    const element = child as { type?: string; props?: { source?: string } }
+    return n + (element.type === 'Code' ? String(element.props?.source).split('\n').length : 1)
+  }, 0)
+}
+
+test('the player keeps one size from step to step, and no requirement is drawn', async ($, on) => {
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', () => ({ value: {} }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+
+  await ui.press({ key: 'play-m1:0' })
+  await ui.press({ key: 'play-m1:0' })
+  const total = Number((await ui.find({ type: 'Text', text: /^Step +1 of \d+$/ }))?.text.match(/of (\d+)/)?.[1])
+  expect(total).toBeGreaterThan(2)
+  const heights: number[] = []
+  for (let step = 1; step <= total; step++) {
+    expect(await ui.find({ type: 'Text', text: new RegExp(`^Step +${step} of ${total}$`) })).toBeDefined()
+    heights.push(height(await ui.find({ key: 'rows-m1:0' })))
+    await ui.press({ key: 'next-m1:0' })
+  }
+  expect(new Set(heights).size).toBe(1)
+  expect(heights[0]).toBeGreaterThan(2)
+
+  for (const text of [/requirements met/, /^✗/, /p99/, /availability/]) expect(await ui.find({ type: 'Text', text })).toBeUndefined()
   await ui.unmount()
 })
 
