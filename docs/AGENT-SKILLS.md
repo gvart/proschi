@@ -72,6 +72,48 @@ npx degit --force gvart/proschi/plugin/skills ~/.claude/skills     # every proje
 npx degit --force gvart/proschi/plugin/skills .claude/skills       # this project only
 ```
 
+## Diagrams in the terminal
+
+The Claude Code plugin also draws Proschi diagrams right in Claude Code's
+terminal, with the same layout as the browser's. It draws:
+
+- a ```` ```proschi ```` fenced block in Claude's reply (the plugin tells
+  Claude to answer with one instead of Mermaid or ASCII art when it shows an
+  architecture or a request flow);
+- a `.proschi` file Claude writes or edits, under the tool call;
+- a file you name with `/proschi view <file>`, in a pane that redraws when the
+  file changes.
+
+Each drawing has the canvas's cards with their tech icons, groups, stacked
+replicas, the legend and, when the diagram has `traffic`, the simulation's
+load on each node. Under it, a use case picker and an explorer open a player
+like the editor's: scenario tabs, the step list with each step's request and
+response, and play, pause and step controls. Buttons copy the source or a
+share link, open the diagram in Proschi, or, with ⛶ Focus, move it into a
+pane you drive from the keyboard:
+
+| Key | Does |
+|---|---|
+| `p` | Play or pause |
+| `n` / `b` | Next or previous step |
+| `r` / `e` | Restart, or jump to the end |
+| `x` | Show or hide the use case explorer |
+| `d` | Back to the diagram |
+| `Esc` | Close the pane, back to the prompt |
+
+`ctrl+x tab` moves focus to the pane when it doesn't have it.
+
+It needs a Claude Code build with mod support (a plugin hooks module) and
+Node 18 or newer on the `PATH`, as the layout runs in Node. The icons are
+[Nerd Font](https://www.nerdfonts.com) glyphs by default; without a Nerd Font
+in the terminal, set the plugin's `icons` option to `symbols`, which works
+with any font, or to `none`.
+
+Limits: it draws in a terminal only; elsewhere a reply shows the block's
+source. Diagrams are fitted to the terminal's width (40 to 512 columns), so a
+wide one is cramped in a narrow window. The drawing is read-only: edit the
+source, or open it in the editor.
+
 ## Codex, Cursor, Copilot, Gemini CLI and others
 
 Copy the skills into the repository:

@@ -25,7 +25,9 @@
         { "type": "json", "path": "tooling/package-lock.json", "jsonpath": "$.version" },
         { "type": "json", "path": "tooling/package-lock.json", "jsonpath": "$.packages[''].version" },
         { "type": "json", "path": "tooling/vscode/package.json", "jsonpath": "$.version" },
-        { "type": "generic", "path": "tooling/jetbrains/gradle.properties" }
+        { "type": "generic", "path": "tooling/jetbrains/gradle.properties" },
+        { "type": "json", "path": "plugin/.claude-plugin/plugin.json", "jsonpath": "$.version" },
+        { "type": "json", "path": ".claude-plugin/marketplace.json", "jsonpath": "$.plugins[0].version" }
       ]
     }
   }
