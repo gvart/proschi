@@ -85,9 +85,10 @@ test('Play moves the packet along its edge in place, then on to the next step', 
 
   await ui.press({ key: 'play-m1:0' })
   expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
-  await clock.advance(500)
-  expect(new Set(blits).size).toBeGreaterThan(3)
-  await clock.advance(1600)
+  // Out to the callee and part way back: the edge is only a few cells long, a frame per cell.
+  await clock.advance(1000)
+  expect(new Set(blits).size).toBeGreaterThan(2)
+  await clock.advance(1100)
   expect(await ui.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^Checkout API → Cart Cache/ })).toBeDefined()
 
