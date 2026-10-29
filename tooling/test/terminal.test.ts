@@ -54,7 +54,7 @@ describe('terminal scene', () => {
     const { doc, scene } = await sceneOf(example('hello'));
     expect(doc.overlay?.api.utilization).toBeGreaterThan(0);
     expect(doc.tests.length).toBeGreaterThan(0);
-    expect(paint(scene, { overlay: doc.overlay }).toText()).toMatch(/┗━ x2 +\d+% ━/);
+    expect(paint(scene, { overlay: doc.overlay }).toText()).toMatch(/╰─ x2 +\d+% ─/);
   });
 });
 
