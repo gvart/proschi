@@ -1,0 +1,26 @@
+docs/AGENT-SKILLS.md
+  s_5399f587bc6d62::t_133121c44cea77 75-105,108,111,116
+  s_5399f587bc6d62::t_50df9367c48f83 106-107,109-110,112-115
+plugin/skills/README.md
+  s_5399f587bc6d62::t_1c9636f535e4f8 40-42
+docs/site.json
+  s_5399f587bc6d62::t_42e0c3738587ac 106-107
+README.md
+  s_5399f587bc6d62::t_1c9636f535e4f8 77-78
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "cab76cd4504bdacf04e11d1bcefd3f18a2d3d81f",
+  "prompts": {},
+  "sessions": {
+    "s_5399f587bc6d62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a4147e3-4a01-4099-9aff-b26d6a95f78e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
