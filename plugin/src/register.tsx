@@ -9,7 +9,7 @@ import { currentStepsOf, isErrorStep, playAt, STEP_MS, TRAVEL_MS } from '../../t
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
 import type { DiagramScenario, DiagramUseCase, FlowStep } from '../../frontend/src/dsl/types'
 import { groupByEndpoint } from '../../frontend/src/playground/useCaseGroups'
-import type { Player } from '../types'
+import type { PaneSource, Player } from '../types'
 
 /**
  * Draws Proschi diagrams in Claude Code's terminal: ```proschi blocks in
@@ -28,9 +28,16 @@ type Draw = { ui: Ui; requestId: string; columns: number }
 let icons: IconStyle = 'nerd-font'
 
 const PANE = 'proschi-view'
+/** The pane's one drawing, by the id its player is stored under. */
+const PANE_VIEW = `${PANE}:0`
 const IDLE: Player = { pick: '', step: 0, isPlaying: false, mode: 'diagram', explorer: false }
+const NO_SOURCE: PaneSource = { source: '' }
 const paneFile = atom({ plugin: 'proschi', key: 'paneFile' } as const, '')
+const paneSource = atom({ plugin: 'proschi', key: 'paneSource' } as const, NO_SOURCE)
 const players = atom({ plugin: 'proschi', key: 'player' } as const, IDLE)
+
+/** The pane's keys, as its Buttons' hotkeys name them. */
+const PANE_KEYS = 'p play · n/b step · r restart · e end · x explorer · d diagram · esc back to the prompt'
 
 /** One animation frame, in ms. */
 const FRAME = 50
@@ -70,10 +77,18 @@ export function register(on: On, options: PluginOptions): void {
     const file = rest.join(' ')
     if (verb !== 'view' || !file) return { text: 'Usage: /proschi view <file.proschi>' }
     if (!(await $.fs.exists(file))) return { text: `No such file: ${file}` }
+    stop(PANE_VIEW)
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => IDLE)
     await update($, paneFile, () => file)
     await $.ui.open({ id: PANE, title: `Proschi · ${basename(file)}` })
     watch($, file)
     return { text: `Showing ${file} in the Proschi pane.` }
+  })
+
+  on('ui.close', { id: PANE }, async ($, e, next) => {
+    stop(PANE_VIEW)
+    stop(PANE)
+    return next(e)
   })
 
   on('ui.render', { component: 'AssistantMessage' }, async ($, e, next) => {
@@ -102,7 +117,7 @@ export function register(on: On, options: PluginOptions): void {
     const ui = $.ui.resolve(e)
     const source = await readWithImports($, file).catch(() => undefined)
     if (!source) return row
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source)
+    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file)
     return view ? (
       <ui.Box flexDirection="column">
         {row}
@@ -117,13 +132,24 @@ export function register(on: On, options: PluginOptions): void {
       return <Text>The Proschi pane draws in a terminal.</Text>
     }
     const ui = $.ui.resolve(e)
+    // The file `/proschi view` (or Focus under a Write or Edit) shows, else the block Focus opened from a reply.
     const file = await read($, paneFile)
-    if (!file) return <ui.Text dimColor>Run /proschi view &lt;file.proschi&gt;.</ui.Text>
-    const source = await readWithImports($, file).catch(() => undefined)
+    const focused = file ? NO_SOURCE : await read($, paneSource)
+    if (!file && !focused.source) return <ui.Text dimColor>Run /proschi view &lt;file.proschi&gt;.</ui.Text>
+    const source = file ? await readWithImports($, file).catch(() => undefined) : focused
     if (!source) return <ui.Text color="red">Cannot read {file}.</ui.Text>
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
-    const view = await diagramView($, { ui, requestId: PANE, columns }, `${PANE}:0`, source)
-    return view ?? <ui.Text color="red">{file} has errors: run `npx proschi check {file}`.</ui.Text>
+    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source)
+    if (!view) return <ui.Text color="red">{file ? `${file} has errors: run \`npx proschi check ${file}\`.` : 'The diagram has errors.'}</ui.Text>
+    const isFocused = 'isFocused' in e.props && e.props.isFocused === true
+    return (
+      <ui.Box flexDirection="column">
+        {view}
+        <ui.Text dimColor wrap="truncate-end">
+          {isFocused ? PANE_KEYS : 'ctrl+x tab focuses the pane for its keys'}
+        </ui.Text>
+      </ui.Box>
+    )
   })
 }
 
@@ -155,7 +181,7 @@ async function readWithImports($: EngineInterface, file: string): Promise<Source
 
 /** Redraws the pane when its file changes. */
 function watch($: EngineInterface, file: string): void {
-  timers.get(PANE)?.cancel()
+  stop(PANE)
   let seen = 0
   timers.set(
     PANE,
@@ -205,6 +231,8 @@ interface View {
   rasterKey: string
   scene: Scene
   overlay: Document['overlay']
+  /** Drawn in the pane, whose Buttons take hotkeys and whose body scrolls under the plugin. */
+  inPane: boolean
 }
 
 /** A stored player in the current shape: an older version stored `beat` instead of `step` and `mode`. */
@@ -227,8 +255,8 @@ const YELLOW = '#ffd23f'
 const PAUSE = '❚❚ Pause'
 const PLAY = ' ▶ Play '
 
-/** The drawing of one document: the diagram with its use case picker or player and its links; undefined when it has errors. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source): Promise<RenderElement | undefined> {
+/** The drawing of one document: the diagram with its use case picker or player and its links; undefined when it has errors. `file` is where the source was read from, if anywhere. */
+async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source, file?: string): Promise<RenderElement | undefined> {
   const { ui } = d
   const key = keyOf(source)
   let doc = documents.get(key)
@@ -259,7 +287,7 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
   const playing = player.mode === 'play' ? pick : undefined
   const steps = playing?.scenario.steps ?? []
   const step = Math.max(0, Math.min(player.step, steps.length - 1))
-  const view: View = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay }
+  const view: View = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, inPane: d.requestId === PANE }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
   // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
@@ -283,6 +311,9 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
         <ui.Button key={`src-${viewId}`} label="⧉ Copy source" onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
         <ui.Button key={`lnk-${viewId}`} label="⧉ Copy share link" onPress={press => void copy($, press.surface, link, 'the share link')} />
         <ui.Button key={`open-${viewId}`} label="↗ Open in Proschi" variant="primary" onPress={press => void openLink($, press.surface, link)} />
+        {!view.inPane && (
+          <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => void focus($, view, file ? basename(file) : (doc.diagram.title ?? 'diagram'), file ? { file } : { source })} />
+        )}
       </ui.Box>
     </ui.Box>
   )
@@ -309,8 +340,8 @@ function useCaseBar($: EngineInterface, view: View, doc: Document, pick: Pick, p
             if (u?.scenarios[0]) void setPlayer($, view, p => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }))
           }}
         />
-        <ui.Button key={`play-${view.viewId}`} label="▶ Play" variant="primary" onPress={() => void start($, view, pick)} />
-        <ui.Button key={`explore-${view.viewId}`} label={player.explorer ? '☰ Hide explorer' : '☰ Explore use cases'} onPress={() => void setPlayer($, view, p => ({ ...p, explorer: !p.explorer }))} />
+        <ui.Button key={`play-${view.viewId}`} label="▶ Play" variant="primary" {...hotkey(view, 'p')} onPress={() => void start($, view, pick)} />
+        <ui.Button key={`explore-${view.viewId}`} label={player.explorer ? '☰ Hide explorer' : '☰ Explore use cases'} {...hotkey(view, 'x')} onPress={() => void setPlayer($, view, p => ({ ...p, explorer: !p.explorer }))} />
       </ui.Box>
       {player.explorer &&
         groups.map(g => (
@@ -356,7 +387,7 @@ function playerHeader($: EngineInterface, view: View, pick: Pick, player: Player
   return (
     <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.scene.columns}>
       <ui.Box flexDirection="row" gap={1} alignItems="center">
-        <ui.Button key={`back-${view.viewId}`} label="← Diagram" onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
+        <ui.Button key={`back-${view.viewId}`} label="← Diagram" {...hotkey(view, 'd')} onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
         <ui.Text bold>{useCase.name}</ui.Text>
         <ui.Text dimColor>· Playback mode · read only</ui.Text>
       </ui.Box>
@@ -481,7 +512,9 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   const { scenario } = pick
   const steps = scenario.steps
   const total = steps.length
-  const go = (to: number, isPlaying = false) => void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
+  const go = async (to: number, isPlaying = false) => {
+    await setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
+  }
   const rows = stepRows(ui, view, steps, step)
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height)
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`
@@ -504,16 +537,17 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
         ))}
       </ui.Box>
       <ui.Box flexDirection="row" gap={1} alignItems="center" marginTop={1} flexWrap="wrap">
-        <ui.Button key={`reset-${view.viewId}`} label="⏮" onPress={() => go(0)} />
-        <ui.Button key={`prev-${view.viewId}`} label="‹" onPress={() => go(step - 1)} />
+        <ui.Button key={`reset-${view.viewId}`} label="⏮" {...hotkey(view, 'r')} onPress={() => void go(0)} />
+        <ui.Button key={`prev-${view.viewId}`} label="‹" {...hotkey(view, 'b')} onPress={() => void go(step - 1)} />
         <ui.Button
           key={`play-${view.viewId}`}
           label={player.isPlaying ? PAUSE : PLAY}
           variant="primary"
-          onPress={() => (player.isPlaying ? void setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))}
+          {...hotkey(view, 'p')}
+          onPress={() => void (player.isPlaying ? setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))}
         />
-        <ui.Button key={`next-${view.viewId}`} label="›" onPress={() => go(step + 1)} />
-        <ui.Button key={`end-${view.viewId}`} label="⏭" onPress={() => go(total - 1)} />
+        <ui.Button key={`next-${view.viewId}`} label="›" {...hotkey(view, 'n')} onPress={() => void go(step + 1)} />
+        <ui.Button key={`end-${view.viewId}`} label="⏭" {...hotkey(view, 'e')} onPress={() => void go(total - 1)} />
         <ui.Text>{counter}</ui.Text>
         <ui.Text>
           <ui.Text color={YELLOW}>{'━'.repeat(filled)}</ui.Text>
@@ -525,9 +559,36 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   )
 }
 
+/** A Button's hotkey, in the pane alone: the transcript's drawings share no keyboard. */
+const hotkey = (view: View, key: string) => (view.inPane ? { hotkey: key } : {})
+
 /** Plays a scenario from its first step. */
-function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): Promise<void> {
-  return setPlayer($, view, p => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: 'play' }), pick.scenario.steps)
+async function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): Promise<void> {
+  await setPlayer($, view, p => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: 'play' }), pick.scenario.steps)
+}
+
+/**
+ * Opens the drawing in the pane as a dialog: it takes the keys and Esc closes
+ * it (no `holdToasts`: the copy buttons toast). A file keeps its watch; a block
+ * from a reply is stored whole. The pane's player starts where this one stands,
+ * and this one pauses.
+ */
+async function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }): Promise<void> {
+  const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
+  if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
+  stop(PANE_VIEW)
+  await update($, memberOf(players, { requestId: PANE_VIEW }), () => player)
+  if ('file' in what) {
+    await update($, paneFile, () => what.file)
+    watch($, what.file)
+  } else {
+    const { source, path, imports } = what.source
+    stop(PANE)
+    await update($, paneFile, () => '')
+    await update($, paneSource, () => ({ source, ...(path ? { path } : {}), ...(imports ? { imports } : {}) }))
+  }
+  const opened = await $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
+  if (!opened.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${opened.reason}`)
 }
 
 /** Changes the player; with `steps`, the step it lands on animates (on and on while it plays). */

@@ -168,3 +168,56 @@ test('Play and Pause are as wide as each other', async ($, on) => {
   expect([...play.props.label].length).toBe([...pause.props.label].length)
   await ui.unmount()
 })
+
+const pane = (isFocused: boolean) =>
+  ({
+    plugin: 'proschi',
+    component: 'Pane',
+    requestId: 'proschi-view',
+    surface: 'terminal',
+    props: { title: 'Proschi', isFocused, bodyColumns: 100, placement: 'dock', scroll: { offset: 0, bodyRows: 60 }, view: {} },
+  }) as const
+
+const hotkeyOf = async (ui: { find(q: { key: string }): Promise<unknown> }, key: string) => ((await ui.find({ key })) as { props: { hotkey?: string } } | undefined)?.props.hotkey
+
+test('Focus opens the block in a focused pane that Esc closes, with its player and keys', async ($, on) => {
+  const opens: Record<string, unknown>[] = []
+  mock.clock(on)
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.blit', () => ({ value: {} }))
+  on('ui.open', (_, e) => {
+    opens.push({ ...e })
+    return { value: { isPlaced: true } }
+  })
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+  expect(await ui.find({ key: 'focus-m1:0' })).toBeDefined()
+  await ui.press({ key: 'play-m1:0' })
+  // The transcript's drawings take no hotkeys: the keyboard is the prompt's.
+  expect(await hotkeyOf(ui, 'play-m1:0')).toBeUndefined()
+  await ui.press({ key: 'play-m1:0' })
+  await ui.press({ key: 'next-m1:0' })
+  await ui.press({ key: 'focus-m1:0' })
+  await ui.unmount()
+
+  expect(opens).toHaveLength(1)
+  expect(opens[0]).toMatchObject({ id: 'proschi-view', focus: true, closeOnEscape: true })
+  expect(opens[0]!.holdToasts).toBeUndefined()
+
+  // The pane draws the block (it has no file) where the inline player stood.
+  const p = await $.ui.mount(pane(true))
+  expect(await p.find({ type: 'Raster', key: 'd-proschi-view:0' })).toBeDefined()
+  expect(await p.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
+  expect(await p.find({ key: 'focus-proschi-view:0' })).toBeUndefined()
+  for (const [key, hotkey] of [['play', 'p'], ['next', 'n'], ['prev', 'b'], ['reset', 'r'], ['end', 'e'], ['back', 'd']] as const) {
+    expect(await hotkeyOf(p, `${key}-proschi-view:0`)).toBe(hotkey)
+  }
+  expect(await hotkeyOf(p, 'exit-proschi-view:0')).toBeUndefined()
+  expect(await p.find({ type: 'Text', text: /p play · n\/b step/ })).toBeDefined()
+
+  await p.press({ key: 'back-proschi-view:0' })
+  expect(await hotkeyOf(p, 'play-proschi-view:0')).toBe('p')
+  expect(await hotkeyOf(p, 'explore-proschi-view:0')).toBe('x')
+  await p.unmount()
+})
