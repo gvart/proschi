@@ -1,0 +1,19 @@
+plugin/hooks/register.js
+  s_5399f587bc6d62::t_1e847412769a9c 4438,4507,4803,4912-4994,5100-5105,5108-5109,5118-5121,5186,5343,5513,5652
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "1a9b174675e1a3b53908f16c7fafce0c4bfdea97",
+  "prompts": {},
+  "sessions": {
+    "s_5399f587bc6d62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a4147e3-4a01-4099-9aff-b26d6a95f78e",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
