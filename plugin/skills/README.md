@@ -37,7 +37,9 @@ web editor (`npx proschi share-link <file>`). They need Node 18 or newer;
 
 The skills then show up as `/proschi:infra-to-proschi` and so on, and Claude
 uses them when a task matches; `/plugin marketplace update proschi` gets new
-versions. Or copy the folders by hand, for yourself or for one project
+versions. The plugin also draws Proschi diagrams in Claude Code's terminal,
+with a player for their use cases
+([Diagrams in the terminal](https://proschi.app/docs/agents/#diagrams-in-the-terminal)). Or copy the folders by hand, for yourself or for one project
 (commit `.claude/skills/` to share them with your team):
 
 ```sh
