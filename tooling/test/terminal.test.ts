@@ -56,7 +56,7 @@ describe('terminal scene', () => {
     expect(doc.tests.length).toBeGreaterThan(0);
     const text = paint(scene, { overlay: doc.overlay }).toText();
     // The numbers and a bar take the team's row; the replicas sit on the card stacked behind.
-    expect(text).toMatch(/\d+% ━*─+ │/);
+    expect(text).toMatch(/\d+% ━*─+ ┃/);
     expect(text).toMatch(/╰─+ ×2 ─╯/);
   });
 
@@ -70,7 +70,7 @@ describe('terminal scene', () => {
     expect(grid.bg[(db.y + 1) * grid.columns + db.x + 1]).toBe(COLOR.heatOver);
     expect(grid.fg[db.y * grid.columns + db.x]).toBe(COLOR.fail);
     expect(grid.toText()).toMatch(/L · \d+%/);
-    expect(grid.glyph(api.x, api.y + 1)).toBe('┊');
+    expect(grid.glyph(api.x, api.y + 1)).toBe('┇');
     expect(grid.toText()).toContain('down');
     expect(heatOf({ utilization: 0.5 })).toBeUndefined();
     expect(heatOf({ utilization: 0.95 })).toBe(COLOR.heatHot);
@@ -134,6 +134,25 @@ describe('terminal compaction', () => {
       // The card stacked behind a card with replicas stays inside the frame too.
       expect(r(id).y + r(id).h + 1).toBeLessThan(trips.y + trips.h - 1);
     }
+  });
+
+  it('draws cards with heavy borders and no shadow, lit pink while playing', async () => {
+    const { doc, scene } = await sceneOf(RIDES);
+    const grid = paint(scene, { overlay: doc.overlay });
+    const gw = scene.nodes.get('gw')!.rect;
+    expect(grid.glyph(gw.x, gw.y)).toBe('┏');
+    expect(grid.glyph(gw.x + gw.w - 1, gw.y + gw.h - 1)).toBe('┛');
+    expect(grid.glyph(gw.x, gw.y + 1)).toBe('┃');
+    // No shadow: nothing right of or under a card without replicas but the lines.
+    expect(grid.glyph(gw.x + gw.w, gw.y + 2)).toBe(' ');
+    expect(grid.toText()).not.toMatch(/[▀▄▌▐█]/);
+    // The legacy billing's dotted border, heavy.
+    const billing = scene.nodes.get('billing')!.rect;
+    expect(grid.glyph(billing.x + 1, billing.y)).toBe('┅');
+    const steps = doc.diagram.useCases[0].scenarios[0].steps;
+    const lit = paint(scene, { play: playAt(scene, steps, 0, 50) });
+    expect(lit.glyph(gw.x, gw.y)).toBe('┏');
+    expect(lit.fg[gw.y * lit.columns + gw.x]).toBe(COLOR.pink);
   });
 });
 
