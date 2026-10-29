@@ -4757,8 +4757,24 @@ function fallbackRoute(s, t) {
 var SX = 8;
 var SY = 12;
 var MAX_SX = 16;
+var SQUEEZE_SX = 20;
 var MARGIN = 1;
 function buildScene(diagram, layout, maxColumns = 160) {
+  const widthPx = layoutWidth(diagram, layout);
+  let sx = Math.min(MAX_SX, Math.max(SX, widthPx / Math.max(1, maxColumns - 2 * MARGIN - 1)));
+  let scene = sceneAt(diagram, layout, sx);
+  for (let tries = 0; tries < 8 && scene.columns > maxColumns && sx < SQUEEZE_SX; tries++) {
+    sx = Math.min(SQUEEZE_SX, sx * Math.max(1.05, (scene.columns + 2) / maxColumns));
+    const narrower = sceneAt(diagram, layout, sx);
+    if (narrower.columns < scene.columns) scene = narrower;
+  }
+  return scene;
+}
+function layoutWidth(diagram, layout) {
+  const { xs, minX } = extent(diagram, layout);
+  return Math.max(1, ...xs) - minX;
+}
+function extent(diagram, layout) {
   const boxes = new Map(layout.nodes.map((b) => [b.id, b]));
   const absolute = (id) => {
     const b = boxes.get(id);
@@ -4770,10 +4786,10 @@ function buildScene(diagram, layout, maxColumns = 160) {
   const bends = Object.values(layout.routes).flatMap((r) => r.points);
   const xs = [...px.flatMap((p) => [p.at.x, p.at.x + p.box.width]), ...bends.map((p) => p.x)];
   const ys = [...px.flatMap((p) => [p.at.y, p.at.y + p.box.height]), ...bends.map((p) => p.y)];
-  const minX = Math.min(0, ...xs);
-  const minY = Math.min(0, ...ys);
-  const widthPx = Math.max(1, ...xs) - minX;
-  const sx = Math.min(MAX_SX, Math.max(SX, widthPx / Math.max(1, maxColumns - 2 * MARGIN - 1)));
+  return { px, xs, minX: Math.min(0, ...xs), minY: Math.min(0, ...ys) };
+}
+function sceneAt(diagram, layout, sx) {
+  const { px, minX, minY } = extent(diagram, layout);
   const cx = (x) => Math.round((x - minX) / sx) + MARGIN;
   const cy = (y) => Math.round((y - minY) / SY) + MARGIN;
   const depthOf = (n) => {
@@ -5051,14 +5067,21 @@ function paint(scene, options = {}) {
     const last = cells[cells.length - 1];
     grid.set(last.x, last.y, HEAD[head], color);
   }
+  const taken = /* @__PURE__ */ new Set();
   for (const { edge, label } of scene.edges) {
     if (!label || !edge.label) continue;
     const text = ` ${edge.label} `;
     const x = label.x - Math.floor(text.length / 2);
+    const free = (y2) => y2 >= 0 && y2 < grid.rows && Array.from(text, (_, i) => `${x + i},${y2}`).every((k) => !taken.has(k));
+    const y = [0, -1, 1, -2, 2].map((d) => label.y + d).find(free) ?? label.y;
     const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
-    for (let i = 0; i < text.length; i++) if (!onCard(scene, x + i, label.y)) grid.set(x + i, label.y, text[i], color);
+    for (let i = 0; i < text.length; i++) {
+      taken.add(`${x + i},${y}`);
+      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+    }
   }
-  for (const g of all) if (g.node.kind === "group") drawGroupDescription(grid, g, play ? "path" : void 0);
+  for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0);
+  for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
   for (const n of all) {
     if (n.node.kind === "group") continue;
@@ -5125,11 +5148,11 @@ function fill(grid, r, fg, bg) {
 }
 var fit = (text, room) => text.length <= room ? text : room <= 1 ? "\u2026".slice(0, room) : text.slice(0, room - 1) + "\u2026";
 function drawGroup(grid, { node, rect }, look) {
-  const color = fade(look, baseColor(node, COLOR.muted));
-  frame(grid, rect, color, node.style?.dash ?? "dashed");
-  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
+  frame(grid, rect, fade(look, baseColor(node, COLOR.muted)), node.style?.dash ?? "dashed");
 }
-function drawGroupDescription(grid, { node, rect }, look) {
+function drawGroupHeading(grid, { node, rect }, look) {
+  const color = fade(look, baseColor(node, COLOR.muted));
+  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
   if (!node.description || rect.h <= 3) return;
   grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, " "), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
 }
@@ -5168,8 +5191,12 @@ function drawStack(grid, scene, n, overlay, look) {
   grid.set(right, rect.y + 1, "\u256E", color);
   grid.set(rect.x + 1, bottom, "\u2570", color);
   grid.set(right, bottom, "\u256F", color);
-  const count = ` \xD7${replicasOf2(node, overlay)} `;
-  if (rect.w > count.length + 4) grid.text(right - 1 - count.length, bottom, count, look === "off" ? COLOR.fadedMore : COLOR.muted);
+}
+function drawStackCount(grid, scene, n, overlay, look) {
+  if (!stackShown(grid, scene, n, overlay)) return;
+  const { rect } = n;
+  const count = ` \xD7${replicasOf2(n.node, overlay)} `;
+  if (rect.w > count.length + 4) grid.text(rect.x + rect.w - 1 - count.length, rect.y + rect.h, count, look === "off" ? COLOR.fadedMore : COLOR.muted);
 }
 function drawCard(grid, scene, n, overlay, look, icons2) {
   const { node, rect } = n;
@@ -5395,7 +5422,10 @@ function register(on, options) {
       const before2 = e.props.text.slice(last, match.index);
       if (before2.trim()) parts.push(/* @__PURE__ */ h(ui.Markdown, { text: before2 }));
       const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] });
-      parts.push(view ?? /* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
+      if ("error" in view) {
+        parts.push(/* @__PURE__ */ h(ui.Markdown, { text: match[0] }));
+        parts.push(/* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error));
+      } else parts.push(view.element);
       last = match.index + match[0].length;
     }
     if (n === 0) return next(e);
@@ -5411,7 +5441,7 @@ function register(on, options) {
     const source = await readWithImports($, file).catch(() => void 0);
     if (!source) return row;
     const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
-    return view ? /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, view)) : row;
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, "error" in view ? /* @__PURE__ */ h(ui.Text, { dimColor: true }, view.error) : view.element));
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
     if (e.surface !== "terminal") {
@@ -5426,9 +5456,9 @@ function register(on, options) {
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
     const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
-    if (!view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, file ? `${file} has errors: run \`npx proschi check ${file}\`.` : "The diagram has errors.");
+    if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view.element, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"));
   });
 }
 function proschiFile(tool, input) {
@@ -5496,6 +5526,7 @@ var INK = "#111111";
 var YELLOW = "#ffd23f";
 var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
+var BARS_WIDTH = 80;
 async function diagramView($, d, viewId, source, file) {
   const { ui } = d;
   const key = keyOf(source);
@@ -5504,13 +5535,18 @@ async function diagramView($, d, viewId, source, file) {
     doc = loadDocument(source);
     documents.set(key, doc);
   }
-  if (doc.errors.length > 0 || doc.diagram.nodes.length === 0) return void 0;
+  const where = file ?? "The diagram";
+  if (doc.errors.length > 0) {
+    const [first] = doc.errors;
+    return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ""}.` };
+  }
+  if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` };
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
-    return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026");
+    return { element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026") };
   }
-  if ("error" in layout) return void 0;
+  if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
   const columns = Math.max(40, Math.min(512, d.columns));
   const sceneKey = `${key}@${columns}`;
   let scene = scenes.get(sceneKey);
@@ -5524,19 +5560,41 @@ async function diagramView($, d, viewId, source, file) {
   const playing = player.mode === "play" ? pick : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, inPane: d.requestId === PANE };
+  const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, inPane: d.requestId === PANE };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
   const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => void focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) })));
+  const lost = lostImports(source, key);
+  const roomy = view.width >= 79;
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.length > 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.join(", ")), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))) };
 }
+var lostByKey = /* @__PURE__ */ new Map();
+function lostImports(source, key) {
+  let names = lostByKey.get(key);
+  if (!names) {
+    const empty = Object.entries(source.imports ?? {}).filter(([, text]) => text === "").map(([name]) => name);
+    names = [.../* @__PURE__ */ new Set([...missingImports(source), ...empty])];
+    lostByKey.set(key, names);
+  }
+  return names;
+}
+var EXPLORE = { long: ["\u2261 Explore use cases", "\u2261 Hide explorer"], short: ["\u2261 Explore", "\u2261 Hide"] };
+var toggle = (labels, open) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map((l) => l.length)));
+var cut = (text, room) => text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}\u2026`;
 function useCaseBar($, view, doc, pick, player) {
   const { ui } = view.d;
   const groups = groupByEndpoint(doc.diagram.useCases);
   const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
-  const options = groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: `${g.label ? `${g.label} \u203A ` : ""}${u.name} \xB7 ${count(u)}` })));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
+  const labels = groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: `${g.label ? `${g.label} \u203A ` : ""}${u.name} \xB7 ${count(u)}` })));
+  const inner = view.width - 4;
+  const longToggle = toggle(EXPLORE.long, false).length + 4;
+  const picker = 9 + Math.max(...labels.map((o) => o.label.length)) + 2;
+  const oneRow = picker + 1 + 10 + 1 + longToggle <= inner;
+  const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer);
+  const options = oneRow ? labels : labels.map((o) => ({ ...o, label: cut(o.label, inner - 9 - 2) }));
+  const select = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
     ui.Select,
     {
       key: `uc-${view.viewId}`,
@@ -5547,20 +5605,22 @@ function useCaseBar($, view, doc, pick, player) {
         if (u?.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
       }
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => void start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: player.explorer ? "\u2630 Hide explorer" : "\u2630 Explore use cases", ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) })), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => void start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  ));
+  const buttons = /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: explore, ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) }));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: oneRow ? "row" : "column", gap: oneRow ? 1 : 0 }, select, buttons), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
-function scenarioLabel(ui, u, s) {
+function scenarioLabel(ui, u, s, current) {
   const error = s.outcome === "error";
   const status = error ? s.steps.find(isErrorStep)?.statusCode : void 0;
   const name = u.scenarios.length > 1 ? s.name : "Play";
-  return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green" }, error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
+  return /* @__PURE__ */ h(ui.Text, { color: error ? "red" : "green", bold: current === true }, current === void 0 ? "" : current ? "\u25B8 " : "  ", error ? "\u2717" : "\u2713", " ", name, status ? ` \xB7 ${status}` : "");
 }
 function playerHeader($, view, pick, player) {
   const { ui } = view.d;
   const { useCase } = pick;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true, wrap: "truncate-end" }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
     const current = s.id === pick.scenario.id;
-    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => void start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s));
+    return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s, current));
   })));
 }
 var FORMAT = { JSON: "JSON", XML: "XML", FREE_TEXT: "Text" };
@@ -5630,61 +5690,61 @@ function stepPanel($, view, pick, step, player) {
   const { scenario } = pick;
   const steps = scenario.steps;
   const total = steps.length;
-  const go = async (to, isPlaying = false) => {
-    await setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
-    await reveal($, view);
+  const go = (to, isPlaying = false) => {
+    reveal($, view);
+    void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
   };
   const rows = stepRows(ui, view, steps, step);
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
-  const controls = 5 + 5 + 12 + 5 + 5 + counter.length + 19 + 7;
-  const bar = Math.max(10, Math.min(60, view.scene.columns - 4 - controls));
+  const room = view.width - 4 - (5 + 5 + 12 + 5 + 5 + counter.length + 7);
+  const exit = room - 19 >= 10 ? "\u2715 Exit playback" : "\u2715 Exit";
+  const left = room - (exit.length + 4);
+  const bar = left >= 6 ? Math.min(60, left) : 0;
   const filled = total === 0 ? 0 : Math.round(bar * (step + 1) / total);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.scene.columns }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u23EE", ...hotkey(view, "r"), onPress: () => void go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", ...hotkey(view, "b"), onPress: () => void go(step - 1) }), /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u21E4", ...hotkey(view, "r"), onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", ...hotkey(view, "b"), onPress: () => go(step - 1) }), /* @__PURE__ */ h(
     ui.Button,
     {
       key: `play-${view.viewId}`,
       label: player.isPlaying ? PAUSE : PLAY,
       variant: "primary",
       ...hotkey(view, "p"),
-      onPress: () => void (player.isPlaying ? setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))
+      onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => void go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u23ED", ...hotkey(view, "e"), onPress: () => void go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: "\u2715 Exit playback", dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
+  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u21E5", ...hotkey(view, "e"), onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), bar > 0 && /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: exit, dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
 var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
-async function start($, view, pick, isPlaying = true) {
-  await setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
-  await reveal($, view);
+function start($, view, pick, isPlaying = true) {
+  reveal($, view);
+  void setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
 }
-async function reveal($, view) {
-  if (view.inPane) {
-    await scroll($, { to: { key: view.rasterKey }, in: PANE, block: "start" });
-    return;
-  }
-  const moved = await scroll($, { to: { key: view.rasterKey }, block: "start" });
-  if (moved.deny) await scroll($, { to: { requestId: view.d.requestId }, block: "start" });
+function reveal($, view) {
+  void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: "start" } : { to: { requestId: view.d.requestId }, block: "start" });
 }
 async function scroll($, args) {
   const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
   if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
   return moved;
 }
-async function focus($, view, title, what) {
-  const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
-  if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
-  stop(PANE_VIEW);
-  await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
-  if ("file" in what) {
-    await update($, paneFile, () => what.file);
-    watch($, what.file);
-  } else {
-    const { source, path, imports } = what.source;
-    stop(PANE);
-    await update($, paneFile, () => "");
-    await update($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
-  }
-  const opened = await $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
-  if (!opened.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${opened.reason}`);
+function focus($, view, title, what) {
+  const opened = $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
+  void (async () => {
+    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
+    stop(PANE_VIEW);
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
+    if ("file" in what) {
+      await update($, paneFile, () => what.file);
+      watch($, what.file);
+    } else {
+      const { source, path, imports } = what.source;
+      stop(PANE);
+      await update($, paneFile, () => "");
+      await update($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
+    }
+    const placed = await opened;
+    if (!placed.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${placed.reason}`);
+  })();
 }
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
@@ -5717,7 +5777,7 @@ function animate($, view, steps) {
     const last = step >= steps.length - 1;
     if (last) stop(view.viewId);
     await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
-    if (view.inPane) await scroll($, { to: { key: `rows-${view.viewId}` }, in: PANE, block: "nearest" });
+    if (view.inPane) await scroll($, { to: { key: view.anchorKey }, in: PANE, block: "nearest" });
   });
   timers.set(view.viewId, timer);
 }
