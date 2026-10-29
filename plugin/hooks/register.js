@@ -1982,7 +1982,7 @@ var Parser = class {
    * one whose header is broken, still opens a block so that its lines and its
    * `}` are not mistaken for nodes and the end of an enclosing block.
    */
-  openSection(section, tokens, line, fill = {}) {
+  openSection(section, tokens, line, fill2 = {}) {
     const keyword = tokens[0];
     const loc = this.locOf(keyword, line);
     if (this.stack.length > 0) {
@@ -1991,7 +1991,7 @@ var Parser = class {
       return false;
     }
     if (section === "traffic" || section === "requirements" || section === "capacity" || section === "legend") this.expectEnd(tokens, 2, line);
-    this.stack.push({ kind: "section", section, ...fill, loc });
+    this.stack.push({ kind: "section", section, ...fill2, loc });
     return true;
   }
   /** After an error in a section header: skips the block, if the line opens one. */
@@ -4718,17 +4718,20 @@ function iconOf(node, style) {
 var COLOR = {
   muted: 9146264,
   line: 10265519,
-  /** Mid grey: reads as a shadow on dark and light terminals alike. */
-  shadow: 4937059,
   critical: 15680580,
   note: 15381256,
   /** Playback, as the canvas's tokens (design/tokens.css): the pink packet and lit node, the fail red. */
   pink: 16735650,
   fail: 16726832,
-  onAccent: 1118481,
-  /** What playback fades: the scenario's path a little, the rest more. */
-  faded: 7041664,
-  fadedMore: 3817288,
+  /** Dark text on a solid palette color or the accent: readable on any of them, on any terminal. */
+  onColor: 1118481,
+  /**
+   * What playback fades: the scenario's path loses its colors, the rest turns
+   * a mid grey drawn dotted. Mid greys sit back on dark and light terminals
+   * alike, where a darker or lighter grey would stand out on one of them.
+   */
+  faded: 10265519,
+  fadedMore: 8028040,
   good: 2278750,
   warn: 15381256,
   bad: 15680580
@@ -4748,8 +4751,9 @@ function paint(scene, options = {}) {
   for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0);
   for (const { edge, path } of scene.edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
-    const color = play ? play.pathEdges.has(edge.id) ? COLOR.faded : COLOR.fadedMore : own;
-    drawPath(grid, path, color, edge.style?.dash !== void 0);
+    const off = !!play && !play.pathEdges.has(edge.id);
+    const color = play ? off ? COLOR.fadedMore : COLOR.faded : own;
+    drawPath(grid, path, color, edge.style?.dash !== void 0, off);
   }
   for (const active of play?.edges ?? []) {
     const color = active.error ? COLOR.fail : DEFAULT;
@@ -4787,11 +4791,13 @@ function onCard(scene, x, y) {
   }
   return false;
 }
-function drawPath(grid, path, color, dashed) {
+function drawPath(grid, path, color, dashed, dotted) {
   const { cells, dirs, head } = path;
   for (let i = 0; i < cells.length - 1; i++) {
     const { x, y } = cells[i];
-    if (dashed && (dirs[i] === (N | S) || dirs[i] === (E | W))) grid.set(x, y, dirs[i] === (N | S) ? "\u2506" : "\u254C", color);
+    const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
+    if (dotted && straight) grid.set(x, y, dirs[i] === (N | S) ? "\u250A" : "\u2508", color);
+    else if (dashed && straight) grid.set(x, y, dirs[i] === (N | S) ? "\u2506" : "\u254C", color);
     else grid.line(x, y, dirs[i], color);
   }
   const last = cells[cells.length - 1];
@@ -4802,7 +4808,7 @@ function baseColor(node, fallback) {
   return base ? hex(base) : fallback;
 }
 var LIGHT = { h: "\u2500", v: "\u2502", dh: "\u254C", dv: "\u2506", tl: "\u256D", tr: "\u256E", bl: "\u2570", br: "\u256F" };
-var HEAVY = { h: "\u2501", v: "\u2503", dh: "\u2505", dv: "\u2507", tl: "\u250F", tr: "\u2513", bl: "\u2517", br: "\u251B" };
+var DOTTED = { ...LIGHT, h: "\u2508", v: "\u250A", dh: "\u2508", dv: "\u250A" };
 function frame(grid, r, color, dash, g = LIGHT) {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
@@ -4821,47 +4827,40 @@ function frame(grid, r, color, dash, g = LIGHT) {
   grid.set(r.x, bottom, g.bl, color);
   grid.set(right, bottom, g.br, color);
 }
-function shadow(grid, r, color) {
-  const right = r.x + r.w;
-  const bottom = r.y + r.h;
-  const blank = (x, y) => grid.glyph(x, y) === " ";
-  for (let y = r.y + 1; y < bottom; y++) if (blank(right, y)) grid.set(right, y, "\u258C", color);
-  for (let x = r.x + 1; x < right; x++) if (blank(x, bottom)) grid.set(x, bottom, "\u2580", color);
-  if (blank(right, bottom)) grid.set(right, bottom, "\u2598", color);
-}
-function clear(grid, r) {
-  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ");
+function fill(grid, r, fg, bg) {
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ", fg, bg);
 }
 var fit = (text, room) => text.length <= room ? text : room <= 1 ? "\u2026".slice(0, room) : text.slice(0, room - 1) + "\u2026";
 function drawGroup(grid, { node, rect }, look) {
   const color = fade(look, baseColor(node, COLOR.muted));
   frame(grid, rect, color, true);
-  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, color);
+  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
 }
 var TILE = { w: 5, h: 3 };
 function drawCard(grid, { node, rect }, overlay, look, icons2) {
   const accent = look === "failing" ? COLOR.fail : look === "lit" ? COLOR.pink : void 0;
-  const color = look === "failing" ? COLOR.fail : fade(look, baseColor(node, COLOR.line));
-  const ink = look === "path" || look === "off" ? fade(look, DEFAULT) : DEFAULT;
-  const muted = fade(look, COLOR.muted);
-  clear(grid, rect);
-  shadow(grid, rect, accent ?? (look === "off" ? COLOR.fadedMore : COLOR.shadow));
-  frame(grid, rect, color, node.style?.dash !== void 0 && !accent, HEAVY);
+  const color = accent ?? fade(look, baseColor(node, COLOR.line));
+  const faded = look === "path" || look === "off";
+  const ink = look === "off" ? COLOR.fadedMore : DEFAULT;
+  const muted = look === "off" ? COLOR.fadedMore : COLOR.muted;
+  fill(grid, rect, DEFAULT, DEFAULT);
+  frame(grid, rect, color, node.style?.dash !== void 0 && !accent, look === "off" ? DOTTED : LIGHT);
   const icon = iconOf(node, icons2);
   const tiled = icon !== void 0 && rect.w >= 22;
   if (tiled) {
     const tile = { x: rect.x + 2, y: rect.y + 1, w: TILE.w, h: TILE.h };
-    if (accent) for (let y = tile.y; y < tile.y + tile.h; y++) for (let x2 = tile.x; x2 < tile.x + tile.w; x2++) grid.set(x2, y, " ", DEFAULT, accent);
-    frame(grid, tile, accent ? COLOR.onAccent : muted, false);
-    if (accent) for (let y = tile.y; y < tile.y + tile.h; y++) for (let x2 = tile.x; x2 < tile.x + tile.w; x2++) grid.paint(x2, y, COLOR.onAccent, accent);
-    grid.set(tile.x + 2, tile.y + 1, icon, accent ? COLOR.onAccent : color, accent);
+    if (faded) grid.set(tile.x + 2, tile.y + 1, icon, color);
+    else {
+      fill(grid, tile, COLOR.onColor, color);
+      grid.set(tile.x + 2, tile.y + 1, icon, COLOR.onColor, color);
+    }
   }
-  const left = rect.x + (tiled ? 2 + TILE.w + 1 : 2);
+  const left = rect.x + (tiled ? 2 + TILE.w + 2 : 2);
   const room = rect.x + rect.w - 2 - left;
   grid.text(left, rect.y + 1, fit(node.name, room), ink);
   grid.text(left, rect.y + 2, fit(node.techStack, room), muted);
   if (node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted);
-  if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "path" || look === "off" ? muted : COLOR.critical);
+  if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
   const badges = [];
   const replicas = overlay?.replicas ?? (node.replicas && node.replicas > 1 ? node.replicas : void 0);
   if (replicas) badges.push({ text: `x${replicas}`, color: muted });
@@ -4880,23 +4879,23 @@ function drawCard(grid, { node, rect }, overlay, look, icons2) {
   }
 }
 function drawNote(grid, { node, rect }, look) {
-  clear(grid, rect);
-  shadow(grid, rect, COLOR.shadow);
-  frame(grid, rect, fade(look, COLOR.note), false, HEAVY);
+  const muted = look === "off" ? COLOR.fadedMore : COLOR.muted;
+  fill(grid, rect, DEFAULT, DEFAULT);
+  frame(grid, rect, fade(look, COLOR.note), false, look === "off" ? DOTTED : LIGHT);
   const room = rect.w - 4;
-  grid.text(rect.x + 2, rect.y + 1, fit(node.name, room));
+  grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === "off" ? COLOR.fadedMore : DEFAULT);
   const words = (node.description ?? "").split(/\s+/).filter(Boolean);
   let y = rect.y + 2;
   let line = "";
   for (const word of words) {
     if (y >= rect.y + rect.h - 1) break;
     if (line && line.length + 1 + word.length > room) {
-      grid.text(rect.x + 2, y++, line, COLOR.muted);
+      grid.text(rect.x + 2, y++, line, muted);
       line = "";
     }
     line = line ? `${line} ${word}` : fit(word, room);
   }
-  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, COLOR.muted);
+  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
 }
 function drawLegend(grid, scene) {
   const legend = scene.diagram.legend;
@@ -4904,8 +4903,10 @@ function drawLegend(grid, scene) {
   let x = 1;
   for (const entry of legend) {
     const color = entry.color ? hex(entry.color) : DEFAULT;
-    grid.text(x, scene.legendRow, entry.dash ? "\u254C\u254C" : "\u25A0", color);
-    x += entry.dash ? 3 : 2;
+    if (entry.dash) grid.text(x, scene.legendRow, "\u254C\u254C", color);
+    else if (entry.color) grid.text(x, scene.legendRow, "  ", color, Infinity, color);
+    else grid.text(x, scene.legendRow, "\u25A0", color);
+    x += 3;
     grid.text(x, scene.legendRow, entry.label, COLOR.muted);
     x += entry.label.length + 3;
   }
