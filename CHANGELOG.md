@@ -9,6 +9,13 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.12.0](https://github.com/gvart/proschi/compare/tooling-v0.11.0...tooling-v0.12.0) (2026-10-29)
+
+
+### Added
+
+* **plugin:** draw Proschi diagrams natively in the Claude Code terminal ([#164](https://github.com/gvart/proschi/issues/164)) ([81575ad](https://github.com/gvart/proschi/commit/81575ad7cd935d34f4d0e89d4cc33f2ad63d27c8))
+
 ## [0.11.0] - 2026-10-25
 
 ### Added
