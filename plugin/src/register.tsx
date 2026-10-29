@@ -101,7 +101,10 @@ export function register(on: On, options: PluginOptions): void {
       const before = e.props.text.slice(last, match.index)
       if (before.trim()) parts.push(<ui.Markdown text={before} />)
       const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 4 }, `${e.requestId}:${n++}`, { source: match[1] })
-      parts.push(view ?? <ui.Markdown text={match[0]} />)
+      if ('error' in view) {
+        parts.push(<ui.Markdown text={match[0]} />)
+        parts.push(<ui.Text dimColor>{view.error}</ui.Text>)
+      } else parts.push(view.element)
       last = match.index + match[0].length
     }
     if (n === 0) return next(e)
@@ -118,12 +121,12 @@ export function register(on: On, options: PluginOptions): void {
     const source = await readWithImports($, file).catch(() => undefined)
     if (!source) return row
     const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file)
-    return view ? (
+    return (
       <ui.Box flexDirection="column">
         {row}
-        <ui.Box paddingLeft={2}>{view}</ui.Box>
+        <ui.Box paddingLeft={2}>{'error' in view ? <ui.Text dimColor>{view.error}</ui.Text> : view.element}</ui.Box>
       </ui.Box>
-    ) : row
+    )
   })
 
   on('ui.render', { component: 'Pane', requestId: PANE }, async ($, e) => {
@@ -140,11 +143,11 @@ export function register(on: On, options: PluginOptions): void {
     if (!source) return <ui.Text color="red">Cannot read {file}.</ui.Text>
     const columns = 'bodyColumns' in e.props && typeof e.props.bodyColumns === 'number' ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4
     const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source)
-    if (!view) return <ui.Text color="red">{file ? `${file} has errors: run \`npx proschi check ${file}\`.` : 'The diagram has errors.'}</ui.Text>
+    if ('error' in view) return <ui.Text color="red">{view.error}</ui.Text>
     const isFocused = 'isFocused' in e.props && e.props.isFocused === true
     return (
       <ui.Box flexDirection="column">
-        {view}
+        {view.element}
         <ui.Text dimColor wrap="truncate-end">
           {isFocused ? PANE_KEYS : 'ctrl+x tab focuses the pane for its keys'}
         </ui.Text>
@@ -229,7 +232,11 @@ interface View {
   d: Draw
   viewId: string
   rasterKey: string
+  /** The keyed Box around the Raster: what a press scrolls the pane to, the Raster itself being no scroll target. */
+  anchorKey: string
   scene: Scene
+  /** The width of the bars under the diagram: the diagram's, at least as wide as their controls want where the terminal has room. */
+  width: number
   overlay: Document['overlay']
   /** Drawn in the pane, whose Buttons take hotkeys and whose body scrolls under the plugin. */
   inPane: boolean
@@ -255,8 +262,11 @@ const YELLOW = '#ffd23f'
 const PAUSE = '❚❚ Pause'
 const PLAY = ' ▶ Play '
 
-/** The drawing of one document: the diagram with its use case picker or player and its links; undefined when it has errors. `file` is where the source was read from, if anywhere. */
-async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source, file?: string): Promise<RenderElement | undefined> {
+/** What the bars under a diagram want, so they lay out on one row each. */
+const BARS_WIDTH = 80
+
+/** The drawing of one document: the diagram with its use case picker or player and its links, or why it cannot be drawn. `file` is where the source was read from, if anywhere. */
+async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source, file?: string): Promise<{ element: RenderElement } | { error: string }> {
   const { ui } = d
   const key = keyOf(source)
   let doc = documents.get(key)
@@ -264,14 +274,19 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
     doc = loadDocument(source)
     documents.set(key, doc)
   }
-  if (doc.errors.length > 0 || doc.diagram.nodes.length === 0) return undefined
+  const where = file ?? 'The diagram'
+  if (doc.errors.length > 0) {
+    const [first] = doc.errors
+    return { error: `${where} has errors (line ${first.line}: ${first.message})${file ? `: run \`npx proschi check ${file}\`` : ''}.` }
+  }
+  if (doc.diagram.nodes.length === 0) return { error: `${where} has no components to draw.` }
 
   const layout = layouts.get(key)
   if (!layout) {
     requestLayout($, key, source)
-    return <ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</ui.Text>
+    return { element: <ui.Text dimColor>Laying out {doc.diagram.title ?? 'the diagram'}…</ui.Text> }
   }
-  if ('error' in layout) return undefined
+  if ('error' in layout) return { error: `Proschi could not lay ${file ?? 'this diagram'} out: ${layout.error}` }
 
   const columns = Math.max(40, Math.min(512, d.columns))
   const sceneKey = `${key}@${columns}`
@@ -287,15 +302,19 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
   const playing = player.mode === 'play' ? pick : undefined
   const steps = playing?.scenario.steps ?? []
   const step = Math.max(0, Math.min(player.step, steps.length - 1))
-  const view: View = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, inPane: d.requestId === PANE }
+  const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH))
+  const view: View = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, inPane: d.requestId === PANE }
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps)
 
   // While a step animates, its frames are blitted in place; a drawing starts it from the beginning.
   const progress = timers.has(viewId) ? 0 : 100
   const grid = paint(scene, { overlay: doc.overlay, icons, ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step } : undefined)
+  const lost = lostImports(source, key)
+  // Wide enough for the long labels, else the short ones.
+  const roomy = view.width >= 79
 
-  return (
+  return { element: (
     <ui.Box flexDirection="column">
       {playing
         ? playerHeader($, view, playing, player)
@@ -305,43 +324,93 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
               {doc.diagram.summary && <ui.Text dimColor>{doc.diagram.summary}</ui.Text>}
             </ui.Box>
           )}
-      <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
-      {playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player)}
-      <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={grid.columns}>
-        <ui.Button key={`src-${viewId}`} label="⧉ Copy source" onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
-        <ui.Button key={`lnk-${viewId}`} label="⧉ Copy share link" onPress={press => void copy($, press.surface, link, 'the share link')} />
-        <ui.Button key={`open-${viewId}`} label="↗ Open in Proschi" variant="primary" onPress={press => void openLink($, press.surface, link)} />
-        {!view.inPane && (
-          <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => void focus($, view, file ? basename(file) : (doc.diagram.title ?? 'diagram'), file ? { file } : { source })} />
+      <ui.Box key={view.anchorKey} flexDirection="column">
+        {grid.columns > d.columns && (
+          <ui.Text dimColor wrap="truncate-end">
+            ↔ {grid.columns} columns wide, wider than the {d.columns} here: {view.inPane ? 'widen the window' : 'use ⛶ Focus or a wider window'} to see it whole.
+          </ui.Text>
         )}
+        {lost.length > 0 && (
+          <ui.Text dimColor wrap="truncate-end">
+            ⚠ Not found, so drawn as plain boxes: {lost.join(', ')}
+          </ui.Text>
+        )}
+        <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
+      </ui.Box>
+      {playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player)}
+      <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
+        <ui.Button key={`src-${viewId}`} label={roomy ? '⧉ Copy source' : '⧉ Source'} onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
+        <ui.Button key={`lnk-${viewId}`} label={roomy ? '⧉ Copy share link' : '⧉ Link'} onPress={press => void copy($, press.surface, link, 'the share link')} />
+        <ui.Button key={`open-${viewId}`} label={roomy ? '↗ Open in Proschi' : '↗ Open'} variant="primary" onPress={press => void openLink($, press.surface, link)} />
+        {!view.inPane && <ui.Button key={`focus-${viewId}`} label="⛶ Focus" onPress={() => focus($, view, file ? basename(file) : (doc.diagram.title ?? 'diagram'), file ? { file } : { source })} />}
       </ui.Box>
     </ui.Box>
-  )
+  ) }
 }
 
-/** Picking a use case, as the editor's header does, and the explorer listing every scenario by endpoint. */
+/** The imports a document names that were not found, which it draws as plain boxes: none were read for a block in a reply, and a file's were read as empty. */
+const lostByKey = new Map<string, string[]>()
+function lostImports(source: Source, key: string): string[] {
+  let names = lostByKey.get(key)
+  if (!names) {
+    const empty = Object.entries(source.imports ?? {}).filter(([, text]) => text === '').map(([name]) => name)
+    names = [...new Set([...missingImports(source), ...empty])]
+    lostByKey.set(key, names)
+  }
+  return names
+}
+
+/** The explorer toggle's labels, long and short, each pair as wide as each other so a toggle leaves no cell behind; no glyph whose width terminals disagree on (☰ is wide in Unicode 16, narrow before). */
+const EXPLORE = { long: ['≡ Explore use cases', '≡ Hide explorer'], short: ['≡ Explore', '≡ Hide'] }
+const toggle = (labels: string[], open: boolean) => labels[open ? 1 : 0].padEnd(Math.max(...labels.map(l => l.length)))
+
+/** `text` cut to `room` cells with an ellipsis. */
+const cut = (text: string, room: number) => (text.length <= room ? text : `${text.slice(0, Math.max(0, room - 1))}…`)
+
+/**
+ * Picking a use case, as the editor's header does, and the explorer listing
+ * every scenario by endpoint. On one row where it fits; else the picker on a
+ * row of its own, its options cut to fit, and the buttons under it.
+ */
 function useCaseBar($: EngineInterface, view: View, doc: Document, pick: Pick, player: Player): RenderElement {
   const { ui } = view.d
   const groups = groupByEndpoint(doc.diagram.useCases)
   const count = (u: DiagramUseCase) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? '' : 's'}`
-  const options = groups.flatMap(g => g.useCases.map(u => ({ value: u.id, label: `${g.label ? `${g.label} › ` : ''}${u.name} · ${count(u)}` })))
+  const labels = groups.flatMap(g => g.useCases.map(u => ({ value: u.id, label: `${g.label ? `${g.label} › ` : ''}${u.name} · ${count(u)}` })))
+  // Inside the frame and its padding: "Use case", the picker's value and its ▾, then [ ▶ Play ] and the explorer toggle.
+  const inner = view.width - 4
+  const longToggle = toggle(EXPLORE.long, false).length + 4
+  const picker = 9 + Math.max(...labels.map(o => o.label.length)) + 2
+  const oneRow = picker + 1 + 10 + 1 + longToggle <= inner
+  const explore = toggle(10 + 1 + longToggle <= inner ? EXPLORE.long : EXPLORE.short, player.explorer)
+  const options = oneRow ? labels : labels.map(o => ({ ...o, label: cut(o.label, inner - 9 - 2) }))
+  const select = (
+    <ui.Box flexDirection="row" gap={1} alignItems="center">
+      <ui.Text bold color={PINK}>
+        Use case
+      </ui.Text>
+      <ui.Select
+        key={`uc-${view.viewId}`}
+        value={pick.useCase.id}
+        options={options}
+        onSelect={id => {
+          const u = doc.diagram.useCases.find(c => c.id === id)
+          if (u?.scenarios[0]) void setPlayer($, view, p => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }))
+        }}
+      />
+    </ui.Box>
+  )
+  const buttons = (
+    <ui.Box flexDirection="row" gap={1} alignItems="center">
+      <ui.Button key={`play-${view.viewId}`} label="▶ Play" variant="primary" {...hotkey(view, 'p')} onPress={() => start($, view, pick)} />
+      <ui.Button key={`explore-${view.viewId}`} label={explore} {...hotkey(view, 'x')} onPress={() => void setPlayer($, view, p => ({ ...p, explorer: !p.explorer }))} />
+    </ui.Box>
+  )
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.scene.columns}>
-      <ui.Box flexDirection="row" gap={1} alignItems="center" flexWrap="wrap">
-        <ui.Text bold color={PINK}>
-          Use case
-        </ui.Text>
-        <ui.Select
-          key={`uc-${view.viewId}`}
-          value={pick.useCase.id}
-          options={options}
-          onSelect={id => {
-            const u = doc.diagram.useCases.find(c => c.id === id)
-            if (u?.scenarios[0]) void setPlayer($, view, p => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }))
-          }}
-        />
-        <ui.Button key={`play-${view.viewId}`} label="▶ Play" variant="primary" {...hotkey(view, 'p')} onPress={() => void start($, view, pick)} />
-        <ui.Button key={`explore-${view.viewId}`} label={player.explorer ? '☰ Hide explorer' : '☰ Explore use cases'} {...hotkey(view, 'x')} onPress={() => void setPlayer($, view, p => ({ ...p, explorer: !p.explorer }))} />
+    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.width}>
+      <ui.Box flexDirection={oneRow ? 'row' : 'column'} gap={oneRow ? 1 : 0}>
+        {select}
+        {buttons}
       </ui.Box>
       {player.explorer &&
         groups.map(g => (
@@ -355,7 +424,7 @@ function useCaseBar($: EngineInterface, view: View, doc: Document, pick: Pick, p
               <ui.Box flexDirection="row" gap={1} flexWrap="wrap" paddingLeft={g.label ? 2 : 0}>
                 <ui.Text bold={u.id === pick.useCase.id}>{u.name}</ui.Text>
                 {u.scenarios.map(s => (
-                  <ui.Button key={`x-${view.viewId}-${u.id}-${s.id}`} onPress={() => void start($, view, pickOf(u, s))}>
+                  <ui.Button key={`x-${view.viewId}-${u.id}-${s.id}`} onPress={() => start($, view, pickOf(u, s))}>
                     {scenarioLabel(ui, u, s)}
                   </ui.Button>
                 ))}
@@ -367,13 +436,14 @@ function useCaseBar($: EngineInterface, view: View, doc: Document, pick: Pick, p
   )
 }
 
-/** A scenario as the editor's scenario tabs name it: ✓ or ✗, the branch, and the status an error ends with. */
-function scenarioLabel(ui: Ui, u: DiagramUseCase, s: DiagramScenario): RenderElement {
+/** A scenario as the editor's scenario tabs name it: ✓ or ✗, the branch, and the status an error ends with; as a tab, the current one marked ▸ and bold. */
+function scenarioLabel(ui: Ui, u: DiagramUseCase, s: DiagramScenario, current?: boolean): RenderElement {
   const error = s.outcome === 'error'
   const status = error ? s.steps.find(isErrorStep)?.statusCode : undefined
   const name = u.scenarios.length > 1 ? s.name : 'Play'
   return (
-    <ui.Text color={error ? 'red' : 'green'}>
+    <ui.Text color={error ? 'red' : 'green'} bold={current === true}>
+      {current === undefined ? '' : current ? '▸ ' : '  '}
       {error ? '✗' : '✓'} {name}
       {status ? ` · ${status}` : ''}
     </ui.Text>
@@ -385,19 +455,23 @@ function playerHeader($: EngineInterface, view: View, pick: Pick, player: Player
   const { ui } = view.d
   const { useCase } = pick
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.scene.columns}>
+    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.width}>
       <ui.Box flexDirection="row" gap={1} alignItems="center">
         <ui.Button key={`back-${view.viewId}`} label="← Diagram" {...hotkey(view, 'd')} onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
-        <ui.Text bold>{useCase.name}</ui.Text>
-        <ui.Text dimColor>· Playback mode · read only</ui.Text>
+        <ui.Text bold wrap="truncate-end">
+          {useCase.name}
+        </ui.Text>
+        <ui.Text dimColor wrap="truncate-end">
+          · Playback mode · read only
+        </ui.Text>
       </ui.Box>
       {useCase.scenarios.length > 1 && (
         <ui.Box flexDirection="row" gap={1} flexWrap="wrap">
           {useCase.scenarios.map(s => {
             const current = s.id === pick.scenario.id
             return (
-              <ui.Button key={`sc-${view.viewId}-${s.id}`} variant={current ? 'primary' : undefined} dimColor={!current} onPress={() => void start($, view, pickOf(useCase, s), player.isPlaying)}>
-                {scenarioLabel(ui, useCase, s)}
+              <ui.Button key={`sc-${view.viewId}-${s.id}`} variant={current ? 'primary' : undefined} dimColor={!current} onPress={() => start($, view, pickOf(useCase, s), player.isPlaying)}>
+                {scenarioLabel(ui, useCase, s, current)}
               </ui.Button>
             )
           })}
@@ -512,20 +586,22 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
   const { scenario } = pick
   const steps = scenario.steps
   const total = steps.length
-  const go = async (to: number, isPlaying = false) => {
-    await setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
-    await reveal($, view)
+  const go = (to: number, isPlaying = false) => {
+    reveal($, view)
+    void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
   }
   const rows = stepRows(ui, view, steps, step)
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height)
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`
-  // What else the controls row holds, as the terminal draws it (a Button is `[ label ]`, Pause the wider label), so the bar takes the rest.
-  const controls = 5 + 5 + 12 + 5 + 5 + counter.length + 19 + 7
-  const bar = Math.max(10, Math.min(60, view.scene.columns - 4 - controls))
+  // What else the controls row holds, as the terminal draws it (a Button is `[ label ]`, Pause the wider label), so the bar takes the rest; short of room, Exit's label shortens and then the bar goes, so the row never wraps.
+  const room = view.width - 4 - (5 + 5 + 12 + 5 + 5 + counter.length + 7)
+  const exit = room - 19 >= 10 ? '✕ Exit playback' : '✕ Exit'
+  const left = room - (exit.length + 4)
+  const bar = left >= 6 ? Math.min(60, left) : 0
   const filled = total === 0 ? 0 : Math.round((bar * (step + 1)) / total)
 
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.scene.columns}>
+    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.width}>
       {scenario.condition && (
         <ui.Text wrap="truncate-end">
           <ui.Text bold>When:</ui.Text> {scenario.condition}
@@ -538,23 +614,25 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
         ))}
       </ui.Box>
       <ui.Box flexDirection="row" gap={1} alignItems="center" marginTop={1} flexWrap="wrap">
-        <ui.Button key={`reset-${view.viewId}`} label="⏮" {...hotkey(view, 'r')} onPress={() => void go(0)} />
-        <ui.Button key={`prev-${view.viewId}`} label="‹" {...hotkey(view, 'b')} onPress={() => void go(step - 1)} />
+        <ui.Button key={`reset-${view.viewId}`} label="⇤" {...hotkey(view, 'r')} onPress={() => go(0)} />
+        <ui.Button key={`prev-${view.viewId}`} label="‹" {...hotkey(view, 'b')} onPress={() => go(step - 1)} />
         <ui.Button
           key={`play-${view.viewId}`}
           label={player.isPlaying ? PAUSE : PLAY}
           variant="primary"
           {...hotkey(view, 'p')}
-          onPress={() => void (player.isPlaying ? setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))}
+          onPress={() => (player.isPlaying ? void setPlayer($, view, p => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))}
         />
-        <ui.Button key={`next-${view.viewId}`} label="›" {...hotkey(view, 'n')} onPress={() => void go(step + 1)} />
-        <ui.Button key={`end-${view.viewId}`} label="⏭" {...hotkey(view, 'e')} onPress={() => void go(total - 1)} />
+        <ui.Button key={`next-${view.viewId}`} label="›" {...hotkey(view, 'n')} onPress={() => go(step + 1)} />
+        <ui.Button key={`end-${view.viewId}`} label="⇥" {...hotkey(view, 'e')} onPress={() => go(total - 1)} />
         <ui.Text>{counter}</ui.Text>
-        <ui.Text>
-          <ui.Text color={YELLOW}>{'━'.repeat(filled)}</ui.Text>
-          <ui.Text dimColor>{'━'.repeat(bar - filled)}</ui.Text>
-        </ui.Text>
-        <ui.Button key={`exit-${view.viewId}`} label="✕ Exit playback" dimColor onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
+        {bar > 0 && (
+          <ui.Text>
+            <ui.Text color={YELLOW}>{'━'.repeat(filled)}</ui.Text>
+            <ui.Text dimColor>{'━'.repeat(bar - filled)}</ui.Text>
+          </ui.Text>
+        )}
+        <ui.Button key={`exit-${view.viewId}`} label={exit} dimColor onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
       </ui.Box>
     </ui.Box>
   )
@@ -563,24 +641,22 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
 /** A Button's hotkey, in the pane alone: the transcript's drawings share no keyboard. */
 const hotkey = (view: View, key: string) => (view.inPane ? { hotkey: key } : {})
 
-/** Plays a scenario from its first step. */
-async function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): Promise<void> {
-  await setPlayer($, view, p => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: 'play' }), pick.scenario.steps)
-  await reveal($, view)
+/** Plays a scenario from its first step: the diagram brought into view first, while the press is still the person's. */
+function start($: EngineInterface, view: View, pick: Pick, isPlaying = true): void {
+  reveal($, view)
+  void setPlayer($, view, p => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: 'play' }), pick.scenario.steps)
 }
 
 /**
- * Brings the diagram to the top of its window, the step panel under it: from a
- * press, the one time the engine lets a plugin move a transcript row. Where the
- * Raster is no target there, it scrolls to the start of the drawing's row.
+ * Brings the drawing to the top of its window, the step panel under it. A
+ * transcript row moves only while the plugin answers the person's own input,
+ * so a press handler calls this first, before anything it awaits: the scroll
+ * is issued in the press itself. In the pane it targets the keyed Box around
+ * the Raster; in the transcript, where the engine finds no element of a
+ * plugin's by key (neither the Raster nor a Box), the row the drawing is in.
  */
-async function reveal($: EngineInterface, view: View): Promise<void> {
-  if (view.inPane) {
-    await scroll($, { to: { key: view.rasterKey }, in: PANE, block: 'start' })
-    return
-  }
-  const moved = await scroll($, { to: { key: view.rasterKey }, block: 'start' })
-  if (moved.deny) await scroll($, { to: { requestId: view.d.requestId }, block: 'start' })
+function reveal($: EngineInterface, view: View): void {
+  void scroll($, view.inPane ? { to: { key: view.anchorKey }, in: PANE, block: 'start' } : { to: { requestId: view.d.requestId }, block: 'start' })
 }
 
 /** Scrolls, a failure answered as a refusal (and noted in the debug log): a drawing that cannot move still plays. */
@@ -592,26 +668,30 @@ async function scroll($: EngineInterface, args: UiScrollArgs): Promise<{ deny?: 
 
 /**
  * Opens the drawing in the pane as a dialog: it takes the keys and Esc closes
- * it (no `holdToasts`: the copy buttons toast). A file keeps its watch; a block
- * from a reply is stored whole. The pane's player starts where this one stands,
- * and this one pauses.
+ * it (no `holdToasts`: the copy buttons toast). The pane opens first, in the
+ * press itself, so it counts as the person's and is placed at any width; what
+ * it shows follows. A file keeps its watch; a block from a reply is stored
+ * whole. The pane's player starts where this one stands, and this one pauses.
  */
-async function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }): Promise<void> {
-  const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
-  if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
-  stop(PANE_VIEW)
-  await update($, memberOf(players, { requestId: PANE_VIEW }), () => player)
-  if ('file' in what) {
-    await update($, paneFile, () => what.file)
-    watch($, what.file)
-  } else {
-    const { source, path, imports } = what.source
-    stop(PANE)
-    await update($, paneFile, () => '')
-    await update($, paneSource, () => ({ source, ...(path ? { path } : {}), ...(imports ? { imports } : {}) }))
-  }
-  const opened = await $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
-  if (!opened.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${opened.reason}`)
+function focus($: EngineInterface, view: View, title: string, what: { file: string } | { source: Source }): void {
+  const opened = $.ui.open({ id: PANE, title: `Proschi · ${title}`, focus: true, closeOnEscape: true })
+  void (async () => {
+    const player = normal(await read($, memberOf(players, { requestId: view.viewId })))
+    if (player.isPlaying) await setPlayer($, view, p => ({ ...p, isPlaying: false }))
+    stop(PANE_VIEW)
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => player)
+    if ('file' in what) {
+      await update($, paneFile, () => what.file)
+      watch($, what.file)
+    } else {
+      const { source, path, imports } = what.source
+      stop(PANE)
+      await update($, paneFile, () => '')
+      await update($, paneSource, () => ({ source, ...(path ? { path } : {}), ...(imports ? { imports } : {}) }))
+    }
+    const placed = await opened
+    if (!placed.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${placed.reason}`)
+  })()
 }
 
 /** Changes the player; with `steps`, the step it lands on animates (on and on while it plays). */
@@ -650,8 +730,8 @@ function animate($: EngineInterface, view: View, steps: FlowStep[]): void {
     const last = step >= steps.length - 1
     if (last) stop(view.viewId)
     await update($, memberOf(players, { requestId: view.viewId }), p => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }))
-    // The pane's body is the plugin's to scroll: keep the step it moved on to in view.
-    if (view.inPane) await scroll($, { to: { key: `rows-${view.viewId}` }, in: PANE, block: 'nearest' })
+    // The pane's body is the plugin's to scroll: keep the diagram, where the step plays, in view (no move while it shows).
+    if (view.inPane) await scroll($, { to: { key: view.anchorKey }, in: PANE, block: 'nearest' })
   })
   timers.set(view.viewId, timer)
 }

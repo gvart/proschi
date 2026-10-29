@@ -182,13 +182,26 @@ const hotkeyOf = async (ui: { find(q: { key: string }): Promise<unknown> }, key:
 
 test('Focus opens the block in a focused pane that Esc closes, with its player and keys', async ($, on) => {
   const opens: Record<string, unknown>[] = []
+  const toasts: string[] = []
+  // What the press does, in order: the engine places a pane opened in the press itself, before anything it awaits, and no later.
+  const calls: string[] = []
   mock.clock(on)
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.blit', () => ({ value: {} }))
+  on('ui.toast', (_, e) => {
+    toasts.push(String((e as { text?: unknown }).text ?? ''))
+    return { value: undefined }
+  })
+  on('state.set', ($, e, next) => {
+    calls.push('state.set')
+    return next(e)
+  })
   on('ui.open', (_, e) => {
     opens.push({ ...e })
-    return { value: { isPlaced: true } }
+    const asked = !calls.includes('state.set')
+    calls.push('ui.open')
+    return { value: asked ? { isPlaced: true } : { isPlaced: false, reason: 'unasked below 110 columns' } }
   })
   await (await $.ui.mount(reply(FENCED))).unmount()
   const ui = await $.ui.mount(reply(FENCED))
@@ -198,9 +211,13 @@ test('Focus opens the block in a focused pane that Esc closes, with its player a
   expect(await hotkeyOf(ui, 'play-m1:0')).toBeUndefined()
   await ui.press({ key: 'play-m1:0' })
   await ui.press({ key: 'next-m1:0' })
+  calls.length = 0
   await ui.press({ key: 'focus-m1:0' })
   await ui.unmount()
 
+  expect(calls[0]).toBe('ui.open')
+  expect(calls).toContain('state.set')
+  expect(toasts.filter(t => /not shown/.test(t))).toEqual([])
   expect(opens).toHaveLength(1)
   expect(opens[0]).toMatchObject({ id: 'proschi-view', focus: true, closeOnEscape: true })
   expect(opens[0]!.holdToasts).toBeUndefined()
@@ -224,6 +241,7 @@ test('Focus opens the block in a focused pane that Esc closes, with its player a
 
 test('Play and a step bring the diagram into view, in the transcript and in the pane', async ($, on) => {
   // The harness moves no window for a plugin's $.ui.scroll: each call is refused, and the refusal, naming its target, goes to the debug log.
+  // (That the scroll is issued in the press itself, before the player changes, the e2e run checks in a live session.)
   const logs: string[] = []
   mock.clock(on)
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
@@ -237,22 +255,50 @@ test('Play and a step bring the diagram into view, in the transcript and in the 
   const scrolledTo = () => logs.filter(line => line.startsWith('proschi: scroll to ')).map(line => line.slice('proschi: scroll to '.length).split(' refused')[0])
   await (await $.ui.mount(reply(FENCED))).unmount()
   const ui = await $.ui.mount(reply(FENCED))
+  // The transcript row the drawing is in; the pane's keyed Box around the Raster.
 
-  // The Raster first; refused, the drawing's transcript row.
   await ui.press({ key: 'play-m1:0' })
-  expect(scrolledTo()).toEqual(['{"key":"d-m1:0"}', '{"requestId":"m1"}'])
+  expect(scrolledTo()).toEqual(['{"requestId":"m1"}'])
   // Playback goes on all the same.
   expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
   await ui.press({ key: 'play-m1:0' })
   logs.length = 0
   await ui.press({ key: 'next-m1:0' })
-  expect(scrolledTo()[0]).toBe('{"key":"d-m1:0"}')
+  expect(scrolledTo()).toEqual(['{"requestId":"m1"}'])
   await ui.press({ key: 'focus-m1:0' })
   await ui.unmount()
 
   const p = await $.ui.mount(pane(true))
   logs.length = 0
   await p.press({ key: 'reset-proschi-view:0' })
-  expect(scrolledTo()).toEqual(['{"key":"d-proschi-view:0"}'])
+  expect(scrolledTo()).toEqual(['{"key":"at-proschi-view:0"}'])
   await p.unmount()
+})
+
+test('a layout that fails shows why under the block, and in the pane', async ($, on) => {
+  on('process.run', () => ({ value: { exitCode: 1, stdout: '', stderr: 'Proschi lays diagrams out with Node.js 18 or newer' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.open', () => ({ value: { isPlaced: true } }))
+  await (await $.ui.mount(reply(FENCED))).unmount()
+  const ui = await $.ui.mount(reply(FENCED))
+  expect(await ui.find({ type: 'Markdown', text: /```proschi/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /could not lay this diagram out: Proschi lays diagrams out with Node\.js 18/ })).toBeDefined()
+  await ui.unmount()
+})
+
+test('the use case bar keeps to its width: one row where it fits, else the picker above the buttons, and the explorer toggle keeps its width', async ($, on) => {
+  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  const narrow = { ...reply(FENCED), viewport: { columns: 64, rows: 40 } } as const
+  await (await $.ui.mount(narrow)).unmount()
+  const ui = await $.ui.mount(narrow)
+  const label = async () => ((await ui.find({ key: 'explore-m1:0' })) as unknown as { props: { label: string } }).props.label
+  const closed = await label()
+  await ui.press({ key: 'explore-m1:0' })
+  const open = await label()
+  expect(open).toMatch(/Hide/)
+  expect([...open].length).toBe([...closed].length)
+  // Short labels on the action bar where the long ones would wrap.
+  expect(((await ui.find({ key: 'src-m1:0' })) as unknown as { props: { label: string } }).props.label).toBe('⧉ Source')
+  await ui.unmount()
 })

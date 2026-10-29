@@ -1,7 +1,8 @@
+import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
 import { examples } from '../../frontend/src/dsl/examples';
-import { keyOf, loadDocument, missingImports } from '../src/terminal/document';
+import { keyOf, loadDocument, missingImports, type Source } from '../src/terminal/document';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
@@ -49,6 +50,29 @@ describe('terminal scene', () => {
     const wide = await sceneOf(examples[1].source, 70);
     expect(wide.scene.columns).toBeLessThanOrEqual(72);
   });
+
+  it('fits every example, layout fixture and problem solution into 100, 160 and 240 columns where it can', async () => {
+    const docs: { id: string; src: Source }[] = examples.map((e) => ({ id: e.id, src: { source: e.source } }));
+    const fixtures = new URL('../../frontend/src/dsl/layoutFixtures/', import.meta.url);
+    for (const f of readdirSync(fixtures).filter((f) => f.endsWith('.proschi'))) docs.push({ id: f, src: { source: readFileSync(new URL(f, fixtures), 'utf8') } });
+    const problems = new URL('../../frontend/src/practice/problems/', import.meta.url);
+    for (const p of readdirSync(problems)) {
+      const read = (f: string) => readFileSync(new URL(`${p}/${f}`, problems), 'utf8');
+      docs.push({ id: `${p}/solution`, src: { source: read('solution.proschi'), path: 'solution.proschi', imports: { 'problem.proschi': read('given.proschi') } } });
+    }
+    // Too wide at any readable scale: drawn wider than asked, and the plugin says so.
+    const tooWide = new Set(['order-fulfillment.proschi@100', 'order-fulfillment.proschi@160', 'order-fulfillment-hinted.proschi@100', 'order-fulfillment-hinted.proschi@160']);
+    for (const { id, src } of docs) {
+      const doc = loadDocument(src);
+      expect(doc.errors, id).toEqual([]);
+      const layout = await layoutGraph(doc.diagram);
+      for (const columns of [100, 160, 240]) {
+        const { columns: drawn } = buildScene(doc.diagram, layout, columns);
+        if (tooWide.has(`${id}@${columns}`)) expect(drawn, `${id} at ${columns}`).toBeGreaterThan(columns);
+        else expect(drawn, `${id} at ${columns}`).toBeLessThanOrEqual(columns);
+      }
+    }
+  }, 60_000);
 
   it('puts the simulation on the cards of a document with traffic', async () => {
     const { doc, scene } = await sceneOf(example('hello'));
