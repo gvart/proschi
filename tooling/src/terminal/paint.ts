@@ -8,7 +8,8 @@ import { legendWidth, stacked, type Path, type Rect, type Scene, type SceneNode 
 
 /**
  * Paints a scene into a grid the way the canvas draws it: dashed group
- * frames, then the edges with their labels, then the cards on top. Colors
+ * frames, then the edges with their labels, then the group names and replica
+ * counts the edges would cut, then the cards on top. Colors
  * follow the canvas's palette (dsl/palette.ts): the base hue of a node's
  * `color`, tag or category for its border and icon tile, the ink (the
  * terminal's own foreground) for its text. The background stays the
@@ -93,15 +94,24 @@ export function paint(scene: Scene, options: PaintOptions = {}): Grid {
     const last = cells[cells.length - 1];
     grid.set(last.x, last.y, HEAD[head], color);
   }
+  // A label that would land on one drawn before it moves a row or two up or down, where there is room.
+  const taken = new Set<string>();
   for (const { edge, label } of scene.edges) {
     if (!label || !edge.label) continue;
     const text = ` ${edge.label} `;
     const x = label.x - Math.floor(text.length / 2);
+    const free = (y: number) => y >= 0 && y < grid.rows && Array.from(text, (_, i) => `${x + i},${y}`).every((k) => !taken.has(k));
+    const y = [0, -1, 1, -2, 2].map((d) => label.y + d).find(free) ?? label.y;
     const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
-    for (let i = 0; i < text.length; i++) if (!onCard(scene, x + i, label.y)) grid.set(x + i, label.y, text[i], color);
+    for (let i = 0; i < text.length; i++) {
+      taken.add(`${x + i},${y}`);
+      if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
+    }
   }
 
-  for (const g of all) if (g.node.kind === 'group') drawGroupDescription(grid, g, play ? 'path' : undefined);
+  // Over the edges, so a line crossing them leaves them whole: group names and descriptions, the replica counts.
+  for (const g of all) if (g.node.kind === 'group') drawGroupHeading(grid, g, play ? 'path' : undefined);
+  for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
 
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? '✗' : '■', packet.error ? COLOR.fail : COLOR.pink);
 
@@ -187,14 +197,13 @@ function fill(grid: Grid, r: Rect, fg: number, bg: number): void {
 const fit = (text: string, room: number) => (text.length <= room ? text : room <= 1 ? '…'.slice(0, room) : text.slice(0, room - 1) + '…');
 
 function drawGroup(grid: Grid, { node, rect }: SceneNode, look: Look): void {
-  const color = fade(look, baseColor(node, COLOR.muted));
-  frame(grid, rect, color, node.style?.dash ?? 'dashed');
-  // The name as a chip in the group's color.
-  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
+  frame(grid, rect, fade(look, baseColor(node, COLOR.muted)), node.style?.dash ?? 'dashed');
 }
 
-/** A group's description under its name, as the canvas shows it; drawn over the edges so it stays whole. */
-function drawGroupDescription(grid: Grid, { node, rect }: SceneNode, look: Look): void {
+/** A group's name as a chip in its color, and its description under it, as the canvas shows them; drawn over the edges so they stay whole. */
+function drawGroupHeading(grid: Grid, { node, rect }: SceneNode, look: Look): void {
+  const color = fade(look, baseColor(node, COLOR.muted));
+  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
   if (!node.description || rect.h <= 3) return;
   grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, ' '), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
 }
@@ -230,7 +239,7 @@ function stackRoom(grid: Grid, scene: Scene, { node, rect }: SceneNode): boolean
 
 const stackShown = (grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined) => stacked(n.node, replicasOf(n.node, overlay)) && stackRoom(grid, scene, n);
 
-/** The edge of a second card behind a card with replicas (canvas.css `data-stack`), the count on it. */
+/** The edge of a second card behind a card with replicas (canvas.css `data-stack`). */
 function drawStack(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined, look: Look): void {
   if (!stackShown(grid, scene, n, overlay)) return;
   const { node, rect } = n;
@@ -243,8 +252,14 @@ function drawStack(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay 
   grid.set(right, rect.y + 1, '╮', color);
   grid.set(rect.x + 1, bottom, '╰', color);
   grid.set(right, bottom, '╯', color);
-  const count = ` ×${replicasOf(node, overlay)} `;
-  if (rect.w > count.length + 4) grid.text(right - 1 - count.length, bottom, count, look === 'off' ? COLOR.fadedMore : COLOR.muted);
+}
+
+/** The replica count on the stacked card's edge, drawn after the lines that may cross it. */
+function drawStackCount(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay | undefined, look: Look): void {
+  if (!stackShown(grid, scene, n, overlay)) return;
+  const { rect } = n;
+  const count = ` ×${replicasOf(n.node, overlay)} `;
+  if (rect.w > count.length + 4) grid.text(rect.x + rect.w - 1 - count.length, rect.y + rect.h, count, look === 'off' ? COLOR.fadedMore : COLOR.muted);
 }
 
 /**
