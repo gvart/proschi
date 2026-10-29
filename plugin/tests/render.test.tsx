@@ -146,7 +146,8 @@ for (const [icons, postgres] of [['nerd-font', '\ue76e'], ['symbols', '◉']] as
     on('ui.invalidate', () => ({ value: undefined }))
     await (await $.ui.mount(reply(FENCED))).unmount()
     const ui = await $.ui.mount(reply(FENCED))
-    expect(glyphs(await ui.find({ type: 'Raster' }))).toContain(`│ ${postgres} │ PostgreSQL`)
+    // The icon sits in the middle of its solid tile, left of the tech.
+    expect(glyphs(await ui.find({ type: 'Raster' }))).toMatch(new RegExp(`${postgres} {2,6}PostgreSQL`))
     await ui.unmount()
   })
 }
