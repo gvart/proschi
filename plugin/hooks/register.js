@@ -5337,9 +5337,13 @@ function groupByEndpoint(useCases) {
 // ../plugin/src/register.tsx
 var icons = "nerd-font";
 var PANE = "proschi-view";
+var PANE_VIEW = `${PANE}:0`;
 var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false };
+var NO_SOURCE = { source: "" };
 var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
+var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom({ plugin: "proschi", key: "player" }, IDLE);
+var PANE_KEYS = "p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
 var FRAME2 = 50;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
@@ -5369,10 +5373,17 @@ function register(on, options) {
     const file = rest.join(" ");
     if (verb !== "view" || !file) return { text: "Usage: /proschi view <file.proschi>" };
     if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
+    stop(PANE_VIEW);
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => IDLE);
     await update($, paneFile, () => file);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
     return { text: `Showing ${file} in the Proschi pane.` };
+  });
+  on("ui.close", { id: PANE }, async ($, e, next) => {
+    stop(PANE_VIEW);
+    stop(PANE);
+    return next(e);
   });
   on("ui.render", { component: "AssistantMessage" }, async ($, e, next) => {
     if (e.surface !== "terminal" || !e.props.text.includes("```proschi")) return next(e);
@@ -5399,7 +5410,7 @@ function register(on, options) {
     const ui = $.ui.resolve(e);
     const source = await readWithImports($, file).catch(() => void 0);
     if (!source) return row;
-    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source);
+    const view = await diagramView($, { ui, requestId: e.requestId, columns: (e.viewport?.columns ?? 120) - 6 }, `${e.requestId}:0`, source, file);
     return view ? /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, row, /* @__PURE__ */ h(ui.Box, { paddingLeft: 2 }, view)) : row;
   });
   on("ui.render", { component: "Pane", requestId: PANE }, async ($, e) => {
@@ -5409,12 +5420,15 @@ function register(on, options) {
     }
     const ui = $.ui.resolve(e);
     const file = await read($, paneFile);
-    if (!file) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
-    const source = await readWithImports($, file).catch(() => void 0);
+    const focused = file ? NO_SOURCE : await read($, paneSource);
+    if (!file && !focused.source) return /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Run /proschi view <file.proschi>.");
+    const source = file ? await readWithImports($, file).catch(() => void 0) : focused;
     if (!source) return /* @__PURE__ */ h(ui.Text, { color: "red" }, "Cannot read ", file, ".");
     const columns = "bodyColumns" in e.props && typeof e.props.bodyColumns === "number" ? e.props.bodyColumns : (e.viewport?.columns ?? 120) - 4;
-    const view = await diagramView($, { ui, requestId: PANE, columns }, `${PANE}:0`, source);
-    return view ?? /* @__PURE__ */ h(ui.Text, { color: "red" }, file, " has errors: run `npx proschi check ", file, "`.");
+    const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
+    if (!view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, file ? `${file} has errors: run \`npx proschi check ${file}\`.` : "The diagram has errors.");
+    const isFocused = "isFocused" in e.props && e.props.isFocused === true;
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"));
   });
 }
 function proschiFile(tool, input) {
@@ -5439,7 +5453,7 @@ async function readWithImports($, file) {
   return doc;
 }
 function watch($, file) {
-  timers.get(PANE)?.cancel();
+  stop(PANE);
   let seen = 0;
   timers.set(
     PANE,
@@ -5482,7 +5496,7 @@ var INK = "#111111";
 var YELLOW = "#ffd23f";
 var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
-async function diagramView($, d, viewId, source) {
+async function diagramView($, d, viewId, source, file) {
   const { ui } = d;
   const key = keyOf(source);
   let doc = documents.get(key);
@@ -5510,12 +5524,12 @@ async function diagramView($, d, viewId, source) {
   const playing = player.mode === "play" ? pick : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, inPane: d.requestId === PANE };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
   const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => void focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) })));
 }
 function useCaseBar($, view, doc, pick, player) {
   const { ui } = view.d;
@@ -5533,7 +5547,7 @@ function useCaseBar($, view, doc, pick, player) {
         if (u?.scenarios[0]) void setPlayer($, view, (p) => ({ ...p, pick: pickOf(u, u.scenarios[0]).value }));
       }
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", onPress: () => void start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: player.explorer ? "\u2630 Hide explorer" : "\u2630 Explore use cases", onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) })), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => void start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
+  ), /* @__PURE__ */ h(ui.Button, { key: `play-${view.viewId}`, label: "\u25B6 Play", variant: "primary", ...hotkey(view, "p"), onPress: () => void start($, view, pick) }), /* @__PURE__ */ h(ui.Button, { key: `explore-${view.viewId}`, label: player.explorer ? "\u2630 Hide explorer" : "\u2630 Explore use cases", ...hotkey(view, "x"), onPress: () => void setPlayer($, view, (p) => ({ ...p, explorer: !p.explorer })) })), player.explorer && groups.map((g) => /* @__PURE__ */ h(ui.Box, { flexDirection: "column", marginTop: 1 }, g.label && /* @__PURE__ */ h(ui.Text, { bold: true, color: "cyan" }, g.label), g.useCases.map((u) => /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap", paddingLeft: g.label ? 2 : 0 }, /* @__PURE__ */ h(ui.Text, { bold: u.id === pick.useCase.id }, u.name), u.scenarios.map((s) => /* @__PURE__ */ h(ui.Button, { key: `x-${view.viewId}-${u.id}-${s.id}`, onPress: () => void start($, view, pickOf(u, s)) }, scenarioLabel(ui, u, s))))))));
 }
 function scenarioLabel(ui, u, s) {
   const error = s.outcome === "error";
@@ -5544,7 +5558,7 @@ function scenarioLabel(ui, u, s) {
 function playerHeader($, view, pick, player) {
   const { ui } = view.d;
   const { useCase } = pick;
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center" }, /* @__PURE__ */ h(ui.Button, { key: `back-${view.viewId}`, label: "\u2190 Diagram", ...hotkey(view, "d"), onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) }), /* @__PURE__ */ h(ui.Text, { bold: true }, useCase.name), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\xB7 Playback mode \xB7 read only")), useCase.scenarios.length > 1 && /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, flexWrap: "wrap" }, useCase.scenarios.map((s) => {
     const current = s.id === pick.scenario.id;
     return /* @__PURE__ */ h(ui.Button, { key: `sc-${view.viewId}-${s.id}`, variant: current ? "primary" : void 0, dimColor: !current, onPress: () => void start($, view, pickOf(useCase, s), player.isPlaying) }, scenarioLabel(ui, useCase, s));
   })));
@@ -5616,25 +5630,61 @@ function stepPanel($, view, pick, step, player) {
   const { scenario } = pick;
   const steps = scenario.steps;
   const total = steps.length;
-  const go = (to, isPlaying = false) => void setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
+  const go = async (to, isPlaying = false) => {
+    await setPlayer($, view, (p) => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps);
+    await reveal($, view);
+  };
   const rows = stepRows(ui, view, steps, step);
   const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height);
   const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`;
   const controls = 5 + 5 + 12 + 5 + 5 + counter.length + 19 + 7;
   const bar = Math.max(10, Math.min(60, view.scene.columns - 4 - controls));
   const filled = total === 0 ? 0 : Math.round(bar * (step + 1) / total);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.scene.columns }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u23EE", onPress: () => go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", onPress: () => go(step - 1) }), /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.scene.columns }, scenario.condition && /* @__PURE__ */ h(ui.Text, { wrap: "truncate-end" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "When:"), " ", scenario.condition), /* @__PURE__ */ h(ui.Box, { key: `rows-${view.viewId}`, flexDirection: "column" }, rows.nodes, Array.from({ length: tallest - rows.height }, () => /* @__PURE__ */ h(ui.Text, null, " "))), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", marginTop: 1, flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Button, { key: `reset-${view.viewId}`, label: "\u23EE", ...hotkey(view, "r"), onPress: () => void go(0) }), /* @__PURE__ */ h(ui.Button, { key: `prev-${view.viewId}`, label: "\u2039", ...hotkey(view, "b"), onPress: () => void go(step - 1) }), /* @__PURE__ */ h(
     ui.Button,
     {
       key: `play-${view.viewId}`,
       label: player.isPlaying ? PAUSE : PLAY,
       variant: "primary",
-      onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
+      ...hotkey(view, "p"),
+      onPress: () => void (player.isPlaying ? setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true))
     }
-  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", onPress: () => go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u23ED", onPress: () => go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: "\u2715 Exit playback", dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
+  ), /* @__PURE__ */ h(ui.Button, { key: `next-${view.viewId}`, label: "\u203A", ...hotkey(view, "n"), onPress: () => void go(step + 1) }), /* @__PURE__ */ h(ui.Button, { key: `end-${view.viewId}`, label: "\u23ED", ...hotkey(view, "e"), onPress: () => void go(total - 1) }), /* @__PURE__ */ h(ui.Text, null, counter), /* @__PURE__ */ h(ui.Text, null, /* @__PURE__ */ h(ui.Text, { color: YELLOW }, "\u2501".repeat(filled)), /* @__PURE__ */ h(ui.Text, { dimColor: true }, "\u2501".repeat(bar - filled))), /* @__PURE__ */ h(ui.Button, { key: `exit-${view.viewId}`, label: "\u2715 Exit playback", dimColor: true, onPress: () => void setPlayer($, view, (p) => ({ ...p, mode: "diagram", isPlaying: false })) })));
 }
-function start($, view, pick, isPlaying = true) {
-  return setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
+var hotkey = (view, key) => view.inPane ? { hotkey: key } : {};
+async function start($, view, pick, isPlaying = true) {
+  await setPlayer($, view, (p) => ({ ...p, pick: pick.value, step: 0, isPlaying, mode: "play" }), pick.scenario.steps);
+  await reveal($, view);
+}
+async function reveal($, view) {
+  if (view.inPane) {
+    await scroll($, { to: { key: view.rasterKey }, in: PANE, block: "start" });
+    return;
+  }
+  const moved = await scroll($, { to: { key: view.rasterKey }, block: "start" });
+  if (moved.deny) await scroll($, { to: { requestId: view.d.requestId }, block: "start" });
+}
+async function scroll($, args) {
+  const moved = await $.ui.scroll(args).catch((error) => ({ deny: String(error) }));
+  if (moved.deny) $.ui.log(`proschi: scroll to ${JSON.stringify(args.to)} refused: ${moved.deny}`, { to: "debug" });
+  return moved;
+}
+async function focus($, view, title, what) {
+  const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+  if (player.isPlaying) await setPlayer($, view, (p) => ({ ...p, isPlaying: false }));
+  stop(PANE_VIEW);
+  await update($, memberOf(players, { requestId: PANE_VIEW }), () => player);
+  if ("file" in what) {
+    await update($, paneFile, () => what.file);
+    watch($, what.file);
+  } else {
+    const { source, path, imports } = what.source;
+    stop(PANE);
+    await update($, paneFile, () => "");
+    await update($, paneSource, () => ({ source, ...path ? { path } : {}, ...imports ? { imports } : {} }));
+  }
+  const opened = await $.ui.open({ id: PANE, title: `Proschi \xB7 ${title}`, focus: true, closeOnEscape: true });
+  if (!opened.isPlaced) $.ui.toast(`The Proschi pane is open but not shown: ${opened.reason}`);
 }
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
@@ -5667,6 +5717,7 @@ function animate($, view, steps) {
     const last = step >= steps.length - 1;
     if (last) stop(view.viewId);
     await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
+    if (view.inPane) await scroll($, { to: { key: `rows-${view.viewId}` }, in: PANE, block: "nearest" });
   });
   timers.set(view.viewId, timer);
 }
