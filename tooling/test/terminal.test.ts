@@ -6,6 +6,7 @@ import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
 import { buildScene } from '../src/terminal/scene';
+import { drawTraffic, gapOf, trafficAt, TRAFFIC_COLOR } from '../src/terminal/traffic';
 
 async function sceneOf(source: string, columns = 150) {
   const doc = loadDocument({ source });
@@ -116,6 +117,37 @@ capacity {
   db size L
 }
 `;
+
+describe('terminal traffic', () => {
+  it('spaces the dots by how busy a connection is', () => {
+    expect(gapOf(1)).toBe(8);
+    expect(gapOf(100)).toBeLessThan(gapOf(1));
+    expect(gapOf(1e6)).toBe(4);
+  });
+
+  it('moves the dots a cell a frame along their edge, hollow for async, and drops requests off a saturated node', async () => {
+    const { doc, scene } = await sceneOf(STRESSED);
+    const flows = doc.flows!;
+    expect(flows.some((f) => f.async)).toBe(true);
+    const at = (frame: number) => trafficAt(scene, flows, doc.overlay!, frame);
+    const path = scene.edges.find((e) => e.edge.source === 'web')!.path.cells;
+    const onWeb = (frame: number) => at(frame).filter((p) => path.includes(p.at));
+    expect(onWeb(0).length).toBeGreaterThan(0);
+    const before = onWeb(0).map((p) => path.indexOf(p.at));
+    for (const p of onWeb(1)) expect(before).toContain(path.indexOf(p.at) - 1);
+    expect(at(0).some((p) => p.kind === 'async')).toBe(true);
+    expect([0, 1, 2].some((f) => at(f).some((p) => p.kind === 'drop'))).toBe(true);
+
+    const base = paint(scene, { overlay: doc.overlay });
+    const frame = base.copy();
+    drawTraffic(frame, scene, at(0));
+    expect(frame.toText()).toContain('●');
+    expect(frame.toText()).toContain('○');
+    expect(base.toText()).not.toContain('●');
+    const dot = at(0).find((p) => p.kind === 'sync' && frame.glyph(p.at.x, p.at.y) === '●')!;
+    expect(frame.fg[dot.at.y * frame.columns + dot.at.x]).toBe(TRAFFIC_COLOR.sync);
+  });
+});
 
 describe('terminal playback', () => {
   it('plays one step per call, the packet out and back, as the editor does', async () => {

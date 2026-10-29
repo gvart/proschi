@@ -68,6 +68,16 @@ export class Grid {
     this.lines = new Uint8Array(size);
   }
 
+  /** A copy to draw one animation frame on. */
+  copy(): Grid {
+    const grid = new Grid(this.columns, this.rows);
+    grid.glyphs.set(this.glyphs);
+    grid.fg.set(this.fg);
+    grid.bg.set(this.bg);
+    grid.lines.set(this.lines);
+    return grid;
+  }
+
   inside(x: number, y: number): boolean {
     return x >= 0 && y >= 0 && x < this.columns && y < this.rows;
   }
