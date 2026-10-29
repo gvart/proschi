@@ -1,0 +1,21 @@
+tooling/src/terminal/document.ts
+  s_5399f587bc6d62::t_c592f72c7102ce 6,48
+plugin/src/register.tsx
+  s_5399f587bc6d62::t_c592f72c7102ce 262
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a01a9783dc7754b773576ae2d35a8ac985be931b",
+  "prompts": {},
+  "sessions": {
+    "s_5399f587bc6d62": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "6a4147e3-4a01-4099-9aff-b26d6a95f78e",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
