@@ -223,7 +223,7 @@ const PINK = '#ff5da2'
 const INK = '#111111'
 const YELLOW = '#ffd23f'
 
-/** The drawing of one document: the diagram with its use case picker or player, its requirements and links; undefined when it has errors. */
+/** The drawing of one document: the diagram with its use case picker or player and its links; undefined when it has errors. */
 async function diagramView($: EngineInterface, d: Draw, viewId: string, source: Source): Promise<RenderElement | undefined> {
   const { ui } = d
   const key = keyOf(source)
@@ -262,20 +262,13 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, source: 
   const progress = timers.has(viewId) ? 0 : 100
   const grid = paint(scene, { overlay: doc.overlay, icons, ...(steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {}) })
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...(playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}), step } : undefined)
-  const failed = doc.tests.filter(t => !t.passed)
 
   return (
     <ui.Box flexDirection="column">
       {playing ? playerHeader($, view, playing, player) : doc.diagram.title && <ui.Text bold>{doc.diagram.title}</ui.Text>}
       <ui.Raster key={view.rasterKey} columns={grid.columns} rows={grid.rows} cells={grid.toBase64()} />
       {playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player)}
-      {failed.map(t => (
-        <ui.Text color="red">
-          ✗ {t.name}: {t.message}
-        </ui.Text>
-      ))}
-      {doc.tests.length > 0 && failed.length === 0 && <ui.Text color="green">✓ {doc.tests.length} requirements met</ui.Text>}
-      <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1}>
+      <ui.Box flexDirection="row" gap={1} borderStyle="round" borderColor="gray" paddingX={1} width={grid.columns}>
         <ui.Button key={`src-${viewId}`} label="⧉ Copy source" onPress={press => void copy($, press.surface, source.source, 'the Proschi source')} />
         <ui.Button key={`lnk-${viewId}`} label="⧉ Copy share link" onPress={press => void copy($, press.surface, link, 'the share link')} />
         <ui.Button key={`open-${viewId}`} label="↗ Open in Proschi" variant="primary" onPress={press => void openLink($, press.surface, link)} />
@@ -350,7 +343,7 @@ function playerHeader($: EngineInterface, view: View, pick: Pick, player: Player
   const { ui } = view.d
   const { useCase } = pick
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1}>
+    <ui.Box flexDirection="column" borderStyle="round" borderColor={PINK} paddingX={1} width={view.scene.columns}>
       <ui.Box flexDirection="row" gap={1} alignItems="center">
         <ui.Button key={`back-${view.viewId}`} label="← Diagram" onPress={() => void setPlayer($, view, p => ({ ...p, mode: 'diagram', isPlaying: false }))} />
         <ui.Text bold>{useCase.name}</ui.Text>
@@ -382,68 +375,123 @@ const chip = (ui: Ui, text: string, background: string) => (
   </ui.Text>
 )
 
-/** The current step (and its parallel siblings) with what it sends and gets back, then the controls, as the editor's player lays them out. */
+/** Lines of a request or response body the player shows; the rest is counted. */
+const BODY_LINES = 8
+
+/** Rows of a step panel: each element one terminal row, except a Code, which takes a row per line of its source. */
+interface Rows {
+  nodes: RenderNode[]
+  height: number
+}
+
+/** A body, at most BODY_LINES lines of it, each cut at the panel's edge. */
+function bodyRows(ui: Ui, label: RenderElement, text: string, format: FlowStep['requestFormat']): Rows {
+  const lines = text.replace(/\n+$/, '').split('\n')
+  const shown = lines.slice(0, BODY_LINES)
+  const more = lines.length - shown.length
+  const language = LANGUAGE[format]
+  return {
+    nodes: [
+      label,
+      <ui.Code source={shown.join('\n')} wrap="truncate-end" {...(language ? { language } : {})} />,
+      ...(more > 0 ? [<ui.Text dimColor>… {more} more line{more === 1 ? '' : 's'}</ui.Text>] : []),
+    ],
+    height: 1 + shown.length + (more > 0 ? 1 : 0),
+  }
+}
+
+/** The step at `at` (and its parallel siblings) with what it sends and gets back, one row per line, cut at the panel's edge. */
+function stepRows(ui: Ui, view: View, steps: FlowStep[], at: number): Rows {
+  const name = (id: string) => view.scene.nodes.get(id)?.node.name ?? id
+  const current = currentStepsOf(steps, at)
+  const nodes: RenderNode[] = []
+  let height = 0
+  const row = (node: RenderNode) => {
+    nodes.push(node)
+    height++
+  }
+  const add = (rows: Rows) => {
+    nodes.push(...rows.nodes)
+    height += rows.height
+  }
+  if (current.length > 1) {
+    row(
+      <ui.Text bold color="blue" wrap="truncate-end">
+        ⚡ Parallel Execution ({current.length} steps running simultaneously)
+      </ui.Text>,
+    )
+  }
+  if (steps.length === 0) row(<ui.Text dimColor>This scenario has no steps.</ui.Text>)
+  current.forEach((s, i) => {
+    const error = isErrorStep(s)
+    const call = `${s.httpMethod} ${s.endpoint}`.trim()
+    if (i > 0) row(<ui.Text> </ui.Text>)
+    row(
+      <ui.Text wrap="truncate-end">
+        {chip(ui, String(steps.indexOf(s) + 1), error ? '#ff3b30' : PINK)} <ui.Text bold>{s.stepName}</ui.Text>
+        {s.failed && <ui.Text> {chip(ui, 'Failed', '#fca5a5')}</ui.Text>}
+        {!s.failed && (s.statusCode ?? 0) >= 400 && <ui.Text> {chip(ui, String(s.statusCode), '#fca5a5')}</ui.Text>}
+        {s.executionType === 'SYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Sync', '#86efac')}</ui.Text>}
+        {s.executionType === 'ASYNC_FIRE_AND_FORGET' && <ui.Text> {chip(ui, 'Fire & Forget', '#fdba74')}</ui.Text>}
+        {s.executionType === 'ASYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Async', '#d8b4fe')}</ui.Text>}
+      </ui.Text>,
+    )
+    row(
+      <ui.Text dimColor wrap="truncate-end">
+        {name(s.fromServiceId)} → {name(s.toServiceId)}
+        {call && call !== s.stepName ? `   ${call}` : ''}
+      </ui.Text>,
+    )
+    if (s.description) row(<ui.Text wrap="truncate-end">{s.description.replace(/\s*\n\s*/g, ' ')}</ui.Text>)
+    if (s.requestBody) add(bodyRows(ui, <ui.Text dimColor>Request ({FORMAT[s.requestFormat]})</ui.Text>, s.requestBody, s.requestFormat))
+    if (s.responseBody && s.executionType !== 'ASYNC_FIRE_AND_FORGET') {
+      const label = (
+        <ui.Text color={error ? 'red' : undefined} dimColor={!error}>
+          Response ({FORMAT[s.responseFormat]}){s.statusCode !== undefined ? ` - ${s.statusCode}` : ''}
+        </ui.Text>
+      )
+      add(bodyRows(ui, label, s.responseBody, s.responseFormat))
+    }
+    if (!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400) row(<ui.Text color="red">Answered with {s.statusCode}</ui.Text>)
+    if (s.failed) {
+      row(
+        <ui.Text color="red" wrap="truncate-end">
+          No response: the call failed (timeout, connection refused or similar).
+        </ui.Text>,
+      )
+    }
+  })
+  return { nodes, height }
+}
+
+/** The current step (and its parallel siblings) with what it sends and gets back, then the controls, as the editor's player lays them out; as tall as the scenario's tallest step, so stepping moves nothing. */
 function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, player: Player): RenderElement {
   const { ui } = view.d
   const { scenario } = pick
   const steps = scenario.steps
   const total = steps.length
-  const name = (id: string) => view.scene.nodes.get(id)?.node.name ?? id
-  const current = currentStepsOf(steps, step)
   const go = (to: number, isPlaying = false) => void setPlayer($, view, p => ({ ...p, step: Math.max(0, Math.min(total - 1, to)), isPlaying }), steps)
-  const bar = Math.max(10, Math.min(60, view.d.columns - 30))
+  const rows = stepRows(ui, view, steps, step)
+  const tallest = steps.reduce((most, _, i) => Math.max(most, stepRows(ui, view, steps, i).height), rows.height)
+  const counter = `Step ${String(Math.min(step + 1, total)).padStart(String(total).length)} of ${total}`
+  // What else the controls row holds, as the terminal draws it (a Button is `[ label ]`, Pause the wider label), so the bar takes the rest.
+  const controls = 5 + 5 + 12 + 5 + 5 + counter.length + 19 + 7
+  const bar = Math.max(10, Math.min(60, view.scene.columns - 4 - controls))
   const filled = total === 0 ? 0 : Math.round((bar * (step + 1)) / total)
 
   return (
-    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1}>
+    <ui.Box flexDirection="column" borderStyle="round" borderColor="gray" paddingX={1} width={view.scene.columns}>
       {scenario.condition && (
-        <ui.Text>
+        <ui.Text wrap="truncate-end">
           <ui.Text bold>When:</ui.Text> {scenario.condition}
         </ui.Text>
       )}
-      {current.length > 1 && (
-        <ui.Text bold color="blue">
-          ⚡ Parallel Execution ({current.length} steps running simultaneously)
-        </ui.Text>
-      )}
-      {total === 0 && <ui.Text dimColor>This scenario has no steps.</ui.Text>}
-      {current.map((s, i) => {
-        const error = isErrorStep(s)
-        const call = `${s.httpMethod} ${s.endpoint}`.trim()
-        return (
-          <ui.Box flexDirection="column" marginTop={i > 0 ? 1 : 0}>
-            <ui.Text>
-              {chip(ui, String(steps.indexOf(s) + 1), error ? '#ff3b30' : PINK)} <ui.Text bold>{s.stepName}</ui.Text>
-              {s.failed && <ui.Text> {chip(ui, 'Failed', '#fca5a5')}</ui.Text>}
-              {!s.failed && (s.statusCode ?? 0) >= 400 && <ui.Text> {chip(ui, String(s.statusCode), '#fca5a5')}</ui.Text>}
-              {s.executionType === 'SYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Sync', '#86efac')}</ui.Text>}
-              {s.executionType === 'ASYNC_FIRE_AND_FORGET' && <ui.Text> {chip(ui, 'Fire & Forget', '#fdba74')}</ui.Text>}
-              {s.executionType === 'ASYNC_REQUEST_RESPONSE' && <ui.Text> {chip(ui, 'Async', '#d8b4fe')}</ui.Text>}
-            </ui.Text>
-            <ui.Text dimColor>
-              {name(s.fromServiceId)} → {name(s.toServiceId)}
-              {call && call !== s.stepName ? `   ${call}` : ''}
-            </ui.Text>
-            {s.description && <ui.Text>{s.description}</ui.Text>}
-            {s.requestBody && (
-              <ui.Box flexDirection="column">
-                <ui.Text dimColor>Request ({FORMAT[s.requestFormat]})</ui.Text>
-                <ui.Code source={s.requestBody} {...(LANGUAGE[s.requestFormat] ? { language: LANGUAGE[s.requestFormat] } : {})} />
-              </ui.Box>
-            )}
-            {s.responseBody && s.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
-              <ui.Box flexDirection="column">
-                <ui.Text color={error ? 'red' : undefined} dimColor={!error}>
-                  Response ({FORMAT[s.responseFormat]}){s.statusCode !== undefined ? ` - ${s.statusCode}` : ''}
-                </ui.Text>
-                <ui.Code source={s.responseBody} {...(LANGUAGE[s.responseFormat] ? { language: LANGUAGE[s.responseFormat] } : {})} />
-              </ui.Box>
-            )}
-            {!s.responseBody && !s.failed && (s.statusCode ?? 0) >= 400 && <ui.Text color="red">Answered with {s.statusCode}</ui.Text>}
-            {s.failed && <ui.Text color="red">No response: the call failed (timeout, connection refused or similar).</ui.Text>}
-          </ui.Box>
-        )
-      })}
+      <ui.Box key={`rows-${view.viewId}`} flexDirection="column">
+        {rows.nodes}
+        {Array.from({ length: tallest - rows.height }, () => (
+          <ui.Text> </ui.Text>
+        ))}
+      </ui.Box>
       <ui.Box flexDirection="row" gap={1} alignItems="center" marginTop={1} flexWrap="wrap">
         <ui.Button key={`reset-${view.viewId}`} label="⏮" onPress={() => go(0)} />
         <ui.Button key={`prev-${view.viewId}`} label="‹" onPress={() => go(step - 1)} />
@@ -455,9 +503,7 @@ function stepPanel($: EngineInterface, view: View, pick: Pick, step: number, pla
         />
         <ui.Button key={`next-${view.viewId}`} label="›" onPress={() => go(step + 1)} />
         <ui.Button key={`end-${view.viewId}`} label="⏭" onPress={() => go(total - 1)} />
-        <ui.Text>
-          Step {Math.min(step + 1, total)} of {total}
-        </ui.Text>
+        <ui.Text>{counter}</ui.Text>
         <ui.Text>
           <ui.Text color={YELLOW}>{'━'.repeat(filled)}</ui.Text>
           <ui.Text dimColor>{'━'.repeat(bar - filled)}</ui.Text>
