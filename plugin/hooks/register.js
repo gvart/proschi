@@ -4428,10 +4428,14 @@ function loadDocument(input) {
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
   const analysis = simulated ? analyze(diagram) : void 0;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : void 0;
+  const sim = analysis ? analysisOverlay(diagram, analysis) : void 0;
+  if (sim) {
+    for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
+  }
   return {
     diagram,
     errors,
-    ...analysis ? { overlay: analysisOverlay(diagram, analysis).nodes } : {},
+    ...sim ? { overlay: sim.nodes, flows: sim.flows } : {},
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
@@ -4500,7 +4504,7 @@ var HEAVY_GLYPH = {
   [N | E | W]: "\u253B",
   [N | E | S | W]: "\u254B"
 };
-var Grid = class {
+var Grid = class _Grid {
   constructor(columns, rows) {
     this.columns = columns;
     this.rows = rows;
@@ -4517,6 +4521,15 @@ var Grid = class {
   bg;
   /** Line directions per cell, for cells drawn by `line`. */
   lines;
+  /** A copy to draw one animation frame on. */
+  copy() {
+    const grid = new _Grid(this.columns, this.rows);
+    grid.glyphs.set(this.glyphs);
+    grid.fg.set(this.fg);
+    grid.bg.set(this.bg);
+    grid.lines.set(this.lines);
+    return grid;
+  }
   inside(x, y) {
     return x >= 0 && y >= 0 && x < this.columns && y < this.rows;
   }
@@ -4714,204 +4727,6 @@ function iconOf(node, style) {
   return String.fromCodePoint(NERD[name] ?? NERD.Server);
 }
 
-// src/terminal/paint.ts
-var COLOR = {
-  muted: 9146264,
-  line: 10265519,
-  critical: 15680580,
-  note: 15381256,
-  /** Playback, as the canvas's tokens (design/tokens.css): the pink packet and lit node, the fail red. */
-  pink: 16735650,
-  fail: 16726832,
-  /** Dark text on a solid palette color or the accent: readable on any of them, on any terminal. */
-  onColor: 1118481,
-  /**
-   * What playback fades: the scenario's path loses its colors, the rest turns
-   * a mid grey drawn dotted. Mid greys sit back on dark and light terminals
-   * alike, where a darker or lighter grey would stand out on one of them.
-   */
-  faded: 10265519,
-  fadedMore: 8028040,
-  good: 2278750,
-  warn: 15381256,
-  bad: 15680580
-};
-var HEAD = { [N]: "\u25B2", [S]: "\u25BC", [E]: "\u25BA", [W]: "\u25C4" };
-function lookOf(play, id) {
-  if (!play) return void 0;
-  if (play.failing.has(id)) return "failing";
-  if (play.active.has(id)) return "lit";
-  return play.pathNodes.has(id) ? "path" : "off";
-}
-var fade = (look, color) => look === "path" ? COLOR.faded : look === "off" ? COLOR.fadedMore : color;
-function paint(scene, options = {}) {
-  const grid = new Grid(scene.columns, scene.rows);
-  const { play } = options;
-  const all = [...scene.nodes.values()];
-  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0);
-  for (const { edge, path } of scene.edges) {
-    const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
-    const off = !!play && !play.pathEdges.has(edge.id);
-    const color = play ? off ? COLOR.fadedMore : COLOR.faded : own;
-    drawPath(grid, path, color, edge.style?.dash !== void 0, off);
-  }
-  for (const active of play?.edges ?? []) {
-    const color = active.error ? COLOR.fail : DEFAULT;
-    const { cells, dirs, head } = active.path;
-    for (let i = 0; i < cells.length - 1; i++) {
-      const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
-      const gap = active.failed ? i % 2 === 1 : active.flowing && (i + 3 * 1e3 - play.tick) % 3 === 0;
-      if (straight && gap) grid.set(cells[i].x, cells[i].y, dirs[i] === (N | S) ? "\u254F" : "\u254D", color);
-      else grid.line(cells[i].x, cells[i].y, dirs[i], color, true);
-    }
-    const last = cells[cells.length - 1];
-    grid.set(last.x, last.y, HEAD[head], color);
-  }
-  for (const { edge, label } of scene.edges) {
-    if (!label || !edge.label) continue;
-    const text = ` ${edge.label} `;
-    const x = label.x - Math.floor(text.length / 2);
-    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
-    for (let i = 0; i < text.length; i++) if (!onCard(scene, x + i, label.y)) grid.set(x + i, label.y, text[i], color);
-  }
-  for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
-  for (const n of all) {
-    if (n.node.kind === "group") continue;
-    const look = lookOf(play, n.node.id);
-    if (n.node.kind === "text") drawNote(grid, n, look);
-    else drawCard(grid, n, options.overlay?.[n.node.id], look, options.icons ?? "nerd-font");
-  }
-  drawLegend(grid, scene);
-  return grid;
-}
-function onCard(scene, x, y) {
-  for (const { node, rect } of scene.nodes.values()) {
-    if (node.kind === "group") continue;
-    if (x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h) return true;
-  }
-  return false;
-}
-function drawPath(grid, path, color, dashed, dotted) {
-  const { cells, dirs, head } = path;
-  for (let i = 0; i < cells.length - 1; i++) {
-    const { x, y } = cells[i];
-    const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
-    if (dotted && straight) grid.set(x, y, dirs[i] === (N | S) ? "\u250A" : "\u2508", color);
-    else if (dashed && straight) grid.set(x, y, dirs[i] === (N | S) ? "\u2506" : "\u254C", color);
-    else grid.line(x, y, dirs[i], color);
-  }
-  const last = cells[cells.length - 1];
-  grid.set(last.x, last.y, HEAD[head], color);
-}
-function baseColor(node, fallback) {
-  const base = nodeBaseColor(node);
-  return base ? hex(base) : fallback;
-}
-var LIGHT = { h: "\u2500", v: "\u2502", dh: "\u254C", dv: "\u2506", tl: "\u256D", tr: "\u256E", bl: "\u2570", br: "\u256F" };
-var DOTTED = { ...LIGHT, h: "\u2508", v: "\u250A", dh: "\u2508", dv: "\u250A" };
-function frame(grid, r, color, dash, g = LIGHT) {
-  const right = r.x + r.w - 1;
-  const bottom = r.y + r.h - 1;
-  const h2 = dash ? g.dh : g.h;
-  const v = dash ? g.dv : g.v;
-  for (let x = r.x + 1; x < right; x++) {
-    grid.set(x, r.y, h2, color);
-    grid.set(x, bottom, h2, color);
-  }
-  for (let y = r.y + 1; y < bottom; y++) {
-    grid.set(r.x, y, v, color);
-    grid.set(right, y, v, color);
-  }
-  grid.set(r.x, r.y, g.tl, color);
-  grid.set(right, r.y, g.tr, color);
-  grid.set(r.x, bottom, g.bl, color);
-  grid.set(right, bottom, g.br, color);
-}
-function fill(grid, r, fg, bg) {
-  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ", fg, bg);
-}
-var fit = (text, room) => text.length <= room ? text : room <= 1 ? "\u2026".slice(0, room) : text.slice(0, room - 1) + "\u2026";
-function drawGroup(grid, { node, rect }, look) {
-  const color = fade(look, baseColor(node, COLOR.muted));
-  frame(grid, rect, color, true);
-  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
-}
-var TILE = { w: 5, h: 3 };
-function drawCard(grid, { node, rect }, overlay, look, icons2) {
-  const accent = look === "failing" ? COLOR.fail : look === "lit" ? COLOR.pink : void 0;
-  const color = accent ?? fade(look, baseColor(node, COLOR.line));
-  const faded = look === "path" || look === "off";
-  const ink = look === "off" ? COLOR.fadedMore : DEFAULT;
-  const muted = look === "off" ? COLOR.fadedMore : COLOR.muted;
-  fill(grid, rect, DEFAULT, DEFAULT);
-  frame(grid, rect, color, node.style?.dash !== void 0 && !accent, look === "off" ? DOTTED : LIGHT);
-  const icon = iconOf(node, icons2);
-  const tiled = icon !== void 0 && rect.w >= 22;
-  if (tiled) {
-    const tile = { x: rect.x + 2, y: rect.y + 1, w: TILE.w, h: TILE.h };
-    if (faded) grid.set(tile.x + 2, tile.y + 1, icon, color);
-    else {
-      fill(grid, tile, COLOR.onColor, color);
-      grid.set(tile.x + 2, tile.y + 1, icon, COLOR.onColor, color);
-    }
-  }
-  const left = rect.x + (tiled ? 2 + TILE.w + 2 : 2);
-  const room = rect.x + rect.w - 2 - left;
-  grid.text(left, rect.y + 1, fit(node.name, room), ink);
-  grid.text(left, rect.y + 2, fit(node.techStack, room), muted);
-  if (node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted);
-  if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
-  const badges = [];
-  const replicas = overlay?.replicas ?? (node.replicas && node.replicas > 1 ? node.replicas : void 0);
-  if (replicas) badges.push({ text: `x${replicas}`, color: muted });
-  if (overlay?.shards) badges.push({ text: `${overlay.shards} shards`, color: muted });
-  if (overlay?.utilization !== void 0) {
-    const u = overlay.utilization;
-    badges.push({ text: `${Math.round(u * 100)}%`, color: fade(look, overlay.saturated || u >= 1 ? COLOR.bad : u >= 0.7 ? COLOR.warn : COLOR.good) });
-  }
-  let x = rect.x + 2;
-  const end = rect.x + rect.w - 2;
-  for (const b of badges) {
-    const text = ` ${b.text} `;
-    if (x + text.length > end) break;
-    grid.text(x, rect.y + rect.h - 1, text, b.color);
-    x += text.length;
-  }
-}
-function drawNote(grid, { node, rect }, look) {
-  const muted = look === "off" ? COLOR.fadedMore : COLOR.muted;
-  fill(grid, rect, DEFAULT, DEFAULT);
-  frame(grid, rect, fade(look, COLOR.note), false, look === "off" ? DOTTED : LIGHT);
-  const room = rect.w - 4;
-  grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === "off" ? COLOR.fadedMore : DEFAULT);
-  const words = (node.description ?? "").split(/\s+/).filter(Boolean);
-  let y = rect.y + 2;
-  let line = "";
-  for (const word of words) {
-    if (y >= rect.y + rect.h - 1) break;
-    if (line && line.length + 1 + word.length > room) {
-      grid.text(rect.x + 2, y++, line, muted);
-      line = "";
-    }
-    line = line ? `${line} ${word}` : fit(word, room);
-  }
-  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
-}
-function drawLegend(grid, scene) {
-  const legend = scene.diagram.legend;
-  if (!legend?.length) return;
-  let x = 1;
-  for (const entry of legend) {
-    const color = entry.color ? hex(entry.color) : DEFAULT;
-    if (entry.dash) grid.text(x, scene.legendRow, "\u254C\u254C", color);
-    else if (entry.color) grid.text(x, scene.legendRow, "  ", color, Infinity, color);
-    else grid.text(x, scene.legendRow, "\u25A0", color);
-    x += 3;
-    grid.text(x, scene.legendRow, entry.label, COLOR.muted);
-    x += entry.label.length + 3;
-  }
-}
-
 // ../frontend/src/dsl/edgePath.ts
 function labelPoint(points) {
   let best = { x: points[0]?.x ?? 0, y: points[0]?.y ?? 0 };
@@ -4997,7 +4812,7 @@ function buildScene(diagram, layout, maxColumns = 160) {
   let right = 0;
   let bottom = 0;
   for (const { node, rect } of nodes.values()) {
-    const cast = node.kind === "group" ? 0 : 1;
+    const cast = stacked(node) ? 1 : 0;
     right = Math.max(right, rect.x + rect.w + cast);
     bottom = Math.max(bottom, rect.y + rect.h + cast);
   }
@@ -5007,7 +4822,9 @@ function buildScene(diagram, layout, maxColumns = 160) {
       bottom = Math.max(bottom, c.y + 1);
     }
   for (const e of edges) if (e.label && e.edge.label) right = Math.max(right, e.label.x + Math.ceil(e.edge.label.length / 2) + 1);
-  const legendRows = diagram.legend?.length ? 2 : 0;
+  const legend = diagram.legend ?? [];
+  const legendRows = legend.length ? legend.length + 3 : 0;
+  if (legend.length) right = Math.max(right, MARGIN + legendWidth(legend.map((e) => e.label)));
   return {
     diagram,
     columns: Math.min(512, Math.max(1, right + MARGIN)),
@@ -5016,6 +4833,12 @@ function buildScene(diagram, layout, maxColumns = 160) {
     edges,
     legendRow: bottom + MARGIN
   };
+}
+function stacked(node, replicas) {
+  return node.kind === "component" && (replicas ?? node.replicas ?? 1) > 1;
+}
+function legendWidth(labels) {
+  return Math.max(10, 1 + 1 + 3 + 1 + Math.max(0, ...labels.map((l) => l.length)) + 1 + 1);
 }
 var contains = (r, c) => c.x >= r.x && c.x < r.x + r.w && c.y >= r.y && c.y < r.y + r.h;
 function attach(end, next, r) {
@@ -5095,6 +4918,268 @@ function fallbackPath(from, to) {
   return routePath(points, from, to);
 }
 
+// src/terminal/paint.ts
+var COLOR = {
+  muted: 9146264,
+  line: 10265519,
+  critical: 15680580,
+  note: 15381256,
+  /** Playback, as the canvas's tokens (design/tokens.css): the pink packet and lit node, the fail red. */
+  pink: 16735650,
+  fail: 16726832,
+  /** Dark text on a solid palette color or the accent: readable on any of them, on any terminal. */
+  onColor: 1118481,
+  /**
+   * What playback fades: the scenario's path loses its colors, the rest turns
+   * a mid grey drawn dotted. Mid greys sit back on dark and light terminals
+   * alike, where a darker or lighter grey would stand out on one of them.
+   */
+  faded: 10265519,
+  fadedMore: 8028040,
+  good: 2278750,
+  warn: 15381256,
+  bad: 15680580,
+  /** The canvas's load overlay (utils/heat.ts): a busy card's fill, from yellow through pink to red. */
+  heatWarm: 16765503,
+  heatHot: 16743092,
+  heatOver: 16739169
+};
+var HEAD = { [N]: "\u25B2", [S]: "\u25BC", [E]: "\u25BA", [W]: "\u25C4" };
+function lookOf(play, id) {
+  if (!play) return void 0;
+  if (play.failing.has(id)) return "failing";
+  if (play.active.has(id)) return "lit";
+  return play.pathNodes.has(id) ? "path" : "off";
+}
+var fade = (look, color) => look === "path" ? COLOR.faded : look === "off" ? COLOR.fadedMore : color;
+function paint(scene, options = {}) {
+  const grid = new Grid(scene.columns, scene.rows);
+  const { play } = options;
+  const all = [...scene.nodes.values()];
+  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0);
+  for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
+  for (const { edge, path } of scene.edges) {
+    const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
+    const off = !!play && !play.pathEdges.has(edge.id);
+    const color = play ? off ? COLOR.fadedMore : COLOR.faded : own;
+    drawPath(grid, path, color, off ? "dotted" : edge.style?.dash);
+  }
+  for (const active of play?.edges ?? []) {
+    const color = active.error ? COLOR.fail : DEFAULT;
+    const { cells, dirs, head } = active.path;
+    for (let i = 0; i < cells.length - 1; i++) {
+      const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
+      const gap = active.failed ? i % 2 === 1 : active.flowing && (i + 3 * 1e3 - play.tick) % 3 === 0;
+      if (straight && gap) grid.set(cells[i].x, cells[i].y, dirs[i] === (N | S) ? "\u254F" : "\u254D", color);
+      else grid.line(cells[i].x, cells[i].y, dirs[i], color, true);
+    }
+    const last = cells[cells.length - 1];
+    grid.set(last.x, last.y, HEAD[head], color);
+  }
+  for (const { edge, label } of scene.edges) {
+    if (!label || !edge.label) continue;
+    const text = ` ${edge.label} `;
+    const x = label.x - Math.floor(text.length / 2);
+    const color = play && !play.pathEdges.has(edge.id) ? COLOR.fadedMore : COLOR.muted;
+    for (let i = 0; i < text.length; i++) if (!onCard(scene, x + i, label.y)) grid.set(x + i, label.y, text[i], color);
+  }
+  for (const g of all) if (g.node.kind === "group") drawGroupDescription(grid, g, play ? "path" : void 0);
+  for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
+  for (const n of all) {
+    if (n.node.kind === "group") continue;
+    const look = lookOf(play, n.node.id);
+    if (n.node.kind === "text") drawNote(grid, n, look);
+    else drawCard(grid, scene, n, options.overlay?.[n.node.id], look, options.icons ?? "nerd-font");
+  }
+  drawLegend(grid, scene);
+  return grid;
+}
+function onCard(scene, x, y) {
+  for (const { node, rect } of scene.nodes.values()) {
+    if (node.kind === "group") continue;
+    if (x >= rect.x && x < rect.x + rect.w && y >= rect.y && y < rect.y + rect.h) return true;
+  }
+  return false;
+}
+function drawPath(grid, path, color, dash) {
+  const { cells, dirs, head } = path;
+  const g = dash ? LINES[dash] : void 0;
+  for (let i = 0; i < cells.length - 1; i++) {
+    const { x, y } = cells[i];
+    const straight = dirs[i] === (N | S) || dirs[i] === (E | W);
+    if (g && straight) grid.set(x, y, dirs[i] === (N | S) ? g.v : g.h, color);
+    else grid.line(x, y, dirs[i], color);
+  }
+  const last = cells[cells.length - 1];
+  grid.set(last.x, last.y, HEAD[head], color);
+}
+function baseColor(node, fallback) {
+  const base = nodeBaseColor(node);
+  return base ? hex(base) : fallback;
+}
+var LINES = {
+  solid: { h: "\u2500", v: "\u2502" },
+  dashed: { h: "\u254C", v: "\u254E" },
+  dotted: { h: "\u2508", v: "\u250A" }
+};
+function frame(grid, r, color, dash = "solid") {
+  const right = r.x + r.w - 1;
+  const bottom = r.y + r.h - 1;
+  const { h: h2, v } = LINES[dash];
+  for (let x = r.x + 1; x < right; x++) {
+    grid.set(x, r.y, h2, color);
+    grid.set(x, bottom, h2, color);
+  }
+  for (let y = r.y + 1; y < bottom; y++) {
+    grid.set(r.x, y, v, color);
+    grid.set(right, y, v, color);
+  }
+  grid.set(r.x, r.y, "\u256D", color);
+  grid.set(right, r.y, "\u256E", color);
+  grid.set(r.x, bottom, "\u2570", color);
+  grid.set(right, bottom, "\u256F", color);
+}
+function fill(grid, r, fg, bg) {
+  for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ", fg, bg);
+}
+var fit = (text, room) => text.length <= room ? text : room <= 1 ? "\u2026".slice(0, room) : text.slice(0, room - 1) + "\u2026";
+function drawGroup(grid, { node, rect }, look) {
+  const color = fade(look, baseColor(node, COLOR.muted));
+  frame(grid, rect, color, node.style?.dash ?? "dashed");
+  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
+}
+function drawGroupDescription(grid, { node, rect }, look) {
+  if (!node.description || rect.h <= 3) return;
+  grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, " "), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
+}
+var TILE = { w: 5, h: 3 };
+function heatOf(overlay) {
+  const u = overlay?.utilization;
+  if (!overlay || overlay.down || u === void 0) return void 0;
+  if (overlay.saturated || u >= 1) return COLOR.heatOver;
+  if (u >= 0.9) return COLOR.heatHot;
+  return u >= 0.7 ? COLOR.heatWarm : void 0;
+}
+var replicasOf2 = (node, overlay) => overlay?.replicas ?? node.replicas ?? 1;
+function stackRoom(grid, scene, { node, rect }) {
+  const right = rect.x + rect.w;
+  const bottom = rect.y + rect.h;
+  if (!grid.inside(right, bottom)) return false;
+  for (const other of scene.nodes.values()) {
+    if (other.node === node || other.node.kind === "group") continue;
+    const r = other.rect;
+    const hitsRight = right >= r.x && right < r.x + r.w && r.y <= bottom && r.y + r.h > rect.y + 1;
+    const hitsBottom = bottom >= r.y && bottom < r.y + r.h && r.x <= right && r.x + r.w > rect.x + 1;
+    if (hitsRight || hitsBottom) return false;
+  }
+  return true;
+}
+var stackShown = (grid, scene, n, overlay) => stacked(n.node, replicasOf2(n.node, overlay)) && stackRoom(grid, scene, n);
+function drawStack(grid, scene, n, overlay, look) {
+  if (!stackShown(grid, scene, n, overlay)) return;
+  const { node, rect } = n;
+  const color = look ? look === "off" ? COLOR.fadedMore : COLOR.faded : overlay?.down ? COLOR.muted : baseColor(node, COLOR.line);
+  const right = rect.x + rect.w;
+  const bottom = rect.y + rect.h;
+  const { h: h2, v } = LINES[look === "off" ? "dotted" : "solid"];
+  for (let y = rect.y + 2; y < bottom; y++) grid.set(right, y, v, color);
+  for (let x = rect.x + 2; x < right; x++) grid.set(x, bottom, h2, color);
+  grid.set(right, rect.y + 1, "\u256E", color);
+  grid.set(rect.x + 1, bottom, "\u2570", color);
+  grid.set(right, bottom, "\u256F", color);
+  const count = ` \xD7${replicasOf2(node, overlay)} `;
+  if (rect.w > count.length + 4) grid.text(right - 1 - count.length, bottom, count, look === "off" ? COLOR.fadedMore : COLOR.muted);
+}
+function drawCard(grid, scene, n, overlay, look, icons2) {
+  const { node, rect } = n;
+  const down = !!overlay?.down;
+  const over = !down && !!overlay && (!!overlay.saturated || (overlay.utilization ?? 0) >= 1);
+  const heat = look ? void 0 : heatOf(overlay);
+  const accent = look === "failing" ? COLOR.fail : look === "lit" ? COLOR.pink : void 0;
+  const color = accent ?? (down && !look ? COLOR.muted : over && !look ? COLOR.fail : fade(look, baseColor(node, COLOR.line)));
+  const faded = look === "path" || look === "off" || down;
+  const ink = heat !== void 0 ? COLOR.onColor : look === "off" || down ? COLOR.fadedMore : DEFAULT;
+  const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
+  fill(grid, rect, DEFAULT, DEFAULT);
+  if (heat !== void 0) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
+  frame(grid, rect, color, look === "off" || down ? "dotted" : accent ? "solid" : node.style?.dash ?? "solid");
+  const icon = iconOf(node, icons2);
+  const tiled = icon !== void 0 && rect.w >= 22;
+  if (tiled) {
+    const tile = { x: rect.x + 2, y: rect.y + 1, w: TILE.w, h: TILE.h };
+    if (faded) grid.set(tile.x + 2, tile.y + 1, icon, color, heat);
+    else {
+      fill(grid, tile, COLOR.onColor, color);
+      grid.set(tile.x + 2, tile.y + 1, icon, COLOR.onColor, color);
+    }
+  }
+  const left = rect.x + (tiled ? 2 + TILE.w + 2 : 2);
+  const room = rect.x + rect.w - 2 - left;
+  grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
+  grid.text(left, rect.y + 2, fit(node.techStack, room), muted, Infinity, heat);
+  const load = overlay ? loadRow(grid, { x: left, y: rect.y + 3, room }, node, overlay, look, heat, stackShown(grid, scene, n, overlay)) : false;
+  if (!load && node.ownerTeam) grid.text(left, rect.y + 3, fit(`Team: ${node.ownerTeam}`, room), muted, Infinity, heat);
+  if (node.critical) grid.text(rect.x + rect.w - 4, rect.y, " ! ", look === "off" ? muted : COLOR.critical);
+}
+function loadRow(grid, at, node, o, look, heat, stack) {
+  const u = o.utilization;
+  const replicas = replicasOf2(node, o);
+  const parts = [
+    replicas > 1 && !stack ? `\xD7${replicas}` : "",
+    o.size ?? "",
+    o.shards && o.shards > 1 ? `\u29C9${o.shards}` : "",
+    o.down ? "down" : u !== void 0 ? `${Math.round(u * 100)}%` : ""
+  ].filter(Boolean);
+  if (parts.length === 0) return false;
+  const text = fit(parts.join(" \xB7 "), at.room);
+  const on = heat !== void 0;
+  const ink = on ? COLOR.onColor : look === "off" || o.down ? COLOR.fadedMore : look ? COLOR.muted : DEFAULT;
+  grid.text(at.x, at.y, text, ink, Infinity, heat);
+  const bar = at.room - text.length - 1;
+  if (u === void 0 || o.down || bar < 4) return true;
+  const filled = Math.max(u > 0 ? 1 : 0, Math.min(bar, Math.round(u * bar)));
+  for (let i = 0; i < bar; i++) {
+    const full = i < filled;
+    grid.set(at.x + text.length + 1 + i, at.y, full ? "\u2501" : "\u2500", on ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+  }
+  return true;
+}
+function drawNote(grid, { node, rect }, look) {
+  const muted = look === "off" ? COLOR.fadedMore : COLOR.muted;
+  fill(grid, rect, DEFAULT, DEFAULT);
+  frame(grid, rect, fade(look, COLOR.note), look === "off" ? "dotted" : "solid");
+  const room = rect.w - 4;
+  grid.text(rect.x + 2, rect.y + 1, fit(node.name, room), look === "off" ? COLOR.fadedMore : DEFAULT);
+  const words = (node.description ?? "").split(/\s+/).filter(Boolean);
+  let y = rect.y + 2;
+  let line = "";
+  for (const word of words) {
+    if (y >= rect.y + rect.h - 1) break;
+    if (line && line.length + 1 + word.length > room) {
+      grid.text(rect.x + 2, y++, line, muted);
+      line = "";
+    }
+    line = line ? `${line} ${word}` : fit(word, room);
+  }
+  if (line && y < rect.y + rect.h - 1) grid.text(rect.x + 2, y, line, muted);
+}
+function drawLegend(grid, scene) {
+  const legend = scene.diagram.legend;
+  if (!legend?.length) return;
+  const panel = { x: 1, y: scene.legendRow, w: legendWidth(legend.map((e) => e.label)), h: legend.length + 2 };
+  frame(grid, panel, COLOR.muted);
+  grid.text(panel.x + 2, panel.y, " LEGEND ", COLOR.muted);
+  legend.forEach((entry, i) => {
+    const y = panel.y + 1 + i;
+    const x = panel.x + 2;
+    const color = entry.color ? hex(entry.color) : DEFAULT;
+    if (entry.dash) grid.text(x, y, LINES[entry.dash].h.repeat(3), color);
+    else if (entry.color) grid.text(x, y, "   ", color, Infinity, color);
+    else grid.text(x, y, "\u2500\u2500\u2500", color);
+    grid.text(x + 4, y, fit(entry.label, panel.w - 8), DEFAULT);
+  });
+}
+
 // src/terminal/playback.ts
 var TRAVEL_MS = 1500;
 var STEP_MS = 2e3;
@@ -5157,6 +5242,54 @@ function playAt(scene, steps, index, progress, tick = 0) {
   return { active, failing, pathNodes: pathNodes2, pathEdges, edges, packets, tick };
 }
 
+// src/terminal/traffic.ts
+var TRAFFIC_FRAME_MS = 120;
+var TRAFFIC_COLOR = { sync: 6061306, async: 9926138, drop: 15680580 };
+var GLYPH = { sync: "\u25CF", async: "\u25CB", drop: "\u2022" };
+function gapOf(rps) {
+  return Math.max(4, Math.min(8, Math.round(10 - 1.5 * Math.log10(rps + 1))));
+}
+function trafficAt(scene, flows, nodes, frame2) {
+  const out = [];
+  for (const f of flows) {
+    if (f.rps <= 0 || f.from === f.to) continue;
+    const path = stepPath(scene, f.from, f.to);
+    if (!path) continue;
+    const run = path.cells.length - 1;
+    const gap = gapOf(f.rps);
+    const kind = f.async ? "async" : "sync";
+    for (let i = (frame2 % gap + gap) % gap; i < run; i += gap) out.push({ at: path.cells[i], kind });
+  }
+  for (const [id, o] of Object.entries(nodes)) {
+    const n = scene.nodes.get(id);
+    if (!n || !o.saturated || o.down || o.utilization === void 0 || n.rect.w < 4) continue;
+    const { x, y, w, h: h2 } = n.rect;
+    const count = o.utilization >= 1.5 ? 3 : 2;
+    for (let k = 0; k < count; k++) {
+      const t = frame2 + k * 2;
+      const fall = t % 3;
+      const round2 = Math.floor(t / 3);
+      const column = x + 1 + (round2 * 7 + k * 11) % (w - 2);
+      if (fall < 2) out.push({ at: { x: column, y: y + h2 + fall }, kind: "drop" });
+    }
+  }
+  return out;
+}
+var onCard2 = (scene, c) => {
+  for (const { node, rect } of scene.nodes.values())
+    if (node.kind !== "group" && c.x >= rect.x && c.x < rect.x + rect.w && c.y >= rect.y && c.y < rect.y + rect.h) return true;
+  return false;
+};
+var isLine = (code) => code >= 9472 && code <= 9599 || code === 9650 || code === 9660 || code === 9658 || code === 9668;
+function drawTraffic(grid, scene, particles) {
+  for (const { at, kind } of particles) {
+    if (!grid.inside(at.x, at.y) || onCard2(scene, at)) continue;
+    const code = grid.glyphs[at.y * grid.columns + at.x];
+    if (kind === "drop" ? code !== 32 : !isLine(code)) continue;
+    grid.set(at.x, at.y, GLYPH[kind], TRAFFIC_COLOR[kind]);
+  }
+}
+
 // ../frontend/src/playground/useCaseGroups.ts
 function groupByEndpoint(useCases) {
   if (!useCases.some((u) => u.endpoint)) return [{ useCases }];
@@ -5186,6 +5319,7 @@ var pending = /* @__PURE__ */ new Set();
 var documents = /* @__PURE__ */ new Map();
 var scenes = /* @__PURE__ */ new Map();
 var timers = /* @__PURE__ */ new Map();
+var flowing = /* @__PURE__ */ new Map();
 var FENCE = /^```proschi[^\n]*\n([\s\S]*?)\n```[ \t]*$/gm;
 function register(on, options) {
   const chosen = options.icons;
@@ -5314,6 +5448,8 @@ function normal(p) {
 var PINK = "#ff5da2";
 var INK = "#111111";
 var YELLOW = "#ffd23f";
+var PAUSE = "\u275A\u275A Pause";
+var PLAY = " \u25B6 Play ";
 async function diagramView($, d, viewId, source) {
   const { ui } = d;
   const key = keyOf(source);
@@ -5342,19 +5478,20 @@ async function diagramView($, d, viewId, source) {
   const playing = player.mode === "play" ? pick : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
-  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay };
+  const view = { d, viewId, rasterKey: `d-${viewId}`, scene, overlay: doc.overlay, flows: doc.flows };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
   const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  if (!playing && view.flows?.length && flowing.get(viewId)?.scene !== scene) flow($, view, grid);
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() }), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: grid.columns }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: "\u29C9 Copy source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: "\u29C9 Copy share link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: "\u2197 Open in Proschi", variant: "primary", onPress: (press) => void openLink($, press.surface, link) })));
 }
 function useCaseBar($, view, doc, pick, player) {
   const { ui } = view.d;
   const groups = groupByEndpoint(doc.diagram.useCases);
   const count = (u) => `${u.scenarios.length} scenario${u.scenarios.length === 1 ? "" : "s"}`;
   const options = groups.flatMap((g) => g.useCases.map((u) => ({ value: u.id, label: `${g.label ? `${g.label} \u203A ` : ""}${u.name} \xB7 ${count(u)}` })));
-  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1 }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: PINK, paddingX: 1, width: view.scene.columns }, /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true, color: PINK }, "Use case"), /* @__PURE__ */ h(
     ui.Select,
     {
       key: `uc-${view.viewId}`,
@@ -5459,7 +5596,7 @@ function stepPanel($, view, pick, step, player) {
     ui.Button,
     {
       key: `play-${view.viewId}`,
-      label: player.isPlaying ? "\u275A\u275A Pause" : "\u25B6 Play",
+      label: player.isPlaying ? PAUSE : PLAY,
       variant: "primary",
       onPress: () => player.isPlaying ? void setPlayer($, view, (p) => ({ ...p, isPlaying: false })) : go(step >= total - 1 ? 0 : step, true)
     }
@@ -5470,6 +5607,7 @@ function start($, view, pick, isPlaying = true) {
 }
 async function setPlayer($, view, fn, steps) {
   stop(view.viewId);
+  stopFlow(view.viewId);
   if (steps && steps.length > 0) animate($, view, steps);
   await update($, memberOf(players, { requestId: view.viewId }), (p) => fn(normal(p)));
 }
@@ -5501,6 +5639,27 @@ function animate($, view, steps) {
     await update($, memberOf(players, { requestId: view.viewId }), (p) => ({ ...normal(p), step: last ? step : step + 1, isPlaying: !last }));
   });
   timers.set(view.viewId, timer);
+}
+function stopFlow(viewId) {
+  flowing.get(viewId)?.timer.cancel();
+  flowing.delete(viewId);
+}
+var GONE = 5;
+function flow($, view, base) {
+  stopFlow(view.viewId);
+  const flows = view.flows ?? [];
+  let frame2 = 0;
+  let refused = 0;
+  const timer = $.clock.every(TRAFFIC_FRAME_MS, async () => {
+    const player = normal(await read($, memberOf(players, { requestId: view.viewId })));
+    if (player.mode === "play") return stopFlow(view.viewId);
+    const grid = base.copy();
+    drawTraffic(grid, view.scene, trafficAt(view.scene, flows, view.overlay ?? {}, frame2++));
+    const blitted = await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: grid.toBase64() });
+    refused = blitted.deny ? refused + 1 : 0;
+    if (refused >= GONE) stopFlow(view.viewId);
+  });
+  flowing.set(view.viewId, { scene: view.scene, timer });
 }
 async function copy($, surface, text, what) {
   const copied = await $.ui.copy({ text, surface });
