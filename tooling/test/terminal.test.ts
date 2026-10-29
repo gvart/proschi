@@ -5,7 +5,7 @@ import { keyOf, loadDocument, missingImports } from '../src/terminal/document';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
-import { buildScene } from '../src/terminal/scene';
+import { buildScene, type Rect, type Scene } from '../src/terminal/scene';
 
 async function sceneOf(source: string, columns = 150) {
   const doc = loadDocument({ source });
@@ -90,6 +90,93 @@ describe('terminal scene', () => {
     expect(text).toMatch(/[╎╌]/);
   });
 });
+
+/** Every edge runs cell by cell from beside its source to the arrowhead beside its target, its joins agreeing with its neighbours, its label on it. */
+function expectConnected(scene: Scene): void {
+  const beside = (c: { x: number; y: number }, r: Rect) =>
+    (c.x >= r.x && c.x < r.x + r.w && (c.y === r.y - 1 || c.y === r.y + r.h)) || (c.y >= r.y && c.y < r.y + r.h && (c.x === r.x - 1 || c.x === r.x + r.w));
+  const dir = (a: { x: number; y: number }, b: { x: number; y: number }) => (b.x > a.x ? 2 : b.x < a.x ? 8 : b.y > a.y ? 4 : 1);
+  for (const { edge, path, label } of scene.edges) {
+    const { cells, dirs } = path;
+    const from = scene.nodes.get(edge.source)!.rect;
+    const to = scene.nodes.get(edge.target)!.rect;
+    expect(beside(cells[0], from), `${edge.id} leaves ${edge.source}`).toBe(true);
+    expect(beside(cells[cells.length - 1], to), `${edge.id} reaches ${edge.target}`).toBe(true);
+    for (let i = 1; i < cells.length; i++) {
+      expect(Math.abs(cells[i].x - cells[i - 1].x) + Math.abs(cells[i].y - cells[i - 1].y), `${edge.id} at ${i}`).toBe(1);
+      expect(dirs[i] & dir(cells[i], cells[i - 1]), `${edge.id} joins back at ${i}`).toBeTruthy();
+      if (i < cells.length - 1) expect(dirs[i] & dir(cells[i], cells[i + 1]), `${edge.id} joins on at ${i}`).toBeTruthy();
+    }
+    if (label && edge.label) {
+      const half = Math.ceil(edge.label.length / 2);
+      expect(cells.some((c) => c.y === label.y && Math.abs(c.x - label.x) <= half), `${edge.id}'s label`).toBe(true);
+    }
+  }
+}
+
+describe('terminal compaction', () => {
+  it('squeezes the empty rows out of a tall diagram and keeps every edge joined', async () => {
+    const { scene } = await sceneOf(RIDES);
+    // 96 rows before the empty rows went.
+    expect(scene.rows).toBeLessThanOrEqual(96 * 0.75);
+    expectConnected(scene);
+    for (const { source } of examples) expectConnected((await sceneOf(source)).scene);
+  });
+
+  it('keeps cards side by side apart and a cell of padding inside a group', async () => {
+    const { scene } = await sceneOf(RIDES);
+    const r = (id: string) => scene.nodes.get(id)!.rect;
+    expect(r('db').x - (r('geo').x + r('geo').w)).toBeGreaterThanOrEqual(3);
+    const trips = r('trips');
+    for (const id of ['trip', 'match']) {
+      expect(r(id).x).toBeGreaterThan(trips.x + 1);
+      expect(r(id).y).toBeGreaterThan(trips.y + 1);
+      // The card stacked behind a card with replicas stays inside the frame too.
+      expect(r(id).y + r(id).h + 1).toBeLessThan(trips.y + trips.h - 1);
+    }
+  });
+});
+
+const RIDES = `title "Ride Booking" "Riders request trips, drivers get matched in real time"
+legend {
+  core     "Owned by Trips team" green
+  planned  "Planned flow"        blue dashed
+  legacy   "Being replaced"      red dotted
+}
+rider   "Rider App"      [Mobile App]
+gw      "API Gateway"    [API Gateway]
+group trips "Trips" .core {
+  trip  "Trip Service"   [REST API] @trips x3 critical
+  match "Matching"       [REST API] @trips x2
+}
+geo     "Driver Locations" [Redis]
+db      "Trips DB"       [PostgreSQL] x2
+bus     "Trip Events"    [Kafka]
+notify  "Notifications"  [REST API]
+billing "Legacy Billing" [SOAP API] .legacy
+rider -> gw : HTTPS
+gw -> trip : book
+trip -> match : find driver
+match -> geo : nearby
+trip -> db : SQL
+trip -> bus : publish
+bus -> notify : consume
+trip -> billing .legacy : charge
+notify -> rider .planned : push
+usecase "Book a ride" {
+  rider -> gw : POST /rides
+  gw -> trip : POST /trips
+  trip -> match : POST /match
+  trip -x db : INSERT trip
+  trip --> gw : 503
+}
+traffic {
+  "Book a ride" 800 rps
+}
+capacity {
+  geo size L
+}
+`;
 
 const STRESSED = `web "Web" [Actor]
 api "API" [REST API] .old
