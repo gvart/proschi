@@ -7,7 +7,8 @@ import { E, N, S, W } from './grid';
  * The diagram in character cells: the browser's ELK layout (autoLayout.ts),
  * scaled so a 240px card is about 30 columns wide and 5 rows tall, and
  * squeezed sideways when it would not fit the terminal. Edge routes become
- * runs of cells, each with the directions its line leaves in.
+ * runs of cells, each with the directions its line leaves in. The empty
+ * rows and columns ELK's spacing leaves are then squeezed out (`compact`).
  */
 
 export interface Rect {
@@ -105,6 +106,8 @@ export function buildScene(diagram: Diagram, layout: Layout, maxColumns = 160): 
     const at = route?.label ? { x: cx(route.label.x), y: cy(route.label.y) } : labelPoint(path.cells);
     edges.push({ edge, path, ...(edge.label ? { label: { x: Math.round(at.x), y: Math.round(at.y) } } : {}) });
   }
+
+  compact(nodes, edges);
 
   let right = 0;
   let bottom = 0;
@@ -238,4 +241,113 @@ export function fallbackPath(from: Rect, to: Rect): Path | undefined {
   const box = (r: Rect) => ({ x: r.x, y: r.y, width: r.w - 1, height: r.h - 1 });
   const points = fallbackRoute(box(from), box(to)).map((p) => ({ x: Math.round(p.x), y: Math.round(p.y) }));
   return routePath(points, from, to);
+}
+
+/**
+ * What a row or column holds, for how close its neighbours may come: a card
+ * (or the card stacked behind it), a group frame's border or title, or a
+ * line's bend, arrowhead or label. Anything else is blank or a straight run
+ * of a line, which can go.
+ */
+const LINE = 1;
+const FRAME = 2;
+const CARD = 3;
+
+/** Blank rows or columns kept between two kinds: cards side by side keep room to read apart, frames keep a cell of padding, lines close up. */
+function gapRows(a: number, b: number): number {
+  if (a === CARD || b === CARD) return 1;
+  return a === FRAME && b === FRAME ? 1 : 0;
+}
+
+function gapColumns(a: number, b: number): number {
+  if (a === CARD && b === CARD) return 3;
+  if (a === FRAME && b === FRAME) return 2;
+  return 1;
+}
+
+/**
+ * The new index of each row (or column) when every run of unmarked ones is
+ * cut down to the gap its marked neighbours ask for; -1 for those cut. The
+ * run before the first marked one keeps the margin.
+ */
+function squeeze(kinds: number[], gap: (a: number, b: number) => number): number[] {
+  const to = new Array<number>(kinds.length).fill(-1);
+  let next = 0;
+  let prev = 0;
+  for (let i = 0; i < kinds.length; ) {
+    if (kinds[i]) {
+      prev = kinds[i];
+      to[i++] = next++;
+      continue;
+    }
+    let end = i;
+    while (end < kinds.length && !kinds[end]) end++;
+    if (end === kinds.length) break;
+    const keep = Math.min(end - i, prev ? gap(prev, kinds[end]) : MARGIN);
+    for (let k = 0; k < keep; k++) to[i + k] = next++;
+    i = end;
+  }
+  return to;
+}
+
+/**
+ * Squeezes out the rows and columns that hold only blank cells and straight
+ * runs of lines, down to the gaps `gapRows` and `gapColumns` keep. Cards,
+ * frames, bends, arrowheads and labels keep their rows and columns, so the
+ * lines stay joined and every label stays on its line; a cut row only held
+ * vertical runs, a cut column horizontal ones.
+ */
+function compact(nodes: Map<string, SceneNode>, edges: SceneEdge[]): void {
+  const rows: number[] = [];
+  const cols: number[] = [];
+  const mark = (at: number[], i: number, kind: number) => {
+    if (i >= 0) at[i] = Math.max(at[i] ?? 0, kind);
+  };
+  for (const { node, rect } of nodes.values()) {
+    if (node.kind === 'group') {
+      mark(rows, rect.y, FRAME);
+      mark(rows, rect.y + rect.h - 1, FRAME);
+      mark(cols, rect.x, FRAME);
+      mark(cols, rect.x + rect.w - 1, FRAME);
+      // The title chip.
+      for (let x = rect.x + 1; x < Math.min(rect.x + rect.w - 1, rect.x + 4 + node.name.length + 1); x++) mark(cols, x, FRAME);
+      continue;
+    }
+    const cast = stacked(node) ? 1 : 0;
+    for (let y = rect.y; y < rect.y + rect.h + cast; y++) mark(rows, y, CARD);
+    for (let x = rect.x; x < rect.x + rect.w + cast; x++) mark(cols, x, CARD);
+  }
+  for (const { edge, path, label } of edges) {
+    path.cells.forEach((c, i) => {
+      const last = i === path.cells.length - 1;
+      if (last || path.dirs[i] !== (N | S)) mark(rows, c.y, LINE);
+      if (last || path.dirs[i] !== (E | W)) mark(cols, c.x, LINE);
+    });
+    if (label && edge.label) {
+      mark(rows, label.y, LINE);
+      const left = label.x - Math.floor((edge.label.length + 2) / 2);
+      for (let x = left; x < left + edge.label.length + 2; x++) mark(cols, x, LINE);
+    }
+  }
+  const dense = (at: number[]) => Array.from({ length: at.length }, (_, i) => at[i] ?? 0);
+  const toRow = squeeze(dense(rows), gapRows);
+  const toCol = squeeze(dense(cols), gapColumns);
+  const row = (y: number) => toRow[y] ?? y;
+  const col = (x: number) => (x < 0 ? x : (toCol[x] ?? x));
+
+  for (const n of nodes.values()) {
+    const { x, y, w, h } = n.rect;
+    n.rect = { x: col(x), y: row(y), w: col(x + w - 1) - col(x) + 1, h: row(y + h - 1) - row(y) + 1 };
+  }
+  for (const e of edges) {
+    const cells: Cell[] = [];
+    const dirs: number[] = [];
+    e.path.cells.forEach((c, i) => {
+      if (toRow[c.y] === -1 || toCol[c.x] === -1) return;
+      cells.push({ x: col(c.x), y: row(c.y) });
+      dirs.push(e.path.dirs[i]);
+    });
+    e.path = { cells, dirs, head: e.path.head };
+    if (e.label) e.label = { x: col(e.label.x), y: row(e.label.y) };
+  }
 }

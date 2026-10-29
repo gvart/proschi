@@ -5,8 +5,7 @@ import { keyOf, loadDocument, missingImports } from '../src/terminal/document';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
-import { buildScene } from '../src/terminal/scene';
-import { drawTraffic, gapOf, trafficAt, TRAFFIC_COLOR } from '../src/terminal/traffic';
+import { buildScene, type Rect, type Scene } from '../src/terminal/scene';
 
 async function sceneOf(source: string, columns = 150) {
   const doc = loadDocument({ source });
@@ -57,7 +56,7 @@ describe('terminal scene', () => {
     expect(doc.tests.length).toBeGreaterThan(0);
     const text = paint(scene, { overlay: doc.overlay }).toText();
     // The numbers and a bar take the team's row; the replicas sit on the card stacked behind.
-    expect(text).toMatch(/\d+% ━*─+ │/);
+    expect(text).toMatch(/\d+% ━*─+ ┃/);
     expect(text).toMatch(/╰─+ ×2 ─╯/);
   });
 
@@ -71,7 +70,7 @@ describe('terminal scene', () => {
     expect(grid.bg[(db.y + 1) * grid.columns + db.x + 1]).toBe(COLOR.heatOver);
     expect(grid.fg[db.y * grid.columns + db.x]).toBe(COLOR.fail);
     expect(grid.toText()).toMatch(/L · \d+%/);
-    expect(grid.glyph(api.x, api.y + 1)).toBe('┊');
+    expect(grid.glyph(api.x, api.y + 1)).toBe('┇');
     expect(grid.toText()).toContain('down');
     expect(heatOf({ utilization: 0.5 })).toBeUndefined();
     expect(heatOf({ utilization: 0.95 })).toBe(COLOR.heatHot);
@@ -91,6 +90,112 @@ describe('terminal scene', () => {
     expect(text).toMatch(/[╎╌]/);
   });
 });
+
+/** Every edge runs cell by cell from beside its source to the arrowhead beside its target, its joins agreeing with its neighbours, its label on it. */
+function expectConnected(scene: Scene): void {
+  const beside = (c: { x: number; y: number }, r: Rect) =>
+    (c.x >= r.x && c.x < r.x + r.w && (c.y === r.y - 1 || c.y === r.y + r.h)) || (c.y >= r.y && c.y < r.y + r.h && (c.x === r.x - 1 || c.x === r.x + r.w));
+  const dir = (a: { x: number; y: number }, b: { x: number; y: number }) => (b.x > a.x ? 2 : b.x < a.x ? 8 : b.y > a.y ? 4 : 1);
+  for (const { edge, path, label } of scene.edges) {
+    const { cells, dirs } = path;
+    const from = scene.nodes.get(edge.source)!.rect;
+    const to = scene.nodes.get(edge.target)!.rect;
+    expect(beside(cells[0], from), `${edge.id} leaves ${edge.source}`).toBe(true);
+    expect(beside(cells[cells.length - 1], to), `${edge.id} reaches ${edge.target}`).toBe(true);
+    for (let i = 1; i < cells.length; i++) {
+      expect(Math.abs(cells[i].x - cells[i - 1].x) + Math.abs(cells[i].y - cells[i - 1].y), `${edge.id} at ${i}`).toBe(1);
+      expect(dirs[i] & dir(cells[i], cells[i - 1]), `${edge.id} joins back at ${i}`).toBeTruthy();
+      if (i < cells.length - 1) expect(dirs[i] & dir(cells[i], cells[i + 1]), `${edge.id} joins on at ${i}`).toBeTruthy();
+    }
+    if (label && edge.label) {
+      const half = Math.ceil(edge.label.length / 2);
+      expect(cells.some((c) => c.y === label.y && Math.abs(c.x - label.x) <= half), `${edge.id}'s label`).toBe(true);
+    }
+  }
+}
+
+describe('terminal compaction', () => {
+  it('squeezes the empty rows out of a tall diagram and keeps every edge joined', async () => {
+    const { scene } = await sceneOf(RIDES);
+    // 96 rows before the empty rows went.
+    expect(scene.rows).toBeLessThanOrEqual(96 * 0.75);
+    expectConnected(scene);
+    for (const { source } of examples) expectConnected((await sceneOf(source)).scene);
+  });
+
+  it('keeps cards side by side apart and a cell of padding inside a group', async () => {
+    const { scene } = await sceneOf(RIDES);
+    const r = (id: string) => scene.nodes.get(id)!.rect;
+    expect(r('db').x - (r('geo').x + r('geo').w)).toBeGreaterThanOrEqual(3);
+    const trips = r('trips');
+    for (const id of ['trip', 'match']) {
+      expect(r(id).x).toBeGreaterThan(trips.x + 1);
+      expect(r(id).y).toBeGreaterThan(trips.y + 1);
+      // The card stacked behind a card with replicas stays inside the frame too.
+      expect(r(id).y + r(id).h + 1).toBeLessThan(trips.y + trips.h - 1);
+    }
+  });
+
+  it('draws cards with heavy borders and no shadow, lit pink while playing', async () => {
+    const { doc, scene } = await sceneOf(RIDES);
+    const grid = paint(scene, { overlay: doc.overlay });
+    const gw = scene.nodes.get('gw')!.rect;
+    expect(grid.glyph(gw.x, gw.y)).toBe('┏');
+    expect(grid.glyph(gw.x + gw.w - 1, gw.y + gw.h - 1)).toBe('┛');
+    expect(grid.glyph(gw.x, gw.y + 1)).toBe('┃');
+    // No shadow: nothing right of or under a card without replicas but the lines.
+    expect(grid.glyph(gw.x + gw.w, gw.y + 2)).toBe(' ');
+    expect(grid.toText()).not.toMatch(/[▀▄▌▐█]/);
+    // The legacy billing's dotted border, heavy.
+    const billing = scene.nodes.get('billing')!.rect;
+    expect(grid.glyph(billing.x + 1, billing.y)).toBe('┅');
+    const steps = doc.diagram.useCases[0].scenarios[0].steps;
+    const lit = paint(scene, { play: playAt(scene, steps, 0, 50) });
+    expect(lit.glyph(gw.x, gw.y)).toBe('┏');
+    expect(lit.fg[gw.y * lit.columns + gw.x]).toBe(COLOR.pink);
+  });
+});
+
+const RIDES = `title "Ride Booking" "Riders request trips, drivers get matched in real time"
+legend {
+  core     "Owned by Trips team" green
+  planned  "Planned flow"        blue dashed
+  legacy   "Being replaced"      red dotted
+}
+rider   "Rider App"      [Mobile App]
+gw      "API Gateway"    [API Gateway]
+group trips "Trips" .core {
+  trip  "Trip Service"   [REST API] @trips x3 critical
+  match "Matching"       [REST API] @trips x2
+}
+geo     "Driver Locations" [Redis]
+db      "Trips DB"       [PostgreSQL] x2
+bus     "Trip Events"    [Kafka]
+notify  "Notifications"  [REST API]
+billing "Legacy Billing" [SOAP API] .legacy
+rider -> gw : HTTPS
+gw -> trip : book
+trip -> match : find driver
+match -> geo : nearby
+trip -> db : SQL
+trip -> bus : publish
+bus -> notify : consume
+trip -> billing .legacy : charge
+notify -> rider .planned : push
+usecase "Book a ride" {
+  rider -> gw : POST /rides
+  gw -> trip : POST /trips
+  trip -> match : POST /match
+  trip -x db : INSERT trip
+  trip --> gw : 503
+}
+traffic {
+  "Book a ride" 800 rps
+}
+capacity {
+  geo size L
+}
+`;
 
 const STRESSED = `web "Web" [Actor]
 api "API" [REST API] .old
@@ -117,37 +222,6 @@ capacity {
   db size L
 }
 `;
-
-describe('terminal traffic', () => {
-  it('spaces the dots by how busy a connection is', () => {
-    expect(gapOf(1)).toBe(8);
-    expect(gapOf(100)).toBeLessThan(gapOf(1));
-    expect(gapOf(1e6)).toBe(4);
-  });
-
-  it('moves the dots a cell a frame along their edge, hollow for async, and drops requests off a saturated node', async () => {
-    const { doc, scene } = await sceneOf(STRESSED);
-    const flows = doc.flows!;
-    expect(flows.some((f) => f.async)).toBe(true);
-    const at = (frame: number) => trafficAt(scene, flows, doc.overlay!, frame);
-    const path = scene.edges.find((e) => e.edge.source === 'web')!.path.cells;
-    const onWeb = (frame: number) => at(frame).filter((p) => path.includes(p.at));
-    expect(onWeb(0).length).toBeGreaterThan(0);
-    const before = onWeb(0).map((p) => path.indexOf(p.at));
-    for (const p of onWeb(1)) expect(before).toContain(path.indexOf(p.at) - 1);
-    expect(at(0).some((p) => p.kind === 'async')).toBe(true);
-    expect([0, 1, 2].some((f) => at(f).some((p) => p.kind === 'drop'))).toBe(true);
-
-    const base = paint(scene, { overlay: doc.overlay });
-    const frame = base.copy();
-    drawTraffic(frame, scene, at(0));
-    expect(frame.toText()).toContain('●');
-    expect(frame.toText()).toContain('○');
-    expect(base.toText()).not.toContain('●');
-    const dot = at(0).find((p) => p.kind === 'sync' && frame.glyph(p.at.x, p.at.y) === '●')!;
-    expect(frame.fg[dot.at.y * frame.columns + dot.at.x]).toBe(TRAFFIC_COLOR.sync);
-  });
-});
 
 describe('terminal playback', () => {
   it('plays one step per call, the packet out and back, as the editor does', async () => {

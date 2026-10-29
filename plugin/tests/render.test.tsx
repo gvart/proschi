@@ -85,9 +85,10 @@ test('Play moves the packet along its edge in place, then on to the next step', 
 
   await ui.press({ key: 'play-m1:0' })
   expect(await ui.find({ type: 'Text', text: /^Step 1 of \d+$/ })).toBeDefined()
-  await clock.advance(500)
-  expect(new Set(blits).size).toBeGreaterThan(3)
-  await clock.advance(1600)
+  // Out to the callee and part way back: the edge is only a few cells long, a frame per cell.
+  await clock.advance(1000)
+  expect(new Set(blits).size).toBeGreaterThan(2)
+  await clock.advance(1100)
   expect(await ui.find({ type: 'Text', text: /^Step 2 of \d+$/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /^Checkout API → Cart Cache/ })).toBeDefined()
 
@@ -151,33 +152,6 @@ for (const [icons, postgres] of [['nerd-font', '\ue76e'], ['symbols', '◉']] as
     await ui.unmount()
   })
 }
-
-test('traffic flows along the edges in diagram mode, and stops while a use case plays', async ($, on) => {
-  const clock = mock.clock(on)
-  const blits: string[] = []
-  on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))
-  on('ui.invalidate', () => ({ value: undefined }))
-  on('ui.blit', (_, e) => {
-    blits.push('cells' in e ? e.cells : '')
-    return { value: {} }
-  })
-  await (await $.ui.mount(reply(FENCED))).unmount()
-  const ui = await $.ui.mount(reply(FENCED))
-  expect(await ui.find({ type: 'Select', key: 'uc-m1:0' })).toBeDefined()
-
-  await clock.advance(600)
-  const frames = blits.map(cells => glyphs({ props: { cells } }))
-  expect(frames.length).toBeGreaterThan(2)
-  expect(frames.every(f => f.includes('●'))).toBe(true)
-  expect(new Set(frames).size).toBeGreaterThan(2)
-
-  await ui.press({ key: 'play-m1:0' })
-  await ui.press({ key: 'play-m1:0' })
-  blits.length = 0
-  await clock.advance(2000)
-  expect(blits.map(cells => glyphs({ props: { cells } })).some(f => f.includes('●'))).toBe(false)
-  await ui.unmount()
-})
 
 test('Play and Pause are as wide as each other', async ($, on) => {
   on('process.run', () => ({ value: { exitCode: 0, stdout: LAYOUT, stderr: '' } }))

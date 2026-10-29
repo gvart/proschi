@@ -153,11 +153,19 @@ const LINES: Record<'solid' | Dash, { h: string; v: string }> = {
   dotted: { h: '┈', v: '┊' },
 };
 
-/** A frame with rounded corners, in a dash. */
-function frame(grid: Grid, r: Rect, color: number, dash: 'solid' | Dash = 'solid'): void {
+/** The same, heavy, for the cards' borders. */
+const HEAVY_LINES: Record<'solid' | Dash, { h: string; v: string }> = {
+  solid: { h: '━', v: '┃' },
+  dashed: { h: '╍', v: '╏' },
+  dotted: { h: '┅', v: '┇' },
+};
+
+/** A frame in a dash: light with rounded corners, or heavy with square ones. */
+function frame(grid: Grid, r: Rect, color: number, dash: 'solid' | Dash = 'solid', heavy = false): void {
   const right = r.x + r.w - 1;
   const bottom = r.y + r.h - 1;
-  const { h, v } = LINES[dash];
+  const { h, v } = (heavy ? HEAVY_LINES : LINES)[dash];
+  const [tl, tr, bl, br] = heavy ? '┏┓┗┛' : '╭╮╰╯';
   for (let x = r.x + 1; x < right; x++) {
     grid.set(x, r.y, h, color);
     grid.set(x, bottom, h, color);
@@ -166,10 +174,10 @@ function frame(grid: Grid, r: Rect, color: number, dash: 'solid' | Dash = 'solid
     grid.set(r.x, y, v, color);
     grid.set(right, y, v, color);
   }
-  grid.set(r.x, r.y, '╭', color);
-  grid.set(right, r.y, '╮', color);
-  grid.set(r.x, bottom, '╰', color);
-  grid.set(right, bottom, '╯', color);
+  grid.set(r.x, r.y, tl, color);
+  grid.set(right, r.y, tr, color);
+  grid.set(r.x, bottom, bl, color);
+  grid.set(right, bottom, br, color);
 }
 
 function fill(grid: Grid, r: Rect, fg: number, bg: number): void {
@@ -240,7 +248,7 @@ function drawStack(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay 
 }
 
 /**
- * A card: a light rounded border and a solid icon tile, both in the node's
+ * A card: a heavy border and a solid icon tile, both in the node's
  * color, or the accent while it is lit. On the scenario's path it turns grey
  * and keeps its ink; off it, it all turns grey and dotted. Under the load
  * overlay (ComponentNode.tsx) a busy card fills with its heat, one past
@@ -259,7 +267,7 @@ function drawCard(grid: Grid, scene: Scene, n: SceneNode, overlay: NodeOverlay |
   const muted = heat !== undefined ? COLOR.onColor : look === 'off' ? COLOR.fadedMore : COLOR.muted;
   fill(grid, rect, DEFAULT, DEFAULT);
   if (heat !== undefined) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
-  frame(grid, rect, color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'));
+  frame(grid, rect, color, look === 'off' || down ? 'dotted' : accent ? 'solid' : (node.style?.dash ?? 'solid'), true);
 
   const icon = iconOf(node, icons);
   const tiled = icon !== undefined && rect.w >= 22;
