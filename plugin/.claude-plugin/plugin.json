@@ -1,7 +1,8 @@
 {
   "name": "proschi",
   "displayName": "Proschi",
-  "description": "Turn infrastructure, code and docs into Proschi architecture models that render, simulate and pass their checks.",
+  "version": "0.11.0",
+  "description": "Turn infrastructure, code and docs into Proschi architecture models that render, simulate and pass their checks, and draw them right in Claude Code's terminal.",
   "author": {
     "name": "gvart",
     "url": "https://github.com/gvart"
@@ -9,5 +10,25 @@
   "homepage": "https://proschi.app/docs/agents/",
   "repository": "https://github.com/gvart/proschi",
   "license": "MIT",
-  "keywords": ["proschi", "architecture", "diagrams", "system-design", "simulation"]
+  "keywords": [
+    "proschi",
+    "architecture",
+    "diagrams",
+    "system-design",
+    "simulation"
+  ],
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "icons": {
+      "type": "string",
+      "title": "Diagram icons",
+      "description": "Tech icons on the cards of diagrams drawn in the terminal: nerd-font needs a Nerd Font (https://www.nerdfonts.com) in the terminal; symbols works with any font.",
+      "options": [
+        "nerd-font",
+        "symbols",
+        "none"
+      ],
+      "default": "nerd-font"
+    }
+  }
 }

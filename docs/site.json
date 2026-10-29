@@ -103,7 +103,8 @@
         { "page": "editors", "anchor": "checking-against-openapi", "label": "OpenAPI" },
         { "page": "editors", "anchor": "rendering-and-export", "label": "Export" },
         { "page": "sharing", "label": "Sharing and embedding" },
-        { "page": "agents", "label": "Agent skills" }
+        { "page": "agents", "label": "Agent skills" },
+        { "page": "agents", "anchor": "diagrams-in-the-terminal", "label": "Terminal diagrams" }
       ]
     },
     {
