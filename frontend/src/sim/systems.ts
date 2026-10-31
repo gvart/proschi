@@ -274,9 +274,9 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
     const availability = stub.availability !== undefined ? stub.availability / 100 : 1;
     result.entries = system.entries.map((e) => ({ entry: e.id, p50Ms: at(0.5), p99Ms: at(0.99), availability }));
     if (result.saturated) {
-      result.warnings.push(`${label} cannot take what it is sent: ${sending} is past its capacity of ${formatRps(rps)}.`);
+      result.warnings.push(`${label} cannot take what it is sent: you send ${sending}; it takes at most ${formatRps(rps)}.`);
       if (stub.p99Ms !== undefined) result.breaches.push({ requirement: `p99 < ${formatMs(stub.p99Ms)}`, message: `p99 is not held past ${formatRps(rps)}` });
-    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: ${sending} of its ${formatRps(rps)}.`);
+    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}; it runs hot past ${formatRps(rps * HOT)} and takes at most ${formatRps(rps)}.`);
     return result;
   }
   if (contract.source === 'none' || !system.diagram) {
@@ -303,18 +303,15 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
   const first = contract.entries.find((c) => inbound.some((e) => e.entry === c.entry && e.rps > 0));
   if (result.saturated && busiest) {
     const onOwn = first && first.saturatesAtRps === 0;
-    const limit =
-      first && !onOwn && Number.isFinite(first.saturatesAtRps)
-        ? ` Its design takes ${formatRps(first.saturatesAtRps)} more on "${first.useCase}" before ${first.bottleneck} saturates.`
-        : '';
+    const limit = first && Number.isFinite(first.saturatesAtRps) ? `; it takes at most ${formatRps(first.saturatesAtRps)} before its ${first.bottleneck} saturates` : '';
     result.warnings.push(
       onOwn
         ? `${label} is saturated on its own traffic, before what it is sent: its ${busiest.id} is at ${usageText(busiest)}.`
-        : `${label} cannot take what it is sent: ${sending} saturates its ${busiest.id} (${usageText(busiest)}).${limit}`,
+        : `${label} cannot take what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`,
     );
   } else if (result.hot && busiest) {
-    const limit = first && Number.isFinite(first.hotAtRps) ? ` It runs hot past ${formatRps(first.hotAtRps)} more on "${first.useCase}".` : '';
-    result.warnings.push(`${label} runs hot under what it is sent: ${sending} puts its ${busiest.id} at ${usageText(busiest)}.${limit}`);
+    const limit = first && Number.isFinite(first.hotAtRps) ? `; it runs hot past ${formatRps(first.hotAtRps)}` : '';
+    result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`);
   }
   for (const b of result.breaches) result.warnings.push(`${label} breaks its SLA under what it is sent: ${b.message}.`);
   return result;

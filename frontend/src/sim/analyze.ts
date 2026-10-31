@@ -452,6 +452,8 @@ export function usageText(n: Usage): string {
     return `bandwidth ${mb(n.bandwidthLoadMBps)} of ${mb(n.bandwidthCapacityMBps)}, ${formatPercent(n.bandwidthUtilization)}`;
   }
   if (n.writeScaling === 'shards' && n.writeLoadRps > 0) {
+    // Only the dimension that is loaded: no "reads 0 rps of 60k rps, 0%".
+    if (n.readLoadRps <= 0) return `writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
     return `reads ${part(n.readLoadRps, n.readCapacityRps, n.readUtilization)}; writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
   }
   return part(n.loadRps, n.capacityRps, n.requestUtilization);
