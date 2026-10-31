@@ -1,4 +1,4 @@
-import { joinImportPath, mapResolver } from '../../../frontend/src/dsl/imports';
+import { isRemoteSpec, joinImportPath, mapResolver } from '../../../frontend/src/dsl/imports';
 import { parse } from '../../../frontend/src/dsl/parser';
 import type { Diagram, Diagnostic } from '../../../frontend/src/dsl/types';
 import { encodeShareHash, type PlaybackTarget } from '../../../frontend/src/playground/share';
@@ -60,11 +60,29 @@ export function missingImports(input: Source): string[] {
     path: input.path ?? 'diagram.proschi',
     resolve: (importPath, fromPath) => {
       const found = known(importPath, fromPath);
-      if (!found) missing.add(joinImportPath(fromPath, importPath));
+      const key = joinImportPath(fromPath, importPath);
+      if (!found && key !== undefined) missing.add(key);
       return found;
     },
   });
   return [...missing];
+}
+
+/**
+ * The file an import key (relative to the document in `dir`, from
+ * missingImports) names, `/`-separated, or undefined when it is remote or
+ * leaves `root`, the project root: imports never read outside the project.
+ */
+export function importFilePath(dir: string, root: string, key: string): string | undefined {
+  if (isRemoteSpec(key) || key.startsWith('/')) return undefined;
+  const parts = dir.split('/').filter(Boolean);
+  for (const part of key.split('/')) {
+    if (part === '' || part === '.') continue;
+    if (part === '..') parts.pop();
+    else parts.push(part);
+  }
+  const path = `/${parts.join('/')}`;
+  return path === root || path.startsWith(root.endsWith('/') ? root : `${root}/`) ? path : undefined;
 }
 
 /** A short stable key for a document's text and imports (FNV-1a). */

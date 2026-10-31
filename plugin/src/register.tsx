@@ -3,7 +3,7 @@ import type { Elements, EngineInterface, On, PluginOptions, RenderElement, Rende
 
 import type { Layout } from '../../frontend/src/dsl/autoLayout'
 import type { IconStyle } from '../../tooling/src/terminal/icons'
-import { keyOf, loadDocument, missingImports, type Document, type Source } from '../../tooling/src/terminal/document'
+import { importFilePath, keyOf, loadDocument, missingImports, type Document, type Source } from '../../tooling/src/terminal/document'
 import { paint } from '../../tooling/src/terminal/paint'
 import { currentStepsOf, isErrorStep, playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
@@ -166,17 +166,27 @@ function proschiFile(tool: string, input: unknown): string | undefined {
 const basename = (path: string) => path.split('/').pop() ?? path
 const dirname = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')))
 
+/** The project root imports are confined to: the folder of the nearest proschi.json, else the git root, else the file's folder (tooling/src/imports.ts). */
+async function projectRoot($: EngineInterface, dir: string): Promise<string> {
+  for (let current = dir; ; current = dirname(current)) {
+    if ((await $.fs.exists(`${current}/proschi.json`)) || (await $.fs.exists(`${current}/.git`))) return current || '/'
+    if (!current || current === '/') return dir
+  }
+}
+
 /** A file with the files it imports, keyed relative to it as the editor resolves them (tooling/src/share.ts). */
 async function readWithImports($: EngineInterface, file: string): Promise<Source> {
   const name = basename(file)
   const dir = dirname(file)
+  const root = await projectRoot($, dir)
   const doc: Source = { source: await $.fs.read(file), path: name, imports: {} }
   for (let round = 0; round < 8; round++) {
     const missing = missingImports(doc).filter(key => key !== name && !(key in doc.imports!))
     if (missing.length === 0) break
     for (const key of missing) {
-      const path = dir ? `${dir}/${key}` : key
-      doc.imports![key] = (await $.fs.exists(path)) ? await $.fs.read(path) : ''
+      // Remote imports and paths outside the project are never read; they draw as missing.
+      const path = importFilePath(dir, root, key)
+      doc.imports![key] = path && (await $.fs.exists(path)) ? await $.fs.read(path) : ''
     }
   }
   return doc

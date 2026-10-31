@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
 import { examples } from '../../frontend/src/dsl/examples';
-import { keyOf, loadDocument, missingImports, type Source } from '../src/terminal/document';
+import { importFilePath, keyOf, loadDocument, missingImports, type Source } from '../src/terminal/document';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
@@ -294,6 +294,14 @@ describe('terminal playback', () => {
 describe('terminal document', () => {
   it('lists the imports it still needs, relative to the document', () => {
     expect(missingImports({ source: 'import "shared/infra.proschi"\n', path: 'app/main.proschi' })).toEqual(['app/shared/infra.proschi']);
+  });
+
+  it('reads imports only inside the project root, never remote ones', () => {
+    expect(importFilePath('/repo/docs', '/repo', '../shared/base.proschi')).toBe('/repo/shared/base.proschi');
+    expect(importFilePath('/repo/docs', '/repo', '../../etc/passwd')).toBeUndefined();
+    expect(importFilePath('/repo/docs', '/repo', '../../repo-other/x.proschi')).toBeUndefined();
+    expect(importFilePath('/repo/docs', '/repo', 'git:example.com/a/b//x.proschi@v1')).toBeUndefined();
+    expect(missingImports({ source: 'import "/etc/passwd"\n', path: 'main.proschi' })).toEqual([]);
   });
 
   it('links to the editor, at a playback step when asked', () => {

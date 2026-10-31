@@ -113,6 +113,10 @@ export interface LinkContext {
   from: string
   /** Its source, relative to the repository root, e.g. docs/LANGUAGE.md. */
   sourcePath: string
+  /** For a page outside /docs/ (the blog): its way to the docs root, e.g. '../../docs/'. Links to docs pages then start there. */
+  docsRoot?: string
+  /** For a page that may show images (the blog): the src to publish an image at, given its src in the source. Without it, an image is an error. */
+  image?: (src: string) => string
 }
 
 /** Repository path (docs/LANGUAGE.md) → page slug. */
@@ -127,14 +131,16 @@ export function rewriteHref(href: string, ctx: LinkContext): string {
   const [path, anchor] = splitAnchor(href)
   const local = (repoPath: string): string | undefined => {
     const slug = slugs.get(posix.normalize(repoPath))
-    return slug === undefined ? undefined : pageHref(ctx.from, slug, anchor)
+    return slug === undefined ? undefined : docsHref(slug)
   }
+  const docsHref = (slug: string): string =>
+    ctx.docsRoot === undefined ? pageHref(ctx.from, slug, anchor) : `${ctx.docsRoot}${slug ? `${slug}/` : ''}${anchor ? `#${anchor}` : ''}`
 
   if (path.startsWith(SITE_ORIGIN)) {
     const sitePath = path.slice(SITE_ORIGIN.length)
     // The model page moved into the docs; model/ only forwards there.
     const docsSlug = sitePath === 'model/' ? 'model' : /^docs\/(.*?)\/?$/.exec(sitePath)?.[1]
-    if (docsSlug !== undefined && ctx.config.pages.some((p) => p.slug === docsSlug)) return pageHref(ctx.from, docsSlug, anchor)
+    if (docsSlug !== undefined && ctx.config.pages.some((p) => p.slug === docsSlug)) return docsHref(docsSlug)
     return toSiteRoot(ctx.from) + sitePath + (anchor ? `#${anchor}` : '')
   }
   if (path.startsWith(BLOB)) return local(path.slice(BLOB.length)) ?? href
@@ -189,6 +195,8 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
   }
 
   md.renderer.rules.image = (tokens, idx) => {
+    const token = tokens[idx]
+    if (ctx.image) return `<img src="${escapeHtml(ctx.image(String(token.attrGet('src') ?? '')))}" alt="${escapeHtml(textOf(token.children))}" loading="lazy" />`
     throw new Error(`${ctx.sourcePath}: images are not supported on the site (${tokens[idx].attrGet('src')})`)
   }
 
@@ -208,6 +216,14 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
     return `<figure class="live" data-live data-source="${base64(source)}">\n${pre}\n</figure>\n`
   }
   return md
+}
+
+/** Markdown rendered like a docs page's (anchors, links, live examples), for pages outside /docs/ (plugins/blogSite.ts). */
+export function renderMarkdown(source: string, ctx: LinkContext): { html: string; toc: TocEntry[]; examples: string[] } {
+  const toc: TocEntry[] = []
+  const examples: string[] = []
+  const html = markdown(ctx, toc, examples).render(source)
+  return { html, toc, examples }
 }
 
 /** The first heading of a fragment or a Markdown file is the page's h1; this takes it out. */
