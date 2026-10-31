@@ -240,8 +240,11 @@ usecase "Pay" {
 traffic {
   "Pay" ${rps} rps
 }`;
-    const ok = analyze(parse(src(1000)).diagram);
+    const okDiagram = parse(src(1000)).diagram;
+    const ok = analyze(okDiagram);
     expect(ok.warnings).toEqual([]);
+    // The stub's rate is all it takes, not extra on top of anything.
+    expect(runTests(okDiagram, ok).find((r) => r.id === 'system:pay')).toMatchObject({ passed: true, message: "'pay' takes 1k rps and holds its requirements; it takes at most 2k rps" });
     expect(ok.useCases[0].percentiles.p99).toBeCloseTo(120, 6);
     expect(ok.useCases[0].availability).toBeCloseTo(0.999, 9);
     expect(contractOf(parse(src(1)).diagram.systems![0]).entries[0]).toMatchObject({ saturatesAtRps: 2000, hotAtRps: 1400, latency: [{ maxMs: 120 }], availabilityPercent: 99.9 });

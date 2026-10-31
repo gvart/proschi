@@ -58,8 +58,22 @@ test.describe('team systems in the editor', () => {
     await status(page, 'Order Processing').focus();
     const tip = box(page, 'Order Processing').getByRole('tooltip');
     await expect(tip).toBeVisible();
-    await expect(tip).toContainText("'orders' cannot take what it is sent");
+    await expect(tip).toContainText(/Saturated · db at \d+%/);
+    await expect(tip).toContainText('You send 2k rps');
+    await expect(tip).toContainText(/Takes at most 1\.2k rps before db saturates/);
     await expect(tip).toContainText('ask the Orders team to add capacity for it (their bottleneck is db)');
+    // Beside the box, so the Frontend box above stays clear.
+    const tipBox = (await tip.boundingBox())!;
+    const ordersBox = (await box(page, 'Order Processing').boundingBox())!;
+    const frontendBox = (await box(page, 'Frontend').boundingBox())!;
+    expect(tipBox.x).toBeGreaterThanOrEqual(ordersBox.x + ordersBox.width);
+    expect(tipBox.y + tipBox.height <= frontendBox.y || tipBox.y >= frontendBox.y + frontendBox.height || tipBox.x >= frontendBox.x + frontendBox.width).toBe(true);
+    // The entry point chip stays whole beside the buttons on a red box.
+    const chip = (await box(page, 'Order Processing').getByRole('list', { name: 'Entry points' }).getByText('api').boundingBox())!;
+    const open = (await box(page, 'Order Processing').getByRole('button', { name: 'Open Order Processing' }).boundingBox())!;
+    expect(chip.height).toBeGreaterThan(10);
+    expect(chip.x + chip.width).toBeLessThanOrEqual(open.x);
+    expect(chip.y + chip.height).toBeLessThanOrEqual(ordersBox.y + ordersBox.height);
 
     // Results list the system too.
     await page.getByRole('tab', { name: /Results/ }).click();
@@ -77,6 +91,8 @@ test.describe('team systems in the editor', () => {
     await expect(breadcrumb(page)).toContainText('Drone startup');
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toBeVisible();
+    // The design is shown under its own traffic plus what the org sends.
+    await expect(breadcrumb(page)).toContainText('incl. 100 rps from Drone startup');
     await expect(box(page, 'Frontend')).toHaveCount(0);
     // Its use cases are the team's own.
     await expect(page.getByRole('combobox').first()).toContainText('Place order');
@@ -102,6 +118,15 @@ test.describe('team systems in the editor', () => {
     await expect(frame).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toBeVisible();
     await expect(frame.locator('.pc-system__pill')).toHaveText('OK');
+    // With the load overlay on, its members show their load like any node.
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
+    await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // A long use case name does not widen the picker; its full name is in the title.
+    const picker = page.getByRole('combobox', { name: 'Use case' });
+    expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(11 * 16 + 1);
+    await expect(picker).toHaveAttribute('title', /\S/);
     // The rest of the org stays collapsed.
     await expect(box(page, 'Frontend')).toBeVisible();
     await expect(box(page, 'Order Processing')).toHaveCount(0);

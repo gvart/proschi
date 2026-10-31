@@ -6,6 +6,8 @@ import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
 import { UseCasePlayback } from '../components/UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES } from '../components/UseCases/playbackView';
+import { systemSummaries } from '../components/Canvas/systemSummary';
+import { analyze, runTests } from '../sim';
 import './live.css';
 
 interface LiveExampleProps {
@@ -37,7 +39,23 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
     () => parse(source, imports ? { path: ROOT_PATH, resolve: filesResolver(imports, ROOT_PATH) } : undefined).diagram,
     [source, imports],
   );
-  const { nodes, edges, settled } = useDiagramLayout(diagram);
+  const { nodes: laidOut, edges, settled } = useDiagramLayout(diagram);
+  // System boxes show their status and headroom, as in the editor.
+  const summaries = useMemo(() => {
+    if (!diagram.systems?.length) return undefined;
+    const analysis = analyze(diagram);
+    return systemSummaries(diagram, analysis, runTests(diagram, analysis), diagram, '');
+  }, [diagram]);
+  const nodes = useMemo(
+    () =>
+      summaries
+        ? laidOut.map((n) => {
+            const system = summaries.get(n.id);
+            return system ? { ...n, data: { ...n.data, system } } : n;
+          })
+        : laidOut,
+    [laidOut, summaries],
+  );
   const scenarios = useMemo(
     () =>
       diagram.useCases.flatMap((u) =>

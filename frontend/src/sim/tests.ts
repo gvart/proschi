@@ -140,14 +140,14 @@ function systemResults(diagram: Diagram, analysis: Analysis): TestResult[] {
       const team = node?.ownerTeam ? `the ${node.ownerTeam} team` : `the owners of ${s.id}`;
       const problem = s.warnings.find((w) => !w.includes(' runs hot '));
       const sat = s.contract.entries.find((e) => s.inbound.some((i) => i.entry === e.entry && i.rps > 0));
-      const room = sat && Number.isFinite(sat.saturatesAtRps) ? `; it saturates at ${formatRps(sat.saturatesAtRps)} more` : '';
+      const room = sat && Number.isFinite(sat.saturatesAtRps) ? `; it takes at most ${formatRps(sat.saturatesAtRps)}` : '';
       const bottleneck = s.saturated && s.busiest ? ` (their bottleneck is ${s.busiest})` : '';
       return {
         id: `system:${s.id}`,
         name: `${s.id} takes what it is sent`,
         category: s.breaches.some((b) => b.requirement.startsWith('availability')) && !s.saturated ? 'availability' : 'latency',
         passed: !problem,
-        message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)}${(s.sharedInboundRps ?? 0) > s.totalInboundRps * (1 + 1e-9) ? ` (of the ${formatRps(s.sharedInboundRps!)} it gets)` : ''} on top of its own traffic and holds its requirements${room}`,
+        message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)}${(s.sharedInboundRps ?? 0) > s.totalInboundRps * (1 + 1e-9) ? ` (of the ${formatRps(s.sharedInboundRps!)} it gets)` : ''}${s.contract.source === 'stub' ? '' : ' on top of its own traffic'} and holds its requirements${room}`,
         ...(problem ? { hint: `Send it less, or ask ${team} to add capacity for it${bottleneck}` } : {}),
         ...(system ? { loc: system.loc } : {}),
       };

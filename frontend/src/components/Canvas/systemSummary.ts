@@ -42,6 +42,12 @@ export interface SystemSummary {
   utilization: number;
   /** The simulation's findings about it (saturation, running hot, SLA breaches). */
   warnings: string[];
+  /**
+   * The findings in short, for the status tooltip: a headline (`Saturated ·
+   * db at 160%`) and one line each (`You send 1.5k of the 2.1k rps it gets`,
+   * `Takes at most 1.2k rps before db saturates`, `p99 of "Place order" < 150 ms broken`).
+   */
+  tip: { headline: string; lines: string[] };
   /** Who to ask: `Send it less, or ask the Orders team to add capacity for it`. */
   hint?: string;
 }
@@ -110,9 +116,26 @@ export function summarizeSystem(path: string, node: DiagramNode, system: Diagram
     ...(result?.busiest ? { busiest: result.busiest } : {}),
     utilization: result?.utilization ?? 0,
     warnings: result?.warnings ?? [],
+    tip: tipOf(result, label, status),
     ...(test && !test.passed && test.hint ? { hint: test.hint } : {}),
     ...(node.ownerTeam && !test?.hint && status === 'hot' ? { hint: `Ask the ${node.ownerTeam} team before you send it more` } : {}),
   };
+}
+
+/** The findings of `result` in short; see `SystemSummary.tip`. */
+function tipOf(result: SystemAnalysis | undefined, label: string, status: SystemStatus): SystemSummary['tip'] {
+  if (!result || (status !== 'over' && status !== 'hot')) return { headline: label, lines: [] };
+  const pct = `${Math.round(result.utilization * 100)}%`;
+  const headline = result.busiest ? `${label} · ${result.busiest} at ${pct}` : `${label} · ${pct} of its capacity`;
+  const own = result.totalInboundRps;
+  const all = result.sharedInboundRps ?? own;
+  const lines = [all > own * (1 + 1e-9) ? `You send ${formatRps(own).replace(/ rps$/, '')} of the ${formatRps(all)} it gets` : `You send ${formatRps(own)}`];
+  const entry = result.contract.entries.find((c) => result.inbound.some((e) => e.entry === c.entry && e.rps > 0));
+  if (entry && entry.saturatesAtRps === 0) lines.push('Saturated on its own traffic');
+  else if (entry && result.saturated && Number.isFinite(entry.saturatesAtRps)) lines.push(`Takes at most ${formatRps(entry.saturatesAtRps)}${entry.bottleneck ? ` before ${entry.bottleneck} saturates` : ''}`);
+  else if (entry && Number.isFinite(entry.hotAtRps)) lines.push(`Runs hot past ${formatRps(entry.hotAtRps)}`);
+  for (const b of result.breaches) lines.push(`${b.requirement} broken`);
+  return { headline, lines };
 }
 
 /** The promise of the first entry point that makes one: its latency limits and availability. */
