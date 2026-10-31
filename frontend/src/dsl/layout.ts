@@ -19,7 +19,7 @@ import { NODE_TYPE, toMetadata } from './toCanvas';
 let useWorker = typeof Worker !== 'undefined';
 
 /** A collapsed system box (Canvas/SystemNode.tsx): name, promise, load, entry points and controls. */
-export const SYSTEM_NODE_SIZE = { width: 280, height: 168 };
+export const SYSTEM_NODE_SIZE = { width: 300, height: 168 };
 
 const CANVAS_SIZES: LayoutOptions = { nodeSize: (node: DiagramNode) => (node.kind === 'system' ? SYSTEM_NODE_SIZE : undefined) };
 
