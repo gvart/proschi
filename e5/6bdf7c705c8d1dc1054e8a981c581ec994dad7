@@ -1,0 +1,29 @@
+frontend/src/components/Canvas/canvas.css
+  s_e7f61f870764cb::t_9bc23d2972e0e6 523
+  s_e7f61f870764cb::t_99670c7c3be032 514,524-526
+  s_e7f61f870764cb::t_d2f39a9f0ea2b3 519-522,527
+frontend/e2e/systems.e2e.ts
+  s_e7f61f870764cb::t_ac199bb8daf208 140-141
+  s_e7f61f870764cb::t_08eec6a02e7228 142-161
+  s_e7f61f870764cb::t_8c9c91e875f4e2 162
+frontend/src/components/Canvas/SystemNode.tsx
+  s_e7f61f870764cb::t_99670c7c3be032 1,97,99,105-106,108,131,133-141,143
+  s_e7f61f870764cb::t_d2f39a9f0ea2b3 98,130,132,142
+  s_e7f61f870764cb::t_6bf2bca9836eb4 144-145
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e56bdf7c705c8d1dc1054e8a981c581ec994dad7",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
