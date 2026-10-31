@@ -76,8 +76,8 @@ export async function renderCommand(args: string[], out: (s: string) => void, er
   }
   // The system boxes show the simulation: each team's promise, and what it is sent against its headroom.
   const analysis = diagram.systems?.length && diagram.traffic?.length ? analyze(diagram) : undefined;
-  const { systems } = viewOverlay(diagram, analysis, view);
-  const rendered = await renderFiles(applyView(diagram, view), format, basename(file, extname(file)) || 'diagram', { systems });
+  const { systems, nodes } = viewOverlay(diagram, analysis, view);
+  const rendered = await renderFiles(applyView(diagram, view), format, basename(file, extname(file)) || 'diagram', { systems, nodes });
   mkdirSync(dir, { recursive: true });
   for (const f of rendered) {
     const path = join(dir, f.name);

@@ -3,6 +3,7 @@ import { fallbackRoute, labelPoint, roundedPath, snapToBottom, withHead } from '
 import type { Diagram, DiagramNode } from '../proschi';
 import { DASH_ARRAY, nodeBaseColor, tint } from '../../../frontend/src/dsl/palette';
 import type { DiagramEdge, LegendEntry } from '../../../frontend/src/dsl/types';
+import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
 import { loadText, type SystemBadge, type SystemStatus } from '../terminal/systems';
 import { techIcon } from './icons';
 import { COLORS, MONO, card, esc, fit, r, svgDocument, text, textWidth, wrap } from './svg';
@@ -46,6 +47,8 @@ function noteLines(node: DiagramNode, width: number): string[] {
 export interface ArchitectureOptions {
   /** Promise, headroom and status of each system box and expanded frame (terminal/systems.ts), by node id. */
   systems?: Record<string, SystemBadge>;
+  /** The load on each card, by node id (terminal/systems.ts viewOverlay): a team's nodes inside an expanded system under what it is sent. */
+  nodes?: Record<string, NodeOverlay>;
 }
 
 export async function renderArchitectureSvg(diagram: Diagram, options: ArchitectureOptions = {}): Promise<string> {
@@ -149,7 +152,7 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
 
   for (const p of all) {
     if (p.node.kind === 'group') continue;
-    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[p.node.id]) : drawCard(p, dx, dy));
+    body.push(p.node.kind === 'text' ? drawNote(p, dx, dy) : p.node.kind === 'system' ? drawSystem(p, dx, dy, options.systems?.[p.node.id]) : drawCard(p, dx, dy, options.nodes?.[p.node.id]));
   }
 
   if (diagram.legend && diagram.nodes.length > 0) {
@@ -175,22 +178,31 @@ function handle(cx: number, cy: number): string {
   return `<rect x="${r(cx - 4.5)}" y="${r(cy - 4.5)}" width="9" height="9" rx="1" fill="${COLORS.surface}" stroke="${COLORS.border}" stroke-width="2"/>`;
 }
 
-function drawCard(p: Placed, dx: number, dy: number): string {
+function drawCard(p: Placed, dx: number, dy: number, load?: NodeOverlay): string {
   const { node, width, height } = p;
   const x = p.x + dx;
   const y = p.y + dy;
   const textX = x + PAD_X + ICON + 10;
-  const textMax = width - PAD_X * 2 - ICON - 10;
   const base = nodeBaseColor(node);
   const t = base ? tint(base, 'light') : undefined;
   const dash = node.style?.dash ? DASH_ARRAY[node.style.dash].replace(/\d+/g, (n) => String(Number(n) * 1.5)) : undefined;
+  // The load, as on the terminal's cards: how busy (or down) after the tech, a bar along the bottom, and the heat as the fill.
+  const u = load?.utilization;
+  const busy = load?.down ? 'down' : u !== undefined ? `${Math.round(u * 100)}%` : '';
+  const heat = heatOf(load);
+  const textMax = width - PAD_X * 2 - ICON - 10;
+  const techMax = busy ? textMax - textWidth(busy, 11, true) - 8 : textMax;
+  const ink = load?.saturated || (u ?? 0) >= 1 ? COLORS.error : load?.down ? COLORS.muted : COLORS.text;
+  const bar = u !== undefined && !load?.down ? loadBar(x + PAD_X, y + height - 11, width - PAD_X * 2, u, ink) : '';
   return [
-    `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}">`,
-    card(x, y, width, height, { fill: t?.fill, line: t?.line, dash }),
+    `<g data-node="${esc(node.id)}" data-kind="${esc(node.type)}"${busy ? ` data-load="${busy}"` : ''}>`,
+    card(x, y, width, height, { fill: heat ?? t?.fill, line: t?.line, dash }),
     `<rect x="${r(x + PAD_X + 1)}" y="${r(y + PAD_Y + 1)}" width="${ICON - 2}" height="${ICON - 2}" rx="4" fill="${COLORS.background}" stroke="${COLORS.border}" stroke-width="2"/>`,
     techIcon(node.techStack, x + PAD_X + 8, y + PAD_Y + 8, 18, COLORS.text, node.type),
     text(textX, y + PAD_Y + 15, fit(node.name, textMax, 14, true), { size: 14, weight: 700 }),
-    text(textX, y + PAD_Y + 31, fit(node.techStack, textMax, 12), { size: 11, weight: 500, fill: COLORS.muted, family: MONO }),
+    text(textX, y + PAD_Y + 31, fit(node.techStack, techMax, 12), { size: 11, weight: 500, fill: COLORS.muted, family: MONO }),
+    busy ? text(x + width - PAD_X, y + PAD_Y + 31, busy, { size: 11, weight: 700, fill: ink, anchor: 'end', family: MONO }) : '',
+    bar,
     node.ownerTeam ? text(x + PAD_X, y + PAD_Y + 60, fit(`Team: ${node.ownerTeam}`, width - PAD_X * 2, 12), { size: 12, fill: COLORS.muted }) : '',
     handle(x + width / 2, y),
     handle(x + width / 2, y + height),
@@ -215,6 +227,22 @@ const HEAT = { warm: '#FFF1BF', hot: '#FFD6E8', over: '#FFD9D6' };
  * the border goes red past capacity or its SLA, amber running hot, and the
  * card fills with its heat as a busy card does on the canvas.
  */
+/** How busy a card is, as a thin bar: the track, and the share it is busy. */
+function loadBar(x: number, y: number, w: number, u: number, ink: string): string {
+  const share = Math.min(1, u);
+  return [
+    `<rect x="${r(x)}" y="${r(y)}" width="${r(w)}" height="3" rx="1.5" fill="${COLORS.text}" fill-opacity="0.12"/>`,
+    `<rect x="${r(x)}" y="${r(y)}" width="${r(Math.max(share > 0 ? 3 : 0, w * share))}" height="3" rx="1.5" fill="${ink}"/>`,
+  ].join('\n');
+}
+
+/** A card's fill for its load: the canvas's heat past 70%, 90% and capacity. */
+function heatOf(load: NodeOverlay | undefined): string | undefined {
+  const u = load?.utilization;
+  if (!load || load.down || u === undefined) return undefined;
+  return load.saturated || u >= 1 ? HEAT.over : u >= 0.9 ? HEAT.hot : u >= 0.7 ? HEAT.warm : undefined;
+}
+
 function drawSystem(p: Placed, dx: number, dy: number, badge: SystemBadge | undefined): string {
   const { node, width, height } = p;
   const x = p.x + dx;

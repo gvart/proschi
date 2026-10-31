@@ -215,6 +215,10 @@ describe('proschi render', () => {
       expect(kindOf(expanded.arch, 'warehouse')).toBe('system');
       expect(expanded.arch).toContain('data-node="orders.db"');
       expect(expanded.arch).toMatch(/✗ saturated · @Orders · p99 150 ms · 5\.2k \/ 4\.7k rps/);
+      // Inside the frame, each card carries its load under what the team is sent, as on the terminal.
+      expect(expanded.arch).toMatch(/data-node="orders\.db" data-kind="database" data-load="110%">\n<rect[^>]*\/>\n<rect[^>]* fill="#FFD9D6"/);
+      expect(expanded.arch).toContain('data-node="orders.api" data-kind="service" data-load="92%"');
+      expect(expanded.arch).toContain('data-node="feed.api" data-kind="service" data-load="95%"');
 
       const repeated = await render('org.proschi', ['--expand', 'orders', '--expand', 'feed'], 'sys-repeated');
       expect(kindOf(repeated.arch, 'feed')).toBe('system-frame');
