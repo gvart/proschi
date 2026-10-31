@@ -527,16 +527,8 @@ class Parser {
       this.warning(`Imports are not resolved in this context; '${path}' was not loaded`, loc);
       return;
     }
-    let target: ResolvedImport | undefined;
-    try {
-      target = resolve(path, this.file ?? this.options.path);
-    } catch {
-      target = undefined;
-    }
-    if (!target) {
-      this.error(`Cannot find '${path}'`, loc);
-      return;
-    }
+    const target = this.resolveFile(path, loc);
+    if (!target) return;
     entry.resolved = target.path;
 
     const cycleStart = this.chain.indexOf(target.path);
@@ -558,6 +550,26 @@ class Parser {
     this.parseFile();
     this.chain.pop();
     ({ lines: this.lines, file: this.file, stack: this.stack } = outer);
+  }
+
+  /**
+   * Loads `path` through the resolver, relative to the file being read. A
+   * resolver error named `ImportError` (outside the project root, not synced,
+   * …) is reported with its own message; anything else is "Cannot find".
+   */
+  private resolveFile(path: string, loc: SourceLoc): ResolvedImport | undefined {
+    let target: ResolvedImport | undefined;
+    try {
+      target = this.options.resolve?.(path, this.file ?? this.options.path);
+    } catch (e) {
+      if (e instanceof Error && e.name === 'ImportError') {
+        this.error(e.message, loc);
+        return undefined;
+      }
+      target = undefined;
+    }
+    if (!target) this.error(`Cannot find '${path}'`, loc);
+    return target;
   }
 
   private parseGroup(tokens: Token[], line: number) {
