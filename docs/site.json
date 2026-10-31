@@ -9,9 +9,9 @@
     },
     {
       "slug": "quickstart",
-      "title": "Quickstart",
+      "title": "Quickstart: your first Proschi diagram",
       "source": "QUICKSTART.md",
-      "description": "Your first Proschi diagram in two minutes: services, a request flow, a failure, and a requirement that checks itself."
+      "description": "Write your first Proschi diagram in two minutes: two services, a request that flows between them, a failure, and a requirement that checks itself."
     },
     {
       "slug": "systems",
