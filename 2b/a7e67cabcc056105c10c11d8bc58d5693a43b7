@@ -1,0 +1,22 @@
+tooling/test/grammar.test.ts
+  s_e7f61f870764cb::t_44403c5be20b18 278-315
+tooling/grammar/proschi.tmLanguage.json
+  s_e7f61f870764cb::t_4f73aaeb65cf4b 13-14,521-606
+  s_e7f61f870764cb::t_e499e10f9a76f8 12,607
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "2ba7e67cabcc056105c10c11d8bc58d5693a43b7",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
