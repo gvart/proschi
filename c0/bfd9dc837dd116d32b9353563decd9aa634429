@@ -1,0 +1,27 @@
+docs/AGENT-SKILLS.md
+  s_e7f61f870764cb::t_c33fcb3581cf02 106-125
+docs/QUICKSTART.md
+  s_e7f61f870764cb::t_483edef61b21d4 111-112
+docs/EDITORS.md
+  s_e7f61f870764cb::t_f85944e365aa97 493-495
+  s_e7f61f870764cb::t_9184917a717b3f 316-335
+  s_e7f61f870764cb::t_72fd7b8c456c23 486-487
+  s_e7f61f870764cb::t_b1281aaf057c91 476-485,488
+  s_e7f61f870764cb::t_7347778ada16cd 150-151
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "c0bfd9dc837dd116d32b9353563decd9aa634429",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
