@@ -3,7 +3,7 @@ import { accessIn } from './access';
 import { criticalPath, fallbacksFor, findScenario, findUseCase, needs, pathNodes, type Hop } from './flow';
 import { formatPercent, formatRps } from './format';
 import { capacityOf, combinedUtilization, profileOf, type Profile } from './profiles';
-import { analyzeSystems, type SystemAnalysis } from './systems';
+import { analyzeSystems, type SharedSystemLoad, type SystemAnalysis } from './systems';
 
 /**
  * A deterministic, analytical model of the design under its traffic
@@ -130,6 +130,8 @@ export interface AnalyzeOptions {
    * asks only for what it reads. All of them by default.
    */
   percentiles?: readonly Percentile[];
+  /** Internal: the load on every team design of the document being analysed (sim/systems.ts), passed to the team designs' own analyses. */
+  sharedSystems?: SharedSystemLoad;
 }
 
 export const DEFAULT_TIMEOUT_MS = 1000;
@@ -452,6 +454,8 @@ export function usageText(n: Usage): string {
     return `bandwidth ${mb(n.bandwidthLoadMBps)} of ${mb(n.bandwidthCapacityMBps)}, ${formatPercent(n.bandwidthUtilization)}`;
   }
   if (n.writeScaling === 'shards' && n.writeLoadRps > 0) {
+    // Only the dimension that is loaded: no "reads 0 rps of 60k rps, 0%".
+    if (n.readLoadRps <= 0) return `writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
     return `reads ${part(n.readLoadRps, n.readCapacityRps, n.readUtilization)}; writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
   }
   return part(n.loadRps, n.capacityRps, n.requestUtilization);

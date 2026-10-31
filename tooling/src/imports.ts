@@ -9,7 +9,7 @@ import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'nod
 import { ImportError, isRemoteSpec, resolveImportPath } from '../../frontend/src/dsl/imports';
 import { parse, type Diagnostic, type Diagram, type ImportResolver, type ParseResult } from './proschi';
 import { toRange, type Range } from './analysis';
-import { CACHE_DIR, LOCK_FILE, lockedHash, readCached, readLock, type Lock } from './lock';
+import { lockedHash, readCached, readLock, remoteError, type Lock } from './lock';
 import { findConfigFile } from './openapi/config';
 
 /** Relative to the working directory when the file is inside it, else absolute. */
@@ -97,11 +97,11 @@ export function fileResolver({ entry, read = () => undefined, toPath = (p) => p,
   let lock: Lock | undefined | null = null;
   const fromCache = (spec: string): string => {
     if (lock === null) lock = readLock(root);
-    if (!lock) throw new ImportError(`'${spec}' is a remote import and there is no ${LOCK_FILE}; run proschi imports sync`);
+    if (!lock) throw remoteError.noLock(spec);
     const hash = lockedHash(lock, spec);
-    if (!hash) throw new ImportError(`'${spec}' is not in ${LOCK_FILE}; run proschi imports sync`);
+    if (!hash) throw remoteError.notLocked(spec);
     const bytes = readCached(root, hash, spec);
-    if (!bytes) throw new ImportError(`'${spec}' is not in the import cache (${CACHE_DIR}); run proschi imports sync`);
+    if (!bytes) throw remoteError.notCached(spec);
     return bytes.toString('utf8');
   };
   const loadRemote = remote ?? fromCache;

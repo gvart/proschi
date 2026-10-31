@@ -4,6 +4,8 @@ import type { Elements, EngineInterface, On, PluginOptions, RenderElement, Rende
 import type { Layout } from '../../frontend/src/dsl/autoLayout'
 import type { IconStyle } from '../../tooling/src/terminal/icons'
 import { importFilePath, keyOf, loadDocument, missingImports, parseSource, type Document, type Source } from '../../tooling/src/terminal/document'
+import { CACHE_DIR, LOCK_FILE, lockedHash, parseLock, remoteError, type Lock } from '../../tooling/src/lockFormat'
+import { isRemoteSpec } from '../../frontend/src/dsl/imports'
 import { paint } from '../../tooling/src/terminal/paint'
 import { currentStepsOf, isErrorStep, playAt, STEP_MS, TRAVEL_MS } from '../../tooling/src/terminal/playback'
 import { buildScene, type Scene } from '../../tooling/src/terminal/scene'
@@ -194,22 +196,58 @@ async function projectRoot($: EngineInterface, dir: string): Promise<string> {
   }
 }
 
+/** Why an import was not read, by its key: a remote one not synced, as `proschi check` says it. */
+const importReasons = new Map<string, string>()
+
 /** A file with the files it imports, keyed relative to it as the editor resolves them (tooling/src/share.ts). */
 async function readWithImports($: EngineInterface, file: string): Promise<Source> {
   const name = basename(file)
   const dir = dirname(file)
   const root = await projectRoot($, dir)
   const doc: Source = { source: await $.fs.read(file), path: name, imports: {} }
+  const lock: { read?: Promise<Lock | undefined> } = {}
   for (let round = 0; round < 8; round++) {
     const missing = missingImports(doc).filter(key => key !== name && !(key in doc.imports!))
     if (missing.length === 0) break
     for (const key of missing) {
-      // Remote imports and paths outside the project are never read; they draw as missing.
+      importReasons.delete(key)
+      if (isRemoteSpec(key)) {
+        doc.imports![key] = await readRemote($, root, key, (lock.read ??= readLock($, root))).catch((error: unknown) => {
+          importReasons.set(key, error instanceof Error ? error.message : String(error))
+          return ''
+        })
+        continue
+      }
+      // Paths outside the project are never read; they draw as missing.
       const path = importFilePath(dir, root, key)
       doc.imports![key] = path && (await $.fs.exists(path)) ? await $.fs.read(path) : ''
     }
   }
   return doc
+}
+
+async function readLock($: EngineInterface, root: string): Promise<Lock | undefined> {
+  const file = `${root}/${LOCK_FILE}`
+  return (await $.fs.exists(file)) ? parseLock(await $.fs.read(file)) : undefined
+}
+
+/**
+ * A remote import as every command but sync reads it (tooling/src/imports.ts):
+ * from the bytes proschi.lock pins in .proschi/cache, their sha256 checked;
+ * never the network.
+ */
+async function readRemote($: EngineInterface, root: string, spec: string, locked: Promise<Lock | undefined>): Promise<string> {
+  const lock = await locked
+  if (!lock) throw remoteError.noLock(spec)
+  const hash = lockedHash(lock, spec)
+  if (!hash) throw remoteError.notLocked(spec)
+  const file = `${root}/${CACHE_DIR}/${hash}`
+  if (!(await $.fs.exists(file))) throw remoteError.notCached(spec)
+  const { base64 } = (await $.fs.read(file, { as: 'bytes' })) as { base64: string }
+  const bytes = Uint8Array.from(atob(base64), c => c.charCodeAt(0))
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))
+  if ([...digest].map(b => b.toString(16).padStart(2, '0')).join('') !== hash) throw remoteError.altered(spec)
+  return new TextDecoder().decode(bytes)
 }
 
 /** Redraws the pane when its file changes. */
@@ -372,11 +410,16 @@ async function diagramView($: EngineInterface, d: Draw, viewId: string, written:
             ↔ {grid.columns} columns wide, wider than the {d.columns} here: {view.inPane ? 'widen the window' : 'use ⛶ Focus or a wider window'} to see it whole.
           </ui.Text>
         )}
-        {lost.length > 0 && (
+        {lost.some(name => !importReasons.has(name)) && (
           <ui.Text dimColor wrap="truncate-end">
-            ⚠ Not found, so drawn as plain boxes: {lost.join(', ')}
+            ⚠ Not found, so drawn as plain boxes: {lost.filter(name => !importReasons.has(name)).join(', ')}
           </ui.Text>
         )}
+        {lost.filter(name => importReasons.has(name)).map(name => (
+          <ui.Text key={`lost-${name}`} dimColor>
+            ⚠ {importReasons.get(name)}
+          </ui.Text>
+        ))}
         {doc.notes.map(note => (
           <ui.Text color="yellow">
             ⚠ {note.text}

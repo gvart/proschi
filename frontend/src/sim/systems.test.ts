@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { mapResolver, parse } from '../dsl';
 import type { Diagram } from '../dsl/types';
-import { analyze, contractOf, runTests } from './index';
+import { analyze, contractOf, formatRps, runTests } from './index';
+import { usageText } from './analyze';
 
 /**
  * A team design of about `fill + 6` nodes: an entry gateway, an API, a
@@ -140,7 +141,7 @@ describe('systems in the simulation', () => {
     expect(orders.busiest).toBe('db');
     expect(orders.breaches.map((b) => b.requirement)).toEqual(['p99 of "Place order" < 150 ms']);
     const mine = a.warnings.filter((w) => w.startsWith("'orders'"));
-    expect(mine[0]).toMatch(/^'orders' cannot take what it is sent: .* rps into "Place order" \(orders\.api\) saturates its db \(.*\)\. Its design takes .* rps more on "Place order" before db saturates\.$/);
+    expect(mine[0]).toMatch(/^'orders' cannot take what it is sent: you send .* rps into "Place order" \(orders\.api\); it takes at most .* rps before its db saturates\. Its db is at writes .* rps of .* rps, \d+%\.$/);
     expect(mine[1]).toMatch(/^'orders' breaks its SLA under what it is sent: p99 of "Place order": db is saturated/);
     const result = runTests(diagram, a).find((r) => r.id === 'system:orders')!;
     expect(result).toMatchObject({ passed: false, category: 'latency' });
@@ -149,11 +150,25 @@ describe('systems in the simulation', () => {
     expect(a.systems!.find((s) => s.id === 'frontend')!.saturated).toBe(false);
   });
 
+  it('exposes the load on each node of a team design under the combined load', () => {
+    const low = analyze(parseDrone(100)).systems!.find((s) => s.id === 'orders')!;
+    const headroom = contractOf(parseDrone(100).systems!.find((s) => s.id === 'orders')!).entries[0].saturatesAtRps;
+    const high = analyze(parseDrone(Math.ceil(headroom * 1.5))).systems!.find((s) => s.id === 'orders')!;
+    // Same shape as the canvas overlay of any diagram, by the team's own ids.
+    expect(Object.keys(high.overlay!.nodes)).toHaveLength(75);
+    expect(high.overlay!.nodes.db).toMatchObject({ saturated: true });
+    expect(high.overlay!.nodes.db.utilization).toBeCloseTo(high.analysis!.nodes.find((n) => n.id === 'db')!.utilization, 9);
+    expect(low.overlay!.nodes.db).toMatchObject({ saturated: false });
+    expect(low.overlay!.nodes.db.utilization!).toBeLessThan(high.overlay!.nodes.db.utilization!);
+    // The flows include what the org sends in: 300 own + 100 sent on gateway -> api.
+    expect(low.overlay!.flows.find((f) => f.from === 'gateway' && f.to === 'api')!.rps).toBeCloseTo(400, 6);
+  });
+
   it('warns when a system runs hot', () => {
     const low = parseDrone(100);
     const api = contractOf(low.systems!.find((s) => s.id === 'orders')!).entries[0];
     const a = analyze(parseDrone(Math.ceil((api.hotAtRps + api.saturatesAtRps) / 2)));
-    expect(a.warnings.filter((w) => w.startsWith("'orders'"))[0]).toMatch(/^'orders' runs hot under what it is sent: .* puts its db at .*\. It runs hot past .* rps more on "Place order"\.$/);
+    expect(a.warnings.filter((w) => w.startsWith("'orders'"))[0]).toMatch(/^'orders' runs hot under what it is sent: you send .* rps into "Place order" \(orders\.api\); it runs hot past .* rps\. Its db is at writes .* rps of .* rps, \d+%\.$/);
   });
 
   it('works when my team file calls theirs as a nested system', () => {
@@ -171,6 +186,45 @@ describe('systems in the simulation', () => {
     };
     expect(run(100).warnings.filter((w) => w.startsWith("'orders'"))).toEqual([]);
     expect(run(20_000).warnings.filter((w) => w.startsWith("'orders'"))[0]).toMatch(/^'orders' cannot take what it is sent/);
+  });
+
+  it('adds up what every system using the same team file sends into it', () => {
+    const headroom = contractOf(parseDrone(100).systems!.find((s) => s.id === 'orders')!).entries[0].saturatesAtRps;
+    // The Frontend design calls Orders itself too, as a nested system of the same file.
+    const checkout = (rps: number) =>
+      'system orders @Orders {\n  from "orders.proschi"\n  expose api -> "Place order"\n}\napi -> orders.api\nusecase "Checkout" {\n  gateway -> api : POST /checkout\n  api -> orders.api : place order\n}\ntraffic {\n  "Checkout" ' + rps + ' rps\n}';
+    const run = (org: number, frontend: number) => {
+      const files: Record<string, string> = { ...droneFiles(org), 'teams/frontend.proschi': teamFile('Frontend', 'Open shop', 2000, { fill: 72, p99: 300, apiReplicas: 10, reads: true, extra: frontend > 0 ? checkout(frontend) : '' }) };
+      const r = parse(files['org.proschi'], { path: 'org.proschi', resolve: mapResolver(files) });
+      expect(r.diagnostics.filter((d) => d.severity === 'error')).toEqual([]);
+      const a = analyze(r.diagram);
+      const top = a.systems!.find((s) => s.id === 'orders')!;
+      const nested = a.systems!.find((s) => s.id === 'frontend')!.analysis!.systems?.find((s) => s.id === 'orders');
+      return { a, top, nested };
+    };
+    const share = Math.round(headroom * 0.6);
+    // Either caller alone fits.
+    expect(run(share, 0).top.saturated).toBe(false);
+    const alone = run(1, share).nested!;
+    expect(alone.saturated).toBe(false);
+
+    const { a, top, nested } = run(share, share);
+    // One design under both callers' load, analysed once.
+    expect(top.analysis).toBe(nested!.analysis);
+    expect(top.saturated).toBe(true);
+    expect(nested!.saturated).toBe(true);
+    expect(top.totalInboundRps).toBeCloseTo(share, 6);
+    expect(top.sharedInboundRps).toBeCloseTo(2 * share, 6);
+    expect(top.callers).toEqual([
+      { path: 'orders', from: 'Drone startup', rps: share },
+      { path: 'frontend.orders', from: 'Frontend', rps: share },
+    ]);
+    expect(top.overlay!.nodes.db.saturated).toBe(true);
+    const fmt = (x: number) => formatRps(x).replace(/ rps$/, '');
+    expect(a.warnings.find((w) => w.startsWith("'orders' cannot"))).toBe(
+      `'orders' cannot take what it is sent: you send ${fmt(share)} of the ${formatRps(2 * share)} it gets into "Place order" (orders.api); it takes at most ${formatRps(headroom)} before its db saturates. Its db is at ${usageText(top.analysis!.nodes.find((n) => n.id === 'db')!)}.`,
+    );
+    expect(nested!.warnings[0]).toMatch(new RegExp(`^'orders' cannot take what it is sent: you send ${fmt(share)} of the ${formatRps(2 * share)} it gets into "Place order"`));
   });
 
   it('uses the capacity stub of a system without a team file', () => {
@@ -191,10 +245,10 @@ traffic {
     expect(ok.useCases[0].percentiles.p99).toBeCloseTo(120, 6);
     expect(ok.useCases[0].availability).toBeCloseTo(0.999, 9);
     expect(contractOf(parse(src(1)).diagram.systems![0]).entries[0]).toMatchObject({ saturatesAtRps: 2000, hotAtRps: 1400, latency: [{ maxMs: 120 }], availabilityPercent: 99.9 });
-    expect(analyze(parse(src(1500)).diagram).warnings).toEqual(["'pay' runs hot under what it is sent: 1.5k rps into pay.charge of its 2k rps."]);
+    expect(analyze(parse(src(1500)).diagram).warnings).toEqual(["'pay' runs hot under what it is sent: you send 1.5k rps into pay.charge; it runs hot past 1.4k rps and takes at most 2k rps."]);
     const over = parse(src(3000)).diagram;
     const a = analyze(over);
-    expect(a.warnings).toEqual(["'pay' cannot take what it is sent: 3k rps into pay.charge is past its capacity of 2k rps."]);
+    expect(a.warnings).toEqual(["'pay' cannot take what it is sent: you send 3k rps into pay.charge; it takes at most 2k rps."]);
     expect(runTests(over, a).find((r) => r.id === 'system:pay')).toMatchObject({ passed: false, hint: 'Send it less, or ask the Payments team to add capacity for it' });
   });
 

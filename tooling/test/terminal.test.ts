@@ -7,7 +7,7 @@ import { viewError, viewOptions, type SystemsView } from '../src/terminal/system
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
-import { buildScene, type Rect, type Scene } from '../src/terminal/scene';
+import { buildScene, routePath, type Rect, type Scene } from '../src/terminal/scene';
 
 async function sceneOf(source: string, columns = 150) {
   const doc = loadDocument({ source });
@@ -341,7 +341,7 @@ describe('terminal systems', () => {
     expect(doc.systems.orders.status).toBe('saturated');
     expect(doc.systems.warehouse.status).toBe('hot');
     expect(doc.systems.frontend.status).toBe('ok');
-    expect(doc.notes[0].text).toMatch(/^'orders' cannot take what it is sent: 5\.2k rps into "Place order"/);
+    expect(doc.notes[0].text).toMatch(/^'orders' cannot take what it is sent: you send 5\.2k rps into "Place order"/);
     expect(doc.notes.find((n) => n.hint)?.hint).toBe('Send it less, or ask the Orders team to add capacity for it (their bottleneck is db)');
     expect(text).toContain('✗ saturated');
     expect(text).toContain('5.2k / 4.7k rps');
@@ -360,6 +360,28 @@ describe('terminal systems', () => {
     expect(doc.overlay?.['orders.db']).toMatchObject({ saturated: true });
     expect(text).toContain('ORDER PROCESSING ✗ saturated · @Orders');
     expect(text).toMatchSnapshot();
+  });
+
+  it('enters an expanded frame straight, without a jog under its title', async () => {
+    for (const columns of [100, 160]) {
+      const { scene, text } = await droneText('org-busy.proschi', { expanded: ['orders', 'feed'] }, columns);
+      expect(text, `at ${columns}`).not.toMatch(/▼─|─▼|╰─+╮\n.*╔═ ORDER/);
+      const { cells } = scene.edges.find((e) => e.edge.target === 'orders.gateway')!.path;
+      expect(new Set(cells.map((c) => c.x)).size, `at ${columns}`).toBe(1);
+    }
+    // ELK's way in through a port on the frame: down, five cells over, through the title, and back.
+    const path = routePath([{ x: 10, y: 4 }, { x: 10, y: 6 }, { x: 15, y: 6 }, { x: 15, y: 8 }, { x: 10, y: 8 }, { x: 10, y: 10 }], { x: 0, y: 0, w: 20, h: 4 }, { x: 0, y: 10, w: 20, h: 5 })!;
+    expect(path.cells.every((c) => c.x === 10)).toBe(true);
+  });
+
+  it('drops the load, then the promise and the team, before cutting an expanded frame\'s name', async () => {
+    const title = (text: string) => text.split('\n').find((l) => l.includes('╔═ '))!.trim();
+    expect(title((await droneText('org-busy.proschi', { expanded: ['orders'] }, 160)).text)).toMatch(/^╔═ ORDER PROCESSING ✗ saturated · @Orders · p99 150 ms ═+╗$/);
+    expect(title((await droneText('org-busy.proschi', { expanded: ['orders'] }, 60)).text)).toMatch(/^╔═ ORDER PROCESSING ✗ saturated · @Orders ═+╗$/);
+    const { doc, scene } = await droneText('org-busy.proschi', { expanded: ['orders'] });
+    scene.nodes.get('orders')!.rect.w = 26;
+    const narrow = title(paint(scene, { overlay: doc.overlay, systems: doc.systems, icons: 'symbols' }).toText());
+    expect(narrow.slice(0, 26)).toBe('╔═ ORDER P… ✗ saturated ═╗');
   });
 
   it('focuses into a system: its own design, with what is said about it', async () => {

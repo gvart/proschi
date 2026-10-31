@@ -1,4 +1,4 @@
-import type { Diagram, DiagramSystem, DiagramUseCase, Percentile, TrafficEntry } from '../dsl/types';
+import type { Diagram, DiagramSystem, DiagramUseCase, Percentile, SourceLoc, TrafficEntry } from '../dsl/types';
 import {
   HOT,
   PERCENTILE_KEYS,
@@ -25,6 +25,7 @@ import {
 } from './analyze';
 import { findScenario, findUseCase } from './flow';
 import { formatAvailability, formatMs, formatRps } from './format';
+import { analysisOverlay, type SimOverlay } from './overlay';
 
 /**
  * Systems in the simulation (docs/design/team-systems-and-imports.md D3, D4):
@@ -63,6 +64,30 @@ export interface SystemContract {
   baseline?: Analysis;
 }
 
+/** One system that sends load into a team design, and from where. */
+export interface SystemCaller {
+  /** Namespaced id: `orders`, or `frontend.orders` for one declared in the Frontend design. */
+  path: string;
+  /** Title of the diagram that declares it. */
+  from?: string;
+  rps: number;
+}
+
+/** The file a system's design came from; the parsed design itself when the resolver named none. */
+type TeamKey = string | Diagram;
+const teamKey = (s: DiagramSystem): TeamKey => s.resolved ?? s.diagram!;
+
+/**
+ * The load on every team design of a document from every system that uses
+ * it (keyed by the file the resolver returned), and each design's analysis
+ * under that load, computed once. Built by the top-level `analyzeSystems`
+ * and passed down to the team designs' own analyses.
+ */
+export interface SharedSystemLoad {
+  byFile: Map<TeamKey, { useCases: Map<string, number>; callers: SystemCaller[] }>;
+  analyses: Map<TeamKey, { combined: Diagram; analysis: Analysis }>;
+}
+
 /** A team requirement that fails under the combined load. */
 export interface SystemBreach {
   /** `p99 of "Place order" < 150 ms` */
@@ -76,8 +101,22 @@ export interface SystemAnalysis {
   /** What the rest of the diagram sends to each entry point (every entry listed), in rps. */
   inbound: { entry: string; rps: number }[];
   totalInboundRps: number;
-  /** The team design under its own traffic plus `inbound`; design systems only. */
+  /**
+   * Every system in the document (at any depth) that sends into the same
+   * team file, with what each sends: the team design is one design, so it is
+   * analysed once under all of it. Design systems only.
+   */
+  callers?: SystemCaller[];
+  /** What all of `callers` send together, in rps; design systems only. */
+  sharedInboundRps?: number;
+  /** The team design under its own traffic plus what every caller sends; design systems only. */
   analysis?: Analysis;
+  /**
+   * The load on each node of the team design under the combined load, by the
+   * team's own ids (`db`), with the flows along its connections: the shape
+   * the canvas overlay uses for any diagram. Design systems only.
+   */
+  overlay?: SimOverlay;
   /** The busiest node's utilisation (the stub's for a stub), 0..1+. */
   utilization: number;
   /** The busiest node, in the team's scope. */
@@ -229,6 +268,7 @@ function hopFrom(p50: number, p99: number): HopModel {
 /** Analyses every system of `diagram` under what the diagram sends it. */
 export function analyzeSystems(diagram: Diagram, traffic: Map<string, UseCaseTraffic>, options: AnalyzeOptions = {}): SystemsResult {
   const inbound = inboundLoad(diagram, traffic);
+  if (!options.sharedSystems) options = { ...options, sharedSystems: sharedLoad(diagram, inbound) };
   const hops = new Map<string, HopModel>();
   const availabilities = new Map<string, number>();
   const key = (id: string, port: string) => `${id}\n${port}`;
@@ -247,16 +287,76 @@ export function analyzeSystems(diagram: Diagram, traffic: Map<string, UseCaseTra
   };
 }
 
+/** Adds what `system`'s entry points are sent to its team's use cases in `into`; returns the total. */
+function sentByUseCase(system: DiagramSystem, sent: Map<string, number>, into: Map<string, number>): number {
+  let total = 0;
+  for (const e of system.entries) {
+    const rps = sent.get(e.id) ?? 0;
+    if (rps <= 0 || e.useCaseId === undefined) continue;
+    into.set(e.useCaseId, (into.get(e.useCaseId) ?? 0) + rps);
+    total += rps;
+  }
+  return total;
+}
+
+/**
+ * The load on every team design of the document from every system that uses
+ * it. A team design's own systems send what its combined load makes them
+ * send, so the designs are visited callers first (the `from` chain has no
+ * cycles).
+ */
+function sharedLoad(root: Diagram, rootInbound: Map<string, Map<string, number>>): SharedSystemLoad {
+  const byFile: SharedSystemLoad['byFile'] = new Map();
+  const designs = new Map<TeamKey, { diagram: Diagram; path: string; loc: SourceLoc }>();
+  const order: TeamKey[] = [];
+  const visit = (d: Diagram, prefix: string) => {
+    for (const s of d.systems ?? []) {
+      if (!s.diagram) continue;
+      const key = teamKey(s);
+      if (designs.has(key)) continue;
+      const path = prefix ? `${prefix}.${s.id}` : s.id;
+      designs.set(key, { diagram: s.diagram, path, loc: s.loc });
+      visit(s.diagram, path);
+      order.push(key);
+    }
+  };
+  visit(root, '');
+  const send = (d: Diagram, prefix: string, inbound: Map<string, Map<string, number>>) => {
+    for (const s of d.systems ?? []) {
+      if (!s.diagram) continue;
+      const key = teamKey(s);
+      const load = byFile.get(key) ?? { useCases: new Map<string, number>(), callers: [] };
+      byFile.set(key, load);
+      const rps = sentByUseCase(s, inbound.get(s.id) ?? new Map(), load.useCases);
+      if (rps > 0) load.callers.push({ path: prefix ? `${prefix}.${s.id}` : s.id, ...(d.title !== undefined ? { from: d.title } : {}), rps });
+    }
+  };
+  send(root, '', rootInbound);
+  // Post-order reversed: every design comes after the designs that call it.
+  for (const key of order.reverse()) {
+    const { diagram, path, loc } = designs.get(key)!;
+    if (!diagram.systems?.length) continue;
+    const combined = withExtraTraffic(diagram, byFile.get(key)?.useCases ?? new Map(), loc);
+    send(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
+  }
+  return { byFile, analyses: new Map() };
+}
+
 function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options: AnalyzeOptions): SystemAnalysis {
   const contract = contractOf(system, options);
   const inbound = system.entries.map((e) => ({ entry: e.id, rps: sent.get(e.id) ?? 0 }));
   const totalInboundRps = inbound.reduce((sum, e) => sum + e.rps, 0);
   const result: SystemAnalysis = { id: system.id, contract, inbound, totalInboundRps, utilization: 0, saturated: false, hot: false, breaches: [], entries: [], warnings: [] };
+  const shared = system.diagram ? options.sharedSystems?.byFile.get(teamKey(system)) : undefined;
   const sending = inbound
     .filter((e) => e.rps > 0)
     .map((e) => {
       const c = contract.entries.find((x) => x.entry === e.entry);
-      return `${formatRps(e.rps)} into ${c?.useCase ? `"${c.useCase}" (${system.id}.${e.entry})` : `${system.id}.${e.entry}`}`;
+      const useCaseId = system.entries.find((x) => x.id === e.entry)?.useCaseId;
+      const gets = useCaseId !== undefined ? (shared?.useCases.get(useCaseId) ?? 0) : 0;
+      // Other systems send into the same team design too.
+      const rps = gets > e.rps * (1 + 1e-9) ? `${formatRps(e.rps).replace(/ rps$/, '')} of the ${formatRps(gets)} it gets` : formatRps(e.rps);
+      return `${rps} into ${c?.useCase ? `"${c.useCase}" (${system.id}.${e.entry})` : `${system.id}.${e.entry}`}`;
     })
     .join(' and ');
   const label = `'${system.id}'`;
@@ -274,9 +374,9 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
     const availability = stub.availability !== undefined ? stub.availability / 100 : 1;
     result.entries = system.entries.map((e) => ({ entry: e.id, p50Ms: at(0.5), p99Ms: at(0.99), availability }));
     if (result.saturated) {
-      result.warnings.push(`${label} cannot take what it is sent: ${sending} is past its capacity of ${formatRps(rps)}.`);
+      result.warnings.push(`${label} cannot take what it is sent: you send ${sending}; it takes at most ${formatRps(rps)}.`);
       if (stub.p99Ms !== undefined) result.breaches.push({ requirement: `p99 < ${formatMs(stub.p99Ms)}`, message: `p99 is not held past ${formatRps(rps)}` });
-    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: ${sending} of its ${formatRps(rps)}.`);
+    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}; it runs hot past ${formatRps(rps * HOT)} and takes at most ${formatRps(rps)}.`);
     return result;
   }
   if (contract.source === 'none' || !system.diagram) {
@@ -285,8 +385,23 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
   }
 
   const team = system.diagram;
-  const analysis = totalInboundRps > 0 ? analyze(withExtraTraffic(team, system, inbound), { timeoutMs: options.timeoutMs }) : contract.baseline!;
+  const key = teamKey(system);
+  // What every system using this team file sends; this one's own when analysed on its own.
+  const sentToTeam = shared?.useCases ?? new Map<string, number>();
+  if (!shared) sentByUseCase(system, sent, sentToTeam);
+  const sharedInboundRps = [...sentToTeam.values()].reduce((sum, rps) => sum + rps, 0);
+  result.callers = shared?.callers ?? (totalInboundRps > 0 ? [{ path: system.id, rps: totalInboundRps }] : []);
+  result.sharedInboundRps = sharedInboundRps;
+  let cached = options.sharedSystems?.analyses.get(key);
+  if (!cached) {
+    const combined = sharedInboundRps > 0 ? withExtraTraffic(team, sentToTeam, system.loc) : team;
+    const nested: AnalyzeOptions = { timeoutMs: options.timeoutMs, ...(options.sharedSystems ? { sharedSystems: options.sharedSystems } : {}) };
+    cached = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline! };
+    options.sharedSystems?.analyses.set(key, cached);
+  }
+  const { analysis } = cached;
   result.analysis = analysis;
+  result.overlay = analysisOverlay(cached.combined, analysis);
   const busiest = analysis.nodes.reduce<NodeAnalysis | undefined>((best, n) => (!best || n.utilization > best.utilization ? n : best), undefined);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
@@ -297,48 +412,46 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
     const u = e.useCaseId !== undefined ? byId.get(e.useCaseId) : undefined;
     return { entry: e.id, p50Ms: u?.percentiles.p50 ?? 0, p99Ms: u?.percentiles.p99 ?? 0, availability: u?.availability ?? 1 };
   });
+  // A design only other systems send to: their warnings say it.
   if (totalInboundRps === 0) return result;
 
-  result.breaches = breachesOf(team, system, inbound, analysis);
+  result.breaches = breachesOf(team, sentToTeam, analysis);
   const first = contract.entries.find((c) => inbound.some((e) => e.entry === c.entry && e.rps > 0));
   if (result.saturated && busiest) {
     const onOwn = first && first.saturatesAtRps === 0;
-    const limit =
-      first && !onOwn && Number.isFinite(first.saturatesAtRps)
-        ? ` Its design takes ${formatRps(first.saturatesAtRps)} more on "${first.useCase}" before ${first.bottleneck} saturates.`
-        : '';
+    const limit = first && Number.isFinite(first.saturatesAtRps) ? `; it takes at most ${formatRps(first.saturatesAtRps)} before its ${first.bottleneck} saturates` : '';
     result.warnings.push(
       onOwn
         ? `${label} is saturated on its own traffic, before what it is sent: its ${busiest.id} is at ${usageText(busiest)}.`
-        : `${label} cannot take what it is sent: ${sending} saturates its ${busiest.id} (${usageText(busiest)}).${limit}`,
+        : `${label} cannot take what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`,
     );
   } else if (result.hot && busiest) {
-    const limit = first && Number.isFinite(first.hotAtRps) ? ` It runs hot past ${formatRps(first.hotAtRps)} more on "${first.useCase}".` : '';
-    result.warnings.push(`${label} runs hot under what it is sent: ${sending} puts its ${busiest.id} at ${usageText(busiest)}.${limit}`);
+    const limit = first && Number.isFinite(first.hotAtRps) ? `; it runs hot past ${formatRps(first.hotAtRps)}` : '';
+    result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`);
   }
   for (const b of result.breaches) result.warnings.push(`${label} breaks its SLA under what it is sent: ${b.message}.`);
   return result;
 }
 
-/** The team design with the inbound rps added to the traffic of each entry's use case. */
-function withExtraTraffic(team: Diagram, system: DiagramSystem, inbound: { entry: string; rps: number }[]): Diagram {
+/** The team design with `extra` rps (by use case id) added to its own traffic. */
+function withExtraTraffic(team: Diagram, extra: Map<string, number>, loc: SourceLoc): Diagram {
   const traffic: TrafficEntry[] = [...(team.traffic ?? [])];
-  for (const { entry, rps } of inbound) {
-    const u = team.useCases.find((x) => x.id === system.entries.find((e) => e.id === entry)?.useCaseId);
+  for (const [id, rps] of extra) {
+    const u = team.useCases.find((x) => x.id === id);
     if (!u || rps <= 0) continue;
     // The first traffic line of the use case is the one the simulation reads.
     const i = traffic.findIndex((t) => findUseCase(team, t.useCase) === u);
     if (i >= 0) traffic[i] = { ...traffic[i], rps: traffic[i].rps + rps };
-    else traffic.push({ useCase: u.name, rps, loc: system.loc });
+    else traffic.push({ useCase: u.name, rps, loc });
   }
   return { ...team, traffic };
 }
 
 /** The team's latency and availability requirements on the entered use cases that fail under the combined load. */
-function breachesOf(team: Diagram, system: DiagramSystem, inbound: { entry: string; rps: number }[], analysis: Analysis): SystemBreach[] {
+function breachesOf(team: Diagram, sent: Map<string, number>, analysis: Analysis): SystemBreach[] {
   const entered = new Set<DiagramUseCase>();
-  for (const { entry, rps } of inbound) {
-    const u = team.useCases.find((x) => x.id === system.entries.find((e) => e.id === entry)?.useCaseId);
+  for (const [id, rps] of sent) {
+    const u = team.useCases.find((x) => x.id === id);
     if (u && rps > 0) entered.add(u);
   }
   const nodes = new Map(analysis.nodes.map((n) => [n.id, n]));

@@ -2,7 +2,7 @@ import { viewDiagram, type ViewOptions } from '../../../frontend/src/dsl/view';
 import type { Diagram, DiagramSystem } from '../../../frontend/src/dsl/types';
 import type { Analysis } from '../../../frontend/src/sim/analyze';
 import { formatMs, formatRps } from '../../../frontend/src/sim/format';
-import { analysisOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { analysisOverlay, type NodeOverlay, type SimOverlay } from '../../../frontend/src/sim/overlay';
 import { contractOf, type SystemAnalysis } from '../../../frontend/src/sim/systems';
 import { runTests } from '../../../frontend/src/sim/tests';
 
@@ -110,6 +110,7 @@ export function viewOverlay(diagram: Diagram, analysis: Analysis | undefined, vi
   const { expanded } = viewOptions(view);
   let scope = diagram;
   let scoped = analysis;
+  let load = analysis ? analysisOverlay(diagram, analysis) : undefined;
   let path = '';
   if (view.focus !== undefined && systemAt(diagram, view.focus)?.diagram) {
     for (const id of view.focus.split('.')) {
@@ -118,11 +119,12 @@ export function viewOverlay(diagram: Diagram, analysis: Analysis | undefined, vi
       // Focused into a system, what is said about it still shows: the cause is outside it.
       if (path + id === view.focus) notesOf(scope, scoped, system, result, path, out);
       scoped = teamAnalysis(system, result);
+      load = teamLoad(system, result, scoped);
       scope = system.diagram!;
       path += `${id}.`;
     }
   }
-  collect(scope, scoped, '', path, expanded!, out);
+  collect(scope, scoped, load, '', path, expanded!, out);
   return out;
 }
 
@@ -130,13 +132,21 @@ function teamAnalysis(system: DiagramSystem, result: SystemAnalysis | undefined)
   return result?.analysis ?? (system.diagram ? contractOf(system).baseline : undefined);
 }
 
-function collect(diagram: Diagram, analysis: Analysis | undefined, at: string, path: string, expanded: ReadonlySet<string>, out: ViewOverlay): void {
-  if (analysis) for (const [id, o] of Object.entries(analysisOverlay(diagram, analysis).nodes)) out.nodes[at + id] = o;
+/** The load on a team's nodes: under what it is sent, with the flows that carry it there; else under its own traffic. */
+function teamLoad(system: DiagramSystem, result: SystemAnalysis | undefined, analysis: Analysis | undefined): SimOverlay | undefined {
+  return result?.overlay ?? (analysis && system.diagram ? analysisOverlay(system.diagram, analysis) : undefined);
+}
+
+function collect(diagram: Diagram, analysis: Analysis | undefined, load: SimOverlay | undefined, at: string, path: string, expanded: ReadonlySet<string>, out: ViewOverlay): void {
+  for (const [id, o] of Object.entries(load?.nodes ?? {})) out.nodes[at + id] = o;
   for (const system of diagram.systems ?? []) {
     const result = analysis?.systems?.find((s) => s.id === system.id);
     out.systems[at + system.id] = badgeOf(diagram, system, result);
     notesOf(diagram, analysis, system, result, path, out);
-    if (system.diagram && expanded.has(path + system.id)) collect(system.diagram, teamAnalysis(system, result), `${at}${system.id}.`, `${path}${system.id}.`, expanded, out);
+    if (system.diagram && expanded.has(path + system.id)) {
+      const team = teamAnalysis(system, result);
+      collect(system.diagram, team, teamLoad(system, result, team), `${at}${system.id}.`, `${path}${system.id}.`, expanded, out);
+    }
   }
 }
 

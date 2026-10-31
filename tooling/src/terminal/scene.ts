@@ -232,10 +232,28 @@ function unjog(pts: Cell[], box: Rect): Cell[] {
   return [...pts.slice(0, n - 2), { x: a.x, y: c.y }];
 }
 
+/**
+ * Drops a short step out and back (`│` then `╰──╮`, `▼──╯`): ELK routes an
+ * edge into a group through a port on its border, and at this scale the few
+ * pixels between that port and the line become a detour of a few cells,
+ * right where the line crosses an expanded system's title. Where the line
+ * comes back to the column (or row) it left, it goes straight through.
+ */
+function undetour(pts: Cell[]): Cell[] {
+  const out = pts.slice();
+  for (let i = 0; i + 3 < out.length; i++) {
+    const [a, b, c, d] = out.slice(i, i + 4);
+    const down = a.y === b.y && b.x === c.x && c.y === d.y && a.x === d.x && Math.abs(b.x - a.x) <= 6 && Math.abs(c.y - b.y) <= 4;
+    const across = a.x === b.x && b.y === c.y && c.x === d.x && a.y === d.y && Math.abs(b.y - a.y) <= 3 && Math.abs(c.x - b.x) <= 8;
+    if (down || across) out.splice(i + 1, 2);
+  }
+  return out;
+}
+
 /** The cells of a polyline between two boxes, outside both. */
 export function routePath(points: Cell[], from: Rect, to: Rect): Path | undefined {
   if (points.length < 2) return undefined;
-  const pts = unjog(unjog(points.slice(), to).reverse(), from).reverse();
+  const pts = unjog(unjog(undetour(points), to).reverse(), from).reverse();
   pts[0] = attach(pts[0], pts[1], from);
   pts[pts.length - 1] = attach(pts[pts.length - 1], pts[pts.length - 2], to);
   const all: Cell[] = [pts[0]];

@@ -3907,7 +3907,41 @@ function formatUsd(usd) {
   return `$${Math.round(usd).toLocaleString("en-US")}/month`;
 }
 
+// ../frontend/src/sim/overlay.ts
+function flowsOf(diagram, traffic) {
+  const flows = /* @__PURE__ */ new Map();
+  for (const t of traffic) {
+    const u = findUseCase(diagram, t.useCase);
+    if (!u || t.rps <= 0) continue;
+    for (const sc of u.scenarios) {
+      const share = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
+      if (share <= 0) continue;
+      for (const step of sc.steps) {
+        if (step.failed) continue;
+        const key = `${step.fromServiceId}>${step.toServiceId}`;
+        const f = flows.get(key) ?? { from: step.fromServiceId, to: step.toServiceId, rps: 0, async: step.executionType !== "SYNC_REQUEST_RESPONSE" };
+        f.rps += t.rps * share * (step.multiplier ?? 1);
+        flows.set(key, f);
+      }
+    }
+  }
+  return [...flows.values()];
+}
+function analysisOverlay(diagram, analysis) {
+  const nodes = {};
+  for (const n of analysis.nodes) {
+    const works = Number.isFinite(n.capacityRps) && n.kind !== "client";
+    nodes[n.id] = {
+      ...works ? { utilization: n.utilization, saturated: n.saturated } : {},
+      ...n.replicas > 1 ? { replicas: n.replicas } : {},
+      ...n.shards > 1 ? { shards: n.shards } : {}
+    };
+  }
+  return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
+}
+
 // ../frontend/src/sim/systems.ts
+var teamKey = (s) => s.resolved ?? s.diagram;
 var contracts = /* @__PURE__ */ new WeakMap();
 function contractOf(system, options = {}) {
   let contract = contracts.get(system);
@@ -4016,6 +4050,7 @@ function hopFrom(p50, p99) {
 }
 function analyzeSystems(diagram, traffic, options = {}) {
   const inbound = inboundLoad(diagram, traffic);
+  if (!options.sharedSystems) options = { ...options, sharedSystems: sharedLoad(diagram, inbound) };
   const hops = /* @__PURE__ */ new Map();
   const availabilities = /* @__PURE__ */ new Map();
   const key = (id, port) => `${id}
@@ -4034,14 +4069,63 @@ ${port}`;
     availability: (id, port) => port === void 0 ? void 0 : availabilities.get(key(id, port))
   };
 }
+function sentByUseCase(system, sent, into) {
+  let total = 0;
+  for (const e of system.entries) {
+    const rps = sent.get(e.id) ?? 0;
+    if (rps <= 0 || e.useCaseId === void 0) continue;
+    into.set(e.useCaseId, (into.get(e.useCaseId) ?? 0) + rps);
+    total += rps;
+  }
+  return total;
+}
+function sharedLoad(root, rootInbound) {
+  const byFile = /* @__PURE__ */ new Map();
+  const designs = /* @__PURE__ */ new Map();
+  const order = [];
+  const visit = (d, prefix) => {
+    for (const s of d.systems ?? []) {
+      if (!s.diagram) continue;
+      const key = teamKey(s);
+      if (designs.has(key)) continue;
+      const path = prefix ? `${prefix}.${s.id}` : s.id;
+      designs.set(key, { diagram: s.diagram, path, loc: s.loc });
+      visit(s.diagram, path);
+      order.push(key);
+    }
+  };
+  visit(root, "");
+  const send = (d, prefix, inbound) => {
+    for (const s of d.systems ?? []) {
+      if (!s.diagram) continue;
+      const key = teamKey(s);
+      const load = byFile.get(key) ?? { useCases: /* @__PURE__ */ new Map(), callers: [] };
+      byFile.set(key, load);
+      const rps = sentByUseCase(s, inbound.get(s.id) ?? /* @__PURE__ */ new Map(), load.useCases);
+      if (rps > 0) load.callers.push({ path: prefix ? `${prefix}.${s.id}` : s.id, ...d.title !== void 0 ? { from: d.title } : {}, rps });
+    }
+  };
+  send(root, "", rootInbound);
+  for (const key of order.reverse()) {
+    const { diagram, path, loc } = designs.get(key);
+    if (!diagram.systems?.length) continue;
+    const combined = withExtraTraffic(diagram, byFile.get(key)?.useCases ?? /* @__PURE__ */ new Map(), loc);
+    send(diagram, path, inboundLoad(combined, resolveTraffic(combined)));
+  }
+  return { byFile, analyses: /* @__PURE__ */ new Map() };
+}
 function analyzeSystem(system, sent, options) {
   const contract = contractOf(system, options);
   const inbound = system.entries.map((e) => ({ entry: e.id, rps: sent.get(e.id) ?? 0 }));
   const totalInboundRps = inbound.reduce((sum, e) => sum + e.rps, 0);
   const result = { id: system.id, contract, inbound, totalInboundRps, utilization: 0, saturated: false, hot: false, breaches: [], entries: [], warnings: [] };
+  const shared = system.diagram ? options.sharedSystems?.byFile.get(teamKey(system)) : void 0;
   const sending = inbound.filter((e) => e.rps > 0).map((e) => {
     const c = contract.entries.find((x) => x.entry === e.entry);
-    return `${formatRps(e.rps)} into ${c?.useCase ? `"${c.useCase}" (${system.id}.${e.entry})` : `${system.id}.${e.entry}`}`;
+    const useCaseId = system.entries.find((x) => x.id === e.entry)?.useCaseId;
+    const gets = useCaseId !== void 0 ? shared?.useCases.get(useCaseId) ?? 0 : 0;
+    const rps = gets > e.rps * (1 + 1e-9) ? `${formatRps(e.rps).replace(/ rps$/, "")} of the ${formatRps(gets)} it gets` : formatRps(e.rps);
+    return `${rps} into ${c?.useCase ? `"${c.useCase}" (${system.id}.${e.entry})` : `${system.id}.${e.entry}`}`;
   }).join(" and ");
   const label = `'${system.id}'`;
   if (contract.source === "stub") {
@@ -4056,9 +4140,9 @@ function analyzeSystem(system, sent, options) {
     const availability2 = stub.availability !== void 0 ? stub.availability / 100 : 1;
     result.entries = system.entries.map((e) => ({ entry: e.id, p50Ms: at(0.5), p99Ms: at(0.99), availability: availability2 }));
     if (result.saturated) {
-      result.warnings.push(`${label} cannot take what it is sent: ${sending} is past its capacity of ${formatRps(rps)}.`);
+      result.warnings.push(`${label} cannot take what it is sent: you send ${sending}; it takes at most ${formatRps(rps)}.`);
       if (stub.p99Ms !== void 0) result.breaches.push({ requirement: `p99 < ${formatMs(stub.p99Ms)}`, message: `p99 is not held past ${formatRps(rps)}` });
-    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: ${sending} of its ${formatRps(rps)}.`);
+    } else if (result.hot) result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}; it runs hot past ${formatRps(rps * HOT)} and takes at most ${formatRps(rps)}.`);
     return result;
   }
   if (contract.source === "none" || !system.diagram) {
@@ -4066,8 +4150,22 @@ function analyzeSystem(system, sent, options) {
     return result;
   }
   const team = system.diagram;
-  const analysis = totalInboundRps > 0 ? analyze(withExtraTraffic(team, system, inbound), { timeoutMs: options.timeoutMs }) : contract.baseline;
+  const key = teamKey(system);
+  const sentToTeam = shared?.useCases ?? /* @__PURE__ */ new Map();
+  if (!shared) sentByUseCase(system, sent, sentToTeam);
+  const sharedInboundRps = [...sentToTeam.values()].reduce((sum, rps) => sum + rps, 0);
+  result.callers = shared?.callers ?? (totalInboundRps > 0 ? [{ path: system.id, rps: totalInboundRps }] : []);
+  result.sharedInboundRps = sharedInboundRps;
+  let cached = options.sharedSystems?.analyses.get(key);
+  if (!cached) {
+    const combined = sharedInboundRps > 0 ? withExtraTraffic(team, sentToTeam, system.loc) : team;
+    const nested = { timeoutMs: options.timeoutMs, ...options.sharedSystems ? { sharedSystems: options.sharedSystems } : {} };
+    cached = { combined, analysis: sharedInboundRps > 0 ? analyze(combined, nested) : contract.baseline };
+    options.sharedSystems?.analyses.set(key, cached);
+  }
+  const { analysis } = cached;
   result.analysis = analysis;
+  result.overlay = analysisOverlay(cached.combined, analysis);
   const busiest = analysis.nodes.reduce((best, n) => !best || n.utilization > best.utilization ? n : best, void 0);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
@@ -4079,36 +4177,36 @@ function analyzeSystem(system, sent, options) {
     return { entry: e.id, p50Ms: u?.percentiles.p50 ?? 0, p99Ms: u?.percentiles.p99 ?? 0, availability: u?.availability ?? 1 };
   });
   if (totalInboundRps === 0) return result;
-  result.breaches = breachesOf(team, system, inbound, analysis);
+  result.breaches = breachesOf(team, sentToTeam, analysis);
   const first = contract.entries.find((c) => inbound.some((e) => e.entry === c.entry && e.rps > 0));
   if (result.saturated && busiest) {
     const onOwn = first && first.saturatesAtRps === 0;
-    const limit = first && !onOwn && Number.isFinite(first.saturatesAtRps) ? ` Its design takes ${formatRps(first.saturatesAtRps)} more on "${first.useCase}" before ${first.bottleneck} saturates.` : "";
+    const limit = first && Number.isFinite(first.saturatesAtRps) ? `; it takes at most ${formatRps(first.saturatesAtRps)} before its ${first.bottleneck} saturates` : "";
     result.warnings.push(
-      onOwn ? `${label} is saturated on its own traffic, before what it is sent: its ${busiest.id} is at ${usageText(busiest)}.` : `${label} cannot take what it is sent: ${sending} saturates its ${busiest.id} (${usageText(busiest)}).${limit}`
+      onOwn ? `${label} is saturated on its own traffic, before what it is sent: its ${busiest.id} is at ${usageText(busiest)}.` : `${label} cannot take what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`
     );
   } else if (result.hot && busiest) {
-    const limit = first && Number.isFinite(first.hotAtRps) ? ` It runs hot past ${formatRps(first.hotAtRps)} more on "${first.useCase}".` : "";
-    result.warnings.push(`${label} runs hot under what it is sent: ${sending} puts its ${busiest.id} at ${usageText(busiest)}.${limit}`);
+    const limit = first && Number.isFinite(first.hotAtRps) ? `; it runs hot past ${formatRps(first.hotAtRps)}` : "";
+    result.warnings.push(`${label} runs hot under what it is sent: you send ${sending}${limit}. Its ${busiest.id} is at ${usageText(busiest)}.`);
   }
   for (const b of result.breaches) result.warnings.push(`${label} breaks its SLA under what it is sent: ${b.message}.`);
   return result;
 }
-function withExtraTraffic(team, system, inbound) {
+function withExtraTraffic(team, extra, loc) {
   const traffic = [...team.traffic ?? []];
-  for (const { entry, rps } of inbound) {
-    const u = team.useCases.find((x) => x.id === system.entries.find((e) => e.id === entry)?.useCaseId);
+  for (const [id, rps] of extra) {
+    const u = team.useCases.find((x) => x.id === id);
     if (!u || rps <= 0) continue;
     const i = traffic.findIndex((t) => findUseCase(team, t.useCase) === u);
     if (i >= 0) traffic[i] = { ...traffic[i], rps: traffic[i].rps + rps };
-    else traffic.push({ useCase: u.name, rps, loc: system.loc });
+    else traffic.push({ useCase: u.name, rps, loc });
   }
   return { ...team, traffic };
 }
-function breachesOf(team, system, inbound, analysis) {
+function breachesOf(team, sent, analysis) {
   const entered = /* @__PURE__ */ new Set();
-  for (const { entry, rps } of inbound) {
-    const u = team.useCases.find((x) => x.id === system.entries.find((e) => e.id === entry)?.useCaseId);
+  for (const [id, rps] of sent) {
+    const u = team.useCases.find((x) => x.id === id);
     if (u && rps > 0) entered.add(u);
   }
   const nodes = new Map(analysis.nodes.map((n) => [n.id, n]));
@@ -4300,6 +4398,7 @@ function usageText(n) {
     return `bandwidth ${mb(n.bandwidthLoadMBps)} of ${mb(n.bandwidthCapacityMBps)}, ${formatPercent(n.bandwidthUtilization)}`;
   }
   if (n.writeScaling === "shards" && n.writeLoadRps > 0) {
+    if (n.readLoadRps <= 0) return `writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
     return `reads ${part(n.readLoadRps, n.readCapacityRps, n.readUtilization)}; writes ${part(n.writeLoadRps, n.writeCapacityRps, n.writeUtilization)}`;
   }
   return part(n.loadRps, n.capacityRps, n.requestUtilization);
@@ -4552,7 +4651,7 @@ function systemResults(diagram, analysis) {
       name: `${s.id} takes what it is sent`,
       category: s.breaches.some((b) => b.requirement.startsWith("availability")) && !s.saturated ? "availability" : "latency",
       passed: !problem,
-      message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)} on top of its own traffic and holds its requirements${room}`,
+      message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)}${(s.sharedInboundRps ?? 0) > s.totalInboundRps * (1 + 1e-9) ? ` (of the ${formatRps(s.sharedInboundRps)} it gets)` : ""} on top of its own traffic and holds its requirements${room}`,
       ...problem ? { hint: `Send it less, or ask ${team} to add capacity for it${bottleneck}` } : {},
       ...system ? { loc: system.loc } : {}
     };
@@ -5188,39 +5287,6 @@ function rerouteUseCase(u, route) {
   return changed ? { ...u, steps: scenarios[0]?.steps ?? [], scenarios } : u;
 }
 
-// ../frontend/src/sim/overlay.ts
-function flowsOf(diagram, traffic) {
-  const flows = /* @__PURE__ */ new Map();
-  for (const t of traffic) {
-    const u = findUseCase(diagram, t.useCase);
-    if (!u || t.rps <= 0) continue;
-    for (const sc of u.scenarios) {
-      const share = t.mix ? t.mix.find((m) => m.scenario === sc.name)?.share ?? 0 : sc === u.scenarios[0] ? 1 : 0;
-      if (share <= 0) continue;
-      for (const step of sc.steps) {
-        if (step.failed) continue;
-        const key = `${step.fromServiceId}>${step.toServiceId}`;
-        const f = flows.get(key) ?? { from: step.fromServiceId, to: step.toServiceId, rps: 0, async: step.executionType !== "SYNC_REQUEST_RESPONSE" };
-        f.rps += t.rps * share * (step.multiplier ?? 1);
-        flows.set(key, f);
-      }
-    }
-  }
-  return [...flows.values()];
-}
-function analysisOverlay(diagram, analysis) {
-  const nodes = {};
-  for (const n of analysis.nodes) {
-    const works = Number.isFinite(n.capacityRps) && n.kind !== "client";
-    nodes[n.id] = {
-      ...works ? { utilization: n.utilization, saturated: n.saturated } : {},
-      ...n.replicas > 1 ? { replicas: n.replicas } : {},
-      ...n.shards > 1 ? { shards: n.shards } : {}
-    };
-  }
-  return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
-}
-
 // src/terminal/systems.ts
 function systemAt2(diagram, path) {
   const [head, ...rest] = path.split(".");
@@ -5262,6 +5328,7 @@ function viewOverlay(diagram, analysis, view = {}) {
   const { expanded } = viewOptions(view);
   let scope2 = diagram;
   let scoped = analysis;
+  let load = analysis ? analysisOverlay(diagram, analysis) : void 0;
   let path = "";
   if (view.focus !== void 0 && systemAt2(diagram, view.focus)?.diagram) {
     for (const id of view.focus.split(".")) {
@@ -5269,23 +5336,30 @@ function viewOverlay(diagram, analysis, view = {}) {
       const result = scoped?.systems?.find((s) => s.id === id);
       if (path + id === view.focus) notesOf(scope2, scoped, system, result, path, out);
       scoped = teamAnalysis(system, result);
+      load = teamLoad(system, result, scoped);
       scope2 = system.diagram;
       path += `${id}.`;
     }
   }
-  collect(scope2, scoped, "", path, expanded, out);
+  collect(scope2, scoped, load, "", path, expanded, out);
   return out;
 }
 function teamAnalysis(system, result) {
   return result?.analysis ?? (system.diagram ? contractOf(system).baseline : void 0);
 }
-function collect(diagram, analysis, at, path, expanded, out) {
-  if (analysis) for (const [id, o] of Object.entries(analysisOverlay(diagram, analysis).nodes)) out.nodes[at + id] = o;
+function teamLoad(system, result, analysis) {
+  return result?.overlay ?? (analysis && system.diagram ? analysisOverlay(system.diagram, analysis) : void 0);
+}
+function collect(diagram, analysis, load, at, path, expanded, out) {
+  for (const [id, o] of Object.entries(load?.nodes ?? {})) out.nodes[at + id] = o;
   for (const system of diagram.systems ?? []) {
     const result = analysis?.systems?.find((s) => s.id === system.id);
     out.systems[at + system.id] = badgeOf(diagram, system, result);
     notesOf(diagram, analysis, system, result, path, out);
-    if (system.diagram && expanded.has(path + system.id)) collect(system.diagram, teamAnalysis(system, result), `${at}${system.id}.`, `${path}${system.id}.`, expanded, out);
+    if (system.diagram && expanded.has(path + system.id)) {
+      const team = teamAnalysis(system, result);
+      collect(system.diagram, team, teamLoad(system, result, team), `${at}${system.id}.`, `${path}${system.id}.`, expanded, out);
+    }
   }
 }
 function notesOf(diagram, analysis, system, result, path, out) {
@@ -5378,6 +5452,59 @@ function keyOf(input) {
     h2 = Math.imul(h2, 16777619);
   }
   return (h2 >>> 0).toString(36) + text.length.toString(36);
+}
+
+// src/lockFormat.ts
+var LOCK_FILE = "proschi.lock";
+var CACHE_DIR = ".proschi/cache";
+var HASH = /^[0-9a-f]{64}$/;
+var COMMIT = /^[0-9a-f]{40}([0-9a-f]{24})?$/;
+var emptyLock = () => ({ version: 1, git: {}, https: {} });
+var gitKey = (repo, ref) => `${repo}@${ref}`;
+var remoteError = {
+  noLock: (spec) => new ImportError(`'${spec}' is a remote import and there is no ${LOCK_FILE}; run proschi imports sync`),
+  notLocked: (spec) => new ImportError(`'${spec}' is not in ${LOCK_FILE}; run proschi imports sync`),
+  notCached: (spec) => new ImportError(`'${spec}' is not in the import cache (${CACHE_DIR}); run proschi imports sync`),
+  altered: (spec) => new ImportError(`The cached copy of '${spec}' does not match its hash in ${LOCK_FILE}; run proschi imports sync`)
+};
+var isRecord = (v) => !!v && typeof v === "object" && !Array.isArray(v);
+function parseLock(text) {
+  const invalid = (why) => new ImportError(`Invalid ${LOCK_FILE}: ${why}; delete it and run proschi imports sync`);
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch (e) {
+    throw invalid(e.message);
+  }
+  if (!isRecord(json) || json.version !== 1) throw invalid('expected {"version": 1, \u2026}');
+  const lock = emptyLock();
+  const git = json.git ?? {};
+  const https = json.https ?? {};
+  if (!isRecord(git) || !isRecord(https)) throw invalid('"git" and "https" must be objects');
+  for (const [key, entry] of Object.entries(git)) {
+    const at = key.lastIndexOf("@");
+    const valid = at > 0 && isRecord(entry) && typeof entry.commit === "string" && COMMIT.test(entry.commit) && isRecord(entry.files) && Object.entries(entry.files).every(([path, hash]) => typeof hash === "string" && HASH.test(hash) && isGitSpec(`git:${key.slice(0, at)}//${path}@${key.slice(at + 1)}`));
+    if (!valid) throw invalid(`bad git entry '${key}'`);
+    lock.git[key] = { commit: entry.commit, files: { ...entry.files } };
+  }
+  for (const [url, hash] of Object.entries(https)) {
+    if (typeof hash !== "string" || !HASH.test(hash) || parseRemoteSpec(url)?.kind !== "https") throw invalid(`bad https entry '${url}'`);
+    lock.https[url] = hash;
+  }
+  return lock;
+}
+function isGitSpec(spec) {
+  try {
+    return parseRemoteSpec(spec)?.kind === "git";
+  } catch {
+    return false;
+  }
+}
+function lockedHash(lock, spec) {
+  const remote = parseRemoteSpec(spec);
+  if (remote?.kind === "git") return lock.git[gitKey(remote.repo, remote.ref)]?.files[remote.path];
+  if (remote?.kind === "https") return lock.https[remote.url];
+  return void 0;
 }
 
 // src/terminal/grid.ts
@@ -5804,9 +5931,19 @@ function unjog(pts, box) {
   if (!sideways || a.x < box.x + 1 || a.x > box.x + box.w - 2) return pts;
   return [...pts.slice(0, n - 2), { x: a.x, y: c.y }];
 }
+function undetour(pts) {
+  const out = pts.slice();
+  for (let i = 0; i + 3 < out.length; i++) {
+    const [a, b, c, d] = out.slice(i, i + 4);
+    const down = a.y === b.y && b.x === c.x && c.y === d.y && a.x === d.x && Math.abs(b.x - a.x) <= 6 && Math.abs(c.y - b.y) <= 4;
+    const across = a.x === b.x && b.y === c.y && c.x === d.x && a.y === d.y && Math.abs(b.y - a.y) <= 3 && Math.abs(c.x - b.x) <= 8;
+    if (down || across) out.splice(i + 1, 2);
+  }
+  return out;
+}
 function routePath(points, from, to) {
   if (points.length < 2) return void 0;
-  const pts = unjog(unjog(points.slice(), to).reverse(), from).reverse();
+  const pts = unjog(unjog(undetour(points), to).reverse(), from).reverse();
   pts[0] = attach(pts[0], pts[1], from);
   pts[pts.length - 1] = attach(pts[pts.length - 1], pts[pts.length - 2], to);
   const all = [pts[0]];
@@ -6095,14 +6232,20 @@ function drawGroup(grid, { node, rect }, look, system) {
 }
 function drawGroupHeading(grid, { node, rect }, look, system) {
   const color = system ? system.selected ? COLOR.pink : fade(look, statusColor(system.badge?.status, baseColor(node, COLOR.muted))) : fade(look, baseColor(node, COLOR.muted));
-  const chip2 = ` ${fit(node.name.toUpperCase(), rect.w - 6)} `;
-  grid.text(rect.x + 2, rect.y, chip2, COLOR.onColor, Infinity, color);
+  const name = node.name.toUpperCase();
   const badge = system?.badge;
+  const room = rect.w - 5;
+  let about = "";
   if (badge) {
-    const about = [STATUS[badge.status], badge.team ? `@${badge.team}` : "", badge.promise ?? "", loadText(badge)].filter(Boolean).join(" \xB7 ");
-    const room = rect.w - 4 - chip2.length - 1;
-    if (room > 4) grid.text(rect.x + 2 + chip2.length, rect.y, `${fit(about, room)} `, look ? COLOR.fadedMore : color);
+    let parts = [STATUS[badge.status], badge.team ? `@${badge.team}` : "", badge.promise ?? "", loadText(badge)];
+    const width = () => name.length + 2 + parts.filter(Boolean).join(" \xB7 ").length;
+    for (const drop of [3, 2, 1]) if (width() > room) parts = parts.map((p, i) => i === drop ? "" : p);
+    about = parts.filter(Boolean).join(" \xB7 ");
   }
+  const chip2 = ` ${fit(name, badge ? Math.max(4, room - 2 - about.length) : rect.w - 6)} `;
+  grid.text(rect.x + 2, rect.y, chip2, COLOR.onColor, Infinity, color);
+  const rest = room - chip2.length;
+  if (about && rest > 4) grid.text(rect.x + 2 + chip2.length, rect.y, `${fit(about, rest)} `, look ? COLOR.fadedMore : color);
   if (!node.description || rect.h <= 3) return;
   grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, " "), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
 }
@@ -6474,20 +6617,47 @@ async function projectRoot($, dir) {
     if (!current || current === "/") return dir;
   }
 }
+var importReasons = /* @__PURE__ */ new Map();
 async function readWithImports($, file) {
   const name = basename(file);
   const dir = dirname(file);
   const root = await projectRoot($, dir);
   const doc = { source: await $.fs.read(file), path: name, imports: {} };
+  const lock = {};
   for (let round2 = 0; round2 < 8; round2++) {
     const missing = missingImports(doc).filter((key) => key !== name && !(key in doc.imports));
     if (missing.length === 0) break;
     for (const key of missing) {
+      importReasons.delete(key);
+      if (isRemoteSpec(key)) {
+        doc.imports[key] = await readRemote($, root, key, lock.read ??= readLock($, root)).catch((error) => {
+          importReasons.set(key, error instanceof Error ? error.message : String(error));
+          return "";
+        });
+        continue;
+      }
       const path = importFilePath(dir, root, key);
       doc.imports[key] = path && await $.fs.exists(path) ? await $.fs.read(path) : "";
     }
   }
   return doc;
+}
+async function readLock($, root) {
+  const file = `${root}/${LOCK_FILE}`;
+  return await $.fs.exists(file) ? parseLock(await $.fs.read(file)) : void 0;
+}
+async function readRemote($, root, spec, locked) {
+  const lock = await locked;
+  if (!lock) throw remoteError.noLock(spec);
+  const hash = lockedHash(lock, spec);
+  if (!hash) throw remoteError.notLocked(spec);
+  const file = `${root}/${CACHE_DIR}/${hash}`;
+  if (!await $.fs.exists(file)) throw remoteError.notCached(spec);
+  const { base64: base642 } = await $.fs.read(file, { as: "bytes" });
+  const bytes = Uint8Array.from(atob(base642), (c) => c.charCodeAt(0));
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", bytes));
+  if ([...digest].map((b) => b.toString(16).padStart(2, "0")).join("") !== hash) throw remoteError.altered(spec);
+  return new TextDecoder().decode(bytes);
 }
 function watch($, file) {
   stop(PANE);
@@ -6583,7 +6753,7 @@ async function diagramView($, d, viewId, written, file) {
   const lost = lostImports(written, keyOf(written));
   const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.length > 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.join(", ")), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.some((name) => !importReasons.has(name)) && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.filter((name) => !importReasons.has(name)).join(", ")), lost.filter((name) => importReasons.has(name)).map((name) => /* @__PURE__ */ h(ui.Text, { key: `lost-${name}`, dimColor: true }, "\u26A0 ", importReasons.get(name))), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
 }
 function selectable(scene, focus2) {
   return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
