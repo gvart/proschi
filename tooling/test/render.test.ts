@@ -10,6 +10,7 @@ import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } 
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
 import { techIcon } from '../src/render/icons';
 import { PALETTE, tint } from '../../frontend/src/dsl/palette';
+import { SYSTEM_SIZE } from '../../frontend/src/dsl/autoLayout';
 import { COLORS, esc, fit, textWidth } from '../src/render/svg';
 
 async function capture(argv: string[]) {
@@ -191,6 +192,9 @@ describe('proschi render', () => {
       expect(arch).toContain('>promise p99 150 ms<');
       expect(arch).toContain('>100 / 4.7k rps<');
       expect(arch).not.toContain('data-node="orders.db"');
+      // The box is drawn at the layout's size, so edge routes end on its border.
+      const box = arch.match(/data-node="orders" data-kind="system"[^>]*>\n<rect[^>]* height="([\d.]+)"/);
+      expect(Number(box?.[1])).toBe(SYSTEM_SIZE.height);
     });
 
     it('flags a system sent more than it takes', async () => {

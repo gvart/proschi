@@ -1,4 +1,4 @@
-import { layoutGraph, type Point } from '../../../frontend/src/dsl/autoLayout';
+import { layoutGraph, SYSTEM_SIZE, type Point } from '../../../frontend/src/dsl/autoLayout';
 import { fallbackRoute, labelPoint, roundedPath, snapToBottom, withHead } from '../../../frontend/src/dsl/edgePath';
 import type { Diagram, DiagramNode } from '../proschi';
 import { DASH_ARRAY, nodeBaseColor, tint } from '../../../frontend/src/dsl/palette';
@@ -21,9 +21,6 @@ const MARGIN = 32;
 // ComponentNode: border 2 + py-3, a 36px row (icon tile / name + tech), mb-2, and the team line.
 const CARD_HEIGHT = 72;
 const CARD_WITH_TEAM_HEIGHT = 92;
-// A collapsed system: its name, @team, promise, and what it is sent against its headroom.
-// The height of autoLayout's SYSTEM_SIZE: switch to it once that is on this branch.
-const SYSTEM_HEIGHT = 100;
 const PAD_X = 18;
 const PAD_Y = 14;
 const NOTE_FONT = 14;
@@ -69,7 +66,7 @@ export async function renderArchitectureSvg(diagram: Diagram, options: Architect
     else if (node.kind === 'text') {
       const lines = noteLines(node, box.width);
       placed.set(node.id, { node, x, y, width: box.width, height: 46 + lines.length * NOTE_LINE + 18, lines });
-    } else placed.set(node.id, { node, x, y, width: box.width, height: node.kind === 'system' ? SYSTEM_HEIGHT : node.ownerTeam ? CARD_WITH_TEAM_HEIGHT : CARD_HEIGHT });
+    } else placed.set(node.id, { node, x, y, width: box.width, height: node.kind === 'system' ? SYSTEM_SIZE.height : node.ownerTeam ? CARD_WITH_TEAM_HEIGHT : CARD_HEIGHT });
   }
 
   const all = [...placed.values()];
