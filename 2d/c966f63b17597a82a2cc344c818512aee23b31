@@ -1,0 +1,20 @@
+docs/SYSTEMS.md
+  s_e7f61f870764cb::t_f3462a884231dc 174-176
+  s_e7f61f870764cb::t_4dff455a52cb72 115-117
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "2dc966f63b17597a82a2cc344c818512aee23b31",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
