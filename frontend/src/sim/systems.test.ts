@@ -140,7 +140,7 @@ describe('systems in the simulation', () => {
     expect(orders.busiest).toBe('db');
     expect(orders.breaches.map((b) => b.requirement)).toEqual(['p99 of "Place order" < 150 ms']);
     const mine = a.warnings.filter((w) => w.startsWith("'orders'"));
-    expect(mine[0]).toMatch(/^'orders' cannot take what it is sent: .* rps into "Place order" \(orders\.api\) saturates its db \(.*\)\. Its design takes .* rps more on "Place order" before db saturates\.$/);
+    expect(mine[0]).toMatch(/^'orders' cannot take what it is sent: you send .* rps into "Place order" \(orders\.api\); it takes at most .* rps before its db saturates\. Its db is at writes .* rps of .* rps, \d+%\.$/);
     expect(mine[1]).toMatch(/^'orders' breaks its SLA under what it is sent: p99 of "Place order": db is saturated/);
     const result = runTests(diagram, a).find((r) => r.id === 'system:orders')!;
     expect(result).toMatchObject({ passed: false, category: 'latency' });
@@ -153,7 +153,7 @@ describe('systems in the simulation', () => {
     const low = parseDrone(100);
     const api = contractOf(low.systems!.find((s) => s.id === 'orders')!).entries[0];
     const a = analyze(parseDrone(Math.ceil((api.hotAtRps + api.saturatesAtRps) / 2)));
-    expect(a.warnings.filter((w) => w.startsWith("'orders'"))[0]).toMatch(/^'orders' runs hot under what it is sent: .* puts its db at .*\. It runs hot past .* rps more on "Place order"\.$/);
+    expect(a.warnings.filter((w) => w.startsWith("'orders'"))[0]).toMatch(/^'orders' runs hot under what it is sent: you send .* rps into "Place order" \(orders\.api\); it runs hot past .* rps\. Its db is at writes .* rps of .* rps, \d+%\.$/);
   });
 
   it('works when my team file calls theirs as a nested system', () => {
@@ -191,10 +191,10 @@ traffic {
     expect(ok.useCases[0].percentiles.p99).toBeCloseTo(120, 6);
     expect(ok.useCases[0].availability).toBeCloseTo(0.999, 9);
     expect(contractOf(parse(src(1)).diagram.systems![0]).entries[0]).toMatchObject({ saturatesAtRps: 2000, hotAtRps: 1400, latency: [{ maxMs: 120 }], availabilityPercent: 99.9 });
-    expect(analyze(parse(src(1500)).diagram).warnings).toEqual(["'pay' runs hot under what it is sent: 1.5k rps into pay.charge of its 2k rps."]);
+    expect(analyze(parse(src(1500)).diagram).warnings).toEqual(["'pay' runs hot under what it is sent: you send 1.5k rps into pay.charge; it runs hot past 1.4k rps and takes at most 2k rps."]);
     const over = parse(src(3000)).diagram;
     const a = analyze(over);
-    expect(a.warnings).toEqual(["'pay' cannot take what it is sent: 3k rps into pay.charge is past its capacity of 2k rps."]);
+    expect(a.warnings).toEqual(["'pay' cannot take what it is sent: you send 3k rps into pay.charge; it takes at most 2k rps."]);
     expect(runTests(over, a).find((r) => r.id === 'system:pay')).toMatchObject({ passed: false, hint: 'Send it less, or ask the Payments team to add capacity for it' });
   });
 

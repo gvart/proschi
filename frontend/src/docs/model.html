@@ -546,7 +546,7 @@ requirements {
           however much time is left:
         </p>
         <dl class="facts facts--results">
-          <div><dt class="is-fail" data-pin="orders|test.1.verdict">fail</dt><dd><span data-pin="orders|test.1.message">p99 of Place order: db is saturated (reads 0 rps of 60k rps, 0%; writes 6k rps of 5k rps, 120%) (limit 100 ms)</span><span class="hint" data-pin="orders|test.1.hint">Writes to db (PostgreSQL) need 6k rps and each primary takes 5k rps; read replicas do not add write capacity. Add shards (capacity { db shards 2 } keeps writes under 70%), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue</span></dd></div>
+          <div><dt class="is-fail" data-pin="orders|test.1.verdict">fail</dt><dd><span data-pin="orders|test.1.message">p99 of Place order: db is saturated (writes 6k rps of 5k rps, 120%) (limit 100 ms)</span><span class="hint" data-pin="orders|test.1.hint">Writes to db (PostgreSQL) need 6k rps and each primary takes 5k rps; read replicas do not add write capacity. Add shards (capacity { db shards 2 } keeps writes under 70%), move the data to a partitioned store (DynamoDB, Cassandra), or batch writes through a queue</span></dd></div>
         </dl>
         <p>
           <strong>Sharded.</strong> With <code>shards 2</code> there are two primaries, each with three replicas:
