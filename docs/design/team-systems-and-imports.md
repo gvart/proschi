@@ -118,9 +118,11 @@ returns a layout-ready `Diagram`:
 
 - collapsed (the default): the system is one node of kind `system`; edges and
   steps to its entry points end at the box;
-- expanded: the system is a frame (kind `system`, with children), its team
-  design inside under namespaced ids, and edges to an entry point rerouted to
-  the node that receives the mapped use case's first request;
+- expanded: the system is a frame (a `group` with `system` set to its id, so
+  today's layout handles it), its team design inside under namespaced ids,
+  and edges to an entry point rerouted to where the mapped use case starts:
+  the sender of its first request, or the receiver when that sender is a
+  client (the team file's stand-in for its callers);
 - `focus`: only that system's team design, for navigating into it.
 
 The web editor, the CLI renderer, the terminal and the plugin use it; the
