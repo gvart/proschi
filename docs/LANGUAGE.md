@@ -498,11 +498,10 @@ Where imports are found:
   named after its title (Shop Infra becomes shop-infra.proschi) and keeps that
   name when the title changes. Rename it with the pencil in the *Diagrams*
   menu.
-- **On the command line and in editor plugins**, on disk, inside the project
-  root. The language server prefers the text of open, unsaved documents.
-  Remote files come from the local cache that `proschi imports sync` fills.
-- **In the Claude Code plugin**, on disk, inside the project root. It does
-  not read remote files yet; they are drawn as missing.
+- **On the command line, in editor plugins and in the Claude Code plugin**,
+  on disk, inside the project root. The language server prefers the text of
+  open, unsaved documents. Remote files come from the local cache that
+  `proschi imports sync` fills.
 
 In the web editor, nodes and connections from imported files are drawn like
 any other, but canvas edits only change the open document: moving, renaming or
@@ -617,9 +616,8 @@ are the guarantees:
 
 - **No network, except on request.** Only `proschi imports sync` downloads
   anything. `proschi check`, `render`, `test`, `analyze`, `share-link`, the
-  language server and the VS Code preview read local files and the cache
-  only. The Claude Code plugin reads local files only, and draws a remote
-  import as missing. The browser never fetches imports.
+  language server, the VS Code preview and the Claude Code plugin read local
+  files and the cache only. The browser never fetches imports.
 - **Nothing outside the project.** Local imports and `from` files cannot
   leave the project root: no absolute paths, no `../` past the root, no
   symlinks to files outside it. `proschi share-link` reads through the same
