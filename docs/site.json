@@ -3,9 +3,9 @@
   "pages": [
     {
       "slug": "",
-      "title": "Why Proschi",
+      "title": "Why architecture diagrams as text",
       "source": "WHY.md",
-      "description": "What Proschi is for: architecture diagrams as text, request flows you can play, and designs checked by a simulation in your browser."
+      "description": "Why write architecture diagrams as text: they diff in pull requests, lay themselves out, play request flows and check the design with a simulation."
     },
     {
       "slug": "quickstart",
