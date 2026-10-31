@@ -35,6 +35,12 @@ export interface SystemView {
   overlayOf: () => SimOverlay;
 }
 
+/**
+ * Nothing expanded, one set for every render: a new empty set each time would
+ * make `shown` a new diagram on every render, and each one is laid out again.
+ */
+const NONE: ReadonlySet<string> = new Set();
+
 interface State {
   doc: string;
   focus: string;
@@ -47,8 +53,8 @@ interface State {
  * it is never written to the text, and it starts over for another document.
  */
 export function useSystemView(doc: string, diagram: Diagram, analysis: Analysis, results: TestResult[]): SystemView {
-  const [state, setState] = useState<State>({ doc, focus: '', expanded: new Set() });
-  const own = state.doc === doc ? state : { doc, focus: '', expanded: new Set<string>() };
+  const [state, setState] = useState<State>({ doc, focus: '', expanded: NONE });
+  const own = state.doc === doc ? state : { doc, focus: '', expanded: NONE };
   // A focus whose system is gone (or lost its team file) falls back to the top.
   const focus = own.focus && systemAt(diagram, own.focus)?.diagram ? own.focus : '';
   const { expanded } = own;
