@@ -8,6 +8,7 @@ import { run } from '../src/cli';
 import { examples, parse } from '../src/proschi';
 import { renderArchitectureSvg, renderMarkdown, renderSequenceSvg, renderSvgs } from '../src/render';
 import { previewHtml, renderPreviewContent } from '../src/render/preview';
+import { fileResolver } from '../src/imports';
 import { techIcon } from '../src/render/icons';
 import { PALETTE, tint } from '../../frontend/src/dsl/palette';
 import { SYSTEM_SIZE } from '../../frontend/src/dsl/autoLayout';
@@ -436,6 +437,28 @@ describe('VS Code preview', () => {
     });
     expect(content.ok).toBe(true);
     expect(content.html).toContain('>Orders DB<');
+  });
+
+  it('gives the reason an import failed, as check and the language server do', async () => {
+    const project = mkdtempSync(join(tmpdir(), 'proschi-preview-'));
+    mkdirSync(join(project, 'app'));
+    writeFileSync(join(project, 'app', 'proschi.json'), '{}');
+    const entry = join(project, 'app', 'main.proschi');
+    const source = 'import "../outside.proschi"\nimport "git:github.com/acme/infra//db.proschi@main"\napi -> db\n';
+    const content = await renderPreviewContent(source, { path: entry, resolve: fileResolver({ entry }) });
+    expect(content.ok).toBe(false);
+    expect(content.html).toContain('&#39;../outside.proschi&#39; is outside the project root');
+    expect(content.html).toContain('is a remote import and there is no proschi.lock; run proschi imports sync');
+    expect(content.html).not.toContain('Cannot find');
+  });
+
+  it('draws system boxes with their status, promise and sent / headroom, as proschi render does', async () => {
+    const entry = fileURLToPath(new URL('./fixtures/drone/org-busy.proschi', import.meta.url));
+    const content = await renderPreviewContent(readFileSync(entry, 'utf8'), { path: entry, resolve: fileResolver({ entry }) });
+    expect(content.ok).toBe(true);
+    expect(content.html).toMatch(/data-node="orders" data-kind="system" data-status="saturated"/);
+    expect(content.html).toContain('>promise p99 150 ms<');
+    expect(content.html).toContain('>5.2k / 4.7k rps<');
   });
 
   it('hints at use cases when there are none', async () => {
