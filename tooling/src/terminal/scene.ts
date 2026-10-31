@@ -62,6 +62,8 @@ const MAX_SX = 16;
 /** How far a diagram that does not fit at MAX_SX is squeezed further, its names cut short, before it is drawn wider than asked. */
 const SQUEEZE_SX = 20;
 const MARGIN = 1;
+/** Rows of a collapsed system box (paint.ts drawSystem). */
+export const SYSTEM_ROWS = 6;
 
 /**
  * The scene at the widest scale that fits `maxColumns`. Compaction, and the
@@ -120,7 +122,8 @@ function sceneAt(diagram: Diagram, layout: Layout, sx: number): Scene {
     const x = cx(at.x);
     const y = cy(at.y);
     const w = Math.max(node.kind === 'group' ? 8 : 6, cx(at.x + box.width) - x);
-    const h = node.kind === 'component' ? 5 : Math.max(node.kind === 'group' ? 3 : 4, cy(at.y + box.height) - y);
+    // A card is five rows whatever its box; a system box six: its name, team, promise and load.
+    const h = node.kind === 'component' ? 5 : node.kind === 'system' ? SYSTEM_ROWS : Math.max(node.kind === 'group' ? 3 : 4, cy(at.y + box.height) - y);
     nodes.set(node.id, { node, rect: { x, y, w, h }, depth: depthOf(node) });
   }
 
