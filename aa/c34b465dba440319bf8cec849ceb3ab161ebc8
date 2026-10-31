@@ -1,0 +1,21 @@
+plugin/hooks/layout.cjs
+  s_e7f61f870764cb::t_38ba3d31d0ee66 1-2,5-6,9,18,20,22,24-27,34
+plugin/hooks/register.js
+  s_e7f61f870764cb::t_38ba3d31d0ee66 3910-3942,3944,4053,4072-4116,4122,4125-4128,4143,4145,4153-4166,4168,4180,4184,4186,4189-4190,4195,4197-4198,4202,4206,4208-4209,4401,4654,5331,5339,5344,5350-5354,5359-5362,5457-5509,5934-5943,5946,6235,6237-6238,6240-6243,6245-6248,6620,6626,6631-6638,6645-6661,6756
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "aac34b465dba440319bf8cec849ceb3ab161ebc8",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
