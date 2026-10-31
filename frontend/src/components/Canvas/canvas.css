@@ -392,11 +392,18 @@
 .pc-system[data-status='over'] .pc-system__bar > span {
   background: rgb(var(--c-fail));
 }
+.pc-system__foot {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  margin-top: auto;
+}
 .pc-system__ports {
   display: flex;
-  flex-wrap: nowrap;
+  flex: 1 1 auto;
+  flex-wrap: wrap;
   gap: 4px;
-  overflow: hidden;
+  min-width: 0;
   margin: 0;
   padding: 0;
   list-style: none;
@@ -415,8 +422,9 @@
 }
 .pc-system__actions {
   display: flex;
+  flex: none;
   gap: 6px;
-  margin-top: auto;
+  margin-left: auto;
 }
 .pc-system__actions button {
   display: inline-flex;

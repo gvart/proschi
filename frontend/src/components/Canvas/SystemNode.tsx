@@ -51,30 +51,32 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
         </dl>
       )}
 
-      {s && s.ports.length > 0 && (
-        <ul className="pc-system__ports" aria-label="Entry points">
-          {s.ports.map((p) => (
-            <li key={p.id} title={p.useCase ? `${p.name} → "${p.useCase}"` : p.name}>
-              {p.id}
-            </li>
-          ))}
-        </ul>
-      )}
-
       {s && !s.linked && <p className="pc-system__unlinked">{s.stub ? 'Declared, no design linked' : 'Declared, no design and no capacity: not simulated'}</p>}
 
-      {actions && s?.linked && (
-        <div className="pc-system__actions nodrag">
-          <button type="button" onClick={() => actions.open(id)} aria-label={`Open ${data.name}`} title="Open this team's design (double-click)">
-            <ArrowUpRight size={13} aria-hidden="true" />
-            Open
-          </button>
-          <button type="button" onClick={() => actions.toggle(id)} aria-label={`Expand ${data.name}`} title="Unfold the design here">
-            <Maximize2 size={12} aria-hidden="true" />
-            Expand
-          </button>
-        </div>
-      )}
+      {/* Entry points and the buttons share the last row, so neither is squeezed out of the box. */}
+      <div className="pc-system__foot">
+        {s && s.ports.length > 0 && (
+          <ul className="pc-system__ports" aria-label="Entry points">
+            {s.ports.map((p) => (
+              <li key={p.id} title={p.useCase ? `${p.name} → "${p.useCase}"` : p.name}>
+                {p.id}
+              </li>
+            ))}
+          </ul>
+        )}
+        {actions && s?.linked && (
+          <div className="pc-system__actions nodrag">
+            <button type="button" onClick={() => actions.open(id)} aria-label={`Open ${data.name}`} title="Open this team's design (double-click)">
+              <ArrowUpRight size={13} aria-hidden="true" />
+              Open
+            </button>
+            <button type="button" onClick={() => actions.toggle(id)} aria-label={`Expand ${data.name}`} title="Unfold the design here">
+              <Maximize2 size={12} aria-hidden="true" />
+              Expand
+            </button>
+          </div>
+        )}
+      </div>
 
       <Handle type="source" position={Position.Bottom} className="pc-handle" />
     </div>
