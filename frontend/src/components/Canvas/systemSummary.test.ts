@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { parse } from '../../dsl';
 import { viewDiagram } from '../../dsl/view';
-import { analyze, contractOf, runTests } from '../../sim';
+import { analyze, contractOf, formatRps, runTests } from '../../sim';
 import { filesResolver } from '../../playground/imports';
 import { DRONE_ORG_PATH, DRONE_TEAM_FILES, droneOrgSource } from '../../playground/droneStartup';
 import { scopeAt, systemSummaries } from './systemSummary';
@@ -39,6 +39,10 @@ describe('system boxes', () => {
     expect(orders.hint).toBe('Send it less, or ask the Orders team to add capacity for it (their bottleneck is db)');
     expect(orders.warnings[0]).toMatch(/^'orders' cannot take what it is sent/);
     expect(orders.headroom!.ratio).toBeGreaterThan(1);
+    // The tooltip, in short: a headline and one line per finding.
+    expect(orders.tip.headline).toMatch(/^Saturated · db at \d+%$/);
+    expect(orders.tip.lines).toEqual([`You send ${formatRps(Math.ceil(limit * 1.5))}`, `Takes at most ${formatRps(limit)} before db saturates`, 'p99 of "Place order" < 150 ms broken', 'availability of "Place order" ≥ 99.9% broken'].slice(0, orders.tip.lines.length));
+    expect(orders.tip.lines.length).toBeGreaterThanOrEqual(3);
     // The other teams still hold.
     expect(s.get('frontend')!.status).toBe('ok');
   });

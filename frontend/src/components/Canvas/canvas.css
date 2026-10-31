@@ -490,11 +490,12 @@
 .pc-system__tip {
   position: absolute;
   z-index: 20;
+  top: calc(100% + 6px);
   right: -6px;
-  bottom: calc(100% + 8px);
   display: none;
-  width: 320px;
-  padding: 8px 10px;
+  width: max-content;
+  max-width: 260px;
+  padding: 7px 10px;
   border: var(--bw-1) solid rgb(var(--c-ink));
   border-radius: var(--r-sm);
   background: rgb(var(--c-surface));
@@ -506,16 +507,46 @@
   text-align: left;
   white-space: normal;
 }
+/* On a box, beside it (anchored to the box, not the pill), so the boxes above stay visible. */
+.pc-system .pc-system__status[data-side] {
+  position: static;
+}
+.pc-system__status[data-side] .pc-system__tip {
+  top: -2px;
+  right: auto;
+  left: calc(100% + 14px);
+}
 .pc-system__status:hover .pc-system__tip,
 .pc-system__status:focus-within .pc-system__tip {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
-.pc-system__tip > span + span {
-  margin-top: 4px;
+/* The box with an open tooltip is drawn over its neighbours. */
+.react-flow__node:has(.pc-system__status:hover),
+.react-flow__node:has(.pc-system__status:focus-within) {
+  z-index: 1001 !important;
+}
+.pc-system__tip-head {
+  font: 800 11px / 1.3 var(--font-sans);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+.pc-system__status[data-status='over'] .pc-system__tip-head {
+  color: rgb(var(--c-fail));
+}
+.pc-system__tip-lines {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.pc-system__tip-lines > span::before {
+  content: '· ';
+  color: rgb(var(--c-muted));
 }
 .pc-system__hint {
   display: block;
-  padding-top: 4px;
+  padding-top: 5px;
   border-top: 1px solid rgb(var(--c-ink) / 0.15);
   font-weight: 700;
 }

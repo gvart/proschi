@@ -32,7 +32,7 @@ function SystemNode({ id, data, selected }: NodeProps<SystemNodeData>) {
             {data.ownerTeam ? `@${data.ownerTeam}` : 'system'}
           </div>
         </div>
-        {s && <StatusPill summary={s} />}
+        {s && <StatusPill summary={s} side />}
       </div>
 
       {s && (
@@ -91,24 +91,32 @@ const STATUS_ICON: Record<SystemStatus, typeof CircleCheck> = {
   unsimulated: CircleDashed,
 };
 
-/** The status, with what the simulation found and who to ask in a tooltip (on hover and on focus). */
-export function StatusPill({ summary: s }: { summary: SystemSummary }) {
+/**
+ * The status, with what the simulation found and who to ask in a short
+ * tooltip (on hover and on focus): beside the box with `side`, so it does not
+ * cover the boxes above; below the pill otherwise. The full findings are in
+ * the Results tab.
+ */
+export function StatusPill({ summary: s, side }: { summary: SystemSummary; side?: boolean }) {
   const tipId = useId();
   const Icon = STATUS_ICON[s.status];
-  const details = s.warnings.length > 0 || s.hint;
+  const details = s.tip.lines.length > 0 || s.hint;
   return (
-    <span className="pc-system__status nodrag" data-status={s.status}>
+    <span className="pc-system__status nodrag" data-status={s.status} data-side={side || undefined}>
       <button type="button" aria-describedby={details ? tipId : undefined} tabIndex={details ? 0 : -1} className="pc-system__pill">
         <Icon size={12} strokeWidth={2.5} aria-hidden="true" />
         {s.label}
       </button>
       {details && (
         <span role="tooltip" id={tipId} className="pc-system__tip">
-          {s.warnings.map((w) => (
-            <span key={w} className="block">
-              {w}
+          <strong className="pc-system__tip-head">{s.tip.headline}</strong>
+          {s.tip.lines.length > 0 && (
+            <span className="pc-system__tip-lines">
+              {s.tip.lines.map((line) => (
+                <span key={line}>{line}</span>
+              ))}
             </span>
-          ))}
+          )}
           {s.hint && <span className="pc-system__hint">{s.hint}</span>}
         </span>
       )}

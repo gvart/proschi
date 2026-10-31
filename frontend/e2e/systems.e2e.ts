@@ -58,8 +58,22 @@ test.describe('team systems in the editor', () => {
     await status(page, 'Order Processing').focus();
     const tip = box(page, 'Order Processing').getByRole('tooltip');
     await expect(tip).toBeVisible();
-    await expect(tip).toContainText("'orders' cannot take what it is sent");
+    await expect(tip).toContainText(/Saturated · db at \d+%/);
+    await expect(tip).toContainText('You send 2k rps');
+    await expect(tip).toContainText(/Takes at most 1\.2k rps before db saturates/);
     await expect(tip).toContainText('ask the Orders team to add capacity for it (their bottleneck is db)');
+    // Beside the box, so the Frontend box above stays clear.
+    const tipBox = (await tip.boundingBox())!;
+    const ordersBox = (await box(page, 'Order Processing').boundingBox())!;
+    const frontendBox = (await box(page, 'Frontend').boundingBox())!;
+    expect(tipBox.x).toBeGreaterThanOrEqual(ordersBox.x + ordersBox.width);
+    expect(tipBox.y + tipBox.height <= frontendBox.y || tipBox.y >= frontendBox.y + frontendBox.height || tipBox.x >= frontendBox.x + frontendBox.width).toBe(true);
+    // The entry point chip stays whole beside the buttons on a red box.
+    const chip = (await box(page, 'Order Processing').getByRole('list', { name: 'Entry points' }).getByText('api').boundingBox())!;
+    const open = (await box(page, 'Order Processing').getByRole('button', { name: 'Open Order Processing' }).boundingBox())!;
+    expect(chip.height).toBeGreaterThan(10);
+    expect(chip.x + chip.width).toBeLessThanOrEqual(open.x);
+    expect(chip.y + chip.height).toBeLessThanOrEqual(ordersBox.y + ordersBox.height);
 
     // Results list the system too.
     await page.getByRole('tab', { name: /Results/ }).click();
