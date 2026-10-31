@@ -1,0 +1,20 @@
+docs/impl/docs-refresh.md
+  s_e7f61f870764cb::t_84e76aabca4181 68-217
+  s_e7f61f870764cb::t_39e2ddecf7cae4 36
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d755f99174eabb3ca7de005590c69ee932e8d40b",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
