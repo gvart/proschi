@@ -1,0 +1,34 @@
+docs/LANGUAGE.md
+  s_e7f61f870764cb::t_c0b01edacc3523 677-823
+  s_e7f61f870764cb::t_12524c16d3e3fa 478-481
+  s_e7f61f870764cb::t_5aea2f3896a2fa 66
+  s_e7f61f870764cb::t_dcb016e9dd27bb 504-505
+  s_e7f61f870764cb::t_4ee572326cf426 1211
+  s_e7f61f870764cb::t_b2f03d51b88328 1316-1317
+  s_e7f61f870764cb::t_bbf725ded01af4 601-602
+  s_e7f61f870764cb::t_6e5c7490e2a60b 1218-1219,1221-1225
+  s_e7f61f870764cb::t_a6f61f4334ac98 611
+  s_e7f61f870764cb::t_aa493bb4d75980 620-622
+  s_e7f61f870764cb::t_cd9e496d466d15 452-453
+  s_e7f61f870764cb::t_144838624ca1a4 501-503,513-534,539-600,603-610,612-619,623-675
+  s_e7f61f870764cb::t_190c89f6264c33 1216
+  s_e7f61f870764cb::t_8b9ba9a33ad455 535-538
+  s_e7f61f870764cb::t_bfa131f0fa631e 1300
+  s_e7f61f870764cb::t_1779b5a57435be 676
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "beead311c2ddf99963b8af5c26a923726e6be0db",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
