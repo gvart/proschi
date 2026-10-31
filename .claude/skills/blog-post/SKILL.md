@@ -84,46 +84,22 @@ Link to the docs by their Markdown files (`../docs/AGENT-SKILLS.md#diagrams-in-t
 or by `https://proschi.app/...`: both become links within the site. Link
 PRs as `https://github.com/gvart/proschi/pull/<n>`.
 
-## 3. Style guide
+## 3. Style and anti-slop check
 
-- Plain, simple language. Short sentences. One idea per sentence.
-- Second person: "you", "your diagram". Not "users" or "we are excited".
-- Concrete over claims: show the command, the output, the number. If a
-  sentence would fit any product's release post, delete it.
-- Say what it does, not how it feels. No hype, no superlatives.
-- Present tense for what the software does ("it draws"), past tense for
-  what changed ("0.12.0 added").
-- Names as the product spells them: Proschi, Claude Code, VS Code.
-- Keep it short: 400 to 800 words is plenty.
+Write to the shared style guide, [STYLE.md](../docs-writer/STYLE.md): voice,
+structure, SEO and the anti-slop checklist all live there. On top of it, a
+post:
 
-## 4. Anti-slop checklist
+- Keeps to 400 to 800 words.
+- Has only the four `##` headings above (`###` inside them are fine).
+- Claims nothing the changelog, the PRs or the docs don't show.
 
-Before the preview, read the post once against this list and fix every hit.
+Before the preview, read the post once against STYLE.md's anti-slop
+checklist and fix every hit. Also check: every command runs as written,
+every link resolves, the ```proschi example parses, at least one
+visualization is there.
 
-Banned words and phrases: delve, dive into, deep dive, seamless(ly),
-unlock, unleash, empower, elevate, supercharge, game-changer, revolutionize,
-cutting-edge, robust, leverage (as a verb), harness, streamline,
-effortless(ly), powerful, exciting, we're thrilled, in today's fast-paced
-world, in the ever-evolving landscape, look no further, take it to the next
-level, at the end of the day, whether you're X or Y, it's worth noting,
-needless to say.
-
-Banned patterns:
-
-- "It's not just X, it's Y" and "not only X but also Y".
-- Rule-of-three padding: three adjectives or three parallel clauses where
-  one would do ("fast, simple and powerful").
-- Em-dash chains. Use a full stop or a colon. No em dashes at all is best.
-- Emoji, and emoji bullets.
-- Rhetorical questions as openers ("Ever wished you could…?").
-- A closing summary that repeats the intro ("In short, …", "To sum up").
-- Claims without a source in the changelog, the PRs or the docs.
-- Headings other than the four above (sub-headings `###` inside them are fine).
-
-Also check: every command runs as written, every link resolves, the
-```proschi example parses, at least one visualization is there.
-
-## 5. Build, test, preview
+## 4. Build, test, preview
 
 From `frontend/` (on this Mac, prefix the test runners with
 `NODE_OPTIONS=--no-experimental-webstorage` if they fail with webstorage errors):
@@ -139,7 +115,7 @@ Take screenshots of the post and of `/blog/` (desktop and a 390px phone,
 light and dark), look at them, and fix what looks wrong. Show the user the
 screenshots and the post's text, and ask for changes.
 
-## 6. Commit
+## 5. Commit
 
 When the user approves: `git add blog/` and commit on the release PR's
 branch (`git switch <release-please branch>` first, if you are not on it)
