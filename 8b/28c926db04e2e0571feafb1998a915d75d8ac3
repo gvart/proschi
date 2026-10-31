@@ -1,0 +1,26 @@
+blog/2026-11-01-team-systems.svg
+  s_e7f61f870764cb::t_9b2b761b93572f 1-102
+blog/2026-11-01-team-systems.md
+  s_e7f61f870764cb::t_ebbc21591ae33d 30,42-43,70-72,173-175,179-181
+  s_e7f61f870764cb::t_7c76fc49648e03 25,51-53
+  s_e7f61f870764cb::t_61335e3b7a10f0 1,3-24,26-29,31-41,44-50,54-60,63-69,73-172,176-178,182-184
+  s_e7f61f870764cb::t_7d8ad0b9ad3dc3 2,61-62
+blog/2026-11-01-team-systems-expanded.svg
+  s_e7f61f870764cb::t_9b2b761b93572f 1-174
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8b28c926db04e2e0571feafb1998a915d75d8ac3",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
