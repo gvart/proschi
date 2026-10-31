@@ -1,0 +1,29 @@
+frontend/src/dsl/system.test.ts
+  s_e7f61f870764cb::t_8a6f463e8ed941 29
+  s_e7f61f870764cb::t_e31820d0b1fa6f 76
+  s_e7f61f870764cb::t_510039d7e9bfd2 1-28,30-75,77-184
+frontend/src/dsl/parser.ts
+  s_e7f61f870764cb::t_6dca9dba616082 92,95-101,701-979,2382-2389,2456-2478
+  s_e7f61f870764cb::t_e529698a605c57 23,42-43,82-83,91,102-111,133-135,209-216,239-244,267,270-274,282,309,338-342,344,351-352,378,386-390,416-420,477,512,533,1191-1192,1230,2200-2201,2204,2224-2227,2233-2234,2251-2252,2264-2266,2268
+  s_e7f61f870764cb::t_3e76814fc3a642 980,2479
+frontend/src/dsl/toCanvas.ts
+  s_e7f61f870764cb::t_ae34b57a49cacb 11-12
+frontend/src/dsl/types.ts
+  s_e7f61f870764cb::t_44e189e5deef70 57-60,63-67,118-122,156-159,217-260,436
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b86966c285eb66c6bee1292df1564f0918911177",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
