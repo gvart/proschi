@@ -25,6 +25,7 @@ import {
 } from './analyze';
 import { findScenario, findUseCase } from './flow';
 import { formatAvailability, formatMs, formatRps } from './format';
+import { analysisOverlay, type SimOverlay } from './overlay';
 
 /**
  * Systems in the simulation (docs/design/team-systems-and-imports.md D3, D4):
@@ -78,6 +79,12 @@ export interface SystemAnalysis {
   totalInboundRps: number;
   /** The team design under its own traffic plus `inbound`; design systems only. */
   analysis?: Analysis;
+  /**
+   * The load on each node of the team design under the combined load, by the
+   * team's own ids (`db`), with the flows along its connections: the shape
+   * the canvas overlay uses for any diagram. Design systems only.
+   */
+  overlay?: SimOverlay;
   /** The busiest node's utilisation (the stub's for a stub), 0..1+. */
   utilization: number;
   /** The busiest node, in the team's scope. */
@@ -285,8 +292,10 @@ function analyzeSystem(system: DiagramSystem, sent: Map<string, number>, options
   }
 
   const team = system.diagram;
-  const analysis = totalInboundRps > 0 ? analyze(withExtraTraffic(team, system, inbound), { timeoutMs: options.timeoutMs }) : contract.baseline!;
+  const combined = totalInboundRps > 0 ? withExtraTraffic(team, system, inbound) : team;
+  const analysis = totalInboundRps > 0 ? analyze(combined, { timeoutMs: options.timeoutMs }) : contract.baseline!;
   result.analysis = analysis;
+  result.overlay = analysisOverlay(combined, analysis);
   const busiest = analysis.nodes.reduce<NodeAnalysis | undefined>((best, n) => (!best || n.utilization > best.utilization ? n : best), undefined);
   result.utilization = busiest?.utilization ?? 0;
   result.busiest = busiest?.id;
