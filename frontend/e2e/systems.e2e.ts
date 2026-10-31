@@ -111,6 +111,44 @@ test.describe('team systems in the editor', () => {
     await expect(box(page, 'Warehouse')).toBeVisible();
   });
 
+  test('the load overlay moves its dots along the drawn connections', async ({ page }) => {
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    await layoutSettled(page);
+    // Every drawn dot pixel of the particle canvas lies on a connection's line, even one routed around a corner.
+    const offPath = () =>
+      page.locator('.react-flow').evaluate((flow) => {
+        const canvas = flow.querySelector<HTMLCanvasElement>('canvas[aria-hidden="true"]')!;
+        const rect = canvas.getBoundingClientRect();
+        const scale = canvas.width / rect.width;
+        const pixels = canvas.getContext('2d')!.getImageData(0, 0, canvas.width, canvas.height).data;
+        const line: { x: number; y: number }[] = [];
+        for (const path of Array.from(flow.querySelectorAll<SVGPathElement>('.react-flow__edge-path'))) {
+          const ctm = path.getScreenCTM()!;
+          for (let at = 0, length = path.getTotalLength(); at <= length; at += 2) {
+            const p = path.getPointAtLength(at).matrixTransform(ctm);
+            line.push({ x: p.x, y: p.y });
+          }
+        }
+        let dots = 0;
+        let off = 0;
+        for (let y = 0; y < canvas.height; y += 2) {
+          for (let x = 0; x < canvas.width; x += 2) {
+            if (pixels[(y * canvas.width + x) * 4 + 3] < 200) continue;
+            dots++;
+            const sx = rect.x + x / scale;
+            const sy = rect.y + y / scale;
+            if (!line.some((p) => Math.hypot(p.x - sx, p.y - sy) <= 6)) off++;
+          }
+        }
+        return { dots, off };
+      });
+    await expect.poll(async () => (await offPath()).dots).toBeGreaterThan(0);
+    for (let i = 0; i < 5; i++) {
+      expect((await offPath()).off).toBe(0);
+      await page.waitForTimeout(150);
+    }
+  });
+
   test('a box expands in place and collapses again', async ({ page }) => {
     const before = await editorText(page);
     await box(page, 'Order Processing').getByRole('button', { name: 'Expand Order Processing', exact: true }).click();
