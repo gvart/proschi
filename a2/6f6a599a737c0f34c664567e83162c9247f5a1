@@ -1,0 +1,42 @@
+frontend/src/components/Playground/Playground.tsx
+  s_e7f61f870764cb::t_f2fa191ef007ed 823,825,1066,1284-1285,1321,1508,1633,1636-1666
+frontend/src/components/Canvas/systemSummary.test.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 4,42-45
+frontend/src/docs/LiveExample.tsx
+  s_e7f61f870764cb::t_f2fa191ef007ed 9-10,42-58
+frontend/src/sim/tests.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 143,150
+frontend/src/components/Playground/useSystemView.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 4,21-22,77,79-80,82-83,86,88-89,91-92,98,120-126
+  s_e7f61f870764cb::t_a963b93e03653d 127
+frontend/src/sim/systems.test.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 243-244,246-247
+frontend/src/components/Canvas/canvas.css
+  s_e7f61f870764cb::t_f2fa191ef007ed 395-400,403-404,406,425,427,493,496-498,510-518,521-533,535-545,549
+frontend/src/components/Canvas/systemSummary.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 45-50,119,125-138
+  s_e7f61f870764cb::t_2390847510129f 139-140
+frontend/e2e/systems.e2e.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 61-63,65-76,94-95,121-129
+frontend/src/components/Canvas/SystemNode.tsx
+  s_e7f61f870764cb::t_f2fa191ef007ed 35,56-79,94-100,103,105,112-117,119
+frontend/e2e/embed.e2e.ts
+  s_e7f61f870764cb::t_f2fa191ef007ed 2,61-67
+  s_e7f61f870764cb::t_20a507b06dc16e 68-69
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "a26f6a599a737c0f34c664567e83162c9247f5a1",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
