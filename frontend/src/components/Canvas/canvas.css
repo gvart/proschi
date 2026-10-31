@@ -184,6 +184,21 @@
 .pc-node__load {
   margin-top: 6px;
 }
+/* Text on a heat fill keeps 4.5:1 in both themes: the muted grey vanishes on
+   yellow, pink and red, and the light ink of the dark theme on the solid ones. */
+.pc-node[data-heat] :is(.pc-node__tech, .pc-node__stats) {
+  color: rgb(var(--c-ink));
+}
+.pc-node[data-heat='accent'],
+.pc-node[data-heat='accent'] :is(.pc-node__tech, .pc-node__stats) {
+  color: rgb(var(--c-on-accent));
+}
+.pc-node[data-heat='accent'] .pc-node__bar {
+  background: rgb(var(--c-on-accent) / 0.15);
+}
+.pc-node[data-heat='accent'] .pc-node__bar > div {
+  background: rgb(var(--c-on-accent) / 0.8);
+}
 .pc-node__stats {
   font-family: var(--font-mono);
   font-size: 11px;
@@ -511,10 +526,19 @@
 .pc-system .pc-system__status[data-side] {
   position: static;
 }
-.pc-system__status[data-side] .pc-system__tip {
+.pc-system__status[data-place='right'] .pc-system__tip {
   top: -2px;
   right: auto;
   left: calc(100% + 14px);
+}
+.pc-system__status[data-place='left'] .pc-system__tip {
+  top: -2px;
+  right: calc(100% + 14px);
+}
+/* Too near the canvas's left edge to open leftwards below: open rightwards from the anchor's left edge. */
+.pc-system__status[data-place='below-start'] .pc-system__tip {
+  right: auto;
+  left: -6px;
 }
 .pc-system__status:hover .pc-system__tip,
 .pc-system__status:focus-within .pc-system__tip {

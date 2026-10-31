@@ -384,11 +384,17 @@ export default function Playground() {
     });
   }, [shown]);
 
-  // Keep what the user had selected across re-layouts.
+  // Keep what the user had selected across re-layouts, and the size React Flow measured: a node
+  // without one is hidden until measured again, and a re-measure can be lost while the layout glides.
   const showLaidOut = useCallback((laidOut: Node[]) => {
     setNodes((previous) => {
-      const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
-      return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
+      const before = new Map(previous.map((n) => [n.id, n]));
+      return laidOut.map((n) => {
+        const p = before.get(n.id);
+        if (!p) return n;
+        const measured = p.type === n.type && p.width && p.height ? { width: p.width, height: p.height } : {};
+        return p.selected || measured.width ? { ...n, ...measured, ...(p.selected ? { selected: true } : {}) } : n;
+      });
     });
   }, []);
   const layoutSettled = useAutoLayout(shown, showLaidOut);

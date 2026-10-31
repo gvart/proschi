@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { droneOrgSource } from '../src/playground/droneStartup';
-import { codeEditor, editorText, expect, test } from './fixtures';
+import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
 import { droneLink } from './drone';
 
 /** A system box on the canvas, by its name. */
@@ -136,4 +136,55 @@ test.describe('team systems in the editor', () => {
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toHaveCount(0);
     expect(await editorText(page)).toBe(before);
   });
+});
+
+test.describe('team systems on a busy org', () => {
+  test('the warning tooltip stays on the canvas when the box sits at its right edge', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto(droneLink(2000));
+    await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+    await layoutSettled(page);
+    // Drag the canvas until the box touches its right edge.
+    const canvas = (await page.locator('.react-flow').boundingBox())!;
+    const orders = (await box(page, 'Order Processing').boundingBox())!;
+    await page.mouse.move(canvas.x + 5, canvas.y + 60);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + 5 + (canvas.x + canvas.width - (orders.x + orders.width) - 10), canvas.y + 60, { steps: 8 });
+    await page.mouse.up();
+
+    await status(page, 'Order Processing').focus();
+    const tip = box(page, 'Order Processing').getByRole('tooltip');
+    await expect(tip).toBeVisible();
+    const tipBox = (await tip.boundingBox())!;
+    expect(tipBox.x).toBeGreaterThanOrEqual(canvas.x);
+    expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+  });
+
+  test('a saturated node keeps readable text on its red fill, in the dark theme too', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(droneLink(2000));
+    await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+    await layoutSettled(page);
+    await box(page, 'Order Processing').dblclick();
+    await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    const db = page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node');
+    await expect(db).toHaveAttribute('data-heat', 'accent');
+    // The dark text drawn on accents, not the theme's light ink or its muted grey.
+    await expect(db.locator('.pc-node__name')).toHaveCSS('color', 'rgb(17, 17, 17)');
+    await expect(db.locator('.pc-node__tech')).toHaveCSS('color', 'rgb(17, 17, 17)');
+  });
+});
+
+test('a component added from the palette next to team systems leaves every box shown', async ({ page }) => {
+  await page.goto(droneLink(100));
+  await expect(box(page, 'Order Processing')).toBeVisible();
+  const before = await canvasNodes(page).count();
+  await page.getByRole('button', { name: 'Add component' }).click();
+  const palette = page.getByRole('dialog', { name: 'Add a component' });
+  await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
+  await palette.getByRole('button', { name: 'Redis', exact: true }).click();
+  await expect(palette).toBeHidden();
+  // A new layout keeps the sizes React Flow measured; a node without one stays hidden until measured again.
+  await expect(canvasNodes(page)).toHaveCount(before + 1);
 });
