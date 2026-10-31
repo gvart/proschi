@@ -52,7 +52,7 @@ test('the pane draws team systems with their warnings, and keys open, focus into
   let ui = await drawn($)
   expect(await ui.find({ type: 'Raster', key: 'd-proschi-view:0' })).toBeDefined()
   // The sim's word on Orders, and the hint of its failing check.
-  expect(await ui.find({ type: 'Text', text: /'orders' cannot take what it is sent: 5\.2k rps into "Place order"/ })).toBeDefined()
+  expect(await ui.find({ type: 'Text', text: /'orders' cannot take what it is sent: you send 5\.2k rps into "Place order"/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /ask the Orders team to add capacity/ })).toBeDefined()
   expect(await ui.find({ type: 'Text', text: /s next system · o open\/close · f focus in · u back out/ })).toBeDefined()
   for (const [key, hotkey] of [['sys-next', 's'], ['sys-open', 'o'], ['sys-focus', 'f']] as const) expect(await hotkeyOf(ui, `${key}-proschi-view:0`)).toBe(hotkey)
