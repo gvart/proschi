@@ -83,7 +83,7 @@
   "nav": [
     {
       "title": "Start",
-      "items": [{ "page": "" }, { "page": "quickstart" }, { "page": "systems", "label": "Org diagrams" }]
+      "items": [{ "page": "" }, { "page": "quickstart" }]
     },
     {
       "title": "Language",
@@ -92,10 +92,10 @@
         { "page": "language", "anchor": "use-case-steps", "label": "Use case steps" },
         { "page": "language", "anchor": "scenarios", "label": "Scenarios" },
         { "page": "language", "anchor": "imports", "label": "Imports" },
-        { "page": "language", "anchor": "systems", "label": "Systems" },
         { "page": "language", "anchor": "high-level-design", "label": "High-level design" },
         { "page": "language", "anchor": "tests", "label": "Tests" },
-        { "page": "language", "anchor": "grammar", "label": "Grammar" }
+        { "page": "language", "anchor": "grammar", "label": "Grammar" },
+        { "page": "systems", "label": "Org diagrams" }
       ]
     },
     {

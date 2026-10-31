@@ -103,25 +103,15 @@ pane you drive from the keyboard:
 
 `ctrl+x tab` moves focus to the pane when it doesn't have it.
 
-A diagram with [systems](LANGUAGE.md#systems) draws each team as one box with
-its promise and its load. In the pane, more keys work on them:
+With [systems](LANGUAGE.md#systems), `s` selects the next one, `o` opens or
+closes it in place, `f` draws only its design and `u` goes back out.
+`/proschi view --expand orders org.proschi` starts with Orders open, and
+`--focus orders` starts inside it.
 
-| Key | Does |
-|---|---|
-| `s` | Select the next system |
-| `o` | Open or close the selected system in place |
-| `f` | Focus into the selected system: draw only its design |
-| `u` | Back out to the diagram around it |
-
-`/proschi view --expand orders,feed org.proschi` opens the pane with those
-systems expanded, and `/proschi view --focus orders org.proschi` opens it
-inside Orders. An id that names no system is refused with a message.
-
-The plugin reads imports and `from` files inside the project root, and
-`git:` and `https://` ones from the cache that `proschi imports sync` fills;
-it never uses the network. Its file API cannot resolve symlinks, so unlike
-`proschi check` it cannot tell when a symlink inside the project points
-outside it.
+The plugin never uses the network: remote imports come from the cache that
+`proschi imports sync` fills. It cannot resolve symlinks, so it follows a
+symlink inside the project that points outside it. `proschi check` reports
+that.
 
 It needs a Claude Code build with mod support (a plugin hooks module) and
 Node 18 or newer on the `PATH`, as the layout runs in Node. The icons are

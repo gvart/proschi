@@ -56,8 +56,9 @@ describe('docs/site.json', () => {
     const pager = (slug: string) => layoutHtml(site, rendered.get(slug)!).match(/<nav class="pager"[\s\S]*?<\/nav>/)![0]
     expect(pager('')).toContain('rel="next"><span class="pager__dir">Next</span><span class="pager__title">Quickstart</span>')
     expect(pager('quickstart')).toContain('<span class="pager__title">Why Proschi</span>')
-    expect(pager('quickstart')).toContain('<span class="pager__title">Org diagrams and team systems</span>')
+    expect(pager('quickstart')).toContain('<span class="pager__title">Language reference</span>')
     expect(pager('systems')).toContain('<span class="pager__title">Language reference</span>')
+    expect(pager('systems')).toContain('<span class="pager__title">How the simulation works</span>')
   })
 
   it('points sidebar anchors at headings that exist', () => {
@@ -156,11 +157,11 @@ describe('live examples', () => {
     }
   })
 
-  it('the org guide flags Order Processing only once the traffic is raised, as it says', () => {
-    const [, connected, raised] = rendered.get('systems')!.examples
+  it('the org guide flags Order Processing at 2k rps and nothing at 1k, as it says', () => {
+    const [org] = rendered.get('systems')!.examples
     const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.id)
-    expect(failing(connected)).toEqual([])
-    expect(failing(raised)).toEqual(['system:orders'])
+    expect(failing(org)).toEqual(['system:orders'])
+    expect(failing(org.replace('"Buy drone" 2k rps', '"Buy drone" 1k rps'))).toEqual([])
   })
 
   it('the quickstart’s last step passes, and fails survival with one database, as it says', () => {

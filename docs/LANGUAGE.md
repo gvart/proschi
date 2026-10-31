@@ -509,227 +509,110 @@ deleting something declared in an imported file is refused with a short
 message. Edit that file instead. The problems panel lists problems in imported
 files with the file name in front; clicking one opens that diagram.
 
-The same rules apply to the `from` file of a [system](#systems): it is found
-the same way, and must be inside the same project root.
+The `from` file of a [system](#systems) is found the same way.
 
 ### The project root
 
-On disk, imports are confined to the project root. It is the first of these
-that exists:
+On disk, imports and `from` files must stay inside the project root. It is
+the first of these that exists:
 
-1. the folder of the nearest `proschi.json`, in the entry file's folder or
-   above it;
-2. the root of the git repository the entry file is in;
-3. the folder of the entry file itself.
+1. the folder of the nearest `proschi.json`, at or above the entry file (the
+   file you check, render or open);
+2. the root of its git repository;
+3. the entry file's folder.
 
-The entry file is the one you check, render or open. Inside the root, `../`
-works as usual, so in a monorepo `services/orders/design.proschi` can import
-`../../shared/infra.proschi`. These are errors:
+Inside the root, `../` works as usual. An absolute path, a path that leaves
+the root, and a symlink to a file outside the root are errors.
 
-- an absolute path, such as `/etc/infra.proschi` or `C:\infra.proschi`;
-- a path that leaves the root, such as `../../../elsewhere.proschi`;
-- a symlink inside the root that points to a file outside it.
-
-A project with neither a `proschi.json` nor a git repository can import only
-from the entry file's folder and below. Earlier versions followed any
-relative path, so such a project that imports from a folder above the entry
-file now gets an error. Fix it by putting a `proschi.json` in the folder that
-holds both files. An empty object is enough:
-
-```json
-{}
-```
+Earlier versions followed any relative path. If a project with no
+`proschi.json` and no git repository imports from above the entry file, it
+now gets an error. Put a `proschi.json` containing `{}` in the folder that
+holds both files.
 
 ### Remote sources
 
-An import (or a `from`) can name a file in a git repository or at an https
-URL:
+An import or a `from` can name a file in a git repository or at an https URL:
 
 ```proschi fragment
 import "git:github.com/acme/platform//diagrams/infra.proschi@v1.4.0"
 import "https://example.com/diagrams/shared.proschi"
 ```
 
-| Source | Form | Notes |
-|---|---|---|
-| Git | `git:<host>/<org>/<repo>//<path>@<ref>` | The `//` separates the repository from the path inside it. The ref is a tag, a branch or a commit. More path segments before `//` are fine (GitLab subgroups). |
-| HTTPS | `https://…` | `http://` is refused. A URL with a user name or password is refused, and so is one with a `#fragment`. |
-
-- **Relative imports inside a remote file stay in that source.** An
-  `import "./db.proschi"` in a git file reads `db.proschi` from the same
-  repository and ref; in an https file, from the same origin. A path that
-  climbs out of the repository or to another origin is an error.
-- **Only one command uses the network**: `proschi imports sync`. Everything
-  else reads remote files from the local cache it fills. See below.
-- **The web editor never fetches.** In the browser, a remote import resolves
-  only when the file came along in a share link, which
-  [`proschi share-link`](EDITORS.md#imports) makes.
+- A git source is `git:<host>/<org>/<repo>//<path>@<ref>`. The `//` ends the
+  repository, and the ref is a tag, a branch or a commit. It is fetched with
+  your own `git`, credentials and `url.<base>.insteadOf` settings, from
+  `https://<host>/<org>/<repo>.git` by default.
+- Only `https://` URLs work, without a user name, password or `#fragment`.
+- A relative import inside a remote file reads from the same repository and
+  ref, or the same origin, and may not leave it.
+- The web editor never fetches. A remote file reaches the browser only inside
+  a link made by [`proschi share-link`](EDITORS.md#imports).
 
 ### Syncing remote imports
 
 ```sh
-proschi imports sync              # every .proschi file below the current folder
-proschi imports sync docs/org.proschi
-proschi imports sync --frozen     # in CI: fail instead of changing proschi.lock
+proschi imports sync            # every .proschi file below this folder
+proschi imports sync --frozen   # in CI: fail instead of changing proschi.lock
 ```
 
-`proschi imports sync [--frozen] [<file|dir>…]` follows the imports of the
-files, downloads every git and https file, and writes two things at the
-project root:
+`proschi imports sync [--frozen] [<file|dir>…]` is the only command that
+uses the network. It writes two things at the project root:
 
-- **`proschi.lock`**: for each git source, the commit its ref resolved to and
-  a sha256 of each file read from it; for each https URL, a sha256. Commit
-  this file.
-- **`.proschi/cache/`**: the downloaded files, named by their sha256. Add
-  `.proschi/` to `.gitignore`.
+- `proschi.lock`: the commit each git ref resolved to, and a sha256 of each
+  file. Commit it.
+- `.proschi/cache/`: the downloaded files. Add `.proschi/` to `.gitignore`.
 
-The first sync trusts what it downloads and pins it (trust on first use).
-After that, a ref stays on its locked commit, even when the branch or tag
-moves, and a file whose content no longer matches its sha256 is an error. To
-take a newer version, change the ref, or delete that source's entry from
+Every other command and editor reads the cache. The first sync trusts what it
+downloads. After that, a ref stays on its locked commit, and changed content
+is an error. To update, change the ref, or delete the entry from
 `proschi.lock`, and sync again.
 
-`--frozen` never writes. It fails when `proschi.lock` is missing, when an
-import is not in it, when a file does not match its pin, or when the lock
-holds entries no file uses any more. Run it in CI, after the checkout.
+`--frozen` never writes. It fails when the lock is missing, out of date or
+does not match what the source serves.
 
-Git sources are fetched with the `git` on your `PATH` and your own
-credentials, so private repositories work over SSH keys, a credential helper
-or a token, and your `url.<base>.insteadOf` settings apply (to fetch from a
-mirror, or over SSH). By default `git:github.com/acme/platform//…` fetches
-`https://github.com/acme/platform.git`. Credentials never go in the diagram
-or in `proschi.lock`.
-
-### Limits
-
-| Limit | Value |
-|---|---|
-| Size of one imported file | 1 MB |
-| Imported files per document, local and remote | 500 |
-| Depth of the import chain | 32 files |
-| Length of a git or https source | 1024 characters |
+An imported file may be at most 1 MB, a document may import at most 500
+files, imports may nest 32 deep, and a remote source is at most 1024
+characters long.
 
 ### Security model for imports
 
-A diagram is data. Proschi never runs anything in an imported file. These
-are the guarantees:
+Proschi never runs anything in an imported file. It also guarantees:
 
-- **No network, except on request.** Only `proschi imports sync` downloads
-  anything. `proschi check`, `render`, `test`, `analyze`, `share-link`, the
-  language server, the VS Code preview and the Claude Code plugin read local
-  files and the cache only. The browser never fetches imports.
-- **Nothing outside the project.** Local imports and `from` files cannot
-  leave the project root: no absolute paths, no `../` past the root, no
-  symlinks to files outside it. `proschi share-link` reads through the same
-  check, so a link never carries a file from outside the project.
-- **Pinned content.** Every remote file is pinned in `proschi.lock` to a
-  sha256, and every git file to a commit. A changed file, or an altered cache
-  copy, is an error until you accept the change on purpose. Review changes to
-  `proschi.lock` in pull requests like code.
-- **HTTPS only.** `http://` imports are refused, and so are redirects to
-  `http://` or to a URL with credentials. At most five redirects are
-  followed.
-- **Your credentials stay yours.** A URL with a user name or password is an
-  error. Git uses your own configured credentials.
-- **Git runs locked down.** The repository is fetched shallowly into a
-  temporary bare repository that is deleted afterwards. Nothing is checked
-  out. Hooks, submodules, the fsmonitor and the `ext::` transport are
-  disabled, objects are checked as they arrive, and only regular files are
-  read: a symlink or a submodule in the repository is an error. Arguments go
-  to `git` directly, never through a shell.
-- **Bounded work.** The limits above stop a huge or deeply nested import from
-  hanging the editor.
-- **A checked lockfile.** `proschi.lock` arrives in pull requests like any
-  other file, so every value in it is checked before use. An invalid one is
-  an error.
+- **No network** except `proschi imports sync`. The browser never fetches.
+- **Nothing from outside the project.** Local paths cannot leave the project
+  root, and `proschi share-link` reads through the same check.
+- **Pinned content.** Each remote file is pinned to a sha256, and each git
+  file to a commit. Review changes to `proschi.lock` like code.
+- **HTTPS only**, also after a redirect, with at most five redirects.
+- **No credentials in diagrams.** A URL with a user name or password is an
+  error, and git uses your own configured credentials.
+- **Git runs locked down**: a shallow fetch into a temporary bare repository,
+  no checkout, no hooks, submodules or `ext::` transport, and only regular
+  files are read.
+- **Bounded work**: the limits above.
+- **A checked lockfile**: an invalid `proschi.lock` is an error.
 
-One known gap: the Claude Code plugin's file API has no way to resolve a
-symlink, so the plugin cannot tell a symlink that points outside the project
-from a plain file. It keeps paths inside the project root, but follows such a
-symlink. `proschi check` reports it.
+One gap: the Claude Code plugin cannot resolve symlinks, so it follows a
+symlink inside the project that points outside it. `proschi check` reports
+it.
 
 ### Import errors
 
-The message says what is wrong; this table says what to do.
-
 | Message (shortened) | What to do |
 |---|---|
-| `'…' is outside the project root …` | Move the file into the project, or put a `proschi.json` in a folder that holds both files. |
-| `'…' is a symlink to a file outside the project root …` | Copy the file into the project, or import it from git. |
-| `'…' is an absolute path; imports must be relative to the importing file` | Write the path relative to the importing file. |
-| `'…' uses http://; only https:// imports are allowed` | Use the https URL. |
-| `'…' contains credentials; …` | Remove the user name and password from the URL; configure git or the server instead. |
-| `'…' is not a git source; write git:<host>/<org>/<repo>//<path/in/repo>@<ref>` | Add the `//` before the path and the `@ref` at the end. |
-| `'…' is a remote import and there is no proschi.lock; run proschi imports sync` | Run `proschi imports sync` and commit `proschi.lock`. |
-| `'…' is not in proschi.lock; run proschi imports sync` | A new remote import: run `proschi imports sync`. |
-| `'…' is not in the import cache (.proschi/cache); run proschi imports sync` | A fresh checkout: run `proschi imports sync` (or `--frozen` in CI). |
-| `'…' does not match its sha256 in proschi.lock …; its content changed` | Find out why it changed. If the change is expected, delete its entry from `proschi.lock` and sync again. |
-| `The cached copy of '…' does not match its hash in proschi.lock` | Run `proschi imports sync`; it downloads the file again. |
-| `proschi.lock is out of date: …` | From `--frozen`: run `proschi imports sync` locally and commit `proschi.lock`. |
-| `Invalid proschi.lock: …` | Delete `proschi.lock` and run `proschi imports sync`. |
-| `git fetch failed: …` | Check that `git` can reach the repository with your credentials, and that the ref exists. |
-| `Cannot download '…': HTTP 404` | Check the URL. |
-| `'…' leaves the repository …` | A relative import in a remote file climbs out of its repository; fix it there. |
-| `'…' is larger than 1 MB`, `More than 500 imported files`, `Imports nest more than 32 files deep` | Split the file, or import less. |
+| `… is outside the project root` | Move the file into the project, or add a `proschi.json` to a folder that holds both files. |
+| `… is a symlink to a file outside the project root` | Copy the file into the project, or import it from git. |
+| `… is an absolute path` | Write the path relative to the importing file. |
+| `… run proschi imports sync` | Run `proschi imports sync`, and commit `proschi.lock`. |
+| `… does not match its sha256 in proschi.lock` | Find out why it changed. If that is expected, delete its entry and sync again. |
+| `proschi.lock is out of date` | From `--frozen`: sync locally and commit `proschi.lock`. |
+| `git fetch failed` | Check that `git` can reach the repository and that the ref exists. |
 
 ## Systems
 
-A system is another team's design drawn as one box. Each team keeps its own
-`.proschi` file with its own nodes, traffic and requirements. An org diagram
-links those files with `system` blocks and connects the boxes. The simulation
-then tells you, on the org diagram, when one team sends another more than its
-design can take. [Org diagrams and team systems](SYSTEMS.md) walks through a
-full example.
-
-```proschi fragment
-system orders "Order Processing" @Orders {
-  from "teams/orders.proschi"
-  expose api "Orders API" -> "Place order"
-}
-
-web -> orders.api : place order
-```
-
-The header is `system id ["Name"] [@team] [pos x,y] [color c] [.tag] [rank N] {`,
-at the top level or inside a group. The parts after the id may come in any
-order, as on a node. `system` is a keyword only in that shape, on a line that
-ends with `{`, so a node may still be called `system`. Inside the block:
-
-| Line | Meaning |
-|---|---|
-| `from "path"` | The team's design. It is found like an [import](#imports), so it can be a local path inside the project root, a `git:` source or an `https://` URL. |
-| `expose id ["Name"] [-> "Use case"]` | An entry point that others connect to, and the team's use case it enters. You may leave the use case out when the team file has exactly one. |
-| `capacity { … }` | A stub contract, for a system without a `from`: a rate, `p99` (or `latency`, a mean) and `availability`, written like a [capacity](#capacity) line without the node id. On one line or over several. |
-
-### Names and scope
-
-Outside the block, `orders.api` names the entry point `api` of the system
-`orders`, and `orders` names the whole box. Write it without a space:
-`orders .planned` with a space is still a [tag](#colors-and-legend), and so is
-`b.planned` on a connection to a node that is not a system. `orders` alone may
-be used in a connection, and in a step only when the system has exactly one
-entry point.
-
-The team file has its own scope. It is read as a document of its own: its
-ids, title, summary, layout, traffic, requirements, capacity and tests stay
-inside it. An `api` in the team file never clashes with an `api` in the org
-diagram. Team files may have systems of their own. A file used by several
-systems is read once.
-
-### The contract
-
-The collapsed box shows a contract, derived from the team file:
-
-- **Promise**: the team's own `requirements` for the use case each entry
-  point enters (a requirement for that use case, else one for every use
-  case): its latency limits and availability.
-- **Headroom**: how much more load on that use case the team's design takes,
-  on top of its own traffic, before one of its nodes runs hot (over 70%) and
-  before one saturates (100%), and which node that is.
-
-You don't write the contract: change the team's design and it follows. The
-`capacity { … }` stub is for a team that has no design file yet. Its rate is
-where it saturates, and its `p99` and `availability` are the promise:
+A system draws another team's design as one box, with its own scope and a
+contract. The simulation flags it when you send it more than it takes. The
+[org diagrams guide](SYSTEMS.md) walks through an example.
 
 ```proschi
 title "Checkout"
@@ -753,71 +636,49 @@ traffic {
 }
 ```
 
-### In the simulation
+The header is `system id ["Name"] [@team] [pos x,y] [color c] [.tag] [rank N] {`,
+at the top level or inside a group. `system` is a keyword only on a line that
+ends with `{`, so a node may still be called `system`. Inside the block:
 
-When a step of your use case reaches `orders.api`, its rate (traffic, times
-the scenario's share, times any fan-out) is added to the team's own traffic
-for the use case `api` enters. The team's design is then simulated under the
-combined load. Two systems that use the same team file share one design, so
-what they are sent adds up. In your diagram the system behaves like one hop:
-its latency and availability are those of the team's use case under that
-load.
+| Line | Meaning |
+|---|---|
+| `from "path"` | The team's design file, found like an [import](#imports): a local path, `git:` or `https://`. |
+| `expose id ["Name"] [-> "Use case"]` | An entry point, and the team's use case it enters. Without a `from`, leave the use case out; with one, you may when the team file has a single use case. |
+| `capacity { … }` | A stub for a team with no design file: the rate where it saturates, and its `p99` (or `latency`) and `availability`. |
 
-For each system the simulation reports, on the box and in the *Results* tab:
+With a `from`, the contract follows from the team's own design, so you don't write one:
 
-- **saturated**: a node of the team's design is past 100%, and which one;
-- **runs hot**: a node is past 70%;
-- **breaks its SLA**: one of the team's own requirements fails under the
-  combined load.
+```proschi fragment
+system orders "Order Processing" @Orders {
+  from "teams/orders.proschi"
+  expose api "Orders API" -> "Place order"
+}
+```
 
-Each system that is sent load also gets a result `system:<id>` next to your
-requirements and tests, in the editor, in `proschi test` and in the language
-server. It fails when the system saturates or breaks its SLA, and its hint
-says to send less or to ask that team for more capacity. Running hot is a
-warning only.
+Rules:
 
-### Checks
+- `orders.api` names an entry point, with no space before the dot, and
+  `orders` the whole box. A step may use `orders` alone only when the system
+  has one entry point.
+- The team file has its own scope: its ids, traffic, requirements and tests
+  never clash with yours. From outside you can reach only exposed entry
+  points, so `web -> orders.db` is an error.
+- The **promise** is the team's own requirements for the entry point's use
+  case. The **headroom** is how much more load that use case takes before a
+  node runs hot (70%) and before one saturates (100%).
+- Load you send to an entry point is added to the team's own traffic for its
+  use case, and the team design is simulated under the sum. Systems that use
+  the same file share that load. In your diagram the system is one hop, with
+  that use case's latency and availability.
+- Each system that gets load has a result `system:<id>`. It fails when the
+  system saturates or breaks its SLA. Running hot is only a warning.
+- Team files may contain systems. A cycle of `import` and `from` files is an
+  error, and problems in a team file are reported with its path.
+- Warnings: a `from` and a stub together (the file wins), neither (not
+  simulated), or no `expose`.
 
-These are errors:
-
-- a connection or step from outside to a node of the team file that is not
-  exposed, such as `web -> orders.db`: expose it, or connect to an entry
-  point;
-- an entry point the system does not expose, such as `orders.apii` (the
-  message lists the ones it has);
-- `x.y` where `x` is not a system and not a connection target with a tag;
-- an `expose … -> "Use case"` that names no use case of the team file (the
-  message suggests the closest);
-- an `expose` without a use case when the team file has several;
-- a step to `orders` alone when the system has several entry points;
-- a cycle of `import` and `from` files.
-
-These are warnings:
-
-- a `from` and a `capacity` stub together (the file wins, the stub is
-  ignored);
-- neither a `from` nor a `capacity` stub (the box is drawn but not
-  simulated);
-- no `expose` line (nobody can connect to it).
-
-Problems inside the team file are reported with its path, like problems in
-an imported file.
-
-### Viewing systems
-
-- **Web editor.** Double-click a box, or press *Open*, to go into the team's
-  design. Breadcrumbs above the canvas lead back. The team's design is
-  read-only there: edit its own file. *Expand* unfolds the design in place,
-  inside a frame, and *Collapse* folds it again. The *Results* tab has a
-  *Systems* table: what each system is sent against what it takes, its
-  promise, the p99 your diagram sees, and its status.
-- **Command line.** `proschi render` draws each system as one box with its
-  promise and its load. `--expand orders,feed` opens systems in place, and
-  `--focus orders` draws one system's design alone. See
-  [Rendering and export](EDITORS.md#rendering-and-export).
-- **Claude Code.** In the plugin's pane, `s` selects the next system, `o`
-  opens or closes it in place, `f` goes into it and `u` goes back out. See
-  [Diagrams in the terminal](AGENT-SKILLS.md#diagrams-in-the-terminal).
+To open, expand or render systems, see
+[Look inside](SYSTEMS.md#4-look-inside) in the guide.
 
 ## High-level design
 
