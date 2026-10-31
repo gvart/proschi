@@ -1,0 +1,48 @@
+frontend/blog/index.html
+  s_e7f61f870764cb::t_2a9f7c560c3681 1-35
+frontend/vite.config.ts
+  s_e7f61f870764cb::t_76e64f1c227272 10,47-52,67
+docs/site.json
+  s_e7f61f870764cb::t_76e64f1c227272 131
+frontend/src/design/site.ts
+  s_e7f61f870764cb::t_76e64f1c227272 75
+frontend/plugins/blogSite.test.ts
+  s_e7f61f870764cb::t_4278272f43a1b4 1,4-115,117-125,127-136
+  s_e7f61f870764cb::t_55a5c91cba5728 2-3,116,126
+frontend/plugins/blogSite.ts
+  s_e7f61f870764cb::t_c82f40392311ce 1-136,139-192,194-367
+  s_e7f61f870764cb::t_cfd21f83612c7a 137-138,193
+blog/2026-10-31-terminal-diagrams.svg
+  s_e7f61f870764cb::t_519a3cb3bd5623 1,7-10
+  s_e7f61f870764cb::t_56f9a5001a0cec 2-6,11-81
+frontend/blog/_post/index.html
+  s_e7f61f870764cb::t_2a9f7c560c3681 1-35
+frontend/plugins/sitemap.ts
+  s_e7f61f870764cb::t_76e64f1c227272 6,11-12,14,16,36
+frontend/src/blog/main.ts
+  s_e7f61f870764cb::t_2a9f7c560c3681 1-5
+blog/2026-10-31-terminal-diagrams.md
+  s_e7f61f870764cb::t_bab4bb3ecc68ae 112
+  s_e7f61f870764cb::t_4b7a0e54ef0773 1-111,113-132
+frontend/src/blog/blog.css
+  s_e7f61f870764cb::t_edff8fcae02ceb 1-112
+frontend/e2e/blog.e2e.ts
+  s_e7f61f870764cb::t_d94ba03621ac21 45
+  s_e7f61f870764cb::t_ea62759b64771f 1-44,46-61
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "49150b1df1955c35d54d503240dfc28aae338e10",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
