@@ -1,0 +1,22 @@
+frontend/src/components/Canvas/SystemNode.tsx
+  s_e7f61f870764cb::t_ceb2299ba9f8f5 56-78
+  s_e7f61f870764cb::t_ed5091f3c60233 79
+frontend/src/components/Canvas/canvas.css
+  s_e7f61f870764cb::t_ceb2299ba9f8f5 395-400,403-404,406,425,427
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "ed855506be3fd87feed53e719fe9dc065d5955fd",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
