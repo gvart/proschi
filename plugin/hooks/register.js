@@ -5087,6 +5087,107 @@ function noPath(run, from, to) {
   return pass(`No connection or step goes directly from ${x} to ${y}`);
 }
 
+// ../frontend/src/dsl/view.ts
+var FRAME_TECH = "Service Group";
+function viewDiagram(diagram, options = {}) {
+  const expanded = options.expanded ?? /* @__PURE__ */ new Set();
+  if (options.focus !== void 0) {
+    const team = systemAt(diagram, options.focus);
+    if (team?.diagram) {
+      const prefix = `${options.focus}.`;
+      const inner = new Set([...expanded].filter((id) => id.startsWith(prefix)).map((id) => id.slice(prefix.length)));
+      return viewDiagram(team.diagram, { expanded: inner });
+    }
+  }
+  const open = (diagram.systems ?? []).filter((s) => s.diagram && expanded.has(s.id));
+  if (open.length === 0) return diagram;
+  const nodes = [];
+  const edges = [];
+  const useCases = [];
+  const route = entryRouter(diagram, expanded, "");
+  const openIds = new Set(open.map((s) => s.id));
+  for (const node of diagram.nodes) {
+    if (!openIds.has(node.id)) {
+      nodes.push(node);
+      continue;
+    }
+    nodes.push(frameOf(node, node.id));
+    const system = open.find((s) => s.id === node.id);
+    inline(system.diagram, `${node.id}.`, node, expanded, nodes, edges, useCases);
+  }
+  for (const edge of diagram.edges) edges.push(rerouteEdge(edge, route));
+  return { ...diagram, nodes, edges, useCases: [...diagram.useCases.map((u) => rerouteUseCase(u, route)), ...useCases] };
+}
+function systemAt(diagram, path) {
+  const [head, ...rest] = path.split(".");
+  const system = diagram.systems?.find((s) => s.id === head);
+  if (!system || rest.length === 0) return system;
+  return system.diagram ? systemAt(system.diagram, rest.join(".")) : void 0;
+}
+var frameOf = (node, id) => ({ ...node, id, kind: "group", type: "group", techStack: FRAME_TECH, system: id });
+function inline(team, prefix, owner, expanded, nodes, edges, useCases) {
+  const ownerId = prefix.slice(0, -1);
+  const route = entryRouter(team, expanded, prefix);
+  for (const node of team.nodes) {
+    const id = prefix + node.id;
+    const parent = node.parent !== void 0 ? prefix + node.parent : ownerId;
+    const system = team.systems?.find((s) => s.id === node.id);
+    if (system?.diagram && expanded.has(id)) {
+      nodes.push({ ...frameOf(node, id), parent });
+      inline(system.diagram, `${id}.`, node, expanded, nodes, edges, useCases);
+    } else {
+      const { position: _position, ...rest } = node;
+      void _position;
+      nodes.push({ ...rest, id, parent, system: ownerId });
+    }
+  }
+  for (const edge of team.edges) edges.push(rerouteEdge({ ...edge, id: prefix + edge.id, source: prefix + edge.source, target: prefix + edge.target }, route));
+  for (const u of team.useCases) {
+    const named = { ...u, id: prefix + u.id, name: `${owner.name}: ${u.name}`, entryServiceId: u.entryServiceId !== void 0 ? prefix + u.entryServiceId : void 0 };
+    useCases.push(rerouteUseCase(prefixUseCase(named, prefix), route));
+  }
+}
+function prefixUseCase(u, prefix) {
+  const step = (s) => ({ ...s, ...s.id !== void 0 ? { id: prefix + s.id } : {}, fromServiceId: prefix + s.fromServiceId, toServiceId: prefix + s.toServiceId });
+  const scenarios = u.scenarios.map((sc) => ({ ...sc, steps: sc.steps.map(step) }));
+  return { ...u, steps: scenarios[0]?.steps ?? [], scenarios };
+}
+function entryRouter(diagram, expanded, prefix) {
+  const route = (id, port) => {
+    if (port === void 0 || !expanded.has(id)) return { id, port };
+    const local = id.slice(prefix.length);
+    const system = diagram.systems?.find((s) => s.id === local);
+    const entry = system?.entries.find((e) => e.id === port);
+    const team = system?.diagram;
+    const first = team?.useCases.find((u) => u.id === entry?.useCaseId)?.steps[0];
+    if (!team || !first) return { id };
+    const sender = team.nodes.find((n) => n.id === first.fromServiceId);
+    if (sender && kindOf(sender) !== "client") return { id: `${id}.${sender.id}` };
+    return entryRouter(team, expanded, `${id}.`)(`${id}.${first.toServiceId}`, first.toPort);
+  };
+  return route;
+}
+function rerouteEdge(edge, route) {
+  const { id: target, port } = route(edge.target, edge.targetPort);
+  if (target === edge.target && port === edge.targetPort) return edge;
+  const { targetPort: _targetPort, ...rest } = edge;
+  void _targetPort;
+  return { ...rest, target, ...port !== void 0 ? { targetPort: port } : {} };
+}
+function rerouteUseCase(u, route) {
+  let changed = false;
+  const step = (s) => {
+    const { id, port } = route(s.toServiceId, s.toPort);
+    if (id === s.toServiceId && port === s.toPort) return s;
+    changed = true;
+    const { toPort: _toPort, ...rest } = s;
+    void _toPort;
+    return { ...rest, toServiceId: id, ...port !== void 0 ? { toPort: port } : {} };
+  };
+  const scenarios = u.scenarios.map((sc) => ({ ...sc, steps: sc.steps.map(step) }));
+  return changed ? { ...u, steps: scenarios[0]?.steps ?? [], scenarios } : u;
+}
+
 // ../frontend/src/sim/overlay.ts
 function flowsOf(diagram, traffic) {
   const flows = /* @__PURE__ */ new Map();
@@ -5120,6 +5221,100 @@ function analysisOverlay(diagram, analysis) {
   return { nodes, flows: flowsOf(diagram, diagram.traffic ?? []) };
 }
 
+// src/terminal/systems.ts
+function systemAt2(diagram, path) {
+  const [head, ...rest] = path.split(".");
+  const system = diagram.systems?.find((s) => s.id === head);
+  if (!system || rest.length === 0) return system;
+  return system.diagram ? systemAt2(system.diagram, rest.join(".")) : void 0;
+}
+function systemPaths(diagram, prefix = "") {
+  return (diagram.systems ?? []).flatMap((s) => [prefix + s.id, ...s.diagram ? systemPaths(s.diagram, `${prefix}${s.id}.`) : []]);
+}
+function viewError(diagram, view) {
+  const known = systemPaths(diagram);
+  const check = (id, what) => {
+    const system = systemAt2(diagram, id);
+    if (!system) return `No system '${id}' to ${what}; ${known.length ? `the systems are ${known.join(", ")}` : "the diagram has no systems"}.`;
+    if (!system.diagram) return `System '${id}' has no team design (from "\u2026") to ${what}.`;
+    return void 0;
+  };
+  for (const id of view.expanded ?? []) {
+    const error = check(id, "expand");
+    if (error) return error;
+  }
+  return view.focus !== void 0 ? check(view.focus, "focus") : void 0;
+}
+function viewOptions(view = {}) {
+  const expanded = /* @__PURE__ */ new Set();
+  for (const id of view.expanded ?? []) {
+    const parts = id.split(".");
+    for (let i = 1; i <= parts.length; i++) expanded.add(parts.slice(0, i).join("."));
+  }
+  return { expanded, ...view.focus !== void 0 ? { focus: view.focus } : {} };
+}
+function applyView(diagram, view = {}) {
+  return view.focus === void 0 && !view.expanded?.length ? diagram : viewDiagram(diagram, viewOptions(view));
+}
+var idList = (value) => value.split(",").map((s) => s.trim()).filter(Boolean);
+function viewOverlay(diagram, analysis, view = {}) {
+  const out = { nodes: {}, systems: {}, notes: [] };
+  const { expanded } = viewOptions(view);
+  let scope2 = diagram;
+  let scoped = analysis;
+  let path = "";
+  if (view.focus !== void 0 && systemAt2(diagram, view.focus)?.diagram) {
+    for (const id of view.focus.split(".")) {
+      const system = scope2.systems.find((s) => s.id === id);
+      const result = scoped?.systems?.find((s) => s.id === id);
+      if (path + id === view.focus) notesOf(scope2, scoped, system, result, path, out);
+      scoped = teamAnalysis(system, result);
+      scope2 = system.diagram;
+      path += `${id}.`;
+    }
+  }
+  collect(scope2, scoped, "", path, expanded, out);
+  return out;
+}
+function teamAnalysis(system, result) {
+  return result?.analysis ?? (system.diagram ? contractOf(system).baseline : void 0);
+}
+function collect(diagram, analysis, at, path, expanded, out) {
+  if (analysis) for (const [id, o] of Object.entries(analysisOverlay(diagram, analysis).nodes)) out.nodes[at + id] = o;
+  for (const system of diagram.systems ?? []) {
+    const result = analysis?.systems?.find((s) => s.id === system.id);
+    out.systems[at + system.id] = badgeOf(diagram, system, result);
+    notesOf(diagram, analysis, system, result, path, out);
+    if (system.diagram && expanded.has(path + system.id)) collect(system.diagram, teamAnalysis(system, result), `${at}${system.id}.`, `${path}${system.id}.`, expanded, out);
+  }
+}
+function notesOf(diagram, analysis, system, result, path, out) {
+  const warnings = result?.warnings ?? [];
+  if (!analysis || warnings.length === 0) return;
+  const hint = runTests(diagram, analysis).find((t) => t.id === `system:${system.id}` && !t.passed)?.hint;
+  warnings.forEach((text, i) => out.notes.push({ system: path + system.id, text, ...hint && i === warnings.length - 1 ? { hint } : {} }));
+}
+function badgeOf(diagram, system, result) {
+  const contract = result?.contract ?? contractOf(system);
+  const latency2 = contract.entries.flatMap((e) => e.latency)[0];
+  const availability2 = contract.entries.map((e) => e.availabilityPercent).filter((a) => a !== void 0);
+  const promise = [latency2 ? `p${latency2.percentile} ${formatMs(latency2.maxMs)}` : "", availability2.length ? `${Math.min(...availability2)}%` : ""].filter(Boolean).join(" \xB7 ");
+  const team = diagram.nodes.find((n) => n.id === system.id)?.ownerTeam;
+  const status = contract.source === "none" ? "idle" : result?.saturated ? "saturated" : result?.breaches.length ? "breach" : result?.hot ? "hot" : "ok";
+  return {
+    ...team ? { team } : {},
+    ...promise ? { promise } : {},
+    sentRps: result?.totalInboundRps ?? 0,
+    headroomRps: Math.min(Infinity, ...contract.entries.map((e) => e.saturatesAtRps)),
+    ...result && contract.source !== "none" ? { utilization: result.utilization } : {},
+    status
+  };
+}
+function loadText(badge) {
+  const head = formatRps(badge.headroomRps);
+  return `${formatRps(badge.sentRps).replace(/ rps$/, "")} / ${head}`;
+}
+
 // src/terminal/document.ts
 var EDITOR = "https://proschi.app/app/";
 function parseSource({ source, path = "diagram.proschi", imports = {} }) {
@@ -5131,14 +5326,20 @@ function loadDocument(input) {
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
   const analysis = simulated ? analyze(diagram) : void 0;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : void 0;
-  const sim = analysis ? analysisOverlay(diagram, analysis) : void 0;
-  if (sim) {
+  const view = errors.length ? {} : input.view ?? {};
+  const sim = errors.length ? void 0 : viewOverlay(diagram, analysis, view);
+  const top = view.focus === void 0;
+  if (sim && analysis && top) {
     for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
   }
+  const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : void 0;
   return {
-    diagram,
+    diagram: errors.length ? diagram : applyView(diagram, view),
+    root: diagram,
     errors,
-    ...sim ? { overlay: sim.nodes } : {},
+    ...overlay ? { overlay } : {},
+    systems: sim?.systems ?? {},
+    notes: sim?.notes ?? [],
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports)
   };
@@ -5170,7 +5371,7 @@ function importFilePath(dir, root, key) {
   return path === root || path.startsWith(root.endsWith("/") ? root : `${root}/`) ? path : void 0;
 }
 function keyOf(input) {
-  const text = input.source + "\0" + JSON.stringify(input.imports ?? {});
+  const text = input.source + "\0" + JSON.stringify(input.imports ?? {}) + (input.view ? "\0" + JSON.stringify(input.view) : "");
   let h2 = 2166136261;
   for (let i = 0; i < text.length; i++) {
     h2 ^= text.charCodeAt(i);
@@ -5474,6 +5675,7 @@ var SY = 12;
 var MAX_SX = 16;
 var SQUEEZE_SX = 20;
 var MARGIN = 1;
+var SYSTEM_ROWS = 6;
 function buildScene(diagram, layout, maxColumns = 160) {
   const widthPx = layoutWidth(diagram, layout);
   let sx = Math.min(MAX_SX, Math.max(SX, widthPx / Math.max(1, maxColumns - 2 * MARGIN - 1)));
@@ -5516,7 +5718,7 @@ function sceneAt(diagram, layout, sx) {
     const x = cx(at.x);
     const y = cy(at.y);
     const w = Math.max(node.kind === "group" ? 8 : 6, cx(at.x + box.width) - x);
-    const h2 = node.kind === "component" ? 5 : Math.max(node.kind === "group" ? 3 : 4, cy(at.y + box.height) - y);
+    const h2 = node.kind === "component" ? 5 : node.kind === "system" ? SYSTEM_ROWS : Math.max(node.kind === "group" ? 3 : 4, cy(at.y + box.height) - y);
     nodes.set(node.id, { node, rect: { x, y, w, h: h2 }, depth: depthOf(node) });
   }
   const edges = [];
@@ -5762,7 +5964,8 @@ function paint(scene, options = {}) {
   const grid = new Grid(scene.columns, scene.rows);
   const { play } = options;
   const all = [...scene.nodes.values()];
-  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0);
+  const frameOf2 = (n) => isFrame(n.node) ? { badge: options.systems?.[n.node.id], selected: options.selected === n.node.id } : void 0;
+  for (const g of all.filter((n) => n.node.kind === "group").sort((a, b) => a.depth - b.depth)) drawGroup(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStack(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
   for (const { edge, path } of scene.edges) {
     const own = edge.style?.color ? hex(edge.style.color) : COLOR.line;
@@ -5795,13 +5998,14 @@ function paint(scene, options = {}) {
       if (!onCard(scene, x + i, y)) grid.set(x + i, y, text[i], color);
     }
   }
-  for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0);
+  for (const g of all) if (g.node.kind === "group") drawGroupHeading(grid, g, play ? "path" : void 0, frameOf2(g));
   for (const n of all) drawStackCount(grid, scene, n, options.overlay?.[n.node.id], lookOf(play, n.node.id));
   for (const packet of play?.packets ?? []) grid.set(packet.at.x, packet.at.y, packet.cut ? "\u2717" : "\u25A0", packet.error ? COLOR.fail : COLOR.pink);
   for (const n of all) {
     if (n.node.kind === "group") continue;
     const look = lookOf(play, n.node.id);
     if (n.node.kind === "text") drawNote(grid, n, look);
+    else if (n.node.kind === "system") drawSystem(grid, n, options.systems?.[n.node.id], look, options.selected === n.node.id);
     else drawCard(grid, scene, n, options.overlay?.[n.node.id], look, options.icons ?? "nerd-font");
   }
   drawLegend(grid, scene);
@@ -5862,14 +6066,78 @@ function fill(grid, r, fg, bg) {
   for (let y = r.y; y < r.y + r.h; y++) for (let x = r.x; x < r.x + r.w; x++) grid.set(x, y, " ", fg, bg);
 }
 var fit = (text, room) => text.length <= room ? text : room <= 1 ? "\u2026".slice(0, room) : text.slice(0, room - 1) + "\u2026";
-function drawGroup(grid, { node, rect }, look) {
+var isFrame = (node) => node.kind === "group" && node.system === node.id;
+function statusColor(status, ok) {
+  if (status === "saturated" || status === "breach") return COLOR.fail;
+  if (status === "hot") return COLOR.warn;
+  return status === "idle" ? COLOR.muted : ok;
+}
+var STATUS = { ok: "\u2713 ok", hot: "\u25B2 hot", saturated: "\u2717 saturated", breach: "\u2717 breaks SLA", idle: "not simulated" };
+function doubleFrame(grid, r, color) {
+  const right = r.x + r.w - 1;
+  const bottom = r.y + r.h - 1;
+  for (let x = r.x + 1; x < right; x++) {
+    grid.set(x, r.y, "\u2550", color);
+    grid.set(x, bottom, "\u2550", color);
+  }
+  for (let y = r.y + 1; y < bottom; y++) {
+    grid.set(r.x, y, "\u2551", color);
+    grid.set(right, y, "\u2551", color);
+  }
+  grid.set(r.x, r.y, "\u2554", color);
+  grid.set(right, r.y, "\u2557", color);
+  grid.set(r.x, bottom, "\u255A", color);
+  grid.set(right, bottom, "\u255D", color);
+}
+function drawGroup(grid, { node, rect }, look, system) {
+  if (system) return doubleFrame(grid, rect, system.selected ? COLOR.pink : fade(look, statusColor(system.badge?.status, baseColor(node, COLOR.muted))));
   frame(grid, rect, fade(look, baseColor(node, COLOR.muted)), node.style?.dash ?? "dashed");
 }
-function drawGroupHeading(grid, { node, rect }, look) {
-  const color = fade(look, baseColor(node, COLOR.muted));
-  grid.text(rect.x + 2, rect.y, ` ${fit(node.name.toUpperCase(), rect.w - 6)} `, COLOR.onColor, Infinity, color);
+function drawGroupHeading(grid, { node, rect }, look, system) {
+  const color = system ? system.selected ? COLOR.pink : fade(look, statusColor(system.badge?.status, baseColor(node, COLOR.muted))) : fade(look, baseColor(node, COLOR.muted));
+  const chip2 = ` ${fit(node.name.toUpperCase(), rect.w - 6)} `;
+  grid.text(rect.x + 2, rect.y, chip2, COLOR.onColor, Infinity, color);
+  const badge = system?.badge;
+  if (badge) {
+    const about = [STATUS[badge.status], badge.team ? `@${badge.team}` : "", badge.promise ?? "", loadText(badge)].filter(Boolean).join(" \xB7 ");
+    const room = rect.w - 4 - chip2.length - 1;
+    if (room > 4) grid.text(rect.x + 2 + chip2.length, rect.y, `${fit(about, room)} `, look ? COLOR.fadedMore : color);
+  }
   if (!node.description || rect.h <= 3) return;
   grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, " "), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
+}
+function drawSystem(grid, { node, rect }, badge, look, selected) {
+  const accent = look === "failing" ? COLOR.fail : look === "lit" || selected ? COLOR.pink : void 0;
+  const status = badge?.status;
+  const color = accent ?? fade(look, statusColor(status, baseColor(node, COLOR.line)));
+  const heat = look || !badge || badge.utilization === void 0 ? void 0 : heatOf({ utilization: badge.utilization, saturated: status === "saturated" });
+  const ink = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : DEFAULT;
+  const muted = heat !== void 0 ? COLOR.onColor : look === "off" ? COLOR.fadedMore : COLOR.muted;
+  fill(grid, rect, DEFAULT, DEFAULT);
+  if (heat !== void 0) fill(grid, { x: rect.x + 1, y: rect.y + 1, w: rect.w - 2, h: rect.h - 2 }, COLOR.onColor, heat);
+  doubleFrame(grid, rect, color);
+  const left = rect.x + 2;
+  const room = rect.w - 4;
+  if (status && rect.w > 14) {
+    const word = ` ${fit(STATUS[status], rect.w - 8)} `;
+    grid.text(rect.x + rect.w - 2 - word.length, rect.y, word, look ? muted : statusColor(status, COLOR.muted));
+  }
+  grid.text(left, rect.y + 1, fit(node.name, room), ink, Infinity, heat);
+  grid.text(left, rect.y + 2, fit(badge?.team ? `@${badge.team}` : "system", room), muted, Infinity, heat);
+  if (!badge) return;
+  grid.text(left, rect.y + 3, fit(badge.promise ? `promise ${badge.promise}` : "no promise", room), badge.promise ? ink : muted, Infinity, heat);
+  if (rect.h < 6) return;
+  const long = `${loadText(badge)} sent / headroom`;
+  const text = fit(long.length <= room ? long : loadText(badge), room);
+  grid.text(left, rect.y + 4, text, ink, Infinity, heat);
+  const bar = room - text.length - 1;
+  if (bar < 4 || !Number.isFinite(badge.headroomRps) || badge.headroomRps <= 0) return;
+  const share = badge.sentRps / badge.headroomRps;
+  const filled = Math.max(share > 0 ? 1 : 0, Math.min(bar, Math.round(share * bar)));
+  for (let i = 0; i < bar; i++) {
+    const full = i < filled;
+    grid.set(left + text.length + 1 + i, rect.y + 4, full ? "\u2501" : "\u2500", heat !== void 0 ? COLOR.onColor : full ? ink : COLOR.muted, heat);
+  }
 }
 var TILE = { w: 5, h: 3 };
 function heatOf(overlay) {
@@ -6080,12 +6348,13 @@ function groupByEndpoint(useCases) {
 var icons = "nerd-font";
 var PANE = "proschi-view";
 var PANE_VIEW = `${PANE}:0`;
-var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false };
+var IDLE = { pick: "", step: 0, isPlaying: false, mode: "diagram", explorer: false, expanded: [] };
 var NO_SOURCE = { source: "" };
 var paneFile = atom({ plugin: "proschi", key: "paneFile" }, "");
 var paneSource = atom({ plugin: "proschi", key: "paneSource" }, NO_SOURCE);
 var players = atom({ plugin: "proschi", key: "player" }, IDLE);
 var PANE_KEYS = "p play \xB7 n/b step \xB7 r restart \xB7 e end \xB7 x explorer \xB7 d diagram \xB7 esc back to the prompt";
+var SYSTEM_KEYS = "s next system \xB7 o open/close \xB7 f focus in \xB7 u back out";
 var FRAME2 = 50;
 var HINT = [
   "Proschi diagrams render in this terminal: put a Proschi document in a ```proschi fenced block",
@@ -6103,7 +6372,7 @@ function register(on, options) {
   const chosen = options.icons;
   icons = chosen === "symbols" || chosen === "none" ? chosen : "nerd-font";
   on("session.start", async ($, e, next) => {
-    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view <file>" });
+    await $.command.register({ name: "proschi", description: "Proschi diagrams: /proschi view <file.proschi> shows one in a pane", argumentHint: "view [--expand <id>,\u2026] [--focus <id>] <file>" });
     return next(e);
   });
   on("prompt.compose", async ($, e, next) => {
@@ -6112,11 +6381,26 @@ function register(on, options) {
   });
   on("command.run", { command: "proschi" }, async ($, e) => {
     const [verb, ...rest] = e.args.trim().split(/\s+/);
-    const file = rest.join(" ");
-    if (verb !== "view" || !file) return { text: "Usage: /proschi view <file.proschi>" };
+    const words = [];
+    const view = {};
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === "--expand" || rest[i] === "--focus") {
+        const value = rest[++i];
+        if (!value || idList(value).length === 0) return { text: `Missing system id after ${rest[i - 1]}` };
+        if (rest[i - 1] === "--expand") view.expanded = [...view.expanded ?? [], ...idList(value)];
+        else view.focus = value;
+      } else words.push(rest[i]);
+    }
+    const file = words.join(" ");
+    if (verb !== "view" || !file) return { text: USAGE };
     if (!await $.fs.exists(file)) return { text: `No such file: ${file}` };
+    if (view.expanded || view.focus !== void 0) {
+      const { diagram, errors } = parseSource(await readWithImports($, file));
+      const refused = errors.length ? void 0 : viewError(diagram, view);
+      if (refused) return { text: refused };
+    }
     stop(PANE_VIEW);
-    await update($, memberOf(players, { requestId: PANE_VIEW }), () => IDLE);
+    await update($, memberOf(players, { requestId: PANE_VIEW }), () => ({ ...IDLE, expanded: view.expanded ?? [], ...view.focus !== void 0 ? { focus: view.focus } : {} }));
     await update($, paneFile, () => file);
     await $.ui.open({ id: PANE, title: `Proschi \xB7 ${basename(file)}` });
     watch($, file);
@@ -6173,7 +6457,7 @@ function register(on, options) {
     const view = await diagramView($, { ui, requestId: PANE, columns }, PANE_VIEW, source);
     if ("error" in view) return /* @__PURE__ */ h(ui.Text, { color: "red" }, view.error);
     const isFocused = "isFocused" in e.props && e.props.isFocused === true;
-    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view.element, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"));
+    return /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, view.element, /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, isFocused ? PANE_KEYS : "ctrl+x tab focuses the pane for its keys"), isFocused && view.systems && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, SYSTEM_KEYS));
   });
 }
 function proschiFile(tool, input) {
@@ -6181,6 +6465,7 @@ function proschiFile(tool, input) {
   const path = input?.file_path;
   return typeof path === "string" && path.endsWith(".proschi") ? path : void 0;
 }
+var USAGE = "Usage: /proschi view [--expand <system>[,<system>\u2026]] [--focus <system>] <file.proschi>";
 var basename = (path) => path.split("/").pop() ?? path;
 var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
 async function projectRoot($, dir) {
@@ -6240,7 +6525,10 @@ function normal(p) {
     step: typeof p?.step === "number" ? p.step : 0,
     isPlaying: p?.isPlaying === true && p.mode === "play",
     mode: p?.mode === "play" ? "play" : "diagram",
-    explorer: p?.explorer === true
+    explorer: p?.explorer === true,
+    expanded: Array.isArray(p?.expanded) ? p.expanded.filter((id) => typeof id === "string") : [],
+    ...typeof p?.focus === "string" ? { focus: p.focus } : {},
+    ...typeof p?.selected === "string" ? { selected: p.selected } : {}
   };
 }
 var PINK = "#ff5da2";
@@ -6249,8 +6537,11 @@ var YELLOW = "#ffd23f";
 var PAUSE = "\u275A\u275A Pause";
 var PLAY = " \u25B6 Play ";
 var BARS_WIDTH = 80;
-async function diagramView($, d, viewId, source, file) {
+async function diagramView($, d, viewId, written, file) {
   const { ui } = d;
+  const player = normal(await read($, memberOf(players, { requestId: viewId })));
+  const shown = { ...player.expanded.length ? { expanded: player.expanded } : {}, ...player.focus !== void 0 ? { focus: player.focus } : {} };
+  const source = shown.expanded || shown.focus !== void 0 ? { ...written, view: shown } : written;
   const key = keyOf(source);
   let doc = documents.get(key);
   if (!doc) {
@@ -6266,7 +6557,7 @@ async function diagramView($, d, viewId, source, file) {
   const layout = layouts.get(key);
   if (!layout) {
     requestLayout($, key, source);
-    return { element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026") };
+    return { element: /* @__PURE__ */ h(ui.Text, { dimColor: true }, "Laying out ", doc.diagram.title ?? "the diagram", "\u2026"), systems: false };
   }
   if ("error" in layout) return { error: `Proschi could not lay ${file ?? "this diagram"} out: ${layout.error}` };
   const columns = Math.max(40, Math.min(512, d.columns));
@@ -6277,20 +6568,60 @@ async function diagramView($, d, viewId, source, file) {
     scenes.set(sceneKey, scene);
   }
   const picks = doc.diagram.useCases.flatMap((u) => u.scenarios.map((s) => pickOf(u, s)));
-  const player = normal(await read($, memberOf(players, { requestId: viewId })));
   const pick = picks.find((p) => p.value === player.pick) ?? picks[0];
   const playing = player.mode === "play" ? pick : void 0;
   const steps = playing?.scenario.steps ?? [];
   const step = Math.max(0, Math.min(player.step, steps.length - 1));
   const width = Math.min(Math.max(40, d.columns), Math.max(scene.columns, BARS_WIDTH));
-  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, inPane: d.requestId === PANE };
+  const systems = selectable(scene, player.focus);
+  const selected = systems.find((s) => s.path === player.selected) ?? systems[0];
+  const view = { d, viewId, rasterKey: `d-${viewId}`, anchorKey: `at-${viewId}`, scene, width, overlay: doc.overlay, systems: doc.systems, ...selected ? { selected: selected.id } : {}, inPane: d.requestId === PANE };
   if (playing && player.isPlaying && !timers.has(viewId)) animate($, view, steps);
   const progress = timers.has(viewId) ? 0 : 100;
-  const grid = paint(scene, { overlay: doc.overlay, icons, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
+  const grid = paint(scene, { overlay: doc.overlay, icons, systems: doc.systems, ...view.selected ? { selected: view.selected } : {}, ...steps.length > 0 ? { play: playAt(scene, steps, step, progress) } : {} });
   const link = doc.link(playing ? { useCase: playing.useCase.id, ...playing.useCase.scenarios.length > 1 ? { scenario: playing.scenario.id } : {}, step } : void 0);
-  const lost = lostImports(source, key);
+  const lost = lostImports(written, keyOf(written));
+  const hasSystems = systems.length > 0 || player.focus !== void 0;
   const roomy = view.width >= 79;
-  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.length > 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.join(", ")), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))) };
+  return { element: /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, playing ? playerHeader($, view, playing, player) : doc.diagram.title && /* @__PURE__ */ h(ui.Box, { flexDirection: "column" }, /* @__PURE__ */ h(ui.Text, { bold: true }, doc.diagram.title), doc.diagram.summary && /* @__PURE__ */ h(ui.Text, { dimColor: true }, doc.diagram.summary)), /* @__PURE__ */ h(ui.Box, { key: view.anchorKey, flexDirection: "column" }, grid.columns > d.columns && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u2194 ", grid.columns, " columns wide, wider than the ", d.columns, " here: ", view.inPane ? "widen the window" : "use \u26F6 Focus or a wider window", " to see it whole."), lost.length > 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "\u26A0 Not found, so drawn as plain boxes: ", lost.join(", ")), doc.notes.map((note) => /* @__PURE__ */ h(ui.Text, { color: "yellow" }, "\u26A0 ", note.text, note.hint && /* @__PURE__ */ h(ui.Text, { dimColor: true }, " \u2192 ", note.hint))), /* @__PURE__ */ h(ui.Raster, { key: view.rasterKey, columns: grid.columns, rows: grid.rows, cells: grid.toBase64() })), hasSystems && !playing && systemBar($, view, doc, systems, selected, player), playing ? stepPanel($, view, playing, step, player) : pick && useCaseBar($, view, doc, pick, player), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, /* @__PURE__ */ h(ui.Button, { key: `src-${viewId}`, label: roomy ? "\u29C9 Copy source" : "\u29C9 Source", onPress: (press) => void copy($, press.surface, source.source, "the Proschi source") }), /* @__PURE__ */ h(ui.Button, { key: `lnk-${viewId}`, label: roomy ? "\u29C9 Copy share link" : "\u29C9 Link", onPress: (press) => void copy($, press.surface, link, "the share link") }), /* @__PURE__ */ h(ui.Button, { key: `open-${viewId}`, label: roomy ? "\u2197 Open in Proschi" : "\u2197 Open", variant: "primary", onPress: (press) => void openLink($, press.surface, link) }), !view.inPane && /* @__PURE__ */ h(ui.Button, { key: `focus-${viewId}`, label: "\u26F6 Focus", onPress: () => focus($, view, file ? basename(file) : doc.diagram.title ?? "diagram", file ? { file } : { source }) }))), systems: hasSystems };
+}
+function selectable(scene, focus2) {
+  return [...scene.nodes.values()].map((n) => n.node).filter((n) => n.kind === "system" || n.kind === "group" && n.system === n.id).map((n) => ({ id: n.id, path: focus2 !== void 0 ? `${focus2}.${n.id}` : n.id, name: n.name, expanded: n.kind === "group" }));
+}
+function systemBar($, view, doc, systems, selected, player) {
+  const { ui } = view.d;
+  const design = selected !== void 0 && !!systemAt2(doc.root, selected.path)?.diagram;
+  const next = () => {
+    const at = systems.findIndex((s) => s.path === selected?.path);
+    const to = systems[(at + 1) % systems.length];
+    if (to) void setPlayer($, view, (p) => ({ ...p, selected: to.path }));
+  };
+  const toggle2 = () => {
+    if (!selected || !design) return;
+    const open2 = player.expanded.includes(selected.path) || selected.expanded;
+    void setPlayer($, view, (p) => ({
+      ...p,
+      // Closing a system closes the ones inside it too.
+      expanded: open2 ? p.expanded.filter((id) => id !== selected.path && !id.startsWith(`${selected.path}.`)) : [...p.expanded, selected.path],
+      selected: selected.path
+    }));
+  };
+  const enter = () => {
+    if (!selected || !design) return;
+    void setPlayer($, view, (p) => ({ ...p, focus: selected.path, selected: void 0, pick: "", mode: "diagram", isPlaying: false }));
+  };
+  const leave = () => {
+    const focus2 = player.focus;
+    if (focus2 === void 0) return;
+    const up = focus2.includes(".") ? focus2.slice(0, focus2.lastIndexOf(".")) : void 0;
+    void setPlayer($, view, (p) => {
+      const { focus: _focus, ...rest } = p;
+      void _focus;
+      return { ...rest, ...up !== void 0 ? { focus: up } : {}, selected: focus2, pick: "", mode: "diagram", isPlaying: false };
+    });
+  };
+  const open = selected !== void 0 && (selected.expanded || player.expanded.includes(selected.path));
+  return /* @__PURE__ */ h(ui.Box, { flexDirection: "column", borderStyle: "round", borderColor: "gray", paddingX: 1, width: view.width }, player.focus !== void 0 && /* @__PURE__ */ h(ui.Text, { dimColor: true, wrap: "truncate-end" }, "Inside ", player.focus.split(".").join(" \u203A "), " \xB7 ", doc.diagram.title ?? "its design"), /* @__PURE__ */ h(ui.Box, { flexDirection: "row", gap: 1, alignItems: "center", flexWrap: "wrap" }, /* @__PURE__ */ h(ui.Text, { bold: true }, "System"), /* @__PURE__ */ h(ui.Text, { color: PINK, wrap: "truncate-end" }, selected ? `${selected.name} (${selected.path})` : "none here"), systems.length > 1 && /* @__PURE__ */ h(ui.Button, { key: `sys-next-${view.viewId}`, label: "\u21E5 Next", ...hotkey(view, "s"), onPress: next }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-open-${view.viewId}`, label: open ? "\u229F Collapse" : "\u229E Expand", ...hotkey(view, "o"), onPress: toggle2 }), selected && design && /* @__PURE__ */ h(ui.Button, { key: `sys-focus-${view.viewId}`, label: "\u2922 Focus in", ...hotkey(view, "f"), onPress: enter }), player.focus !== void 0 && /* @__PURE__ */ h(ui.Button, { key: `sys-back-${view.viewId}`, label: "\u2191 Back out", ...hotkey(view, "u"), onPress: leave })));
 }
 var lostByKey = /* @__PURE__ */ new Map();
 function lostImports(source, key) {
@@ -6489,7 +6820,7 @@ function animate($, view, steps) {
     if (started < 0) started = now;
     const elapsed = now - started;
     const play = playAt(view.scene, steps, step, Math.min(100, elapsed / TRAVEL_MS * 100), tick++);
-    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, icons, play }).toBase64() });
+    await $.ui.blit({ requestId: view.d.requestId, key: view.rasterKey, cells: paint(view.scene, { overlay: view.overlay, icons, systems: view.systems, ...view.selected ? { selected: view.selected } : {}, play }).toBase64() });
     if (!player.isPlaying) {
       if (elapsed >= TRAVEL_MS) stop(view.viewId);
       return;
