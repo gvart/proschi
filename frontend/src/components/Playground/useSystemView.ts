@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import type { Diagram } from '../../dsl';
 import { viewDiagram } from '../../dsl/view';
-import type { Analysis, TestResult } from '../../sim';
+import { formatRps, type Analysis, type TestResult } from '../../sim';
 import { analysisOverlay, type SimOverlay } from '../../sim/overlay';
 import { scopeAt, systemAnalysisAt, systemAt, systemSummaries, type SystemSummary } from '../Canvas/systemSummary';
 
@@ -18,6 +18,8 @@ export interface SystemView {
   focus: string;
   /** The team file of the design navigated into, which canvas edits cannot change. */
   focusFile?: string;
+  /** What the rest of the document sends into the design navigated into: `incl. 2k rps from Drone startup`. */
+  focusInbound?: string;
   crumbs: Crumb[];
   /** The analysis of what is shown when navigated into: the team design under what it is sent. */
   analysis: Analysis;
@@ -72,23 +74,28 @@ export function useSystemView(doc: string, diagram: Diagram, analysis: Analysis,
   );
   const goTo = useCallback((path: string) => setState({ doc, focus: path, expanded }), [doc, expanded]);
 
+  const focused = useMemo(() => (focus ? systemAnalysisAt(analysis, focus) : undefined), [analysis, focus]);
   const overlayOf = useCallback(() => {
-    const base = analysisOverlay(shown, scope.analysis);
+    // Navigated into a system: its design under its own traffic plus what every caller sends.
+    const base = focused?.overlay ?? analysisOverlay(shown, scope.analysis);
     const nodes = { ...base.nodes };
-    // The members of an expanded system carry its namespaced ids: `orders.db`.
+    const flows = [...base.flows];
+    // The members of an expanded system carry its namespaced ids (`orders.db`) and the same combined load.
     for (const node of shown.nodes) {
       if (node.system !== node.id) continue;
-      const inner = systemAnalysisAt(analysis, pathOf(node.id))?.analysis;
+      const inner = systemAnalysisAt(analysis, pathOf(node.id))?.overlay;
       if (!inner) continue;
-      for (const [id, o] of Object.entries(analysisOverlay(shown, inner).nodes)) nodes[`${node.id}.${id}`] = o;
+      for (const [id, o] of Object.entries(inner.nodes)) nodes[`${node.id}.${id}`] = o;
+      for (const f of inner.flows) flows.push({ ...f, from: `${node.id}.${f.from}`, to: `${node.id}.${f.to}` });
     }
-    return { ...base, nodes };
-  }, [shown, scope, analysis, pathOf]);
+    return { nodes, flows };
+  }, [shown, scope, analysis, pathOf, focused]);
 
   return {
     shown,
     focus,
     ...(focus ? { focusFile: systemAt(diagram, focus)?.resolved } : {}),
+    ...(focused ? inboundNote(focused.callers ?? []) : {}),
     crumbs,
     analysis: scope.analysis,
     summaries,
@@ -109,4 +116,12 @@ function crumbsOf(diagram: Diagram, focus: string): Crumb[] {
     scope = scope?.systems?.find((s) => s.id === id)?.diagram;
   });
   return crumbs;
+}
+
+/** `incl. 2k rps from Drone startup, 600 rps from Frontend`: what callers send, by the diagram that declares them. */
+function inboundNote(callers: { from?: string; rps: number }[]): { focusInbound?: string } {
+  const byFrom = new Map<string, number>();
+  for (const c of callers) byFrom.set(c.from ?? 'the diagram', (byFrom.get(c.from ?? 'the diagram') ?? 0) + c.rps);
+  if (byFrom.size === 0) return {};
+  return { focusInbound: `incl. ${[...byFrom].map(([from, rps]) => `${formatRps(rps)} from ${from}`).join(', ')}` };
 }

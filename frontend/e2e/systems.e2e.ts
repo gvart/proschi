@@ -77,6 +77,8 @@ test.describe('team systems in the editor', () => {
     await expect(breadcrumb(page)).toContainText('Drone startup');
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toBeVisible();
+    // The design is shown under its own traffic plus what the org sends.
+    await expect(breadcrumb(page)).toContainText('incl. 100 rps from Drone startup');
     await expect(box(page, 'Frontend')).toHaveCount(0);
     // Its use cases are the team's own.
     await expect(page.getByRole('combobox').first()).toContainText('Place order');
@@ -102,6 +104,11 @@ test.describe('team systems in the editor', () => {
     await expect(frame).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toBeVisible();
     await expect(frame.locator('.pc-system__pill')).toHaveText('OK');
+    // With the load overlay on, its members show their load like any node.
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
+    await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
     // The rest of the org stays collapsed.
     await expect(box(page, 'Frontend')).toBeVisible();
     await expect(box(page, 'Order Processing')).toHaveCount(0);

@@ -1062,6 +1062,7 @@ export default function Playground() {
                           diagram={shown}
                           crumbs={systems.crumbs}
                           focusFile={systems.focusFile}
+                          focusInbound={systems.focusInbound}
                           onCrumb={systems.goTo}
                           onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
                           onResetLayout={() => editSource(clearPositions)}
@@ -1279,6 +1280,8 @@ interface DiagramViewProps {
   crumbs: Crumb[];
   /** The team file shown when navigated into a system; the canvas cannot edit it. */
   focusFile?: string;
+  /** What the rest of the document sends into the design navigated into. */
+  focusInbound?: string;
   onCrumb: (path: string) => void;
   /** Navigates into a system box (double-click). */
   onOpenSystem: (id: string) => void;
@@ -1314,6 +1317,7 @@ function DiagramView({
   playback,
   crumbs,
   focusFile,
+  focusInbound,
   onCrumb,
   onOpenSystem,
 }: DiagramViewProps) {
@@ -1500,7 +1504,7 @@ function DiagramView({
         {playing && <PlaybackMiniMap view={playback} />}
         {!playing && crumbs.length > 1 && (
           <Panel position="top-left">
-            <Breadcrumbs crumbs={crumbs} file={focusFile} onPick={onCrumb} />
+            <Breadcrumbs crumbs={crumbs} file={focusFile} inbound={focusInbound} onPick={onCrumb} />
           </Panel>
         )}
         {!playing && crumbs.length === 1 && <Panel position="top-left">
@@ -1625,33 +1629,40 @@ function DiagramView({
 }
 
 /** Where the canvas is among the document's systems (Drone startup › Order Processing), with the way back. */
-function Breadcrumbs({ crumbs, file, onPick }: { crumbs: Crumb[]; file?: string; onPick: (path: string) => void }) {
+function Breadcrumbs({ crumbs, file, inbound, onPick }: { crumbs: Crumb[]; file?: string; inbound?: string; onPick: (path: string) => void }) {
   const up = crumbs[crumbs.length - 2];
   return (
-    <nav aria-label="Breadcrumb" className="flex max-w-[calc(100vw-7rem)] items-center gap-1 rounded border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
-      <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
-        <ArrowLeft size={15} />
-      </button>
-      <ol className="flex min-w-0 items-center gap-1 text-sm">
-        {crumbs.map((c, i) => {
-          const last = i === crumbs.length - 1;
-          return (
-            <li key={c.path} className={`flex items-center gap-1 ${last ? 'min-w-0' : 'flex-none max-sm:[&:not(:first-child)]:hidden'}`}>
-              {i > 0 && <ChevronRight size={14} className="flex-none text-muted" aria-hidden="true" />}
-              {last ? (
-                <span aria-current="page" className="truncate font-bold text-ink">
-                  {c.name}
-                </span>
-              ) : (
-                <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
-                  {c.name}
-                </button>
-              )}
-            </li>
-          );
-        })}
-      </ol>
-      {file && <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title="This design is in its own file; edit it there">{file} · read-only</span>}
+    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
+      <div className="flex min-w-0 items-center gap-1">
+        <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
+          <ArrowLeft size={15} />
+        </button>
+        <ol className="flex min-w-0 items-center gap-1 text-sm">
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <li key={c.path} className={`flex items-center gap-1 ${last ? 'min-w-0' : 'flex-none max-sm:[&:not(:first-child)]:hidden'}`}>
+                {i > 0 && <ChevronRight size={14} className="flex-none text-muted" aria-hidden="true" />}
+                {last ? (
+                  <span aria-current="page" className="truncate font-bold text-ink">
+                    {c.name}
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
+                    {c.name}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        {file && <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title="This design is in its own file; edit it there">{file} · read-only</span>}
+      </div>
+      {inbound && (
+        <span className="min-w-0 truncate pb-0.5 pl-9 text-xs font-semibold text-ink/75" title="The load shown includes what the rest of the document sends into this design">
+          {inbound}
+        </span>
+      )}
     </nav>
   );
 }
