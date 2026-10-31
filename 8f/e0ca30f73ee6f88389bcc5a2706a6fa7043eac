@@ -1,0 +1,23 @@
+docs/SYSTEMS.md
+  s_e7f61f870764cb::t_ba2744f9a3654e 3-6,8-10,12,14-15,18,58-62,64,66-69,71-72,74,76-78,87-90,92,94,96-101,103-104,106,108-109,118,126-129,131,133-138
+docs/site.json
+  s_e7f61f870764cb::t_7a5d0793afcf85 86,97-98
+frontend/plugins/docsSite.test.ts
+  s_e7f61f870764cb::t_7a5d0793afcf85 59,61,160-161,163-164
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "8fe0ca30f73ee6f88389bcc5a2706a6fa7043eac",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
