@@ -149,6 +149,20 @@ describe('systems in the simulation', () => {
     expect(a.systems!.find((s) => s.id === 'frontend')!.saturated).toBe(false);
   });
 
+  it('exposes the load on each node of a team design under the combined load', () => {
+    const low = analyze(parseDrone(100)).systems!.find((s) => s.id === 'orders')!;
+    const headroom = contractOf(parseDrone(100).systems!.find((s) => s.id === 'orders')!).entries[0].saturatesAtRps;
+    const high = analyze(parseDrone(Math.ceil(headroom * 1.5))).systems!.find((s) => s.id === 'orders')!;
+    // Same shape as the canvas overlay of any diagram, by the team's own ids.
+    expect(Object.keys(high.overlay!.nodes)).toHaveLength(75);
+    expect(high.overlay!.nodes.db).toMatchObject({ saturated: true });
+    expect(high.overlay!.nodes.db.utilization).toBeCloseTo(high.analysis!.nodes.find((n) => n.id === 'db')!.utilization, 9);
+    expect(low.overlay!.nodes.db).toMatchObject({ saturated: false });
+    expect(low.overlay!.nodes.db.utilization!).toBeLessThan(high.overlay!.nodes.db.utilization!);
+    // The flows include what the org sends in: 300 own + 100 sent on gateway -> api.
+    expect(low.overlay!.flows.find((f) => f.from === 'gateway' && f.to === 'api')!.rps).toBeCloseTo(400, 6);
+  });
+
   it('warns when a system runs hot', () => {
     const low = parseDrone(100);
     const api = contractOf(low.systems!.find((s) => s.id === 'orders')!).entries[0];
