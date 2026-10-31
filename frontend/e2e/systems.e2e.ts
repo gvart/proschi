@@ -95,6 +95,13 @@ test.describe('team systems in the editor', () => {
     // The design is shown under its own traffic plus what the org sends.
     await expect(breadcrumb(page)).toContainText('incl. 100 rps from Drone startup');
     await expect(box(page, 'Frontend')).toHaveCount(0);
+    // The code pane shows the team file, read-only: it came with the link.
+    const teamBar = page.getByRole('group', { name: 'Team file' });
+    await expect(teamBar).toContainText('teams/orders.proschi');
+    await expect(teamBar).toContainText('Read-only');
+    await expect(teamBar).toContainText('It came with the link this diagram was opened from.');
+    await expect(codeEditor(page)).toHaveAttribute('contenteditable', 'false');
+    expect(await editorText(page)).toBe(DRONE_TEAM_FILES['teams/orders.proschi']);
     // Its use cases are the team's own.
     await expect(page.getByRole('combobox').first()).toContainText('Place order');
 
@@ -235,6 +242,55 @@ test('a narrow team design with a long name keeps its frame controls inside the 
     expect(button.x).toBeGreaterThanOrEqual(frameBox.x + 8);
     expect(button.x + button.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
   }
+});
+
+test('the drone example opens its team files as diagrams, which Open edits', async ({ page }) => {
+  await page.goto('app/');
+  const openDrone = async () => {
+    await page.getByRole('button', { name: 'Examples' }).click();
+    await page.getByRole('dialog', { name: 'Examples' }).getByRole('button', { name: 'Drone startup (team systems)' }).click();
+    await expect(box(page, 'Order Processing')).toBeVisible();
+  };
+  await openDrone();
+  await expect(status(page, 'Order Processing')).toHaveText('OK');
+  await layoutSettled(page);
+
+  // An org edit not yet saved, then into the Orders team.
+  await codeEditor(page).click();
+  await page.keyboard.press('ControlOrMeta+End');
+  await page.keyboard.insertText('# org note\n');
+  await box(page, 'Order Processing').getByRole('button', { name: 'Open Order Processing' }).click();
+  await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
+  const teamBar = page.getByRole('group', { name: 'Team file' });
+  await expect(teamBar).toContainText('teams/orders.proschi');
+  await expect(teamBar).toContainText('Saved in this browser');
+  expect(await editorText(page)).toBe(DRONE_TEAM_FILES['teams/orders.proschi']);
+
+  // Edit the team file: its database now takes 50 rps.
+  await codeEditor(page).click();
+  await page.keyboard.press('ControlOrMeta+A');
+  await page.keyboard.insertText(DRONE_TEAM_FILES['teams/orders.proschi'].replace('db 1.5k rps', 'db 50 rps'));
+
+  // Back at the org, the box says so, and the org's text and its undo history are as they were.
+  await teamBar.getByRole('button', { name: 'Drone startup' }).click();
+  await expect(teamBar).toBeHidden();
+  await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+  expect(await editorText(page)).toContain('# org note');
+  await codeEditor(page).click();
+  await page.keyboard.press('ControlOrMeta+Z');
+  await expect.poll(() => editorText(page)).not.toContain('# org note');
+
+  // Opening the example again adds an org diagram but no second copy of a team file; it reads the edited one.
+  await openDrone();
+  await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+  await expect
+    .poll(() =>
+      page.evaluate(() => {
+        const state = JSON.parse(localStorage.getItem('proschi.docs') ?? '{"docs":[]}') as { docs: { fileName?: string }[] };
+        return state.docs.map((d) => d.fileName).filter((f) => f?.startsWith('teams/')).length;
+      }),
+    )
+    .toBe(4);
 });
 
 test('a component added from the palette next to team systems leaves every box shown', async ({ page }) => {
