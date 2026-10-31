@@ -27,6 +27,8 @@ export interface Source {
 export interface Document {
   /** The diagram as the view draws it. */
   diagram: Diagram;
+  /** The document as parsed, every system collapsed. */
+  root: Diagram;
   errors: Diagnostic[];
   overlay?: Record<string, NodeOverlay>;
   /** Promise, headroom and status of each system box and expanded frame, by its id in the view. */
@@ -63,6 +65,7 @@ export function loadDocument(input: Source): Document {
   const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : undefined;
   return {
     diagram: errors.length ? diagram : applyView(diagram, view),
+    root: diagram,
     errors,
     ...(overlay ? { overlay } : {}),
     systems: sim?.systems ?? {},
