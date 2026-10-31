@@ -820,8 +820,9 @@ export default function Playground() {
               setSelectedScenarioId(undefined);
               setInitialStep(undefined);
             }}
+            title={useCase?.name}
             disabled={shown.useCases.length === 0}
-            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[13rem] ${field}`}
+            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[11rem] truncate ${field}`}
           >
             {shown.useCases.length === 0 && <option value="">No use cases</option>}
             {useCaseGroups.map((group) =>

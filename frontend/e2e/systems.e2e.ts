@@ -123,6 +123,10 @@ test.describe('team systems in the editor', () => {
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toContainText(/\d+%/);
     await page.getByRole('button', { name: 'Overlay: load' }).click();
+    // A long use case name does not widen the picker; its full name is in the title.
+    const picker = page.getByRole('combobox', { name: 'Use case' });
+    expect((await picker.boundingBox())!.width).toBeLessThanOrEqual(11 * 16 + 1);
+    await expect(picker).toHaveAttribute('title', /\S/);
     // The rest of the org stays collapsed.
     await expect(box(page, 'Frontend')).toBeVisible();
     await expect(box(page, 'Order Processing')).toHaveCount(0);
