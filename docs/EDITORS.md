@@ -147,6 +147,8 @@ warning) and 2 on bad usage. `--format json` prints machine-readable results.
 To keep files in the canonical layout, add `proschi fmt --check docs/` (see
 [Formatting](#formatting)). To hold designs to their requirements, add
 `proschi test --format github docs/` (see [Simulation and tests](#simulation-and-tests)).
+When the diagrams have `git:` or `https://` imports, run
+`proschi imports sync --frozen` first (see [Imports](#imports)).
 
 ### GitHub Action
 
@@ -311,7 +313,26 @@ re-reads specs and the config when they change on disk.
 ## Imports
 
 `import "path.proschi"` statements (see [Imports](LANGUAGE.md#imports)) are
-resolved from the file system, relative to the importing file.
+resolved from the file system, relative to the importing file, and must stay
+inside the [project root](LANGUAGE.md#the-project-root): the nearest
+`proschi.json`, else the git repository. The `from` file of a
+[system](LANGUAGE.md#systems) follows the same rules.
+
+`git:` and `https://` imports are read from `proschi.lock` and
+`.proschi/cache/`, which one command fills:
+
+```sh
+proschi imports sync [--frozen] [<file|dir>...]
+```
+
+It is the only command that uses the network. Commit `proschi.lock` and add
+`.proschi/` to `.gitignore`; in CI, run `proschi imports sync --frozen`
+before `check` and `test`. See [Syncing remote imports](LANGUAGE.md#syncing-remote-imports).
+
+`proschi share-link <file>` prints a web editor link with the document and
+every file it imports, remote ones from the cache, so it opens the same in a
+browser that has none of them. It refuses an import outside the project root
+or one that is not synced yet.
 
 - **`proschi check`** reports every problem under the file it occurs in, so an
   error in `infra.proschi` is printed as `infra.proschi:3:1: …` even when only
@@ -452,11 +473,26 @@ Imports are followed as for `check`, and the merged diagram is rendered. A
 document with errors (in any of its files) is not rendered: `render` prints
 them and exits with 1. Warnings are fine.
 
+[Systems](LANGUAGE.md#systems) are drawn as one box each, with the team's
+promise and what it is sent against its headroom. Two options open them:
+
+```sh
+proschi render org.proschi --expand orders,feed    # unfold these in place
+proschi render org.proschi --expand orders.billing # a nested one, and its parent
+proschi render org.proschi --focus orders          # only the Orders design
+```
+
+`--expand` takes a comma-separated list and may be given more than once. An
+id that names no system, or a system without a `from` design, is refused
+with exit code 2; for an unknown id the message lists the systems there are.
+
 **VS Code.** *Proschi: Open Preview to the Side* (the preview button in the
 editor title bar, or the command palette) opens a panel with the architecture
 and a scenario picker showing that scenario's sequence diagram. It updates as
 you type and follows the active `.proschi` editor; while the document has
-errors it lists them above the last good rendering.
+errors it lists them above the last good rendering. It resolves imports and
+system `from` files like `check`, inside the project root, with remote ones
+from the sync cache, and draws each system as one box.
 
 ## Simulation and tests
 

@@ -103,6 +103,26 @@ pane you drive from the keyboard:
 
 `ctrl+x tab` moves focus to the pane when it doesn't have it.
 
+A diagram with [systems](LANGUAGE.md#systems) draws each team as one box with
+its promise and its load. In the pane, more keys work on them:
+
+| Key | Does |
+|---|---|
+| `s` | Select the next system |
+| `o` | Open or close the selected system in place |
+| `f` | Focus into the selected system: draw only its design |
+| `u` | Back out to the diagram around it |
+
+`/proschi view --expand orders,feed org.proschi` opens the pane with those
+systems expanded, and `/proschi view --focus orders org.proschi` opens it
+inside Orders. An id that names no system is refused with a message.
+
+The plugin reads imports and `from` files inside the project root, and
+`git:` and `https://` ones from the cache that `proschi imports sync` fills;
+it never uses the network. Its file API cannot resolve symlinks, so unlike
+`proschi check` it cannot tell when a symlink inside the project points
+outside it.
+
 It needs a Claude Code build with mod support (a plugin hooks module) and
 Node 18 or newer on the `PATH`, as the layout runs in Node. The icons are
 [Nerd Font](https://www.nerdfonts.com) glyphs by default; without a Nerd Font

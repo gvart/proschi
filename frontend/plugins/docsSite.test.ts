@@ -56,7 +56,8 @@ describe('docs/site.json', () => {
     const pager = (slug: string) => layoutHtml(site, rendered.get(slug)!).match(/<nav class="pager"[\s\S]*?<\/nav>/)![0]
     expect(pager('')).toContain('rel="next"><span class="pager__dir">Next</span><span class="pager__title">Quickstart</span>')
     expect(pager('quickstart')).toContain('<span class="pager__title">Why Proschi</span>')
-    expect(pager('quickstart')).toContain('<span class="pager__title">Language reference</span>')
+    expect(pager('quickstart')).toContain('<span class="pager__title">Org diagrams and team systems</span>')
+    expect(pager('systems')).toContain('<span class="pager__title">Language reference</span>')
   })
 
   it('points sidebar anchors at headings that exist', () => {
@@ -147,12 +148,19 @@ describe('live examples', () => {
   })
 
   it('every Markdown fence of Proschi code is tagged', () => {
-    for (const file of ['LANGUAGE.md', 'EDITORS.md', 'PRACTICE.md', 'QUICKSTART.md', 'WHY.md']) {
+    for (const file of ['LANGUAGE.md', 'EDITORS.md', 'PRACTICE.md', 'QUICKSTART.md', 'WHY.md', 'SYSTEMS.md']) {
       const fences = markdownIt().parse(readFileSync(`${docsDir}${file}`, 'utf8'), {}).filter((t) => t.type === 'fence' && !t.info.trim())
       for (const { content } of fences) {
         expect(/^\s*(title|usecase|group)\b|\s-[->x]/m.test(content), `${file}: an untagged fence that looks like Proschi:\n${content}`).toBe(false)
       }
     }
+  })
+
+  it('the org guide flags Order Processing only once the traffic is raised, as it says', () => {
+    const [, connected, raised] = rendered.get('systems')!.examples
+    const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.id)
+    expect(failing(connected)).toEqual([])
+    expect(failing(raised)).toEqual(['system:orders'])
   })
 
   it('the quickstart’s last step passes, and fails survival with one database, as it says', () => {

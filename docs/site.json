@@ -14,6 +14,12 @@
       "description": "Your first Proschi diagram in two minutes: services, a request flow, a failure, and a requirement that checks itself."
     },
     {
+      "slug": "systems",
+      "title": "Org diagrams and team systems",
+      "source": "SYSTEMS.md",
+      "description": "Draw each team's design as one box, connect the teams, and let the simulation say which team cannot take the traffic you send it, including designs from other repositories."
+    },
+    {
       "slug": "language",
       "title": "Language reference",
       "source": "LANGUAGE.md",
@@ -77,7 +83,7 @@
   "nav": [
     {
       "title": "Start",
-      "items": [{ "page": "" }, { "page": "quickstart" }]
+      "items": [{ "page": "" }, { "page": "quickstart" }, { "page": "systems", "label": "Org diagrams" }]
     },
     {
       "title": "Language",
@@ -85,6 +91,8 @@
         { "page": "language", "label": "Reference" },
         { "page": "language", "anchor": "use-case-steps", "label": "Use case steps" },
         { "page": "language", "anchor": "scenarios", "label": "Scenarios" },
+        { "page": "language", "anchor": "imports", "label": "Imports" },
+        { "page": "language", "anchor": "systems", "label": "Systems" },
         { "page": "language", "anchor": "high-level-design", "label": "High-level design" },
         { "page": "language", "anchor": "tests", "label": "Tests" },
         { "page": "language", "anchor": "grammar", "label": "Grammar" }
