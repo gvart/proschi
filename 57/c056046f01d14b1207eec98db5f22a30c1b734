@@ -1,0 +1,43 @@
+plugin/hooks/register.js
+  s_e7f61f870764cb::t_237fa7c84413de 491-580,588-595,597,599,601,4548-4549
+tooling/src/terminal/document.ts
+  s_e7f61f870764cb::t_47a3877ec86111 63-64
+plugin/hooks/layout.cjs
+  s_e7f61f870764cb::t_237fa7c84413de 1-3,5-9,18-22,24-27,30
+tooling/test/imports-jail.test.ts
+  s_e7f61f870764cb::t_2402ccbc330898 1-108
+tooling/vscode/src/preview.ts
+  s_e7f61f870764cb::t_9477e263184d29 119
+tooling/test/share.test.ts
+  s_e7f61f870764cb::t_f26c79253a4d0d 3,6-7,25-26,42-64
+  s_e7f61f870764cb::t_0890625f0da494 65
+tooling/test/imports.test.ts
+  s_e7f61f870764cb::t_a554c76a0dfb2f 20-21,109,115,120
+tooling/src/server.ts
+  s_e7f61f870764cb::t_4f12b88ed781a9 6-7
+  s_e7f61f870764cb::t_d21c9e07464131 55-59
+tooling/src/share.ts
+  s_e7f61f870764cb::t_fdc4529daead7e 41-42
+  s_e7f61f870764cb::t_249ad14151c350 6-8,10-11,13-14,26-36,40,43,45-47,51,56,80,82,87-91
+tooling/src/imports.ts
+  s_e7f61f870764cb::t_99db3eb32e9020 8,47
+  s_e7f61f870764cb::t_8ab4a0ba95f494 3-5,7,9,12-13,22-46,48-49,51-53,55-169,171,176-178,247
+tooling/src/lock.ts
+  s_e7f61f870764cb::t_0b7ee72268dacc 1-130
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "57c056046f01d14b1207eec98db5f22a30c1b734",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
