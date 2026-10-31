@@ -4552,6 +4552,17 @@ function missingImports(input) {
   });
   return [...missing];
 }
+function importFilePath(dir, root, key) {
+  if (isRemoteSpec(key) || key.startsWith("/")) return void 0;
+  const parts = dir.split("/").filter(Boolean);
+  for (const part of key.split("/")) {
+    if (part === "" || part === ".") continue;
+    if (part === "..") parts.pop();
+    else parts.push(part);
+  }
+  const path = `/${parts.join("/")}`;
+  return path === root || path.startsWith(root.endsWith("/") ? root : `${root}/`) ? path : void 0;
+}
 function keyOf(input) {
   const text = input.source + "\0" + JSON.stringify(input.imports ?? {});
   let h2 = 2166136261;
@@ -5566,16 +5577,23 @@ function proschiFile(tool, input) {
 }
 var basename = (path) => path.split("/").pop() ?? path;
 var dirname = (path) => path.slice(0, Math.max(0, path.lastIndexOf("/")));
+async function projectRoot($, dir) {
+  for (let current = dir; ; current = dirname(current)) {
+    if (await $.fs.exists(`${current}/proschi.json`) || await $.fs.exists(`${current}/.git`)) return current || "/";
+    if (!current || current === "/") return dir;
+  }
+}
 async function readWithImports($, file) {
   const name = basename(file);
   const dir = dirname(file);
+  const root = await projectRoot($, dir);
   const doc = { source: await $.fs.read(file), path: name, imports: {} };
   for (let round2 = 0; round2 < 8; round2++) {
     const missing = missingImports(doc).filter((key) => key !== name && !(key in doc.imports));
     if (missing.length === 0) break;
     for (const key of missing) {
-      const path = dir ? `${dir}/${key}` : key;
-      doc.imports[key] = await $.fs.exists(path) ? await $.fs.read(path) : "";
+      const path = importFilePath(dir, root, key);
+      doc.imports[key] = path && await $.fs.exists(path) ? await $.fs.read(path) : "";
     }
   }
   return doc;
