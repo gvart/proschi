@@ -149,8 +149,10 @@ export function SystemFrameHeader({ id, name, team, summary }: { id: string; nam
   return (
     <div className="pc-system-frame__head">
       <Boxes size={14} aria-hidden="true" />
-      <span className="pc-group__name">{name}</span>
-      {team && <span className="pc-system-frame__team">@{team}</span>}
+      <span className="pc-group__name" title={name}>
+        {name}
+      </span>
+      {team && <span className="pc-system-frame__team" title={`@${team}`}>@{team}</span>}
       <StatusPill summary={summary} />
       {actions && (
         <span className="pc-system__actions nodrag">

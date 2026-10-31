@@ -1,5 +1,6 @@
 import type { Page } from '@playwright/test';
-import { droneOrgSource } from '../src/playground/droneStartup';
+import lz from 'lz-string';
+import { DRONE_TEAM_FILES, droneOrgSource } from '../src/playground/droneStartup';
 import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
 import { droneLink } from './drone';
 
@@ -156,6 +157,11 @@ test.describe('team systems in the editor', () => {
     await expect(frame).toBeVisible();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' })).toBeVisible();
     await expect(frame.locator('.pc-system__pill')).toHaveText('OK');
+    // The header's controls keep clear of the frame's border.
+    const frameBox = (await frame.locator('.pc-group').boundingBox())!;
+    const collapse = (await frame.getByRole('button', { name: 'Collapse Order Processing' }).boundingBox())!;
+    expect(collapse.x + collapse.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
+    expect(collapse.y).toBeGreaterThanOrEqual(frameBox.y + 8);
     // With the load overlay on, its members show their load like any node.
     await page.getByRole('button', { name: 'Overlay: load' }).click();
     await expect(page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node[data-load]')).toBeVisible();
@@ -212,6 +218,23 @@ test.describe('team systems on a busy org', () => {
     await expect(db.locator('.pc-node__name')).toHaveCSS('color', 'rgb(17, 17, 17)');
     await expect(db.locator('.pc-node__tech')).toHaveCSS('color', 'rgb(17, 17, 17)');
   });
+});
+
+test('a narrow team design with a long name keeps its frame controls inside the border', async ({ page }) => {
+  const org = droneOrgSource(100).replace('"Feed" @Feed', '"Customer Feed Notifications" @FeedAndNotifications');
+  const feed = 'title "Feed"\ncaller "Callers" [Actor]\ningest "Ingest" [Microservice]\ncaller -> ingest\nusecase "Publish event" {\n  caller -> ingest : POST\n}\n';
+  const files = { ...DRONE_TEAM_FILES, 'teams/feed.proschi': feed };
+  await page.goto(`app/#code=${lz.compressToEncodedURIComponent(org)}&imports=${lz.compressToEncodedURIComponent(JSON.stringify(files))}`);
+  await box(page, 'Customer Feed Notifications').getByRole('button', { name: 'Expand Customer Feed Notifications', exact: true }).click();
+  const frame = page.locator('.react-flow__node-groupNode', { hasText: 'Customer Feed Notifications' }).locator('.pc-group');
+  await expect(frame).toBeVisible();
+  await layoutSettled(page);
+  const frameBox = (await frame.boundingBox())!;
+  for (const name of ['Open', 'Collapse']) {
+    const button = (await frame.getByRole('button', { name: `${name} Customer Feed Notifications` }).boundingBox())!;
+    expect(button.x).toBeGreaterThanOrEqual(frameBox.x + 8);
+    expect(button.x + button.width).toBeLessThanOrEqual(frameBox.x + frameBox.width - 8);
+  }
 });
 
 test('a component added from the palette next to team systems leaves every box shown', async ({ page }) => {
