@@ -22,6 +22,7 @@ const MARGIN = 32;
 const CARD_HEIGHT = 72;
 const CARD_WITH_TEAM_HEIGHT = 92;
 // A collapsed system: its name, @team, promise, and what it is sent against its headroom.
+// The height of autoLayout's SYSTEM_SIZE: switch to it once that is on this branch.
 const SYSTEM_HEIGHT = 100;
 const PAD_X = 18;
 const PAD_Y = 14;
