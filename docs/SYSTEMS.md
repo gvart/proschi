@@ -112,8 +112,9 @@ requirements {
 }
 ```
 
-Press Play to watch the request move from team to team. Each box shows its
-promise and its load: at 100 rps every team is well inside what it takes.
+Press Play to watch the request move from team to team. Then open it in the
+editor: there each box shows its promise and its load, and at 100 rps every
+team is well inside what it takes.
 
 ## 3. Raise the traffic
 
@@ -170,8 +171,9 @@ requirements {
 }
 ```
 
-Order Processing is now flagged as saturated: it is sent 2k rps and takes
-1.2k. The other teams still hold. In the editor's *Results* tab:
+Open it in the editor. Order Processing is now flagged as saturated: it is
+sent 2k rps and takes 1.2k. The other teams still hold. In the *Results*
+tab:
 
 - the *Systems* table lists each team with what it is sent against what it
   takes, its promise, the p99 your diagram sees and its status;
