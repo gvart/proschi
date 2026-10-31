@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { droneOrgSource } from '../src/playground/droneStartup';
-import { codeEditor, editorText, expect, test } from './fixtures';
+import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
 import { droneLink } from './drone';
 
 /** A system box on the canvas, by its name. */
@@ -174,4 +174,17 @@ test.describe('team systems on a busy org', () => {
     await expect(db.locator('.pc-node__name')).toHaveCSS('color', 'rgb(17, 17, 17)');
     await expect(db.locator('.pc-node__tech')).toHaveCSS('color', 'rgb(17, 17, 17)');
   });
+});
+
+test('a component added from the palette next to team systems leaves every box shown', async ({ page }) => {
+  await page.goto(droneLink(100));
+  await expect(box(page, 'Order Processing')).toBeVisible();
+  const before = await canvasNodes(page).count();
+  await page.getByRole('button', { name: 'Add component' }).click();
+  const palette = page.getByRole('dialog', { name: 'Add a component' });
+  await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
+  await palette.getByRole('button', { name: 'Redis', exact: true }).click();
+  await expect(palette).toBeHidden();
+  // A new layout keeps the sizes React Flow measured; a node without one stays hidden until measured again.
+  await expect(canvasNodes(page)).toHaveCount(before + 1);
 });
