@@ -1,0 +1,51 @@
+tooling/test/fixtures/drone/teams/warehouse.proschi
+  s_e7f61f870764cb::t_db7af7b78a23e0 1-4,6-13,15-27
+  s_e7f61f870764cb::t_63580f5a2ed40b 5,14
+tooling/test/terminal.test.ts
+  s_e7f61f870764cb::t_06720823e82eab 315-389
+  s_e7f61f870764cb::t_bdff79ba41c120 5-6
+tooling/test/fixtures/drone/teams/feed.proschi
+  s_e7f61f870764cb::t_63580f5a2ed40b 5,14
+  s_e7f61f870764cb::t_db7af7b78a23e0 1-4,6-13,15-24
+tooling/src/terminal/layoutHost.ts
+  s_e7f61f870764cb::t_87711d280614fb 3,8,14
+tooling/src/terminal/systems.ts
+  s_e7f61f870764cb::t_d1898f7f1a073b 1-98,100-116,121-137,139-140,149-173
+  s_e7f61f870764cb::t_5d4444416409e4 117-120,138,141-148
+  s_e7f61f870764cb::t_8359f4377f88c7 99
+tooling/test/fixtures/drone/teams/orders.proschi
+  s_e7f61f870764cb::t_db7af7b78a23e0 1-27
+tooling/test/fixtures/drone/org.proschi
+  s_e7f61f870764cb::t_15842fed4a135f 1-36
+tooling/src/terminal/scene.ts
+  s_e7f61f870764cb::t_5970e0385e66c4 65-66,125-126
+tooling/src/terminal/document.ts
+  s_e7f61f870764cb::t_87711d280614fb 6-7,10-14,23-24,28,32-35,48-53,59-63,65,67-69,111
+tooling/test/fixtures/drone/teams/frontend.proschi
+  s_e7f61f870764cb::t_db7af7b78a23e0 1-27
+tooling/test/fixtures/drone/org-busy.proschi
+  s_e7f61f870764cb::t_8ef88d77c68955 32
+  s_e7f61f870764cb::t_d3ed8827aefcd6 1-31,33-36
+tooling/src/terminal/paint.ts
+  s_e7f61f870764cb::t_24bee2bc46391f 8,54-57,79-80,119,128,206-244,248-258,262,267-307
+  s_e7f61f870764cb::t_5d4444416409e4 259-261
+  s_e7f61f870764cb::t_48754ca9e43703 308
+tooling/test/__snapshots__/terminal.test.ts.snap
+  s_e7f61f870764cb::t_7ca30a2189777a 43-192
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4e053495f36560e40033165be1aac4e6ba48f032",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
