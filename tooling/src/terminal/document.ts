@@ -3,12 +3,15 @@ import { parse } from '../../../frontend/src/dsl/parser';
 import type { Diagram, Diagnostic } from '../../../frontend/src/dsl/types';
 import { encodeShareHash, type PlaybackTarget } from '../../../frontend/src/playground/share';
 import { analyze, runTests, type TestResult } from '../../../frontend/src/sim';
-import { analysisOverlay, type NodeOverlay } from '../../../frontend/src/sim/overlay';
+import type { NodeOverlay } from '../../../frontend/src/sim/overlay';
+import { applyView, viewOverlay, type SystemBadge, type SystemNote, type SystemsView } from './systems';
 
 /**
- * A Proschi document as the terminal view needs it: the diagram, its errors,
- * the simulation's per-node overlay and requirement results (when the
- * document has `traffic`), and the link that opens it in the web editor.
+ * A Proschi document as the terminal view needs it: the diagram as its view
+ * draws it (systems collapsed, expanded or focused, systems.ts), its errors,
+ * the simulation's per-node overlay, system badges and warnings, and
+ * requirement results (when the document has `traffic`), and the link that
+ * opens it in the web editor.
  */
 
 export interface Source {
@@ -17,12 +20,19 @@ export interface Source {
   path?: string;
   /** Imported files by the path the document's imports resolve to. */
   imports?: Record<string, string>;
+  /** Which systems are drawn open, or focused into. */
+  view?: SystemsView;
 }
 
 export interface Document {
+  /** The diagram as the view draws it. */
   diagram: Diagram;
   errors: Diagnostic[];
   overlay?: Record<string, NodeOverlay>;
+  /** Promise, headroom and status of each system box and expanded frame, by its id in the view. */
+  systems: Record<string, SystemBadge>;
+  /** The simulation's warnings about systems. */
+  notes: SystemNote[];
   tests: TestResult[];
   /** The web editor's link to the document, opened at a playback step when given one. */
   link: (playback?: PlaybackTarget) => string;
@@ -35,17 +45,28 @@ export function parseSource({ source, path = 'diagram.proschi', imports = {} }: 
   return { diagram: result.diagram, errors: result.diagnostics.filter((d) => d.severity === 'error') };
 }
 
+/** The diagram a document's view draws, for laying it out. */
+export function viewSource(input: Source): { diagram: Diagram; errors: Diagnostic[] } {
+  const { diagram, errors } = parseSource(input);
+  return { diagram: errors.length ? diagram : applyView(diagram, input.view), errors };
+}
+
 export function loadDocument(input: Source): Document {
   const { diagram, errors } = parseSource(input);
   const simulated = errors.length === 0 && (diagram.traffic?.length ?? 0) > 0;
   const analysis = simulated ? analyze(diagram) : undefined;
   const imports = input.imports && Object.keys(input.imports).length ? input.imports : undefined;
-  const sim = analysis ? analysisOverlay(diagram, analysis) : undefined;
-  if (sim) for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
+  const view = errors.length ? {} : (input.view ?? {});
+  const sim = errors.length ? undefined : viewOverlay(diagram, analysis, view);
+  const top = view.focus === undefined;
+  if (sim && analysis && top) for (const c of diagram.capacity ?? []) if (c.size && sim.nodes[c.node]) sim.nodes[c.node].size = c.size;
+  const overlay = sim && Object.keys(sim.nodes).length ? sim.nodes : undefined;
   return {
-    diagram,
+    diagram: errors.length ? diagram : applyView(diagram, view),
     errors,
-    ...(sim ? { overlay: sim.nodes } : {}),
+    ...(overlay ? { overlay } : {}),
+    systems: sim?.systems ?? {},
+    notes: sim?.notes ?? [],
     tests: analysis ? runTests(diagram, analysis) : [],
     link: (playback) => EDITOR + encodeShareHash(input.source, playback, imports),
   };
@@ -87,7 +108,7 @@ export function importFilePath(dir: string, root: string, key: string): string |
 
 /** A short stable key for a document's text and imports (FNV-1a). */
 export function keyOf(input: Source): string {
-  const text = input.source + '\u0000' + JSON.stringify(input.imports ?? {});
+  const text = input.source + '\u0000' + JSON.stringify(input.imports ?? {}) + (input.view ? '\u0000' + JSON.stringify(input.view) : '');
   let h = 0x811c9dc5;
   for (let i = 0; i < text.length; i++) {
     h ^= text.charCodeAt(i);

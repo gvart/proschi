@@ -2,7 +2,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 import { layoutGraph } from '../../frontend/src/dsl/autoLayout';
 import { examples } from '../../frontend/src/dsl/examples';
-import { importFilePath, keyOf, loadDocument, missingImports, type Source } from '../src/terminal/document';
+import { importFilePath, keyOf, loadDocument, missingImports, parseSource, viewSource, type Source } from '../src/terminal/document';
+import { viewError, viewOptions, type SystemsView } from '../src/terminal/systems';
 import { DEFAULT, Grid, base64 } from '../src/terminal/grid';
 import { COLOR, heatOf, paint } from '../src/terminal/paint';
 import { currentStepsOf, playAt, stepPath } from '../src/terminal/playback';
@@ -309,5 +310,80 @@ describe('terminal document', () => {
     expect(doc.link()).toMatch(/^https:\/\/proschi\.app\/app\/#code=/);
     expect(doc.link({ useCase: 'x', step: 2 })).toContain('&step=2');
     expect(keyOf({ source: 'a' })).not.toBe(keyOf({ source: 'b' }));
+  });
+});
+
+/** The drone startup of sim/systems.test.ts, small: an org of four team systems; at 5.2k rps Orders saturates and Warehouse and Feed run hot. */
+function drone(file: 'org.proschi' | 'org-busy.proschi', view?: SystemsView): Source {
+  const dir = new URL('./fixtures/drone/', import.meta.url);
+  const teams = Object.fromEntries(readdirSync(new URL('teams/', dir)).map((f) => [`teams/${f}`, readFileSync(new URL(`teams/${f}`, dir), 'utf8')]));
+  return { source: readFileSync(new URL(file, dir), 'utf8'), path: file, imports: teams, ...(view ? { view } : {}) };
+}
+
+async function droneText(file: 'org.proschi' | 'org-busy.proschi', view?: SystemsView, columns = 100) {
+  const doc = loadDocument(drone(file, view));
+  const scene = buildScene(doc.diagram, await layoutGraph(viewSource(drone(file, view)).diagram), columns);
+  return { doc, scene, text: paint(scene, { overlay: doc.overlay, systems: doc.systems, icons: 'symbols' }).toText() };
+}
+
+describe('terminal systems', () => {
+  it('draws each team as a double-bordered box with its team, promise and sent / headroom', async () => {
+    const { doc, text } = await droneText('org.proschi');
+    expect(doc.notes).toEqual([]);
+    expect(doc.systems.orders).toMatchObject({ team: 'Orders', promise: 'p99 150 ms', sentRps: 100, status: 'ok' });
+    expect(text).toContain('╔');
+    expect(text).toContain('@Orders');
+    expect(text).toMatchSnapshot();
+  });
+
+  it('flags a system sent more than it takes, in red, with the warning and the hint', async () => {
+    const { doc, scene, text } = await droneText('org-busy.proschi');
+    expect(doc.systems.orders.status).toBe('saturated');
+    expect(doc.systems.warehouse.status).toBe('hot');
+    expect(doc.systems.frontend.status).toBe('ok');
+    expect(doc.notes[0].text).toMatch(/^'orders' cannot take what it is sent: 5\.2k rps into "Place order"/);
+    expect(doc.notes.find((n) => n.hint)?.hint).toBe('Send it less, or ask the Orders team to add capacity for it (their bottleneck is db)');
+    expect(text).toContain('✗ saturated');
+    expect(text).toContain('5.2k / 4.7k rps');
+    expect(text).toMatchSnapshot();
+    const grid = paint(scene, { overlay: doc.overlay, systems: doc.systems });
+    const { rect } = scene.nodes.get('orders')!;
+    expect(grid.fg[rect.y * grid.columns + rect.x]).toBe(COLOR.fail);
+    // Selected for the plugin's keys, its border is the accent.
+    const picked = paint(scene, { overlay: doc.overlay, systems: doc.systems, selected: 'orders' });
+    expect(picked.fg[rect.y * picked.columns + rect.x]).toBe(COLOR.pink);
+  });
+
+  it('opens an expanded system as a frame around its team design, under the load it is sent', async () => {
+    const { doc, text } = await droneText('org-busy.proschi', { expanded: ['orders'] });
+    expect(doc.diagram.nodes.find((n) => n.id === 'orders')?.kind).toBe('group');
+    expect(doc.overlay?.['orders.db']).toMatchObject({ saturated: true });
+    expect(text).toContain('ORDER PROCESSING ✗ saturated · @Orders');
+    expect(text).toMatchSnapshot();
+  });
+
+  it('focuses into a system: its own design, with what is said about it', async () => {
+    const { doc, text } = await droneText('org-busy.proschi', { focus: 'orders' });
+    expect(doc.diagram.title).toBe('Orders');
+    expect(doc.overlay?.db).toMatchObject({ saturated: true });
+    expect(doc.notes.map((n) => n.system)).toEqual(['orders', 'orders']);
+    expect(text).toMatchSnapshot();
+  });
+
+  it('fits the drone startup into 100 and 160 columns, collapsed, expanded and focused', async () => {
+    for (const view of [undefined, { expanded: ['orders'] }, { focus: 'orders' }])
+      for (const columns of [100, 160]) {
+        const { scene } = await droneText('org-busy.proschi', view, columns);
+        expect(scene.columns, `${JSON.stringify(view)} at ${columns}`).toBeLessThanOrEqual(columns);
+      }
+  });
+
+  it('names the systems when asked to open one that is not there', () => {
+    const { diagram } = parseSource(drone('org.proschi'));
+    expect(viewError(diagram, { expanded: ['orders'] })).toBeUndefined();
+    expect(viewError(diagram, { expanded: ['order'] })).toBe("No system 'order' to expand; the systems are frontend, orders, warehouse, feed.");
+    expect(viewError(diagram, { focus: 'shopper' })).toMatch(/^No system 'shopper' to focus/);
+    expect(viewOptions({ expanded: ['orders.wh'] }).expanded).toEqual(new Set(['orders', 'orders.wh']));
+    expect(keyOf(drone('org.proschi', { expanded: ['orders'] }))).not.toBe(keyOf(drone('org.proschi')));
   });
 });
