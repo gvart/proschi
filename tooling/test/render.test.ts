@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { XMLParser, XMLValidator } from 'fast-xml-parser';
 import { describe, expect, it } from 'vitest';
 import { run } from '../src/cli';
@@ -169,6 +170,68 @@ describe('proschi render', () => {
     expect((await capture(['render', '--nope', file])).code).toBe(2);
     expect((await capture(['render', join(dir, 'missing.proschi')])).code).toBe(2);
     expect((await capture(['--help'])).out).toContain('proschi render');
+  });
+
+  describe('systems', () => {
+    const drone = (file: string) => fileURLToPath(new URL(`./fixtures/drone/${file}`, import.meta.url));
+    const render = async (file: string, flags: string[], name: string) => {
+      const out = join(dir, name);
+      const r = await capture(['render', ...flags, drone(file), '--out', out]);
+      return { ...r, arch: r.code === 0 ? readFileSync(join(out, 'architecture.svg'), 'utf8') : '' };
+    };
+    const kindOf = (svg: string, id: string) => svg.match(new RegExp(`data-node="${id.replace('.', '\\.')}" data-kind="([^"]+)"`))?.[1];
+
+    it('draws each system collapsed by default, with its team, promise and sent / headroom', async () => {
+      const { code, arch } = await render('org.proschi', [], 'sys-ok');
+      expect(code).toBe(0);
+      expectWellFormed(arch);
+      expect(kindOf(arch, 'orders')).toBe('system');
+      expect(arch).toContain('data-status="ok"');
+      expect(arch).toContain('>@Orders<');
+      expect(arch).toContain('>promise p99 150 ms<');
+      expect(arch).toContain('>100 / 4.7k rps<');
+      expect(arch).not.toContain('data-node="orders.db"');
+    });
+
+    it('flags a system sent more than it takes', async () => {
+      const { arch } = await render('org-busy.proschi', [], 'sys-busy');
+      expect(arch).toMatch(/data-node="orders" data-kind="system" data-status="saturated"/);
+      expect(arch).toMatch(/data-node="warehouse" data-kind="system" data-status="hot"/);
+      expect(arch).toContain('>✗ saturated<');
+      expect(arch).toContain('>5.2k / 4.7k rps<');
+    });
+
+    it('expands systems in place, and focuses into one', async () => {
+      const expanded = await render('org-busy.proschi', ['--expand', 'orders,feed'], 'sys-expanded');
+      expect(expanded.code).toBe(0);
+      expectWellFormed(expanded.arch);
+      expect(kindOf(expanded.arch, 'orders')).toBe('system-frame');
+      expect(kindOf(expanded.arch, 'feed')).toBe('system-frame');
+      expect(kindOf(expanded.arch, 'warehouse')).toBe('system');
+      expect(expanded.arch).toContain('data-node="orders.db"');
+      expect(expanded.arch).toMatch(/✗ saturated · @Orders · p99 150 ms · 5\.2k \/ 4\.7k rps/);
+
+      const repeated = await render('org.proschi', ['--expand', 'orders', '--expand', 'feed'], 'sys-repeated');
+      expect(kindOf(repeated.arch, 'feed')).toBe('system-frame');
+
+      const focused = await render('org-busy.proschi', ['--focus', 'orders'], 'sys-focus');
+      expect(focused.code).toBe(0);
+      expect(focused.arch).toContain('<title>Orders</title>');
+      expect(kindOf(focused.arch, 'db')).toBe('database');
+      expect(focused.arch).not.toContain('data-node="frontend"');
+    });
+
+    it('refuses an id that names no system, with exit code 2', async () => {
+      const unknown = await render('org.proschi', ['--expand', 'order'], 'sys-unknown');
+      expect(unknown.code).toBe(2);
+      expect(unknown.err).toBe("No system 'order' to expand; the systems are frontend, orders, warehouse, feed.");
+      expect(existsSync(join(dir, 'sys-unknown'))).toBe(false);
+      const focus = await render('org.proschi', ['--focus', 'shopper'], 'sys-unknown');
+      expect(focus.code).toBe(2);
+      expect(focus.err).toMatch(/^No system 'shopper' to focus/);
+      expect((await capture(['render', drone('org.proschi'), '--expand'])).err).toBe('Missing system id after --expand');
+      expect((await render('org.proschi', ['--focus', '--out'], 'sys-unknown')).code).toBe(2);
+    });
   });
 });
 
