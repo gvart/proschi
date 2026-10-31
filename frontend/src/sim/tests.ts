@@ -147,7 +147,7 @@ function systemResults(diagram: Diagram, analysis: Analysis): TestResult[] {
         name: `${s.id} takes what it is sent`,
         category: s.breaches.some((b) => b.requirement.startsWith('availability')) && !s.saturated ? 'availability' : 'latency',
         passed: !problem,
-        message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)} on top of its own traffic and holds its requirements${room}`,
+        message: problem ?? `'${s.id}' takes ${formatRps(s.totalInboundRps)}${(s.sharedInboundRps ?? 0) > s.totalInboundRps * (1 + 1e-9) ? ` (of the ${formatRps(s.sharedInboundRps!)} it gets)` : ''} on top of its own traffic and holds its requirements${room}`,
         ...(problem ? { hint: `Send it less, or ask ${team} to add capacity for it${bottleneck}` } : {}),
         ...(system ? { loc: system.loc } : {}),
       };
