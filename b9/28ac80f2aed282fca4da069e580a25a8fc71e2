@@ -1,0 +1,21 @@
+docs/SHARING.md
+  s_e7f61f870764cb::t_8e5e9eae88adae 3-5,9-13,15-16,18-31,35-41,43-45,47-49,51-56,58,67-69,71-76,78-79,84-89
+docs/site.json
+  s_e7f61f870764cb::t_d021c4354a93ab 42
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b928ac80f2aed282fca4da069e580a25a8fc71e2",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
