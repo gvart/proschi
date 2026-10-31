@@ -45,9 +45,9 @@
     },
     {
       "slug": "agents",
-      "title": "Agent skills",
+      "title": "Agent skills for Proschi diagrams",
       "source": "AGENT-SKILLS.md",
-      "description": "Skills for Claude Code, Codex, Cursor, Copilot and Gemini CLI that turn docs, Terraform, Kubernetes, docker-compose and code into checked Proschi diagrams."
+      "description": "Skills for Claude Code, Codex, Cursor, Copilot and Gemini CLI that turn docs, Terraform, Kubernetes and code into checked Proschi diagrams."
     },
     {
       "slug": "numbers",
