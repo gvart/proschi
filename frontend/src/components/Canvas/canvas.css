@@ -590,13 +590,31 @@
   gap: 8px;
   color: rgb(var(--c-ink) / 0.8);
 }
+.pc-system-frame__head > svg {
+  flex: none;
+}
 .pc-system-frame__head .pc-system__status {
   align-self: center;
 }
 .pc-system-frame__head .pc-system__actions {
   margin: 0 0 0 auto;
 }
+/* A frame is as wide as the design inside it: a long name wraps and a long team shortens, so the controls stay inside the border. */
+.pc-system-frame__head .pc-group__name {
+  display: -webkit-box;
+  min-width: 0;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
 .pc-system-frame__team {
+  min-width: 0;
+  max-width: 10em;
+  overflow: hidden;
   color: rgb(var(--c-muted));
   font: 500 11px / 1 var(--font-mono);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

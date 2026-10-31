@@ -55,6 +55,7 @@ import {
   DOCS_KEY,
   addDoc,
   addFile,
+  addFiles,
   currentDoc,
   fileNameOf,
   initialState,
@@ -65,11 +66,12 @@ import {
   selectDoc,
   titleOf,
   updateCurrent,
+  updateDoc,
   type DocumentState,
 } from '../../playground/documents';
 import { createDocStore } from '../../playground/docStore';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
-import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
+import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile } from '../../playground/imports';
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
@@ -237,6 +239,7 @@ export default function Playground() {
   /** The screen band a phone tour card covers; the canvas fits the diagram around it. */
   const [tourCover, setTourCover] = useState<CoverBand | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
+  const teamEditorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
@@ -265,6 +268,12 @@ export default function Playground() {
   /** What the canvas shows of the document's systems: collapsed, expanded in place, or navigated into. */
   const systems = useSystemView(current.id, diagram, simulation.analysis, simulation.results);
   const { shown } = systems;
+  /** Navigated into a system: its team file, which the code pane shows instead of the document. */
+  const team = useMemo(() => (systems.focusFile ? teamFileOf(docState.docs, current, systems.focusFile) : undefined), [systems.focusFile, docState.docs, current]);
+  const teamDiagnostics = useMemo(() => (team ? diagnostics.filter((d) => d.file === team.path) : []), [team, diagnostics]);
+  const editTeam = (next: string) => {
+    if (team?.docId) setDocState((s) => updateDoc(s, team.docId!, next));
+  };
   const imports = useMemo(() => usedImports(parsed, JSON.parse(importableKey), rootPath), [parsed, importableKey, rootPath]);
   const importsKey = JSON.stringify(imports);
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
@@ -602,7 +611,12 @@ export default function Playground() {
 
   /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */
   const selectDiagnostic = (d: SourceLoc) => {
+    if (team && d.file === team.path) {
+      teamEditorRef.current?.goTo(d.line, d.col);
+      return;
+    }
     if (d.file === undefined) {
+      if (team) systems.goTo('');
       editorRef.current?.goTo(d.line, d.col);
       return;
     }
@@ -612,9 +626,13 @@ export default function Playground() {
 
   const selectInEditor = useCallback((line: number, col: number, length: number, focus: boolean) => editorRef.current?.select(line, col, length, focus), []);
   const diagramKey = useMemo(() => `${diagram.nodes.map((n) => `${n.id}:${n.name}`).join('|')}#${diagram.edges.length}`, [diagram]);
-  const openExample = (exampleSource: string) =>
-    // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
-    openDoc((s) => (isBlank(currentDoc(s).source) ? removeDoc(addDoc(s, exampleSource), s.currentId) : addDoc(s, exampleSource)));
+  /** Opens a diagram as a new document, with the files it imports (`files`, path → source) saved beside it. */
+  const openExample = (exampleSource: string, files?: Readonly<Record<string, string>>) =>
+    openDoc((s) => {
+      // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
+      const next = isBlank(currentDoc(s).source) ? removeDoc(addDoc(s, exampleSource), s.currentId) : addDoc(s, exampleSource);
+      return files ? addFiles(next, files) : next;
+    });
   const openHldExample = () => {
     const example = examples.find((e) => e.id === 'url-shortener');
     if (!example) return;
@@ -998,9 +1016,24 @@ export default function Playground() {
             data-tour="code"
             className="flex flex-1 min-h-0 min-w-0 flex-col"
           >
-            <div className="flex-1 min-h-0">
+            {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
+            {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
+            <div className="flex-1 min-h-0" hidden={!!team}>
               <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
             </div>
+            {team && (
+              <div className="flex-1 min-h-0">
+                <CodeEditor
+                  key={team.path}
+                  ref={teamEditorRef}
+                  value={team.source}
+                  onChange={editTeam}
+                  readOnly={!!team.readOnly}
+                  diagnostics={teamDiagnostics}
+                  nodeIds={shown.nodes.map((n) => n.id)}
+                />
+              </div>
+            )}
             <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
           </EditorZone>
         </SplitPanel>
@@ -1069,6 +1102,7 @@ export default function Playground() {
                           diagram={shown}
                           crumbs={systems.crumbs}
                           focusFile={systems.focusFile}
+                          focusReadOnly={!team || !!team.readOnly}
                           focusInbound={systems.focusInbound}
                           onCrumb={systems.goTo}
                           onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
@@ -1111,8 +1145,8 @@ export default function Playground() {
         <Suspense fallback={<PaneLoading overlay />}>
           <ExamplesGallery
             onClose={() => setShowExamples(false)}
-            onPick={(picked) => {
-              openExample(picked);
+            onPick={(picked, files) => {
+              openExample(picked, files);
               setShowExamples(false);
             }}
           />
@@ -1287,6 +1321,8 @@ interface DiagramViewProps {
   crumbs: Crumb[];
   /** The team file shown when navigated into a system; the canvas cannot edit it. */
   focusFile?: string;
+  /** The team file cannot be edited in the code pane (it came with a link, or from a remote source). */
+  focusReadOnly?: boolean;
   /** What the rest of the document sends into the design navigated into. */
   focusInbound?: string;
   onCrumb: (path: string) => void;
@@ -1324,6 +1360,7 @@ function DiagramView({
   playback,
   crumbs,
   focusFile,
+  focusReadOnly,
   focusInbound,
   onCrumb,
   onOpenSystem,
@@ -1511,7 +1548,7 @@ function DiagramView({
         {playing && <PlaybackMiniMap view={playback} />}
         {!playing && crumbs.length > 1 && (
           <Panel position="top-left">
-            <Breadcrumbs crumbs={crumbs} file={focusFile} inbound={focusInbound} onPick={onCrumb} />
+            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
           </Panel>
         )}
         {!playing && crumbs.length === 1 && <Panel position="top-left">
@@ -1636,7 +1673,7 @@ function DiagramView({
 }
 
 /** Where the canvas is among the document's systems (Drone startup › Order Processing), with the way back. */
-function Breadcrumbs({ crumbs, file, inbound, onPick }: { crumbs: Crumb[]; file?: string; inbound?: string; onPick: (path: string) => void }) {
+function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crumb[]; file?: string; readOnly?: boolean; inbound?: string; onPick: (path: string) => void }) {
   const up = crumbs[crumbs.length - 2];
   return (
     <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
@@ -1663,7 +1700,12 @@ function Breadcrumbs({ crumbs, file, inbound, onPick }: { crumbs: Crumb[]; file?
             );
           })}
         </ol>
-        {file && <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title="This design is in its own file; edit it there">{file} · read-only</span>}
+        {file && (
+          <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title={readOnly ? 'This design is in its own file, which cannot be edited here' : 'This design is in its own file, open in the code pane'}>
+            {file}
+            {readOnly && ' · read-only'}
+          </span>
+        )}
       </div>
       {inbound && (
         <span className="min-w-0 truncate pb-0.5 pl-9 text-xs font-semibold text-ink/75" title="The load shown includes what the rest of the document sends into this design">
@@ -1671,6 +1713,25 @@ function Breadcrumbs({ crumbs, file, inbound, onPick }: { crumbs: Crumb[]; file?
         </span>
       )}
     </nav>
+  );
+}
+
+/** Above the code pane while it shows a team file: which file, whether it can be edited here, and the way back. */
+function TeamFileBar({ team, up, onBack }: { team: TeamFile; up: Crumb; onBack: (path: string) => void }) {
+  return (
+    <div className="border-b border-ink/15 bg-surface py-1 pl-1 pr-3 text-xs" aria-label="Team file" role="group">
+      <div className="flex min-w-0 items-center gap-2">
+        <button type="button" onClick={() => onBack(up.path)} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-auto flex-none gap-1 !px-2 text-xs font-semibold`}>
+          <ArrowLeft size={14} aria-hidden="true" />
+          <span className="max-w-[8rem] truncate">{up.name}</span>
+        </button>
+        <span className="min-w-0 truncate font-mono text-ink" title={team.path}>
+          {team.path}
+        </span>
+        <span className={`ml-auto flex-none ${team.readOnly ? 'font-bold text-ink' : 'text-muted'}`}>{team.readOnly ? 'Read-only' : 'Saved in this browser'}</span>
+      </div>
+      {team.readOnly && <p className="pb-0.5 pl-2 pt-0.5 text-ink/75">{team.readOnly}</p>}
+    </div>
   );
 }
 

@@ -45,3 +45,28 @@ export function usedImports(result: ParseResult, files: Record<string, string>, 
   teams(result.diagram);
   return used;
 }
+
+/** A team file as the code pane shows it when navigated into its system. */
+export interface TeamFile {
+  path: string;
+  source: string;
+  /** The saved diagram that holds it, when it can be edited here. */
+  docId?: string;
+  /** Why it cannot be edited here, when it cannot. */
+  readOnly?: string;
+}
+
+/**
+ * The file at `path` that `current`'s imports read: editable when it is a
+ * diagram saved in this browser; read-only when it came with the share link
+ * `current` was opened from, or from a remote source (bundled, never fetched).
+ */
+export function teamFileOf(docs: SavedDiagram[], current: SavedDiagram, path: string): TeamFile | undefined {
+  const source = importableFiles(docs, current)[path];
+  if (source === undefined) return undefined;
+  if (/^(git:|https?:)/.test(path)) return { path, source, readOnly: 'It comes from a remote source; change it in its repository.' };
+  if (current.imports?.[path] !== undefined) return { path, source, readOnly: 'It came with the link this diagram was opened from.' };
+  // The most recently changed one, the one imports read (importableFiles).
+  const doc = docs.filter((d) => d.id !== current.id && fileNameOf(d) === path).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))[0];
+  return doc ? { path, source, docId: doc.id } : undefined;
+}
