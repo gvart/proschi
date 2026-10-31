@@ -184,6 +184,21 @@
 .pc-node__load {
   margin-top: 6px;
 }
+/* Text on a heat fill keeps 4.5:1 in both themes: the muted grey vanishes on
+   yellow, pink and red, and the light ink of the dark theme on the solid ones. */
+.pc-node[data-heat] :is(.pc-node__tech, .pc-node__stats) {
+  color: rgb(var(--c-ink));
+}
+.pc-node[data-heat='accent'],
+.pc-node[data-heat='accent'] :is(.pc-node__tech, .pc-node__stats) {
+  color: rgb(var(--c-on-accent));
+}
+.pc-node[data-heat='accent'] .pc-node__bar {
+  background: rgb(var(--c-on-accent) / 0.15);
+}
+.pc-node[data-heat='accent'] .pc-node__bar > div {
+  background: rgb(var(--c-on-accent) / 0.8);
+}
 .pc-node__stats {
   font-family: var(--font-mono);
   font-size: 11px;

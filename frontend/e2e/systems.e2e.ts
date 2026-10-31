@@ -159,4 +159,19 @@ test.describe('team systems on a busy org', () => {
     expect(tipBox.x).toBeGreaterThanOrEqual(canvas.x);
     expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(canvas.x + canvas.width);
   });
+
+  test('a saturated node keeps readable text on its red fill, in the dark theme too', async ({ page }) => {
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto(droneLink(2000));
+    await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+    await layoutSettled(page);
+    await box(page, 'Order Processing').dblclick();
+    await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
+    await page.getByRole('button', { name: 'Overlay: load' }).click();
+    const db = page.locator('.react-flow__node', { hasText: 'Orders DB' }).locator('.pc-node');
+    await expect(db).toHaveAttribute('data-heat', 'accent');
+    // The dark text drawn on accents, not the theme's light ink or its muted grey.
+    await expect(db.locator('.pc-node__name')).toHaveCSS('color', 'rgb(17, 17, 17)');
+    await expect(db.locator('.pc-node__tech')).toHaveCSS('color', 'rgb(17, 17, 17)');
+  });
 });
