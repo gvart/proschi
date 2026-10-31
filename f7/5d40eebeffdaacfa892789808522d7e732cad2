@@ -1,0 +1,24 @@
+.claude/skills/blog-post/SKILL.md
+  s_e7f61f870764cb::t_d6bc31e76c8fc4 87-102,118
+.claude/skills/docs-writer/STYLE.md
+  s_e7f61f870764cb::t_dfaa59f494f7a5 1-101
+.claude/skills/docs-writer/SKILL.md
+  s_e7f61f870764cb::t_6b3e4fabbe0480 139
+  s_e7f61f870764cb::t_b4af9ed5441604 1-138,140-143
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "f75d40eebeffdaacfa892789808522d7e732cad2",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
