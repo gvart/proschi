@@ -511,10 +511,19 @@
 .pc-system .pc-system__status[data-side] {
   position: static;
 }
-.pc-system__status[data-side] .pc-system__tip {
+.pc-system__status[data-place='right'] .pc-system__tip {
   top: -2px;
   right: auto;
   left: calc(100% + 14px);
+}
+.pc-system__status[data-place='left'] .pc-system__tip {
+  top: -2px;
+  right: calc(100% + 14px);
+}
+/* Too near the canvas's left edge to open leftwards below: open rightwards from the anchor's left edge. */
+.pc-system__status[data-place='below-start'] .pc-system__tip {
+  right: auto;
+  left: -6px;
 }
 .pc-system__status:hover .pc-system__tip,
 .pc-system__status:focus-within .pc-system__tip {

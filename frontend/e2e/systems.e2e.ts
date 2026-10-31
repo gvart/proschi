@@ -137,3 +137,26 @@ test.describe('team systems in the editor', () => {
     expect(await editorText(page)).toBe(before);
   });
 });
+
+test.describe('team systems on a busy org', () => {
+  test('the warning tooltip stays on the canvas when the box sits at its right edge', async ({ page }) => {
+    await page.setViewportSize({ width: 1024, height: 768 });
+    await page.goto(droneLink(2000));
+    await expect(status(page, 'Order Processing')).toHaveText('Saturated');
+    await layoutSettled(page);
+    // Drag the canvas until the box touches its right edge.
+    const canvas = (await page.locator('.react-flow').boundingBox())!;
+    const orders = (await box(page, 'Order Processing').boundingBox())!;
+    await page.mouse.move(canvas.x + 5, canvas.y + 60);
+    await page.mouse.down();
+    await page.mouse.move(canvas.x + 5 + (canvas.x + canvas.width - (orders.x + orders.width) - 10), canvas.y + 60, { steps: 8 });
+    await page.mouse.up();
+
+    await status(page, 'Order Processing').focus();
+    const tip = box(page, 'Order Processing').getByRole('tooltip');
+    await expect(tip).toBeVisible();
+    const tipBox = (await tip.boundingBox())!;
+    expect(tipBox.x).toBeGreaterThanOrEqual(canvas.x);
+    expect(tipBox.x + tipBox.width).toBeLessThanOrEqual(canvas.x + canvas.width);
+  });
+});
