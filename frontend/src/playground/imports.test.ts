@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { parse } from '../dsl';
 import { BLANK_SOURCE, addDoc, addFile, fileNameOf, initialState, renameFile, selectDoc, updateCurrent, type SavedDiagram } from './documents';
 import { filesResolver, importableFiles, usedImports } from './imports';
+import { DRONE_ORG_PATH, DRONE_TEAM_FILES, droneOrgSource } from './droneStartup';
 
 const doc = (id: string, source: string, extra: Partial<SavedDiagram> = {}): SavedDiagram => ({ id, source, updatedAt: '2026-01-01', ...extra });
 
@@ -101,5 +102,13 @@ describe('opening a share link with imports', () => {
     const stored = { docs: [{ id: 'a', source: 'same', updatedAt: 't' }], currentId: 'a' };
     const state = initialState({ ...base, stored, sharedSource: 'same', sharedImports: imports });
     expect(state.docs).toEqual([{ id: 'a', source: 'same', updatedAt: 't', imports, fileName: 'untitled.proschi' }]);
+  });
+});
+
+describe('team files in the browser', () => {
+  it('counts the team files of systems as used, so a share link carries them', () => {
+    const files = { ...DRONE_TEAM_FILES, 'unused.proschi': 'x' };
+    const result = parse(droneOrgSource(), { path: DRONE_ORG_PATH, resolve: filesResolver(files, DRONE_ORG_PATH) });
+    expect(Object.keys(usedImports(result, files, DRONE_ORG_PATH)).sort()).toEqual(Object.keys(DRONE_TEAM_FILES).sort());
   });
 });
