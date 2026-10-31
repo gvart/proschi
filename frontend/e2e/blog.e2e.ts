@@ -28,6 +28,17 @@ test.describe('blog', () => {
     await expect(page).toHaveURL(/\/proschi\/docs\/agents\/#diagrams-in-the-terminal$/);
   });
 
+  test("the header's Blog link leads to the blog and is marked current on every blog page", async ({ page }) => {
+    await page.goto('docs/');
+    const main = page.getByRole('navigation', { name: 'Main' });
+    await main.getByRole('link', { name: 'Blog' }).click();
+    await expect(page).toHaveURL(/\/proschi\/blog\/$/);
+    await expect(main.getByRole('link', { name: 'Blog' })).toHaveAttribute('aria-current', 'page');
+    await expect(main.getByRole('link', { name: 'Docs' })).not.toHaveAttribute('aria-current', 'page');
+    await page.goto('blog/terminal-diagrams/');
+    await expect(main.getByRole('link', { name: 'Blog' })).toHaveAttribute('aria-current', 'page');
+  });
+
   test('serves the RSS feed with absolute links', async ({ page, request }) => {
     const res = await request.get('blog/rss.xml');
     expect(res.ok()).toBe(true);
