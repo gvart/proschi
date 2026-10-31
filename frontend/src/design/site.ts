@@ -72,6 +72,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     title: 'Project',
     links: [
       { label: 'GitHub', href: GITHUB_URL },
+      { label: 'Blog', href: 'blog/' },
       { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
       { label: 'Privacy', href: 'docs/privacy/' },
