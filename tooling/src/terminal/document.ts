@@ -60,7 +60,8 @@ export function missingImports(input: Source): string[] {
     path: input.path ?? 'diagram.proschi',
     resolve: (importPath, fromPath) => {
       const found = known(importPath, fromPath);
-      if (!found) missing.add(joinImportPath(fromPath, importPath));
+      const key = joinImportPath(fromPath, importPath);
+      if (!found && key !== undefined) missing.add(key);
       return found;
     },
   });

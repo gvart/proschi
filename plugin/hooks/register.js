@@ -488,8 +488,96 @@ var require_lz_string = __commonJS({
 import { atom, memberOf, read, update } from "claude-code";
 
 // ../frontend/src/dsl/imports.ts
-function joinImportPath(fromPath, importPath) {
-  const parts = importPath.startsWith("/") || !fromPath ? [] : fromPath.split("/").slice(0, -1);
+var ImportError = class extends Error {
+  name = "ImportError";
+};
+var MAX_SPEC_LENGTH = 1024;
+var SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._ +-]*$/;
+var HOST = /^[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?(?:\.[A-Za-z0-9](?:[A-Za-z0-9-]*[A-Za-z0-9])?)*(?::\d{1,5})?$/;
+var REPO_SEGMENT = /^[A-Za-z0-9_][A-Za-z0-9._-]*$/;
+var REF = /^[A-Za-z0-9_][A-Za-z0-9._/-]*$/;
+var SCHEME = /^([A-Za-z][A-Za-z0-9+.-]+):/;
+function isRemoteSpec(spec) {
+  return SCHEME.test(spec);
+}
+function isAbsolutePath(path) {
+  return /^[\\/]/.test(path) || /^[A-Za-z]:/.test(path);
+}
+function checkRef(ref, spec) {
+  if (!REF.test(ref) || ref.length > 200 || ref.includes("..") || ref.includes("//") || ref.endsWith("/") || ref.endsWith(".") || ref.endsWith(".lock") || ref.split("/").some((p) => p.startsWith("."))) {
+    throw new ImportError(`'${spec}' has an invalid ref '${ref}'; use a tag, branch or commit made of letters, digits, '.', '_', '-' and '/'`);
+  }
+}
+function repoPathSegments(path, spec) {
+  const parts = path.split("/");
+  if (!path || parts.some((p) => !SEGMENT.test(p) || p === "." || p === "..")) {
+    throw new ImportError(`'${spec}' has an invalid path in the repository; use a relative path like dir/file.proschi, without '..'`);
+  }
+  return parts;
+}
+function parseRemoteSpec(spec) {
+  const scheme = SCHEME.exec(spec)?.[1].toLowerCase();
+  if (!scheme) return void 0;
+  if (spec.length > MAX_SPEC_LENGTH) throw new ImportError(`Import source is longer than ${MAX_SPEC_LENGTH} characters`);
+  if (/[\s\0\\]/.test(spec)) throw new ImportError(`'${spec}' contains whitespace or a backslash`);
+  if (scheme === "git") {
+    const body = spec.slice(4);
+    const at = body.lastIndexOf("@");
+    const split2 = body.indexOf("//");
+    if (at === -1 || split2 === -1 || split2 > at) {
+      throw new ImportError(`'${spec}' is not a git source; write git:<host>/<org>/<repo>//<path/in/repo>@<ref>`);
+    }
+    const repo = body.slice(0, split2);
+    const path = body.slice(split2 + 2, at);
+    const ref = body.slice(at + 1);
+    const [host, ...names] = repo.split("/");
+    if (!HOST.test(host) || names.length < 2 || names.some((n) => !REPO_SEGMENT.test(n) || n.endsWith("."))) {
+      throw new ImportError(`'${spec}' names an invalid repository '${repo}'; write <host>/<org>/<repo>`);
+    }
+    repoPathSegments(path, spec);
+    checkRef(ref, spec);
+    return { kind: "git", repo, path, ref };
+  }
+  if (scheme === "http") throw new ImportError(`'${spec}' uses http://; only https:// imports are allowed`);
+  if (scheme !== "https") throw new ImportError(`'${spec}' is not a supported import source; use a relative path, git: or https://`);
+  let url;
+  try {
+    url = new URL(spec);
+  } catch {
+    throw new ImportError(`'${spec}' is not a valid URL`);
+  }
+  if (url.username || url.password) throw new ImportError(`'${spec}' contains credentials; git and https imports use your own credentials, never ones in the diagram`);
+  if (url.hash) throw new ImportError(`'${spec}' has a #fragment; remove it`);
+  if (!HOST.test(url.host)) throw new ImportError(`'${spec}' has an invalid host`);
+  return { kind: "https", url: url.href };
+}
+function formatRemoteSpec(spec) {
+  return spec.kind === "git" ? `git:${spec.repo}//${spec.path}@${spec.ref}` : spec.url;
+}
+function resolveImportPath(fromPath, importPath) {
+  if (importPath.includes("\0")) throw new ImportError(`'${importPath.replace(/\0/g, "")}' contains a NUL character`);
+  const remote = parseRemoteSpec(importPath);
+  if (remote) return formatRemoteSpec(remote);
+  if (isAbsolutePath(importPath)) throw new ImportError(`'${importPath}' is an absolute path; imports must be relative to the importing file`);
+  const from = fromPath && isRemoteSpec(fromPath) ? parseRemoteSpec(fromPath) : void 0;
+  if (from?.kind === "git") {
+    const parts2 = from.path.split("/").slice(0, -1);
+    for (const part of importPath.split("/")) {
+      if (part === "" || part === ".") continue;
+      if (part !== "..") parts2.push(part);
+      else if (parts2.length > 0) parts2.pop();
+      else throw new ImportError(`'${importPath}' leaves the repository ${from.repo}`);
+    }
+    repoPathSegments(parts2.join("/"), importPath);
+    return formatRemoteSpec({ ...from, path: parts2.join("/") });
+  }
+  if (from?.kind === "https") {
+    const base = new URL(from.url);
+    const url = new URL(importPath, base);
+    if (url.origin !== base.origin) throw new ImportError(`'${importPath}' leaves ${base.origin}`);
+    return formatRemoteSpec(parseRemoteSpec(url.href));
+  }
+  const parts = !fromPath ? [] : fromPath.split("/").slice(0, -1);
   for (const part of importPath.split("/")) {
     if (part === "" || part === ".") continue;
     if (part === ".." && parts.length > 0 && parts[parts.length - 1] !== "..") parts.pop();
@@ -497,11 +585,20 @@ function joinImportPath(fromPath, importPath) {
   }
   return parts.join("/");
 }
+function joinImportPath(fromPath, importPath) {
+  try {
+    return resolveImportPath(fromPath, importPath);
+  } catch (e) {
+    if (e instanceof ImportError) return void 0;
+    throw e;
+  }
+}
 function mapResolver(files) {
-  const paths = Object.keys(files);
+  const paths = Object.keys(files).filter((p) => !isRemoteSpec(p));
   return (importPath, fromPath) => {
-    const path = joinImportPath(fromPath, importPath);
+    const path = resolveImportPath(fromPath, importPath);
     if (Object.prototype.hasOwnProperty.call(files, path)) return { path, source: files[path] };
+    if (isRemoteSpec(path)) return void 0;
     const name = path.split("/").pop();
     const sameName = paths.filter((p) => p.split("/").pop() === name);
     return sameName.length === 1 ? { path: sameName[0], source: files[sameName[0]] } : void 0;
@@ -4448,7 +4545,8 @@ function missingImports(input) {
     path: input.path ?? "diagram.proschi",
     resolve: (importPath, fromPath) => {
       const found = known(importPath, fromPath);
-      if (!found) missing.add(joinImportPath(fromPath, importPath));
+      const key = joinImportPath(fromPath, importPath);
+      if (!found && key !== void 0) missing.add(key);
       return found;
     }
   });
