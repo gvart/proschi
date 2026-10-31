@@ -341,7 +341,7 @@ describe('terminal systems', () => {
     expect(doc.systems.orders.status).toBe('saturated');
     expect(doc.systems.warehouse.status).toBe('hot');
     expect(doc.systems.frontend.status).toBe('ok');
-    expect(doc.notes[0].text).toMatch(/^'orders' cannot take what it is sent: 5\.2k rps into "Place order"/);
+    expect(doc.notes[0].text).toMatch(/^'orders' cannot take what it is sent: you send 5\.2k rps into "Place order"/);
     expect(doc.notes.find((n) => n.hint)?.hint).toBe('Send it less, or ask the Orders team to add capacity for it (their bottleneck is db)');
     expect(text).toContain('✗ saturated');
     expect(text).toContain('5.2k / 4.7k rps');
