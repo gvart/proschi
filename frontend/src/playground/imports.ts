@@ -13,7 +13,11 @@ export function importableFiles(docs: SavedDiagram[], current: SavedDiagram): Re
   return { ...files, ...current.imports };
 }
 
-/** Resolves imports against `files`; the root document itself resolves too, so a cycle back to it is reported. */
+/**
+ * Resolves imports against `files`; the root document itself resolves too, so
+ * a cycle back to it is reported. Never fetches: `git:` and `https://` imports
+ * resolve only to files bundled under their exact spec (by `proschi share-link`).
+ */
 export function filesResolver(files: Record<string, string>, rootPath: string): ImportResolver {
   const resolve = mapResolver(files);
   return (importPath, fromPath) => {
