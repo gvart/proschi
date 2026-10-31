@@ -78,6 +78,7 @@ test.describe('no sideways scrolling on a phone', () => {
     await menu.locator('summary').click();
     const links = menu.getByRole('link');
     await expect(links.filter({ hasText: 'Practice' })).toBeVisible();
+    await expect(links.filter({ hasText: 'Blog' })).toBeVisible();
     // Tap targets in the menu are at least 44px tall.
     for (const box of await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(box).toBeGreaterThanOrEqual(44);
     await expectNoHorizontalOverflow(page, './ with the menu open');
