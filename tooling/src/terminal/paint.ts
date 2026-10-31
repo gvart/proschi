@@ -252,14 +252,22 @@ function drawGroup(grid: Grid, { node, rect }: SceneNode, look: Look, system?: S
  */
 function drawGroupHeading(grid: Grid, { node, rect }: SceneNode, look: Look, system?: SystemFrame): void {
   const color = system ? (system.selected ? COLOR.pink : fade(look, statusColor(system.badge?.status, baseColor(node, COLOR.muted)))) : fade(look, baseColor(node, COLOR.muted));
-  const chip = ` ${fit(node.name.toUpperCase(), rect.w - 6)} `;
-  grid.text(rect.x + 2, rect.y, chip, COLOR.onColor, Infinity, color);
+  const name = node.name.toUpperCase();
   const badge = system?.badge;
+  // The chip and what follows it; a space and two cells of border stay before the corner.
+  const room = rect.w - 5;
+  let about = '';
   if (badge) {
-    const about = [STATUS[badge.status], badge.team ? `@${badge.team}` : '', badge.promise ?? '', loadText(badge)].filter(Boolean).join(' · ');
-    const room = rect.w - 4 - chip.length - 1;
-    if (room > 4) grid.text(rect.x + 2 + chip.length, rect.y, `${fit(about, room)} `, look ? COLOR.fadedMore : color);
+    // Short of room, the load goes first, then the promise and the team; the name is cut only after them.
+    let parts = [STATUS[badge.status], badge.team ? `@${badge.team}` : '', badge.promise ?? '', loadText(badge)];
+    const width = () => name.length + 2 + parts.filter(Boolean).join(' · ').length;
+    for (const drop of [3, 2, 1]) if (width() > room) parts = parts.map((p, i) => (i === drop ? '' : p));
+    about = parts.filter(Boolean).join(' · ');
   }
+  const chip = ` ${fit(name, badge ? Math.max(4, room - 2 - about.length) : rect.w - 6)} `;
+  grid.text(rect.x + 2, rect.y, chip, COLOR.onColor, Infinity, color);
+  const rest = room - chip.length;
+  if (about && rest > 4) grid.text(rect.x + 2 + chip.length, rect.y, `${fit(about, rest)} `, look ? COLOR.fadedMore : color);
   if (!node.description || rect.h <= 3) return;
   grid.text(rect.x + 2, rect.y + 1, fit(node.description.replace(/\s+/g, ' '), rect.w - 4), look ? COLOR.fadedMore : COLOR.muted);
 }

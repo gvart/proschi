@@ -146,7 +146,7 @@ exports[`terminal systems > opens an expanded system as a frame around its team 
                                   ║ 5.2k / 18k rps ━━━──────── ║
                                   ╚════════════════════════════╝
                                                  │
- ╔═ ORDER PROCESSING ✗ saturated · @Orders · p99 150 ms · 5.2k / 4.7… ═╗
+ ╔═ ORDER PROCESSING ✗ saturated · @Orders · p99 150 ms ═══════════════╗
  ║                                               ▼                     ║
  ║                                ┏━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓       ║
  ║                                ┃        gateway             ┃╮      ║
