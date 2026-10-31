@@ -33,9 +33,9 @@
     },
     {
       "slug": "editors",
-      "title": "Editor support",
+      "title": "Editor support: VS Code, IntelliJ, Neovim",
       "source": "EDITORS.md",
-      "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, on the command line and in CI: checking, formatting, OpenAPI, rendering and tests."
+      "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, and the proschi command line for CI: checking, formatting, rendering and tests."
     },
     {
       "slug": "sharing",
