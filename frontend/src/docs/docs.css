@@ -1005,8 +1005,10 @@
   .live--annotated .live__single {
     display: none;
   }
+  /* Short screens get a shorter diagram, so the code above the dock still has room to tap. */
   .live--annotated .live__stage:not(.live__stage--playing) {
     height: 220px;
+    height: clamp(140px, 26svh, 220px);
   }
 }
 
