@@ -1,0 +1,27 @@
+frontend/src/playground/cloudRefs.ts
+  s_0cba2f07849325::t_0d051bc090c224 141
+docs/EDITORS.md
+  s_0cba2f07849325::t_0d051bc090c224 237,338
+docs/SYSTEMS.md
+  s_0cba2f07849325::t_0d051bc090c224 155
+docs/VERSIONS.md
+  s_0cba2f07849325::t_0d051bc090c224 50
+docs/IMPORTS.md
+  s_0cba2f07849325::t_0d051bc090c224 50-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "cd787668fb0009dce28887827d90f44d158c7434",
+  "prompts": {},
+  "sessions": {
+    "s_0cba2f07849325": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7413bb10-19cd-4a51-9024-1acd2ebe3cf2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
