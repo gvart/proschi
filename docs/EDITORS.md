@@ -380,6 +380,8 @@ opens systems in place (`orders.billing` opens its parent too), and
 `--focus orders` draws one system's design alone. An id that names no system
 exits with 2.
 
+![Rendered with --expand orders: the Order Processing box opened in place, showing its gateway, Orders API, Orders DB at 115% load in red, and stock cache, between Frontend and Warehouse](images/diagrams/org-expanded.svg "proschi render org.proschi --expand orders: the team's own design, inside its box.")
+
 ## Simulation and tests
 
 A document with `traffic` gets a capacity model, and its `requirements` and

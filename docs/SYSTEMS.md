@@ -63,6 +63,8 @@ traffic {
 
 ## 2. Find the team that cannot keep up
 
+![The drone startup's org diagram: Customer, Frontend, Order Processing, Warehouse and Feed, each team a box with its promise and sent load; Order Processing is red and marked saturated at 2k of 1.2k rps](images/diagrams/org.svg "The example above, rendered: Order Processing is sent more than it takes.")
+
 Open the example in the editor. Order Processing is flagged as saturated: it
 is sent 2k rps and takes 1.2k. The check `system:orders` fails, and the
 *Systems* table in the *Results* tab shows each team's load against what it
