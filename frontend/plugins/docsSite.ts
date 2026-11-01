@@ -310,7 +310,7 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
   md.renderer.rules.paragraph_close = (tokens, idx, options, env, self) => {
     const img = ctx.docsImages ? figure(tokens[idx - 1]) : undefined
     if (!img) return defaultParagraphClose(tokens, idx, options, env, self)
-    const caption = img.attrGet('title')
+    const caption = String(img.attrGet('title') ?? '')
     return `${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>\n`
   }
 
