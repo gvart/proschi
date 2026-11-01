@@ -20,16 +20,64 @@
       "description": "Write your first Proschi diagram in two minutes: two services, a request that flows between them, a failure, and a requirement that checks itself."
     },
     {
+      "slug": "language",
+      "title": "Proschi language reference",
+      "source": "LANGUAGE.md",
+      "description": "The Proschi language at a glance: every statement with its syntax, a complete example, and links to the page that explains each part in detail."
+    },
+    {
+      "slug": "nodes",
+      "title": "Nodes, groups and connections",
+      "source": "NODES.md",
+      "description": "Declare nodes, groups and connections in Proschi: ids, display names, tech stacks from the catalog, replicas, owners and descriptions."
+    },
+    {
+      "slug": "styling",
+      "title": "Colors, legend and layout",
+      "source": "STYLING.md",
+      "description": "Style a Proschi diagram with colors, tags and a legend, steer the automatic layout with direction and rank, and see how canvas edits change the text."
+    },
+    {
+      "slug": "use-cases",
+      "title": "Use cases: request flows step by step",
+      "source": "USE-CASES.md",
+      "description": "Write Proschi use cases: request flows step by step, with endpoints, payloads, statuses, fan-out, and the reads and writes the simulation counts."
+    },
+    {
+      "slug": "scenarios",
+      "title": "Scenarios: success and failure paths",
+      "source": "SCENARIOS.md",
+      "description": "Branch a Proschi use case into scenarios with alt: the success path and every way it fails, side by side, plus parallel steps and endpoint groups."
+    },
+    {
+      "slug": "imports",
+      "title": "Imports: split a design across files",
+      "source": "IMPORTS.md",
+      "description": "Split a Proschi design across files with import: the project root, remote sources, syncing them into a lock file, the security model and errors."
+    },
+    {
       "slug": "systems",
       "title": "Org diagrams and team systems",
       "source": "SYSTEMS.md",
-      "description": "Draw each team's design as one box, connect the teams, and let the simulation say which team cannot take the traffic you send it, including designs from other repositories."
+      "description": "Draw each team's design as one box, connect the teams, and let the simulation say which team cannot take the traffic you send to it."
     },
     {
-      "slug": "language",
-      "title": "Language reference",
-      "source": "LANGUAGE.md",
-      "description": "The Proschi language: nodes, groups, connections, use cases, scenarios, imports and the high-level design blocks, with the grammar."
+      "slug": "hld",
+      "title": "High-level design: traffic and capacity",
+      "source": "HLD.md",
+      "description": "Add a high-level design to a Proschi diagram: quantities, traffic, capacity per node, the data model and decisions, all checked by the simulation."
+    },
+    {
+      "slug": "tests",
+      "title": "Requirements and tests for designs",
+      "source": "TESTS.md",
+      "description": "Check a Proschi design with requirements and tests: latency, availability, cost and survival limits, assertions on request flows, and selectors."
+    },
+    {
+      "slug": "grammar",
+      "title": "Proschi grammar (EBNF)",
+      "source": "GRAMMAR.md",
+      "description": "The complete Proschi grammar in EBNF: every statement, block, arrow and payload rule of the language on one page, for tool builders and quick lookups."
     },
     {
       "slug": "model",
@@ -87,7 +135,38 @@
     }
   ],
   "anchorRedirects": {
-    "": { "why-text": "why/#why-text", "start-here": "why/" }
+    "": { "why-text": "why/#why-text", "start-here": "why/" },
+    "language": {
+      "tech-stacks": "nodes/#tech-stacks",
+      "colors-and-legend": "styling/#colors-and-legend",
+      "steering-the-layout": "styling/#steering-the-layout",
+      "use-case-steps": "use-cases/",
+      "fan-out-and-payload-size": "use-cases/#fan-out-and-payload-size",
+      "reads-and-writes": "use-cases/#reads-and-writes",
+      "steps-follow-the-architecture": "use-cases/#steps-follow-the-architecture",
+      "scenarios": "scenarios/",
+      "parallel-steps": "scenarios/#parallel-steps",
+      "grouping-by-endpoint": "scenarios/#grouping-by-endpoint",
+      "imports": "imports/",
+      "the-project-root": "imports/#the-project-root",
+      "remote-sources": "imports/#remote-sources",
+      "syncing-remote-imports": "imports/#syncing-remote-imports",
+      "security-model-for-imports": "imports/#security-model-for-imports",
+      "import-errors": "imports/#import-errors",
+      "systems": "systems/#the-system-block",
+      "high-level-design": "hld/",
+      "quantities": "hld/#quantities",
+      "traffic": "hld/#traffic",
+      "capacity": "hld/#capacity",
+      "entities": "hld/#entities",
+      "decisions": "hld/#decisions",
+      "requirements": "tests/#requirements",
+      "tests": "tests/#tests",
+      "selectors-and-kinds": "tests/#selectors-and-kinds",
+      "editing-on-the-canvas": "styling/#editing-on-the-canvas",
+      "links": "sharing/#links-that-carry-the-diagram",
+      "grammar": "grammar/"
+    }
   },
   "nav": [
     {
@@ -101,14 +180,16 @@
     {
       "title": "Language",
       "items": [
-        { "page": "language", "label": "Reference" },
-        { "page": "language", "anchor": "use-case-steps", "label": "Use case steps" },
-        { "page": "language", "anchor": "scenarios", "label": "Scenarios" },
-        { "page": "language", "anchor": "imports", "label": "Imports" },
-        { "page": "language", "anchor": "high-level-design", "label": "High-level design" },
-        { "page": "language", "anchor": "tests", "label": "Tests" },
-        { "page": "language", "anchor": "grammar", "label": "Grammar" },
-        { "page": "systems", "label": "Org diagrams" }
+        { "page": "language", "label": "Overview" },
+        { "page": "nodes", "label": "Nodes and connections" },
+        { "page": "styling", "label": "Colors and layout" },
+        { "page": "use-cases", "label": "Use cases" },
+        { "page": "scenarios", "label": "Scenarios" },
+        { "page": "imports", "label": "Imports" },
+        { "page": "systems", "label": "Org diagrams" },
+        { "page": "hld", "label": "High-level design" },
+        { "page": "tests", "label": "Requirements and tests" },
+        { "page": "grammar", "label": "Grammar" }
       ]
     },
     {

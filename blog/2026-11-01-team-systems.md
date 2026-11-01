@@ -166,7 +166,7 @@ traffic {
 To try linked team files in the browser, pick **Drone startup (team
 systems)** from the editor's examples. The full walkthrough is in
 [Org diagrams and team systems](../docs/SYSTEMS.md), and the rules for imports
-are in [Security model for imports](../docs/LANGUAGE.md#security-model-for-imports).
+are in [Security model for imports](../docs/IMPORTS.md#security-model-for-imports).
 
 ## Who it is for
 

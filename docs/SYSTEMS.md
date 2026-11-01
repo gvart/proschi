@@ -5,8 +5,8 @@ diagram draws each team as one box and connects the boxes. When you raise the
 traffic, the simulation tells you which team cannot take it, without opening
 any box.
 
-The syntax is in [Systems](LANGUAGE.md#systems) and
-[Imports](LANGUAGE.md#imports). To see a finished org diagram, pick
+The syntax is in [The system block](#the-system-block) and
+[Imports](IMPORTS.md). To see a finished org diagram, pick
 *Drone startup (team systems)* in the editor's *Examples* menu.
 
 ## 1. Draw one box per team
@@ -89,7 +89,7 @@ Its requirements become the box's promise. The load you send is added to the
 team's own traffic, so the simulation names the node that gives out first.
 The team file's ids stay in its own scope.
 
-The path must stay inside the [project root](LANGUAGE.md#the-project-root).
+The path must stay inside the [project root](IMPORTS.md#the-project-root).
 
 ## 4. Look inside
 
@@ -128,11 +128,52 @@ your own `git` and credentials. Every other command, and the editors, read
 the cached copy. In CI, run `proschi imports sync --frozen` before
 `proschi test`: it fails instead of changing the lock.
 
+## The system block
+
+```proschi fragment
+system id ["Name"] [@team] [pos x,y] [color c] [.tag] [rank N] {
+  …
+}
+```
+
+A system goes at the top level or inside a group. `system` is a keyword only
+on a line that ends with `{`, so a node may still be called `system`. Inside
+the block, one line each:
+
+| Line | Meaning |
+|---|---|
+| `from "path"` | The team's design file, found like an [import](IMPORTS.md): a local path, `git:` or `https://`. |
+| `expose id ["Name"] [-> "Use case"]` | An entry point, and the team's use case it enters. Without a `from`, leave the use case out. With one, you may leave it out when the team file has a single use case. |
+| `capacity { … }` | A stub for a team with no design file: the rate where it saturates, and its `p99` (or `latency`) and `availability`. |
+
+- **Entry points.** `orders.api` names an entry point, with no space before
+  the dot, and `orders` the whole box. A step may use `orders` alone only
+  when the system has one entry point.
+- **Scope.** The team file's ids, traffic, requirements and tests never
+  clash with yours. From outside you reach only exposed entry points, so
+  `web -> orders.db` is an error.
+- **Promise and headroom.** The promise is the team's own requirements for
+  the entry point's use case. The headroom is how much more load that use
+  case takes before a node runs hot (70%) and before one saturates (100%).
+- **Load.** What you send to an entry point is added to the team's own
+  traffic for that use case, and the team design is simulated under the
+  sum. Systems that use the same file share that load. In your diagram the
+  system is one hop, with that use case's latency and availability.
+- **Checks.** Each system that gets load has a result `system:<id>`. It
+  fails when the system saturates or breaks its SLA. Running hot is a
+  warning.
+- **Nesting.** Team files may contain systems. A cycle of `import` and
+  `from` files is an error, and problems in a team file are reported with
+  its path.
+- **Warnings**: a `from` and a stub together (the file wins), neither (not
+  simulated), or no `expose`.
+
 ## Go further
 
-- [Systems](LANGUAGE.md#systems): the syntax, the contract and the checks.
-- [Remote sources](LANGUAGE.md#remote-sources) and
-  [syncing](LANGUAGE.md#syncing-remote-imports): updating a ref, and what
+- [Remote sources](IMPORTS.md#remote-sources) and
+  [syncing](IMPORTS.md#syncing-remote-imports): updating a ref, and what
   `--frozen` checks.
-- [Security model for imports](LANGUAGE.md#security-model-for-imports): what
+- [Security model for imports](IMPORTS.md#security-model-for-imports): what
   Proschi guarantees about imported files.
+- [Requirements](TESTS.md#requirements): the team file's requirements
+  become the box's promise.
