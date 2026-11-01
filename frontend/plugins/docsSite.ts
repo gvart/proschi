@@ -439,7 +439,8 @@ function navHtml(config: SiteConfig, current: string): string {
 }
 
 function tocHtml(toc: TocEntry[]): string {
-  if (toc.length === 0) return ''
+  // A single entry is no table of contents: the page goes without one.
+  if (toc.length < 2) return ''
   const items: string[] = []
   let open = false
   for (const entry of toc) {

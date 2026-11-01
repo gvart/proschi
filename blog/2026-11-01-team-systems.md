@@ -2,6 +2,7 @@
 title: Team systems for org diagrams, and pinned imports
 date: 2026-11-01
 description: A system block draws a whole team as one box, with a promise and headroom taken from the team's own design. Imports now stay inside your project, and git and https files are pinned in proschi.lock.
+version: 0.13.0
 audience: You draw designs that span several teams, or you import Proschi files from other folders or repositories.
 tags: [systems, imports, cli, simulation]
 ---
