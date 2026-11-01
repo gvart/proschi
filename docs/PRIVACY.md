@@ -165,7 +165,7 @@ above are about events, not about you).
   local date then. Runs
   played signed out stay in your browser and are sent when you sign in.
 - Your diagrams in the editor, while cloud sync is on (it is, once you
-  sign in, until you turn it off in the editor's Diagrams menu): each one's
+  sign in, until you turn it off in the editor's File menu): each one's
   file name, text and the imported files a share link brought, a version
   number and when it last changed. The diagrams already in your browser are
   uploaded when you first sign in. They are private: they never appear on a
@@ -173,10 +173,10 @@ above are about events, not about you).
   leaves a marker (its id, version and when) for 30 days, so your other
   devices delete their copy too; its text is removed at once. Your account
   keeps at most 5 diagrams on the free plan, 64 KiB each; the others stay in your browser only, marked "This browser only" in
-  the Diagrams menu, and are never lost. **Move to this browser only** in
-  that menu takes a diagram out of your account (and your other devices) to
-  free a slot. Turning sync off keeps the copies in your account until you
-  choose **Delete my cloud copies** in the same menu.
+  the editor's list of diagrams, and are never lost. **Move to this browser
+  only**, in a diagram's actions there, takes it out of your account (and
+  your other devices) to free a slot. Turning sync off keeps the copies in
+  your account until you choose **Delete my cloud copies** in the File menu.
 
   **Shared computers.** The browser remembers which account its diagrams
   were synced with. When a different account signs in, the diagrams synced
@@ -359,7 +359,7 @@ In Settings on the practice page (`#/me`, from the account menu):
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
-- **Delete my cloud copies**, in the editor's Diagrams menu once cloud sync
+- **Delete my cloud copies**, in the editor's File menu once cloud sync
   is off, removes every diagram from your account, their versions with
   them; those in your browser stay. A single version can be deleted on its
   own.
