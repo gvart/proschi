@@ -87,6 +87,14 @@ test.describe('diagrams sidebar', () => {
     await expect(codeEditor(page)).toBeVisible();
     await expect(files(page)).toBeHidden();
   });
+
+  test('the sidebar folds into a rail and opens from it', async ({ page }) => {
+    await files(page).getByRole('button', { name: 'Hide sidebar' }).click();
+    await expect(files(page)).toBeHidden();
+    await page.getByRole('button', { name: 'Show sidebar' }).click();
+    await expect(files(page)).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeHidden();
+  });
 });
 
 test.describe('diagrams drawer on a phone', () => {

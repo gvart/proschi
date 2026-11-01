@@ -42,6 +42,7 @@ import {
   RefreshCw,
   History,
   PanelLeft,
+  PanelLeftOpen,
   Search,
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
@@ -793,7 +794,7 @@ export default function Playground() {
             type="button"
             aria-label="Diagrams"
             aria-pressed={filesOpen}
-            title="Show or hide your diagrams (Ctrl+P to jump to one)"
+            title="Show or hide the diagrams list (Ctrl+P to jump to one)"
             onClick={toggleFiles}
             className={`${toolButton} min-w-0 aria-pressed:md:bg-ink/10`}
           >
@@ -1095,11 +1096,19 @@ export default function Playground() {
       </ZenCollapse>
 
       <div className="flex flex-1 min-h-0">
-      {filesOpen && !zen.zen && (
-        <div className="max-md:hidden w-60 shrink-0 border-r-bw-1 border-ink">
-          <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} />
-        </div>
-      )}
+      {!zen.zen &&
+        (filesOpen ? (
+          <div className="max-md:hidden w-60 shrink-0 border-r-bw-1 border-ink">
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={toggleFiles} />
+          </div>
+        ) : (
+          // Folded: a rail that brings the diagrams back.
+          <div className="max-md:hidden shrink-0 flex flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface px-1 py-2">
+            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+              <PanelLeftOpen size={16} />
+            </button>
+          </div>
+        ))}
       {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
       <Group
         id="playground-split"
