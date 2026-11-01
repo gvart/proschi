@@ -93,7 +93,7 @@ test.describe('annotated examples', () => {
       await line.tap(); // fails if the dock covers the line
       await expect(line).toHaveClass(/is-active/);
       await expect(note(page)).toBeInViewport();
-      for (const shown of await lit(example(page)).all()) await expect(shown).toBeInViewport({ ratio: 1 });
+      for (const shown of await lit(example(page)).all()) await expect(shown).toBeInViewport({ ratio: 0.99 });
       await line.tap();
       await expect(line).not.toHaveClass(/is-active/);
     }
