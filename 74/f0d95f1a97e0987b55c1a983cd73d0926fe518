@@ -1,0 +1,33 @@
+docs/images/src/org.proschi
+  s_e7f61f870764cb::t_256185ca83a0ee 1-38
+docs/images/src/teams/orders.proschi
+  s_e7f61f870764cb::t_f2666f9f6a9da6 1-2,7,11-12,17-20,25-29
+  s_e7f61f870764cb::t_2dfe123a78a777 3-6,8-10,13-16,21-24
+docs/images/diagrams/org.svg
+  s_e7f61f870764cb::t_b6ac7f1434a7c5 1-110
+docs/images/diagrams/org-expanded.svg
+  s_e7f61f870764cb::t_7727fe4df24ee6 1,4-6,8-13,15-18,21-24,39-42,45-47,77,79,81-83,89-101,103-114,117-127,130-145
+  s_e7f61f870764cb::t_b6ac7f1434a7c5 2-3,7,14,19-20,25-38,43-44,48-76,78,80,84-88,102,115-116,128-129,146-147
+docs/EDITORS.md
+  s_e7f61f870764cb::t_0f19b9b61578f6 383-384
+docs/SYSTEMS.md
+  s_e7f61f870764cb::t_0f19b9b61578f6 66-67
+docs/images/src/org-expanded.proschi
+  s_e7f61f870764cb::t_123ecd46d01e81 1-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "74f0d95f1a97e0987b55c1a983cd73d0926fe518",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
