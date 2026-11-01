@@ -91,6 +91,8 @@ Its requirements become the box's promise. The load you send is added to the
 team's own traffic, so the simulation names the node that gives out first.
 The team file's ids stay in its own scope.
 
+![On the left, Order Processing as one box: its entry point orders.api, its promise of p99 150 ms, and 2k rps sent against 1.7k of headroom, marked saturated. On the right, the same box expanded into the team file's gateway, Orders API, stock cache and Orders DB at 115%](images/concepts/team-box.svg "The box is the team file seen from outside: an entry point, a promise and the headroom its nodes leave.")
+
 The path must stay inside the [project root](IMPORTS.md#the-project-root).
 
 ## 4. Look inside
@@ -101,6 +103,8 @@ The path must stay inside the [project root](IMPORTS.md#the-project-root).
   team, and `--focus orders` draws only its design. See
   [Rendering and export](EDITORS.md#rendering-and-export).
 - **Claude Code**: see [Diagrams in the terminal](AGENT-SKILLS.md#diagrams-in-the-terminal).
+
+![The editor with the Order Processing team opened: the breadcrumb "Drone startup > Order Processing" above the canvas, the read-only team file in the code pane, and Orders DB in red under Overlay: load](images/screens/team-open.png "An opened team: the breadcrumb leads back to the org diagram.")
 
 To open the whole org in a browser, with every team file inside the link, run
 `proschi share-link org.proschi`.

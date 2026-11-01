@@ -113,6 +113,8 @@ requirements {
 [How the simulation works](https://proschi.app/docs/model/) explains every
 number.
 
+![The editor with this example on the left and the Results tab open on the right: All 2 passing, a total cost of $1,000/month, no saturated nodes, and a table of each node's load, utilisation, latency and availability](images/screens/results.png "The Results tab, next to Diagram and HLD above the canvas.")
+
 > **Try it:** open it in the editor and change `x2` to `x1` on `db`.
 > *survive any node failure* turns red, because one database is a single
 > point of failure.
