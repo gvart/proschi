@@ -29,7 +29,7 @@
       "slug": "model",
       "title": "How the simulation works",
       "source": "../frontend/src/docs/model.html",
-      "description": "What Proschi's simulation models (load, reads and writes, replicas and shards, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
+      "description": "What Proschi's simulation models (load, replicas, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
     },
     {
       "slug": "editors",
