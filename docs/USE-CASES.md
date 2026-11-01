@@ -72,6 +72,8 @@ by a space. So "xml payload" and "GET /x200" read as written. A zero count,
 a repeated prefix and a malformed size (`~2mb`, `~MB`) are errors.
 Responses and connection labels take no prefixes.
 
+![Load along the "Post a photo" use case: 100 rps of traffic enters at the mobile app and reaches the Feed API, Photos and Posts DB as 100 rps each, while the x200 LPUSH step sends 20k rps to the feed cache](images/concepts/load-flow.svg "Each request step passes the use case's rate on to its target; x200 multiplies it.")
+
 ## Reads and writes
 
 The simulation counts reads and writes apart, since a store takes far fewer
