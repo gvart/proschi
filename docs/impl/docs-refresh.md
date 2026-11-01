@@ -41,7 +41,7 @@ friendly.
   try-it prompts, and the new start page (`docs/README.md`, slug `""`).
   verify: e2e on desktop and 390px, keyboard and touch, screenshots, live
   examples compile. depends on: D1.
-- [ ] **D3 docs-language**: split LANGUAGE.md into concept pages, the
+- [x] **D3 docs-language**: split LANGUAGE.md into concept pages, the
   overview page, the anchor redirects, sitemap and meta. verify: no broken
   internal links, every old anchor resolves, the sitemap lists every page,
   docsSite tests pass. depends on: D1. parallel with: D2 and D4 (disjoint
