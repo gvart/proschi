@@ -50,7 +50,7 @@ friendly.
 - [x] **D4 docs-pages**: rewrite QUICKSTART, MODEL, EDITORS, SHARING,
   AGENT-SKILLS and WHY to the skill. verify: word counts before and after, the
   anti-slop checklist passes, live examples compile. depends on: D1.
-- [ ] **D5 docs-images**: generated diagram images, the screenshot script,
+- [x] **D5 docs-images**: generated diagram images, the screenshot script,
   and the concept SVGs, placed into the pages. verify: the user looks at every
   image; the staleness test passes. depends on: D2, D3 and D4.
 - [ ] **Final**: delete this file and run the full checks from CLAUDE.md.
