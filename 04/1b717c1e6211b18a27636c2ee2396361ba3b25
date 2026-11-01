@@ -1,0 +1,24 @@
+backend/src/apptokens.ts
+  s_e7f61f870764cb::t_e0c72bc63d4b5e 29-33,35-36,59-76
+  s_e7f61f870764cb::t_1f7e858d87584a 77
+backend/src/auth.ts
+  s_e7f61f870764cb::t_e0c72bc63d4b5e 1,28-29,186-187,189,191-193,198,201,210-211,214,216,234
+backend/test/apptokens.test.ts
+  s_e7f61f870764cb::t_766554833ae31c 433-534
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "041b717c1e6211b18a27636c2ee2396361ba3b25",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
