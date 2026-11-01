@@ -72,7 +72,7 @@ export type LayoutDirection = 'down' | 'right' | 'up' | 'left';
 /** A layout layer: 0, 1, 2, … from the top (in the flow's direction), or the first or last one. */
 export type Rank = number | 'first' | 'last';
 
-/** Top-level layout hints; see docs/LANGUAGE.md, "Steering the layout". */
+/** Top-level layout hints; see docs/STYLING.md, "Steering the layout". */
 export interface LayoutHints {
   /** `direction right`: the flow of the whole diagram (default down). */
   direction?: LayoutDirection;

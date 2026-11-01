@@ -143,7 +143,7 @@ export async function layoutBoxes(diagram: Diagram, getElk: () => Promise<ElkIns
  * sensibly even when the architecture declares no edges. `getElk` picks the
  * ELK engine (default: bundled, on this thread).
  *
- * The document's layout hints steer it (docs/LANGUAGE.md, "Steering the
+ * The document's layout hints steer it (docs/STYLING.md, "Steering the
  * layout"): `direction` turns the flow, `rank` pins nodes to a layer and
  * `layout ordered` lays every edge out by declaration order. Of the layouts
  * in VARIANTS, the one with the fewest crossings wins, and among those the

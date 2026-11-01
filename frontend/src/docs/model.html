@@ -65,7 +65,7 @@ N(step) = the x&lt;N&gt; fan-out, 1 without one</code></pre>
           Each request step is a <em>write</em> when its HTTP method is POST, PUT, PATCH or DELETE, or, without a
           method, when the first word of its label is a write verb: INSERT, UPDATE, UPSERT, DELETE, SET, PUBLISH,
           SEND, ENQUEUE, CHARGE, CREATE, SAVE, STORE, UPLOAD, RESERVE, HOLD and about thirty more
-          (<a href="../language/#reads-and-writes">full list</a>).
+          (<a href="../use-cases/#reads-and-writes">full list</a>).
           Everything else (GET, SELECT, QUERY, SCAN, LOOKUP, an event name) is a read. A request to a queue is
           always a write, whatever its label.
         </p>
