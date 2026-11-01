@@ -1,0 +1,58 @@
+plugin/skills/proschi-hld-doc/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+frontend/src/onboarding/CheatSheet.tsx
+  s_e7f61f870764cb::t_67a2ec6519962b 6,113
+plugin/skills/proschi-capacity-plan/references/proschi-simulation.md
+  s_e7f61f870764cb::t_51685318e33e21 5
+plugin/skills/infra-to-proschi/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+blog/2026-11-01-team-systems.md
+  s_e7f61f870764cb::t_fdb29867f82f6b 169
+plugin/skills/proschi-capacity-plan/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+frontend/src/dsl/autoLayout.ts
+  s_e7f61f870764cb::t_4870cd11f0904a 146
+frontend/src/onboarding/cheatSheetSections.test.ts
+  s_e7f61f870764cb::t_ba1fb4ae5e1484 9-11
+  s_e7f61f870764cb::t_ab803eb118dbc8 36-42,46
+plugin/skills/code-to-usecases/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+frontend/src/onboarding/links.ts
+  s_e7f61f870764cb::t_67a2ec6519962b 3-4
+plugin/skills/proschi-design-review/references/proschi-simulation.md
+  s_e7f61f870764cb::t_51685318e33e21 5
+plugin/skills/proschi-keep-in-sync/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+tooling/src/proschi.ts
+  s_e7f61f870764cb::t_4870cd11f0904a 52,64
+plugin/skills/proschi-design-review/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+frontend/src/dsl/layoutFixtures/README.md
+  s_e7f61f870764cb::t_4870cd11f0904a 52
+plugin/skills/image-to-proschi/references/proschi-cheatsheet.md
+  s_e7f61f870764cb::t_51685318e33e21 75
+frontend/src/components/Playground/proschiLanguage.ts
+  s_e7f61f870764cb::t_4870cd11f0904a 38,148
+frontend/src/dsl/types.ts
+  s_e7f61f870764cb::t_4870cd11f0904a 75
+frontend/src/onboarding/cheatSheetSections.ts
+  s_e7f61f870764cb::t_67a2ec6519962b 5,14,18,31,42,51,60,74,95,116
+frontend/src/docs/model.html
+  s_e7f61f870764cb::t_fdb29867f82f6b 68
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "40343643f9f786ce84c7e46321ab4ce9f1b40019",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
