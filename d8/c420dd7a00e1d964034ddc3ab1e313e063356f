@@ -1,0 +1,29 @@
+frontend/src/components/Canvas/canvas.css
+  s_e7f61f870764cb::t_a4dc39e4289c96 171-173
+frontend/src/components/Playground/VersionViewer.tsx
+  s_e7f61f870764cb::t_2eb46158fec54d 164-165,182,198,200,227
+  s_e7f61f870764cb::t_6c0736d07b9937 204
+  s_e7f61f870764cb::t_c419a4f26aad5f 168
+  s_e7f61f870764cb::t_a4dc39e4289c96 93,98-100
+  s_e7f61f870764cb::t_d1b8fb4de8fe3c 327
+  s_e7f61f870764cb::t_2e365a69c588bc 211,223
+frontend/src/components/Playground/VersionsDialog.tsx
+  s_e7f61f870764cb::t_9bcec4a125559f 201,208
+  s_e7f61f870764cb::t_e9d42c2bb3baac 237-238,240
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "d8c420dd7a00e1d964034ddc3ab1e313e063356f",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
