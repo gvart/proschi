@@ -1,0 +1,38 @@
+docs/images/concepts/headroom.svg
+  s_e7f61f870764cb::t_855dc54e6ff223 1-25,30-38,40-41
+  s_e7f61f870764cb::t_53056f9ee5b234 26-29,39
+docs/USE-CASES.md
+  s_e7f61f870764cb::t_76538e6123c01e 75-76
+docs/images/concepts/playback.svg
+  s_e7f61f870764cb::t_1b78edf21b2ed2 16-20
+  s_e7f61f870764cb::t_709192dc392424 5,15,22-23,43-48
+  s_e7f61f870764cb::t_bb8817e037d584 1-4,6-14,21,24-42,49
+docs/SCENARIOS.md
+  s_e7f61f870764cb::t_76538e6123c01e 72-73
+docs/HLD.md
+  s_e7f61f870764cb::t_76538e6123c01e 151-152
+docs/images/concepts/load-flow.svg
+  s_e7f61f870764cb::t_c5f108f5319177 1,18,51-52
+  s_e7f61f870764cb::t_ee17b7c86b5971 2-17,19-32,34-50,53-65
+  s_e7f61f870764cb::t_3244336157e315 33
+docs/images/concepts/team-box.svg
+  s_e7f61f870764cb::t_66b3534b631e97 1-19,21,26-28,30-31,33-46,48-51,53-67
+  s_e7f61f870764cb::t_3917cd98d61b40 20,23-25,52
+  s_e7f61f870764cb::t_0dd837ee1b3768 22,29,32,47
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "1c2d8a245e9c8691407c4094835ba9ef36d104a2",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
