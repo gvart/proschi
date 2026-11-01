@@ -1,0 +1,39 @@
+frontend/plugins/blogSite.test.ts
+  s_0cba2f07849325::t_a9f3917c0ef5b9 1-2,74-95
+  s_0cba2f07849325::t_baeb01f347bdcf 70-73,100-101,106-113,147
+  s_0cba2f07849325::t_0c3bdcce2cc2ce 3
+blog/2026-10-31-terminal-diagrams/index.md
+  s_0cba2f07849325::t_5f1da10b87c1de 1-132
+blog/2026-11-01-editor-folders-and-sidebar/index.md
+  s_0cba2f07849325::t_5f1da10b87c1de 1-111
+frontend/plugins/blogSite.ts
+  s_0cba2f07849325::t_de589e5c30cc79 1,14,28,39,57,66,73,93,97-103,112,117-118,121,123
+  s_0cba2f07849325::t_5141fd18fcbff9 18,21
+blog/2026-11-01-team-systems/index.md
+  s_0cba2f07849325::t_5f1da10b87c1de 1-185
+blog/2026-11-01-versions-and-cloud-references/index.md
+  s_0cba2f07849325::t_5f1da10b87c1de 1-133
+.claude/skills/docs-writer/STYLE.md
+  s_0cba2f07849325::t_4262d819f3d884 4
+frontend/src/dsl/format.test.ts
+  s_0cba2f07849325::t_4262d819f3d884 75
+.claude/skills/blog-post/SKILL.md
+  s_0cba2f07849325::t_909f9c2dd01667 23,37-39,73-75,85
+  s_0cba2f07849325::t_b744994b05e528 8-10,44
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "db19c597431cd268993c1e15435c23d4e9b07ad9",
+  "prompts": {},
+  "sessions": {
+    "s_0cba2f07849325": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7413bb10-19cd-4a51-9024-1acd2ebe3cf2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
