@@ -47,7 +47,7 @@ friendly.
   docsSite tests pass. depends on: D1. parallel with: D2 and D4 (disjoint
   files; D2 alone owns `frontend/plugins/docsSite.ts` and changes it
   additively; D3 asks main if it needs a change there).
-- [ ] **D4 docs-pages**: rewrite QUICKSTART, MODEL, EDITORS, SHARING,
+- [x] **D4 docs-pages**: rewrite QUICKSTART, MODEL, EDITORS, SHARING,
   AGENT-SKILLS and WHY to the skill. verify: word counts before and after, the
   anti-slop checklist passes, live examples compile. depends on: D1.
 - [ ] **D5 docs-images**: generated diagram images, the screenshot script,
