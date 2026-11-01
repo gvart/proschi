@@ -21,6 +21,13 @@ import { highlightLines } from '../src/landing/highlight'
  * - ```proschi fences become <figure data-live> with the code highlighted
  *   and its source in base64; src/docs/main.ts turns them into live
  *   diagrams. ```proschi fragment is highlighted only (a partial document).
+ * - ```proschi annotated is a live example whose `# @note …` lines become
+ *   notes on the line after them (splitAnnotations); the notes also render
+ *   as a list under the code, for readers without JavaScript.
+ * - A `> **Try it:**` blockquote right after a live example gets the class
+ *   try-it, so it reads as a prompt attached to that example.
+ * - `anchorRedirects` in site.json maps a page's old anchors to their new
+ *   home; the page carries its map in data-anchor-redirects (main.ts follows it).
  */
 
 export const REPO = 'gvart/proschi'
@@ -48,6 +55,8 @@ export interface NavItem {
 export interface SiteConfig {
   pages: DocPage[]
   nav: { title: string; items: NavItem[] }[]
+  /** Per page slug: an old anchor → where it lives now, relative to /docs/ (`hld/#traffic`, `scenarios/`). */
+  anchorRedirects?: Record<string, Record<string, string>>
 }
 
 export interface TocEntry {
@@ -95,14 +104,74 @@ export function slugger(): (text: string) => string {
   }
 }
 
-/** Highlighted HTML of a Proschi snippet, one span.line per line, like src/landing/highlight.ts does in the browser. */
-export function highlightProschi(source: string): string {
+/** Highlighted HTML of a Proschi snippet, one span.line per line, like src/landing/highlight.ts does in the browser. `attrs` adds attributes to a line (0-based). */
+export function highlightProschi(source: string, attrs?: (line: number) => string): string {
   return highlightLines(source.split('\n'))
-    .map((segments) => {
+    .map((segments, i) => {
       const html = segments.map((s) => (s.cls ? `<span class="tok-${s.cls}">${escapeHtml(s.text)}</span>` : escapeHtml(s.text))).join('')
-      return `<span class="line">${html}</span>`
+      return `<span class="line"${attrs?.(i) ?? ''}>${html}</span>`
     })
     .join('\n')
+}
+
+export interface Annotation {
+  /** 1-based line of the annotated code (after the note lines are removed). */
+  line: number
+  text: string
+}
+
+const NOTE_PREFIX = '# @note '
+
+/**
+ * The code and notes of a ```proschi annotated fence: a `# @note …` line
+ * annotates the next line that is neither blank nor a note, consecutive notes
+ * join with spaces, and every note line is removed from the code.
+ */
+export function splitAnnotations(source: string, where = 'annotated example'): { code: string; notes: Annotation[] } {
+  const code: string[] = []
+  const notes: Annotation[] = []
+  let pending: string[] = []
+  for (const line of source.split('\n')) {
+    const trimmed = line.trim()
+    if (trimmed.startsWith(NOTE_PREFIX)) pending.push(trimmed.slice(NOTE_PREFIX.length).trim())
+    else {
+      if (trimmed && pending.length > 0) {
+        notes.push({ line: code.length + 1, text: pending.join(' ') })
+        pending = []
+      }
+      code.push(line)
+    }
+  }
+  if (pending.length > 0) throw new Error(`${where}: the note "${pending.join(' ')}" annotates nothing (no line follows it)`)
+  if (notes.length === 0) throw new Error(`${where}: an annotated example needs at least one # @note line`)
+  return { code: code.join('\n'), notes }
+}
+
+/** A note's text: plain, with `backticks` as code. */
+const noteHtml = (text: string): string =>
+  text
+    .split(/(`[^`]+`)/)
+    .map((part) => (/^`[^`]+`$/.test(part) ? `<code>${escapeHtml(part.slice(1, -1))}</code>` : escapeHtml(part)))
+    .join('')
+
+function annotatedFigure(source: string, where: string): { html: string; code: string } {
+  const { code, notes } = splitAnnotations(source, where)
+  const lines = code.split('\n')
+  const index = new Map(notes.map((n, i) => [n.line - 1, i]))
+  const pre = `<pre class="code code--proschi" data-lang="proschi" tabindex="0"><code>${highlightProschi(code, (i) => (index.has(i) ? ` data-note="${index.get(i)}"` : ''))}</code></pre>`
+  const items = notes
+    .map((n, i) => `<li data-note="${i}"><code class="annotated__src">${escapeHtml(lines[n.line - 1].trim())}</code> <span class="annotated__text">${noteHtml(n.text)}</span></li>`)
+    .join('\n')
+  const html = `<figure class="live live--annotated" data-live data-annotated data-source="${base64(code)}">
+<div class="annotated__code">
+${pre}
+<ol class="annotated__notes" aria-label="Notes on the example">
+${items}
+</ol>
+</div>
+</figure>
+`
+  return { html, code }
 }
 
 const base64 = (s: string): string => Buffer.from(s, 'utf8').toString('base64')
@@ -200,6 +269,19 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
     throw new Error(`${ctx.sourcePath}: images are not supported on the site (${tokens[idx].attrGet('src')})`)
   }
 
+  // A "> **Try it:** …" right after a live example is that example's prompt.
+  md.core.ruler.push('proschi_try_it', (state) => {
+    const tokens = state.tokens
+    for (let i = 1; i < tokens.length; i++) {
+      const prev = tokens[i - 1]
+      if (tokens[i].type !== 'blockquote_open' || prev.type !== 'fence') continue
+      const [lang, ...flags] = prev.info.trim().split(/\s+/)
+      if (lang !== 'proschi' || flags.includes('fragment')) continue
+      const first = (tokens[i + 2]?.children ?? []).filter((t) => t.type !== 'text' || t.content !== '')
+      if (first[0]?.type === 'strong_open' && first[1]?.content === 'Try it:') tokens[i].attrSet('class', 'try-it')
+    }
+  })
+
   md.renderer.rules.table_open = () => '<div class="table-wrap" tabindex="0">\n<table>\n'
   md.renderer.rules.table_close = () => '</table>\n</div>\n'
 
@@ -211,6 +293,12 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
       return `<pre class="code"${label} tabindex="0"><code>${escapeHtml(source)}</code></pre>\n`
     }
     const pre = `<pre class="code code--proschi" data-lang="proschi" tabindex="0"><code>${highlightProschi(source)}</code></pre>`
+    if (flags.includes('annotated')) {
+      if (flags.includes('fragment')) throw new Error(`${ctx.sourcePath}: a proschi fence cannot be both annotated and a fragment`)
+      const { html, code } = annotatedFigure(source, `${ctx.sourcePath}, line ${(tokens[idx].map?.[0] ?? 0) + 1}`)
+      examples.push(code)
+      return html
+    }
     if (flags.includes('fragment')) return `${pre}\n`
     examples.push(source)
     return `<figure class="live" data-live data-source="${base64(source)}">\n${pre}\n</figure>\n`
@@ -338,7 +426,9 @@ export function layoutHtml(config: SiteConfig, rendered: RenderedPage): string {
   const toc = tocHtml(rendered.toc)
   const repoPath = posix.normalize(posix.join('docs', page.source))
   const edit = page.source.endsWith('.md') ? `https://github.com/${REPO}/edit/main/${repoPath}` : `${BLOB}${repoPath}`
-  return `<div class="docs" data-site-root="${toSiteRoot(page.slug)}">
+  const redirects = config.anchorRedirects?.[page.slug]
+  const redirectAttr = redirects && Object.keys(redirects).length > 0 ? ` data-anchor-redirects="${escapeHtml(JSON.stringify(redirects))}"` : ''
+  return `<div class="docs" data-site-root="${toSiteRoot(page.slug)}"${redirectAttr}>
 <a class="docs-drawer-open" href="#docs-nav" aria-controls="docs-nav"><span class="docs-drawer-open__icon" aria-hidden="true"></span>Docs menu</a>
 <nav class="docs-nav" id="docs-nav" aria-label="Docs">
 <div class="docs-nav__head"><span class="docs-nav__heading">Docs</span><a class="docs-drawer-close" href="#main" aria-label="Close the docs menu">×</a></div>
@@ -357,7 +447,8 @@ ${toc ? `<aside class="docs-toc">\n<nav class="toc" aria-label="On this page">\n
 
 export function headHtml(page: DocPage): string {
   const url = `${SITE_ORIGIN}docs/${page.slug ? `${page.slug}/` : ''}`
-  const title = page.slug ? `${page.title} · Proschi docs` : 'Proschi docs'
+  // The home page's title names the product already.
+  const title = page.slug ? `${page.title} · Proschi docs` : page.title
   return [
     `<title>${escapeHtml(title)}</title>`,
     `<meta name="description" content="${escapeHtml(page.description)}" />`,

@@ -8,6 +8,8 @@ import { UseCasePlayback } from '../components/UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES } from '../components/UseCases/playbackView';
 import { systemSummaries } from '../components/Canvas/systemSummary';
 import { analyze, runTests } from '../sim';
+import type { Edge, Node } from 'reactflow';
+import type { Lit } from './annotations';
 import './live.css';
 
 interface LiveExampleProps {
@@ -24,6 +26,25 @@ interface LiveExampleProps {
   newTab?: boolean;
   /** A heading at the start of the bar (the embed page's diagram title). */
   title?: string;
+  /** Boxes and arrows to light up (an annotated example's current line); the rest dims. */
+  lit?: Lit;
+}
+
+/** Marks the lit nodes and edges (docs.css styles them) and dims the rest; a lit arrow keeps its two ends, a lit group its members. */
+function withLit(nodes: Node[], edges: Edge[], lit: Lit | undefined): { nodes: Node[]; edges: Edge[] } {
+  if (!lit || (lit.nodes.length === 0 && lit.edges.length === 0)) return { nodes, edges };
+  const litNodes = new Set(lit.nodes);
+  const litEdges = new Set(lit.edges);
+  const kept = new Set(lit.nodes);
+  for (const e of edges) if (litEdges.has(e.id)) kept.add(e.source).add(e.target);
+  const mark = (className: string | undefined, cls: string) => `${className ?? ''} ${cls}`.trim();
+  return {
+    nodes: nodes.map((n) => ({
+      ...n,
+      className: mark(n.className, litNodes.has(n.id) ? 'doc-lit' : kept.has(n.id) || (n.parentNode && litNodes.has(n.parentNode)) ? '' : 'doc-dim'),
+    })),
+    edges: edges.map((e) => ({ ...e, className: mark(e.className, litEdges.has(e.id) ? 'doc-lit' : 'doc-dim') })),
+  };
 }
 
 /** The root file name imports resolve against, as a top-level file of the editor's. */
@@ -34,7 +55,7 @@ const ROOT_PATH = 'embedded.proschi';
  * its scenarios, Play to run one over the diagram, and a link that opens the
  * code in the editor. Nothing is saved: the editor gets the code in the link.
  */
-export default function LiveExample({ source, siteRoot, imports, editorHref, openLabel = 'Open in editor', newTab, title }: LiveExampleProps) {
+export default function LiveExample({ source, siteRoot, imports, editorHref, openLabel = 'Open in editor', newTab, title, lit }: LiveExampleProps) {
   const diagram = useMemo(
     () => parse(source, imports ? { path: ROOT_PATH, resolve: filesResolver(imports, ROOT_PATH) } : undefined).diagram,
     [source, imports],
@@ -129,7 +150,10 @@ export default function LiveExample({ source, siteRoot, imports, editorHref, ope
           showHeader={false}
           autoPlay
         >
-          {(view) => <DiagramCanvas nodes={view.nodes} edges={view.edges} edgeTypes={PLAYBACK_EDGE_TYPES} fitKey={String(settled)} compact />}
+          {(view) => {
+            const shown = withLit(view.nodes, view.edges, lit);
+            return <DiagramCanvas nodes={shown.nodes} edges={shown.edges} edgeTypes={PLAYBACK_EDGE_TYPES} fitKey={String(settled)} compact />;
+          }}
         </UseCasePlayback>
       </div>
     </div>

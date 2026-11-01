@@ -1,11 +1,17 @@
 {
-  "$comment": "The docs on the site (/docs/), built from these files by frontend/plugins/docsSite.ts. `pages` lists the pages; `source` is relative to this folder. The previous / next links follow the sidebar (`nav`) order. Every page needs a stub at frontend/docs/<slug>/index.html (the docs home: frontend/docs/index.html). `nav` is the sidebar: an item names a page (with an optional anchor), or an `href` from the site root or an absolute URL.",
+  "$comment": "The docs on the site (/docs/), built from these files by frontend/plugins/docsSite.ts. `pages` lists the pages; `source` is relative to this folder. The previous / next links follow the sidebar (`nav`) order. Every page needs a stub at frontend/docs/<slug>/index.html (the docs home: frontend/docs/index.html). `anchorRedirects` maps, per page slug, an old anchor to where it lives now, relative to /docs/ (\"hld/#traffic\" or \"scenarios/\"); the page follows it in the browser. `nav` is the sidebar: an item names a page (with an optional anchor), or an `href` from the site root or an absolute URL.",
   "pages": [
     {
       "slug": "",
-      "title": "Why Proschi",
+      "title": "Proschi: architecture diagrams as code",
+      "source": "README.md",
+      "description": "Proschi turns a few lines of text into an architecture diagram you can play and test. Hover each line of the example to see what it draws."
+    },
+    {
+      "slug": "why",
+      "title": "Why architecture diagrams as text",
       "source": "WHY.md",
-      "description": "What Proschi is for: architecture diagrams as text, request flows you can play, and designs checked by a simulation in your browser."
+      "description": "Why write architecture diagrams as text: they diff in pull requests, lay themselves out, play request flows and check the design with a simulation."
     },
     {
       "slug": "quickstart",
@@ -80,10 +86,17 @@
       "description": "What Proschi keeps in your browser, what an account stores on the server, what is logged and shared, and how to export or delete it."
     }
   ],
+  "anchorRedirects": {
+    "": { "why-text": "why/#why-text", "start-here": "why/" }
+  },
   "nav": [
     {
       "title": "Start",
-      "items": [{ "page": "" }, { "page": "quickstart" }]
+      "items": [
+        { "page": "", "label": "Overview" },
+        { "page": "quickstart", "label": "Quickstart" },
+        { "page": "why", "label": "Why Proschi" }
+      ]
     },
     {
       "title": "Language",
