@@ -1,0 +1,30 @@
+docs/README.md
+  s_e7f61f870764cb::t_ae3eee6d91de2f 8,11
+  s_e7f61f870764cb::t_79d78cde9f3b42 23-24,27,29-30,32-33,39-40,42,44
+frontend/plugins/docsSite.test.ts
+  s_e7f61f870764cb::t_c2b983a3650a5d 305,308-321
+frontend/e2e/docs-annotated.e2e.ts
+  s_e7f61f870764cb::t_70caf064174a12 46-48,53-54
+  s_e7f61f870764cb::t_e8639b260d3b46 69,76
+  s_e7f61f870764cb::t_9e651b40ca0e2a 23,29,34,116-118
+  s_e7f61f870764cb::t_ee21e070b4ddf2 84-102
+  s_e7f61f870764cb::t_a08a9cd067b06e 45
+.claude/skills/docs-writer/SKILL.md
+  s_e7f61f870764cb::t_ad2d5ff0909a63 105-108
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b4feff99060852832381c9050738a286b3446cce",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
