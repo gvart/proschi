@@ -126,6 +126,19 @@ describe('rendered pages', () => {
     expect(model.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['modelled', 'examples', 'quirks', 'not-modelled', 'reading', 'practice'])
   })
 
+  it('leaves "On this page" out, inline and beside the article, when a page has fewer than two entries', () => {
+    const home = rendered.get('')!
+    expect(home.toc).toHaveLength(1)
+    for (const toc of [[], home.toc]) {
+      const html = layoutHtml(site, { ...home, toc })
+      expect(html).not.toContain('toc-inline')
+      expect(html).not.toContain('aria-label="On this page"')
+      expect(html).toContain('<aside class="docs-toc"></aside>')
+    }
+    const two = layoutHtml(site, { ...home, toc: [...home.toc, { level: 2, id: 'more', text: 'More' }] })
+    expect(two.match(/aria-label="On this page"/g)).toHaveLength(2)
+  })
+
   it('numbers: has the cheat sheet’s sections, and every estimate card links to one that exists', () => {
     const numbers = rendered.get('numbers')!
     expect(numbers.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['latency', 'throughput-and-capacity', 'time-and-conversions', 'sizes', 'cloud-costs', 'how-to-estimate'])

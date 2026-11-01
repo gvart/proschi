@@ -293,7 +293,7 @@
 .toc__list > li {
   counter-increment: toc;
 }
-.toc a {
+.toc__list a {
   position: relative;
   display: flex;
   gap: 10px;
@@ -323,16 +323,16 @@
   font-size: var(--fs-12);
   color: rgb(var(--c-ink) / 0.7);
 }
-.toc a:hover {
+.toc__list a:hover {
   background: rgb(var(--c-ink) / 0.06);
   color: rgb(var(--c-ink));
 }
-.toc a.is-current {
+.toc__list a.is-current {
   background: rgb(var(--c-yellow));
   border-left-color: rgb(var(--c-pink));
   color: rgb(var(--c-on-accent));
 }
-.toc a.is-current::before {
+.toc__list a.is-current::before {
   color: rgb(var(--c-on-accent));
 }
 
