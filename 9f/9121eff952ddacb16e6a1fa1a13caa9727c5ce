@@ -1,0 +1,34 @@
+frontend/docs/styling/index.html
+  s_e7f61f870764cb::t_5c542a30792b5c 1-35
+docs/NODES.md
+  s_e7f61f870764cb::t_1f0cdc5361ca37 4-5
+  s_e7f61f870764cb::t_d6d35102133bcb 1-3,6-11,13-25,28-34,36-37,39,41-42,45-51,54-56,63-73,75-80,85-100,108-122
+  s_e7f61f870764cb::t_114cc2e6e8048c 26-27
+  s_e7f61f870764cb::t_15a2fa791560cf 43-44,57-62,74,81-84,101-107
+  s_e7f61f870764cb::t_50ab6f02bceda7 52-53
+  s_e7f61f870764cb::t_f9b1faa9f7f2a8 12
+  s_e7f61f870764cb::t_5051d28b3684aa 35,38,40
+docs/STYLING.md
+  s_e7f61f870764cb::t_756d62814c0037 54,92-94,112-113
+  s_e7f61f870764cb::t_cb7b2c9d6efdb5 3-4,8,10-11,42,44-45,101-102,104-107,126-128,130-132
+  s_e7f61f870764cb::t_87870f0ef53f49 1-2,5-7,9,12-41,43,46-53,55-57,61-91,95-100,103,108-111,114-121,123-125,129,133-138
+  s_e7f61f870764cb::t_92f675d69f0e03 58-60,122
+frontend/docs/nodes/index.html
+  s_e7f61f870764cb::t_5c542a30792b5c 1-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "9f9121eff952ddacb16e6a1fa1a13caa9727c5ce",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
