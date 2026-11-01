@@ -27,11 +27,11 @@ test.describe('docs', () => {
     await page.getByRole('link', { name: 'language reference', exact: true }).click();
     await expect(page).toHaveURL(/\/proschi\/docs\/language\/$/);
     await sidebar(page).getByRole('link', { name: 'Scenarios' }).click();
-    await expect(page).toHaveURL(/\/docs\/language\/#scenarios$/);
-    await expect(page.getByRole('heading', { level: 2, name: /^Scenarios/ })).toBeInViewport();
+    await expect(page).toHaveURL(/\/docs\/scenarios\/$/);
+    await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Scenarios/);
 
     await page.getByRole('navigation', { name: 'Previous and next page' }).getByRole('link', { name: /Next/ }).click();
-    await expect(page).toHaveURL(/\/proschi\/docs\/model\/$/);
+    await expect(page).toHaveURL(/\/proschi\/docs\/imports\/$/);
   });
 
   test('a live example draws its diagram and plays a scenario', async ({ page }) => {

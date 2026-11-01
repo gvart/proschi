@@ -14,6 +14,8 @@ import { layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, rewriteHr
 const docsDir = new URL('../../docs/', import.meta.url).pathname
 const stubsDir = new URL('../docs/', import.meta.url).pathname
 const site = readSite(docsDir)
+/** Old anchor → new page, per page: docs/site.json `anchorRedirects`. */
+const redirects = (JSON.parse(readFileSync(`${docsDir}site.json`, 'utf8')) as { anchorRedirects?: Record<string, Record<string, string>> }).anchorRedirects ?? {}
 const rendered = new Map<string, RenderedPage>(site.pages.map((p) => [p.slug, renderFromDisk(docsDir, site, p)]))
 const stubPath = (slug: string) => `${stubsDir}${slug ? `${slug}/` : ''}index.html`
 
@@ -56,9 +58,24 @@ describe('docs/site.json', () => {
     const pager = (slug: string) => layoutHtml(site, rendered.get(slug)!).match(/<nav class="pager"[\s\S]*?<\/nav>/)![0]
     expect(pager('')).toContain('rel="next"><span class="pager__dir">Next</span><span class="pager__title">Quickstart</span>')
     expect(pager('quickstart')).toContain('<span class="pager__title">Why Proschi</span>')
-    expect(pager('quickstart')).toContain('<span class="pager__title">Language reference</span>')
-    expect(pager('systems')).toContain('<span class="pager__title">Language reference</span>')
-    expect(pager('systems')).toContain('<span class="pager__title">How the simulation works</span>')
+    expect(pager('quickstart')).toContain('<span class="pager__title">Proschi language reference</span>')
+    expect(pager('systems')).toContain('<span class="pager__title">Imports: split a design across files</span>')
+    expect(pager('systems')).toContain('<span class="pager__title">High-level design: traffic and capacity</span>')
+    expect(pager('grammar')).toContain('<span class="pager__title">How the simulation works</span>')
+  })
+
+  it('redirects every old anchor of a page to a page and heading that exist', () => {
+    expect(Object.keys(redirects)).toEqual(['language'])
+    for (const [from, map] of Object.entries(redirects)) {
+      expect(Object.keys(map)).toHaveLength(30)
+      for (const [old, to] of Object.entries(map)) {
+        // An old anchor that still exists on the page needs no redirect, unless it points at itself.
+        if (rendered.get(from)!.anchors.has(old)) expect(to, old).toBe(`${from}/#${old}`)
+        const [, slug, anchor] = /^([a-z-]*)\/(?:#(.+))?$/.exec(to) ?? []
+        const dest = rendered.get(slug)
+        expect(dest !== undefined && (!anchor || dest.anchors.has(anchor)), `${from}#${old} → ${to}`).toBe(true)
+      }
+    }
   })
 
   it('points sidebar anchors at headings that exist', () => {
@@ -84,15 +101,17 @@ describe('rendered pages', () => {
       const dest = rendered.get(to.slug)
       // Anchors of the layout itself: the drawer and the skip target.
       const layoutIds = new Set(['docs-nav', 'main'])
-      if (!dest || (to.anchor && !dest.anchors.has(to.anchor) && !layoutIds.has(to.anchor))) broken.push(href)
+      // An anchor that moved to another page is forwarded there (anchorRedirects in site.json).
+      const redirected = to.anchor !== undefined && redirects[to.slug]?.[to.anchor] !== undefined
+      if (!dest || (to.anchor && !dest.anchors.has(to.anchor) && !layoutIds.has(to.anchor) && !redirected)) broken.push(href)
     }
     expect(broken).toEqual([])
   })
 
   it('renders headings with GitHub’s anchors and builds "On this page"', () => {
-    const language = rendered.get('language')!
-    expect(language.toc.find((t) => t.text === 'Reads and writes')).toEqual({ level: 3, id: 'reads-and-writes', text: 'Reads and writes' })
-    expect(language.article).toContain('<h2 id="high-level-design">')
+    const useCases = rendered.get('use-cases')!
+    expect(useCases.toc.find((t) => t.text === 'Reads and writes')).toEqual({ level: 2, id: 'reads-and-writes', text: 'Reads and writes' })
+    expect(rendered.get('tests')!.article).toContain('<h2 id="selectors-and-kinds">')
     const model = rendered.get('model')!
     expect(layoutHtml(site, rendered.get('quickstart')!)).toContain('data-toc="3-break-it-on-purpose">Break it on purpose</a>')
     expect(model.toc.filter((t) => t.level === 2).map((t) => t.id)).toEqual(['modelled', 'examples', 'quirks', 'not-modelled', 'reading', 'practice'])
@@ -140,7 +159,7 @@ describe('live examples', () => {
 
   it('exist on the pages that teach the language', () => {
     expect(rendered.get('quickstart')!.examples.length).toBeGreaterThanOrEqual(4)
-    expect(rendered.get('language')!.examples.length).toBeGreaterThanOrEqual(3)
+    for (const slug of ['language', 'nodes', 'styling', 'use-cases', 'scenarios', 'imports', 'hld', 'tests']) expect(rendered.get(slug)!.examples.length, slug).toBeGreaterThanOrEqual(1)
     expect(rendered.get('')!.examples.length).toBeGreaterThanOrEqual(1)
   })
 
@@ -149,7 +168,7 @@ describe('live examples', () => {
   })
 
   it('every Markdown fence of Proschi code is tagged', () => {
-    for (const file of ['LANGUAGE.md', 'EDITORS.md', 'PRACTICE.md', 'QUICKSTART.md', 'WHY.md', 'SYSTEMS.md']) {
+    for (const file of site.pages.map((p) => p.source).filter((f) => f.endsWith('.md'))) {
       const fences = markdownIt().parse(readFileSync(`${docsDir}${file}`, 'utf8'), {}).filter((t) => t.type === 'fence' && !t.info.trim())
       for (const { content } of fences) {
         expect(/^\s*(title|usecase|group)\b|\s-[->x]/m.test(content), `${file}: an untagged fence that looks like Proschi:\n${content}`).toBe(false)
@@ -162,6 +181,20 @@ describe('live examples', () => {
     const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.id)
     expect(failing(org)).toEqual(['system:orders'])
     expect(failing(org.replace('"Buy drone" 2k rps', '"Buy drone" 1k rps'))).toEqual([])
+  })
+
+  it('the tests page passes as written, and fails survival with one database, as its try-it says', () => {
+    const [paste] = rendered.get('tests')!.examples
+    const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.name)
+    expect(failing(paste)).toEqual([])
+    expect(failing(paste.replace('[PostgreSQL] x2', '[PostgreSQL] x1'))).toEqual(['survive any node failure'])
+  })
+
+  it('the high-level design passes as written, and fails survival at a 50% hit rate, as its try-it says', () => {
+    const [shortener] = rendered.get('hld')!.examples
+    const failing = (source: string) => runTests(parse(source).diagram).filter((t) => !t.passed).map((t) => t.name)
+    expect(failing(shortener)).toEqual([])
+    expect(failing(shortener.replace('"Cache hit" 90%, "Cache miss" 10%', '"Cache hit" 50%, "Cache miss" 50%'))).toEqual(['survive any node failure'])
   })
 
   it('the quickstart’s last step passes, and fails survival with one database, as it says', () => {
