@@ -8,7 +8,7 @@ test.describe('docs', () => {
     await page.goto('./');
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Docs' }).click();
     await expect(page).toHaveURL(/\/proschi\/docs\/$/);
-    await expect(page).toHaveTitle('Proschi docs');
+    await expect(page).toHaveTitle('Proschi: architecture diagrams as code');
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Docs' })).toHaveAttribute('aria-current', 'page');
 
     await sidebar(page).getByRole('link', { name: 'Quickstart' }).click();

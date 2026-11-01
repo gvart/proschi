@@ -3,7 +3,7 @@ import markdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/dsl/parser'
 import { runTests } from '../src/sim/tests'
-import { layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, rewriteHref, slugger, stubInputs, type RenderedPage } from './docsSite'
+import { headHtml, layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, renderPage, rewriteHref, slugger, splitAnnotations, stubInputs, type RenderedPage, type SiteConfig } from './docsSite'
 
 /**
  * The docs section: every page in docs/site.json has a stub and renders,
@@ -14,8 +14,6 @@ import { layoutHtml, pageHref, readingOrder, readSite, renderFromDisk, rewriteHr
 const docsDir = new URL('../../docs/', import.meta.url).pathname
 const stubsDir = new URL('../docs/', import.meta.url).pathname
 const site = readSite(docsDir)
-/** Old anchor → new page, per page: docs/site.json `anchorRedirects`. */
-const redirects = (JSON.parse(readFileSync(`${docsDir}site.json`, 'utf8')) as { anchorRedirects?: Record<string, Record<string, string>> }).anchorRedirects ?? {}
 const rendered = new Map<string, RenderedPage>(site.pages.map((p) => [p.slug, renderFromDisk(docsDir, site, p)]))
 const stubPath = (slug: string) => `${stubsDir}${slug ? `${slug}/` : ''}index.html`
 
@@ -51,29 +49,42 @@ describe('docs/site.json', () => {
     expect([...inNav].sort()).toEqual(site.pages.map((p) => p.slug).sort())
   })
 
-  it('pages through the docs in the sidebar order, starting with Why Proschi', () => {
+  it('pages through the docs in the sidebar order, starting with the overview', () => {
     const sidebar = [...new Set(site.nav.flatMap((g) => g.items.flatMap((i) => (i.page !== undefined ? [i.page] : []))))]
     expect(readingOrder(site).map((p) => p.slug)).toEqual(sidebar)
-    expect(sidebar.slice(0, 2)).toEqual(['', 'quickstart'])
+    expect(sidebar.slice(0, 3)).toEqual(['', 'quickstart', 'why'])
+    const title = (slug: string) => site.pages.find((p) => p.slug === slug)!.title.replace(/&/g, '&amp;')
     const pager = (slug: string) => layoutHtml(site, rendered.get(slug)!).match(/<nav class="pager"[\s\S]*?<\/nav>/)![0]
-    expect(pager('')).toContain('rel="next"><span class="pager__dir">Next</span><span class="pager__title">Quickstart</span>')
-    expect(pager('quickstart')).toContain('<span class="pager__title">Why Proschi</span>')
-    expect(pager('quickstart')).toContain('<span class="pager__title">Proschi language reference</span>')
-    expect(pager('systems')).toContain('<span class="pager__title">Imports: split a design across files</span>')
-    expect(pager('systems')).toContain('<span class="pager__title">High-level design: traffic and capacity</span>')
-    expect(pager('grammar')).toContain('<span class="pager__title">How the simulation works</span>')
+    expect(pager('')).toContain(`rel="next"><span class="pager__dir">Next</span><span class="pager__title">${title('quickstart')}</span>`)
+    expect(pager('quickstart')).toContain(`rel="prev"><span class="pager__dir">Previous</span><span class="pager__title">${title('')}</span>`)
+    expect(pager('quickstart')).toContain(`rel="next"><span class="pager__dir">Next</span><span class="pager__title">${title('why')}</span>`)
+    expect(pager('why')).toContain(`rel="next"><span class="pager__dir">Next</span><span class="pager__title">${title(sidebar[3])}</span>`)
+    expect(pager('systems')).toContain(`<span class="pager__title">${title('imports')}</span>`)
+    expect(pager('systems')).toContain(`<span class="pager__title">${title('hld')}</span>`)
+    expect(pager('grammar')).toContain(`<span class="pager__title">${title('model')}</span>`)
   })
 
-  it('redirects every old anchor of a page to a page and heading that exist', () => {
-    expect(Object.keys(redirects)).toEqual(['language'])
-    for (const [from, map] of Object.entries(redirects)) {
-      expect(Object.keys(map)).toHaveLength(30)
+  it('keeps the sidebar’s Start group short with labels', () => {
+    const start = site.nav.find((g) => g.title === 'Start')!
+    expect(start.items.map((i) => i.label)).toEqual(['Overview', 'Quickstart', 'Why Proschi'])
+    expect(layoutHtml(site, rendered.get('')!)).toContain('aria-current="page">Overview</a>')
+  })
+
+  it('gives the home page its own title, without the docs suffix', () => {
+    expect(headHtml(site.pages.find((p) => p.slug === '')!)).toContain('<title>Proschi: architecture diagrams as code</title>')
+    expect(headHtml(site.pages.find((p) => p.slug === 'why')!)).toMatch(/<title>.+ · Proschi docs<\/title>/)
+  })
+
+  it('redirects old anchors only to pages and anchors that exist, never shadowing a live anchor', () => {
+    for (const [slug, map] of Object.entries(site.anchorRedirects ?? {})) {
+      const from = rendered.get(slug)
+      expect(from, `anchorRedirects: no page "${slug}"`).toBeDefined()
+      // Every heading LANGUAGE.md had before it was split, but the one it kept.
+      if (slug === 'language') expect(Object.keys(map)).toHaveLength(29)
       for (const [old, to] of Object.entries(map)) {
-        // An old anchor that still exists on the page needs no redirect, unless it points at itself.
-        if (rendered.get(from)!.anchors.has(old)) expect(to, old).toBe(`${from}/#${old}`)
-        const [, slug, anchor] = /^([a-z-]*)\/(?:#(.+))?$/.exec(to) ?? []
-        const dest = rendered.get(slug)
-        expect(dest !== undefined && (!anchor || dest.anchors.has(anchor)), `${from}#${old} → ${to}`).toBe(true)
+        expect(from!.anchors.has(old), `${slug}#${old} still exists on the page`).toBe(false)
+        const dest = target('', to)
+        expect(dest && rendered.get(dest.slug) && (!dest.anchor || rendered.get(dest.slug)!.anchors.has(dest.anchor)), `${slug}#${old} → ${to}`).toBeTruthy()
       }
     }
   })
@@ -101,9 +112,7 @@ describe('rendered pages', () => {
       const dest = rendered.get(to.slug)
       // Anchors of the layout itself: the drawer and the skip target.
       const layoutIds = new Set(['docs-nav', 'main'])
-      // An anchor that moved to another page is forwarded there (anchorRedirects in site.json).
-      const redirected = to.anchor !== undefined && redirects[to.slug]?.[to.anchor] !== undefined
-      if (!dest || (to.anchor && !dest.anchors.has(to.anchor) && !layoutIds.has(to.anchor) && !redirected)) broken.push(href)
+      if (!dest || (to.anchor && !dest.anchors.has(to.anchor) && !layoutIds.has(to.anchor))) broken.push(href)
     }
     expect(broken).toEqual([])
   })
@@ -216,8 +225,9 @@ describe('links', () => {
     expect(rewriteHref('https://proschi.app/model/#practice', ctx)).toBe('../model/#practice')
     expect(rewriteHref('https://proschi.app/practice/', ctx)).toBe('../../practice/')
     expect(rewriteHref('https://github.com/gvart/proschi/blob/main/docs/PRACTICE.md#calibrating-a-problem', ctx)).toBe('../practice-authoring/#calibrating-a-problem')
-    expect(rewriteHref('WHY.md', { ...ctx, from: 'quickstart' })).toBe('../')
-    expect(rewriteHref('QUICKSTART.md', { ...ctx, from: '', sourcePath: 'docs/WHY.md' })).toBe('./quickstart/')
+    expect(rewriteHref('README.md', { ...ctx, from: 'quickstart' })).toBe('../')
+    expect(rewriteHref('WHY.md', { ...ctx, from: 'quickstart' })).toBe('../why/')
+    expect(rewriteHref('QUICKSTART.md', { ...ctx, from: '', sourcePath: 'docs/README.md' })).toBe('./quickstart/')
   })
 
   it('sends links to other repository files to GitHub', () => {
@@ -241,5 +251,62 @@ describe('links', () => {
     expect(slug('5.3 Practice platform (/practice/)')).toBe('53-practice-platform-practice')
     expect(slug('Tests')).toBe('tests')
     expect(slug('Tests')).toBe('tests-1')
+  })
+})
+
+describe('annotated examples', () => {
+  const fixture: SiteConfig = { pages: [{ slug: 'x', title: 'X', source: 'X.md', description: 'd' }], nav: [{ title: 'G', items: [{ page: 'x' }] }] }
+  const render = (md: string) => renderPage(fixture, fixture.pages[0], md)
+  const fence = (body: string, info = 'proschi annotated') => `# X\n\n\`\`\`${info}\n${body}\n\`\`\`\n`
+
+  it('attaches a note to the next line that is neither blank nor a note, joining consecutive notes', () => {
+    const { code, notes } = splitAnnotations(['title "T"', '', '  # @note The API,', '  # @note with `x2`.', '', 'api "API" [REST API] x2', '# @note Arrow.', 'api -> db : SQL'].join('\n'))
+    expect(code).toBe(['title "T"', '', '', 'api "API" [REST API] x2', 'api -> db : SQL'].join('\n'))
+    expect(notes).toEqual([
+      { line: 4, text: 'The API, with `x2`.' },
+      { line: 5, text: 'Arrow.' },
+    ])
+  })
+
+  it('renders the code without the note lines, marks the annotated lines and lists the notes for readers without JavaScript', () => {
+    const page = render(fence('title "T"\n# @note A node with `x2`.\napi "API" [REST API] x2\n# @note <b>An arrow.</b>\napi -> db : SQL'))
+    expect(page.examples).toEqual(['title "T"\napi "API" [REST API] x2\napi -> db : SQL'])
+    const figure = /<figure class="live live--annotated" data-live data-annotated data-source="([^"]+)">[\s\S]*?<\/figure>/.exec(page.article)!
+    expect(Buffer.from(figure[1], 'base64').toString('utf8')).toBe(page.examples[0])
+    expect(figure[0]).not.toContain('@note')
+    expect(figure[0].match(/<span class="line" data-note="\d">/g)).toEqual(['<span class="line" data-note="0">', '<span class="line" data-note="1">'])
+    expect(figure[0]).toContain('<li data-note="0"><code class="annotated__src">api &quot;API&quot; [REST API] x2</code> <span class="annotated__text">A node with <code>x2</code>.</span></li>')
+    expect(figure[0]).toContain('&lt;b&gt;An arrow.&lt;/b&gt;')
+  })
+
+  it('fails the build on a note that annotates nothing, on no notes, and on annotated with fragment', () => {
+    expect(() => render(fence('api "API" [REST API]\n# @note Dangling.'))).toThrow(/annotates nothing/)
+    expect(() => render(fence('api "API" [REST API]'))).toThrow(/at least one # @note/)
+    expect(() => render(fence('# @note N.\napi "API" [REST API]', 'proschi annotated fragment'))).toThrow(/both annotated and a fragment/)
+  })
+
+  it('attaches a try-it prompt to the live example right above it, and only there', () => {
+    const live = render(`${fence('api "API" [REST API]', 'proschi')}\n> **Try it:** rename it.\n`)
+    expect(live.article).toMatch(/<\/figure>\n<blockquote class="try-it">\n<p><strong>Try it:<\/strong> rename it.<\/p>/)
+    expect(render(`${fence('api "API"', 'proschi fragment')}\n> **Try it:** no.\n`).article).not.toContain('try-it')
+    expect(render('# X\n\n> **Try it:** no.\n').article).not.toContain('try-it')
+    expect(render(`${fence('api "API" [REST API]', 'proschi')}\n> A quote.\n`).article).not.toContain('try-it')
+  })
+
+  it('puts a page’s anchor redirects on the page, and none on pages without any', () => {
+    const page = render('# X\n')
+    expect(layoutHtml(fixture, page)).not.toContain('data-anchor-redirects')
+    const html = layoutHtml({ ...fixture, anchorRedirects: { x: { 'old-one': 'hld/#traffic', gone: 'scenarios/' } } }, page)
+    const attr = /data-anchor-redirects="([^"]+)"/.exec(html)![1].replace(/&quot;/g, '"')
+    expect(JSON.parse(attr)).toEqual({ 'old-one': 'hld/#traffic', gone: 'scenarios/' })
+    expect(layoutHtml({ ...fixture, anchorRedirects: { x: {} } }, page)).not.toContain('data-anchor-redirects')
+  })
+
+  it('the start page has one annotated example, with three to eight notes', () => {
+    const home = rendered.get('')!
+    expect(home.article.match(/data-annotated/g)).toHaveLength(1)
+    const notes = home.article.match(/<li data-note="\d+">/g) ?? []
+    expect(notes.length).toBeGreaterThanOrEqual(3)
+    expect(notes.length).toBeLessThanOrEqual(8)
   })
 })

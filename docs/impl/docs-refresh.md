@@ -37,7 +37,7 @@ friendly.
   style guide (blog-post now refers to it). Also a page plan appended below:
   the sidebar, an old→new URL and anchor map, and a title and description for
   each page. verify: the user reviews the page plan. depends on: none.
-- [ ] **D2 docs-interactive**: the annotated-example component and fence,
+- [x] **D2 docs-interactive**: the annotated-example component and fence,
   try-it prompts, and the new start page (`docs/README.md`, slug `""`).
   verify: e2e on desktop and 390px, keyboard and touch, screenshots, live
   examples compile. depends on: D1.
@@ -47,7 +47,7 @@ friendly.
   docsSite tests pass. depends on: D1. parallel with: D2 and D4 (disjoint
   files; D2 alone owns `frontend/plugins/docsSite.ts` and changes it
   additively; D3 asks main if it needs a change there).
-- [ ] **D4 docs-pages**: rewrite QUICKSTART, MODEL, EDITORS, SHARING,
+- [x] **D4 docs-pages**: rewrite QUICKSTART, MODEL, EDITORS, SHARING,
   AGENT-SKILLS and WHY to the skill. verify: word counts before and after, the
   anti-slop checklist passes, live examples compile. depends on: D1.
 - [ ] **D5 docs-images**: generated diagram images, the screenshot script,
