@@ -15,9 +15,9 @@
     },
     {
       "slug": "quickstart",
-      "title": "Quickstart",
+      "title": "Quickstart: your first Proschi diagram",
       "source": "QUICKSTART.md",
-      "description": "Your first Proschi diagram in two minutes: services, a request flow, a failure, and a requirement that checks itself."
+      "description": "Write your first Proschi diagram in two minutes: two services, a request that flows between them, a failure, and a requirement that checks itself."
     },
     {
       "slug": "systems",
@@ -35,25 +35,25 @@
       "slug": "model",
       "title": "How the simulation works",
       "source": "../frontend/src/docs/model.html",
-      "description": "What Proschi's simulation models (load, reads and writes, replicas and shards, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
+      "description": "What Proschi's simulation models (load, replicas, queueing, percentiles, availability, cost), what it leaves out, and how far to trust its numbers."
     },
     {
       "slug": "editors",
-      "title": "Editor support",
+      "title": "Editor support: VS Code, IntelliJ, Neovim",
       "source": "EDITORS.md",
-      "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, on the command line and in CI: checking, formatting, OpenAPI, rendering and tests."
+      "description": "Proschi in VS Code, IntelliJ, Neovim, Helix and Sublime Text, and the proschi command line for CI: checking, formatting, rendering and tests."
     },
     {
       "slug": "sharing",
-      "title": "Sharing and embedding",
+      "title": "Sharing and embedding diagrams",
       "source": "SHARING.md",
       "description": "Share a Proschi diagram as a link, as a short link with a preview image, or embed it read-only in a blog post, a wiki or docs with an iframe or oEmbed."
     },
     {
       "slug": "agents",
-      "title": "Agent skills",
+      "title": "Agent skills for Proschi diagrams",
       "source": "AGENT-SKILLS.md",
-      "description": "Skills for Claude Code, Codex, Cursor, Copilot and Gemini CLI that turn docs, Terraform, Kubernetes, docker-compose and code into checked Proschi diagrams."
+      "description": "Skills for Claude Code, Codex, Cursor, Copilot and Gemini CLI that turn docs, Terraform, Kubernetes and code into checked Proschi diagrams."
     },
     {
       "slug": "numbers",
