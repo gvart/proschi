@@ -122,5 +122,5 @@ number.
 - [Scenarios](SCENARIOS.md): failure paths, [parallel steps](SCENARIOS.md#parallel-steps)
   and endpoint groups.
 - [Requirements and tests](TESTS.md): every limit you can check.
-- [Org diagrams](SYSTEMS.md): one box per team.
+- The [language reference](LANGUAGE.md): every statement.
 - [Editor support](EDITORS.md): VS Code, IntelliJ, Neovim and CI.
