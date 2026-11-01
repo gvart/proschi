@@ -113,7 +113,7 @@ import EditorZone from './EditorZone';
 import CloudSection, { CloudIcon } from './CloudStatus';
 import FileSidebar, { type FileActions } from './FileSidebar';
 import QuickOpen from './QuickOpen';
-import { addDocIn, docsInFolder, duplicateDoc, folderOf, importersOf, moveDoc, removeFolder, renameFolder } from '../../playground/folders';
+import { addDocIn, brokenImports, docsInFolder, duplicateDoc, folderOf, moveDoc, removeFolder, renameFolder } from '../../playground/folders';
 import { useCloudSync } from './useCloudSync';
 import { useCloudFiles } from './useCloudFiles';
 import { withCloudErrors } from '../../playground/cloudRefs';
@@ -470,12 +470,16 @@ export default function Playground() {
     });
   };
 
-  /** After moving or renaming files: which other diagrams import them by their old names, and now need their import lines changed. */
-  const warnImporters = (ids: ReadonlySet<string>) => {
-    const importers = importersOf(docStore.get().docs, ids);
-    if (importers.length === 0) return;
-    const names = importers.slice(0, 3).map((d) => `"${titleOf(d.source)}"`).join(', ');
-    setBanner({ tone: 'warning', message: `${names}${importers.length > 3 ? ` and ${importers.length - 3} more` : ''} may import the old file name; update their import lines.` });
+  /** Moves or renames files, then warns about the diagrams whose imports stopped finding a file. */
+  const changeFiles = (update: (s: DocumentState) => DocumentState) => {
+    const before = docStore.get();
+    const after = update(before);
+    if (after === before) return;
+    setDocState(after);
+    const broken = brokenImports(before.docs, after.docs);
+    if (broken.length === 0) return;
+    const names = broken.slice(0, 3).map((d) => `"${titleOf(d.source)}"`).join(', ');
+    setBanner({ tone: 'warning', message: `${names}${broken.length > 3 ? ` and ${broken.length - 3} more` : ''} ${broken.length === 1 ? 'has an import that no longer finds its file' : 'have imports that no longer find their files'}; update the import lines.` });
   };
 
   // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
@@ -500,26 +504,21 @@ export default function Playground() {
       openDoc((s) => addDocIn(s, BLANK_SOURCE, folder));
       setDrawer(false);
     },
-    renameFile: (id, base) => {
-      const doc = docStore.get().docs.find((d) => d.id === id);
-      if (!doc) return;
-      warnImporters(new Set([id]));
-      const folder = folderOf(fileNameOf(doc));
-      setDocState((s) => renameFile(s, id, folder ? `${folder}/${base.replace(/\//g, '-')}` : base.replace(/\//g, '-')));
-    },
-    move: (id, folder) => {
-      warnImporters(new Set([id]));
-      setDocState((s) => moveDoc(s, id, folder));
-    },
+    renameFile: (id, base) =>
+      changeFiles((s) => {
+        const doc = s.docs.find((d) => d.id === id);
+        if (!doc) return s;
+        const folder = folderOf(fileNameOf(doc));
+        const clean = base.replace(/\//g, '-');
+        return renameFile(s, id, folder ? `${folder}/${clean}` : clean);
+      }),
+    move: (id, folder) => changeFiles((s) => moveDoc(s, id, folder)),
     duplicate: (id) => openDoc((s) => duplicateDoc(s, id)),
     remove: (id) => {
       const doc = docStore.get().docs.find((d) => d.id === id);
       if (doc) deleteDoc(id, titleOf(doc.source));
     },
-    renameFolder: (from, to) => {
-      warnImporters(new Set(docsInFolder(docStore.get().docs, from).map((d) => d.id)));
-      setDocState((s) => renameFolder(s, from, to));
-    },
+    renameFolder: (from, to) => changeFiles((s) => renameFolder(s, from, to)),
     removeFolder: (folder) => {
       const n = docsInFolder(docStore.get().docs, folder).length;
       if (window.confirm(`Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it? This cannot be undone.`)) openDoc((s) => removeFolder(s, folder));
@@ -727,7 +726,9 @@ export default function Playground() {
   const openExample = (exampleSource: string, files?: Readonly<Record<string, string>>) =>
     openDoc((s) => {
       // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
-      const next = isBlank(currentDoc(s).source) ? removeDoc(addDoc(s, exampleSource), s.currentId) : addDoc(s, exampleSource);
+      // It keeps that diagram's folder, as a folder made with "New folder" holds a blank diagram.
+      const blank = currentDoc(s);
+      const next = isBlank(blank.source) ? removeDoc(addDocIn(s, exampleSource, folderOf(fileNameOf(blank))), s.currentId) : addDoc(s, exampleSource);
       return files ? addFiles(next, files) : next;
     });
   const openHldExample = () => {

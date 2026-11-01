@@ -1,4 +1,5 @@
-import { addDoc, fileNameOf, removeDoc, titleOf, type DocumentState, type SavedDiagram } from './documents';
+import { joinImportPath, isRemoteSpec } from '../dsl/imports';
+import { addDoc, fileNameOf, freeName, removeDoc, titleOf, type DocumentState, type SavedDiagram } from './documents';
 import { retitle } from './sync';
 
 /**
@@ -29,13 +30,6 @@ export function baseOf(fileName: string): string {
 }
 
 const join = (folder: string, base: string) => (folder ? `${folder}/${base}` : base);
-
-/** `name` if free, else `name-2.proschi`, `name-3.proschi`, … */
-function freeName(name: string, taken: Set<string>): string {
-  if (!taken.has(name)) return name;
-  const stem = name.replace(/\.proschi$/, '');
-  for (let n = 2; ; n++) if (!taken.has(`${stem}-${n}.proschi`)) return `${stem}-${n}.proschi`;
-}
 
 const takenBy = (docs: SavedDiagram[], except?: string) => new Set(docs.filter((d) => d.id !== except).map(fileNameOf));
 
@@ -69,11 +63,11 @@ export function duplicateDoc(state: DocumentState, id: string, now?: () => strin
 
 const inFolder = (fileName: string, folder: string) => fileName.startsWith(`${folder}/`);
 
-/** Renames (or moves) folder `from` to `to`, with its subfolders. Names already taken at the target are numbered. */
+/** Renames (or moves) folder `from` to `to`, with its subfolders. Names already taken at the target are numbered; an empty target (typed '..' or '/') is refused. */
 export function renameFolder(state: DocumentState, from: string, to: string): DocumentState {
   const source = cleanFolder(from);
   const target = cleanFolder(to);
-  if (!source || source === target || inFolder(target, source)) return state;
+  if (!source || !target || source === target || inFolder(target, source)) return state;
   const moving = new Set(state.docs.filter((d) => inFolder(fileNameOf(d), source)).map((d) => d.id));
   if (moving.size === 0) return state;
   const taken = new Set(state.docs.filter((d) => !moving.has(d.id)).map(fileNameOf));
@@ -148,13 +142,27 @@ export function matchesQuery(doc: SavedDiagram, query: string): boolean {
     .every((word) => hay.includes(word));
 }
 
+/** The relative paths a diagram imports: `import "…"` lines and `from "…"` in systems. Remote sources are left out. */
+function importPathsOf(source: string): string[] {
+  return [...source.matchAll(/\b(?:import|from)\s+"([^"]+)"/g)].map((m) => m[1]).filter((p) => !isRemoteSpec(p));
+}
+
 /**
- * The other diagrams whose imports may name one of `ids` by its current file
- * name (a quoted path ending in its base name): moving or renaming those
- * files breaks them. A hint for a warning, not a parse.
+ * The diagrams, after a move or rename, with an import that found a diagram
+ * before and finds none now: importers of a moved file, and moved files whose
+ * own relative imports now point elsewhere. Imports kept with a diagram
+ * (share-link copies) are skipped.
  */
-export function importersOf(docs: SavedDiagram[], ids: ReadonlySet<string>): SavedDiagram[] {
-  const bases = docs.filter((d) => ids.has(d.id)).map((d) => baseOf(fileNameOf(d)));
-  if (bases.length === 0) return [];
-  return docs.filter((d) => !ids.has(d.id) && bases.some((base) => d.source.includes(`/${base}"`) || d.source.includes(`"${base}"`)));
+export function brokenImports(before: SavedDiagram[], after: SavedDiagram[]): SavedDiagram[] {
+  const oldNames = new Set(before.map(fileNameOf));
+  const newNames = new Set(after.map(fileNameOf));
+  const was = new Map(before.map((d) => [d.id, fileNameOf(d)]));
+  return after.filter((d) =>
+    importPathsOf(d.source).some((path) => {
+      if (d.imports?.[path] !== undefined) return false;
+      const from = was.get(d.id);
+      const found = from !== undefined && oldNames.has(joinImportPath(from, path) ?? '');
+      return found && !newNames.has(joinImportPath(fileNameOf(d), path) ?? '');
+    }),
+  );
 }

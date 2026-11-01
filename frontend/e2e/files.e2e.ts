@@ -47,13 +47,17 @@ test.describe('diagrams sidebar', () => {
     await tree.getByRole('button', { name: 'Actions for Payments API' }).click();
     await page.getByRole('menuitem', { name: 'Move to…' }).click();
     await page.getByRole('menuitem', { name: 'Top level' }).click();
-    await expect(page.getByRole('status').filter({ hasText: '"Shop" may import the old file name' })).toBeVisible();
+    await expect(page.getByRole('status').filter({ hasText: '"Shop" has an import that no longer finds its file' })).toBeVisible();
     await expect.poll(() => stored(page)).toContainEqual(['api', 'api.proschi']);
 
     await tree.getByTestId('file').filter({ hasText: 'Payments DB' }).dragTo(tree.getByTestId('folder').filter({ hasText: 'archive' }));
     await expect.poll(() => stored(page)).toContainEqual(['db', 'archive/db.proschi']);
     // payments is empty now, so it is gone.
     await expect(tree.getByTestId('folder')).toHaveText(['archive']);
+
+    // Dropped on a diagram in a folder, a file goes into that folder.
+    await tree.getByTestId('file').filter({ hasText: 'Shop' }).dragTo(tree.getByTestId('file').filter({ hasText: 'Payments DB' }));
+    await expect.poll(() => stored(page)).toContainEqual(['shop', 'archive/shop.proschi']);
   });
 
   test('rename, duplicate, search and Ctrl+P', async ({ page }) => {

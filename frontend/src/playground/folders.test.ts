@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { fileNameOf, titleOf, type DocumentState, type SavedDiagram } from './documents';
-import { addDocIn, allFolders, buildTree, cleanFolder, docsInFolder, duplicateDoc, folderOf, importersOf, matchesQuery, moveDoc, removeFolder, renameFolder } from './folders';
+import { fileNameOf, renameFile, titleOf, type DocumentState, type SavedDiagram } from './documents';
+import { addDocIn, allFolders, brokenImports, buildTree, cleanFolder, docsInFolder, duplicateDoc, folderOf, matchesQuery, moveDoc, removeFolder, renameFolder } from './folders';
 
 const clock = () => '2026-01-01T00:00:00.000Z';
 const ids = () => {
@@ -82,6 +82,12 @@ describe('renameFolder', () => {
     const s = state(doc('a', 'pay/api.proschi'));
     expect(renameFolder(s, 'pay', 'pay/sub')).toBe(s);
   });
+
+  it('refuses a name that cleans to nothing', () => {
+    const s = state(doc('a', 'pay/api.proschi'));
+    expect(renameFolder(s, 'pay', '..')).toBe(s);
+    expect(renameFolder(s, 'pay', '/')).toBe(s);
+  });
 });
 
 describe('removeFolder', () => {
@@ -121,12 +127,42 @@ describe('trees and search', () => {
   });
 });
 
-describe('importersOf', () => {
-  it('finds the diagrams that import a file by its name', () => {
-    const a = doc('a', 'pay/api.proschi');
-    const b = { ...doc('b', 'shop.proschi'), source: 'import "pay/api.proschi"\n' };
-    const c = { ...doc('c', 'pay/x.proschi'), source: 'import "./api.proschi"\n' };
-    const d = { ...doc('d', 'other.proschi'), source: 'import "apis.proschi"\n' };
-    expect(importersOf([a, b, c, d], new Set(['a'])).map((x) => x.id)).toEqual(['b', 'c']);
+describe('renameFile', () => {
+  it('numbers a name another diagram has', () => {
+    const s = renameFile(state(doc('a', 'pay/api.proschi'), doc('b', 'pay/db.proschi')), 'b', 'pay/api');
+    expect(names(s).b).toBe('pay/api-2.proschi');
+    expect(names(renameFile(s, 'a', 'pay/api.proschi')).a).toBe('pay/api.proschi');
+  });
+});
+
+describe('brokenImports', () => {
+  const src = (d: SavedDiagram, source: string) => ({ ...d, source });
+
+  it('finds the importers of a moved file', () => {
+    const before = [doc('a', 'pay/api.proschi'), src(doc('b', 'shop.proschi'), 'import "pay/api.proschi"\n'), src(doc('c', 'pay/x.proschi'), 'import "api.proschi"\n'), doc('d', 'other.proschi')];
+    const after = moveDoc({ docs: before, currentId: 'a' }, 'a', '').docs;
+    expect(brokenImports(before, after).map((d) => d.id)).toEqual(['b', 'c']);
+  });
+
+  it('finds a moved file whose own imports now point elsewhere', () => {
+    const before = [src(doc('a', 'app.proschi'), 'import "infra.proschi"\n'), doc('b', 'infra.proschi')];
+    const after = moveDoc({ docs: before, currentId: 'a' }, 'a', 'pay').docs;
+    expect(brokenImports(before, after).map((d) => d.id)).toEqual(['a']);
+  });
+
+  it('is quiet when imports move together or were already missing, and skips remote and kept imports', () => {
+    const before = [
+      src(doc('a', 'pay/app.proschi'), 'import "infra.proschi"\nimport "missing.proschi"\nimport "git:github.com/a/b//x.proschi@v1"\n'),
+      doc('b', 'pay/infra.proschi'),
+      { ...src(doc('c', 'c.proschi'), 'import "pay/infra.proschi"\n'), imports: { 'pay/infra.proschi': 'title "Kept"' } },
+    ];
+    const after = renameFolder({ docs: before, currentId: 'a' }, 'pay', 'billing').docs;
+    expect(brokenImports(before, after)).toEqual([]);
+  });
+
+  it('reads system from paths', () => {
+    const before = [doc('a', 'teams/orders.proschi'), src(doc('b', 'b.proschi'), 'system orders [Orders]\n  from "teams/orders.proschi"\n')];
+    const after = moveDoc({ docs: before, currentId: 'a' }, 'a', '').docs;
+    expect(brokenImports(before, after).map((d) => d.id)).toEqual(['b']);
   });
 });

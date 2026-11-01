@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ChevronRight, Cloud, Copy, FilePlus, FolderInput, FolderPlus, HardDrive, LogIn, MoreHorizontal, PanelLeftClose, Pencil, Search, Trash2, X } from 'lucide-react';
 import { fileNameOf, titleOf, type SavedDiagram } from '../../playground/documents';
-import { allFolders, baseOf, buildTree, folderOf, matchesQuery, type FolderNode } from '../../playground/folders';
+import { allFolders, baseOf, buildTree, cleanFolder, folderOf, matchesQuery, type FolderNode } from '../../playground/folders';
+import { PROVIDER_LABEL } from '../../practice/account';
 import { loadJson, saveJson } from '../../services/storage';
 import { MenuItem } from './Menu';
 import { cloudLabel, type CloudSync } from './useCloudSync';
@@ -11,7 +12,6 @@ import { eyebrow, field } from './ui';
 const COLLAPSED_KEY = 'proschi.playground.collapsed';
 const DOC_TYPE = 'application/x-proschi-doc';
 const FOLDER_TYPE = 'application/x-proschi-folder';
-const PROVIDER_LABEL = { github: 'GitHub', google: 'Google' } as const;
 
 export interface FileActions {
   open: (id: string) => void;
@@ -55,6 +55,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
   const [editing, setEditing] = useState<Editing>(null);
   const [menu, setMenu] = useState<RowMenuState | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
 
   const tree = useMemo(() => buildTree(docs), [docs]);
   const folders = useMemo(() => allFolders(docs), [docs]);
@@ -115,12 +116,14 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
     },
   });
 
-  const moveItems = (exclude: string, run: (folder: string) => void) => (close: () => void) => (
-    <>
-      <div className={`px-3 pt-1 pb-1 ${eyebrow}`}>Move to</div>
-      {['', ...folders]
-        .filter((f) => f !== exclude)
-        .map((f) => (
+  /** The "Move to" list, without the folders `skip` rules out. */
+  const moveItems = (skip: (folder: string) => boolean, run: (folder: string) => void) => (close: () => void) => {
+    const targets = ['', ...folders].filter((f) => !skip(f));
+    return (
+      <>
+        <div className={`px-3 pt-1 pb-1 ${eyebrow}`}>Move to</div>
+        {targets.length === 0 && <p className="px-3 py-1 text-sm text-muted">No other folder to move it to.</p>}
+        {targets.map((f) => (
           <MenuItem
             key={f || '/'}
             icon={<FolderInput size={14} />}
@@ -132,8 +135,9 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
             <span className="truncate">{f || 'Top level'}</span>
           </MenuItem>
         ))}
-    </>
-  );
+      </>
+    );
+  };
 
   const fileMenu = (doc: SavedDiagram) => (close: () => void) => {
     const title = titleOf(doc.source);
@@ -152,7 +156,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
         </MenuItem>
         <MenuItem
           icon={<FolderInput size={14} />}
-          onSelect={() => setMenu((m) => m && { ...m, items: moveItems(folder, (f) => actions.move(doc.id, f)) })}
+          onSelect={() => setMenu((m) => m && { ...m, items: moveItems((f) => f === folder, (f) => actions.move(doc.id, f)) })}
         >
           Move to…
         </MenuItem>
@@ -217,6 +221,14 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
         icon={<FolderPlus size={14} />}
         onSelect={() => {
           close();
+          // A folded folder opens, so the name field shows inside it.
+          setCollapsed((c) => {
+            if (!c.has(node.path)) return c;
+            const next = new Set(c);
+            next.delete(node.path);
+            saveJson(COLLAPSED_KEY, [...next]);
+            return next;
+          });
           setEditing({ kind: 'new-folder', parent: node.path });
         }}
       >
@@ -235,7 +247,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
         icon={<FolderInput size={14} />}
         onSelect={() => {
           const parent = folderOf(node.path);
-          setMenu((m) => m && { ...m, items: moveItems(parent, (f) => actions.renameFolder(node.path, f ? `${f}/${node.name}` : node.name)) });
+          setMenu((m) => m && { ...m, items: moveItems((f) => f === parent || f === node.path || f.startsWith(`${node.path}/`), (f) => actions.renameFolder(node.path, f ? `${f}/${node.name}` : node.name)) });
         }}
       >
         Move to…
@@ -273,7 +285,8 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
       );
     }
     return (
-      <li key={doc.id} className={`${rowBase} ${active ? 'bg-ink/10' : 'hover:bg-ink/5'}`} {...dragProps(DOC_TYPE, doc.id)}>
+      // Dropped on a diagram, a file or folder goes into that diagram's folder.
+      <li key={doc.id} className={`${rowBase} ${active ? 'bg-ink/10' : 'hover:bg-ink/5'}`} {...dragProps(DOC_TYPE, doc.id)} {...dropProps(folderOf(name))}>
         <button
           type="button"
           data-testid="file"
@@ -309,7 +322,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
           placeholder="Folder name"
           onDone={(value) => {
             setEditing(null);
-            if (value) actions.create(parent ? `${parent}/${value}` : value);
+            if (cleanFolder(value)) actions.create(parent ? `${parent}/${value}` : value);
           }}
         />
       </li>
@@ -400,7 +413,11 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
           aria-label="Search diagrams"
           placeholder="Search"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onChange={(e) => {
+            // The tree swaps for the results, so a half-typed name would vanish unsaved.
+            setEditing(null);
+            setQuery(e.target.value);
+          }}
           onKeyDown={(e) => {
             if (e.key === 'Escape') setQuery('');
             if (e.key === 'Enter' && found?.[0]) actions.open(found[0].id);
@@ -420,7 +437,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
         )}
       </div>
       <StorageFooter cloud={cloud} />
-      {menu && <RowMenu menu={menu} onClose={() => setMenu(null)} />}
+      {menu && <RowMenu menu={menu} onClose={closeMenu} />}
     </aside>
   );
 }
