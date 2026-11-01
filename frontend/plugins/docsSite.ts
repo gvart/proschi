@@ -15,7 +15,7 @@ import { highlightLines } from '../src/landing/highlight'
  *   ours, but the pages' CSP and the docs' GitHub rendering both prefer plain
  *   Markdown. A source ending in .html is a trusted fragment, kept as is.
  * - Headings get GitHub's anchors, so links written for GitHub keep working.
- * - Links between the Markdown files (LANGUAGE.md#grammar), to
+ * - Links between the Markdown files (GRAMMAR.md#productions), to
  *   https://proschi.app/… and to the GitHub copies of the docs become links
  *   within the site; links to other repository files go to GitHub.
  * - ```proschi fences become <figure data-live> with the code highlighted
