@@ -37,7 +37,7 @@ friendly.
   style guide (blog-post now refers to it). Also a page plan appended below:
   the sidebar, an old→new URL and anchor map, and a title and description for
   each page. verify: the user reviews the page plan. depends on: none.
-- [ ] **D2 docs-interactive**: the annotated-example component and fence,
+- [x] **D2 docs-interactive**: the annotated-example component and fence,
   try-it prompts, and the new start page (`docs/README.md`, slug `""`).
   verify: e2e on desktop and 390px, keyboard and touch, screenshots, live
   examples compile. depends on: D1.

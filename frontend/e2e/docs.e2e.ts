@@ -8,7 +8,7 @@ test.describe('docs', () => {
     await page.goto('./');
     await page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Docs' }).click();
     await expect(page).toHaveURL(/\/proschi\/docs\/$/);
-    await expect(page).toHaveTitle('Proschi docs');
+    await expect(page).toHaveTitle('Proschi: architecture diagrams as code');
     await expect(page.getByRole('navigation', { name: 'Main' }).getByRole('link', { name: 'Docs' })).toHaveAttribute('aria-current', 'page');
 
     await sidebar(page).getByRole('link', { name: 'Quickstart' }).click();
@@ -31,7 +31,7 @@ test.describe('docs', () => {
     await expect(page.getByRole('heading', { level: 2, name: /^Scenarios/ })).toBeInViewport();
 
     await page.getByRole('navigation', { name: 'Previous and next page' }).getByRole('link', { name: /Next/ }).click();
-    await expect(page).toHaveURL(/\/proschi\/docs\/model\/$/);
+    await expect(page).toHaveURL(/\/proschi\/docs\/systems\/$/);
   });
 
   test('a live example draws its diagram and plays a scenario', async ({ page }) => {
