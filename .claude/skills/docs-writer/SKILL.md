@@ -102,8 +102,10 @@ api -> db : SQL
 - Without JavaScript, or on GitHub, the notes read as ordinary comments.
 
 Write notes as one or two short sentences, at most 25 words, saying what the
-line does for the reader. Three to eight notes per example. Don't annotate
-every line.
+line does for the reader. The start page (`README.md`) explains every
+meaningful line, with one note on a block's first line (`traffic {`); when
+two lines teach the same thing, the second note adds something new. Other
+pages: three to eight notes per example.
 
 ## 4. Images
 

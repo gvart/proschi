@@ -5,9 +5,10 @@ and the requests between them, and Proschi draws the diagram, plays each
 request and checks the design against the traffic you expect.
 
 The example below is a complete design for a link shortener. Hover, tap or
-tab to a marked line to see what it does and what it draws.
+tab to a line to see what it does and what it draws.
 
 ```proschi annotated
+# @note The diagram's name. Exported files and the design document use it.
 title "Short links"
 
 # @note A node: an id, the name on its box, and a tech stack from the catalog
@@ -19,19 +20,28 @@ api   "Links API"  [REST API]   x3
 # @note `[Redis]` makes this a cache. The tech stack sets how fast a node
 # @note answers and how much load it takes.
 cache "Link cache" [Redis]
+# @note `x2` keeps a second database, so one failed node doesn't take every
+# @note link down with it.
 db    "Links DB"   [PostgreSQL] x2
 
-# @note A connection draws an arrow. Use case steps can only travel along
-# @note connections.
+# @note A connection draws an arrow. The text after the colon is its label.
 user -> api   : HTTPS
+# @note Labels are free text. Name the protocol: `RESP` is the one Redis
+# @note speaks.
 api  -> cache : RESP
+# @note Use case steps can only travel along connections, so draw one for
+# @note every call the API makes.
 api  -> db    : SQL
 
 # @note A use case is one request, step by step. Press Play to watch it move
 # @note through the diagram.
 usecase "Open a link" {
+  # @note A step: who calls whom, and with what. It travels the `user -> api`
+  # @note arrow.
   user  -> api   : GET /r/abc
+  # @note Then the API looks the link up in the cache.
   api   -> cache : GET link:abc
+  # @note And reads the database. Each step adds load to the node it calls.
   api   -> db    : SELECT link
   # @note `-->` is the answer going back, with its status code.
   api  --> user  : 302
