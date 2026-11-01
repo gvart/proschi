@@ -302,11 +302,22 @@ describe('annotated examples', () => {
     expect(layoutHtml({ ...fixture, anchorRedirects: { x: {} } }, page)).not.toContain('data-anchor-redirects')
   })
 
-  it('the start page has one annotated example, with three to eight notes', () => {
+  it('the start page has one annotated example, with a note on every line but a closing brace or a block’s body', () => {
     const home = rendered.get('')!
     expect(home.article.match(/data-annotated/g)).toHaveLength(1)
-    const notes = home.article.match(/<li data-note="\d+">/g) ?? []
-    expect(notes.length).toBeGreaterThanOrEqual(3)
-    expect(notes.length).toBeLessThanOrEqual(8)
+    const fence = /```proschi annotated\n([\s\S]*?)\n```/.exec(readFileSync(`${docsDir}README.md`, 'utf8'))![1]
+    const { code, notes } = splitAnnotations(fence)
+    const noted = new Set(notes.map((n) => n.line))
+    // Lines inside traffic { … } and requirements { … } share the note on the block's first line.
+    let inBlock = false
+    const missing = code.split('\n').flatMap((text, i) => {
+      const t = text.trim()
+      if (/^(traffic|requirements) \{$/.test(t)) inBlock = true
+      else if (t === '}') inBlock = false
+      else if (t && !inBlock && !noted.has(i + 1)) return [t]
+      return []
+    })
+    expect(missing).toEqual([])
+    expect(new Set(notes.map((n) => n.text)).size).toBe(notes.length)
   })
 })
