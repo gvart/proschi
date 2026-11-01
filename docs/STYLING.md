@@ -131,6 +131,8 @@ With traffic in the document, **Overlay: load** colors each node by how busy
 it is and shows its replicas, shards and utilization. Dots flow along the
 connections: hollow for async work, red when they fall off a node past 100%.
 
+![The URL shortener example in the editor with Overlay: load switched on at the top right of the canvas: each node shows its replicas and utilisation, the busiest ones tinted yellow, and dots flow along the connections](images/screens/overlay-load.png "Overlay: load is the button at the top right of the canvas.")
+
 ## Go further
 
 - [Nodes, groups and connections](NODES.md): the parts each line takes.

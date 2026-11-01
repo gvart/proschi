@@ -69,6 +69,8 @@ In links, a scenario is named in lower case with dashes (`not-found`). See
 Steps in a `par` block run at the same time. The block's latency is its
 slowest step, not the sum.
 
+![A playback timeline of the Checkout use case: after POST /checkout, the three steps in the par block start together; the async OrderPlaced is fire and forget, SEND receipt is the slowest, and the 201 follows when it ends, well before the same steps would end one after another](images/concepts/playback.svg "Playback of the example below: the par block ends with its slowest step.")
+
 ```proschi
 user   "Shopper"      [Browser]
 api    "Checkout API" [REST API]

@@ -121,6 +121,24 @@ pages: three to eight notes per example.
 Every image has real alt text (STYLE.md "SEO"). If a live example can show
 it, use the live example instead of an image.
 
+Put an image on a line of its own, so it becomes a figure with its size and
+lazy loading, and its title becomes the caption:
+
+```markdown
+![Order Processing in red, sent 2k rps against 1.2k of headroom](images/diagrams/org.svg "The example above, rendered.")
+```
+
+Images live in `docs/images/` (`.svg` or `.png`; the build fails on any other
+path, a missing file or empty alt text):
+
+| Folder | What | How to regenerate |
+|---|---|---|
+| `diagrams/` | Diagrams rendered from `src/<name>.proschi` (a first line `# render: --expand orders` passes flags; team files go in `src/teams/`) | `npm run docs:images` in `tooling/`. `npm test` there fails when a committed SVG is stale or over 100 KB. |
+| `screens/` | Editor screenshots, 1440×860, light theme | `npm run build`, then `npm run docs:screenshots` in `frontend/` (`e2e/docs-screenshots.screens.ts`). Not in CI. Keep each under 250 KB. |
+| `concepts/` | Hand-drawn SVGs: a light `#FFF8E7` background, ink `#111111` boxes with a 3 px offset shadow, the site's accents, Archivo and JetBrains Mono with system fallbacks | Edit the SVG by hand. Keep it under 100 KB. |
+
+At most one or two images per page, each on the page that explains its idea.
+
 ## 5. Review before you finish
 
 1. **Read it aloud.** Every sentence you stumble on gets shorter.

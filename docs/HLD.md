@@ -148,6 +148,8 @@ An unknown node id is a warning, and so are `shards` or `consistency` on a
 non-store. A repeated part, a rate with `reads` or `writes`, and a second
 line for one node are errors.
 
+![A load gauge for Orders DB with a capacity of 2k rps: 1.2k rps is sent, it runs hot from 1.4k (70%) and saturates at 2k (100%), so it takes 200 more rps before it runs hot and 800 more before it saturates](images/concepts/headroom.svg "Headroom: how much more load a node takes before it runs hot (70%) and before it saturates (100%).")
+
 ## Entities
 
 An entity names a kind of record, its fields and the store that holds it,
