@@ -1,0 +1,20 @@
+blog/2026-11-01-editor-folders-and-sidebar.md
+  s_0cba2f07849325::t_6381a62aafe160 1-45,49-111
+  s_0cba2f07849325::t_04cde1f6769cec 46-48
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b6dc0f69e729297e928a4e97b194ac4a8c31a59d",
+  "prompts": {},
+  "sessions": {
+    "s_0cba2f07849325": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "7413bb10-19cd-4a51-9024-1acd2ebe3cf2",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
