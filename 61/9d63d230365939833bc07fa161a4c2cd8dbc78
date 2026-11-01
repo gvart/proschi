@@ -1,0 +1,37 @@
+tooling/src/lockFormat.ts
+  s_e7f61f870764cb::t_7530a89e150dfe 6,19-32,39-40,46,51-53,58,83-84,101-123,127-136,150-153
+tooling/test/sync-cloud.test.ts
+  s_e7f61f870764cb::t_94934a31f27f66 1-133,135-167
+  s_e7f61f870764cb::t_40750a86585f04 134
+tooling/src/sync.ts
+  s_e7f61f870764cb::t_f6882641e87ce2 2-5,8,11-14,17,20,23-30,37-38,51,71-87,101-125,207,212-217,231,233-234,236-243,255-256,261-262,264
+tooling/src/cloud.ts
+  s_e7f61f870764cb::t_83f5b79fcd2039 1-115
+tooling/test/credentials.test.ts
+  s_e7f61f870764cb::t_26b7ec7eb5010b 1,3-105
+  s_e7f61f870764cb::t_2ea9d08082d4cf 2
+tooling/src/api.ts
+  s_e7f61f870764cb::t_3c3651f5d288ac 1-182
+tooling/test/fakeApi.ts
+  s_e7f61f870764cb::t_0c399c8c9c7aa8 1-122
+tooling/src/lock.ts
+  s_e7f61f870764cb::t_7530a89e150dfe 13,25-29,31-34
+tooling/src/credentials.ts
+  s_e7f61f870764cb::t_0a7b071498a323 1-142
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "619d63d230365939833bc07fa161a4c2cd8dbc78",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
