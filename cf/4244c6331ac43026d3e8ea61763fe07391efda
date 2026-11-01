@@ -1,0 +1,38 @@
+frontend/src/playground/cloudSync.ts
+  s_e7f61f870764cb::t_b2cc16b2ebcb42 234-249
+frontend/src/components/Playground/VersionsDialog.tsx
+  s_e7f61f870764cb::t_4a65b14ec9e2ac 1-65,68-137,139-249,261-263,296-302,304-324
+  s_e7f61f870764cb::t_a197a88746defb 66-67,138,250-260,264-295,303
+frontend/src/components/Canvas/canvas.css
+  s_e7f61f870764cb::t_8ebafb8be94292 162-190
+frontend/src/components/Playground/Playground.tsx
+  s_e7f61f870764cb::t_b2cc16b2ebcb42 44-45,842-852
+  s_e7f61f870764cb::t_1cd83022ee1fca 113-114,223-224,272-276,278-283,291
+  s_e7f61f870764cb::t_9d52e67e8c663a 115-116,134-135,236-238,663-701,853-861,1245-1284
+  s_e7f61f870764cb::t_93c3a110efd0bc 1285
+frontend/src/components/Playground/VersionViewer.tsx
+  s_e7f61f870764cb::t_d9be6fab1f0e7f 15,237
+  s_e7f61f870764cb::t_ae3af3f025377e 1-14,16-236,238-347
+frontend/src/playground/cloudSync.test.ts
+  s_e7f61f870764cb::t_5ab244ce203e8a 141-149
+frontend/src/components/Playground/useCloudFiles.ts
+  s_e7f61f870764cb::t_576146894ff091 1-47
+frontend/src/components/Playground/useCloudSync.ts
+  s_e7f61f870764cb::t_b2cc16b2ebcb42 38-41,186-191
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "cf4244c6331ac43026d3e8ea61763fe07391efda",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
