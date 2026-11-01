@@ -28,6 +28,9 @@ import { highlightLines } from '../src/landing/highlight'
  *   try-it, so it reads as a prompt attached to that example.
  * - `anchorRedirects` in site.json maps a page's old anchors to their new
  *   home; the page carries its map in data-anchor-redirects (main.ts follows it).
+ * - An image alone in a paragraph, `![alt](images/x.svg "Caption")`, becomes
+ *   a figure with its size, lazily loaded, and the title as its caption. It
+ *   must be an .svg or .png under docs/images/, published at /docs/images/.
  */
 
 export const REPO = 'gvart/proschi'
@@ -74,6 +77,24 @@ export interface RenderedPage {
   examples: string[]
   /** Every heading anchor. */
   anchors: Set<string>
+  /** The images it shows, relative to docs/ (images/org.svg). */
+  images: string[]
+}
+
+/** A docs image's size in CSS pixels: an SVG's width and height, a PNG's pixels (halved for name@2x.png). */
+export function imageSize(file: string): { width: number; height: number } {
+  if (file.endsWith('.svg')) {
+    const root = /<svg\b[^>]*>/.exec(readFileSync(file, 'utf8'))?.[0] ?? ''
+    const attr = (name: string) => Number(new RegExp(`\\s${name}="([\\d.]+)"`).exec(root)?.[1])
+    const [, , w, h] = (/\sviewBox="([^"]+)"/.exec(root)?.[1] ?? '').trim().split(/[\s,]+/).map(Number)
+    const width = attr('width') || w
+    const height = attr('height') || h
+    if (!width || !height) throw new Error(`${file}: the SVG needs a width and height or a viewBox`)
+    return { width, height }
+  }
+  const png = readFileSync(file)
+  const scale = file.endsWith('@2x.png') ? 2 : 1
+  return { width: Math.round(png.readUInt32BE(16) / scale), height: Math.round(png.readUInt32BE(20) / scale) }
 }
 
 /** The way from a docs page to the site root, and to the docs root. */
@@ -186,6 +207,20 @@ export interface LinkContext {
   docsRoot?: string
   /** For a page that may show images (the blog): the src to publish an image at, given its src in the source. Without it, an image is an error. */
   image?: (src: string) => string
+  /** For a docs page: docs/ on disk, where its images are read from (under images/). It collects them in `images`. */
+  docsImages?: { docsDir: string; images: string[] }
+}
+
+/** A docs page's image: checked, sized and collected; its src on the page. */
+function docsImage(src: string, ctx: LinkContext, docs: NonNullable<LinkContext['docsImages']>): { src: string; width: number; height: number } {
+  const path = posix.normalize(src)
+  const fail = (what: string) => new Error(`${ctx.sourcePath}: image ${src} ${what}`)
+  if (/^[a-z]+:/i.test(src) || !path.startsWith('images/')) throw fail('must be a file under docs/images/')
+  if (!/\.(svg|png)$/.test(path)) throw fail('must be an .svg or a .png')
+  const file = join(docs.docsDir, path)
+  if (!existsSync(file)) throw fail('does not exist')
+  if (!docs.images.includes(path)) docs.images.push(path)
+  return { src: toDocsRoot(ctx.from) + path, ...imageSize(file) }
 }
 
 /** Repository path (docs/LANGUAGE.md) → page slug. */
@@ -263,8 +298,30 @@ function markdown(ctx: LinkContext, toc: TocEntry[], examples: string[]): Markdo
     return defaultLink(tokens, idx, options, env, self)
   }
 
+  // A docs image alone in its paragraph is a figure, its title the caption.
+  const figure = (inline: Token | undefined) => {
+    const kids = (inline?.children ?? []).filter((t) => !(t.type === 'text' && t.content.trim() === '') && t.type !== 'softbreak')
+    return kids.length === 1 && kids[0].type === 'image' ? kids[0] : undefined
+  }
+  const defaultParagraphOpen = md.renderer.rules.paragraph_open ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+  const defaultParagraphClose = md.renderer.rules.paragraph_close ?? ((tokens, idx, options, _env, self) => self.renderToken(tokens, idx, options))
+  md.renderer.rules.paragraph_open = (tokens, idx, options, env, self) =>
+    ctx.docsImages && figure(tokens[idx + 1]) ? '<figure class="doc-figure">' : defaultParagraphOpen(tokens, idx, options, env, self)
+  md.renderer.rules.paragraph_close = (tokens, idx, options, env, self) => {
+    const img = ctx.docsImages ? figure(tokens[idx - 1]) : undefined
+    if (!img) return defaultParagraphClose(tokens, idx, options, env, self)
+    const caption = img.attrGet('title')
+    return `${caption ? `<figcaption>${escapeHtml(caption)}</figcaption>` : ''}</figure>\n`
+  }
+
   md.renderer.rules.image = (tokens, idx) => {
     const token = tokens[idx]
+    if (ctx.docsImages) {
+      const alt = textOf(token.children)
+      if (!alt) throw new Error(`${ctx.sourcePath}: image ${token.attrGet('src')} needs alt text`)
+      const img = docsImage(String(token.attrGet('src') ?? ''), ctx, ctx.docsImages)
+      return `<img src="${escapeHtml(img.src)}" alt="${escapeHtml(alt)}" width="${img.width}" height="${img.height}" loading="lazy" decoding="async" />`
+    }
     if (ctx.image) return `<img src="${escapeHtml(ctx.image(String(token.attrGet('src') ?? '')))}" alt="${escapeHtml(textOf(token.children))}" loading="lazy" />`
     throw new Error(`${ctx.sourcePath}: images are not supported on the site (${tokens[idx].attrGet('src')})`)
   }
@@ -328,10 +385,11 @@ const stripTags = (s: string): string =>
   decodeEntities(s.replace(/<[^>]+>/g, '')).replace(/\s+/g, ' ').trim()
 
 /** Renders one page's article from its source text. */
-export function renderPage(config: SiteConfig, page: DocPage, source: string): RenderedPage {
+export function renderPage(config: SiteConfig, page: DocPage, source: string, docsDir?: string): RenderedPage {
   const sourcePath = posix.normalize(posix.join('docs', page.source))
   const toc: TocEntry[] = []
   const examples: string[] = []
+  const images: string[] = []
   const group = config.nav.find((g) => g.items.some((i) => i.page === page.slug && !i.anchor))?.title ?? 'Docs'
   let article: string
 
@@ -346,7 +404,8 @@ export function renderPage(config: SiteConfig, page: DocPage, source: string): R
       toc.push({ level: Number(m[1]) as 2 | 3, id: m[2], text: stripTags(m[3]) })
     }
   } else {
-    const html = markdown({ config, from: page.slug, sourcePath }, toc, examples).render(source)
+    const docsImages = docsDir === undefined ? undefined : { docsDir, images }
+    const html = markdown({ config, from: page.slug, sourcePath, docsImages }, toc, examples).render(source)
     const { h1, body } = splitTitle(html)
     // The paragraph right after the title is the lede.
     const lede = body.replace(/^\s*<p>/, '<p class="lede">')
@@ -354,7 +413,7 @@ export function renderPage(config: SiteConfig, page: DocPage, source: string): R
   }
 
   const anchors = new Set([...article.matchAll(/\sid="([^"]+)"/g)].map((m) => m[1]))
-  return { page, article, toc, examples, anchors }
+  return { page, article, toc, examples, anchors, images }
 }
 
 function navHtml(config: SiteConfig, current: string): string {
@@ -468,7 +527,7 @@ export function readSite(docsDir: string): SiteConfig {
 }
 
 export function renderFromDisk(docsDir: string, config: SiteConfig, page: DocPage): RenderedPage {
-  return renderPage(config, page, readFileSync(join(docsDir, page.source), 'utf8'))
+  return renderPage(config, page, readFileSync(join(docsDir, page.source), 'utf8'), docsDir)
 }
 
 /** The stub pages under `stubsDir` (frontend/docs), as rollup inputs: docs, docs/quickstart, … */
@@ -501,6 +560,19 @@ export function docsSite({ docsDir, stubsDir }: { docsDir: string; stubsDir: str
       server.watcher.on('change', (file) => {
         if (file.startsWith(docsDir) || file.endsWith('model.html')) server.ws.send({ type: 'full-reload' })
       })
+      // `npm run dev`: the pages' images, as the build publishes them.
+      server.middlewares.use((req, res, next) => {
+        const m = /^\/docs\/(images\/[\w/.@-]+\.(svg|png))$/.exec(req.url?.split('?')[0] ?? '')
+        const file = m && !m[1].includes('..') ? join(docsDir, m[1]) : undefined
+        if (!file || !existsSync(file)) return next()
+        res.setHeader('Content-Type', m![2] === 'svg' ? 'image/svg+xml' : 'image/png')
+        res.end(readFileSync(file))
+      })
+    },
+    generateBundle() {
+      const site = readSite(docsDir)
+      const images = new Set(site.pages.flatMap((p) => renderFromDisk(docsDir, site, p).images))
+      for (const path of images) this.emitFile({ type: 'asset', fileName: `docs/${path}`, source: readFileSync(join(docsDir, path)) })
     },
     transformIndexHtml: {
       order: 'pre',

@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync } from 'node:fs'
+import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs'
 import markdownIt from 'markdown-it'
 import { describe, expect, it } from 'vitest'
 import { parse } from '../src/dsl/parser'
@@ -150,8 +150,26 @@ describe('rendered pages', () => {
 
   it('escapes raw HTML in Markdown instead of rendering it', () => {
     for (const page of rendered.values()) {
-      if (page.page.source.endsWith('.md')) expect(page.article).not.toMatch(/<(script|iframe|style|img)\b/)
+      if (page.page.source.endsWith('.md')) expect(page.article).not.toMatch(/<(script|iframe|style)\b|<img\b(?! src="(\.\.\/|\.\/)?images\/)/)
     }
+  })
+
+  it('shows images from docs/images as sized, lazy figures with alt text and a caption', () => {
+    const systems = rendered.get('systems')!
+    expect(systems.images).toContain('images/diagrams/org.svg')
+    expect(systems.article).toMatch(/<figure class="doc-figure"><img src="\.\.\/images\/diagrams\/org\.svg" alt="[^"]{20,}" width="\d+" height="\d+" loading="lazy" decoding="async" \/><figcaption>[^<]+<\/figcaption><\/figure>/)
+    for (const page of rendered.values()) {
+      for (const path of page.images) {
+        expect(existsSync(`${docsDir}${path}`), path).toBe(true)
+        expect(statSync(`${docsDir}${path}`).size, path).toBeLessThan(path.endsWith('.png') ? 250_000 : 100_000)
+      }
+    }
+    const page = site.pages.find((p) => p.slug === 'quickstart')!
+    const render = (md: string) => renderPage(site, page, `# T\n\n${md}\n`, docsDir)
+    expect(() => render('![A diagram](../README.md)')).toThrow(/under docs\/images/)
+    expect(() => render('![A diagram](images/nope.svg)')).toThrow(/does not exist/)
+    expect(() => render('![](images/diagrams/org.svg)')).toThrow(/alt text/)
+    expect(() => renderPage(site, page, '# T\n\n![A diagram](images/diagrams/org.svg)\n')).toThrow(/not supported/)
   })
 
   it('highlights Proschi code at build time and keeps the source for the live example', () => {
