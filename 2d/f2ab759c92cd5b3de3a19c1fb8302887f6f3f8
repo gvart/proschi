@@ -1,0 +1,25 @@
+frontend/src/playground/cloudSync.ts
+  s_e7f61f870764cb::t_ab80b9b9f60e7a 2,75-80,304
+frontend/src/components/Playground/useCloudSync.ts
+  s_e7f61f870764cb::t_ab80b9b9f60e7a 6,93-99
+frontend/src/playground/cloudSync.test.ts
+  s_e7f61f870764cb::t_120f9717adc9d6 68-69,79-85,106,126-136
+  s_e7f61f870764cb::t_da13d458d4bd0f 137-138
+  s_e7f61f870764cb::t_a5dcc888825d64 139-140
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "2df2ab759c92cd5b3de3a19c1fb8302887f6f3f8",
+  "prompts": {},
+  "sessions": {
+    "s_e7f61f870764cb": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "cfc228d4-e566-4bda-b786-93cbe507b91c",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
