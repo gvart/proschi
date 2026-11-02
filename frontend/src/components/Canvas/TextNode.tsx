@@ -17,7 +17,7 @@ function TextNode({ data, selected }: NodeProps<ComponentMetadata>) {
       <NodeResizer color={CANVAS_ACCENT} isVisible={selected} minWidth={150} minHeight={80} />
       <div className="pc-note" data-selected={selected || undefined}>
         <div className="flex items-start gap-2 mb-2">
-          <StickyNote className="w-4 h-4 flex-shrink-0 mt-0.5" aria-hidden="true" />
+          <StickyNote className="w-4 h-4 shrink-0 mt-0.5" aria-hidden="true" />
           <div className="font-semibold text-sm">{data.name}</div>
         </div>
         <div className="whitespace-pre-wrap break-words text-ink/85" style={{ fontSize: `${fontSize}px` }}>

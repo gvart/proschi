@@ -222,7 +222,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
         aria-label={`${label}: ${step.title}`}
         aria-describedby={`${ids}-body`}
         tabIndex={-1}
-        className={`fixed z-40 rounded-xl border border-ink/15 bg-surface shadow-xl outline-none motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
+        className={`fixed z-40 rounded-xl border border-ink/15 bg-surface shadow-xl outline-hidden motion-safe:data-[placed=true]:transition-[top,left] motion-safe:data-[placed=true]:duration-200 ${
           phone ? 'w-[calc(100vw-24px)]' : 'w-[22rem]'
         }`}
         style={{ top: -9999, left: -9999, visibility: settled === index ? undefined : 'hidden' }}
@@ -252,7 +252,7 @@ export default function Tour({ label, steps, phone, onClose, onCover }: TourProp
                 done ? 'border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-200' : 'border-pop-blue/20 bg-pop-blue/10 text-ink'
               }`}
             >
-              {done ? <Check size={16} className="mt-0.5 flex-shrink-0" /> : <MousePointerClick size={16} className="mt-0.5 flex-shrink-0" />}
+              {done ? <Check size={16} className="mt-0.5 shrink-0" /> : <MousePointerClick size={16} className="mt-0.5 shrink-0" />}
               <span>{done ? (step.doneText ?? 'Done.') : step.task}</span>
             </div>
           )}

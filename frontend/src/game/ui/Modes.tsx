@@ -81,7 +81,7 @@ export function ChangesPanel({ game, planning, onMigrate, onSunset }: { game: Ga
                 <li
                   key={p}
                   aria-current={p === st.phase ? 'step' : undefined}
-                  className={`rounded border-bw-1 px-1.5 py-0.5 text-xs font-semibold ${i + 1 <= at ? 'border-ink bg-pop-yellow text-on-accent' : 'border-ink/30 text-muted'}`}
+                  className={`rounded-sm border-bw-1 px-1.5 py-0.5 text-xs font-semibold ${i + 1 <= at ? 'border-ink bg-pop-yellow text-on-accent' : 'border-ink/30 text-muted'}`}
                 >
                   {PHASE_LABEL[p]}
                 </li>
@@ -172,13 +172,13 @@ export function DiagnosisPanel({ diagnosis, picked, onPick }: { diagnosis: Diagn
             const mine = picked?.pick === o.id;
             return (
               <li key={o.id}>
-                <label className={`flex items-start gap-2 rounded border-bw-1 p-2 text-sm ${picked ? (o.correct ? 'border-pass bg-pass/10' : mine ? 'border-fail bg-fail/10' : 'border-ink/20') : 'border-ink/30 hover:bg-ink/5'}`}>
+                <label className={`flex items-start gap-2 rounded-sm border-bw-1 p-2 text-sm ${picked ? (o.correct ? 'border-pass bg-pass/10' : mine ? 'border-fail bg-fail/10' : 'border-ink/20') : 'border-ink/30 hover:bg-ink/5'}`}>
                   <input type="radio" name="diagnosis" className="mt-0.5" disabled={!!picked} checked={picked ? mine : choice === o.id} onChange={() => setChoice(o.id)} />
                   <span>
                     {o.text}
                     {picked && (
                       <span className="mt-0.5 flex items-start gap-1 text-muted">
-                        {o.correct ? <CheckCircle2 size={14} className="mt-0.5 flex-shrink-0 text-pass" aria-label="Right" /> : <XCircle size={14} className="mt-0.5 flex-shrink-0 text-fail" aria-label="Wrong" />}
+                        {o.correct ? <CheckCircle2 size={14} className="mt-0.5 shrink-0 text-pass" aria-label="Right" /> : <XCircle size={14} className="mt-0.5 shrink-0 text-fail" aria-label="Wrong" />}
                         {o.why}
                       </span>
                     )}

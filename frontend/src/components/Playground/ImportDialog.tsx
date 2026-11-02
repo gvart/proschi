@@ -129,11 +129,11 @@ export default function ImportDialog({ onOpen, onClose }: ImportDialogProps) {
           </div>
           <div className="flex min-h-0 flex-col gap-2">
             <div className={eyebrow}>Proschi preview</div>
-            <pre aria-label="Proschi preview" className="min-h-[16rem] flex-1 overflow-auto rounded border-bw-1 border-ink/30 bg-paper p-2 font-mono text-xs leading-relaxed text-ink">
+            <pre aria-label="Proschi preview" className="min-h-[16rem] flex-1 overflow-auto rounded-sm border-bw-1 border-ink/30 bg-paper p-2 font-mono text-xs leading-relaxed text-ink">
               {result?.source ?? <span className="text-muted">The converted diagram shows here.</span>}
             </pre>
             {result && result.warnings.length > 0 && (
-              <ul aria-label="Import warnings" className="max-h-32 overflow-y-auto rounded border-bw-1 border-ink/30 bg-pop-yellow/20 p-2 text-xs text-ink">
+              <ul aria-label="Import warnings" className="max-h-32 overflow-y-auto rounded-sm border-bw-1 border-ink/30 bg-pop-yellow/20 p-2 text-xs text-ink">
                 {result.warnings.map((w, i) => (
                   <li key={i} className="flex gap-1.5">
                     <AlertTriangle size={12} className="mt-0.5 shrink-0" />

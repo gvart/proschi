@@ -58,7 +58,7 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
     <aside
       role="region"
       aria-label={`${title} settings`}
-      className="pointer-events-auto flex max-h-full w-full flex-col rounded border-bw-1 border-ink bg-surface shadow-brutal-md"
+      className="pointer-events-auto flex max-h-full w-full flex-col rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md"
     >
       <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{title}</h2>
@@ -232,7 +232,7 @@ function SystemFields({ node, system: s, readOnly, onEdit }: { node: DiagramNode
             </ul>
           )}
           {s.warnings.map((w) => (
-            <p key={w} className="rounded bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
+            <p key={w} className="rounded-sm bg-amber-50 px-2 py-1 text-xs text-amber-900 dark:bg-amber-950/40 dark:text-amber-100">
               {w}
             </p>
           ))}
@@ -288,7 +288,7 @@ function TextField({ label, value, unit, placeholder, list, inputMode, disabled,
           }}
           className={`${field} w-full min-w-0 aria-[invalid]:border-fail`}
         />
-        {unit && <span className="flex-shrink-0 text-xs text-muted">{unit}</span>}
+        {unit && <span className="shrink-0 text-xs text-muted">{unit}</span>}
       </span>
     </label>
   );

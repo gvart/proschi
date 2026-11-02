@@ -94,7 +94,7 @@ export function MenuItem({
       role="menuitem"
       onClick={onSelect}
       disabled={disabled}
-      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm font-medium text-ink hover:bg-pop-yellow hover:text-on-accent focus-visible:bg-pop-yellow focus-visible:text-on-accent focus-visible:outline-none disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink"
+      className="w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm font-medium text-ink hover:bg-pop-yellow hover:text-on-accent focus-visible:bg-pop-yellow focus-visible:text-on-accent focus-visible:outline-hidden disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-transparent disabled:hover:text-ink"
     >
       {icon}
       {children}

@@ -3,15 +3,21 @@
    utilities, which assume its border reset. Loaded with the demo, lazily.
    The demo's frame (window bar, panes, captions) is styled by the page. */
 
-:where(.demo__canvas) *,
-:where(.demo__canvas) ::before,
-:where(.demo__canvas) ::after {
-  box-sizing: border-box;
-  border: 0 solid rgb(var(--c-ink) / 0.15);
-}
+@import 'tailwindcss/theme' layer(theme);
+@import '../../design/tailwind3-palette.css' layer(theme);
+@import 'tailwindcss/utilities' layer(utilities);
 
-@tailwind components;
-@tailwind utilities;
+@config '../../../tailwind.config.js';
+
+/* In the base layer, so the utilities still win over it. */
+@layer base {
+  :where(.demo__canvas) *,
+  :where(.demo__canvas) ::before,
+  :where(.demo__canvas) ::after {
+    box-sizing: border-box;
+    border: 0 solid rgb(var(--c-ink) / 0.15);
+  }
+}
 
 /* The block caret the tour types behind. */
 .demo-caret {

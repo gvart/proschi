@@ -191,13 +191,13 @@ export function CardView({ card, isNew, topic, state, position, onRate, round, o
       aria-label={position}
       data-card-type={card.type}
       data-card-id={card.id}
-      className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md focus:outline-none"
+      className="mt-5 rounded-brutal border-bw-2 border-ink bg-surface shadow-brutal-md focus:outline-hidden"
     >
       <h2
         ref={heading}
         tabIndex={-1}
         data-card-heading=""
-        className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5 focus:outline-none focus-visible:bg-pop-yellow/20"
+        className="flex flex-wrap items-center gap-x-2 gap-y-1 border-b-bw-1 border-ink px-4 py-2.5 sm:px-5 focus:outline-hidden focus-visible:bg-pop-yellow/20"
       >
         <span className="sr-only">{position}: </span>
         <span className={eyebrow}>{topic}</span>
@@ -225,12 +225,12 @@ export function CardView({ card, isNew, topic, state, position, onRate, round, o
 const RATING_LABEL: Record<Rating, string> = { 1: 'Again', 2: 'Hard', 3: 'Good', 4: 'Easy' };
 const RATING_TONE: Record<Rating, string> = { 1: 'bg-pop-pink/40', 2: 'bg-surface', 3: 'bg-pass/30', 4: 'bg-pop-blue/25' };
 const ratingButton =
-  'flex min-h-[52px] flex-col items-center justify-center rounded border-bw-1 border-ink px-1 py-1.5 text-sm font-bold text-ink shadow-brutal-sm transition-[transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-md active:translate-x-0.5 active:translate-y-0.5 active:shadow-none';
+  'flex min-h-[52px] flex-col items-center justify-center rounded-sm border-bw-1 border-ink px-1 py-1.5 text-sm font-bold text-ink shadow-brutal-sm transition-[translate,transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-md active:translate-x-0.5 active:translate-y-0.5 active:shadow-none';
 
 function Why({ card }: { card: Card }) {
   if (!card.why) return null;
   return (
-    <div className="mt-4 rounded border-bw-1 border-ink/30 bg-paper p-3">
+    <div className="mt-4 rounded-sm border-bw-1 border-ink/30 bg-paper p-3">
       <p className={eyebrow}>Why</p>
       <div className="mt-1">
         <Markdown source={card.why} />
@@ -248,7 +248,7 @@ function Revealed({ label, children }: { label: string; children: ReactNode }) {
     showRevealed(ref.current);
   }, []);
   return (
-    <div ref={ref} tabIndex={-1} role="region" aria-label={label} className="mt-4 border-t-bw-1 border-dashed border-ink/40 pt-4 focus:outline-none">
+    <div ref={ref} tabIndex={-1} role="region" aria-label={label} className="mt-4 border-t-bw-1 border-dashed border-ink/40 pt-4 focus:outline-hidden">
       {children}
     </div>
   );
@@ -304,7 +304,7 @@ function Graded({ outcome, onRate }: { outcome: Outcome; onRate: (r: Rating) => 
   return (
     <Revealed label={outcome.correct ? 'Correct' : 'Not quite'}>
       <p className={`flex items-start gap-2 font-semibold ${outcome.correct ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-300'}`}>
-        {outcome.correct ? <CheckCircle2 size={18} className="mt-0.5 flex-shrink-0" aria-hidden="true" /> : <XCircle size={18} className="mt-0.5 flex-shrink-0" aria-hidden="true" />}
+        {outcome.correct ? <CheckCircle2 size={18} className="mt-0.5 shrink-0" aria-hidden="true" /> : <XCircle size={18} className="mt-0.5 shrink-0" aria-hidden="true" />}
         <span>{outcome.feedback}</span>
       </p>
       {outcome.explanation}
@@ -350,9 +350,9 @@ function ChoiceBody({ card, round, onAnswer, onRate }: { card: ChoiceCard; round
                 onClick={() => pick(i)}
                 disabled={picked !== undefined}
                 data-option={i}
-                className={`flex w-full min-h-[48px] items-start gap-3 rounded border-bw-1 border-ink px-3 py-2.5 text-left text-sm text-ink shadow-brutal-sm transition-[background-color] duration-d1 [overflow-wrap:anywhere] disabled:cursor-default ${tone}`}
+                className={`flex w-full min-h-[48px] items-start gap-3 rounded-sm border-bw-1 border-ink px-3 py-2.5 text-left text-sm text-ink shadow-brutal-sm transition-[background-color] duration-d1 [overflow-wrap:anywhere] disabled:cursor-default ${tone}`}
               >
-                <span className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm border-bw-1 border-ink/40 font-mono text-[11px] text-muted" aria-hidden="true">
+                <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-xs border-bw-1 border-ink/40 font-mono text-[11px] text-muted" aria-hidden="true">
                   {state === 'right' ? <Check size={12} /> : state === 'wrong' ? <X size={12} /> : n + 1}
                 </span>
                 <span className="min-w-0 flex-1">

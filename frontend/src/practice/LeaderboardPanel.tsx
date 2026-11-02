@@ -34,7 +34,7 @@ export default function LeaderboardPanel({ leaderboard }: { leaderboard: Leaderb
             <a
               href={`#/u/${encodeURIComponent(e.id)}`}
               aria-label={`${e.displayName}: rank ${e.rank}, ${e.solved} of ${leaderboard.problems} solved. See their profile`}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25"
             >
               <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
               <span className="flex-1 min-w-0 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>

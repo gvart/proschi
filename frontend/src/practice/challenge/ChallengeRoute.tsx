@@ -628,7 +628,7 @@ function Result({
         aria-label="Your result"
         className={`mt-6 rounded-brutal border-bw-2 border-ink p-4 shadow-brutal-md sm:p-5 motion-safe:animate-[ps-pop_var(--d-spring)_var(--e-spring)] ${result.perfect ? 'bg-pop-yellow/30' : 'bg-surface'}`}
       >
-        <h2 ref={heading} tabIndex={-1} className="flex items-center gap-2 font-display text-xl font-bold text-ink focus:outline-none">
+        <h2 ref={heading} tabIndex={-1} className="flex items-center gap-2 font-display text-xl font-bold text-ink focus:outline-hidden">
           {result.perfect ? <PartyPopper size={18} aria-hidden="true" /> : <Trophy size={18} aria-hidden="true" />}
           {result.perfect ? 'Perfect score!' : 'Challenge done'}
         </h2>
@@ -658,7 +658,7 @@ function Result({
 
         <div className="mt-4">
           <p className={eyebrow}>Share</p>
-          <p id="challenge-share-text" className="mt-1 break-words rounded border-bw-1 border-ink/30 bg-paper px-3 py-2 font-mono text-sm text-ink">
+          <p id="challenge-share-text" className="mt-1 break-words rounded-sm border-bw-1 border-ink/30 bg-paper px-3 py-2 font-mono text-sm text-ink">
             {text}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">
@@ -803,7 +803,7 @@ function Leaderboard({ day, refresh }: { day: string; refresh: number }) {
             <a
               href={`#/u/${encodeURIComponent(e.id)}`}
               aria-label={`${e.displayName}: rank ${e.rank}, ${e.score} points, ${e.correct} of ${CHALLENGE_SIZE} right. See their profile`}
-              className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+              className="flex items-center gap-3 px-4 py-2 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25"
             >
               <span className="w-6 text-right tabular-nums text-muted">{e.rank}</span>
               <span className="min-w-0 flex-1 truncate text-ink underline-offset-2 hover:underline">{e.displayName}</span>

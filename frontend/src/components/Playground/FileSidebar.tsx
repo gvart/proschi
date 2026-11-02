@@ -45,8 +45,8 @@ interface RowMenuState {
   items: (close: () => void) => ReactNode;
 }
 
-const rowBase = 'group flex items-center gap-1 rounded pr-1 text-sm';
-const actionButton = 'p-1 rounded text-muted hover:text-ink hover:bg-ink/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 max-md:opacity-100';
+const rowBase = 'group flex items-center gap-1 rounded-sm pr-1 text-sm';
+const actionButton = 'p-1 rounded-sm text-muted hover:text-ink hover:bg-ink/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 max-md:opacity-100';
 
 /** The editor's diagrams as a folder tree: open, add, rename, move (drag or "Move to"), duplicate and delete them. */
 export default function FileSidebar({ docs, currentId, actions, cloud, onClose, onCollapse }: FileSidebarProps) {
@@ -380,7 +380,7 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
     <aside aria-label="Diagrams" className="flex h-full w-full flex-col bg-surface text-ink">
       <div className="flex items-center gap-1 px-2 pt-2">
         <span className={`flex-1 pl-1 ${eyebrow}`}>Diagrams</span>
-        <button type="button" aria-label="New diagram" title="New diagram" onClick={() => actions.create(currentFolder)} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+        <button type="button" aria-label="New diagram" title="New diagram" onClick={() => actions.create(currentFolder)} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
           <FilePlus size={15} />
         </button>
         <button
@@ -391,17 +391,17 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
             setQuery('');
             setEditing({ kind: 'new-folder', parent: '' });
           }}
-          className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
+          className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10"
         >
           <FolderPlus size={15} />
         </button>
         {onCollapse && (
-          <button type="button" aria-label="Hide sidebar" title="Hide sidebar" onClick={onCollapse} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+          <button type="button" aria-label="Hide sidebar" title="Hide sidebar" onClick={onCollapse} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
             <PanelLeftClose size={15} />
           </button>
         )}
         {onClose && (
-          <button type="button" aria-label="Close diagrams" onClick={onClose} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+          <button type="button" aria-label="Close diagrams" onClick={onClose} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
             <X size={15} />
           </button>
         )}
@@ -459,7 +459,7 @@ function StorageFooter({ cloud }: { cloud: CloudSync }) {
               key={provider}
               type="button"
               onClick={() => cloud.signIn(provider)}
-              className="inline-flex items-center gap-1 rounded border-bw-1 border-ink bg-surface px-2 py-1 font-semibold text-ink hover:bg-pop-yellow hover:text-on-accent"
+              className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-surface px-2 py-1 font-semibold text-ink hover:bg-pop-yellow hover:text-on-accent"
             >
               <LogIn size={12} />
               Sync with {PROVIDER_LABEL[provider]}

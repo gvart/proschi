@@ -180,7 +180,7 @@ function StayOnTrack({ account }: { account: Account }) {
             role="switch"
             checked={user.publicProfile}
             onChange={(e) => void account.update({ publicProfile: e.target.checked })}
-            className="mt-0.5 h-5 w-5 flex-shrink-0 accent-ink"
+            className="mt-0.5 h-5 w-5 shrink-0 accent-ink"
           />
           <span className="font-semibold text-ink">Show me on the leaderboard, with a public profile</span>
         </label>

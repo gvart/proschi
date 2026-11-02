@@ -72,7 +72,7 @@ export default function QuickOpen({ docs, currentId, onOpen, onClose }: QuickOpe
                 onClose();
               }
             }}
-            className="w-full bg-transparent py-3 text-base outline-none placeholder:text-muted"
+            className="w-full bg-transparent py-3 text-base outline-hidden placeholder:text-muted"
           />
         </div>
         <ul id="quick-open-list" ref={listRef} role="listbox" aria-label="Diagrams" className="max-h-[50vh] overflow-y-auto py-1">

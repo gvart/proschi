@@ -132,7 +132,7 @@ export default function EmailReminders() {
             {prefs.confirmed ? '.' : ': follow the link we emailed you.'}
           </p>
           {prefs.confirmed && prefs.paused && (
-            <p className="mt-2 flex flex-wrap items-center gap-2 rounded border-bw-1 border-ink bg-pop-yellow/30 p-2 text-sm text-ink">
+            <p className="mt-2 flex flex-wrap items-center gap-2 rounded-sm border-bw-1 border-ink bg-pop-yellow/30 p-2 text-sm text-ink">
               We paused your reminders after three in a row went unanswered.
               <button type="button" disabled={busy} className={primaryButton} onClick={() => void patch({ resume: true }, 'Reminders are back on.')}>
                 <Play size={14} aria-hidden="true" />
@@ -151,7 +151,7 @@ export default function EmailReminders() {
                     checked={prefs[kind.key as ReminderKind]}
                     disabled={busy}
                     onChange={(e) => void patch({ [kind.key]: e.target.checked })}
-                    className="mt-0.5 h-5 w-5 flex-shrink-0 accent-ink"
+                    className="mt-0.5 h-5 w-5 shrink-0 accent-ink"
                   />
                   <span className="text-sm text-ink">
                     <span className="font-semibold">{kind.label}</span> <span className="text-ink/70">— {kind.hint}</span>

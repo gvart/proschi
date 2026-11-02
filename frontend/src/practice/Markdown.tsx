@@ -121,7 +121,7 @@ function BlockView({ block, large = false }: { block: Block; large?: boolean }) 
       return (
         <aside aria-label={block.title ? undefined : CALLOUT_TITLES[block.tone]} data-block="callout" data-tone={block.tone} className={`rounded-brutal border-bw-1 border-ink border-l-[6px] px-4 py-3 ${tone}`}>
           <p className="mb-1 flex items-center gap-1.5 font-semibold text-ink">
-            <Icon size={16} aria-hidden="true" className="flex-shrink-0" />
+            <Icon size={16} aria-hidden="true" className="shrink-0" />
             {block.title ? <Inlines nodes={block.title} /> : CALLOUT_TITLES[block.tone]}
           </p>
           <Children blocks={block.children} large={large} />
@@ -145,7 +145,7 @@ function BlockView({ block, large = false }: { block: Block; large?: boolean }) 
       return (
         <details data-block="deepdive" className="group rounded-brutal border-bw-1 border-ink bg-paper">
           <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-2.5 font-semibold text-ink [&::-webkit-details-marker]:hidden">
-            <ChevronRight size={16} aria-hidden="true" className="flex-shrink-0 transition-transform duration-d1 group-open:rotate-90" />
+            <ChevronRight size={16} aria-hidden="true" className="shrink-0 transition-transform duration-d1 group-open:rotate-90" />
             <span className={`${eyebrowText} text-muted`}>Deep dive</span>
             <span className="min-w-0">
               <Inlines nodes={block.title} />
@@ -229,7 +229,7 @@ function Inlines({ nodes }: { nodes: Inline[] }) {
         return n.text;
       case 'code':
         return (
-          <code key={i} className="rounded bg-ink/5 px-1 py-0.5 font-mono text-[0.85em]">
+          <code key={i} className="rounded-sm bg-ink/5 px-1 py-0.5 font-mono text-[0.85em]">
             {n.text}
           </code>
         );

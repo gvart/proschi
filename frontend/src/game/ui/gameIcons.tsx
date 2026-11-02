@@ -157,7 +157,7 @@ const ICON_SIZE = { sm: 12, md: 16, lg: 20 } as const;
 /** An icon in a small bordered tile, the look of the board's nodes: a content icon by `name`, or a lucide `icon`. */
 export function IconTile({ name, icon: Icon, tone, size = 'md', className = '' }: { name?: IconName; icon?: LucideIcon; tone: string; size?: keyof typeof TILE_SIZE; className?: string }) {
   return (
-    <span aria-hidden="true" className={`inline-flex flex-shrink-0 items-center justify-center rounded border-bw-1 border-ink ${TILE_SIZE[size]} ${tone} ${className}`}>
+    <span aria-hidden="true" className={`inline-flex shrink-0 items-center justify-center rounded-sm border-bw-1 border-ink ${TILE_SIZE[size]} ${tone} ${className}`}>
       {Icon ? <Icon size={ICON_SIZE[size]} aria-hidden="true" /> : name && <GameIcon name={name} size={ICON_SIZE[size]} />}
     </span>
   );

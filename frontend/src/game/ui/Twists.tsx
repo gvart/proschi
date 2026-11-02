@@ -48,7 +48,7 @@ export function MutatorPicker({ offer, daily, onPick }: { offer: MutatorDef[]; d
 /** The run's mutator, as a chip: what it is and what it pays. */
 export function MutatorChip({ mutator }: { mutator: MutatorDef }) {
   return (
-    <span className="inline-flex items-center gap-1.5 rounded border-bw-1 border-ink/40 bg-pop-pink/15 px-1.5 py-0.5 text-xs font-semibold" title={mutator.text}>
+    <span className="inline-flex items-center gap-1.5 rounded-sm border-bw-1 border-ink/40 bg-pop-pink/15 px-1.5 py-0.5 text-xs font-semibold" title={mutator.text}>
       <IconTile name={mutator.icon} tone={MUTATOR_TILE} size="sm" />
       {mutator.name} <span className="font-mono">{times(mutator.score)}</span>
     </span>
@@ -58,7 +58,7 @@ export function MutatorChip({ mutator }: { mutator: MutatorDef }) {
 /** This wave's bounty in the forecast: the objective and its pay. */
 export function BountyLine({ bounty }: { bounty: NonNullable<Forecast['bounty']> }) {
   return (
-    <p className="mt-2 flex items-start gap-1.5 rounded border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" aria-label="Bounty">
+    <p className="mt-2 flex items-start gap-1.5 rounded-sm border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" aria-label="Bounty">
       <IconTile name={bounty.icon} tone={BOUNTY_TILE} size="sm" />
       <span>
         <strong>Bounty: {bounty.name}.</strong> {bounty.text}{' '}
@@ -73,12 +73,12 @@ export function BountyLine({ bounty }: { bounty: NonNullable<Forecast['bounty']>
 /** The wave's bounties on offer: take one before deploying (a missed one costs part of its cash), or none. */
 export function BountyChoice({ offer, onPick }: { offer: Forecast['bountyOffer']; onPick: (i: number) => void }) {
   return (
-    <div className="mt-2 rounded border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" role="group" aria-label="Bounties">
+    <div className="mt-2 rounded-sm border-bw-1 border-dashed border-ink/50 bg-pop-yellow/10 p-1.5 text-sm" role="group" aria-label="Bounties">
       <p className="font-semibold">Take a bounty, or none. Met, it pays; missed, it costs a quarter of its cash.</p>
       <ul className="mt-1 grid gap-1.5">
         {offer.map((b, i) => (
           <li key={b.id}>
-            <button type="button" className="flex h-full w-full items-start gap-1.5 rounded border-bw-1 border-ink/40 bg-surface p-1.5 text-left hover:border-ink" onClick={() => onPick(i)} aria-label={`Take the bounty ${b.name}`}>
+            <button type="button" className="flex h-full w-full items-start gap-1.5 rounded-sm border-bw-1 border-ink/40 bg-surface p-1.5 text-left hover:border-ink" onClick={() => onPick(i)} aria-label={`Take the bounty ${b.name}`}>
               <IconTile name={b.icon} tone={BOUNTY_TILE} size="sm" />
               <span>
                 <strong>{b.name}.</strong> {b.text}{' '}
@@ -97,7 +97,7 @@ export function BountyChoice({ offer, onPick }: { offer: Forecast['bountyOffer']
 /** The bounty's outcome in the wave's debrief. */
 export function BountyResult({ result, def }: { result: NonNullable<WaveSummary['bounty']>; def?: BountyDef }) {
   return (
-    <div className={`flex items-start gap-1.5 rounded border-bw-1 p-2 ${result.met ? 'border-pass bg-pass/10' : 'border-ink/40 bg-surface'}`}>
+    <div className={`flex items-start gap-1.5 rounded-sm border-bw-1 p-2 ${result.met ? 'border-pass bg-pass/10' : 'border-ink/40 bg-surface'}`}>
       {def && <IconTile name={def.icon} tone={BOUNTY_TILE} size="sm" />}
       <div>
         <p className="font-semibold">

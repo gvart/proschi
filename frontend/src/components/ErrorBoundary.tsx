@@ -47,7 +47,7 @@ export default class ErrorBoundary extends Component<Props, State> {
           Proschi hit an error in {this.props.where}. Your work is saved in this browser, so reloading the page should bring it
           back.
         </p>
-        <pre className="max-h-40 overflow-auto rounded border border-ink/20 p-3 text-sm">{error.message}</pre>
+        <pre className="max-h-40 overflow-auto rounded-sm border border-ink/20 p-3 text-sm">{error.message}</pre>
         <p className="flex flex-wrap gap-3">
           <button type="button" className={buttonClass({ variant: 'primary' })} onClick={() => location.reload()}>
             Reload the page

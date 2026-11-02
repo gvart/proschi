@@ -57,7 +57,7 @@ export default function HldView({ diagram, nodes, edges, analysis, results, engi
 
   return (
     <div className="h-full overflow-y-auto bg-paper">
-      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 py-2 bg-surface/95 backdrop-blur border-b border-ink/15">
+      <div className="sticky top-0 z-10 flex flex-wrap items-center gap-2 px-4 py-2 bg-surface/95 backdrop-blur-sm border-b border-ink/15">
         <nav aria-label="HLD sections" className="flex-1 min-w-0 flex gap-3 overflow-x-auto text-sm whitespace-nowrap">
           {doc.sections.map((s) => (
             <a key={s.kind} href={`#hld-${s.kind}`} className="text-ink/75 hover:text-pop-blue">
@@ -437,7 +437,7 @@ function Utilization({ value, saturated }: { value: number; saturated: boolean }
 
 function RiskIcon({ severity }: { severity: Risk['severity'] }) {
   const color = severity === 'high' ? 'text-red-600 dark:text-red-400' : severity === 'medium' ? 'text-amber-600 dark:text-amber-400' : 'text-muted';
-  return <AlertTriangle size={16} className={`mt-0.5 flex-shrink-0 ${color}`} aria-label={`${severity} risk`} />;
+  return <AlertTriangle size={16} className={`mt-0.5 shrink-0 ${color}`} aria-label={`${severity} risk`} />;
 }
 
 /** The scenario's messages in order, like the sequence diagram reads. */
@@ -450,7 +450,7 @@ function SequenceList({ doc, useCaseId, scenarioId }: { doc: HldDocument; useCas
     <ol className="mt-2 space-y-0.5 text-xs">
       {sequenceMessages(sequence.items).map((m, i) => (
         <li key={i} className={`flex gap-2 ${m.error ? 'text-red-700 dark:text-red-300' : 'text-ink/85'} ${m.kind === 'response' ? 'pl-4 text-muted' : ''}`}>
-          <span className="w-4 flex-shrink-0 text-right tabular-nums text-muted">{m.kind === 'request' ? m.number : ''}</span>
+          <span className="w-4 shrink-0 text-right tabular-nums text-muted">{m.kind === 'request' ? m.number : ''}</span>
           <span>
             {name(m.from)} {m.kind === 'response' ? '⇠' : m.failed ? '✗→' : m.async ? '⇢' : '→'} {name(m.to)}
             {m.label && <code className="ml-1.5 text-muted">{m.label}</code>}

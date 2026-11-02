@@ -31,7 +31,7 @@ export default function Banner({ banner, onClose }: { banner: BannerMessage; onC
           {banner.secondary.label}
         </button>
       )}
-      <button type="button" aria-label="Dismiss" onClick={onClose} className="rounded p-1 hover:bg-ink/10">
+      <button type="button" aria-label="Dismiss" onClick={onClose} className="rounded-sm p-1 hover:bg-ink/10">
         <X size={14} />
       </button>
     </div>

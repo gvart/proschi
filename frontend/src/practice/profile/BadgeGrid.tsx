@@ -65,7 +65,7 @@ export default function BadgeGrid({ badges, label = 'Badges', headingLevel = 2 }
               aria-expanded={open === b.id}
               aria-controls={open === b.id ? detailId : undefined}
               onClick={() => setOpen((o) => (o === b.id ? undefined : b.id))}
-              className={`block rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue focus-visible:ring-offset-2 focus-visible:ring-offset-paper motion-safe:transition-transform motion-safe:duration-d1 hover:-translate-y-px ${
+              className={`block rounded-full focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue focus-visible:ring-offset-2 focus-visible:ring-offset-paper motion-safe:transition-transform motion-safe:duration-d1 hover:-translate-y-px ${
                 open === b.id ? 'ring-2 ring-ink ring-offset-2 ring-offset-paper' : ''
               }`}
             >

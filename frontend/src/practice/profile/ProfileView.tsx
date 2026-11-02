@@ -130,7 +130,7 @@ export default function ProfileView({ model, kicker, note, goal, children }: Pro
           <ul className="mt-3 divide-y divide-ink/15 overflow-hidden rounded-brutal border-bw-2 border-ink bg-surface text-sm shadow-brutal-sm">
             {model.solved.map((p) => (
               <li key={p.id}>
-                <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25">
+                <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink">{p.title}</span>
                   <DifficultyBadge difficulty={p.difficulty} />
                 </a>

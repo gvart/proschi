@@ -115,16 +115,16 @@ function Row({ passed, title, message, hint, loc, onSelect, strong }: RowProps) 
     <button
       onClick={() => loc && onSelect(loc)}
       disabled={!loc}
-      className="w-full flex items-start gap-2 text-left rounded hover:bg-ink/5 disabled:hover:bg-transparent"
+      className="w-full flex items-start gap-2 text-left rounded-sm hover:bg-ink/5 disabled:hover:bg-transparent"
       title={loc ? `${loc.file ? `${loc.file}:` : 'Line '}${loc.line}` : undefined}
     >
-      <Icon size={strong ? 16 : 14} className={`mt-0.5 flex-shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} aria-label={passed ? 'passed' : 'failed'} />
+      <Icon size={strong ? 16 : 14} className={`mt-0.5 shrink-0 ${passed ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`} aria-label={passed ? 'passed' : 'failed'} />
       <span className="min-w-0">
         {title && <span className="block font-medium text-ink">{title}</span>}
         <span className={`block ${strong ? 'text-ink/75' : 'text-xs text-ink/75'}`}>{message}</span>
         {!passed && hint && <span className={`block text-amber-800 dark:text-amber-200 ${strong ? 'text-xs mt-0.5' : 'text-xs'}`}>{hint}</span>}
       </span>
-      {loc && <span className="ml-auto flex-shrink-0 text-xs text-muted tabular-nums">{loc.file ? `${loc.file}:` : ''}{loc.line}</span>}
+      {loc && <span className="ml-auto shrink-0 text-xs text-muted tabular-nums">{loc.file ? `${loc.file}:` : ''}{loc.line}</span>}
     </button>
   );
 }

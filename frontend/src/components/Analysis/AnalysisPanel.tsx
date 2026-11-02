@@ -51,7 +51,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
         <ul className="space-y-1">
           {analysis.warnings.map((w) => (
             <li key={w} className="flex items-start gap-2 rounded-md bg-amber-50 dark:bg-amber-950/40 px-3 py-1.5 text-amber-900 dark:text-amber-100">
-              <AlertTriangle size={14} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+              <AlertTriangle size={14} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
               {w}
             </li>
           ))}
@@ -178,7 +178,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
         <section>
           <h2 className="mb-2 font-semibold text-ink">Single points of failure</h2>
           <p className="flex items-start gap-2 text-ink/85">
-            <ShieldAlert size={16} className="mt-0.5 flex-shrink-0 text-amber-600 dark:text-amber-400" />
+            <ShieldAlert size={16} className="mt-0.5 shrink-0 text-amber-600 dark:text-amber-400" />
             <span>
               {analysis.singlePointsOfFailure.join(', ')}: one replica, and a use case cannot do without it. Add <code>x2</code> to the declaration or a
               fallback scenario that calls it with <code>-x</code> and still completes.
@@ -188,7 +188,7 @@ export function AnalysisBody({ diagram, analysis, onSelect, results }: AnalysisP
       )}
 
       <p className="flex items-start gap-2 text-xs text-muted">
-        <Info size={14} className="mt-px flex-shrink-0" />
+        <Info size={14} className="mt-px shrink-0" />
         <span>
           The numbers come from default profiles per technology (teaching values, right to an order of magnitude) and a simple queueing
           model. Relational databases take writes on one primary per shard, so read replicas add reads only; egress is charged for data a node sends to

@@ -62,7 +62,7 @@ export default function ProblemFilters({ query, onQuery, filters, onFilters, tag
           aria-controls={panelId}
           aria-label={active.length > 0 ? `Filters, ${active.length} active` : 'Filters'}
           onClick={() => setOpen(!open)}
-          className={`flex-shrink-0 whitespace-nowrap ${outlineButton} ${active.length > 0 ? 'bg-pop-yellow/40' : ''}`}
+          className={`shrink-0 whitespace-nowrap ${outlineButton} ${active.length > 0 ? 'bg-pop-yellow/40' : ''}`}
         >
           <SlidersHorizontal size={14} aria-hidden="true" />
           Filters
@@ -160,7 +160,7 @@ export default function ProblemFilters({ query, onQuery, filters, onFilters, tag
           <button
             type="button"
             onClick={() => onFilters(NO_FILTERS)}
-            className="rounded px-1.5 py-1 text-xs font-semibold text-ink underline underline-offset-2 hover:text-ink/70"
+            className="rounded-sm px-1.5 py-1 text-xs font-semibold text-ink underline underline-offset-2 hover:text-ink/70"
           >
             Clear all
           </button>

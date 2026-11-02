@@ -16,7 +16,7 @@ export default function CommunityStats({ stats, canSignIn }: CommunityStatsProps
   return (
     <div className="m-3 rounded-md border border-ink/15 bg-paper px-3 py-2 text-ink/85">
       <p className="flex items-center gap-2">
-        <Users size={16} className="flex-shrink-0 text-muted" />
+        <Users size={16} className="shrink-0 text-muted" />
         <span>
           {stats.attempted === 0 ? (
             'Nobody has recorded a run of this problem yet.'
@@ -74,7 +74,7 @@ function Metric({ label, value, comparison, distribution: d, mine, format }: Met
   const span = d ? d.max - d.min : 0;
   const at = (v: number) => (span > 0 ? `${Math.min(100, Math.max(0, ((v - d!.min) / span) * 100))}%` : '50%');
   return (
-    <div className="rounded border border-ink/15 bg-surface px-2.5 py-2">
+    <div className="rounded-sm border border-ink/15 bg-surface px-2.5 py-2">
       <p className="text-xs text-muted">{label}</p>
       <p className="font-medium text-ink">{value}</p>
       {comparison && <p className="text-xs text-ink/75">{comparison}</p>}
@@ -83,7 +83,7 @@ function Metric({ label, value, comparison, distribution: d, mine, format }: Met
           <div className="relative h-2 rounded-full bg-ink/5">
             <div className="absolute inset-y-0 rounded-full bg-pop-blue/15" style={{ left: at(d.p25), right: `calc(100% - ${at(d.p75)})` }} />
             <div className="absolute -top-0.5 h-3 w-0.5 bg-ink/40" style={{ left: at(d.median) }} />
-            <div className="absolute -top-1 h-4 w-1.5 -translate-x-1/2 rounded-sm bg-pop-yellow" style={{ left: at(mine) }} />
+            <div className="absolute -top-1 h-4 w-1.5 -translate-x-1/2 rounded-xs bg-pop-yellow" style={{ left: at(mine) }} />
           </div>
           <div className="mt-0.5 flex justify-between text-[11px] text-muted">
             <span>{format(d.min)}</span>

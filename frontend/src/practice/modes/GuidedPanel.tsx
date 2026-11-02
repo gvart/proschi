@@ -43,7 +43,7 @@ export default function GuidedPanel({ steps, progress, onCheck, onPass, onSkip, 
           const done = progress.done[i];
           const active = i === current;
           return (
-            <li key={i} aria-current={active ? 'step' : undefined} className={active ? 'rounded border-bw-1 border-ink bg-surface px-3 py-2' : 'px-1'}>
+            <li key={i} aria-current={active ? 'step' : undefined} className={active ? 'rounded-sm border-bw-1 border-ink bg-surface px-3 py-2' : 'px-1'}>
               <p className={`flex items-center gap-1.5 text-sm ${active ? 'font-semibold text-ink' : done ? 'text-ink' : 'text-muted'}`}>
                 {done === 'passed' ? (
                   <CircleCheck size={15} className="text-green-700 dark:text-green-300" aria-label="Done" />
@@ -70,12 +70,12 @@ export default function GuidedPanel({ steps, progress, onCheck, onPass, onSkip, 
                           <li key={j} className="flex items-start gap-1.5 text-sm text-ink">
                             {r ? (
                               r.passed ? (
-                                <Check size={15} className="mt-0.5 flex-shrink-0 text-green-700 dark:text-green-300" aria-label="Passed" />
+                                <Check size={15} className="mt-0.5 shrink-0 text-green-700 dark:text-green-300" aria-label="Passed" />
                               ) : (
-                                <X size={15} className="mt-0.5 flex-shrink-0 text-red-700 dark:text-red-300" aria-label="Not yet" />
+                                <X size={15} className="mt-0.5 shrink-0 text-red-700 dark:text-red-300" aria-label="Not yet" />
                               )
                             ) : (
-                              <Circle size={15} className="mt-0.5 flex-shrink-0 text-muted" aria-hidden="true" />
+                              <Circle size={15} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
                             )}
                             <span>
                               <InlineMarkdown source={r?.label ?? describeCheck(step.checks[j])} />
