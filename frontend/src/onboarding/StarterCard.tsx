@@ -13,12 +13,12 @@ const optionClass =
 /** What an empty diagram shows instead of a blank canvas: three ways to start. */
 export default function StarterCard({ onTemplate, onExamples }: StarterCardProps) {
   return (
-    <section aria-labelledby="starter-title" className="w-full max-w-md rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
+    <section aria-labelledby="starter-title" className="pointer-events-auto w-full max-w-md rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
       <h2 id="starter-title" className="font-display text-xl font-extrabold tracking-[-0.02em] text-ink">
         Start a diagram
       </h2>
       <p className="mt-0.5 text-sm text-muted">
-        Type in the code pane, e.g. <code className="rounded bg-ink/5 px-1">api -&gt; db</code>, or pick a start:
+        Type in the code pane, e.g. <code className="rounded bg-ink/5 px-1">api -&gt; db</code>, use Add component, or pick a start:
       </p>
       <div className="mt-3 space-y-2">
         <button type="button" onClick={() => onTemplate(STARTER_TEMPLATE)} className={optionClass}>

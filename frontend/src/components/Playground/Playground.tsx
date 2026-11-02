@@ -1235,7 +1235,8 @@ export default function Playground() {
               </Suspense>
               {nodes.length === 0 && !playing && view === 'diagram' &&
                 (isBlank(source) ? (
-                  <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+                  // Click-through, so the canvas's own Add component button (under this) still works.
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
                     <Suspense fallback={null}>
                       <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
                     </Suspense>
