@@ -14,8 +14,29 @@ export interface SavedDiagram {
   /**
    * Imported files (path → source) that came with a share link. They win over
    * saved diagrams of the same name, so the link renders as it was shared.
+   * Never `cloud:` files (storedImports): those are fetched again each time.
    */
   imports?: Record<string, string>;
+}
+
+/** Whether an imports key is a `cloud:` version or a file saved with one (`cloud:<name>:<tag>//<path>`). */
+const isCloudKey = (path: string): boolean => /^cloud:/i.test(path);
+
+/**
+ * The imports a diagram keeps (in this browser, the account and its saved
+ * versions): all but `cloud:` files, which are fetched from the account each
+ * time, so a share link's copies never get saved, synced or frozen into a
+ * version. Undefined when nothing is left.
+ */
+export function storedImports(imports: Record<string, string> | undefined): Record<string, string> | undefined {
+  if (!imports) return undefined;
+  const kept = Object.fromEntries(Object.entries(imports).filter(([path]) => !isCloudKey(path)));
+  return Object.keys(kept).length ? kept : undefined;
+}
+
+/** The `cloud:` files of a share link's imports, used only while it is open where a version cannot be fetched. */
+export function cloudImports(imports: Record<string, string> | undefined): Record<string, string> {
+  return Object.fromEntries(Object.entries(imports ?? {}).filter(([path]) => isCloudKey(path)));
 }
 
 export interface DocumentState {
@@ -38,7 +59,7 @@ export function readDiagram(value: unknown): SavedDiagram | null {
   if (!isRecord(value) || typeof value.id !== 'string' || !value.id || typeof value.source !== 'string') return null;
   const updatedAt = typeof value.updatedAt === 'string' ? value.updatedAt : new Date(0).toISOString();
   const fileName = typeof value.fileName === 'string' && value.fileName.trim() && value.fileName.length <= MAX_PATH_LENGTH ? value.fileName : undefined;
-  const imports = fileMap(value.imports);
+  const imports = storedImports(fileMap(value.imports));
   return { id: value.id, source: value.source, updatedAt, ...(fileName ? { fileName } : {}), ...(imports ? { imports } : {}) };
 }
 
@@ -95,7 +116,8 @@ export function initialState(input: InitialInput, now: Clock = defaultClock, new
   }
 
   if (input.sharedSource !== null) {
-    const imports = input.sharedImports && Object.keys(input.sharedImports).length ? { imports: input.sharedImports } : {};
+    const kept = storedImports(input.sharedImports);
+    const imports = kept ? { imports: kept } : {};
     const existing = docs.find((d) => d.source === input.sharedSource);
     if (existing) {
       currentId = existing.id;
@@ -124,6 +146,25 @@ export function updateCurrent(state: DocumentState, source: string, now: Clock =
   };
 }
 
+/** Changes the text of the diagram `id`, e.g. a team file edited while navigated into it from the org diagram. */
+export function updateDoc(state: DocumentState, id: string, source: string, now: Clock = defaultClock): DocumentState {
+  if (state.docs.find((d) => d.id === id)?.source === source) return state;
+  return { ...state, docs: state.docs.map((d) => (d.id === id ? { ...d, source, updatedAt: now() } : d)) };
+}
+
+/**
+ * Adds the files a diagram imports (path → source) as diagrams of those file
+ * names, so its imports resolve and the files can be edited; a file name
+ * already saved keeps its diagram, so opening the same example again adds nothing.
+ */
+export function addFiles(state: DocumentState, files: Readonly<Record<string, string>>, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
+  const taken = new Set(state.docs.map(fileNameOf));
+  const added = Object.entries(files)
+    .filter(([path]) => !taken.has(path))
+    .map(([fileName, source]) => ({ id: newId(), source, updatedAt: now(), fileName }));
+  return added.length ? { ...state, docs: [...state.docs, ...added] } : state;
+}
+
 export function addDoc(state: DocumentState, source: string, now: Clock = defaultClock, newId: IdFactory = defaultIds): DocumentState {
   const doc = { id: newId(), source, updatedAt: now() };
   return { docs: nameDocs([doc, ...state.docs]), currentId: doc.id };
@@ -139,8 +180,17 @@ export function addFile(state: DocumentState, source: string, fileName: string, 
 export function renameFile(state: DocumentState, id: string, fileName: string): DocumentState {
   const clean = fileName.trim().replace(/^\/+/, '');
   if (!clean) return state;
-  const name = clean.endsWith('.proschi') ? clean : `${clean}.proschi`;
+  const wanted = clean.endsWith('.proschi') ? clean : `${clean}.proschi`;
+  // Two diagrams never share a name: imports and the account find them by it.
+  const name = freeName(wanted, new Set(state.docs.filter((d) => d.id !== id).map(fileNameOf)));
   return { ...state, docs: state.docs.map((d) => (d.id === id ? { ...d, fileName: name } : d)) };
+}
+
+/** `name` if free, else `name-2.proschi`, `name-3.proschi`, … */
+export function freeName(name: string, taken: ReadonlySet<string>): string {
+  if (!taken.has(name)) return name;
+  const stem = name.replace(/\.proschi$/, '');
+  for (let n = 2; ; n++) if (!taken.has(`${stem}-${n}.proschi`)) return `${stem}-${n}.proschi`;
 }
 
 export function selectDoc(state: DocumentState, id: string): DocumentState {

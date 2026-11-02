@@ -9,6 +9,9 @@
  * `proschi game check|lock|sim` validates and plays the Scale or Fail content (see game.ts);
  * `proschi share-link` prints a web editor link for a file (see share.ts).
  * `proschi import mermaid|openapi` converts other formats to Proschi (see importCommand.ts).
+ * `proschi imports sync` fetches git, https and cloud imports into the cache and proschi.lock (see sync.ts).
+ * `proschi login|logout|whoami` signs in to the account (see login.ts);
+ * `proschi versions list|diff` reads a diagram's saved versions (see versions.ts).
  */
 import { readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
@@ -24,6 +27,9 @@ import { ACHIEVEMENTS_HELP, ACHIEVEMENTS_USAGE, runAchievements } from './achiev
 import { GAME_HELP, GAME_USAGE, runGame } from './game';
 import { SHARE_HELP, SHARE_USAGE, runShareLink } from './share';
 import { IMPORT_HELP, IMPORT_USAGE, runImport } from './importCommand';
+import { IMPORTS_HELP, IMPORTS_USAGE, runImports } from './sync';
+import { LOGIN_HELP, LOGIN_USAGE, runAuth } from './login';
+import { VERSIONS_HELP, VERSIONS_USAGE, runVersions } from './versions';
 
 declare const PROSCHI_VERSION: string;
 const VERSION = typeof PROSCHI_VERSION === 'string' ? PROSCHI_VERSION : 'dev';
@@ -40,6 +46,9 @@ ${ACHIEVEMENTS_USAGE}
 ${GAME_USAGE}
 ${SHARE_USAGE}
 ${IMPORT_USAGE}
+${IMPORTS_USAGE}
+${LOGIN_USAGE}
+${VERSIONS_USAGE}
   proschi --version
 
 check   Reports errors and warnings. Directories are searched for *.proschi files.
@@ -58,7 +67,10 @@ ${CARDS_HELP}
 ${ACHIEVEMENTS_HELP}
 ${GAME_HELP}
 ${SHARE_HELP}
-${IMPORT_HELP}`;
+${IMPORT_HELP}
+${IMPORTS_HELP}
+${LOGIN_HELP}
+${VERSIONS_HELP}`;
 
 export interface CheckResult {
   file: string;
@@ -136,6 +148,9 @@ export function run(argv: string[], out: (s: string) => void = console.log, err:
   if (command === 'game') return runGame(rest, out, err);
   if (command === 'share-link') return runShareLink(rest, out, err);
   if (command === 'import') return runImport(rest, out, err);
+  if (command === 'imports') return runImports(rest, collectFiles, out, err);
+  if (command === 'login' || command === 'logout' || command === 'whoami') return runAuth(command, rest, out, err);
+  if (command === 'versions') return runVersions(rest, out, err);
 
   if (command === 'check') {
     let strict = false;

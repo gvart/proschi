@@ -9,6 +9,44 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.15.0](https://github.com/gvart/proschi/compare/tooling-v0.14.0...tooling-v0.15.0) (2026-11-01)
+
+
+### Added
+
+* **editor:** diagrams sidebar with folders, quick open and a leaner header ([#171](https://github.com/gvart/proschi/issues/171)) ([82d1c47](https://github.com/gvart/proschi/commit/82d1c475fed82cf6c1e23bbdf9237aadaddc520d))
+
+## [0.14.0](https://github.com/gvart/proschi/compare/tooling-v0.13.0...tooling-v0.14.0) (2026-11-01)
+
+
+### Added
+
+* diagram versions and cloud references ([#169](https://github.com/gvart/proschi/issues/169)) ([eea0e13](https://github.com/gvart/proschi/commit/eea0e13d288b733d5f7147485a8a64e761ae6fcb))
+
+
+### Fixed
+
+* **dsl:** the formatter keeps references to a system's entry points (orders.api) whole ([eea0e13](https://github.com/gvart/proschi/commit/eea0e13d288b733d5f7147485a8a64e761ae6fcb))
+* **editor:** save pulled diagrams before the sync state, so closing the tab right after a pull can no longer delete a diagram from the account ([eea0e13](https://github.com/gvart/proschi/commit/eea0e13d288b733d5f7147485a8a64e761ae6fcb))
+
+## [0.13.0](https://github.com/gvart/proschi/compare/tooling-v0.12.0...tooling-v0.13.0) (2026-11-01)
+
+
+### ⚠ BREAKING CHANGES
+
+* imports are confined to a root. Without a proschi.json and outside a git repository, a file can no longer import ../ paths above its own folder; add a proschi.json at the folder that should be the root.
+
+### Added
+
+* team system boxes and pinned imports across repositories ([#166](https://github.com/gvart/proschi/issues/166)) ([7102996](https://github.com/gvart/proschi/commit/7102996e292aceab13ef972979a167d128597b13))
+
+## [0.12.0](https://github.com/gvart/proschi/compare/tooling-v0.11.0...tooling-v0.12.0) (2026-10-29)
+
+
+### Added
+
+* **plugin:** draw Proschi diagrams natively in the Claude Code terminal ([#164](https://github.com/gvart/proschi/issues/164)) ([81575ad](https://github.com/gvart/proschi/commit/81575ad7cd935d34f4d0e89d4cc33f2ad63d27c8))
+
 ## [0.11.0] - 2026-10-25
 
 ### Added

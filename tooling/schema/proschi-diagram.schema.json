@@ -889,6 +889,25 @@
           "$ref": "#/$defs/loc",
           "description": "The `-->` line that answered the request."
         },
+        "deferredResponse": {
+          "type": "object",
+          "description": "Set when the `-->` that answers the request is written after other steps: the player plays the answer there, not with the request.",
+          "properties": {
+            "after": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "The `-->` is written after this many steps of the scenario."
+            },
+            "group": {
+              "type": "integer",
+              "description": "The `par` group the `-->` is written in."
+            }
+          },
+          "required": [
+            "after"
+          ],
+          "additionalProperties": false
+        },
         "multiplier": {
           "type": "integer",
           "minimum": 1,

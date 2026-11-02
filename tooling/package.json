@@ -1,6 +1,6 @@
 {
   "name": "proschi",
-  "version": "0.11.0",
+  "version": "0.15.0",
   "description": "Command-line checker and language server for Proschi architecture diagrams",
   "license": "MIT",
   "repository": {
@@ -38,6 +38,7 @@
     "typecheck": "tsc --noEmit",
     "pretest": "node build.mjs",
     "test": "vitest run",
+    "docs:images": "node build.mjs && node scripts/docs-images.mjs",
     "package:vscode": "node build.mjs && cd vscode && vsce package --no-dependencies -o ../dist/proschi.vsix"
   },
   "devDependencies": {

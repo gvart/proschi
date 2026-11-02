@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
 import { expect, test } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
@@ -12,8 +12,8 @@ import { mockProfile, PROFILE } from './profile';
 
 const DIST = new URL('../dist/', import.meta.url);
 
-/** The docs pages in the build (plugins/docsSite.ts writes docs/<slug>/index.html). */
-const DOCS_PAGES = ['docs/', ...readdirSync(new URL('docs/', DIST), { withFileTypes: true }).filter((d) => d.isDirectory()).map((d) => `docs/${d.name}/`)];
+/** The docs pages, from docs/site.json (plugins/docsSite.ts writes each to docs/<slug>/index.html). */
+const DOCS_PAGES = (JSON.parse(readFileSync(new URL('../../docs/site.json', import.meta.url), 'utf8')) as { pages: { slug: string }[] }).pages.map((p) => `docs/${p.slug ? `${p.slug}/` : ''}`);
 
 /** The elements whose box crosses the viewport's edges, unless an ancestor inside the viewport clips or scrolls them. */
 function offenders(): string[] {
@@ -78,6 +78,7 @@ test.describe('no sideways scrolling on a phone', () => {
     await menu.locator('summary').click();
     const links = menu.getByRole('link');
     await expect(links.filter({ hasText: 'Practice' })).toBeVisible();
+    await expect(links.filter({ hasText: 'Blog' })).toBeVisible();
     // Tap targets in the menu are at least 44px tall.
     for (const box of await links.evaluateAll((els) => els.map((e) => e.getBoundingClientRect().height))) expect(box).toBeGreaterThanOrEqual(44);
     await expectNoHorizontalOverflow(page, './ with the menu open');
@@ -278,8 +279,10 @@ for (const width of [320, 400, 470]) {
     test('fits on every kind of page', async ({ page }) => {
       for (const path of ['./', 'practice/', 'practice/#/review', 'practice/#/url-shortener', 'app/', 'docs/']) {
         await visit(page, path);
-        const burger = (await page.locator('.ps-header .ps-menu__button').boundingBox())!;
-        expect(burger.x + burger.width, `${path}: the menu button is off screen`).toBeLessThanOrEqual(width);
+        // The editor has no site links, so no menu button: its last control is the theme toggle.
+        const last = page.locator(path === 'app/' ? '.ps-header .ps-header__end > :last-child' : '.ps-header .ps-menu__button');
+        const box = (await last.boundingBox())!;
+        expect(box.x + box.width, `${path}: the header's last control is off screen`).toBeLessThanOrEqual(width);
       }
     });
   });

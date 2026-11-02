@@ -14,7 +14,8 @@ async function openEditor(page: Page) {
 
 /** Opens a bundled example from the Examples gallery. */
 async function openExample(page: Page, name: RegExp) {
-  await page.getByRole('button', { name: 'Examples' }).click();
+  await page.getByRole('button', { name: 'File' }).click();
+  await page.getByRole('menuitem', { name: 'Examples…' }).click();
   const gallery = page.getByRole('dialog', { name: 'Examples' });
   await gallery.getByRole('button', { name }).click();
   await expect(gallery).toBeHidden();
@@ -130,7 +131,7 @@ test.describe('editor', () => {
     await expect(tabs.getByRole('tab')).toHaveCount(3);
     await tabs.getByRole('tab', { name: /Unknown user/ }).click();
     await expect(tabs.getByRole('tab', { name: /Unknown user/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(stepLabel(page)).toHaveText('Step 1 of 2') // responses (-->) are folded into the calls they answer;
+    await expect(stepLabel(page)).toHaveText('Step 1 of 3') // two calls, then the late response (-->) as a frame of its own
     await expect(page).toHaveURL(/[#&]alt=unknown-user/);
 
     await tabs.getByRole('tab', { name: /Database down/ }).click();
@@ -177,7 +178,7 @@ test.describe('editor', () => {
   test('Format code tidies the document', async ({ page }) => {
     await appendCode(page, '\nzeta    "Zeta Cache"     [Redis]\n   orders   ->   zeta\n');
     await expect.poll(() => editorText(page)).toContain('   orders   ->   zeta');
-    await page.getByRole('button', { name: 'Diagrams' }).click();
+    await page.getByRole('button', { name: 'File' }).click();
     await page.getByRole('menuitem', { name: /Format code/ }).click();
     await expect.poll(() => editorText(page)).toContain('\norders -> zeta\n');
     const text = await editorText(page);
@@ -332,8 +333,7 @@ test.describe('first visit and example links', () => {
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('URL Shortener');
     await page.goto('app/?example=login');
     await expect(page.getByRole('button', { name: 'Diagrams' })).toContainText('Login with Sessions');
-    await page.getByRole('button', { name: 'Diagrams' }).click();
-    await expect(page.getByRole('menu').getByText('Login with Sessions')).toHaveCount(1);
+    await expect(page.getByRole('complementary', { name: 'Diagrams' }).getByText('Login with Sessions')).toHaveCount(1);
   });
 
   test('an unknown example says so and opens the editor as usual', async ({ page }) => {
@@ -421,8 +421,8 @@ for (const width of [375, 320]) {
       await expect(page.getByRole('menuitem', { name: 'PNG image' })).toBeInViewport();
       await page.keyboard.press('Escape');
 
-      // Examples moves into the Diagrams menu on phones.
-      await page.getByRole('button', { name: 'Diagrams' }).click();
+      // Examples is in the File menu.
+      await page.getByRole('button', { name: 'File' }).click();
       await page.getByRole('menuitem', { name: 'Examples…' }).click();
       await expect(page.getByRole('dialog', { name: 'Examples' })).toBeVisible();
     });

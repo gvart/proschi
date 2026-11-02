@@ -72,6 +72,7 @@ export function AnimatedPlaybackEdge({
             pathRef={pathRef}
             from={geometry.start}
             isRequestResponse={!!data?.isRequestResponse}
+            reverse={!!data?.reverse}
             isError={!!data?.isError}
             failed={failed}
           />
@@ -85,6 +86,8 @@ interface PacketProps {
   pathRef: RefObject<SVGPathElement | null>;
   from: { x: number; y: number };
   isRequestResponse: boolean;
+  /** An answer on its own: it travels from the target back to the source. */
+  reverse: boolean;
   /** 4xx/5xx: the reply travels back in red. */
   isError: boolean;
   /** The call never arrives: the packet stops short and a cross marks the spot. */
@@ -92,7 +95,7 @@ interface PacketProps {
 }
 
 /** The packet on its way; the only part of the canvas that re-renders on every tick. */
-function Packet({ pathRef, from, isRequestResponse, isError, failed }: PacketProps) {
+function Packet({ pathRef, from, isRequestResponse, reverse, isError, failed }: PacketProps) {
   const progress = usePlaybackProgress();
   const path = pathRef.current;
   let at = from;
@@ -106,7 +109,7 @@ function Packet({ pathRef, from, isRequestResponse, isError, failed }: PacketPro
           ? progress / 50
           : 1 - (progress - 50) / 50
         : progress / 100;
-    const point = path.getPointAtLength(share * length);
+    const point = path.getPointAtLength((reverse ? 1 - share : share) * length);
     at = { x: point.x, y: point.y };
   }
 

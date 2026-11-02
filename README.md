@@ -74,7 +74,8 @@ requirements {
   [GitHub Action](docs/EDITORS.md#github-action) that comments each pull
   request's diagrams, tests, cost and p99, and
   [agent skills](docs/AGENT-SKILLS.md) for Claude Code, Codex, Cursor and
-  others.
+  others, with a Claude Code plugin that also
+  [draws diagrams in the terminal](docs/AGENT-SKILLS.md#diagrams-in-the-terminal).
 
 The [language reference](docs/LANGUAGE.md) covers the syntax in full.
 

@@ -204,6 +204,11 @@ export function diagramSchema() {
           failed: { ...bool, description: 'Written `a -x b`: the call never got an answer.' },
           loc: { ...loc, description: 'The request line.' },
           responseLoc: { ...loc, description: 'The `-->` line that answered the request.' },
+          deferredResponse: object(
+            { after: { type: 'integer', minimum: 1, description: 'The `-->` is written after this many steps of the scenario.' }, group: { ...int, description: 'The `par` group the `-->` is written in.' } },
+            ['after'],
+            'Set when the `-->` that answers the request is written after other steps: the player plays the answer there, not with the request.',
+          ),
           multiplier: { type: 'integer', minimum: 1, description: '`x200` at the start of the label: the step happens this many times per request (fan-out). Absent means 1.' },
           sizeBytes: { type: 'integer', minimum: 1, description: '`~2MB` at the start of the label: payload size in bytes (decimal units).' },
           access: { enum: ['read', 'write'], description: 'From the HTTP method, or the first word of the label (INSERT, SET, PUBLISH, … write); every request step has one.' },

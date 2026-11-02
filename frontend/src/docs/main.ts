@@ -1,19 +1,36 @@
 import '../design/site.css';
 import './docs.css';
 import { enhance } from '../design/enhance';
+import { anchorRedirect } from './anchorRedirect';
+import { enableZoom } from './zoom';
 
 /*
  * The docs pages are static HTML (plugins/docsSite.ts) and read fine without
  * this script: the sidebar opens as a :target drawer on phones, and the live
  * examples stay highlighted code. With it: the shared header's controls, a
  * drawer that closes on Escape or a tap outside, the "On this page" list
- * following the reading position, and live examples once they near the screen.
+ * following the reading position, pictures that open enlarged, and live
+ * examples once they near the screen.
  */
 
 enhance();
+enableZoom();
 
 const docs = document.querySelector<HTMLElement>('.docs');
 const siteRoot = docs?.dataset.siteRoot ?? '../';
+
+// ---------- old anchors that moved to another page ----------
+
+const redirects = docs?.dataset.anchorRedirects;
+if (redirects) {
+  const map = JSON.parse(redirects) as Record<string, string>;
+  const follow = () => {
+    const to = location.hash && anchorRedirect(map, location.hash, new URL(`${siteRoot}docs/`, location.href).href);
+    if (to) location.replace(to);
+  };
+  follow();
+  window.addEventListener('hashchange', follow);
+}
 
 // ---------- the sidebar drawer (phones) ----------
 

@@ -14,6 +14,8 @@ import 'reactflow/dist/style.css';
 import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
+  ArrowLeft,
+  ChevronRight,
   AlertCircle,
   AlertTriangle,
   BookOpen,
@@ -36,9 +38,12 @@ import {
   Gauge,
   Network,
   ArchiveRestore,
-  Cloud,
-  CloudOff,
   Import,
+  RefreshCw,
+  History,
+  PanelLeft,
+  PanelLeftOpen,
+  Search,
 } from 'lucide-react';
 import { examples, parse, type Diagnostic, type DiagramScenario, type DiagramUseCase, type SourceLoc } from '../../dsl';
 import { toFlowEdges } from '../../dsl/layout';
@@ -53,6 +58,8 @@ import {
   DOCS_KEY,
   addDoc,
   addFile,
+  addFiles,
+  cloudImports,
   currentDoc,
   fileNameOf,
   initialState,
@@ -63,11 +70,12 @@ import {
   selectDoc,
   titleOf,
   updateCurrent,
+  updateDoc,
   type DocumentState,
 } from '../../playground/documents';
 import { createDocStore } from '../../playground/docStore';
 import { groupByEndpoint } from '../../playground/useCaseGroups';
-import { filesResolver, importableFiles, usedImports } from '../../playground/imports';
+import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile } from '../../playground/imports';
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
@@ -76,10 +84,13 @@ import type { Diagram } from '../../dsl/types';
 import Palette, { TECH_DRAG_TYPE } from '../Diagram/Palette';
 import Inspector from '../Diagram/Inspector';
 import FlowParticles from '../Overlay/FlowParticles';
-import { analysisOverlay, type SimOverlay } from '../../sim/overlay';
+import type { SimOverlay } from '../../sim/overlay';
 import ComponentNode from '../Canvas/ComponentNode';
 import GroupNode from '../Canvas/GroupNode';
+import SystemNode from '../Canvas/SystemNode';
 import TextNode from '../Canvas/TextNode';
+import { SystemActionsContext, type SystemActions, type SystemNodeData } from '../Canvas/systemActions';
+import { useSystemView, type Crumb } from './useSystemView';
 import PaneLoading from '../PaneLoading';
 import ViewTabs from '../Analysis/ViewTabs';
 import { parseView, type View } from '../Analysis/view';
@@ -100,7 +111,14 @@ import { useKeyboardViewport } from './useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from './Zen';
 import EditorZone from './EditorZone';
 import CloudSection, { CloudIcon } from './CloudStatus';
+import FileSidebar, { type FileActions } from './FileSidebar';
+import QuickOpen from './QuickOpen';
+import { addDocIn, brokenImports, docsInFolder, duplicateDoc, folderOf, moveDoc, removeFolder, renameFolder } from '../../playground/folders';
 import { useCloudSync } from './useCloudSync';
+import { useCloudFiles } from './useCloudFiles';
+import { withCloudErrors } from '../../playground/cloudRefs';
+import type { VersionInfo } from '../../playground/versions';
+import type { VersionMode } from './VersionViewer';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
 import Tabs from '../../design/Tabs';
 import HelpMenu from '../../onboarding/HelpMenu';
@@ -118,6 +136,8 @@ const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
+const VersionsDialog = lazy(() => import('./VersionsDialog'));
+const VersionViewer = lazy(() => import('./VersionViewer'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
 const TourHint = lazy(() => import('../../onboarding/TourHint'));
@@ -128,11 +148,15 @@ const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
+/** Whether the diagrams sidebar is open, on wider screens. */
+const FILES_KEY = 'proschi.playground.files';
+const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
 const nodeTypes = {
   componentNode: ComponentNode,
   groupNode: GroupNode,
+  systemNode: SystemNode,
   textNode: TextNode,
 };
 
@@ -184,6 +208,12 @@ export default function Playground() {
   const docState = useSyncExternalStore(docStore.subscribe, docStore.get);
   const setDocState = docStore.set;
   const current = currentDoc(docState);
+  /**
+   * The `cloud:` files a share link bundled, for the diagram it opened. They are never
+   * saved with it (storedImports): only used, while open, where a version cannot be fetched.
+   */
+  const [linkCloud, setLinkCloud] = useState(() => ({ docId: docStore.get().currentId, files: cloudImports(decodeShareLink(window.location.hash)?.imports) }));
+  const linkCloudFiles = linkCloud.docId === current.id ? linkCloud.files : {};
   const source = current.source;
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
@@ -204,19 +234,26 @@ export default function Playground() {
   // A link may point at a use case step; open straight into playback there.
   const [linkPlayback] = useState(() => decodeShareLink(window.location.hash)?.playback);
   const [parsedSource, setParsedSource] = useState(source);
+  /** Short links and cloud sources, signed in on a build with accounts; `off` elsewhere. */
+  const account = useAccount(noop);
   const [selectedUseCaseId, setSelectedUseCaseId] = useState<string | undefined>(linkPlayback?.useCase);
   const [selectedScenarioId, setSelectedScenarioId] = useState<string | undefined>(linkPlayback?.scenario);
   const [playing, setPlaying] = useState(!!linkPlayback);
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
+  /** The diagrams sidebar on wider screens (remembered); phones open it as a drawer instead. */
+  const [filesOpen, setFilesOpen] = useState(() => loadJson<boolean>(FILES_KEY, true));
+  const [drawer, setDrawer] = useState(false);
+  const [quickOpen, setQuickOpen] = useState(false);
   const [showShortLinks, setShowShortLinks] = useState(false);
-  /** Short links, signed in on a build with accounts; `off` elsewhere. */
-  const account = useAccount(noop);
   /** The short link made for a document and its imports, so asking again reuses it. */
   const shortLinkRef = useRef<{ key: string; id: string; url: string } | null>(null);
   const [shortening, setShortening] = useState(false);
   const [showImport, setShowImport] = useState(false);
+  const [showVersions, setShowVersions] = useState(false);
+  /** A saved version open read-only, or two compared, over the editor. */
+  const [versionView, setVersionView] = useState<{ mode: VersionMode; versions: VersionInfo[] } | null>(null);
   /** The code and diagram panes' sizes, as last set with the splitter. */
   const [splitLayout] = useState(() => loadJson<Layout | undefined>(SPLIT_KEY, undefined));
   /** Bumped when the splitter is let go, so the diagram re-fits its new width. */
@@ -231,6 +268,7 @@ export default function Playground() {
   /** The screen band a phone tour card covers; the canvas fits the diagram around it. */
   const [tourCover, setTourCover] = useState<CoverBand | null>(null);
   const editorRef = useRef<CodeEditorHandle>(null);
+  const teamEditorRef = useRef<CodeEditorHandle>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const backupInputRef = useRef<HTMLInputElement>(null);
   const zen = useZenMode();
@@ -249,18 +287,35 @@ export default function Playground() {
 
   // Imports resolve against the other diagrams saved in this browser. Comparing them
   // by value keeps typing in the current diagram from re-parsing before the debounce.
-  const importableKey = JSON.stringify(importableFiles(docState.docs, current));
+  // `cloud:` sources are versions in the signed-in account, fetched before the parse (V6).
+  const accountStatus = account.state.status;
+  const cloudRefs = useCloudFiles(parsedSource, rootPath, { ...current.imports, ...linkCloudFiles }, accountStatus === 'loading' ? null : accountStatus === 'signed-in');
+  const importableKey = JSON.stringify({ ...importableFiles(docState.docs, current), ...linkCloudFiles, ...cloudRefs.files });
+  const cloudErrorsKey = JSON.stringify(cloudRefs.errors);
   const parsed = useMemo(
-    () => parse(parsedSource, { path: rootPath, resolve: filesResolver(JSON.parse(importableKey), rootPath) }),
-    [parsedSource, rootPath, importableKey],
+    () =>
+      parse(parsedSource, {
+        path: rootPath,
+        resolve: withCloudErrors(filesResolver(JSON.parse(importableKey), rootPath), JSON.parse(cloudErrorsKey), cloudRefs.loading),
+      }),
+    [parsedSource, rootPath, importableKey, cloudErrorsKey, cloudRefs.loading],
   );
   const { diagram, diagnostics } = parsed;
   const simulation = useSimulation(diagram);
+  /** What the canvas shows of the document's systems: collapsed, expanded in place, or navigated into. */
+  const systems = useSystemView(current.id, diagram, simulation.analysis, simulation.results);
+  const { shown } = systems;
+  /** Navigated into a system: its team file, which the code pane shows instead of the document. */
+  const team = useMemo(() => (systems.focusFile ? teamFileOf(docState.docs, current, systems.focusFile, cloudRefs.files) : undefined), [systems.focusFile, docState.docs, current, cloudRefs.files]);
+  const teamDiagnostics = useMemo(() => (team ? diagnostics.filter((d) => d.file === team.path) : []), [team, diagnostics]);
+  const editTeam = (next: string) => {
+    if (team?.docId) setDocState((s) => updateDoc(s, team.docId!, next));
+  };
   const imports = useMemo(() => usedImports(parsed, JSON.parse(importableKey), rootPath), [parsed, importableKey, rootPath]);
   const importsKey = JSON.stringify(imports);
   const rootDiagnostics = useMemo(() => diagnostics.filter((d) => d.file === undefined), [diagnostics]);
-  /** Nodes declared in imported files (id → file); canvas edits leave them alone. */
-  const importedNodes = useMemo(() => new Map(diagram.nodes.flatMap((n) => (n.loc.file ? [[n.id, n.loc.file] as const] : []))), [diagram]);
+  /** Nodes declared in imported files or team designs (id → file); canvas edits leave them alone. */
+  const importedNodes = useMemo(() => new Map(shown.nodes.flatMap((n) => (n.loc.file ? [[n.id, n.loc.file] as const] : []))), [shown]);
   const [notice, setNotice] = useState<string | null>(null);
   // A link that could not be opened says so; the banner also carries long-link and backup messages.
   const [banner, setBanner] = useState<BannerMessage | null>(() => {
@@ -281,13 +336,14 @@ export default function Playground() {
     return () => clearTimeout(timer);
   }, [notice]);
   const nodeIds = useMemo(() => diagram.nodes.map((n) => n.id), [diagram]);
-  const useCase = diagram.useCases.find((u) => u.id === selectedUseCaseId) ?? diagram.useCases[0];
+  // Use cases play on what the canvas shows, so navigated into a team design they are that team's.
+  const useCase = shown.useCases.find((u) => u.id === selectedUseCaseId) ?? shown.useCases[0];
   const scenario = useCase?.scenarios.find((s) => s.id === selectedScenarioId) ?? useCase?.scenarios[0];
   const hasScenarios = (useCase?.scenarios.length ?? 0) > 1;
   const playback: PlaybackTarget | undefined =
     playing && useCase ? { useCase: useCase.id, ...(hasScenarios && scenario ? { scenario: scenario.id } : {}), step: playStep + 1 } : undefined;
   const playbackKey = playback ? `${playback.useCase}/${playback.scenario ?? ''}#${playback.step}` : '';
-  const useCaseGroups = useMemo(() => groupByEndpoint(diagram.useCases), [diagram]);
+  const useCaseGroups = useMemo(() => groupByEndpoint(shown.useCases), [shown]);
   // The player restarts when this changes, so each scenario starts at its first step.
   const playedUseCase = useMemo(
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
@@ -309,6 +365,7 @@ export default function Playground() {
       (share) => {
         if (cancelled) return;
         openDoc((s) => openShared(s, share.source, share.imports));
+        setLinkCloud({ docId: docStore.get().currentId, files: cloudImports(share.imports) });
         dropParam(encodeShareHash(share.source, undefined, share.imports));
       },
       (error: unknown) => {
@@ -344,15 +401,19 @@ export default function Playground() {
   const [nodes, setNodes] = useState<Node[]>([]);
   /** "Overlay: load": the analysis drawn on the diagram, for documents with a traffic block. */
   const [overlayOn, setOverlayOn] = useState(false);
-  const canOverlay = (diagram.traffic?.length ?? 0) > 0;
-  const overlay = useMemo(
-    () => (overlayOn && canOverlay ? analysisOverlay(diagram, simulation.analysis) : undefined),
-    [overlayOn, canOverlay, diagram, simulation.analysis],
-  );
+  const canOverlay = (shown.traffic?.length ?? 0) > 0;
+  const { overlayOf, summaries } = systems;
+  const overlay = useMemo(() => (overlayOn && canOverlay ? overlayOf() : undefined), [overlayOn, canOverlay, overlayOf]);
   const shownNodes = useMemo(
-    () => (overlay ? nodes.map((n) => (overlay.nodes[n.id] ? { ...n, data: { ...n.data, overlay: overlay.nodes[n.id] } } : n)) : nodes),
-    [nodes, overlay],
+    () =>
+      nodes.map((n) => {
+        const load = overlay?.nodes[n.id];
+        const system = summaries.get(n.id);
+        return load || system ? { ...n, data: { ...n.data, ...(load ? { overlay: load } : {}), ...(system ? { system } : {}) } } : n;
+      }),
+    [nodes, overlay, summaries],
   );
+  const systemActions = useMemo<SystemActions>(() => ({ open: systems.open, toggle: systems.toggle }), [systems.open, systems.toggle]);
   const [edges, setEdges] = useState<Edge[]>([]);
 
   // Usage counts: the first look at the simulation's numbers (the Results or
@@ -366,18 +427,24 @@ export default function Playground() {
   useEffect(() => {
     setEdges((previous) => {
       const selected = new Set(previous.filter((e) => e.selected).map((e) => e.id));
-      return withEdgeStyles(diagram, toFlowEdges(diagram)).map((e) => (selected.has(e.id) ? { ...e, selected: true } : e));
+      return withEdgeStyles(shown, toFlowEdges(shown)).map((e) => (selected.has(e.id) ? { ...e, selected: true } : e));
     });
-  }, [diagram]);
+  }, [shown]);
 
-  // Keep what the user had selected across re-layouts.
+  // Keep what the user had selected across re-layouts, and the size React Flow measured: a node
+  // without one is hidden until measured again, and a re-measure can be lost while the layout glides.
   const showLaidOut = useCallback((laidOut: Node[]) => {
     setNodes((previous) => {
-      const selected = new Set(previous.filter((n) => n.selected).map((n) => n.id));
-      return laidOut.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n));
+      const before = new Map(previous.map((n) => [n.id, n]));
+      return laidOut.map((n) => {
+        const p = before.get(n.id);
+        if (!p) return n;
+        const measured = p.type === n.type && p.width && p.height ? { width: p.width, height: p.height } : {};
+        return p.selected || measured.width ? { ...n, ...measured, ...(p.selected ? { selected: true } : {}) } : n;
+      });
     });
   }, []);
-  const layoutSettled = useAutoLayout(diagram, showLaidOut);
+  const layoutSettled = useAutoLayout(shown, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -391,13 +458,71 @@ export default function Playground() {
     setSelectedScenarioId(undefined);
   };
 
-  const renameDocFile = (id: string, current: string) => {
-    const name = window.prompt('File name (used by import "…")', current);
-    if (name !== null) setDocState((s) => renameFile(s, id, name));
-  };
-
   const deleteDoc = (id: string, title: string) => {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
+  };
+
+  const toggleFiles = () => {
+    if (!window.matchMedia('(min-width: 768px)').matches) return setDrawer((d) => !d);
+    setFilesOpen((open) => {
+      saveJson(FILES_KEY, !open);
+      return !open;
+    });
+  };
+
+  /** Moves or renames files, then warns about the diagrams whose imports stopped finding a file. */
+  const changeFiles = (update: (s: DocumentState) => DocumentState) => {
+    const before = docStore.get();
+    const after = update(before);
+    if (after === before) return;
+    setDocState(after);
+    const broken = brokenImports(before.docs, after.docs);
+    if (broken.length === 0) return;
+    const names = broken.slice(0, 3).map((d) => `"${titleOf(d.source)}"`).join(', ');
+    setBanner({ tone: 'warning', message: `${names}${broken.length > 3 ? ` and ${broken.length - 3} more` : ''} ${broken.length === 1 ? 'has an import that no longer finds its file' : 'have imports that no longer find their files'}; update the import lines.` });
+  };
+
+  // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setDrawer(false);
+      if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
+        e.preventDefault();
+        setQuickOpen(true);
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const fileActions: FileActions = {
+    open: (id) => {
+      if (id !== docState.currentId) openDoc((s) => selectDoc(s, id));
+      setDrawer(false);
+    },
+    create: (folder) => {
+      openDoc((s) => addDocIn(s, BLANK_SOURCE, folder));
+      setDrawer(false);
+    },
+    renameFile: (id, base) =>
+      changeFiles((s) => {
+        const doc = s.docs.find((d) => d.id === id);
+        if (!doc) return s;
+        const folder = folderOf(fileNameOf(doc));
+        const clean = base.replace(/\//g, '-');
+        return renameFile(s, id, folder ? `${folder}/${clean}` : clean);
+      }),
+    move: (id, folder) => changeFiles((s) => moveDoc(s, id, folder)),
+    duplicate: (id) => openDoc((s) => duplicateDoc(s, id)),
+    remove: (id) => {
+      const doc = docStore.get().docs.find((d) => d.id === id);
+      if (doc) deleteDoc(id, titleOf(doc.source));
+    },
+    renameFolder: (from, to) => changeFiles((s) => renameFolder(s, from, to)),
+    removeFolder: (folder) => {
+      const n = docsInFolder(docStore.get().docs, folder).length;
+      if (window.confirm(`Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it? This cannot be undone.`)) openDoc((s) => removeFolder(s, folder));
+    },
   };
 
   const importFile = async (file: File | undefined) => {
@@ -501,7 +626,11 @@ export default function Playground() {
   };
 
   const deleteFromCanvas = (nodeIds: string[], edgeIds: string[]) => {
-    const selectedEdges = diagram.edges.filter((e) => edgeIds.includes(e.id));
+    if (systems.focusFile) {
+      setNotice(`This is the design in ${systems.focusFile}; delete it there.`);
+      return;
+    }
+    const selectedEdges = shown.edges.filter((e) => edgeIds.includes(e.id));
     const importedNode = nodeIds.find((id) => importedNodes.has(id));
     const importedEdge = selectedEdges.find((e) => e.loc.file);
     if (importedNode || importedEdge) {
@@ -565,10 +694,12 @@ export default function Playground() {
 
   /** Adds a catalog component; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
   const addFromCanvas = (tech: string, position?: { x: number; y: number }) => {
+    if (systems.focusFile) return setNotice(`This is the design in ${systems.focusFile}; add components there.`);
     editSource((src) => addNode(src, { name: tech, tech, position }).source);
   };
 
   const connectNodes = (from: string, to: string) => {
+    if (systems.focusFile || importedNodes.has(from) || importedNodes.has(to)) return setNotice(`Declared in ${systems.focusFile ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
     // The connection may already exist in an imported file.
     if (diagram.edges.some((e) => e.source === from && e.target === to)) return;
     editSource((src) => addConnection(src, from, to));
@@ -576,7 +707,12 @@ export default function Playground() {
 
   /** A problem (or test) in an imported file opens that file, if it is saved in this browser. */
   const selectDiagnostic = (d: SourceLoc) => {
+    if (team && d.file === team.path) {
+      teamEditorRef.current?.goTo(d.line, d.col);
+      return;
+    }
     if (d.file === undefined) {
+      if (team) systems.goTo('');
       editorRef.current?.goTo(d.line, d.col);
       return;
     }
@@ -586,9 +722,15 @@ export default function Playground() {
 
   const selectInEditor = useCallback((line: number, col: number, length: number, focus: boolean) => editorRef.current?.select(line, col, length, focus), []);
   const diagramKey = useMemo(() => `${diagram.nodes.map((n) => `${n.id}:${n.name}`).join('|')}#${diagram.edges.length}`, [diagram]);
-  const openExample = (exampleSource: string) =>
-    // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
-    openDoc((s) => (isBlank(currentDoc(s).source) ? removeDoc(addDoc(s, exampleSource), s.currentId) : addDoc(s, exampleSource)));
+  /** Opens a diagram as a new document, with the files it imports (`files`, path → source) saved beside it. */
+  const openExample = (exampleSource: string, files?: Readonly<Record<string, string>>) =>
+    openDoc((s) => {
+      // An example picked while the current diagram is still empty takes its place instead of piling up "Untitled".
+      // It keeps that diagram's folder, as a folder made with "New folder" holds a blank diagram.
+      const blank = currentDoc(s);
+      const next = isBlank(blank.source) ? removeDoc(addDocIn(s, exampleSource, folderOf(fileNameOf(blank))), s.currentId) : addDoc(s, exampleSource);
+      return files ? addFiles(next, files) : next;
+    });
   const openHldExample = () => {
     const example = examples.find((e) => e.id === 'url-shortener');
     if (!example) return;
@@ -597,9 +739,47 @@ export default function Playground() {
     setMobilePane('diagram');
   };
 
+  /** Why this diagram has no versions (they live in the account), with what to do; null when it can have them. */
+  const versionsHint = ((): { message: string; actions: { label: string; run: () => void }[] } | null => {
+    const state = cloud.state;
+    if (state.kind === 'unavailable') return { message: 'Versions are saved in a Proschi account, which this copy of the editor does not have.', actions: [] };
+    if (state.kind === 'signed-out') {
+      return {
+        message: 'Versions live in your Proschi account. Sign in, and this diagram syncs there; then you can save versions of it and use them in other diagrams.',
+        actions: state.providers.map((p) => ({ label: `Sign in with ${p === 'github' ? 'GitHub' : 'Google'}`, run: () => cloud.signIn(p) })),
+      };
+    }
+    if (state.kind === 'off' || !cloud.enabled) return { message: 'Versions live in your account, and cloud sync is off in this browser.', actions: [{ label: 'Turn on cloud sync', run: () => cloud.setEnabled(true) }] };
+    if (cloud.local.has(current.id)) {
+      return {
+        message: 'This diagram stays in this browser only, so it has no versions. Keep it in your account to save versions of it.',
+        actions: cloud.canKeep ? [{ label: 'Keep in cloud', run: () => cloud.keepInCloud(current.id) }] : [],
+      };
+    }
+    if (state.kind === 'loading') return { message: 'Connecting to your account…', actions: [] };
+    if (state.kind === 'offline') return { message: 'Offline: versions are in your account, so they need a connection.', actions: [] };
+    return null;
+  })();
+  const versionDraft = useMemo(() => ({ source, files: JSON.parse(importableKey) as Record<string, string> }), [source, importableKey]);
+  /** "Restore into draft": the version's text replaces the draft's; the version stays as it is, and Undo puts the draft back. */
+  const restoreVersion = (text: string, tag: string) => {
+    const before = source;
+    setSource(text);
+    setVersionView(null);
+    setBanner({
+      message: `Restored version ${tag} into the draft. The version itself is unchanged.`,
+      action: {
+        label: 'Undo',
+        run: () => {
+          setSource(before);
+          setBanner(null);
+        },
+      },
+    });
+  };
+
   const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
-  const sortedDocs = [...docState.docs].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
   return (
     <div
@@ -609,97 +789,48 @@ export default function Playground() {
       data-keyboard={keyboard.open || undefined}
     >
       <ZenCollapse zen={zen.zen}>
-        <Header base="../" current="editor" compact actions={<AccountMenu account={account} />}>
+        <Header base="../" current="editor" compact siteNav={false} actions={<AccountMenu account={account} />}>
         <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+          <button
+            type="button"
+            aria-label="Diagrams"
+            aria-pressed={filesOpen}
+            title="Show or hide the diagrams list (Ctrl+P to jump to one)"
+            onClick={toggleFiles}
+            className={`${toolButton} min-w-0 aria-pressed:md:bg-ink/10`}
+          >
+            <PanelLeft size={16} className="shrink-0" />
+            <span className="max-w-[7.5rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
+            <CloudIcon state={cloud.state} />
+          </button>
           <Menu
-            label="Diagrams"
+            label="File"
             trigger={
               <>
-                <span className="max-w-[7.5rem] sm:max-w-[14rem] truncate">{titleOf(source)}</span>
-                <CloudIcon state={cloud.state} />
+                <span className="max-sm:hidden">File</span>
                 <ChevronDown size={14} />
               </>
             }
           >
             {(close) => (
               <>
-                <div className={`px-3 pt-1 pb-1.5 ${eyebrow}`}>{cloud.state.kind === 'saved' || cloud.state.kind === 'saving' ? 'Your diagrams' : 'Saved in this browser'}</div>
-                <ul className="max-h-72 overflow-y-auto">
-                  {sortedDocs.map((doc) => {
-                    const title = titleOf(doc.source);
-                    const syncing = cloud.enabled && (cloud.state.kind === 'saved' || cloud.state.kind === 'saving');
-                    const browserOnly = syncing && cloud.local.has(doc.id);
-                    return (
-                      <li key={doc.id} className="group flex items-center">
-                        <button
-                          role="menuitem"
-                          onClick={() => {
-                            openDoc((s) => selectDoc(s, doc.id));
-                            close();
-                          }}
-                          className={`flex-1 min-w-0 px-3 py-1.5 text-left text-sm hover:bg-ink/10 ${doc.id === docState.currentId ? 'font-bold text-ink shadow-[inset_4px_0_0_rgb(var(--c-pink))]' : 'text-ink/85'}`}
-                        >
-                          <span className="block truncate">{title}</span>
-                          <span className="block truncate text-xs font-normal text-muted">
-                            {browserOnly && (
-                              <span data-testid="browser-only" className="mr-1 rounded bg-ink/10 px-1 text-ink/80">
-                                This browser only
-                              </span>
-                            )}
-                            {fileNameOf(doc)} · {new Date(doc.updatedAt).toLocaleString()}
-                          </span>
-                        </button>
-                        {syncing &&
-                          (browserOnly ? (
-                            <button
-                              aria-label={`Keep ${title} in your account`}
-                              title={cloud.canKeep ? 'Keep in cloud' : 'Cloud full: move another diagram to this browser only first'}
-                              disabled={!cloud.canKeep}
-                              onClick={() => cloud.keepInCloud(doc.id)}
-                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10 disabled:opacity-40 disabled:hover:bg-transparent"
-                            >
-                              <Cloud size={14} />
-                            </button>
-                          ) : (
-                            <button
-                              aria-label={`Move ${title} to this browser only`}
-                              title="Move to this browser only (frees a cloud slot)"
-                              onClick={() => {
-                                if (window.confirm(`Move "${title}" to this browser only? It is removed from your account and your other devices, and stays here.`)) cloud.moveToBrowser(doc.id);
-                              }}
-                              className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
-                            >
-                              <CloudOff size={14} />
-                            </button>
-                          ))}
-                        <button
-                          aria-label={`Rename file ${fileNameOf(doc)}`}
-                          title="Rename the file imports refer to"
-                          onClick={() => renameDocFile(doc.id, fileNameOf(doc))}
-                          className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10"
-                        >
-                          <Pencil size={14} />
-                        </button>
-                        <button
-                          aria-label={`Delete ${title}`}
-                          onClick={() => deleteDoc(doc.id, title)}
-                          className="mr-1 p-1.5 rounded text-muted hover:text-fail hover:bg-fail/10"
-                        >
-                          <Trash2 size={14} />
-                        </button>
-                      </li>
-                    );
-                  })}
-                </ul>
-                <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<FilePlus size={14} />}
                   onSelect={() => {
-                    openDoc((s) => addDoc(s, BLANK_SOURCE));
+                    fileActions.create(current ? folderOf(fileNameOf(current)) : '');
                     close();
                   }}
                 >
                   New diagram
+                </MenuItem>
+                <MenuItem
+                  icon={<Search size={14} />}
+                  onSelect={() => {
+                    setQuickOpen(true);
+                    close();
+                  }}
+                >
+                  Go to diagram… <span className="ml-auto text-xs text-muted">{MOD_KEY}+P</span>
                 </MenuItem>
                 <MenuItem
                   icon={<BookOpen size={14} />}
@@ -736,6 +867,26 @@ export default function Playground() {
                   }}
                 >
                   Format code <span className="ml-auto text-xs text-muted">Shift+Alt+F</span>
+                </MenuItem>
+                {cloudRefs.any && (
+                  <MenuItem
+                    icon={<RefreshCw size={14} />}
+                    onSelect={() => {
+                      cloudRefs.refresh();
+                      close();
+                    }}
+                  >
+                    Refresh cloud references
+                  </MenuItem>
+                )}
+                <MenuItem
+                  icon={<History size={14} />}
+                  onSelect={() => {
+                    setShowVersions(true);
+                    close();
+                  }}
+                >
+                  Versions…
                 </MenuItem>
                 <div className="my-1 border-t border-ink/10" />
                 <MenuItem
@@ -782,16 +933,6 @@ export default function Playground() {
         />
 
         <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
-          <button
-            onClick={() => setShowExamples(true)}
-            aria-label="Examples"
-            // Phones keep the room for the use case picker; Examples… is in the Diagrams menu there.
-            className={`${toolButton} max-sm:hidden`}
-          >
-            <BookOpen size={16} />
-            <span className="hidden sm:inline">Examples</span>
-          </button>
-
           <select
             aria-label="Use case"
             value={useCase?.id ?? ''}
@@ -800,10 +941,11 @@ export default function Playground() {
               setSelectedScenarioId(undefined);
               setInitialStep(undefined);
             }}
-            disabled={diagram.useCases.length === 0}
-            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[13rem] ${field}`}
+            title={useCase?.name}
+            disabled={shown.useCases.length === 0}
+            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[11rem] truncate ${field}`}
           >
-            {diagram.useCases.length === 0 && <option value="">No use cases</option>}
+            {shown.useCases.length === 0 && <option value="">No use cases</option>}
             {useCaseGroups.map((group) =>
               group.label ? (
                 <optgroup key={group.label} label={group.label}>
@@ -954,10 +1096,24 @@ export default function Playground() {
         </div>
       </ZenCollapse>
 
+      <div className="flex flex-1 min-h-0">
+      {!zen.zen &&
+        (filesOpen ? (
+          <div className="max-md:hidden w-60 shrink-0 border-r-bw-1 border-ink">
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={toggleFiles} />
+          </div>
+        ) : (
+          // Folded: a rail that brings the diagrams back.
+          <div className="max-md:hidden shrink-0 flex flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface px-1 py-2">
+            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+              <PanelLeftOpen size={16} />
+            </button>
+          </div>
+        ))}
       {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
       <Group
         id="playground-split"
-        className="flex-1 min-h-0 max-md:[&>[data-mobile-hidden]]:!hidden"
+        className="flex-1 min-h-0 min-w-0 max-md:[&>[data-mobile-hidden]]:!hidden"
         defaultLayout={splitLayout}
         onLayoutChanged={(layout, meta) => {
           if (!meta.isUserInteraction) return;
@@ -971,9 +1127,24 @@ export default function Playground() {
             data-tour="code"
             className="flex flex-1 min-h-0 min-w-0 flex-col"
           >
-            <div className="flex-1 min-h-0">
+            {team && <TeamFileBar team={team} up={systems.crumbs[systems.crumbs.length - 2]} onBack={systems.goTo} />}
+            {/* Hidden, not unmounted, while a team file is shown, so the document keeps its cursor and undo history. */}
+            <div className="flex-1 min-h-0" hidden={!!team}>
               <CodeEditor ref={editorRef} value={source} onChange={typeSource} diagnostics={rootDiagnostics} nodeIds={nodeIds} />
             </div>
+            {team && (
+              <div className="flex-1 min-h-0">
+                <CodeEditor
+                  key={team.path}
+                  ref={teamEditorRef}
+                  value={team.source}
+                  onChange={editTeam}
+                  readOnly={!!team.readOnly}
+                  diagnostics={teamDiagnostics}
+                  nodeIds={shown.nodes.map((n) => n.id)}
+                />
+              </div>
+            )}
             <DiagnosticsPanel diagnostics={diagnostics} onSelect={selectDiagnostic} />
           </EditorZone>
         </SplitPanel>
@@ -1021,6 +1192,7 @@ export default function Playground() {
                   >
                     {(pv) => (
                       <ReactFlowProvider>
+                        <SystemActionsContext.Provider value={systemActions}>
                         <DiagramView
                           nodes={pv.nodes}
                           playback={pv}
@@ -1030,15 +1202,21 @@ export default function Playground() {
                           edges={pv.edges}
                           onNodesChange={setNodes}
                           onEdgesChange={setEdges}
-                          title={diagram.title}
-                          hasPinnedNodes={diagram.nodes.some((n) => n.position)}
+                          title={shown.title}
+                          hasPinnedNodes={!systems.focusFile && shown.nodes.some((n) => n.position)}
                           importedNodes={importedNodes}
                           onMoveNodes={moveNodes}
                           onConnectNodes={connectNodes}
                           onRenameNode={renameFromCanvas}
                           onAddNode={addFromCanvas}
                           onEdit={editSource}
-                          diagram={diagram}
+                          diagram={shown}
+                          crumbs={systems.crumbs}
+                          focusFile={systems.focusFile}
+                          focusReadOnly={!team || !!team.readOnly}
+                          focusInbound={systems.focusInbound}
+                          onCrumb={systems.goTo}
+                          onOpenSystem={(id) => (summaries.get(id)?.linked ? systems.open(id) : setNotice(`'${id}' is declared without a design; add from "file" to its block to open it.`))}
                           onResetLayout={() => editSource(clearPositions)}
                           onDelete={deleteFromCanvas}
                           fitKey={`${mobilePane}:${layoutSettled}`}
@@ -1049,6 +1227,7 @@ export default function Playground() {
                           onNotice={setNotice}
                           cover={tour === 'tour' ? tourCover : null}
                         />
+                        </SystemActionsContext.Provider>
                       </ReactFlowProvider>
                     )}
                   </UseCasePlayback>
@@ -1056,7 +1235,8 @@ export default function Playground() {
               </Suspense>
               {nodes.length === 0 && !playing && view === 'diagram' &&
                 (isBlank(source) ? (
-                  <div className="absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
+                  // Click-through, so the canvas's own Add component button (under this) still works.
+                  <div className="pointer-events-none absolute inset-0 flex items-center justify-center overflow-y-auto p-4">
                     <Suspense fallback={null}>
                       <StarterCard onTemplate={setSource} onExamples={() => setShowExamples(true)} />
                     </Suspense>
@@ -1072,13 +1252,31 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
+      </div>
+
+      {drawer && (
+        <div className="md:hidden fixed inset-0 z-40 bg-black/40" onMouseDown={() => setDrawer(false)}>
+          <div className="h-full w-[min(20rem,85vw)] border-r-bw-2 border-ink shadow-brutal-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onClose={() => setDrawer(false)} />
+          </div>
+        </div>
+      )}
+
+      {quickOpen && (
+        <QuickOpen
+          docs={docState.docs}
+          currentId={docState.currentId}
+          onOpen={(id) => fileActions.open(id)}
+          onClose={() => setQuickOpen(false)}
+        />
+      )}
 
       {showExamples && (
         <Suspense fallback={<PaneLoading overlay />}>
           <ExamplesGallery
             onClose={() => setShowExamples(false)}
-            onPick={(picked) => {
-              openExample(picked);
+            onPick={(picked, files) => {
+              openExample(picked, files);
               setShowExamples(false);
             }}
           />
@@ -1092,6 +1290,47 @@ export default function Playground() {
             onDeleted={(id) => {
               if (shortLinkRef.current?.id === id) shortLinkRef.current = null;
             }}
+          />
+        </Suspense>
+      )}
+
+      {showVersions && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <VersionsDialog
+            docId={current.id}
+            fileName={rootPath}
+            hint={versionsHint}
+            pushedVersion={cloud.pushedVersion}
+            pull={cloud.pull}
+            onView={(tag, listing) => {
+              setShowVersions(false);
+              setVersionView({ mode: { kind: 'view', tag }, versions: listing.versions });
+            }}
+            onCompare={(tag, listing) => {
+              setShowVersions(false);
+              setVersionView({ mode: { kind: 'compare', base: tag, target: '' }, versions: listing.versions });
+            }}
+            onCopy={(text, message) => {
+              void copyText(text, 'Copy this:');
+              setBanner({ message });
+            }}
+            onClose={() => setShowVersions(false)}
+          />
+        </Suspense>
+      )}
+
+      {versionView && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <VersionViewer
+            docId={current.id}
+            fileName={rootPath}
+            versions={versionView.versions}
+            mode={versionView.mode}
+            onMode={(mode) => setVersionView((v) => (v ? { ...v, mode } : v))}
+            draft={versionDraft}
+            cloudFiles={cloudRefs.files}
+            onClose={() => setVersionView(null)}
+            onRestore={restoreVersion}
           />
         </Suspense>
       )}
@@ -1249,6 +1488,17 @@ interface DiagramViewProps {
   cover?: CoverBand | null;
   /** The use case playing over the diagram, if any; the canvas is read-only meanwhile. */
   playback: PlaybackView;
+  /** Where the canvas is among the document's systems, top first; one crumb at the top. */
+  crumbs: Crumb[];
+  /** The team file shown when navigated into a system; the canvas cannot edit it. */
+  focusFile?: string;
+  /** The team file cannot be edited in the code pane (it came with a link, or from a remote source). */
+  focusReadOnly?: boolean;
+  /** What the rest of the document sends into the design navigated into. */
+  focusInbound?: string;
+  onCrumb: (path: string) => void;
+  /** Navigates into a system box (double-click). */
+  onOpenSystem: (id: string) => void;
 }
 
 /** Renders the parsed diagram. Canvas edits are written back to the text, which stays the source of truth. */
@@ -1279,6 +1529,12 @@ function DiagramView({
   onNotice,
   cover,
   playback,
+  crumbs,
+  focusFile,
+  focusReadOnly,
+  focusInbound,
+  onCrumb,
+  onOpenSystem,
 }: DiagramViewProps) {
   const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
@@ -1442,7 +1698,12 @@ function DiagramView({
           if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
         }}
         onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
-        onNodeDoubleClick={(_event, node) => !playing && promptRename(node)}
+        // A system box opens its team design; renaming it stays in its settings and the selection bar.
+        onNodeDoubleClick={(_event, node) => {
+          if (playing) return;
+          if (node.type === 'systemNode' || node.data?.system) onOpenSystem(node.id);
+          else promptRename(node);
+        }}
         onSelectionChange={handleSelectionChange}
         // Deleting goes through the text; React Flow's own delete would only hide the node until the next render.
         deleteKeyCode={null}
@@ -1456,7 +1717,12 @@ function DiagramView({
         {overlay && !playing && <FlowParticles flows={overlay.flows} nodes={overlay.nodes} />}
         <Controls showInteractive={false} />
         {playing && <PlaybackMiniMap view={playback} />}
-        {!playing && <Panel position="top-left">
+        {!playing && crumbs.length > 1 && (
+          <Panel position="top-left">
+            <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
+          </Panel>
+        )}
+        {!playing && crumbs.length === 1 && <Panel position="top-left">
           <div className="relative">
             <button
               type="button"
@@ -1566,12 +1832,76 @@ function DiagramView({
             edge={selectedNode ? undefined : selectedEdge}
             capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
             importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
+            system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
             onEdit={onEdit}
             onDelete={deleteSelection}
             onClose={() => setClosedSettings(single.id)}
           />
         </div>
       )}
+    </div>
+  );
+}
+
+/** Where the canvas is among the document's systems (Drone startup › Order Processing), with the way back. */
+function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crumb[]; file?: string; readOnly?: boolean; inbound?: string; onPick: (path: string) => void }) {
+  const up = crumbs[crumbs.length - 2];
+  return (
+    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
+      <div className="flex min-w-0 items-center gap-1">
+        <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
+          <ArrowLeft size={15} />
+        </button>
+        <ol className="flex min-w-0 items-center gap-1 text-sm">
+          {crumbs.map((c, i) => {
+            const last = i === crumbs.length - 1;
+            return (
+              <li key={c.path} className={`flex items-center gap-1 ${last ? 'min-w-0' : 'flex-none max-sm:[&:not(:first-child)]:hidden'}`}>
+                {i > 0 && <ChevronRight size={14} className="flex-none text-muted" aria-hidden="true" />}
+                {last ? (
+                  <span aria-current="page" className="truncate font-bold text-ink">
+                    {c.name}
+                  </span>
+                ) : (
+                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
+                    {c.name}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+        </ol>
+        {file && (
+          <span className="ml-2 hidden flex-none font-mono text-xs text-muted md:inline" title={readOnly ? 'This design is in its own file, which cannot be edited here' : 'This design is in its own file, open in the code pane'}>
+            {file}
+            {readOnly && ' · read-only'}
+          </span>
+        )}
+      </div>
+      {inbound && (
+        <span className="min-w-0 truncate pb-0.5 pl-9 text-xs font-semibold text-ink/75" title="The load shown includes what the rest of the document sends into this design">
+          {inbound}
+        </span>
+      )}
+    </nav>
+  );
+}
+
+/** Above the code pane while it shows a team file: which file, whether it can be edited here, and the way back. */
+function TeamFileBar({ team, up, onBack }: { team: TeamFile; up: Crumb; onBack: (path: string) => void }) {
+  return (
+    <div className="border-b border-ink/15 bg-surface py-1 pl-1 pr-3 text-xs" aria-label="Team file" role="group">
+      <div className="flex min-w-0 items-center gap-2">
+        <button type="button" onClick={() => onBack(up.path)} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-auto flex-none gap-1 !px-2 text-xs font-semibold`}>
+          <ArrowLeft size={14} aria-hidden="true" />
+          <span className="max-w-[8rem] truncate">{up.name}</span>
+        </button>
+        <span className="min-w-0 truncate font-mono text-ink" title={team.path}>
+          {team.path}
+        </span>
+        <span className={`ml-auto flex-none ${team.readOnly ? 'font-bold text-ink' : 'text-muted'}`}>{team.readOnly ? 'Read-only' : 'Saved in this browser'}</span>
+      </div>
+      {team.readOnly && <p className="pb-0.5 pl-2 pt-0.5 text-ink/75">{team.readOnly}</p>}
     </div>
   );
 }
