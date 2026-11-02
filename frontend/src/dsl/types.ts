@@ -26,6 +26,11 @@ export interface FlowStep {
   conditionExpression?: string;
   /** The call never got an answer (connection refused, timeout); written `a -x b`. */
   failed?: boolean;
+  /**
+   * The `-->` that answers this step is written after other steps, so the player
+   * plays it then (after `after` steps; in `par` group `group`), not with the request.
+   */
+  deferredResponse?: { after: number; group?: number };
 }
 
 /** 1-based source position of a construct, used for diagnostics and editor links. */
