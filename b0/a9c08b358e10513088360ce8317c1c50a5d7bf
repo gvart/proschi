@@ -1,0 +1,28 @@
+frontend/e2e/editor.e2e.ts
+  s_3e5d87ba636076::t_ffc333e81bb92f 134
+plugin/hooks/layout.cjs
+  s_3e5d87ba636076::t_6041ef92bf48b4 1-3,5-6,9,18,20-22,24,26-27
+tooling/schema/proschi-diagram.schema.json
+  s_3e5d87ba636076::t_f17fe4aecc11be 892-910
+tooling/src/schema.ts
+  s_3e5d87ba636076::t_f17fe4aecc11be 207
+  s_3e5d87ba636076::t_eb613c700fd51d 208-211
+plugin/hooks/register.js
+  s_3e5d87ba636076::t_6041ef92bf48b4 3153-3155
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "b0a9c08b358e10513088360ce8317c1c50a5d7bf",
+  "prompts": {},
+  "sessions": {
+    "s_3e5d87ba636076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "192177d3-4661-4774-bd30-3fb830b74b34",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
