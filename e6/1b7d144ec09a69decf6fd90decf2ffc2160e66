@@ -1,0 +1,155 @@
+frontend/package-lock.json
+  s_ccbdd72f9a29a1::t_e3cebc7ca8833a 41,57,64-76,1620-1956,3336-3349,3779-3785,3983-3992,5225-5227,5231-5244
+frontend/package.json
+  s_ccbdd72f9a29a1::t_4f92df3e0322e9 49,65
+frontend/postcss.config.js
+  s_ccbdd72f9a29a1::t_fba9113f538983 3
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_ccbdd72f9a29a1::t_fefd383e6d6e58 54,181,191
+frontend/src/components/Analysis/ResultsPanel.tsx
+  s_ccbdd72f9a29a1::t_6422f424f569a0 118,121,127
+frontend/src/components/Canvas/TextNode.tsx
+  s_ccbdd72f9a29a1::t_035b08604d3ca6 20
+frontend/src/components/Demo/demo.css
+  s_ccbdd72f9a29a1::t_9256214109101a 6-10,12-20
+frontend/src/components/Diagram/Inspector.tsx
+  s_ccbdd72f9a29a1::t_f3284a3611ac71 61,235,291
+frontend/src/components/Diagram/Palette.tsx
+  s_ccbdd72f9a29a1::t_d502577a77d28e 60,104,106
+frontend/src/components/ErrorBoundary.tsx
+  s_ccbdd72f9a29a1::t_48a2314a25833e 50
+frontend/src/components/Hld/HldView.tsx
+  s_ccbdd72f9a29a1::t_3f6e090ba55230 60,440,453
+frontend/src/components/Playground/Banner.tsx
+  s_ccbdd72f9a29a1::t_b52a9bcd722431 34
+frontend/src/components/Playground/ExamplesGallery.tsx
+  s_ccbdd72f9a29a1::t_fdfb83cf40288d 107
+frontend/src/components/Playground/FileSidebar.tsx
+  s_ccbdd72f9a29a1::t_5fa076ad19c0dc 48-49,383,394,399,404,462
+frontend/src/components/Playground/ImportDialog.tsx
+  s_ccbdd72f9a29a1::t_dc3716b8fef2e8 132,136
+frontend/src/components/Playground/Menu.tsx
+  s_ccbdd72f9a29a1::t_498d8bae7ecd86 97
+frontend/src/components/Playground/Playground.tsx
+  s_ccbdd72f9a29a1::t_66b7003c41f66d 1108,1153,1247,1418,1431,1757,1789,1850,1866,1930,1932,1934
+frontend/src/components/Playground/QuickOpen.tsx
+  s_ccbdd72f9a29a1::t_7c0b34f2d750b2 75
+frontend/src/components/Playground/VersionViewer.tsx
+  s_ccbdd72f9a29a1::t_e25b2d7dca155d 188-189
+frontend/src/components/Playground/VersionsDialog.tsx
+  s_ccbdd72f9a29a1::t_418a4b711db6bf 239,265,271,281,296,300,303
+frontend/src/components/Playground/ui.ts
+  s_ccbdd72f9a29a1::t_7bfacb73430036 6,9,12,15,18,21
+frontend/src/components/UseCases/UseCasePlayback.tsx
+  s_ccbdd72f9a29a1::t_10ee2a9bdf8d9f 298,301,304,307,310,335,346
+frontend/src/design/tailwind3-palette.css
+  s_ccbdd72f9a29a1::t_713753e6d45fce 1-246
+frontend/src/docs/live.css
+  s_ccbdd72f9a29a1::t_a848a2ac3211b6 2-8,11-19
+frontend/src/game/ui/ArcadeRoute.tsx
+  s_ccbdd72f9a29a1::t_6070729ef31f31 146,239,350,360,417
+frontend/src/game/ui/Mascot.tsx
+  s_ccbdd72f9a29a1::t_0461a530711375 37,132
+frontend/src/game/ui/Modes.tsx
+  s_ccbdd72f9a29a1::t_2543af0670266a 84,175,181
+frontend/src/game/ui/Panels.tsx
+  s_ccbdd72f9a29a1::t_9bcbf2844bc56c 34,128,158,163,171,181,231,346,386,530,550,570
+frontend/src/game/ui/Report.tsx
+  s_ccbdd72f9a29a1::t_00d98918ea86b0 110
+frontend/src/game/ui/RunScreen.tsx
+  s_ccbdd72f9a29a1::t_480c7974db0de7 741
+frontend/src/game/ui/Twists.tsx
+  s_ccbdd72f9a29a1::t_1b94304380a23c 51,61,76,81,100
+frontend/src/game/ui/gameIcons.tsx
+  s_ccbdd72f9a29a1::t_356cd0a4ed78ff 160
+frontend/src/index.css
+  s_ccbdd72f9a29a1::t_f259edfccee0ab 1,3-27
+frontend/src/onboarding/CheatSheet.tsx
+  s_ccbdd72f9a29a1::t_1bda18fe8ce91b 46
+frontend/src/onboarding/EditorTour.tsx
+  s_ccbdd72f9a29a1::t_f15c409a848906 37
+frontend/src/onboarding/StarterCard.tsx
+  s_ccbdd72f9a29a1::t_be7b1e4a29d8d6 11,21,25,32,39
+frontend/src/onboarding/Tour.tsx
+  s_ccbdd72f9a29a1::t_3402c13ba9753d 225,255
+frontend/src/practice/Badges.tsx
+  s_ccbdd72f9a29a1::t_c51bf000dbac12 14-16,27
+frontend/src/practice/CommunityStats.tsx
+  s_ccbdd72f9a29a1::t_17d81fddd8268f 19,77,86
+frontend/src/practice/LeaderboardPanel.tsx
+  s_ccbdd72f9a29a1::t_3701fd4d565060 37
+frontend/src/practice/LessonQuiz.tsx
+  s_ccbdd72f9a29a1::t_bf20fac7ccb176 54,65,112,170,228
+frontend/src/practice/LessonView.tsx
+  s_ccbdd72f9a29a1::t_f0e5dba14d9f95 13
+frontend/src/practice/Markdown.tsx
+  s_ccbdd72f9a29a1::t_3351b98186e43f 124,148,232
+frontend/src/practice/MistakePanel.tsx
+  s_ccbdd72f9a29a1::t_cba7663a643d59 56,58,75
+frontend/src/practice/ProblemBoards.tsx
+  s_ccbdd72f9a29a1::t_93a7afa099ecd6 59,77,83
+frontend/src/practice/ProblemFilters.tsx
+  s_ccbdd72f9a29a1::t_b1063cbfaeeaed 65,163
+frontend/src/practice/ProblemList.tsx
+  s_ccbdd72f9a29a1::t_91e9f474b8f274 61,69
+frontend/src/practice/ProblemPage.tsx
+  s_ccbdd72f9a29a1::t_f2dcbbda36d661 642,652-653,670,729
+frontend/src/practice/RoadmapView.tsx
+  s_ccbdd72f9a29a1::t_c24bdf4f221a56 128,130,139,225,256,266,285
+frontend/src/practice/SolveCelebration.tsx
+  s_ccbdd72f9a29a1::t_eed5bc8d0a2655 183
+frontend/src/practice/Streak.tsx
+  s_ccbdd72f9a29a1::t_7cdbd6d3558701 32,73,91,119
+frontend/src/practice/TestPanel.tsx
+  s_ccbdd72f9a29a1::t_1c4dd12a1809ba 34,108,128,133,139,158,160,162,207,218
+frontend/src/practice/challenge/ChallengeRoute.tsx
+  s_ccbdd72f9a29a1::t_347f4dc356b032 631,661,806
+frontend/src/practice/hub/PracticeHub.tsx
+  s_ccbdd72f9a29a1::t_a9a4365e8c592b 19
+frontend/src/practice/hub/TodayPanel.tsx
+  s_ccbdd72f9a29a1::t_a95bd30786f117 23,25
+frontend/src/practice/modes/GuidedPanel.tsx
+  s_ccbdd72f9a29a1::t_cdf8c121b89de0 46,73,75,78
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_ccbdd72f9a29a1::t_e286f70d259f4c 106,175,203,219,250,256,293,341,367
+frontend/src/practice/profile/AccountRoute.tsx
+  s_ccbdd72f9a29a1::t_18394720b8a192 69
+frontend/src/practice/profile/BadgeGrid.tsx
+  s_ccbdd72f9a29a1::t_52cca24769e199 68
+frontend/src/practice/profile/EmailReminders.tsx
+  s_ccbdd72f9a29a1::t_f11a5f7a45c76c 135,154
+frontend/src/practice/profile/ProfileView.tsx
+  s_ccbdd72f9a29a1::t_2995df6e6f24d3 133
+frontend/src/practice/profile/PublicProfileRoute.tsx
+  s_ccbdd72f9a29a1::t_fb5f3e74ade077 86
+frontend/src/practice/review/ReviewRoute.tsx
+  s_ccbdd72f9a29a1::t_a049058e84d37e 289,295,381
+frontend/src/practice/review/ReviewSession.tsx
+  s_ccbdd72f9a29a1::t_d4cc3702028a64 194,200,228,233,251,307,353,355
+frontend/src/practice/skills/AchievementIcon.tsx
+  s_ccbdd72f9a29a1::t_1385a2bd2274cd 38
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_ccbdd72f9a29a1::t_87db1d667dddd6 273,332
+frontend/src/review/ReviewPanel.tsx
+  s_ccbdd72f9a29a1::t_b85df898dd597b 72,77-78,133
+frontend/src/utils/canvasColors.test.ts
+  s_ccbdd72f9a29a1::t_252c877198fd0a 3,7-9,13
+frontend/src/utils/canvasColors.ts
+  s_ccbdd72f9a29a1::t_4e54d01ea5e8a8 62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "e61b7d144ec09a69decf6fd90decf2ffc2160e66",
+  "prompts": {},
+  "sessions": {
+    "s_ccbdd72f9a29a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b904dd7-1d33-4bb4-bdb3-fce725efe044",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
