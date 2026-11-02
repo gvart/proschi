@@ -131,7 +131,7 @@ test.describe('editor', () => {
     await expect(tabs.getByRole('tab')).toHaveCount(3);
     await tabs.getByRole('tab', { name: /Unknown user/ }).click();
     await expect(tabs.getByRole('tab', { name: /Unknown user/ })).toHaveAttribute('aria-selected', 'true');
-    await expect(stepLabel(page)).toHaveText('Step 1 of 2') // responses (-->) are folded into the calls they answer;
+    await expect(stepLabel(page)).toHaveText('Step 1 of 3') // two calls, then the late response (-->) as a frame of its own
     await expect(page).toHaveURL(/[#&]alt=unknown-user/);
 
     await tabs.getByRole('tab', { name: /Database down/ }).click();
