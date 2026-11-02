@@ -1,0 +1,32 @@
+frontend/src/components/UseCases/UseCasePlayback.tsx
+  s_3e5d87ba636076::t_34d87a8d490adf 30,103,136-137,147-148,151-152,160,172,203,221-222,224,227,277,279,292,296,314-315,363,408,415,426,429
+  s_3e5d87ba636076::t_4714abc7a05bb3 135,223,225-226,282,289,300,330,340,354
+frontend/src/components/UseCases/playbackView.ts
+  s_3e5d87ba636076::t_3b29d0b07f847e 42-70,73-81,99,111-116,119,122,139-142,146-149,157-159
+frontend/src/dsl/parser.ts
+  s_3e5d87ba636076::t_b5f627ec4481a5 2211-2214
+frontend/src/components/UseCases/playbackView.test.ts
+  s_3e5d87ba636076::t_00c38dbcb7e454 58
+  s_3e5d87ba636076::t_ed21212497ca87 4-5,51-57,59-85
+  s_3e5d87ba636076::t_89a83e6a72035a 86
+frontend/src/components/UseCases/AnimatedPlaybackEdge.tsx
+  s_3e5d87ba636076::t_3b29d0b07f847e 75,89-90,98,112
+frontend/src/dsl/types.ts
+  s_3e5d87ba636076::t_b5f627ec4481a5 29-33
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "1fbee361700f73c35b12cce205e5b3ad0bcd7822",
+  "prompts": {},
+  "sessions": {
+    "s_3e5d87ba636076": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "192177d3-4661-4774-bd30-3fb830b74b34",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
