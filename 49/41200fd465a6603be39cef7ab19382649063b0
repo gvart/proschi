@@ -1,0 +1,45 @@
+frontend/src/utils/canvasColors.test.ts
+  s_ccbdd72f9a29a1::t_45e2025933da64 7-8,13
+  s_ccbdd72f9a29a1::t_ad37ce43bfb6f1 3,9
+frontend/src/utils/canvasColors.ts
+  s_ccbdd72f9a29a1::t_ad37ce43bfb6f1 62
+frontend/package.json
+  s_ccbdd72f9a29a1::t_b44def3000d16f 49
+  s_ccbdd72f9a29a1::t_c8892962cff061 65
+frontend/src/index.css
+  s_ccbdd72f9a29a1::t_1d5958ae985e98 7,9-27
+  s_ccbdd72f9a29a1::t_93f3e2bb41abcf 1
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 3-5
+  s_ccbdd72f9a29a1::t_f9df1869a4707b 8
+  s_ccbdd72f9a29a1::t_755e6fd97a1a46 6
+frontend/postcss.config.js
+  s_ccbdd72f9a29a1::t_5d550752d5018d 3
+frontend/src/design/tailwind3-palette.css
+  s_ccbdd72f9a29a1::t_f23874c0ac0d6f 1-246
+frontend/src/components/Demo/demo.css
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 12-20
+  s_ccbdd72f9a29a1::t_ccd0a7c5d28b9d 6,8-10
+  s_ccbdd72f9a29a1::t_4b7228ed770288 7
+frontend/src/docs/live.css
+  s_ccbdd72f9a29a1::t_5e06c83b16297a 5
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 11-19
+  s_ccbdd72f9a29a1::t_d8385aaa94897b 2-4,6-8
+frontend/package-lock.json
+  s_ccbdd72f9a29a1::t_f2a8380157b714 41,57,64-76,1620-1956,3336-3349,3779-3785,3983-3992,5225-5227,5231-5244
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "4941200fd465a6603be39cef7ab19382649063b0",
+  "prompts": {},
+  "sessions": {
+    "s_ccbdd72f9a29a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b904dd7-1d33-4bb4-bdb3-fce725efe044",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
