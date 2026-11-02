@@ -1,0 +1,165 @@
+frontend/postcss.config.js
+  s_ccbdd72f9a29a1::t_5d550752d5018d 3
+frontend/package-lock.json
+  s_ccbdd72f9a29a1::t_f2a8380157b714 41,57,64-76,1620-1956,3336-3349,3779-3785,3983-3992,5225-5227,5231-5244
+frontend/src/utils/canvasColors.ts
+  s_ccbdd72f9a29a1::t_ad37ce43bfb6f1 62
+frontend/src/docs/live.css
+  s_ccbdd72f9a29a1::t_d8385aaa94897b 2-4,6-8
+  s_ccbdd72f9a29a1::t_5e06c83b16297a 5
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 11-19
+frontend/src/utils/canvasColors.test.ts
+  s_ccbdd72f9a29a1::t_45e2025933da64 7-8,13
+  s_ccbdd72f9a29a1::t_ad37ce43bfb6f1 3,9
+frontend/src/design/tailwind3-palette.css
+  s_ccbdd72f9a29a1::t_f23874c0ac0d6f 1-246
+frontend/src/components/Demo/demo.css
+  s_ccbdd72f9a29a1::t_ccd0a7c5d28b9d 6,8-10
+  s_ccbdd72f9a29a1::t_4b7228ed770288 7
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 12-20
+frontend/src/index.css
+  s_ccbdd72f9a29a1::t_f9df1869a4707b 8
+  s_ccbdd72f9a29a1::t_93f3e2bb41abcf 1
+  s_ccbdd72f9a29a1::t_755e6fd97a1a46 6
+  s_ccbdd72f9a29a1::t_2c16be19b1b653 3-5
+  s_ccbdd72f9a29a1::t_1d5958ae985e98 7,9-27
+frontend/package.json
+  s_ccbdd72f9a29a1::t_b44def3000d16f 49
+  s_ccbdd72f9a29a1::t_c8892962cff061 65
+frontend/src/components/Analysis/AnalysisPanel.tsx
+  s_ccbdd72f9a29a1::t_d4841c62d6942e 54,181,191
+frontend/src/components/Analysis/ResultsPanel.tsx
+  s_ccbdd72f9a29a1::t_90fa2e828a9080 118,121,127
+frontend/src/components/Canvas/TextNode.tsx
+  s_ccbdd72f9a29a1::t_e83f62f8acac2f 20
+frontend/src/components/Diagram/Inspector.tsx
+  s_ccbdd72f9a29a1::t_0d24f9d04df56c 61,235,291
+frontend/src/components/Diagram/Palette.tsx
+  s_ccbdd72f9a29a1::t_4e8b05321092ae 60,104,106
+frontend/src/components/ErrorBoundary.tsx
+  s_ccbdd72f9a29a1::t_86e040bbc884c9 50
+frontend/src/components/Hld/HldView.tsx
+  s_ccbdd72f9a29a1::t_52df6164235b67 60,440,453
+frontend/src/components/Playground/Banner.tsx
+  s_ccbdd72f9a29a1::t_64c5a6f143308c 34
+frontend/src/components/Playground/ExamplesGallery.tsx
+  s_ccbdd72f9a29a1::t_c55ad1d9d74628 107
+frontend/src/components/Playground/FileSidebar.tsx
+  s_ccbdd72f9a29a1::t_878d2136cb59fd 48-49,383,394,399,404,462
+frontend/src/components/Playground/ImportDialog.tsx
+  s_ccbdd72f9a29a1::t_28310e3796c6b3 132,136
+frontend/src/components/Playground/Menu.tsx
+  s_ccbdd72f9a29a1::t_3098529a3a002d 97
+frontend/src/components/Playground/Playground.tsx
+  s_ccbdd72f9a29a1::t_44aab0fbc6962c 1108,1153,1247,1418,1431,1757,1789,1850,1866,1930,1932,1934
+frontend/src/components/Playground/QuickOpen.tsx
+  s_ccbdd72f9a29a1::t_429afcc7f62de9 75
+frontend/src/components/Playground/VersionViewer.tsx
+  s_ccbdd72f9a29a1::t_7e7379b8c0b531 188-189
+frontend/src/components/Playground/VersionsDialog.tsx
+  s_ccbdd72f9a29a1::t_9b187923fd2ebf 239,265,271,281,296,300,303
+frontend/src/components/Playground/ui.ts
+  s_ccbdd72f9a29a1::t_6ab9d40b0226c8 6,9,12,15,18,21
+frontend/src/components/UseCases/UseCasePlayback.tsx
+  s_ccbdd72f9a29a1::t_bfe84b881e3263 298,301,304,307,310,335,346
+frontend/src/game/ui/ArcadeRoute.tsx
+  s_ccbdd72f9a29a1::t_44e3478ef9465b 146,239,350,360,417
+frontend/src/game/ui/Mascot.tsx
+  s_ccbdd72f9a29a1::t_5d44dfff3fb327 37,132
+frontend/src/game/ui/Modes.tsx
+  s_ccbdd72f9a29a1::t_22bd291846b4e1 84,175,181
+frontend/src/game/ui/Panels.tsx
+  s_ccbdd72f9a29a1::t_9b9adb4ec4aafe 34,128,158,163,171,181,231,346,386,530,550,570
+frontend/src/game/ui/Report.tsx
+  s_ccbdd72f9a29a1::t_f447366a3f1ecc 110
+frontend/src/game/ui/RunScreen.tsx
+  s_ccbdd72f9a29a1::t_755793de88b116 741
+frontend/src/game/ui/Twists.tsx
+  s_ccbdd72f9a29a1::t_0967a58e47ca25 51,61,76,81,100
+frontend/src/game/ui/gameIcons.tsx
+  s_ccbdd72f9a29a1::t_07ffa8bcf7a295 160
+frontend/src/onboarding/CheatSheet.tsx
+  s_ccbdd72f9a29a1::t_1bf15dd0a3c4f1 46
+frontend/src/onboarding/EditorTour.tsx
+  s_ccbdd72f9a29a1::t_29af45b087ed6b 37
+frontend/src/onboarding/StarterCard.tsx
+  s_ccbdd72f9a29a1::t_642fb6044286cb 11,21,25,32,39
+frontend/src/onboarding/Tour.tsx
+  s_ccbdd72f9a29a1::t_52c8b9fdd0d7e6 225,255
+frontend/src/practice/Badges.tsx
+  s_ccbdd72f9a29a1::t_67f1c82a4ee13b 14-16,27
+frontend/src/practice/CommunityStats.tsx
+  s_ccbdd72f9a29a1::t_97d9462e471045 19,77,86
+frontend/src/practice/LeaderboardPanel.tsx
+  s_ccbdd72f9a29a1::t_7ae2b248f1502b 37
+frontend/src/practice/LessonQuiz.tsx
+  s_ccbdd72f9a29a1::t_565361441c314a 54,65,112,170,228
+frontend/src/practice/LessonView.tsx
+  s_ccbdd72f9a29a1::t_d9719c68f3af6e 13
+frontend/src/practice/Markdown.tsx
+  s_ccbdd72f9a29a1::t_b227866e775c96 124,148,232
+frontend/src/practice/MistakePanel.tsx
+  s_ccbdd72f9a29a1::t_f2e1b44ed29554 56,58,75
+frontend/src/practice/ProblemBoards.tsx
+  s_ccbdd72f9a29a1::t_be0e6012e88b83 59,77,83
+frontend/src/practice/ProblemFilters.tsx
+  s_ccbdd72f9a29a1::t_93c0268366f7ba 65,163
+frontend/src/practice/ProblemList.tsx
+  s_ccbdd72f9a29a1::t_70cc929846f136 61,69
+frontend/src/practice/ProblemPage.tsx
+  s_ccbdd72f9a29a1::t_999f85d9e6016f 642,652-653,670,729
+frontend/src/practice/RoadmapView.tsx
+  s_ccbdd72f9a29a1::t_1b672c88594677 128,130,139,225,256,266,285
+frontend/src/practice/SolveCelebration.tsx
+  s_ccbdd72f9a29a1::t_995d87c0523e6f 183
+frontend/src/practice/Streak.tsx
+  s_ccbdd72f9a29a1::t_c839fc1f0bbd6c 32,73,91,119
+frontend/src/practice/TestPanel.tsx
+  s_ccbdd72f9a29a1::t_9c7a28a67b6a68 34,108,128,133,139,158,160,162,207,218
+frontend/src/practice/challenge/ChallengeRoute.tsx
+  s_ccbdd72f9a29a1::t_cf7831b646bab6 631,661,806
+frontend/src/practice/hub/PracticeHub.tsx
+  s_ccbdd72f9a29a1::t_8a1a180d50d375 19
+frontend/src/practice/hub/TodayPanel.tsx
+  s_ccbdd72f9a29a1::t_40d33cc9aecc6d 23,25
+frontend/src/practice/modes/GuidedPanel.tsx
+  s_ccbdd72f9a29a1::t_b5d5f605cfb87c 46,73,75,78
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_ccbdd72f9a29a1::t_24135c2396118c 106,175,203,219,250,256,293,341,367
+frontend/src/practice/profile/AccountRoute.tsx
+  s_ccbdd72f9a29a1::t_26ce5014ba61e0 69
+frontend/src/practice/profile/BadgeGrid.tsx
+  s_ccbdd72f9a29a1::t_5e847045e575b5 68
+frontend/src/practice/profile/EmailReminders.tsx
+  s_ccbdd72f9a29a1::t_dd8cc3e3d2e017 135,154
+frontend/src/practice/profile/ProfileView.tsx
+  s_ccbdd72f9a29a1::t_e7d93e643f89ba 133
+frontend/src/practice/profile/PublicProfileRoute.tsx
+  s_ccbdd72f9a29a1::t_c642b2e3c7461c 86
+frontend/src/practice/review/ReviewRoute.tsx
+  s_ccbdd72f9a29a1::t_a621669fcac5f7 289,295,381
+frontend/src/practice/review/ReviewSession.tsx
+  s_ccbdd72f9a29a1::t_fe24c8374b42e2 194,200,228,233,251,307,353,355
+frontend/src/practice/skills/AchievementIcon.tsx
+  s_ccbdd72f9a29a1::t_b83a76732cf2cd 38
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_ccbdd72f9a29a1::t_1c94ed82216d60 273,332
+frontend/src/review/ReviewPanel.tsx
+  s_ccbdd72f9a29a1::t_1690a62a7e9b9d 72,77-78,133
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "977ac51e62abce9e1168367b5fd1150194ac2b0a",
+  "prompts": {},
+  "sessions": {
+    "s_ccbdd72f9a29a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b904dd7-1d33-4bb4-bdb3-fce725efe044",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
