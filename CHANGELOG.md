@@ -9,6 +9,14 @@ deployed from `main` and ships with the same changes. From 0.12.0 on,
 [release-please](https://github.com/googleapis/release-please) writes each
 section from the conventional commit titles of the merged pull requests.
 
+## [0.15.1](https://github.com/gvart/proschi/compare/tooling-v0.15.0...tooling-v0.15.1) (2026-11-02)
+
+
+### Fixed
+
+* **editor:** let Add component be clicked on an empty diagram ([#178](https://github.com/gvart/proschi/issues/178)) ([084b6b5](https://github.com/gvart/proschi/commit/084b6b5f1de0a25ae5edfa59865ff9df13981ebb))
+* **playback:** play a response where it is written, and a par group as one frame ([#176](https://github.com/gvart/proschi/issues/176)) ([9339be6](https://github.com/gvart/proschi/commit/9339be60aaf1a3a28a841b253d21dccadcccdd39))
+
 ## [0.15.0](https://github.com/gvart/proschi/compare/tooling-v0.14.0...tooling-v0.15.0) (2026-11-01)
 
 
