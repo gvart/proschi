@@ -3150,6 +3150,9 @@ var Parser = class _Parser {
         }
         answered.add(request2);
         request2.responseLoc = step.loc;
+        if (steps.length > steps.indexOf(request2) + 1 && !(step.parallelGroup !== void 0 && step.parallelGroup === request2.parallelGroup)) {
+          request2.deferredResponse = { after: steps.length, ...step.parallelGroup !== void 0 ? { group: step.parallelGroup } : {} };
+        }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) request2.statusCode = Number(status[1]);
         const payload = splitPayload(status ? status[2] : step.label);

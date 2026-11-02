@@ -39,11 +39,45 @@ const connects = (edge: Edge, step: FlowStep) =>
   (edge.source === step.fromServiceId && edge.target === step.toServiceId) ||
   (edge.target === step.fromServiceId && edge.source === step.toServiceId);
 
-/** The current step, with the earlier steps of its parallel group. */
-export function currentStepsOf(steps: FlowStep[], index: number): FlowStep[] {
-  const group = steps[index]?.parallelGroup;
-  return steps.filter((step, i) => i === index || (i < index && group !== undefined && step.parallelGroup === group));
+/**
+ * One moment of the playback: calls going out (`steps`) and answers coming back
+ * (`responses`) at the same time. A `par` group is one frame, and a `-->` written
+ * after other steps is a frame of its own (or part of its `par` group's frame).
+ */
+export interface Frame {
+  steps: FlowStep[];
+  responses: FlowStep[];
 }
+
+/** The frames of a scenario's steps, in the order they play. */
+export function framesOf(steps: FlowStep[]): Frame[] {
+  const withSteps = new Set(steps.map((step) => step.parallelGroup));
+  const deferred = steps.filter((step) => step.deferredResponse);
+  const groupOf = (step: FlowStep) => (withSteps.has(step.deferredResponse!.group) ? step.deferredResponse!.group : undefined);
+  const frames: Frame[] = [];
+  const groups = new Map<number, Frame>();
+  steps.forEach((step, i) => {
+    const group = step.parallelGroup;
+    const open = group === undefined ? undefined : groups.get(group);
+    if (open) open.steps.push(step);
+    else {
+      const frame: Frame = { steps: [step], responses: group === undefined ? [] : deferred.filter((d) => groupOf(d) === group) };
+      frames.push(frame);
+      if (group !== undefined) groups.set(group, frame);
+    }
+    for (const d of deferred) if (d.deferredResponse!.after === i + 1 && groupOf(d) === undefined) frames.push({ steps: [], responses: [d] });
+  });
+  return frames;
+}
+
+/** The step a frame is about, as an index into the scenario's steps. */
+export function stepIndexOf(steps: FlowStep[], frame: Frame | undefined): number {
+  const step = frame?.steps[0] ?? frame?.responses[0];
+  return Math.max(step ? steps.indexOf(step) : 0, 0);
+}
+
+/** A request is answered on its way back, in one animation, unless the answer is written further down. */
+const answeredLater = (step: FlowStep) => !!step.deferredResponse;
 
 /** Steps between nodes with no architecture edge get a hidden edge so they can still animate. */
 function withStepEdges(edges: Edge[], steps: FlowStep[]): Edge[] {
@@ -62,7 +96,7 @@ function withStepEdges(edges: Edge[], steps: FlowStep[]): Edge[] {
  * Every edge has the playback type either way, so starting playback restyles
  * the canvas instead of remounting its edges.
  */
-export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: PlayedUseCase | undefined, stepIndex: number): PlaybackView {
+export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: PlayedUseCase | undefined, frameIndex: number): PlaybackView {
   if (!useCase || useCase.steps.length === 0) {
     return {
       nodes,
@@ -74,13 +108,18 @@ export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: 
   }
 
   const steps = useCase.steps;
-  const currentSteps = currentStepsOf(steps, stepIndex);
+  const frame = framesOf(steps)[frameIndex] ?? { steps: [], responses: [] };
+  // A request whose answer comes later has no error yet; the answer carries it.
+  const moving = [
+    ...frame.steps.map((step) => ({ step, response: false, error: !answeredLater(step) && isErrorStep(step) })),
+    ...frame.responses.map((step) => ({ step, response: true, error: isErrorStep(step) })),
+  ];
   const highlighted = new Set<string>();
   const errorNodes = new Set<string>();
-  for (const step of currentSteps) {
+  for (const { step, error } of moving) {
     highlighted.add(step.fromServiceId);
     highlighted.add(step.toServiceId);
-    if (isErrorStep(step)) errorNodes.add(step.toServiceId);
+    if (error) errorNodes.add(step.toServiceId);
   }
   // Nodes this scenario never touches fade further than the ones it passes through later.
   const scenarioNodes = new Set(steps.flatMap((step) => [step.fromServiceId, step.toServiceId]));
@@ -97,16 +136,17 @@ export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: 
   }));
 
   const edges = withStepEdges(architectureEdges, steps);
-  const active = new Map<string, FlowStep>();
-  for (const step of currentSteps) {
-    const edge = edges.find((e) => connects(e, step));
-    if (edge && !active.has(edge.id)) active.set(edge.id, step);
+  const active = new Map<string, (typeof moving)[number]>();
+  for (const item of moving) {
+    const edge = edges.find((e) => connects(e, item.step));
+    if (edge && !active.has(edge.id)) active.set(edge.id, item);
   }
 
   const shownEdges: Edge[] = edges.map((edge) => {
-    const step = active.get(edge.id);
-    const isActive = !!step;
-    const isError = !!step && isErrorStep(step);
+    const item = active.get(edge.id);
+    const step = item?.step;
+    const isActive = !!item;
+    const isError = !!item?.error;
     const onPath = steps.some((s) => connects(edge, s));
     return {
       ...edge,
@@ -114,7 +154,9 @@ export function playbackView(nodes: Node[], architectureEdges: Edge[], useCase: 
       data: {
         ...(edge.data || {}),
         isActive,
-        isRequestResponse: step?.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed,
+        isRequestResponse: !item?.response && !!step && !answeredLater(step) && step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed,
+        // An answer rides the edge from the node that answers.
+        reverse: !!item?.response && edge.source !== step?.toServiceId,
         isError,
         failed: !!step?.failed,
       },

@@ -27,7 +27,7 @@ import TextNode from '../Canvas/TextNode';
 import GroupNode from '../Canvas/GroupNode';
 import SystemNode from '../Canvas/SystemNode';
 import { PlaybackClock, PlaybackClockContext, usePlaybackProgress } from './playbackClock';
-import { PLAYBACK_EDGE_TYPES, currentStepsOf, isErrorStep, playbackView, type PlaybackView, type PlayedUseCase } from './playbackView';
+import { PLAYBACK_EDGE_TYPES, framesOf, isErrorStep, playbackView, stepIndexOf, type PlaybackView, type PlayedUseCase } from './playbackView';
 
 const nodeTypes = {
   componentNode: ComponentNode,
@@ -100,6 +100,7 @@ export function UseCasePlayback({
   const [isPlaying, setIsPlaying] = useState(false);
   const [clock] = useState(() => new PlaybackClock());
   const steps = useMemo(() => useCase?.steps ?? [], [useCase]);
+  const frames = useMemo(() => framesOf(steps), [steps]);
 
   const onFinishedRef = useRef(onFinished);
   const autoPlayRef = useRef(autoPlay);
@@ -131,8 +132,9 @@ export function UseCasePlayback({
   useEffect(() => {
     if (useCaseKey !== undefined && firstUseCaseKeyRef.current === undefined) firstUseCaseKeyRef.current = useCaseKey;
     const start = useCaseKey !== undefined && useCaseKey === firstUseCaseKeyRef.current ? (initialStep ?? 0) : 0;
-    setCurrentStepIndex(Math.min(Math.max(start, 0), Math.max(steps.length - 1, 0)));
-    const play = useCaseKey !== undefined && autoPlayRef.current && steps.length > 0;
+    const startFrame = frames.findIndex((frame) => frame.steps.includes(steps[Math.min(Math.max(start, 0), steps.length - 1)]));
+    setCurrentStepIndex(Math.max(startFrame, 0));
+    const play = useCaseKey !== undefined && autoPlayRef.current && frames.length > 0;
     setIsPlaying(play);
     if (play) clock.start();
     else clock.reset();
@@ -142,12 +144,12 @@ export function UseCasePlayback({
 
   // Editing can remove steps; stay within range.
   useEffect(() => {
-    setCurrentStepIndex((index) => Math.min(index, Math.max(steps.length - 1, 0)));
-  }, [steps.length]);
+    setCurrentStepIndex((index) => Math.min(index, Math.max(frames.length - 1, 0)));
+  }, [frames.length]);
 
   useEffect(() => {
-    onStepChange?.(currentStepIndex);
-  }, [currentStepIndex, onStepChange]);
+    onStepChange?.(stepIndexOf(steps, frames[currentStepIndex]));
+  }, [currentStepIndex, onStepChange, steps, frames]);
 
   useEffect(() => () => clock.stop(), [clock]);
 
@@ -155,7 +157,7 @@ export function UseCasePlayback({
   useEffect(() => {
     if (!isPlaying) return;
     const timer = setTimeout(() => {
-      if (currentStepIndex < steps.length - 1) {
+      if (currentStepIndex < frames.length - 1) {
         setCurrentStepIndex(currentStepIndex + 1);
         clock.start();
       } else if (loop) {
@@ -167,7 +169,7 @@ export function UseCasePlayback({
       }
     }, STEP_MS);
     return () => clearTimeout(timer);
-  }, [isPlaying, currentStepIndex, steps.length, loop, clock]);
+  }, [isPlaying, currentStepIndex, frames.length, loop, clock]);
 
   const handlePlay = () => {
     setIsPlaying(true);
@@ -198,7 +200,7 @@ export function UseCasePlayback({
   // Manual steps animate too, so a failed call still shows where it was cut off.
   const handleStepForward = () => {
     handlePause();
-    setCurrentStepIndex((prev) => Math.min(prev + 1, steps.length - 1));
+    setCurrentStepIndex((prev) => Math.min(prev + 1, frames.length - 1));
     clock.start();
   };
 
@@ -216,7 +218,13 @@ export function UseCasePlayback({
 
   // Rebuilt once per step, not on every tick of the packet.
   const view = useMemo(() => playbackView(nodes, edges, useCase, currentStepIndex), [nodes, edges, useCase, currentStepIndex]);
-  const currentSteps = useCase ? currentStepsOf(steps, currentStepIndex) : [];
+  const frame = useCase ? frames[currentStepIndex] : undefined;
+  // What the panel describes: calls going out, then answers coming back.
+  // A request answered later shows its answer (body, status, error) in that frame, not this one.
+  const entries = [
+    ...(frame?.steps ?? []).map((step) => ({ step, response: false, answered: !step.deferredResponse })),
+    ...(frame?.responses ?? []).map((step) => ({ step, response: true, answered: true })),
+  ];
 
   return (
     <div className={`pc-playback h-full flex flex-col ${bare || !useCase ? '' : 'bg-paper'}`} data-playing={useCase ? '' : undefined}>
@@ -266,30 +274,30 @@ export function UseCasePlayback({
               <span className="font-medium text-ink/85">When:</span> {useCase.condition}
             </p>
           )}
-          {currentSteps.length > 1 && (
+          {entries.length > 1 && (
             <div className="mb-2 text-sm font-medium text-pop-blue">
-              ⚡ Parallel Execution ({currentSteps.length} steps running simultaneously)
+              ⚡ Parallel Execution ({entries.length} steps running simultaneously)
             </div>
           )}
-          {currentSteps.map((step, idx) => (
+          {entries.map(({ step, response, answered }, idx) => (
             <div key={step.id || idx} className="mb-4 last:mb-0">
               <div className="flex items-start gap-6">
                 <div className="flex-1 min-w-0">
                   <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
                     <div
                       className={`w-8 h-8 rounded-full flex items-center justify-center font-semibold text-sm ${
-                        isErrorStep(step) ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-pop-blue/15 text-pop-blue'
+                        answered && isErrorStep(step) ? 'bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300' : 'bg-pop-blue/15 text-pop-blue'
                       }`}
                     >
-                      {steps.indexOf(step) + 1}
+                      {response ? '↩' : steps.indexOf(step) + 1}
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h3 className="font-semibold text-ink break-words">{step.stepName}</h3>
+                        <h3 className="font-semibold text-ink break-words">{response ? `Response to ${step.stepName}` : step.stepName}</h3>
                         {step.failed && (
                           <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">Failed</span>
                         )}
-                        {!step.failed && (step.statusCode ?? 0) >= 400 && (
+                        {answered && !step.failed && (step.statusCode ?? 0) >= 400 && (
                           <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">{step.statusCode}</span>
                         )}
                         {step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed && (
@@ -303,8 +311,8 @@ export function UseCasePlayback({
                         )}
                       </div>
                       <p className="text-sm text-muted">
-                        {nodes.find((n) => n.id === step.fromServiceId)?.data.name} →{' '}
-                        {nodes.find((n) => n.id === step.toServiceId)?.data.name}
+                        {nodes.find((n) => n.id === (response ? step.toServiceId : step.fromServiceId))?.data.name} →{' '}
+                        {nodes.find((n) => n.id === (response ? step.fromServiceId : step.toServiceId))?.data.name}
                       </p>
                     </div>
                     {`${step.httpMethod} ${step.endpoint}`.trim() !== step.stepName && (
@@ -319,7 +327,7 @@ export function UseCasePlayback({
                   )}
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 sm:gap-4">
-                    {step.requestBody && (
+                    {!response && step.requestBody && (
                       <div>
                         <div className="text-xs font-medium text-muted mb-1">
                           Request ({FORMAT_LABEL[step.requestFormat]})
@@ -329,7 +337,7 @@ export function UseCasePlayback({
                         </pre>
                       </div>
                     )}
-                    {step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
+                    {answered && step.responseBody && step.executionType !== 'ASYNC_FIRE_AND_FORGET' && (
                       <div>
                         <div className={`text-xs font-medium mb-1 ${isErrorStep(step) ? 'text-red-600 dark:text-red-400' : 'text-muted'}`}>
                           Response ({FORMAT_LABEL[step.responseFormat]}){step.statusCode !== undefined && ` - ${step.statusCode}`}
@@ -343,7 +351,7 @@ export function UseCasePlayback({
                         </pre>
                       </div>
                     )}
-                    {!step.responseBody && !step.failed && (step.statusCode ?? 0) >= 400 && (
+                    {answered && !step.responseBody && !step.failed && (step.statusCode ?? 0) >= 400 && (
                       <div className="text-sm text-red-700 dark:text-red-300">Answered with {step.statusCode}</div>
                     )}
                     {step.failed && (
@@ -352,7 +360,7 @@ export function UseCasePlayback({
                   </div>
                 </div>
               </div>
-              {idx < currentSteps.length - 1 && <hr className="mt-4" />}
+              {idx < entries.length - 1 && <hr className="mt-4" />}
             </div>
           ))}
         </div>
@@ -397,14 +405,14 @@ export function UseCasePlayback({
               )}
               <button
                 onClick={handleStepForward}
-                disabled={currentStepIndex === steps.length - 1}
+                disabled={currentStepIndex === frames.length - 1}
                 className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
                 title="Next step"
               >
                 <ChevronRight size={20} />
               </button>
               <button
-                onClick={() => setCurrentStepIndex(steps.length - 1)}
+                onClick={() => setCurrentStepIndex(frames.length - 1)}
                 className="p-2 text-ink/75 hover:bg-ink/10 rounded-lg transition-colors"
                 title="Go to end"
               >
@@ -415,10 +423,10 @@ export function UseCasePlayback({
             <div className="flex-1">
               <div className="flex items-center gap-3">
                 <span className="text-sm font-medium text-ink/85">
-                  Step {currentStepIndex + 1} of {steps.length}
+                  Step {currentStepIndex + 1} of {frames.length}
                 </span>
                 <PlaybackClockContext.Provider value={clock}>
-                  <ProgressBar step={currentStepIndex} total={steps.length} />
+                  <ProgressBar step={currentStepIndex} total={frames.length} />
                 </PlaybackClockContext.Provider>
               </div>
             </div>

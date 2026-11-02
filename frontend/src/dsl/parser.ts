@@ -2208,6 +2208,10 @@ class Parser {
         }
         answered.add(request);
         request.responseLoc = step.loc;
+        // Written after other steps (and not inside the request's own `par`): the response plays there.
+        if (steps.length > steps.indexOf(request) + 1 && !(step.parallelGroup !== undefined && step.parallelGroup === request.parallelGroup)) {
+          request.deferredResponse = { after: steps.length, ...(step.parallelGroup !== undefined ? { group: step.parallelGroup } : {}) };
+        }
         const status = step.label.match(/^(\d{3})\b\s*([\s\S]*)$/);
         if (status) request.statusCode = Number(status[1]);
         const payload = splitPayload(status ? status[2] : step.label);
