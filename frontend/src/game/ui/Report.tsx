@@ -107,7 +107,7 @@ export default function Report(props: {
       {share && (
         <section aria-label="Share your daily run" className="rounded-brutal border-bw-1 border-ink bg-surface p-3">
           <p className={eyebrow}>Share</p>
-          <p id="arcade-share-text" className="mt-1 whitespace-pre-line break-words rounded border-bw-1 border-ink/30 bg-paper px-3 py-2 font-mono text-sm text-ink">
+          <p id="arcade-share-text" className="mt-1 whitespace-pre-line break-words rounded-sm border-bw-1 border-ink/30 bg-paper px-3 py-2 font-mono text-sm text-ink">
             {share}
           </p>
           <div className="mt-2 flex flex-wrap items-center gap-2">

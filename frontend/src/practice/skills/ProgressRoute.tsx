@@ -270,7 +270,7 @@ export default function ProgressRoute({
           <ul className="mt-3 divide-y divide-ink/15 overflow-hidden rounded-brutal border-bw-2 border-ink bg-surface text-sm shadow-brutal-sm">
             {solved.map((p) => (
               <li key={p.id}>
-                <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25">
+                <a href={`#/${p.id}`} className="flex items-center gap-3 px-4 py-2.5 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25">
                   <span className="min-w-0 flex-1 truncate font-semibold text-ink">{p.title}</span>
                   <DifficultyBadge difficulty={p.difficulty} />
                 </a>
@@ -329,7 +329,7 @@ function NextStep({ roadmap }: { roadmap: RoadmapState }) {
             <ArrowRight size={14} aria-hidden="true" />
           </a>
         )}
-        <a href="#/review" className="inline-flex min-h-[40px] items-center gap-1.5 rounded border-bw-1 border-ink bg-surface px-3 py-1.5 text-sm font-bold text-ink hover:bg-pop-yellow/30">
+        <a href="#/review" className="inline-flex min-h-[40px] items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface px-3 py-1.5 text-sm font-bold text-ink hover:bg-pop-yellow/30">
           <Layers size={14} aria-hidden="true" />
           Review cards
         </a>

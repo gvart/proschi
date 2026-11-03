@@ -286,13 +286,13 @@ export default function ReviewRoute({ account, activity, topic: topicId }: { acc
               <li key={t.topic.id}>
                 <a
                   href={`#/review/${t.topic.id}`}
-                  className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-none focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
+                  className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-hidden focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
                 >
                   <span className="min-w-0 flex-1">
                     <span className="block font-display text-lg font-bold leading-tight text-ink">{t.topic.title}</span>
                     <span className="mt-0.5 block text-sm text-ink/75">{t.topic.summary}</span>
                   </span>
-                  <span className="flex-shrink-0 text-right text-xs tabular-nums text-muted">
+                  <span className="shrink-0 text-right text-xs tabular-nums text-muted">
                     {t.due > 0 && <span className="block font-semibold text-ink">{t.due} due</span>}
                     <span className="block">
                       {t.new} new · {t.total} {t.total === 1 ? 'card' : 'cards'}
@@ -378,7 +378,7 @@ function Summary({
   useEffect(() => heading.current?.focus({ preventScroll: true }), []);
   return (
     <Celebration label="Session summary" tone={tone} className="mt-6">
-      <h2 ref={heading} tabIndex={-1} className="flex items-center gap-2 font-display text-xl font-bold text-ink focus:outline-none">
+      <h2 ref={heading} tabIndex={-1} className="flex items-center gap-2 font-display text-xl font-bold text-ink focus:outline-hidden">
         <Icon size={18} aria-hidden="true" />
         {title}
       </h2>

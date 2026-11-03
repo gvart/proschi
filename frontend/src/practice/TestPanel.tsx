@@ -31,7 +31,7 @@ interface TestPanelProps {
 }
 
 const viewButton = (on: boolean) =>
-  `flex-none inline-flex items-center gap-1.5 rounded px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
+  `flex-none inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-sm font-bold border-bw-1 ${on ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`;
 
 /** Run tests, then every requirement and test with what was measured and how to fix it. */
 export default function TestPanel({ run, stale, diagnostics, onRun, running = false, onSelect, community, review, celebration, mistake, collapsed = false, onToggle }: TestPanelProps) {
@@ -105,7 +105,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, running = fa
             aria-expanded={!collapsed}
             aria-label={collapsed ? 'Show the test results' : 'Hide the test results'}
             title={collapsed ? 'Show the test results' : 'Hide the test results'}
-            className="inline-flex items-center justify-center w-8 h-8 rounded border-bw-1 border-transparent text-ink/75 hover:border-ink hover:text-ink"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-sm border-bw-1 border-transparent text-ink/75 hover:border-ink hover:text-ink"
           >
             {collapsed ? <ChevronUp size={16} /> : <ChevronDown size={16} />}
           </button>
@@ -125,18 +125,18 @@ export default function TestPanel({ run, stale, diagnostics, onRun, running = fa
           {!run && !running && <p className="px-3 py-4 text-muted">Run the tests to check your design against the problem’s requirements.</p>}
 
           {run?.blocked === 'no-engine' && (
-            <p className="m-3 rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
+            <p className="m-3 rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
               The simulation is not available yet, so tests cannot run. You can still design and play your use cases.
             </p>
           )}
           {run?.blocked === 'errors' && (
-            <p className="m-3 rounded border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink">
+            <p className="m-3 rounded-sm border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink">
               Fix the {errors} error{errors === 1 ? '' : 's'} listed below first; tests run on a document without errors.
             </p>
           )}
 
           {run?.solved && (
-            <div ref={solvedRef} role="status" className="m-3 flex items-center gap-2 rounded border-bw-2 border-ink bg-pass px-3 py-2 text-on-accent shadow-brutal-sm">
+            <div ref={solvedRef} role="status" className="m-3 flex items-center gap-2 rounded-sm border-bw-2 border-ink bg-pass px-3 py-2 text-on-accent shadow-brutal-sm">
               <PartyPopper size={18} />
               <span>
                 <strong>Solved.</strong> Every requirement and test passes. Compare with the reference solution, or try a harder problem.
@@ -155,11 +155,11 @@ export default function TestPanel({ run, stale, diagnostics, onRun, running = fa
                 <li key={i}>
                   <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
                     {d.severity === 'error' ? (
-                      <AlertCircle size={14} className="text-red-600 dark:text-red-400 flex-shrink-0 mt-px" />
+                      <AlertCircle size={14} className="text-red-600 dark:text-red-400 shrink-0 mt-px" />
                     ) : (
-                      <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-px" />
+                      <AlertTriangle size={14} className="text-amber-600 dark:text-amber-400 shrink-0 mt-px" />
                     )}
-                    <span className="text-muted tabular-nums flex-shrink-0">
+                    <span className="text-muted tabular-nums shrink-0">
                       {d.file ? `${d.file}:` : ''}
                       {d.line}:{d.col}
                     </span>
@@ -204,7 +204,7 @@ function ResultList({ results }: { results: RunResult['results'] }) {
     <ul className="divide-y divide-ink/10">
       {results.map((r) => (
         <li key={r.id} className={`flex gap-2 px-3 py-2 ${r.passed ? '' : 'shadow-[inset_4px_0_0_rgb(var(--c-fail))]'}`}>
-          {r.passed ? <CheckCircle2 size={16} className="mt-0.5 flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={16} className="mt-0.5 flex-shrink-0 text-red-600 dark:text-red-400" />}
+          {r.passed ? <CheckCircle2 size={16} className="mt-0.5 shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={16} className="mt-0.5 shrink-0 text-red-600 dark:text-red-400" />}
           <div className="min-w-0">
             <p className="font-medium text-ink">
               {r.name} <span className="ml-1 font-mono text-[11px] font-normal uppercase tracking-wide text-muted">{r.category}</span>
@@ -215,7 +215,7 @@ function ResultList({ results }: { results: RunResult['results'] }) {
               <ul className="mt-1 space-y-0.5">
                 {r.assertions.map((a, i) => (
                   <li key={i} className="flex gap-1.5 text-xs">
-                    {a.passed ? <CheckCircle2 size={13} className="mt-px flex-shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={13} className="mt-px flex-shrink-0 text-red-600 dark:text-red-400" />}
+                    {a.passed ? <CheckCircle2 size={13} className="mt-px shrink-0 text-green-600 dark:text-green-400" /> : <XCircle size={13} className="mt-px shrink-0 text-red-600 dark:text-red-400" />}
                     <span>
                       <span className={a.passed ? 'text-ink/75' : 'text-ink'}>{a.message}</span>
                       {!a.passed && a.hint && <span className="block text-muted">Fix: {a.hint}</span>}

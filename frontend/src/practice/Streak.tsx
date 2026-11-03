@@ -29,7 +29,7 @@ function GoalRing({ progress, done, children }: { progress: number; done: boolea
   const r = 17;
   const length = 2 * Math.PI * r;
   return (
-    <span className="relative inline-flex h-11 w-11 flex-shrink-0 items-center justify-center" aria-hidden="true">
+    <span className="relative inline-flex h-11 w-11 shrink-0 items-center justify-center" aria-hidden="true">
       <svg viewBox="0 0 44 44" className="absolute inset-0 h-full w-full -rotate-90">
         <circle cx="22" cy="22" r={r} fill="none" strokeWidth="5" className="stroke-ink/15" />
         <circle
@@ -70,7 +70,7 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
       </div>
       {streak.freezes > 0 && (
         <span
-          className="ml-1 inline-flex flex-shrink-0 items-center gap-1 rounded-full border-bw-1 border-ink bg-pop-blue/20 px-2 py-0.5 text-xs font-bold tabular-nums text-ink"
+          className="ml-1 inline-flex shrink-0 items-center gap-1 rounded-full border-bw-1 border-ink bg-pop-blue/20 px-2 py-0.5 text-xs font-bold tabular-nums text-ink"
           title="A streak freeze covers a missed day. You earn one for every 7 days in a row, and hold up to 2."
         >
           <Snowflake size={12} aria-hidden="true" />
@@ -88,7 +88,7 @@ export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: 
       <span id="goal-picker" className={eyebrow}>
         Daily goal
       </span>
-      <div role="radiogroup" aria-labelledby="goal-picker" className="inline-flex overflow-hidden rounded border-bw-1 border-ink shadow-brutal-sm">
+      <div role="radiogroup" aria-labelledby="goal-picker" className="inline-flex overflow-hidden rounded-sm border-bw-1 border-ink shadow-brutal-sm">
         {GOAL_CHOICES.map((n) => {
           const on = n === goal.reviews;
           return (
@@ -116,7 +116,7 @@ export function StreakInvite({ account, compact = false }: { account: Account; c
   const providers = account.state.status === 'signed-out' ? account.state.providers : [];
   return (
     <div role="group" aria-label="Daily streak" className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-brutal border-bw-2 border-dashed border-ink/60 bg-surface px-3 py-2">
-      <Flame size={20} className="flex-shrink-0 text-muted" aria-hidden="true" />
+      <Flame size={20} className="shrink-0 text-muted" aria-hidden="true" />
       <p className="min-w-0 flex-1 text-sm text-ink">
         <strong>Keep a daily streak.</strong>
         {!compact && ' Sign in to set a daily goal, count your streak and keep it on every device.'}

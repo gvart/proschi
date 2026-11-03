@@ -1,24 +1,21 @@
-import colors from 'tailwindcss/colors';
-import defaultTheme from 'tailwindcss/defaultTheme';
 import { describe, expect, it } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { CANVAS_FONT, CANVAS_TOKENS, CANVAS_TOKEN_VARS, TAILWIND_HEX } from './canvasColors';
+import { CANVAS_TOKENS, CANVAS_TOKEN_VARS, TAILWIND_HEX } from './canvasColors';
 import { componentTypeColors } from './iconMapping';
 
 describe('TAILWIND_HEX', () => {
+  // The palette is Tailwind 3's, pinned in design/tailwind3-palette.css.
+  const palette = readFileSync(new URL('../design/tailwind3-palette.css', import.meta.url), 'utf8');
+
   it('matches Tailwind’s palette', () => {
     for (const [cls, hex] of Object.entries(TAILWIND_HEX)) {
       const [, color, shade] = cls.match(/^(?:bg|text|border)-([a-z]+)-(\d+)$/)!;
-      expect(hex, cls).toBe((colors as unknown as Record<string, Record<string, string>>)[color][shade]);
+      expect(hex, cls).toBe(palette.match(new RegExp(`--color-${color}-${shade}: (#[0-9a-f]{6});`))![1]);
     }
   });
 
   it('covers every component type colour', () => {
     for (const cls of Object.values(componentTypeColors)) expect(TAILWIND_HEX[cls], cls).toBeDefined();
-  });
-
-  it('uses Tailwind’s sans font stack', () => {
-    expect(CANVAS_FONT.replace(/'/g, '"')).toBe(defaultTheme.fontFamily.sans.join(', '));
   });
 });
 

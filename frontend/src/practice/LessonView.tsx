@@ -10,7 +10,7 @@ export function LessonToc({ blocks, root, className = '' }: { blocks: Block[]; /
   const toc = lessonToc(blocks);
   if (toc.length < 2) return null;
   return (
-    <nav aria-label="Lesson contents" className={`rounded border-bw-1 border-ink bg-paper px-3 py-2 ${className}`}>
+    <nav aria-label="Lesson contents" className={`rounded-sm border-bw-1 border-ink bg-paper px-3 py-2 ${className}`}>
       <p className={eyebrow}>On this page</p>
       <ol className="mt-1 grid gap-x-4 gap-y-0.5 text-sm sm:grid-cols-2">
         {toc.map((entry, i) => (

@@ -185,8 +185,8 @@ export default function VersionViewer({ docId, fileName, versions, mode, onMode,
       )}
       {diff && (diff.nodes.added.length > 0 || diff.nodes.changed.length > 0) && (
         <div className="pointer-events-none absolute left-3 top-3 flex gap-2 text-xs font-semibold">
-          <span className="rounded border border-pass/50 bg-surface px-1.5 py-0.5 text-ink"><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-pass" />new</span>
-          <span className="rounded border border-pop-blue/50 bg-surface px-1.5 py-0.5 text-ink"><span className="mr-1 inline-block h-2 w-2 rounded-sm bg-pop-blue" />changed</span>
+          <span className="rounded-sm border border-pass/50 bg-surface px-1.5 py-0.5 text-ink"><span className="mr-1 inline-block h-2 w-2 rounded-xs bg-pass" />new</span>
+          <span className="rounded-sm border border-pop-blue/50 bg-surface px-1.5 py-0.5 text-ink"><span className="mr-1 inline-block h-2 w-2 rounded-xs bg-pop-blue" />changed</span>
         </div>
       )}
     </div>

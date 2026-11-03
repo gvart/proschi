@@ -31,7 +31,7 @@ export function LearnLinks({ ids, max = 3 }: { ids: readonly string[]; max?: num
       {cards.map((c) => (
         <li key={c.id}>
           <a href={`#/review/${c.topic}`} className="inline-flex items-start gap-1.5 underline decoration-ink/30 underline-offset-2 hover:decoration-ink">
-            <BookOpen size={14} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
+            <BookOpen size={14} aria-hidden="true" className="mt-0.5 shrink-0" />
             <span>
               <span className="text-muted">{topicTitle(c.topic)}:</span> {promptOf(c).replace(/\s+/g, ' ').slice(0, 110)}
               {promptOf(c).length > 110 ? '…' : ''}
@@ -125,7 +125,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
       )}
       <div className="flex flex-wrap items-baseline justify-between gap-2">
         <h3 className="font-display font-extrabold text-lg">
-          {forecast.boss && <span className="mr-1 rounded bg-fail px-1.5 py-0.5 text-xs text-white align-middle">BOSS</span>}
+          {forecast.boss && <span className="mr-1 rounded-sm bg-fail px-1.5 py-0.5 text-xs text-white align-middle">BOSS</span>}
           Wave {forecast.wave + 1}
           {forecast.name ? `: ${forecast.name}` : ''}
         </h3>
@@ -155,12 +155,12 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
       {open && forecast.requirements.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1.5" aria-label="Requirements">
           {forecast.requirements.map((r) => (
-            <li key={r} className="rounded border-bw-1 border-ink/40 bg-paper px-1.5 py-0.5 font-mono text-xs">
+            <li key={r} className="rounded-sm border-bw-1 border-ink/40 bg-paper px-1.5 py-0.5 font-mono text-xs">
               {r}
             </li>
           ))}
           {forecast.freshness.map((f) => (
-            <li key={f.useCase} className="rounded border-bw-1 border-ink/40 bg-paper px-1.5 py-0.5 font-mono text-xs">
+            <li key={f.useCase} className="rounded-sm border-bw-1 border-ink/40 bg-paper px-1.5 py-0.5 font-mono text-xs">
               {scenario.useCases[f.useCase]?.name} background ≤ {f.maxMinutes} min
             </li>
           ))}
@@ -168,7 +168,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
       )}
       {open && forecast.surprises && (
         <p className="mt-2 flex items-start gap-1.5 text-sm text-muted">
-          <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0" />
+          <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 shrink-0" />
           Not every incident is on the forecast any more: some strike unannounced, and one that breaks something can set off another. Keep some headroom, and a hotfix or two in hand.
         </p>
       )}
@@ -178,7 +178,7 @@ export function ForecastPanel({ forecast, scenario, events, act, collapsible, ch
             const def = events.get(e.id);
             return (
             <li key={e.id} className="flex items-start gap-1.5">
-              {def ? <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" /> : <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 flex-shrink-0 text-fail" />}
+              {def ? <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" /> : <AlertTriangle size={15} aria-hidden="true" className="mt-0.5 shrink-0 text-fail" />}
               <span>
                 <strong>{e.title}</strong>
                 {e.from !== undefined ? ` at tick ${e.from}${e.duration > 1 ? `–${e.from + e.duration - 1}` : ''}` : ''}: {e.telegraph}
@@ -228,7 +228,7 @@ export function Palette({ items, placing, onPick, onDragStart, onPointerEnd }: {
             onPointerUp={onPointerEnd}
             onPointerCancel={onPointerEnd}
             onContextMenu={(e) => e.preventDefault()}
-            className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-brutal border-bw-1 px-2.5 py-2 text-sm font-semibold transition-[transform,box-shadow] duration-d1 ${
+            className={`shrink-0 inline-flex items-center gap-1.5 rounded-brutal border-bw-1 px-2.5 py-2 text-sm font-semibold transition-[translate,transform,box-shadow] duration-d1 ${
               placing === def.id ? 'border-ink bg-pop-yellow text-on-accent shadow-brutal-sm -translate-y-0.5' : available ? 'border-ink bg-surface hover:shadow-brutal-sm' : 'border-ink/30 bg-paper text-muted'
             } disabled:cursor-not-allowed`}
           >
@@ -343,7 +343,7 @@ export function Inspector(p: InspectorProps) {
                     disabled={!p.editable}
                     title={`${t.capacity}× capacity for ${t.cost}× the price`}
                     onClick={() => p.onChange({ tier: i })}
-                    className={`w-9 rounded border-bw-1 border-ink py-1 text-sm font-bold ${(p.node.tier ?? 0) === i ? 'bg-pop-yellow text-on-accent' : 'bg-surface'}`}
+                    className={`w-9 rounded-sm border-bw-1 border-ink py-1 text-sm font-bold ${(p.node.tier ?? 0) === i ? 'bg-pop-yellow text-on-accent' : 'bg-surface'}`}
                   >
                     {t.name}
                   </button>
@@ -383,7 +383,7 @@ export function Inspector(p: InspectorProps) {
           <p className="text-sm font-semibold">Calls</p>
           <ul className="mt-1 flex flex-wrap gap-1">
             {out.map((to) => (
-              <li key={to} className="inline-flex items-center gap-1 rounded border-bw-1 border-ink/40 px-1.5 py-0.5 text-xs">
+              <li key={to} className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink/40 px-1.5 py-0.5 text-xs">
                 {name(to)}
                 {p.editable && (
                   <button type="button" aria-label={`Unwire ${name(to)}`} onClick={() => p.onUnwire(to)}>
@@ -527,7 +527,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
             const def = events.get(e.id);
             if (!def) return null;
             return (
-              <details key={e.id} className="rounded border-bw-1 border-ink/40 bg-surface p-2" open={!summary.clean}>
+              <details key={e.id} className="rounded-sm border-bw-1 border-ink/40 bg-surface p-2" open={!summary.clean}>
                 <summary className="cursor-pointer font-semibold">
                   <span className="inline-flex items-center gap-1.5 align-middle">
                     <IconTile name={def.icon} tone={CATEGORY_TILE[def.category]} size="sm" />
@@ -547,7 +547,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
             );
           })}
           {debrief && (
-            <div className="rounded border-bw-1 border-ink bg-pop-lilac/25 p-2">
+            <div className="rounded-sm border-bw-1 border-ink bg-pop-lilac/25 p-2">
               <p className={eyebrow}>Staff engineer’s note</p>
               <p className="mt-1">{debrief}</p>
             </div>
@@ -567,7 +567,7 @@ export function WaveResult({ summary, trustFull, scenario, events, onContinue, c
 /** A breach and its fix; `during` lists the incidents that were on when it happened. */
 export function BreachCard({ breach, count, during }: { breach: Breach; count?: number; during?: readonly EventDef[] }) {
   return (
-    <div className="rounded border-bw-1 border-ink bg-fail/10 p-2">
+    <div className="rounded-sm border-bw-1 border-ink bg-fail/10 p-2">
       <p className="flex items-center gap-1 font-semibold">
         <AlertTriangle size={15} aria-hidden="true" className="text-fail" />
         {BREACH_TITLE[breach.kind]}

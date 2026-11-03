@@ -236,7 +236,7 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                           <div className="min-w-0 flex-1">
                             <div className="flex flex-wrap items-center gap-x-2">
                               <span className="whitespace-nowrap font-mono font-bold">{v.tag}</span>
-                              {i === 0 && <span className="rounded border border-ink/30 px-1 text-[11px] font-bold uppercase tracking-wide text-muted">latest</span>}
+                              {i === 0 && <span className="rounded-sm border border-ink/30 px-1 text-[11px] font-bold uppercase tracking-wide text-muted">latest</span>}
                               <span className="whitespace-nowrap text-xs text-muted">{dateOf(v.createdAt)}</span>
                             </div>
                             {v.note && <div className="truncate text-sm text-ink/80">{v.note}</div>}
@@ -262,13 +262,13 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                           </button>
                         </div>
                         {open === `copy:${v.tag}` && (
-                          <div className="mt-2 flex flex-wrap items-center gap-2 rounded border border-ink/20 bg-ink/5 px-3 py-2 text-sm">
+                          <div className="mt-2 flex flex-wrap items-center gap-2 rounded-sm border border-ink/20 bg-ink/5 px-3 py-2 text-sm">
                             {ref ? (
                               <>
                                 <code className="flex-1 min-w-0 break-all font-mono text-xs">{ref}</code>
                                 <button
                                   type="button"
-                                  className="rounded border-bw-1 border-ink/40 px-2.5 py-1 font-semibold hover:bg-ink/10"
+                                  className="rounded-sm border-bw-1 border-ink/40 px-2.5 py-1 font-semibold hover:bg-ink/10"
                                   onClick={() => {
                                     setOpen(null);
                                     onCopy(ref, `Copied ${ref}`);
@@ -278,7 +278,7 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                                 </button>
                                 <button
                                   type="button"
-                                  className="rounded px-2.5 py-1 font-semibold hover:bg-ink/10"
+                                  className="rounded-sm px-2.5 py-1 font-semibold hover:bg-ink/10"
                                   onClick={() => {
                                     setOpen(null);
                                     onCopy(`system ${systemId(fileName)} {\n  from "${ref}"\n}\n`, `Copied a system block that uses ${ref}`);
@@ -293,14 +293,14 @@ export default function VersionsDialog({ docId, fileName, hint, pushedVersion, p
                           </div>
                         )}
                         {open === `delete:${v.tag}` && (
-                          <div role="group" aria-label={`Delete ${v.tag}?`} className="mt-2 flex flex-wrap items-center gap-2 rounded border border-fail/40 bg-fail/5 px-3 py-2 text-sm">
+                          <div role="group" aria-label={`Delete ${v.tag}?`} className="mt-2 flex flex-wrap items-center gap-2 rounded-sm border border-fail/40 bg-fail/5 px-3 py-2 text-sm">
                             <span className="flex-1 min-w-0">
                               Delete version <span className="font-mono">{v.tag}</span>? Diagrams that use it stop resolving, and the tag can't be reused for this diagram.
                             </span>
-                            <button type="button" className="rounded border-bw-1 border-fail px-2.5 py-1 font-semibold text-fail hover:bg-fail/10" onClick={() => void remove(v.tag)}>
+                            <button type="button" className="rounded-sm border-bw-1 border-fail px-2.5 py-1 font-semibold text-fail hover:bg-fail/10" onClick={() => void remove(v.tag)}>
                               Delete
                             </button>
-                            <button type="button" className="rounded px-2.5 py-1 font-semibold hover:bg-ink/10" onClick={() => setOpen(null)}>
+                            <button type="button" className="rounded-sm px-2.5 py-1 font-semibold hover:bg-ink/10" onClick={() => setOpen(null)}>
                               Cancel
                             </button>
                           </div>

@@ -57,7 +57,7 @@ export default function Palette({ onAdd, onClose }: PaletteProps) {
       ref={rootRef}
       role="dialog"
       aria-label="Add a component"
-      className="flex max-h-[min(70vh,28rem)] w-[min(18rem,calc(100vw-2rem))] flex-col rounded border-bw-1 border-ink bg-surface shadow-brutal-md"
+      className="flex max-h-[min(70vh,28rem)] w-[min(18rem,calc(100vw-2rem))] flex-col rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md"
       onKeyDown={(e) => {
         if (e.key === 'Escape') {
           e.stopPropagation();
@@ -101,9 +101,9 @@ export default function Palette({ onAdd, onClose }: PaletteProps) {
                       e.dataTransfer.effectAllowed = 'copy';
                     }}
                     onClick={() => onAdd(c.techStack)}
-                    className="group flex w-full items-center gap-2 rounded px-2 py-1.5 text-left text-sm text-ink hover:bg-ink/10 focus-visible:bg-ink/10"
+                    className="group flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-sm text-ink hover:bg-ink/10 focus-visible:bg-ink/10"
                   >
-                    <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4">{getTechStackIcon(c.techStack, c.type)}</span>
+                    <span className="flex h-6 w-6 shrink-0 items-center justify-center [&_svg]:h-4 [&_svg]:w-4">{getTechStackIcon(c.techStack, c.type)}</span>
                     <span className="flex-1 truncate">{c.techStack}</span>
                     <Plus size={14} className="text-muted opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100" aria-hidden />
                   </button>

@@ -34,7 +34,7 @@ export function CatSre({ mood, talking, className = 'h-24 w-24' }: { mood: Mood;
   const clip = `sf-cat-disc-${useId().replace(/:/g, '')}`;
   const ears = mood === 'alarmed' ? 'sf-cat-ears sf-cat-ears--back' : 'sf-cat-ears';
   return (
-    <svg viewBox="0 0 120 120" aria-hidden="true" className={`sf-cat flex-shrink-0 ${className} ${talking ? 'sf-cat--talking' : ''}`}>
+    <svg viewBox="0 0 120 120" aria-hidden="true" className={`sf-cat shrink-0 ${className} ${talking ? 'sf-cat--talking' : ''}`}>
       <defs>
         <clipPath id={clip}>
           <circle cx="60" cy="62" r="56" />
@@ -129,7 +129,7 @@ export function MascotBriefing({ briefing, boss, onClose }: { briefing: Briefing
         <CatSre mood={briefing.mood} talking={talking} className={boss ? 'h-16 w-16 sm:h-28 sm:w-28' : 'h-14 w-14 sm:h-20 sm:w-20'} />
         <div className="min-w-0 flex-1">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted">
-            {MASCOT}, your SRE lead {boss && <span className="ml-1 inline-block whitespace-nowrap rounded bg-fail px-1.5 py-0.5 text-white">Boss wave</span>}
+            {MASCOT}, your SRE lead {boss && <span className="ml-1 inline-block whitespace-nowrap rounded-sm bg-fail px-1.5 py-0.5 text-white">Boss wave</span>}
           </p>
           <div className="sf-bubble relative mt-1 cursor-pointer rounded-brutal border-bw-1 border-ink bg-paper p-2.5 text-sm space-y-1.5" onClick={() => setShown(total)} aria-hidden="true">
             {typed.map((t, i) =>

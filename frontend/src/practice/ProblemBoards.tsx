@@ -56,7 +56,7 @@ export default function ProblemBoards({ problemId, signedIn, refresh, onOptIn }:
           <Trophy size={16} aria-hidden="true" className="text-amber-500 dark:text-amber-400" />
           Leaderboard
         </h3>
-        <div role="group" aria-label="Rank by" className="inline-flex overflow-hidden rounded border border-ink/30 text-xs">
+        <div role="group" aria-label="Rank by" className="inline-flex overflow-hidden rounded-sm border border-ink/30 text-xs">
           {METRICS.map((m) => (
             <button
               key={m.id}
@@ -74,13 +74,13 @@ export default function ProblemBoards({ problemId, signedIn, refresh, onOptIn }:
         <p className="mt-2 text-xs text-muted">Loading…</p>
       ) : (
         <>
-          <ol aria-label={`${label} passing designs`} className="mt-2 divide-y divide-ink/10 rounded border border-ink/15 bg-surface">
+          <ol aria-label={`${label} passing designs`} className="mt-2 divide-y divide-ink/10 rounded-sm border border-ink/15 bg-surface">
             {board.entries.map((e) => (
               <li key={e.id}>
                 <a
                   href={`#/u/${encodeURIComponent(e.id)}`}
                   aria-label={`${e.displayName}: rank ${e.rank}, ${format(e.value)}. See their profile`}
-                  className="flex items-center gap-3 px-2.5 py-1.5 hover:bg-pop-yellow/25 focus-visible:outline-none focus-visible:bg-pop-yellow/25"
+                  className="flex items-center gap-3 px-2.5 py-1.5 hover:bg-pop-yellow/25 focus-visible:outline-hidden focus-visible:bg-pop-yellow/25"
                 >
                   <span className="w-5 text-right tabular-nums text-muted">{e.rank}</span>
                   <span className="min-w-0 flex-1 truncate text-ink">{e.displayName}</span>

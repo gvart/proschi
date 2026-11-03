@@ -143,7 +143,7 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
             {top > 0 && (
               <label className="text-sm inline-flex items-center gap-1">
                 Ascension
-                <select className="rounded border-bw-1 border-ink bg-surface px-1 py-1" value={asc} onChange={(e) => setAscension({ ...ascension, [s.id]: Number(e.target.value) })}>
+                <select className="rounded-sm border-bw-1 border-ink bg-surface px-1 py-1" value={asc} onChange={(e) => setAscension({ ...ascension, [s.id]: Number(e.target.value) })}>
                   {Array.from({ length: top + 1 }, (_, i) => (
                     <option key={i} value={i}>
                       {i}
@@ -236,7 +236,7 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
           ref={dailyBox}
           tabIndex={-1}
           aria-label="Today’s daily run"
-          className={`rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md focus:outline-none ${focusDaily ? 'ring-4 ring-pop-yellow' : ''}`}
+          className={`rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md focus:outline-hidden ${focusDaily ? 'ring-4 ring-pop-yellow' : ''}`}
         >
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
@@ -347,7 +347,7 @@ function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]
           {items.map((i) => {
             const equipped = props.equipped.includes(i.id);
             return (
-              <li key={i.id} className="rounded border-bw-1 border-ink bg-surface p-2 flex items-start justify-between gap-2">
+              <li key={i.id} className="rounded-sm border-bw-1 border-ink bg-surface p-2 flex items-start justify-between gap-2">
                 <ShopTile item={i} />
                 <div className="min-w-0 flex-1">
                   <p className="font-semibold leading-tight">
@@ -357,7 +357,7 @@ function Shop(props: { items: ShopItem[]; blueprints: number; equipped: string[]
                   <p className="mt-0.5 text-xs text-muted">{i.text}</p>
                   {i.blocked && <p className="mt-0.5 text-xs font-semibold">{i.blocked}</p>}
                 </div>
-                <div className="flex gap-1 flex-shrink-0">
+                <div className="flex gap-1 shrink-0">
                   {i.kind === 'perk' && (props.owned[i.id] ?? 0) > 0 && (
                     <button
                       type="button"
@@ -414,7 +414,7 @@ function Leaderboards({ scenarios, day }: { scenarios: { id: string; title: stri
         <h3 className="font-display text-xl font-extrabold flex items-center gap-1.5">
           <Trophy size={18} aria-hidden="true" /> Leaderboard
         </h3>
-        <select className="rounded border-bw-1 border-ink bg-surface px-2 py-1 text-sm" value={which} onChange={(e) => setWhich(e.target.value)} aria-label="Leaderboard">
+        <select className="rounded-sm border-bw-1 border-ink bg-surface px-2 py-1 text-sm" value={which} onChange={(e) => setWhich(e.target.value)} aria-label="Leaderboard">
           {options.map((o) => (
             <option key={o.key} value={o.key}>
               {o.label}

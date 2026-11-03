@@ -35,7 +35,7 @@ export default function AchievementIcon({ icon, tier, earned, size = 'md' }: { i
   return (
     <span
       aria-hidden="true"
-      className={`flex flex-shrink-0 items-center justify-center rounded-full border-bw-2 ${box} ${
+      className={`flex shrink-0 items-center justify-center rounded-full border-bw-2 ${box} ${
         earned ? `border-ink text-on-accent shadow-brutal-sm ${TIER_FILL[tier ?? 'none']}` : 'border-dashed border-ink/35 bg-paper text-ink/40'
       }`}
     >

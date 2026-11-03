@@ -20,9 +20,9 @@ import { useChallengeStatus, useDailyRunStatus, type Played } from './todayStatu
 const DueCards = lazy(() => import('./DueCards'));
 
 const action =
-  'inline-flex min-h-[40px] max-w-full items-center gap-1.5 self-start rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-sm font-bold text-paper hover:bg-ink/85 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue';
+  'inline-flex min-h-[40px] max-w-full items-center gap-1.5 self-start rounded-sm border-bw-1 border-ink bg-ink px-3 py-1.5 text-sm font-bold text-paper hover:bg-ink/85 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue';
 const chip =
-  'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue';
+  'inline-flex min-h-[36px] items-center gap-1.5 rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-sm font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue';
 
 function Chip({ href, icon: Icon, label, children }: { href: string; icon: LucideIcon; label: string; children?: ReactNode }) {
   return (

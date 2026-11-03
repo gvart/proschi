@@ -295,19 +295,19 @@ export function UseCasePlayback({
                       <div className="flex flex-wrap items-center gap-2">
                         <h3 className="font-semibold text-ink break-words">{response ? `Response to ${step.stepName}` : step.stepName}</h3>
                         {step.failed && (
-                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">Failed</span>
+                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-sm">Failed</span>
                         )}
                         {answered && !step.failed && (step.statusCode ?? 0) >= 400 && (
-                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded">{step.statusCode}</span>
+                          <span className="px-2 py-0.5 text-xs bg-red-100 dark:bg-red-900/40 text-red-700 dark:text-red-300 rounded-sm">{step.statusCode}</span>
                         )}
                         {step.executionType === 'SYNC_REQUEST_RESPONSE' && !step.failed && (
-                          <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded">Sync</span>
+                          <span className="px-2 py-0.5 text-xs bg-green-100 dark:bg-green-900/40 text-green-700 dark:text-green-300 rounded-sm">Sync</span>
                         )}
                         {step.executionType === 'ASYNC_FIRE_AND_FORGET' && (
-                          <span className="px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded">Fire & Forget</span>
+                          <span className="px-2 py-0.5 text-xs bg-orange-100 dark:bg-orange-900/40 text-orange-700 dark:text-orange-300 rounded-sm">Fire & Forget</span>
                         )}
                         {step.executionType === 'ASYNC_REQUEST_RESPONSE' && (
-                          <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded">Async</span>
+                          <span className="px-2 py-0.5 text-xs bg-purple-100 dark:bg-purple-900/40 text-purple-700 dark:text-purple-300 rounded-sm">Async</span>
                         )}
                       </div>
                       <p className="text-sm text-muted">
@@ -332,7 +332,7 @@ export function UseCasePlayback({
                         <div className="text-xs font-medium text-muted mb-1">
                           Request ({FORMAT_LABEL[step.requestFormat]})
                         </div>
-                        <pre className="text-xs bg-paper p-2 rounded border border-ink/15 overflow-auto max-h-32">
+                        <pre className="text-xs bg-paper p-2 rounded-sm border border-ink/15 overflow-auto max-h-32">
                           {step.requestBody}
                         </pre>
                       </div>
@@ -343,7 +343,7 @@ export function UseCasePlayback({
                           Response ({FORMAT_LABEL[step.responseFormat]}){step.statusCode !== undefined && ` - ${step.statusCode}`}
                         </div>
                         <pre
-                          className={`text-xs p-2 rounded border overflow-auto max-h-32 ${
+                          className={`text-xs p-2 rounded-sm border overflow-auto max-h-32 ${
                             isErrorStep(step) ? 'bg-red-50 dark:bg-red-950/40 border-red-200 dark:border-red-800' : 'bg-paper border-ink/15'
                           }`}
                         >

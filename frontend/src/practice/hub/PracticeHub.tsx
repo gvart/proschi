@@ -16,7 +16,7 @@ import { HUB_TABS, type HubTab } from './tabs';
 const ICON: Record<HubTab, LucideIcon> = { problems: List, roadmap: MapIcon, review: Layers, challenge: Zap, arcade: Gamepad2, progress: Radar };
 
 const section =
-  'flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-brutal border-bw-2 border-ink px-2 py-1.5 text-[13px] font-bold leading-tight transition-[background-color,box-shadow,transform] duration-d1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue md:min-h-[44px] md:flex-row md:gap-1.5 md:text-sm';
+  'flex min-h-[56px] flex-col items-center justify-center gap-1 rounded-brutal border-bw-2 border-ink px-2 py-1.5 text-[13px] font-bold leading-tight transition-[background-color,box-shadow,transform] duration-d1 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue md:min-h-[44px] md:flex-row md:gap-1.5 md:text-sm';
 
 /** `onIntent` runs when a section is pointed at or focused, before the click: its code can start loading. */
 export default function PracticeHub({

@@ -59,6 +59,6 @@ export const CANVAS_FAIL = 'rgb(var(--c-fail))';
 export const CANVAS_EDGE = 'rgb(var(--c-muted))';
 export const CANVAS_INK = 'rgb(var(--c-ink))';
 
-/** Tailwind's default `font-sans` stack, which the editor uses. */
+/** The `font-sans` stack Tailwind 3 shipped, for drawing without Tailwind. */
 export const CANVAS_FONT =
   "ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji', 'Segoe UI Symbol', 'Noto Color Emoji'";

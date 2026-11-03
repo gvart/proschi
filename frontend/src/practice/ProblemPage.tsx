@@ -639,7 +639,7 @@ function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem
       )}
       <Markdown source={problem.statement} />
 
-      <details className="rounded border-bw-1 border-ink bg-paper">
+      <details className="rounded-sm border-bw-1 border-ink bg-paper">
         <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink">
           <span className={eyebrow}>Given</span> <code className="font-mono">{PROBLEM_FILE}</code> <span className="font-normal text-muted">(read-only)</span>
         </summary>
@@ -649,8 +649,8 @@ function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem
       {problem.hints.length > 0 && (
         <div className="space-y-2">
           {problem.hints.slice(0, hints).map((hint, i) => (
-            <p key={i} className="flex gap-2 rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink shadow-brutal-sm">
-              <Lightbulb size={16} className="mt-0.5 flex-shrink-0" />
+            <p key={i} className="flex gap-2 rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink shadow-brutal-sm">
+              <Lightbulb size={16} className="mt-0.5 shrink-0" />
               <span>
                 <strong>Hint {i + 1}.</strong> {hint}
               </span>
@@ -667,7 +667,7 @@ function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem
 
       <div>
         {showSolution ? (
-          <div className="rounded border-bw-1 border-ink bg-paper">
+          <div className="rounded-sm border-bw-1 border-ink bg-paper">
             <div className="flex items-center gap-2 px-3 py-2 border-b-bw-1 border-ink text-sm font-semibold text-ink">
               Reference solution
               <button
@@ -726,7 +726,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen }: D
             onClick={() => setTab(t)}
             disabled={(t === 'playback' && !current) || (t === 'analysis' && !engine.available)}
             aria-pressed={tab === t}
-            className={`rounded px-2.5 py-1 text-sm font-semibold capitalize border-bw-1 disabled:opacity-40 ${tab === t ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`}
+            className={`rounded-sm px-2.5 py-1 text-sm font-semibold capitalize border-bw-1 disabled:opacity-40 ${tab === t ? 'border-ink bg-ink text-paper' : 'border-transparent text-ink/75 hover:border-ink hover:text-ink'}`}
           >
             {t}
           </button>

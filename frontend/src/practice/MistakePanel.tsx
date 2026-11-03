@@ -53,9 +53,9 @@ export default function MistakePanel({ problem, engine, results, onLesson }: Mis
   if (!match) return null;
   const topicTitle = (id: string) => deck?.topics.find((t) => t.id === id)?.title ?? id;
   return (
-    <section aria-label="Common mistake" className="m-3 rounded border-bw-2 border-ink bg-pop-yellow/20 p-3 shadow-brutal-sm">
+    <section aria-label="Common mistake" className="m-3 rounded-sm border-bw-2 border-ink bg-pop-yellow/20 p-3 shadow-brutal-sm">
       <h3 className="flex items-start gap-2 font-display text-base font-bold text-ink">
-        <TriangleAlert size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+        <TriangleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
         <span>Common mistake: {match.mistake.title}</span>
       </h3>
       <p className="mt-1 text-sm text-ink/85">{match.mistake.explain}</p>
@@ -72,7 +72,7 @@ export default function MistakePanel({ problem, engine, results, onLesson }: Mis
             {cards.map((card) => (
               <li key={card.id}>
                 <a href={`cards/${card.topic}/${card.id}/`} className="flex items-start gap-2 text-sm text-ink hover:underline">
-                  <Layers size={14} className="mt-0.5 flex-shrink-0 text-muted" aria-hidden="true" />
+                  <Layers size={14} className="mt-0.5 shrink-0 text-muted" aria-hidden="true" />
                   <span>
                     {shortPrompt(card)} <span className="text-xs text-muted">· {topicTitle(card.topic)}</span>
                   </span>

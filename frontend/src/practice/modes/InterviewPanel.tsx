@@ -103,7 +103,7 @@ function StartScreen({ onStart, onCancel }: { onStart: (d: Duration) => void; on
               role="radio"
               aria-checked={duration === d}
               onClick={() => setDuration(d)}
-              className={`rounded border-bw-1 px-3 py-1.5 text-sm font-semibold ${duration === d ? 'border-ink bg-ink text-paper' : 'border-ink/40 text-ink hover:border-ink'}`}
+              className={`rounded-sm border-bw-1 px-3 py-1.5 text-sm font-semibold ${duration === d ? 'border-ink bg-ink text-paper' : 'border-ink/40 text-ink hover:border-ink'}`}
             >
               {d} min
             </button>
@@ -172,7 +172,7 @@ function PhaseBar({ session, dispatch, onExit }: { session: InterviewSession; di
           <li
             key={p.id}
             aria-current={!finished && i === index ? 'step' : undefined}
-            className={`flex-1 rounded border-bw-1 px-1.5 py-0.5 text-center ${!finished && i === index ? 'border-ink bg-pop-yellow text-on-accent' : i < index || finished ? 'border-ink/40 text-ink' : 'border-ink/20 text-muted'}`}
+            className={`flex-1 rounded-sm border-bw-1 px-1.5 py-0.5 text-center ${!finished && i === index ? 'border-ink bg-pop-yellow text-on-accent' : i < index || finished ? 'border-ink/40 text-ink' : 'border-ink/20 text-muted'}`}
           >
             {i + 1}. {p.label}
           </li>
@@ -200,7 +200,7 @@ function Clarify({ problemId, statement, interview, session, dispatch, onNext }:
   const asked = session.asked.map((i) => interview.questions[i]).filter(Boolean);
   return (
     <>
-      <p className="rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
+      <p className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
         <strong>Phase 1: Clarify.</strong> The scale and constraints are hidden. Pick the questions you would ask the interviewer before designing; good ones get an answer.
       </p>
       <Markdown source={redacted} />
@@ -216,7 +216,7 @@ function Clarify({ problemId, statement, interview, session, dispatch, onNext }:
             const q = interview.questions[i];
             const wasAsked = session.asked.includes(i);
             return (
-              <li key={i} className="rounded border-bw-1 border-ink/40 bg-paper">
+              <li key={i} className="rounded-sm border-bw-1 border-ink/40 bg-paper">
                 {wasAsked ? (
                   <div className="px-3 py-2 space-y-1">
                     <p className="text-sm font-semibold text-ink">{q.question}</p>
@@ -247,13 +247,13 @@ function Clarify({ problemId, statement, interview, session, dispatch, onNext }:
 function Estimate({ statement, interview, session, dispatch, onNext }: { statement: string; interview: Interview; session: InterviewSession; dispatch: (a: InterviewAction) => void; onNext: () => void }) {
   return (
     <>
-      <p className="rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
+      <p className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
         <strong>Phase 2: Estimate.</strong> Back-of-the-envelope numbers before the design. An answer within the accepted range counts; the worked answer follows.{' '}
         <a href="../docs/numbers/" target="_blank" rel="noopener" className="font-semibold underline underline-offset-2">
           Numbers to know
         </a>
       </p>
-      <details className="rounded border-bw-1 border-ink bg-paper">
+      <details className="rounded-sm border-bw-1 border-ink bg-paper">
         <summary className="cursor-pointer px-3 py-2 text-sm font-semibold text-ink">The full statement, scale and constraints included</summary>
         <div className="border-t-bw-1 border-ink px-3 py-3">
           <Markdown source={statement} />
@@ -290,7 +290,7 @@ function EstimateItem({ index, estimate, answer, onAnswer }: { index: number; es
   const shown = `${formatNumber(estimate.answer)} ${estimate.unit}`;
   const range = `${formatNumber(estimate.low)} to ${formatNumber(estimate.high)}`;
   return (
-    <form onSubmit={check} className="rounded border-bw-1 border-ink/40 bg-paper px-3 py-2 space-y-2">
+    <form onSubmit={check} className="rounded-sm border-bw-1 border-ink/40 bg-paper px-3 py-2 space-y-2">
       <label htmlFor={id} className="block text-sm font-semibold text-ink">
         {estimate.question}
       </label>
@@ -338,7 +338,7 @@ function EstimateItem({ index, estimate, answer, onAnswer }: { index: number; es
 function Design({ session, onNext, children }: { session: InterviewSession; onNext: () => void; children: ReactNode }) {
   return (
     <>
-      <div className="rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink space-y-2">
+      <div className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink space-y-2">
         <p>
           <strong>Phase 3: Design.</strong> Write the design in the editor and run the tests; the clock keeps running. Wrap up when you are done or the time is nearly out.
         </p>
@@ -364,7 +364,7 @@ function Design({ session, onNext, children }: { session: InterviewSession; onNe
 function WrapUp({ session, dispatch, onNext }: { session: InterviewSession; dispatch: (a: InterviewAction) => void; onNext: () => void }) {
   return (
     <>
-      <p className="rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
+      <p className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-sm text-ink">
         <strong>Phase 4: Wrap-up.</strong> Interviews end with a review of your own design. Tick what you could explain out loud.
       </p>
       <ul className="space-y-2">

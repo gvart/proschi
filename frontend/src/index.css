@@ -1,10 +1,30 @@
-@import './design/tokens.css';
-@import './design/components.css';
-@import './design/widgets.css';
+@layer theme, base, components, utilities;
 
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import './design/tokens.css' layer(components);
+@import './design/components.css' layer(components);
+@import './design/widgets.css' layer(components);
+
+@import 'tailwindcss/theme' layer(theme);
+@import './design/tailwind3-palette.css' layer(theme);
+@import 'tailwindcss/preflight' layer(base);
+@import 'tailwindcss/utilities' layer(utilities);
+
+@config '../tailwind.config.js';
+
+/* Tailwind 3 defaults that v4 changed, kept so the pages render as before. */
+@layer base {
+  *,
+  ::after,
+  ::before,
+  ::backdrop,
+  ::file-selector-button {
+    border-color: var(--color-gray-200, currentColor);
+  }
+  button:not(:disabled),
+  [role='button']:not(:disabled) {
+    cursor: pointer;
+  }
+}
 
 @layer base {
   body {

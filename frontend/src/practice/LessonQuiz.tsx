@@ -51,7 +51,7 @@ function Verdict({ correct, children, explanation }: { correct: boolean; childre
   return (
     <div role="status" className="mt-3 space-y-2">
       <p className={`flex items-start gap-2 text-sm font-semibold ${correct ? 'text-green-700 dark:text-green-400' : 'text-red-700 dark:text-red-300'}`}>
-        {correct ? <CheckCircle2 size={17} className="mt-0.5 flex-shrink-0" aria-hidden="true" /> : <XCircle size={17} className="mt-0.5 flex-shrink-0" aria-hidden="true" />}
+        {correct ? <CheckCircle2 size={17} className="mt-0.5 shrink-0" aria-hidden="true" /> : <XCircle size={17} className="mt-0.5 shrink-0" aria-hidden="true" />}
         <span>{children}</span>
       </p>
       {explanation}
@@ -62,7 +62,7 @@ function Verdict({ correct, children, explanation }: { correct: boolean; childre
 function Why({ card }: { card: Card }) {
   if (!card.why) return null;
   return (
-    <div className="rounded border-bw-1 border-ink/30 bg-paper p-3">
+    <div className="rounded-sm border-bw-1 border-ink/30 bg-paper p-3">
       <p className={eyebrow}>Why</p>
       <div className="mt-1">
         <Markdown source={card.why} />
@@ -109,7 +109,7 @@ function Choice({ card }: { card: ChoiceCard }) {
               disabled={done}
               aria-pressed={i === picked}
               onClick={() => setPicked(i)}
-              className={`rounded border-bw-1 border-ink px-3 py-2 text-left text-sm text-ink ${tone} disabled:cursor-default`}
+              className={`rounded-sm border-bw-1 border-ink px-3 py-2 text-left text-sm text-ink ${tone} disabled:cursor-default`}
             >
               <InlineMarkdown source={option.text} />
             </button>
@@ -167,7 +167,7 @@ function Estimate({ card }: { card: EstimateCard }) {
           correct={result.correct}
           explanation={
             <>
-              <div className="rounded border-bw-1 border-ink/30 bg-paper p-3">
+              <div className="rounded-sm border-bw-1 border-ink/30 bg-paper p-3">
                 <p className={eyebrow}>Worked out</p>
                 <div className="mt-1">
                   <Markdown source={card.solution} />
@@ -225,7 +225,7 @@ function Cloze({ card }: { card: ClozeCard }) {
           correct={graded.correct}
           explanation={
             <>
-              <div className="rounded border-bw-1 border-ink/30 bg-paper p-3">
+              <div className="rounded-sm border-bw-1 border-ink/30 bg-paper p-3">
                 <p className={eyebrow}>Answer</p>
                 <div className="mt-1">
                   <Markdown source={clozeWithAnswers(card)} />

@@ -58,7 +58,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
             <li key={p.id}>
               <a
                 href={`#/${p.id}`}
-                className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-none focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
+                className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-hidden focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
               >
                 <StatusIcon status={s} />
                 <span className="flex-1 min-w-0">
@@ -66,7 +66,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
                   <span className="mt-1 flex flex-wrap gap-1">
                     {p.company && <CompanyBadge company={p.company} />}
                     {p.tags.map((t) => (
-                      <span key={t} className="rounded border border-ink/25 px-1.5 py-0.5 font-mono text-[11px] text-ink/75">
+                      <span key={t} className="rounded-sm border border-ink/25 px-1.5 py-0.5 font-mono text-[11px] text-ink/75">
                         {t}
                       </span>
                     ))}

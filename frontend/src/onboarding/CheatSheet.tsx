@@ -43,7 +43,7 @@ function Snippet({ code }: { code: string }) {
 function Note({ text }: { text: string }): ReactNode {
   return text.split(/(`[^`]+`)/).map((part, i) =>
     part.startsWith('`') ? (
-      <code key={i} className="rounded bg-ink/5 px-1 font-mono text-[0.75rem] text-ink">
+      <code key={i} className="rounded-sm bg-ink/5 px-1 font-mono text-[0.75rem] text-ink">
         {part.slice(1, -1)}
       </code>
     ) : (

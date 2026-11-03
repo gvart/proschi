@@ -104,7 +104,7 @@ export default function ExamplesGallery({ onPick, onClose }: ExamplesGalleryProp
       {entry.tags.length > 0 && (
         <ul className="mt-2 flex flex-wrap gap-1" aria-label="Patterns">
           {entry.tags.map((t) => (
-            <li key={t} className="rounded border border-ink/20 px-1.5 py-px text-[11px] text-ink/80">
+            <li key={t} className="rounded-sm border border-ink/20 px-1.5 py-px text-[11px] text-ink/80">
               {t}
             </li>
           ))}

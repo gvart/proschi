@@ -1105,7 +1105,7 @@ export default function Playground() {
         ) : (
           // Folded: a rail that brings the diagrams back.
           <div className="max-md:hidden shrink-0 flex flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface px-1 py-2">
-            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded text-muted hover:text-ink hover:bg-ink/10">
+            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
               <PanelLeftOpen size={16} />
             </button>
           </div>
@@ -1150,7 +1150,7 @@ export default function Playground() {
         </SplitPanel>
         <Separator
           aria-label="Resize the code and diagram panes"
-          className="hidden md:block w-[2px] bg-ink outline-none transition-colors hover:bg-pop-pink focus-visible:bg-pop-pink data-[separator=active]:bg-pop-pink"
+          className="hidden md:block w-[2px] bg-ink outline-hidden transition-colors hover:bg-pop-pink focus-visible:bg-pop-pink data-[separator=active]:bg-pop-pink"
         />
         <SplitPanel id="diagram" minSize="320px" data-mobile-hidden={mobilePane !== 'diagram' || undefined} className="flex">
           <section id="pane-panel-diagram" className="flex flex-col flex-1 min-h-0 min-w-0">
@@ -1244,7 +1244,7 @@ export default function Playground() {
                 ) : (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
                     <p className="text-sm text-muted">
-                      Start typing, e.g. <code className="px-1 bg-ink/5 rounded font-mono">api -&gt; db</code>
+                      Start typing, e.g. <code className="px-1 bg-ink/5 rounded-sm font-mono">api -&gt; db</code>
                     </p>
                   </div>
                 ))}
@@ -1415,7 +1415,7 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
       aria-label={`Scenarios of ${useCase.name}`}
       className={`flex items-center gap-1.5 px-2 py-1.5 overflow-x-auto ${subBar}`}
     >
-      <span className={`hidden sm:inline px-1.5 flex-shrink-0 ${eyebrow}`}>Scenarios</span>
+      <span className={`hidden sm:inline px-1.5 shrink-0 ${eyebrow}`}>Scenarios</span>
       {useCase.scenarios.map((s: DiagramScenario) => {
         const active = s.id === current;
         const error = s.outcome === 'error';
@@ -1428,7 +1428,7 @@ function ScenarioBar({ useCase, current, onPick }: ScenarioBarProps) {
             aria-selected={active}
             onClick={() => onPick(s.id)}
             title={s.condition ? `Play “${s.name}” — when ${s.condition}` : `Play “${s.name}”`}
-            className={`flex-shrink-0 inline-flex items-center gap-1.5 rounded-full border-bw-1 px-3 py-1.5 sm:py-1 text-sm font-semibold whitespace-nowrap transition-[transform,box-shadow] duration-d1 ${
+            className={`shrink-0 inline-flex items-center gap-1.5 rounded-full border-bw-1 px-3 py-1.5 sm:py-1 text-sm font-semibold whitespace-nowrap transition-[translate,transform,box-shadow] duration-d1 ${
               active
                 ? `border-ink text-on-accent shadow-brutal-sm ${error ? 'bg-fail' : 'bg-pop-pink'}`
                 : 'border-ink/25 text-ink/85 hover:border-ink hover:bg-surface'
@@ -1754,7 +1754,7 @@ function DiagramView({
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
             {notice && (
-              <p role="status" className="rounded border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
+              <p role="status" className="rounded-sm border-bw-1 border-ink bg-ink px-3 py-1.5 text-xs font-semibold text-paper shadow-brutal-sm">
                 {notice}
               </p>
             )}
@@ -1786,7 +1786,7 @@ function DiagramView({
           </Panel>
         )}
         {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
-          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded px-2 py-1">
+          <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
             Drag to pin · select to edit settings · drag between dots to connect · Delete removes
           </Panel>
         )}
@@ -1847,7 +1847,7 @@ function DiagramView({
 function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crumb[]; file?: string; readOnly?: boolean; inbound?: string; onPick: (path: string) => void }) {
   const up = crumbs[crumbs.length - 2];
   return (
-    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
+    <nav aria-label="Breadcrumb" className="flex max-w-[min(calc(100vw-7rem),36rem)] flex-col rounded-sm border-bw-1 border-ink bg-surface py-1 pl-1 pr-3 shadow-brutal-sm">
       <div className="flex min-w-0 items-center gap-1">
         <button type="button" onClick={() => onPick(up.path)} aria-label={`Back to ${up.name}`} title={`Back to ${up.name}`} className={`${iconButton} !h-7 !w-7`}>
           <ArrowLeft size={15} />
@@ -1863,7 +1863,7 @@ function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crum
                     {c.name}
                   </span>
                 ) : (
-                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
+                  <button type="button" onClick={() => onPick(c.path)} className="max-w-[10rem] truncate rounded-sm px-1 font-semibold text-ink/75 underline-offset-2 hover:text-ink hover:underline">
                     {c.name}
                   </button>
                 )}
@@ -1927,11 +1927,11 @@ function DiagnosticsPanel({ diagnostics, onSelect }: DiagnosticsPanelProps) {
         <li key={i}>
           <button onClick={() => onSelect(d)} className="w-full flex items-start gap-2 px-3 py-1.5 text-left hover:bg-ink/10">
             {d.severity === 'error' ? (
-              <AlertCircle size={14} className="text-fail flex-shrink-0 mt-px" />
+              <AlertCircle size={14} className="text-fail shrink-0 mt-px" />
             ) : (
-              <AlertTriangle size={14} className="text-pop-yellow flex-shrink-0 mt-px" />
+              <AlertTriangle size={14} className="text-pop-yellow shrink-0 mt-px" />
             )}
-            <span className="text-muted tabular-nums flex-shrink-0">
+            <span className="text-muted tabular-nums shrink-0">
               {d.file ? `${d.file}:` : ''}
               {d.line}:{d.col}
             </span>

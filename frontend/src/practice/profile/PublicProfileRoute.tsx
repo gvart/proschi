@@ -83,7 +83,7 @@ export default function PublicProfileRoute({ id }: { id: string }) {
       note={
         <div className="mt-3 flex flex-wrap items-center gap-2">
           <p role="note" className="inline-flex max-w-full items-center gap-2 rounded-full border-bw-1 border-ink bg-pop-blue/15 px-3 py-1 text-sm text-ink">
-            <Eye size={14} aria-hidden="true" className="flex-shrink-0" />
+            <Eye size={14} aria-hidden="true" className="shrink-0" />
             This is a public profile: only what {load.profile.displayName} chose to share.
           </p>
           <ShareButton label="Share profile" text={profileShareText({ displayName: load.profile.displayName, userId: load.profile.id, own: false })} />

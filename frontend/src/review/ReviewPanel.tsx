@@ -69,13 +69,13 @@ export default function ReviewPanel({ source, input, onSelect, reviewer = defaul
       </button>
 
       {state.status === 'unavailable' && (
-        <div role="status" className="rounded border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
+        <div role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
           <strong>No review is available in this version.</strong> The tests still check latency, availability, durability and cost.
         </div>
       )}
       {state.status === 'error' && (
-        <p role="alert" className="flex gap-2 rounded border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink">
-          <AlertCircle size={16} className="mt-0.5 flex-shrink-0" />
+        <p role="alert" className="flex gap-2 rounded-sm border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink">
+          <AlertCircle size={16} className="mt-0.5 shrink-0" />
           The review failed: {state.message}
         </p>
       )}
@@ -130,7 +130,7 @@ function Issues({ severity, issues, locs, onSelect }: { severity: ReviewSeverity
         {issues.map((issue, i) => {
           const loc = issue.nodeId ? locs.get(issue.nodeId) : undefined;
           return (
-            <li key={i} className={`rounded border-bw-1 px-3 py-2 ${SEVERITY_CLASS[issue.severity]}`}>
+            <li key={i} className={`rounded-sm border-bw-1 px-3 py-2 ${SEVERITY_CLASS[issue.severity]}`}>
               <p className="font-medium text-ink">
                 {issue.title}
                 {issue.nodeId &&

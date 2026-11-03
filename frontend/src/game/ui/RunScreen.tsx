@@ -738,7 +738,7 @@ export default function RunScreen(props: RunScreenProps) {
         {s.hand.map((id) => {
           const c = content.cards.find((x) => x.id === id);
           return (
-            <li key={id} className="inline-flex items-center gap-1 rounded border-bw-1 border-ink/40 bg-surface py-0.5 pl-0.5 pr-1.5 text-xs text-ink" title={c?.text}>
+            <li key={id} className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink/40 bg-surface py-0.5 pl-0.5 pr-1.5 text-xs text-ink" title={c?.text}>
               {c && <IconTile name={c.icon} tone={RARITY_TILE[c.rarity]} size="sm" />}
               {c?.name ?? id}
             </li>

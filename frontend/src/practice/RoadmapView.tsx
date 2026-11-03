@@ -125,9 +125,9 @@ export default function Roadmap({ stages, problems, progress, access, providers,
       {guide && (
         <a
           href={`#/roadmap/${guide.id}`}
-          className="group mt-8 flex items-start gap-3 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md transition-[transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue"
+          className="group mt-8 flex items-start gap-3 rounded-brutal border-bw-2 border-ink bg-pop-lilac/20 p-4 shadow-brutal-md transition-[translate,transform,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-lg focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue"
         >
-          <BookOpen size={22} className="mt-0.5 flex-shrink-0 text-ink" aria-hidden="true" />
+          <BookOpen size={22} className="mt-0.5 shrink-0 text-ink" aria-hidden="true" />
           <span className="min-w-0 flex-1">
             <span className={`flex flex-wrap items-center gap-2 ${eyebrow}`}>
               Read first{guide.minutes ? ` · ${guide.minutes} min read` : ''}
@@ -136,7 +136,7 @@ export default function Roadmap({ stages, problems, progress, access, providers,
             <span className="mt-0.5 block font-display text-lg font-bold leading-tight text-ink group-hover:underline">{guide.title}</span>
             <span className="mt-1 block text-sm text-ink/80">{guide.summary}</span>
           </span>
-          <ArrowRight size={18} className="mt-1 flex-shrink-0 text-ink" aria-hidden="true" />
+          <ArrowRight size={18} className="mt-1 shrink-0 text-ink" aria-hidden="true" />
         </a>
       )}
 
@@ -222,7 +222,7 @@ function StageSection({
           const minutes = lessons[step.id];
           const content = (
             <>
-              {step.locked ? <Lock size={16} className="flex-shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
+              {step.locked ? <Lock size={16} className="shrink-0 text-ink/40" aria-label="Locked" /> : <StatusIcon status={step.status} />}
               <span className="flex-1 min-w-0">
                 <span className={`block font-display text-lg font-bold leading-tight ${step.locked ? 'text-ink/50' : 'text-ink'}`}>
                   {title}
@@ -253,7 +253,7 @@ function StageSection({
                     <a
                       href={`${roadmapHref(step.id)}/lesson`}
                       aria-label={`Read the lesson: ${title}`}
-                      className="inline-flex items-center gap-1.5 rounded border-bw-1 border-ink bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pop-blue"
+                      className="inline-flex items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-surface px-2.5 py-1 text-xs font-semibold text-ink hover:bg-pop-yellow/30 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-pop-blue"
                     >
                       <BookOpen size={12} aria-hidden="true" />
                       Read the lesson
@@ -263,7 +263,7 @@ function StageSection({
               ) : (
                 <a
                   href={roadmapHref(step.id)}
-                  className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-none focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
+                  className="group flex items-center gap-3 px-4 py-3.5 transition-[background-color,box-shadow] duration-d1 hover:bg-pop-yellow/25 hover:shadow-[inset_6px_0_0_rgb(var(--c-ink))] focus-visible:outline-hidden focus-visible:bg-pop-yellow/25 focus-visible:shadow-[inset_6px_0_0_rgb(var(--c-blue))]"
                 >
                   {content}
                 </a>
@@ -282,7 +282,7 @@ function LockedNotice({ title, lock, problems }: { title: string; lock: StepLock
   if (lock.kind === 'checking' || lock.kind === 'open') return null;
   return (
     <p role="status" className="mt-6 flex items-start gap-2 rounded-brutal border-bw-2 border-ink bg-pop-yellow/30 p-3 text-sm text-ink shadow-brutal-sm">
-      <Lock size={16} className="mt-0.5 flex-shrink-0" aria-hidden="true" />
+      <Lock size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
       <span>
         <strong>{title}</strong> is locked on the roadmap; its lesson is open to read.{' '}
         {lock.kind === 'order'
