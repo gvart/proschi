@@ -1,0 +1,37 @@
+.claude-plugin/marketplace.json
+  s_ccbdd72f9a29a1::t_261d7b3ab99246 13
+.release-please-manifest.json
+  s_ccbdd72f9a29a1::t_e2a52c8a3e4b09 2
+CHANGELOG.md
+  s_ccbdd72f9a29a1::t_f3ce8b039e9a53 12-19
+frontend/package-lock.json
+  s_ccbdd72f9a29a1::t_9ed50a3dfa835a 11,26,31,51-54,59,65-67,78-80,84-88,91-101,105-107,111,113-114,117,120-123,125,127,418-420,550-552,2343-2345,2350-2353,2366,2382-2384,2388-2391,2407-2409,2413-2414,2429-2431,2435-2436,2447-2449,2464-2466,2470-2472,2489-2491,2503-2505,2509-2512,2544-2546,2551-2553,2568-2570,2574,2719-2735,3217-3219,3224,3227,3786-3788,3863-3865,3869,3872,4020-4022,4026-4027,4029-4030,4032,4034,4036,4039-4041,4044,4048,4051,4452-4454,4486-4488,4502-4504,4777-4779,4951-4953,4956,4959-4963,5354-5356,5363,5407-5409,5413-5416,5438-5440,5444,5700-5702,5709,5733-5735,5739-5740,5744
+frontend/package.json
+  s_ccbdd72f9a29a1::t_f7aec66e89a6ac 19,34,39,59-62,67
+plugin/.claude-plugin/plugin.json
+  s_ccbdd72f9a29a1::t_0400c4a9535a31 4
+tooling/jetbrains/gradle.properties
+  s_ccbdd72f9a29a1::t_8c2e75aca6eae8 9
+tooling/package-lock.json
+  s_ccbdd72f9a29a1::t_09ad9d58ce3dbb 3,9,33,1422-1424,2764-2766,3657-3663,3665-3667,3671,3689-3691,3702-3729
+tooling/package.json
+  s_ccbdd72f9a29a1::t_0af71dd0c79103 3,62
+tooling/vscode/package.json
+  s_ccbdd72f9a29a1::t_7d3d15b1358689 6
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.6.15",
+  "base_commit_sha": "644c4b0140d4862803f0f0b1b7b7bb1f9888728b",
+  "prompts": {},
+  "sessions": {
+    "s_ccbdd72f9a29a1": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "0b904dd7-1d33-4bb4-bdb3-fce725efe044",
+        "model": "claude-sonnet-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
