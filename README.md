@@ -30,6 +30,8 @@ simulation of load, latency, availability and cost against the requirements
 and tests you write next to it. The same parser runs in the browser, the CLI,
 the language server and the editor plugins, so they always agree.
 
+![proschi — architecture diagrams as code, load-tested before you build](docs/images/proschi-demo.gif)
+
 ```proschi
 user "User"      [Actor]
 api  "Notes API" [REST API]   @backend
