@@ -32,32 +32,6 @@ the language server and the editor plugins, so they always agree.
 
 ![proschi — architecture diagrams as code, load-tested before you build](docs/images/proschi-demo.gif)
 
-```proschi
-user "User"      [Actor]
-api  "Notes API" [REST API]   @backend
-db   "Notes DB"  [PostgreSQL] @backend
-
-user -> api : HTTPS
-api  -> db  : SQL
-
-usecase "Create a note" {
-  user -> api  : POST /notes
-  api  -> db   : INSERT note
-  db  --> api  : 1 row
-  api --> user : 201 {"id": 42}
-}
-
-traffic {
-  "Create a note" 200 rps
-}
-
-requirements {
-  p99 "Create a note" < 200ms
-}
-```
-
-![The Proschi editor: source on the left, the laid-out diagram with its scenarios on the right](docs/images/editor.png)
-
 ## What's in the box
 
 - **[Editor](https://proschi.app/app/)**: completion, live diagnostics,
