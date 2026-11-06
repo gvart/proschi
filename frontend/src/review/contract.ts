@@ -213,6 +213,28 @@ export interface DesignReview {
   by?: 'rules';
 }
 
+/** A Pro user's AI reviews today (GET /api/review/usage, and with each review and each 429 daily_limit). */
+export interface ReviewUsage {
+  /** Reviews a UTC day (20, docs/design/paid-plans.md P17). */
+  limit: number;
+  used: number;
+  remaining: number;
+  /** Unix milliseconds: the next UTC midnight, when the count starts again. */
+  resetAt: number;
+}
+
+/** What `POST /api/review` answers with: the review and the usage after it. */
+export interface DesignReviewResponse extends DesignReview {
+  usage: ReviewUsage;
+}
+
+/** A ReviewUsage from an untrusted answer; undefined for anything else. */
+export function parseReviewUsage(data: unknown): ReviewUsage | undefined {
+  if (!isObj(data)) return undefined;
+  const { limit, used, remaining, resetAt } = data;
+  return [limit, used, remaining, resetAt].every(isNum) ? { limit: limit as number, used: used as number, remaining: remaining as number, resetAt: resetAt as number } : undefined;
+}
+
 // ---------- limits ----------
 
 /** Same as a recorded run's source (backend/src/progress.ts MAX_SOURCE). */

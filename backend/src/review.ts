@@ -1,29 +1,125 @@
-import { MAX_REVIEW_BODY, reviewRequestProblem, SOURCE_TOO_LONG } from '../../frontend/src/review/contract';
+import { MAX_REVIEW_BODY, reviewRequestProblem, SOURCE_TOO_LONG, type DesignReviewRequest, type ReviewUsage } from '../../frontend/src/review/contract';
+import { AiError, aiEnabled, createClient, type AiEnv } from './ai/client';
+import { problemContext } from './ai/context';
+import { aiReview, serverReviewRequest } from './ai/reviewer';
+import { requireUser } from './auth';
 import type { Ctx } from './context';
+import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
+import { errorText, log } from './log';
+import { findProblem } from './verify';
 
 /**
  * POST /api/review: an AI review of a design (backend/README.md, "Design
- * review"). A stub: it checks the body against the contract the page builds
- * it from (frontend/src/review/contract.ts) and answers 501 until an LLM is
- * wired in. No sign-in needed; limited per IP, since each real review will
- * cost an LLM call.
+ * review"; docs/design/paid-plans.md P17). Pro only, at most
+ * REVIEWS_PER_DAY a UTC day per user, counted in D1 (migration 0020). The
+ * body is checked against the contract the page builds it from
+ * (frontend/src/review/contract.ts), but only its source and problem id are
+ * used: the server parses, simulates and tests the design itself (P6,
+ * src/ai/reviewer.ts). Without ANTHROPIC_API_KEY it answers 501 and the page
+ * uses its rule reviewer (P10). The source is never logged.
+ *
+ * GET /api/review/usage: the signed-in Pro user's reviews today.
  */
+
+/** Pro's AI design reviews per UTC day (P17). */
+export const REVIEWS_PER_DAY = 20;
+
+/** The Worker's env with the AI secrets and the per-user limiter (wrangler.jsonc). */
+type ReviewEnv = Env & AiEnv & { AI_REVIEW_LIMITER: RateLimit };
+
+const NO_STORE = { 'Cache-Control': 'no-store' };
+const DAY_MS = 86_400_000;
+
+const utcDay = (at: number) => new Date(at).toISOString().slice(0, 10);
+/** The next UTC midnight, in Unix milliseconds: when the count starts again. */
+const resetAt = (at: number) => (Math.floor(at / DAY_MS) + 1) * DAY_MS;
+
+const usageOf = (used: number, at: number): ReviewUsage => ({ limit: REVIEWS_PER_DAY, used, remaining: Math.max(0, REVIEWS_PER_DAY - used), resetAt: resetAt(at) });
+
+/** Counts one review if today's count is under the cap; the new count, or undefined at the cap. One statement, so concurrent reviews cannot pass it. */
+export async function takeReview(DB: D1Database, userId: string, at = Date.now(), cap = REVIEWS_PER_DAY): Promise<number | undefined> {
+  const row = await DB.prepare(
+    `INSERT INTO review_usage (user_id, day, count) VALUES (?1, ?2, 1)
+     ON CONFLICT (user_id, day) DO UPDATE SET count = count + 1 WHERE count < ?3
+     RETURNING count`,
+  )
+    .bind(userId, utcDay(at), cap)
+    .first<{ count: number }>();
+  return row?.count;
+}
+
+/** Gives back a review whose model call failed. */
+async function giveBack(DB: D1Database, userId: string, at: number): Promise<void> {
+  await DB.prepare('UPDATE review_usage SET count = count - 1 WHERE user_id = ? AND day = ? AND count > 0').bind(userId, utcDay(at)).run();
+}
+
+async function usedToday(DB: D1Database, userId: string, at: number): Promise<number> {
+  const row = await DB.prepare('SELECT count FROM review_usage WHERE user_id = ? AND day = ?').bind(userId, utcDay(at)).first<{ count: number }>();
+  return row?.count ?? 0;
+}
+
+/** The signed-in user when on Pro, undefined when on another plan; 401 signed out. */
+async function proUser(request: Request, ctx: Ctx) {
+  const user = await requireUser(request, ctx);
+  return user.plan === 'pro' ? user : undefined;
+}
+
+const planRequired = () => json({ error: 'plan_required', message: 'AI design review is part of Pro' }, 402, NO_STORE);
+
 export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response> {
-  await rateLimit(ctx.env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
+  const env = ctx.env as ReviewEnv;
+  await rateLimit(env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
   const body = await readJson(request, MAX_REVIEW_BODY);
   const problem = reviewRequestProblem(body);
   if (problem) throw new HttpError(problem === SOURCE_TOO_LONG ? 413 : 400, problem);
+  const page = body as unknown as DesignReviewRequest;
+  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
 
-  // `body` is now a DesignReviewRequest.
-  // TODO(ai-review): call the LLM here and answer 200 with a DesignReview
-  // ({summary, strengths, issues: [{severity, title, detail, nodeId?}],
-  // suggestions}), checked with parseDesignReview from the same contract
-  // before it is sent. The call will need an API key: add it to Env
-  // (src/env.ts) as an optional secret, set with `npx wrangler secret put`
-  // (wrangler.jsonc lists the secrets), keep answering 501 while it is unset,
-  // and never log the request's source. `body.problem` names the practice
-  // problem, when there is one; findProblem (src/verify.ts) gives its
-  // statement for the prompt.
-  return json({ error: 'not_implemented' }, 501, { 'Cache-Control': 'no-store' });
+  const user = await proUser(request, ctx);
+  if (!user) return planRequired();
+  await rateLimit(env.AI_REVIEW_LIMITER, user.id, 'Too many reviews; wait a minute');
+  const solved = page.problem ? findProblem(page.problem.id) : undefined;
+  if (page.problem && !solved) throw new HttpError(404, 'Unknown problem');
+
+  const at = Date.now();
+  const used = await takeReview(env.DB, user.id, at);
+  if (used === undefined) {
+    const reset = resetAt(at);
+    return json(
+      { error: 'daily_limit', message: `You have used today's ${REVIEWS_PER_DAY} AI reviews`, usage: usageOf(REVIEWS_PER_DAY, at) },
+      429,
+      { ...NO_STORE, 'Retry-After': String(Math.ceil((reset - at) / 1000)) },
+    );
+  }
+
+  try {
+    const req = serverReviewRequest(page.source, solved);
+    const { review, usage } = await aiReview(createClient(env), req, solved ? problemContext(solved.id) : undefined);
+    log('info', 'review.done', { requestId: ctx.requestId, userId: user.id, problem: solved?.id, tokens: usage.reduce((n, u) => n + u.input_tokens + u.output_tokens + u.cache_creation_input_tokens, 0) });
+    return json({ ...review, usage: usageOf(used, at) }, 200, NO_STORE);
+  } catch (e) {
+    await giveBack(env.DB, user.id, at);
+    if (!(e instanceof AiError)) throw e;
+    log('error', 'review.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, error: errorText(e) });
+    // Busy or unreachable: worth trying again (503, the page offers the rule review meanwhile); anything else failed outright.
+    return e.retryable
+      ? json({ error: 'ai_unavailable', message: 'The AI reviewer is busy; try again in a minute' }, 503, NO_STORE)
+      : json({ error: 'review_failed', message: 'The AI review failed; try again' }, 502, NO_STORE);
+  }
+}
+
+/** GET /api/review/usage: {limit, used, remaining, resetAt} for a Pro user; 402 off Pro, 501 without the key. */
+export async function getReviewUsage(request: Request, ctx: Ctx): Promise<Response> {
+  const env = ctx.env as ReviewEnv;
+  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
+  const user = await proUser(request, ctx);
+  if (!user) return planRequired();
+  const at = Date.now();
+  return json(usageOf(await usedToday(env.DB, user.id, at), at), 200, NO_STORE);
+}
+
+/** Download my data: AI reviews asked for, per UTC day. */
+export async function exportReviewUsage(DB: D1Database, userId: string): Promise<{ day: string; count: number }[]> {
+  return (await DB.prepare('SELECT day, count FROM review_usage WHERE user_id = ? ORDER BY day').bind(userId).all<{ day: string; count: number }>()).results;
 }

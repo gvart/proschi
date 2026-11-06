@@ -18,6 +18,7 @@ import { exportEmailPrefs } from './reminders';
 import { BOARD_METRICS, cacheKey } from './stats';
 import { exportBilling, revokeOnDelete } from './billing';
 import { exportCredits } from './credits';
+import { exportReviewUsage } from './review';
 
 /** The signed-in user's account and practice progress. */
 
@@ -242,6 +243,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     billing: await exportBilling(DB, user.id),
     // AI interview credits: each grant, spend and refund.
     credits: await exportCredits(DB, user.id),
+    // AI design reviews asked for, per UTC day (Pro).
+    reviewUsage: await exportReviewUsage(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }
