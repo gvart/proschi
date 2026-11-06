@@ -19,6 +19,7 @@ import { BOARD_METRICS, cacheKey } from './stats';
 import { exportBilling, revokeOnDelete } from './billing';
 import { exportCredits } from './credits';
 import { exportReviewUsage } from './review';
+import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 
 /** The signed-in user's account and practice progress. */
@@ -248,6 +249,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     reviewUsage: await exportReviewUsage(DB, user.id),
     // AI interviews: each session with its verdict and, for 90 days, its transcript.
     aiInterviews: await exportInterviews(DB, user.id),
+    // The AI roadmap's picks (Pro): the next steps picked after an interview or a review, each with its reason.
+    roadmapRecs: await exportRoadmapRecs(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

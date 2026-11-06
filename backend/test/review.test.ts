@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REVIEW_BODY, MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE, type DesignReviewRequest } from '../../frontend/src/review/contract';
 import { REVIEW_SCHEMA, serverReviewRequest } from '../src/ai/reviewer';
+import { HAIKU } from '../src/ai/client';
 import { dailyCron } from '../src/cron';
 import { pruneReviewUsage, REVIEWS_PER_DAY, takeReview } from '../src/review';
 import { findProblem } from '../src/verify';
@@ -163,8 +164,8 @@ describe('POST /api/review: the AI review', () => {
     expect(body.usage.resetAt).toBe((Math.floor(Date.now() / 86_400_000) + 1) * 86_400_000);
     expect(await countToday(id)).toBe(1);
 
-    // One Sonnet call, with the JSON schema and the key.
-    expect(calls).toHaveLength(1);
+    // One Sonnet call, with the JSON schema and the key (the AI roadmap's Haiku refresh, src/roadmap.ts, comes after).
+    expect(calls.filter((c) => c.body.model !== HAIKU)).toHaveLength(1);
     expect(calls[0].headers['x-api-key']).toBe('sk-test');
     expect(calls[0].body).toMatchObject({ model: 'claude-sonnet-5-5', thinking: { type: 'adaptive' }, output_config: { format: { type: 'json_schema', schema: REVIEW_SCHEMA } } });
     // The server ran the simulation itself: the prompt has its parse and numbers.
@@ -221,7 +222,7 @@ describe('POST /api/review: the AI review', () => {
     expect(body.usage.resetAt).toBeGreaterThan(Date.now());
     expect(Number(over.headers.get('Retry-After'))).toBeGreaterThan(0);
     expect(Number(over.headers.get('Retry-After'))).toBeLessThanOrEqual(86_400);
-    expect(calls).toHaveLength(1);
+    expect(calls.filter((c) => c.body.model !== HAIKU)).toHaveLength(1);
     expect(await countToday(id)).toBe(REVIEWS_PER_DAY);
   });
 

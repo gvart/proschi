@@ -1,7 +1,7 @@
 import { DURATIONS, type Duration } from '../../frontend/src/practice/modes/session';
 import { requireUser } from './auth';
-import { aiEnabled, AiError, createClient } from './ai/client';
-import { billedTokens, sessionCostUsd, WALL_CLOCK_MS } from './ai/budget';
+import { aiEnabled, AiError, createClient, HAIKU } from './ai/client';
+import { addUsage, billedTokens, sessionCostUsd, WALL_CLOCK_MS } from './ai/budget';
 import { problemContext } from './ai/context';
 import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewState, type InterviewVerdict } from './ai/interviewer';
 import type { Ctx } from './context';
@@ -9,6 +9,7 @@ import { balance, refund, spend } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
+import { recommendAfterInterview } from './roadmap';
 
 /**
  * The AI mock interviewer's routes (docs/design/paid-plans.md P3–P10), over
@@ -21,6 +22,10 @@ import { errorText, log } from './log';
  *   POST /api/interviews/<id>/finish              the verdict (once; again answers the same one)
  *   GET  /api/interviews/<id>                     the session with its transcript, to resume
  *   GET  /api/interviews                          the user's sessions, newest first, and the credits left
+ *   GET  /api/interviews/history                  verdict summaries with skill scores: every one on Pro, the latest on free (P1)
+ *
+ * A Pro user's verdict is followed by the AI roadmap's next steps
+ * (src/roadmap.ts, P9): one Haiku call whose failure never fails the verdict.
  *
  * The credit (P3) is refunded when the session fails (a model error, not a
  * limit) on its first turn or in its first 5 minutes; the session then ends.
@@ -276,7 +281,9 @@ export async function finishInterview(request: Request, ctx: Ctx, id: string): P
   const now = Date.now();
   try {
     const result = await verdict({ client: createClient(ctx.env), context, now }, state);
-    const s = result.state;
+    // The next steps (Pro): recommendAfterInterview never throws, and its tokens count with the session's.
+    const picked = await recommendAfterInterview(ctx.env, user, id, row.problem_id, result.verdict, ctx.requestId);
+    const s = { ...result.state, usage: addUsage(result.state.usage, HAIKU, picked) };
     await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = ?, cost_usd = ?, verdict = ? WHERE id = ?")
       .bind(JSON.stringify(s), Date.now(), billedTokens(s.usage), sessionCostUsd(s.usage), JSON.stringify(result.verdict), id)
       .run();
@@ -302,6 +309,33 @@ export async function listInterviews(request: Request, ctx: Ctx): Promise<Respon
   const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
   const { results } = await ctx.env.DB.prepare('SELECT * FROM ai_interviews WHERE user_id = ? ORDER BY started_at DESC, id LIMIT ?').bind(user.id, LIST_MAX).all<Row>();
   return json({ interviews: results.map(summary), credits: await balance(ctx.env, user.id) }, 200, NO_STORE);
+}
+
+const HISTORY_MAX = 200;
+
+/**
+ * GET /api/interviews/history: the finished sessions' verdict summaries
+ * (pass or fail and the score per skill, no notes), newest first, for the
+ * history list and the trend per skill. Pro gets every one (up to 200);
+ * any other plan gets the latest only (P1), with `total` saying how many
+ * there are and `full: false`.
+ */
+export async function interviewHistory(request: Request, ctx: Ctx): Promise<Response> {
+  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
+  const full = user.plan === 'pro';
+  const { DB } = ctx.env;
+  const [rows, count] = await DB.batch([
+    DB.prepare("SELECT id, problem_id, duration_min, started_at, ended_at, verdict FROM ai_interviews WHERE user_id = ? AND status = 'finished' AND verdict IS NOT NULL ORDER BY started_at DESC, id LIMIT ?").bind(
+      user.id,
+      full ? HISTORY_MAX : 1,
+    ),
+    DB.prepare("SELECT COUNT(*) AS n FROM ai_interviews WHERE user_id = ? AND status = 'finished' AND verdict IS NOT NULL").bind(user.id),
+  ]);
+  const sessions = (rows.results as Pick<Row, 'id' | 'problem_id' | 'duration_min' | 'started_at' | 'ended_at' | 'verdict'>[]).map((r) => {
+    const v = JSON.parse(r.verdict!) as InterviewVerdict;
+    return { id: r.id, problem: r.problem_id, minutes: r.duration_min, startedAt: r.started_at, endedAt: r.ended_at ?? undefined, passed: v.passed, scores: v.scores };
+  });
+  return json({ full, total: (count.results[0] as { n: number }).n, sessions }, 200, NO_STORE);
 }
 
 /**
