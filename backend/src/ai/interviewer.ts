@@ -151,12 +151,15 @@ function testResultsText(grade: DesignGrade): string {
 }
 
 /** The candidate's turn as the model sees it. Rendered once and stored, so the history never changes. */
-function renderTurn(state: InterviewState, phase: Phase, elapsed: number, message: string, design?: { source: string; grade: DesignGrade }): string {
+function renderTurn(context: ProblemContext, state: InterviewState, phase: Phase, elapsed: number, message: string, design?: { source: string; grade: DesignGrade }): string {
   const ends = phaseEnds(state.durationMin);
+  const notAsked = context.topics.filter((t) => t.kind === 'clarify' && !state.covered.includes(t.id));
   const attrs = `phase="${phase}" elapsed="${minutes(elapsed)}" phase_left="${minutes(Math.max(0, ends[phase] - elapsed))}" total_left="${minutes(Math.max(0, state.durationMin * 60_000 - elapsed))}"`;
   const parts = [
     ...(phase !== state.phase ? [`The phase changed from ${state.phase} to ${phase}.`] : []),
     fence('candidate_message', message),
+    // Server text, not the candidate's: the facts behind these stay hidden until asked (the coverage is the hint's, up to the last turn).
+    ...(notAsked.length ? [`<not_asked>\nNot asked before this turn. Answer one if this message asks it (or something close); otherwise keep its facts hidden, also out of your own questions:\n${notAsked.map((t) => `- [${t.id}] ${t.label}`).join('\n')}\n</not_asked>`] : []),
     ...(design ? [fence('candidate_design', design.source), fence('test_results', testResultsText(design.grade))] : []),
   ];
   return `<turn ${attrs}>\n${parts.join('\n')}\n</turn>`;
@@ -211,7 +214,7 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
   let phase = currentPhase(state, elapsed);
   if (input.advance && phase !== 'wrapup') phase = PHASES[phaseIndex(phase) + 1].id;
   const design = input.design !== undefined ? { source: input.design, grade: gradeDesign(context.problem, input.design) } : undefined;
-  const rendered = renderTurn(state, phase, elapsed, input.message, design);
+  const rendered = renderTurn(context, state, phase, elapsed, input.message, design);
 
   // Sonnet sees the new turn and the reply; Haiku sees them again in its window.
   const estimate = 2 * approxTokens(rendered) + REPLY_MAX_TOKENS + HINT_MAX_TOKENS + 2_000;
@@ -296,7 +299,9 @@ async function coach(client: ClaudeClient, context: ProblemContext, state: Inter
   });
   const parsed = parseHint(result.text, new Set(context.topics.map((t) => t.id)));
   if (!parsed) throw new AiError('malformed', 'The hint is not valid JSON', { usage: result.usage });
-  return { hint: { kind: forced ?? parsed.kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
+  // Only the clock asks for a wrap-up hint; one the model picks on its own is a focus hint.
+  const kind = forced ?? (parsed.kind === 'wrapup' ? 'focus' : parsed.kind);
+  return { hint: { kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
 }
 
 /** Haiku's JSON, checked; topic ids it made up are dropped. */
