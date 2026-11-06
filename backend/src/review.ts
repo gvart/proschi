@@ -14,8 +14,8 @@ import { findProblem } from './verify';
  * review"; docs/design/paid-plans.md P17). Pro only, at most
  * REVIEWS_PER_DAY a UTC day per user, counted in D1 (migration 0020). The
  * body is checked against the contract the page builds it from
- * (frontend/src/review/contract.ts), but only its source and problem id are
- * used: the server parses, simulates and tests the design itself (P6,
+ * (frontend/src/review/contract.ts), but only its source, problem id and,
+ * for an editor diagram, the files it imports are used: the server parses, simulates and tests the design itself (P6,
  * src/ai/reviewer.ts). Without ANTHROPIC_API_KEY it answers 501 and the page
  * uses its rule reviewer (P10). The source is never logged.
  *
@@ -94,7 +94,7 @@ export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response
   }
 
   try {
-    const req = serverReviewRequest(page.source, solved);
+    const req = serverReviewRequest(page.source, solved, { path: page.path, imports: page.imports });
     const { review, usage } = await aiReview(createClient(env), req, solved ? problemContext(solved.id) : undefined);
     log('info', 'review.done', { requestId: ctx.requestId, userId: user.id, problem: solved?.id, tokens: usage.reduce((n, u) => n + u.input_tokens + u.output_tokens + u.cache_creation_input_tokens, 0) });
     return json({ ...review, usage: usageOf(used, at) }, 200, NO_STORE);
@@ -117,6 +117,15 @@ export async function getReviewUsage(request: Request, ctx: Ctx): Promise<Respon
   if (!user) return planRequired();
   const at = Date.now();
   return json(usageOf(await usedToday(env.DB, user.id, at), at), 200, NO_STORE);
+}
+
+/** Days of review_usage kept: the cap only needs today; a week is enough to look back on. */
+export const REVIEW_USAGE_DAYS = 7;
+
+/** Deletes review_usage rows older than REVIEW_USAGE_DAYS; returns how many. For the daily cron. */
+export async function pruneReviewUsage(env: Pick<Env, 'DB'>, at = Date.now()): Promise<number> {
+  const { meta } = await env.DB.prepare('DELETE FROM review_usage WHERE day < ?').bind(utcDay(at - REVIEW_USAGE_DAYS * DAY_MS)).run();
+  return meta.changes;
 }
 
 /** Download my data: AI reviews asked for, per UTC day. */

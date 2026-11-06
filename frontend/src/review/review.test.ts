@@ -1,7 +1,9 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { defaultEngine, nullEngine } from '../hld/engine';
 import { findProblem } from '../practice/catalog';
-import { MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
+import { mapResolver, parse } from '../dsl';
+import { MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
+import { editorReviewInput } from './editor';
 import { practiceReviewInput } from './practice';
 import { buildReviewRequest } from './request';
 import { aiReviewEnabled, apiReviewer, DailyLimitError, defaultReviewer, getReviewUsage, ReviewUnavailableError, ruleReviewer, withFallback } from './reviewer';
@@ -65,8 +67,25 @@ describe('review request', () => {
     ['bad nodes', { source: '', model: { nodes: [{ id: 1 }], edges: [], useCases: [], decisions: [], diagnostics: [] } }, /model\.nodes/],
     ['bad tests', { source: '', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] }, tests: { passed: 1 } }, /tests needs/],
     ['bad metrics', { source: '', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] }, metrics: { costUsd: 'a lot' } }, /metrics\.costUsd/],
+    ['a bad path', { source: '', path: 1 }, /path must be a string/],
+    ['imports that are not a map', { source: '', imports: ['a.proschi'] }, /imports must be an object/],
+    ['too many imports', { source: '', imports: Object.fromEntries(Array.from({ length: MAX_REVIEW_IMPORTS + 1 }, (_, i) => [`f${i}`, ''])) }, /imports must be an object/],
+    ['an import that is not text', { source: '', imports: { 'a.proschi': 1 } }, /each import/],
+    ['a long import', { source: '', imports: { 'a.proschi': 'x'.repeat(MAX_REVIEW_SOURCE + 1) } }, /source is too long/],
   ])('rejects %s', (_name, body, message) => {
     expect(reviewRequestProblem(body)).toMatch(message);
+  });
+
+  it('carries the editor’s path and the files its imports read', () => {
+    const files = { 'lib/shared.proschi': 'db "Orders" [PostgreSQL]\n' };
+    const source = 'import "lib/shared.proschi"\napi "API" [REST API]\napi -> db\n';
+    const parsed = parse(source, { path: 'shop.proschi', resolve: mapResolver(files) });
+    const request = buildReviewRequest(editorReviewInput(source, parsed, defaultEngine.analyze(parsed.diagram)!, [], { path: 'shop.proschi', imports: files }));
+    expect(request).toMatchObject({ path: 'shop.proschi', imports: files });
+    expect(request.model.nodes.map((n) => n.id)).toEqual(expect.arrayContaining(['api', 'db']));
+    expect(reviewRequestProblem(JSON.parse(JSON.stringify(request)))).toBeUndefined();
+    // No imports, no field.
+    expect(buildReviewRequest(editorReviewInput('', parse(''), defaultEngine.analyze(parse('').diagram)!, [], { imports: {} }))).not.toHaveProperty('imports');
   });
 });
 

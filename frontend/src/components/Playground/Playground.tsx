@@ -1200,7 +1200,7 @@ export default function Playground() {
                     review={
                       <ReviewPanel
                         source={source}
-                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)}
+                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
                         onSelect={selectDiagnostic}
                         plan={account.state.status === 'signed-in' ? (account.state.user.plan ?? 'free') : undefined}
                       />

@@ -25,6 +25,9 @@ export interface ReviewInput {
   /** The practice problem being solved; absent in the editor. */
   problem?: Pick<Problem, 'id' | 'title' | 'version'>;
   source: string;
+  /** The design's path and the imported files its parse read (the editor's), so the server can parse it the same way. */
+  path?: string;
+  imports?: Record<string, string>;
   parsed: ParseResult;
   /** The tests of this source, when it was run. */
   run?: RunResult;
@@ -237,10 +240,12 @@ function detailsByUseCase(diagram: Diagram, analysis: Analysis): Partial<ReviewU
   });
 }
 
-export function buildReviewRequest({ problem, source, parsed, run, analysis, givenFiles }: ReviewInput): DesignReviewRequest {
+export function buildReviewRequest({ problem, source, path, imports, parsed, run, analysis, givenFiles }: ReviewInput): DesignReviewRequest {
   return {
     ...(problem ? { problem: { id: problem.id, version: problem.version ?? 1, title: problem.title } } : {}),
     source,
+    ...(path !== undefined ? { path } : {}),
+    ...(imports && Object.keys(imports).length ? { imports } : {}),
     model: modelSummary(parsed.diagram, parsed.diagnostics, analysis, givenFiles),
     ...(run ? { tests: reviewTests(run) } : {}),
     ...(analysis ? { metrics: reviewMetrics(analysis, parsed.diagram) } : {}),

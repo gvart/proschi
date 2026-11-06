@@ -474,11 +474,19 @@ so the two cannot drift.
     `tests.results` id of the same requirement.
 
   Lists hold at most 500 items. Unknown fields are refused.
-  The server checks the whole body, but uses only `source` and
-  `problem.id` (P6): it parses the source itself (with the problem's given,
-  for a problem), runs the simulation and the tests, and gives the model
-  those results, never the page's `model`, `tests` or `metrics`. An editor
-  diagram's imports are not sent, so they show as errors.
+  - `path?` and `imports?`: for an editor diagram, its file name and the
+    files its imports read (path → source: other diagrams, `cloud:`
+    versions), at most 50, each at most 64 KiB, all of them inside the
+    192 KiB body.
+
+  The server checks the whole body, but uses only `source`, `problem.id`
+  and, without a problem, `path` and `imports` (P6): it parses the source
+  itself, runs the simulation and the tests, and gives the model those
+  results, never the page's `model`, `tests` or `metrics`. A practice
+  solution's `import "problem.proschi"` resolves to the bundled problem's
+  given, as in `src/verify.ts`, and any `imports` sent with it are ignored;
+  an editor diagram's imports resolve only against the files sent, parsed as
+  data like the source, and nothing is fetched.
 - **Answers**: 200 with a `DesignReview` and the usage after it: `{summary,
   strengths: string[], issues: [{severity: "info" | "minor" | "major" |
   "critical", title, detail, nodeId?}], suggestions: string[], usage: {limit,
@@ -504,8 +512,9 @@ How it works (`src/review.ts`, `src/ai/reviewer.ts`):
   UTC day. A review is counted before the model is called, with one
   statement that increments only under the cap (`INSERT … ON CONFLICT DO
   UPDATE … WHERE count < 20 RETURNING`), so concurrent reviews cannot pass
-  it, and given back when the call fails. The counts are in Download my data
-  and deleted with the account.
+  it, and given back when the call fails. Rows older than 7 days are pruned
+  (`pruneReviewUsage`, for the daily cron). The counts are in Download my
+  data and deleted with the account.
 - One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)
   through `src/ai/client.ts`, so `AI_GATEWAY_URL` applies as for interviews,
   with a JSON schema for the answer. The answer is checked with
