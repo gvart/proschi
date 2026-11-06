@@ -73,3 +73,9 @@ id; don't rewrite old ones.
   diagrams send their imported files (at most 50, 64 KiB each), which the
   server reads as data and never fetches. `VITE_AI_REVIEW` is gone: billing
   decides.
+- **P20. AI interview details.** The 90-day job deletes transcripts and
+  stored state but keeps the verdict. One active AI interview per user:
+  starting another answers 409 `active_session`, and the UI offers Resume
+  (default) or "End it and start a new one", which says the old credit is
+  not returned. Model calls can go through AI Gateway with
+  `AI_GATEWAY_TOKEN`.
