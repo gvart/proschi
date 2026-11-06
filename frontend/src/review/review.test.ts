@@ -4,7 +4,7 @@ import { findProblem } from '../practice/catalog';
 import { MAX_REVIEW_SOURCE, parseDesignReview, reviewRequestProblem, type DesignReview } from './contract';
 import { practiceReviewInput } from './practice';
 import { buildReviewRequest } from './request';
-import { apiReviewer, defaultReviewer, ReviewUnavailableError, ruleReviewer, withFallback } from './reviewer';
+import { aiReviewEnabled, apiReviewer, DailyLimitError, defaultReviewer, getReviewUsage, ReviewUnavailableError, ruleReviewer, withFallback } from './reviewer';
 
 const shortener = findProblem('url-shortener')!;
 
@@ -95,8 +95,9 @@ describe('design review answers', () => {
 describe('reviewers', () => {
   afterEach(() => vi.unstubAllGlobals());
 
-  it('use the rule reviewer unless built with VITE_AI_REVIEW=true', async () => {
+  it('use the rule reviewer by default; the AI review is for Pro where paid plans are on', async () => {
     expect(defaultReviewer).toBe(ruleReviewer);
+    expect(aiReviewEnabled).toBe(false);
     expect(ruleReviewer).toMatchObject({ available: true, ai: false });
     const review = await ruleReviewer.review(buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine)));
     expect(review.by).toBe('rules');
@@ -136,5 +137,33 @@ describe('reviewers', () => {
 
     vi.stubGlobal('fetch', answer(200, { summary: 'ok', strengths: [], issues: [], suggestions: [] }));
     await expect(apiReviewer.review(request)).resolves.toEqual({ summary: 'ok', strengths: [], issues: [], suggestions: [] });
+  });
+
+  it('read the Pro API: the usage with a review, 429 daily_limit, 402 as not available, and malformed reviews as errors', async () => {
+    const request = buildReviewRequest(practiceReviewInput(shortener, shortener.starter, defaultEngine));
+    const answer = (status: number, body: unknown) => vi.fn(async () => new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } }));
+    const usage = { limit: 20, used: 3, remaining: 17, resetAt: Date.UTC(2026, 10, 7) };
+
+    vi.stubGlobal('fetch', answer(200, { summary: 'ok', strengths: [], issues: [], suggestions: [], usage }));
+    await expect(apiReviewer.review(request)).resolves.toEqual({ summary: 'ok', strengths: [], issues: [], suggestions: [], usage });
+
+    vi.stubGlobal('fetch', answer(429, { error: 'daily_limit', usage: { ...usage, used: 20, remaining: 0 } }));
+    const limit = await apiReviewer.review(request).catch((e: unknown) => e);
+    expect(limit).toBeInstanceOf(DailyLimitError);
+    expect((limit as DailyLimitError).usage).toMatchObject({ remaining: 0 });
+
+    vi.stubGlobal('fetch', answer(402, { error: 'plan_required' }));
+    await expect(apiReviewer.review(request)).rejects.toBeInstanceOf(ReviewUnavailableError);
+    vi.stubGlobal('fetch', answer(503, { error: 'ai_unavailable' }));
+    await expect(apiReviewer.review(request)).rejects.toBeInstanceOf(ReviewUnavailableError);
+    vi.stubGlobal('fetch', answer(502, { error: 'review_failed' }));
+    await expect(apiReviewer.review(request)).rejects.toThrow('review_failed');
+    vi.stubGlobal('fetch', answer(200, { summary: 1 }));
+    await expect(apiReviewer.review(request)).rejects.toThrow(/Malformed design review/);
+
+    vi.stubGlobal('fetch', answer(200, usage));
+    await expect(getReviewUsage()).resolves.toEqual(usage);
+    vi.stubGlobal('fetch', answer(501, { error: 'not_implemented' }));
+    await expect(getReviewUsage()).resolves.toBeUndefined();
   });
 });

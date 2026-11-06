@@ -4,9 +4,8 @@
  * Worker validates request bodies with the same definition the page builds
  * them from (backend/src/review.ts imports this file).
  *
- * Until an LLM is wired in, the page reviews designs itself with rules over
- * the same request (./rules.ts, ./reviewer.ts); builds with VITE_AI_REVIEW=true
- * call the endpoint, which answers 501 `{error: "not_implemented"}` for now.
+ * The endpoint is Pro's AI review; everyone else gets the page's own review,
+ * rules over the same request (./rules.ts, ./reviewer.ts).
  */
 
 /** One node of the design, as the review sees it. */

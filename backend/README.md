@@ -436,17 +436,18 @@ views) and a per-day table. Without the secret the summary answers 404.
 
 ### Design review (`POST /api/review`)
 
-A placeholder for an LLM review of a design, for whoever wires the model in.
-Until then the page reviews designs itself: a rule reviewer
-(`frontend/src/review/rules.ts`) reads the same request and answers with the
-same `DesignReview`, so the LLM can replace it behind the `DesignReviewer`
-interface without touching the page. The contract is one file,
+An AI review of a design, for Pro (docs/design/paid-plans.md, P17): Claude
+Sonnet reads the design, the server's own run of its tests and the
+simulation's numbers, and answers with a `DesignReview`. Everyone else, and
+Pro when the reviewer is off, busy or used up for the day, gets the page's
+rule reviewer (`frontend/src/review/rules.ts`), which answers with the same
+`DesignReview` from the same request. The contract is one file,
 `frontend/src/review/contract.ts`: the page builds the request from it
 (`src/review/request.ts`) and the Worker validates with it (`src/review.ts`),
 so the two cannot drift.
 
-- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, no sign-in
-  needed:
+- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, signed in
+  on Pro:
   - `source`: the design as written (at most 64 KiB; for a practice problem,
     the solver's file, which starts with `import "problem.proschi"`);
   - `model`: the parsed design, summarised: `nodes` (`id`, `name`, `tech`,
@@ -473,24 +474,57 @@ so the two cannot drift.
     `tests.results` id of the same requirement.
 
   Lists hold at most 500 items. Unknown fields are refused.
-- **Answers today**: 400 `{error}` naming what is wrong with the body, 413 for
-  a source or body that is too long, 429 past the per-IP limit, and otherwise
-  501 `{error: "not_implemented"}`. The page reads the 501 (and a 404, a 503
-  or no answer) as "no AI reviewer here" and shows the rule review instead.
-- **Answer once implemented**: 200 with a `DesignReview`: `{summary,
+  The server checks the whole body, but uses only `source` and
+  `problem.id` (P6): it parses the source itself (with the problem's given,
+  for a problem), runs the simulation and the tests, and gives the model
+  those results, never the page's `model`, `tests` or `metrics`. An editor
+  diagram's imports are not sent, so they show as errors.
+- **Answers**: 200 with a `DesignReview` and the usage after it: `{summary,
   strengths: string[], issues: [{severity: "info" | "minor" | "major" |
-  "critical", title, detail, nodeId?}], suggestions: string[]}`, the shape the
-  rule reviewer gives too (it adds `by: "rules"`). `nodeId`
-  must be a node of `model.nodes`; the page links it to the node's line.
-  Check the model's output with `parseDesignReview` from the contract before
-  sending it.
+  "critical", title, detail, nodeId?}], suggestions: string[], usage: {limit,
+  used, remaining, resetAt}}` (`resetAt`: the next UTC midnight, in Unix
+  milliseconds). `nodeId` is a node of the server's parse (others are
+  dropped); the page links it to the node's line. Otherwise 400 `{error}`
+  naming what is wrong with the body, 413 for a source or body that is too
+  long, 401 signed out, 402 `{error: "plan_required"}` off Pro, 404 for an
+  unknown problem, 429 past the per-IP or per-user limit (`Retry-After`),
+  429 `{error: "daily_limit", usage}` past 20 reviews today (with
+  `Retry-After` to midnight UTC), 503 `{error: "ai_unavailable"}` when the
+  model is busy or unreachable, 502 `{error: "review_failed"}` when it
+  failed or its answer did not validate twice, and 501 `{error:
+  "not_implemented"}` without `ANTHROPIC_API_KEY` (P10). The page reads 501,
+  402, 404, 503 and no answer as "no AI reviewer here" and shows the rule
+  review, saying why.
+- **`GET /api/review/usage`**: `{limit, used, remaining, resetAt}` for a Pro
+  user, for the count next to the button; 402 off Pro, 501 without the key.
 
-The `TODO(ai-review)` in `src/review.ts` marks where the call goes. It will
-need an API key: add it to `Env` (`src/env.ts`) as an optional secret, set
-with `npx wrangler secret put`, and keep answering 501 while it is unset.
-Don't log the request's source. Pages built without `VITE_AI_REVIEW=true`
-never call the endpoint: they use the rule reviewer
-(`frontend/src/review/reviewer.ts`).
+How it works (`src/review.ts`, `src/ai/reviewer.ts`):
+
+- The day's count is `review_usage` (migration 0020), one row per user and
+  UTC day. A review is counted before the model is called, with one
+  statement that increments only under the cap (`INSERT … ON CONFLICT DO
+  UPDATE … WHERE count < 20 RETURNING`), so concurrent reviews cannot pass
+  it, and given back when the call fails. The counts are in Download my data
+  and deleted with the account.
+- One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)
+  through `src/ai/client.ts`, so `AI_GATEWAY_URL` applies as for interviews,
+  with a JSON schema for the answer. The answer is checked with
+  `parseDesignReview` and for sizes and empty text; one that does not hold
+  is asked for once more. For a problem, its context
+  (`src/ai/context.ts`) is a cached system block.
+- The design's source, its parse, the test results and the simulation reach
+  the model only inside data tags (`<design_source>`, …), with every `<`
+  that could open or close a tag escaped, and the prompt says that text is
+  data, never instructions. The source is never logged.
+- Limits: `REVIEW_LIMITER` per IP (10 a minute) and `AI_REVIEW_LIMITER` per
+  user (5 a minute), besides the daily cap.
+
+The page asks the API only in builds with paid plans (`VITE_BILLING=true`,
+which needs `VITE_ACCOUNTS=true`) and only for a Pro account; there it shows
+the reviews left today. Elsewhere it uses the rule reviewer
+(`frontend/src/review/reviewer.ts`), with a hint that AI review is part of
+Pro where paid plans are on. The old `VITE_AI_REVIEW` flag is gone: AI
+review is a Pro feature, so billing decides.
 
 The server refuses POST, PATCH and DELETE requests whose `Origin` is another
 site, unless they carry `Authorization: Bearer` and no session cookie (an

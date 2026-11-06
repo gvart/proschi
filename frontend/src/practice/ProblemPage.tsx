@@ -409,7 +409,14 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         onSelect={goTo}
         collapsed={!phone && !testsOpen}
         onToggle={phone ? undefined : toggleTests}
-        review={<ReviewPanel source={source} input={() => practiceReviewInput(problem, source, engine)} onSelect={goTo} />}
+        review={
+          <ReviewPanel
+            source={source}
+            input={() => practiceReviewInput(problem, source, engine)}
+            onSelect={goTo}
+            plan={account.state.status === 'signed-in' ? (account.state.user.plan ?? 'free') : undefined}
+          />
+        }
         mistake={
           // Not for the untouched starter: it fails everything, so no one mistake describes it.
           run && !run.result.blocked && !run.result.solved && problem.wrong?.length && run.source.trim() !== problem.starter.trim() ? (
