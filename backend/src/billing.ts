@@ -1,7 +1,7 @@
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { timingSafeEqual } from './crypto';
-import { balance, grantStatement, revokeStatement } from './credits';
+import { balance, grantStatement, refundedOrderStatement, revokeStatement } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
@@ -240,13 +240,15 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  *
  * - `subscription.created|updated|active|canceled|uncanceled|revoked`: the
  *   subscription's state is stored (a late event older than what is stored
- *   is not applied), and `users.plan` follows it: pro while active, trialing
+ *   is not applied, nor a cancel or revoke of a subscription other than the
+ *   current active one), and `users.plan` follows it: pro while active, trialing
  *   or past_due, else free. A downgrade keeps every diagram; those past the
  *   free limit turn read-only (src/documents.ts).
  * - `order.paid` for the pack: 5 credits, once per order.
  * - `order.refunded`, a succeeded `refund.created|updated`, or a lost
  *   `dispute.*` (a chargeback) of a pack order: its credits are taken back,
  *   what is left of them (the balance never goes below 0), once per order.
+ *   A refund that arrives before the order's `order.paid` keeps it from granting.
  *
  * Everything else is acknowledged and ignored.
  */
@@ -274,7 +276,12 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
   const product = productOf(env, data.product_id);
   if (userId && type.startsWith('subscription.') && (product === 'pro_monthly' || product === 'pro_yearly')) {
     const modified = msOf(data.modified_at) ?? msOf(data.created_at) ?? t;
+    const pro = PRO_STATUSES.map((s) => `'${s}'`).join(', ');
+    const newer = 'billing.subscription_modified_at IS NULL OR excluded.subscription_modified_at >= billing.subscription_modified_at';
     statements.push(
+      // The stored subscription is the account's current one. Its own events apply when not older than what is stored. Another
+      // subscription's event replaces it only when that one keeps Pro (a newer subscription) or the stored one doesn't: a late
+      // cancel or revoke of an old subscription never downgrades an account with a newer active one.
       DB.prepare(
         `INSERT INTO billing (user_id, polar_customer_id, polar_subscription_id, status, product, current_period_end, cancel_at_period_end, subscription_modified_at, updated_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
@@ -283,7 +290,11 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
            polar_subscription_id = excluded.polar_subscription_id, status = excluded.status, product = excluded.product,
            current_period_end = excluded.current_period_end, cancel_at_period_end = excluded.cancel_at_period_end,
            subscription_modified_at = excluded.subscription_modified_at, updated_at = excluded.updated_at
-         WHERE billing.subscription_modified_at IS NULL OR excluded.subscription_modified_at >= billing.subscription_modified_at`,
+         WHERE CASE
+           WHEN billing.polar_subscription_id IS NULL OR billing.polar_subscription_id = excluded.polar_subscription_id THEN ${newer}
+           WHEN COALESCE(billing.status, '') NOT IN (${pro}) THEN excluded.status IN (${pro}) OR ${newer}
+           ELSE excluded.status IN (${pro}) AND (${newer})
+         END`,
       ).bind(userId, customerId, data.id ?? null, data.status ?? null, product, msOf(data.current_period_end), data.cancel_at_period_end ? 1 : 0, modified, t),
       // The plan follows what is stored, so a late, older event can't flip it back. A plan set by hand (not free or pro) stays.
       DB.prepare(
@@ -310,7 +321,8 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
         : type.startsWith('dispute.') && (data.status === 'lost' || data.status === 'charge_back')
           ? data.order_id
           : undefined;
-  if (refundedOrder) statements.push(revokeStatement(DB, refundedOrder, t));
+  // Marked first, so an order.paid that arrives later grants nothing.
+  if (refundedOrder) statements.push(refundedOrderStatement(DB, refundedOrder, t), revokeStatement(DB, refundedOrder, t));
 
   try {
     await DB.batch(statements);

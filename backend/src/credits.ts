@@ -133,12 +133,21 @@ export async function refund(env: Pick<Env, 'DB'>, refId: string, at = Date.now(
   return { refunded: row !== null };
 }
 
-/** The statement that adds `credits` pack credits for a paid order (src/billing.ts batches it with the webhook's other writes). Once per order. */
+/**
+ * The statement that adds `credits` pack credits for a paid order (src/billing.ts batches it with the webhook's other writes).
+ * Once per order, and never for an order already refunded (a refund that arrived before its order.paid, `refunded_orders`).
+ */
 export function grantStatement(DB: D1Database, userId: string, credits: number, item: string, orderId: string, at = Date.now()): D1PreparedStatement {
   return DB.prepare(
-    `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at) VALUES (?1, 'grant', 'pack', '', ?2, ?3, ?4, ?5)
+    `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at)
+     SELECT ?1, 'grant', 'pack', '', ?2, ?3, ?4, ?5 WHERE NOT EXISTS (SELECT 1 FROM refunded_orders WHERE order_id = ?4)
      ON CONFLICT (kind, ref_id) DO NOTHING`,
   ).bind(userId, credits, item, orderId, at);
+}
+
+/** The statement that marks an order refunded, so a grant arriving after it adds nothing. */
+export function refundedOrderStatement(DB: D1Database, orderId: string, at = Date.now()): D1PreparedStatement {
+  return DB.prepare('INSERT INTO refunded_orders (order_id, refunded_at) VALUES (?, ?) ON CONFLICT (order_id) DO NOTHING').bind(orderId, at);
 }
 
 /**

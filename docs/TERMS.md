@@ -47,7 +47,8 @@ consumer law of the country you buy from. Ask through the billing portal or
 
 A pack is 5 AI interviews for €15, on any plan. Pack credits never expire
 while the account exists. Pro's monthly interviews are used first, then the
-free one, then pack credits.
+free one, then pack credits. Interviews already used from a pack aren't
+refundable: a refunded pack takes back only its unused credits.
 
 ## AI interviews
 

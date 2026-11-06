@@ -17,3 +17,11 @@ CREATE TABLE account_tombstones (
   -- 1: the deleted account had used its trial interview.
   trial_used INTEGER NOT NULL DEFAULT 0
 );
+
+-- Polar orders refunded or charged back (src/billing.ts), by Polar's order
+-- id: a refund that arrives before its order.paid keeps the later grant from
+-- adding the pack's credits. One small row per refunded order.
+CREATE TABLE refunded_orders (
+  order_id TEXT PRIMARY KEY,
+  refunded_at INTEGER NOT NULL
+);
