@@ -1,0 +1,68 @@
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 104
+  s_e17b87e0a1b3ca::t_476f754e383da1 538-539,802,910,1335,1428-1429
+frontend/src/components/Playground/ShareLinkDialog.tsx
+  s_e17b87e0a1b3ca::t_476f754e383da1 4,7,33-34,36-38,122-160,162-173,175-185
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 5-6
+frontend/e2e/accounts.ts
+  s_e17b87e0a1b3ca::t_1a899b567bd717 27-33,62
+frontend/src/practice/roadmap.ts
+  s_e17b87e0a1b3ca::t_74859c9231295b 112-113
+frontend/src/services/documentShares.test.ts
+  s_e17b87e0a1b3ca::t_d4c18ef5a044ca 2
+frontend/src/practice/history/InterviewHistory.tsx
+  s_e17b87e0a1b3ca::t_ce3de875671e47 6-7,103-116,124-125,156
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_578e814c1321b5 10,69-71,93,151-155,272,343-344,346,349
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 9
+frontend/src/review/ReviewPanel.tsx
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 5-6
+  s_e17b87e0a1b3ca::t_d4c18ef5a044ca 7,51,55,57,129-140
+  s_e17b87e0a1b3ca::t_9691af1551593a 59-60
+frontend/src/practice/history/NextForYou.tsx
+  s_e17b87e0a1b3ca::t_8bbd2405c5f5e6 3,89,91
+  s_e17b87e0a1b3ca::t_74859c9231295b 4,52-57,59-69,74-88,90
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 11
+  s_e17b87e0a1b3ca::t_87d00b45961b26 12,150-151,223-237,241,311,336
+frontend/src/practice/modes/ai/AiInterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 11
+  s_e17b87e0a1b3ca::t_ce3de875671e47 43,97,358
+  s_e17b87e0a1b3ca::t_c121abfe4fae33 364-365
+frontend/src/components/Feature.tsx
+  s_e17b87e0a1b3ca::t_174b100b2a72bb 1-2
+  s_e17b87e0a1b3ca::t_f934e7613cb374 4-36
+  s_e17b87e0a1b3ca::t_c3e92ff0e3a8ab 3
+frontend/src/practice/roadmap.test.ts
+  s_e17b87e0a1b3ca::t_74859c9231295b 3
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_ce3de875671e47 78
+frontend/src/components/Playground/UpgradeHint.tsx
+  s_e17b87e0a1b3ca::t_8bbd2405c5f5e6 1,6-7,9-10,12,14
+frontend/src/services/billing.ts
+  s_e17b87e0a1b3ca::t_73c72e22aeeff6 2,32-33
+frontend/e2e/billing.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_1a899b567bd717 2,21,31
+frontend/src/components/Feature.test.tsx
+  s_e17b87e0a1b3ca::t_da25a00dcba237 1-132
+frontend/src/components/UpgradeHint.tsx
+  s_e17b87e0a1b3ca::t_4c2225ed9746e0 1-32
+frontend/src/components/featureState.ts
+  s_e17b87e0a1b3ca::t_c8f49a848acd9a 1-65
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2eb43134db6985bdaaff2dd64fd10f271fb85bb5",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}

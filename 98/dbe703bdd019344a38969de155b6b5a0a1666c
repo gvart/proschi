@@ -1,0 +1,42 @@
+backend/src/roadmap.ts
+  s_e17b87e0a1b3ca::t_9bc6522aadbc6e 136,158
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_6daeb35cb887d8 16
+  s_e17b87e0a1b3ca::t_7a6f7a941c86df 131-161,174-179
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_b4e5885f65cf0b 97-114
+backend/test/paidRoutes.test.ts
+  s_e17b87e0a1b3ca::t_2f7e66b996cdee 1-349
+backend/README.md
+  s_e17b87e0a1b3ca::t_7817113218db50 345-379
+backend/src/features.ts
+  s_e17b87e0a1b3ca::t_b8a629e118f1b2 53-61,63-67,69-70,72,74-79,81,83-88
+backend/src/documentShares.ts
+  s_e17b87e0a1b3ca::t_cd679f4a561955 5,53-54,59,61,66,85-86,94
+  s_e17b87e0a1b3ca::t_2a67005b6f01f9 2,62-65
+backend/src/review.ts
+  s_e17b87e0a1b3ca::t_9bc6522aadbc6e 64-66,70-71,74-75,108,110-111,113-121
+backend/src/interviews.ts
+  s_e17b87e0a1b3ca::t_d8fcaa6c07e5a9 10,78-89,91-94,137,165,192,279,322,338,350,376
+  s_e17b87e0a1b3ca::t_209e97e18c0959 2,90,293,336,345,361
+  s_e17b87e0a1b3ca::t_9c379caf2917d7 281-289,292,295,335,337
+  s_e17b87e0a1b3ca::t_4e113996dcb802 280
+backend/test/features.test.ts
+  s_e17b87e0a1b3ca::t_9a4e8701ae3a69 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98dbe703bdd019344a38969de155b6b5a0a1666c",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
