@@ -1,0 +1,40 @@
+backend/test/review.test.ts
+  s_e17b87e0a1b3ca::t_f6613d3887a79a 1-2,4-7,27-28,30-77,82-83,86,112,120,126-289
+  s_e17b87e0a1b3ca::t_6f95a4f91876ff 290
+backend/src/ai/reviewer.ts
+  s_e17b87e0a1b3ca::t_adf31b7dc539cc 1-171
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_85f77580b8646f 57
+backend/migrations/0020_review_usage.sql
+  s_e17b87e0a1b3ca::t_ee9e04fc30c4ef 1-12
+backend/wrangler.jsonc
+  s_e17b87e0a1b3ca::t_e488b60abe51b8 64-66
+  s_e17b87e0a1b3ca::t_cbb4b858816e69 110-111
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_85f77580b8646f 21,246-247
+frontend/src/review/contract.ts
+  s_e17b87e0a1b3ca::t_3ea140f4e6c9b0 216-237
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_85f77580b8646f 22,103-104,196
+backend/src/review.ts
+  s_e17b87e0a1b3ca::t_37b921e7aa81e8 62,65,79-80,116-117
+  s_e17b87e0a1b3ca::t_1c7681baeede0c 1-5,7,9-10,14-22,24-61,63-64,66-69,71-72,76-78,81-115,118-120,122-124
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_520e12f8ea0317 273
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b1ec5834f88689bf7075be68b1a0378b8c30600a",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
