@@ -221,6 +221,42 @@ normal editor and tests, the clock still running) and **Wrap-up** (a
 self-review checklist and a summary). The session, time per phase and the
 summaries stay in the browser; nothing is sent to the server.
 
+### The AI interviewer
+
+Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
+offers a choice: **Scripted (free)**, the mode above, or the **AI
+interviewer**, with the AI interviews left (and, with billing on, a link to
+Pro and the packs). Starting one spends a credit (the free plan has one for
+life); the first start asks once for consent and names what is sent to the
+AI provider. The interviewer is Claude (backend `src/ai/`, routes in
+`src/interviews.ts`), and the session lives on the server, so a reload picks
+it up again.
+
+- **A chat next to the editor**, in the statement column. The interviewer
+  greets, then answers clarifying questions from the hidden `## Scale` and
+  `## Constraints`, asks this file's estimates in the Estimate phase and the
+  lesson's "In the interview" follow-ups in Design and Wrap-up. Replies
+  stream in. A mic button dictates through the browser's speech recognition
+  where there is one (it is hidden elsewhere); typing always works.
+- **The phase and the clock**: the same four phases and 10/10/70/10 split of
+  30, 45 or 60 minutes. The clock moves the phase on; **Next phase** moves
+  on earlier. Whatever the length, a session stops taking turns after 60
+  minutes or at its token cap; the verdict can always be asked for.
+- **Coaching cards** after each turn: **Focus now** (what to do next),
+  **Can improve** (what to fix in what you just said) and **Wrap up** (near
+  the end of a phase).
+- **Send my design** attaches the editor's source to the message. The server
+  runs the problem's tests on it and hands the model those results; it never
+  trusts the page's.
+- **The verdict**, on **Finish and get the verdict**: pass or fail, a score
+  from 1 to 5 for requirements, estimation, design, trade-offs and
+  communication, what went well and what went wrong per skill, and up to five
+  next steps.
+
+If the interviewer fails on the first turn or in the first 5 minutes, the
+credit is given back and the session ends. Transcripts are kept 90 days, the
+verdicts for history ([Privacy](PRIVACY.md#ai-interviews)).
+
 Every problem has an `interview.md` (`interviewFile.test.ts` fails without
 one). It holds exactly two sections, each item a `### ` heading opened by
 `- key: value` lines and followed by Markdown:

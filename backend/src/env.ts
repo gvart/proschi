@@ -22,6 +22,11 @@ export interface Env {
   EMAIL_LIMITER: RateLimit;
   /** The admin panel's sign-in and setup, per IP (src/adminAuth.ts). */
   ADMIN_LIMITER: RateLimit;
+  /** AI interviews (src/interviews.ts), per user: sessions started, turns, verdicts, and reads of sessions. */
+  INTERVIEW_START_LIMITER: RateLimit;
+  INTERVIEW_TURN_LIMITER: RateLimit;
+  INTERVIEW_FINISH_LIMITER: RateLimit;
+  INTERVIEW_READ_LIMITER: RateLimit;
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
@@ -70,6 +75,15 @@ export interface Env {
   POLAR_PRODUCT_PRO_MONTHLY?: string;
   POLAR_PRODUCT_PRO_YEARLY?: string;
   POLAR_PRODUCT_PACK_5?: string;
+  /**
+   * The AI interviewer (src/interviews.ts, src/ai/client.ts). Without the
+   * key its routes answer 501 (docs/design/paid-plans.md P10).
+   */
+  ANTHROPIC_API_KEY?: string;
+  /** Cloudflare AI Gateway's Anthropic endpoint; the Claude API when unset. */
+  AI_GATEWAY_URL?: string;
+  /** An authenticated gateway's token, sent as `cf-aig-authorization`. */
+  AI_GATEWAY_TOKEN?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

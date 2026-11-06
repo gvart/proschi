@@ -26,6 +26,10 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
+| `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
+| `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
+| `proschi.aiInterview.<problem>` | Signed in: the id of the AI interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
+| `proschi.aiInterview.consent` | That you agreed once to what an AI interview sends to the AI provider |
 | `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
@@ -335,7 +339,9 @@ them only to answer, not to train its models.
 **What is stored**: the interview's transcript, kept 90 days and then
 deleted, and its verdict summary (pass or fail, and what went well and
 wrong per skill), kept for your interview history. Both are private, part
-of **Download my data**, and deleted with your account. Dictation, where
+of **Download my data**, and deleted with your account. A daily job deletes
+each transcript, and the design sent with it, once the interview is 90 days
+old; the verdict stays. Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 

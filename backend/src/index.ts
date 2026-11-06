@@ -27,6 +27,7 @@ import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sha
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
 import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
+import { finishInterview, getInterview, interviewTurn, listInterviews, startInterview } from './interviews';
 
 /**
  * proschi.app: the site (frontend/dist, served as static assets without
@@ -102,6 +103,11 @@ import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from
  *   GET    /api/oembed?url=                 oEmbed for a short link
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review: Pro, 20 a day (402 plan_required, 429 daily_limit, 501 without the key)
  *   GET    /api/review/usage                Pro's AI reviews today: {limit, used, remaining, resetAt}
+ *   POST   /api/interviews {problem, minutes, replace?}   starts an AI interview, spending a credit (402 no_credits; 409 active_session; 501 without the AI key)
+ *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
+ *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
+ *   GET    /api/interviews/<id>            one session with its transcript, to resume
+ *   GET    /api/interviews                 the user's sessions and the credits left
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
@@ -194,6 +200,11 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
   if (is('GET', 'api', 'review', 'usage')) return getReviewUsage(request, ctx);
+  if (is('POST', 'api', 'interviews')) return startInterview(request, ctx);
+  if (is('GET', 'api', 'interviews')) return listInterviews(request, ctx);
+  if (is('GET', 'api', 'interviews', '*')) return getInterview(request, ctx, parts[2]);
+  if (is('POST', 'api', 'interviews', '*', 'turn')) return interviewTurn(request, ctx, parts[2]);
+  if (is('POST', 'api', 'interviews', '*', 'finish')) return finishInterview(request, ctx, parts[2]);
   if (is('POST', 'api', 'shares')) return createShare(request, ctx);
   if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
   if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);

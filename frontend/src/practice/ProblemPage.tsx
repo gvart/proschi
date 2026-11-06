@@ -42,6 +42,7 @@ import { evaluateChecks, guidedReducer, parseGuided } from './modes/guidedFile';
 import { interviewReducer, startSession, summarize, type InterviewAction, type InterviewSession } from './modes/session';
 import { appendHistory, loadGuided, loadHistory, loadSession, saveGuided, saveSession, type GuidedState } from './modes/store';
 import InterviewPanel, { InterviewClock } from './modes/InterviewPanel';
+import { hasAiInterview } from './modes/ai/api';
 import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 import './practiceLayout.css';
@@ -190,7 +191,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     return read.issues.length === 0 ? read.steps : undefined;
   }, [problem.guided]);
   const [session, setSession] = useState<InterviewSession | undefined>(() => (interview ? loadSession(problem.id) : undefined));
-  const [interviewOn, setInterviewOn] = useState(() => session !== undefined);
+  const [interviewOn, setInterviewOn] = useState(() => session !== undefined || (!!interview && hasAiInterview(problem.id)));
+  // The AI interviewer's "Send my design" reads the editor's source when pressed.
+  const sourceNow = useRef(source);
+  useEffect(() => {
+    sourceNow.current = source;
+  }, [source]);
+  const getSource = useCallback(() => sourceNow.current, []);
   const [guidedState, setGuidedState] = useState<GuidedState>(() => (guidedSteps ? loadGuided(problem.id, guidedSteps.length) : { done: [], active: false }));
   const guidedOn = !!guidedSteps && guidedState.active && !interviewOn;
   const dispatchInterview = useCallback((a: InterviewAction) => setSession((s) => s && interviewReducer(s, a)), []);
@@ -330,6 +337,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
           onExit={exitInterview}
           onRestart={() => setSession(undefined)}
+          signedIn={account.state.status === 'signed-in'}
+          getSource={getSource}
         >
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
         </InterviewPanel>

@@ -45,6 +45,17 @@ describe('Claude client', () => {
     expect(calls[0].url).toBe('https://gateway.ai.cloudflare.com/v1/acc/gw/anthropic/v1/messages');
     expect(calls[0].body.fallbacks).toBeUndefined();
     expect(calls[0].headers['anthropic-beta']).toBeUndefined();
+    expect(calls[0].headers['cf-aig-authorization']).toBeUndefined();
+  });
+
+  it('authenticates to AI Gateway with its token, and never sends the token to the Claude API', async () => {
+    const { fetch, calls } = mockFetch(() => messageResponse('ok'));
+    await createClient({ ...env, AI_GATEWAY_URL: 'https://gateway.ai.cloudflare.com/v1/acc/gw/anthropic', AI_GATEWAY_TOKEN: 'cf-token' }, { fetch }).create(req());
+    await createClient({ ...env, AI_GATEWAY_TOKEN: 'cf-token' }, { fetch }).create(req());
+    expect(calls[0].headers['cf-aig-authorization']).toBe('Bearer cf-token');
+    expect(calls[0].headers['x-api-key']).toBe('sk-test');
+    expect(calls[1].url).toBe('https://api.anthropic.com/v1/messages');
+    expect(calls[1].headers['cf-aig-authorization']).toBeUndefined();
   });
 
   it('maps HTTP errors, retrying only the transient ones', async () => {
