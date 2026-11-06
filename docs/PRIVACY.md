@@ -3,7 +3,7 @@
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
 (private, and you can turn that off). Payments for Pro go through Polar,
-and AI interviews are sent to an AI provider only when you start one. There are no analytics or tracking
+and AI interviews and AI design reviews are sent to an AI provider only when you start one. There are no analytics or tracking
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
@@ -339,6 +339,20 @@ of **Download my data**, and deleted with your account. Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 
+## AI design review
+
+On Pro, **Review my design** sends the design you review (its source and,
+for a practice problem, the problem's id) to the server, which runs the
+simulation and the tests on it and sends the design, those results and the
+problem to Anthropic's Claude to write the review. The provider uses them
+only to answer, not to train its models. On the free plan, signed out, and
+on Pro once the day's AI reviews are used up, the review is written by the
+page itself and nothing is sent.
+
+**What is stored**: not the design or the review, only how many AI reviews
+you asked for each day (UTC), for the limit of 20 a day. The counts are part
+of **Download my data** and deleted with your account.
+
 ## The site's operator
 
 Proschi has one operator, who signs in to an admin panel (`/admin/`) with a
@@ -418,7 +432,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan, subscription and interview credits, every session with its kind (the site or an
+  plan, subscription, interview credits and AI reviews a day, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).

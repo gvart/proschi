@@ -1197,7 +1197,14 @@ export default function Playground() {
                     analysis={simulation.analysis}
                     results={simulation.results}
                     onSelect={selectDiagnostic}
-                    review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
+                    review={
+                      <ReviewPanel
+                        source={source}
+                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
+                        onSelect={selectDiagnostic}
+                        plan={account.state.status === 'signed-in' ? (account.state.user.plan ?? 'free') : undefined}
+                      />
+                    }
                   />
                 ) : view === 'hld' && !playing ? (
                   <HldView

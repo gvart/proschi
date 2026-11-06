@@ -270,6 +270,7 @@ describe('data export', () => {
       emailReminders: null,
       billing: null,
       credits: [],
+      reviewUsage: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

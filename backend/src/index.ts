@@ -19,7 +19,7 @@ import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders }
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
-import { reviewDesign } from './review';
+import { getReviewUsage, reviewDesign } from './review';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
@@ -100,7 +100,8 @@ import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from
  *   DELETE /api/shares/<id>                 the owner deletes one
  *   GET    /api/me/shares                   the user's short links
  *   GET    /api/oembed?url=                 oEmbed for a short link
- *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review: Pro, 20 a day (402 plan_required, 429 daily_limit, 501 without the key)
+ *   GET    /api/review/usage                Pro's AI reviews today: {limit, used, remaining, resetAt}
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
@@ -192,6 +193,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
   if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
+  if (is('GET', 'api', 'review', 'usage')) return getReviewUsage(request, ctx);
   if (is('POST', 'api', 'shares')) return createShare(request, ctx);
   if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
   if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);

@@ -1,10 +1,11 @@
-import { useState } from 'react';
-import { AlertCircle, ClipboardCheck } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { AlertCircle, ClipboardCheck, Sparkles } from 'lucide-react';
 import type { SourceLoc } from '../dsl';
 import { outlineButton } from '../components/Playground/ui';
-import { REVIEW_SEVERITIES, type DesignReview, type DesignReviewIssue, type ReviewSeverity } from './contract';
+import { billingEnabled, pricingHref } from '../services/billing';
+import { REVIEW_SEVERITIES, type DesignReview, type DesignReviewIssue, type ReviewSeverity, type ReviewUsage } from './contract';
 import { buildReviewRequest, type ReviewInput } from './request';
-import { defaultReviewer, ReviewUnavailableError, type DesignReviewer } from './reviewer';
+import { aiReviewEnabled, apiReviewer, DailyLimitError, getReviewUsage, ReviewUnavailableError, ruleReviewer, type DesignReviewer } from './reviewer';
 
 interface ReviewPanelProps {
   /** The current source: a review of an older one is marked as such. */
@@ -13,15 +14,24 @@ interface ReviewPanelProps {
   input: () => ReviewInput;
   /** Jumps to a node the review names. */
   onSelect?: (loc: SourceLoc) => void;
+  /** The signed-in account's plan (`pro`, `free`); undefined signed out or without accounts. */
+  plan?: string;
+  /** A reviewer of the caller's (tests): used as is, without the plan's AI review or upgrade hint. */
   reviewer?: DesignReviewer;
 }
+
+/** Why the review shown is not the AI's, on an AI-capable panel. */
+type Notice = { kind: 'limit'; usage?: ReviewUsage } | { kind: 'fallback' } | { kind: 'error'; message: string };
 
 type State =
   | { status: 'idle' }
   | { status: 'loading' }
   | { status: 'unavailable' }
   | { status: 'error'; message: string }
-  | { status: 'done'; review: DesignReview; source: string; locs: Map<string, SourceLoc> };
+  | { status: 'done'; review: DesignReview; source: string; locs: Map<string, SourceLoc>; notice?: Notice };
+
+/** Whether this panel offers the AI review: `checking` until GET /api/review/usage answers. */
+type Ai = { status: 'off' } | { status: 'checking' } | { status: 'on'; usage: ReviewUsage };
 
 const SEVERITY_CLASS: Record<ReviewSeverity, string> = {
   critical: 'border-fail bg-fail/10',
@@ -34,39 +44,100 @@ const SEVERITY_TITLE: Record<ReviewSeverity, string> = { critical: 'Critical', m
 /** Most severe first. */
 const SEVERITY_ORDER = [...REVIEW_SEVERITIES].reverse();
 
+const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+
 /**
  * "Review my design": a review of the design's trade-offs, next to the
- * tests. By default the rule reviewer (./rules.ts) writes it from the
- * simulation and the test results; builds with VITE_AI_REVIEW=true ask an
- * LLM first (./reviewer.ts).
+ * tests. Pro accounts on the hosted site get an AI review (./reviewer.ts,
+ * 20 a day, the count shown); everyone else, and Pro when the AI reviewer is
+ * off, busy or used up for the day, gets the rule reviewer (./rules.ts),
+ * which writes it from the simulation and the test results. Where paid plans
+ * are on, non-Pro accounts see a small hint that AI review is part of Pro.
  */
-export default function ReviewPanel({ source, input, onSelect, reviewer = defaultReviewer }: ReviewPanelProps) {
+export default function ReviewPanel({ source, input, onSelect, plan, reviewer: injected }: ReviewPanelProps) {
   const [state, setState] = useState<State>({ status: 'idle' });
+  const wantsAi = !injected && aiReviewEnabled && plan === 'pro';
+  // GET /api/review/usage's answer: undefined until it comes, null when there is no AI review for this account.
+  const [usage, setUsage] = useState<ReviewUsage | null | undefined>(undefined);
+  useEffect(() => {
+    if (!wantsAi) return;
+    let cancelled = false;
+    void getReviewUsage().then((u) => !cancelled && setUsage(u ?? null));
+    return () => {
+      cancelled = true;
+    };
+  }, [wantsAi]);
+  const ai: Ai = !wantsAi || usage === null ? { status: 'off' } : usage === undefined ? { status: 'checking' } : { status: 'on', usage };
+
+  const aiOn = ai.status === 'on';
+  const reviewer = injected ?? (aiOn ? apiReviewer : ruleReviewer);
+  const showsAi = injected ? injected.ai : aiOn;
+  const upgradeHint = !injected && billingEnabled && plan !== 'pro';
 
   const review = async () => {
     setState({ status: 'loading' });
+    const reviewInput = input();
+    const request = buildReviewRequest(reviewInput);
+    const locs = new Map(reviewInput.parsed.diagram.nodes.filter((n) => n.loc.file === undefined).map((n) => [n.id, n.loc]));
+    const done = (review: DesignReview, notice?: Notice) => setState({ status: 'done', review, source: reviewInput.source, locs, notice });
+    if (aiOn && ai.usage.remaining <= 0) return done(await ruleReviewer.review(request), { kind: 'limit', usage: ai.usage });
     try {
-      const reviewInput = input();
-      const result = await reviewer.review(buildReviewRequest(reviewInput));
-      const locs = new Map(reviewInput.parsed.diagram.nodes.filter((n) => n.loc.file === undefined).map((n) => [n.id, n.loc]));
-      setState({ status: 'done', review: result, source: reviewInput.source, locs });
+      const result = await reviewer.review(request);
+      if (result.usage) setUsage(result.usage);
+      done(result);
     } catch (e) {
-      if (e instanceof ReviewUnavailableError) setState({ status: 'unavailable' });
-      else setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
+      if (!aiOn) {
+        if (e instanceof ReviewUnavailableError) setState({ status: 'unavailable' });
+        else setState({ status: 'error', message: e instanceof Error ? e.message : String(e) });
+        return;
+      }
+      // The AI review did not come: the automatic one instead, saying why.
+      let notice: Notice;
+      if (e instanceof DailyLimitError) {
+        notice = { kind: 'limit', usage: e.usage };
+        if (e.usage) setUsage(e.usage);
+      } else if (e instanceof ReviewUnavailableError) notice = { kind: 'fallback' };
+      else notice = { kind: 'error', message: e instanceof Error ? e.message : String(e) };
+      done(await ruleReviewer.review(request), notice);
     }
   };
 
+  const loading = state.status === 'loading';
   return (
-    <div className="px-3 py-3 space-y-3 text-sm" data-testid="design-review">
+    <div className="px-3 py-3 space-y-3 text-sm" data-testid="design-review" aria-busy={loading || ai.status === 'checking'}>
       <p className="text-ink/80">
-        {reviewer.ai
-          ? 'An AI reviewer reads your design, its test results and the simulation’s numbers, and comments on the trade-offs.'
+        {showsAi
+          ? 'An AI reviewer reads your design, the server’s run of its tests and the simulation’s numbers, and comments on the trade-offs.'
           : 'An automatic review, based on the simulation and the tests.'}
       </p>
-      <button onClick={() => void review()} disabled={state.status === 'loading'} className={`${outlineButton} disabled:opacity-50`}>
-        <ClipboardCheck size={14} />
-        {state.status === 'loading' ? 'Reviewing…' : 'Review my design'}
-      </button>
+      <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
+        <button onClick={() => void review()} disabled={loading || ai.status === 'checking'} className={`${outlineButton} disabled:opacity-50`}>
+          {showsAi ? <Sparkles size={14} /> : <ClipboardCheck size={14} />}
+          {loading ? 'Reviewing…' : 'Review my design'}
+        </button>
+        {aiOn && (
+          <span className="text-xs text-muted tabular-nums" data-testid="reviews-left">
+            {ai.usage.remaining > 0 ? `${ai.usage.remaining} of ${ai.usage.limit} AI reviews left today` : `No AI reviews left today · more at ${time(ai.usage.resetAt)}`}
+          </span>
+        )}
+      </div>
+      {loading && showsAi && (
+        <p role="status" className="text-xs text-muted">
+          Reading your design and its test results; this can take up to a minute.
+        </p>
+      )}
+      {upgradeHint && (
+        <p className="text-xs text-muted" data-testid="review-upgrade-hint">
+          Want an AI reviewer to explain your design’s trade-offs?{' '}
+          <a
+            href={pricingHref('../')}
+            className="inline-flex items-start gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink"
+          >
+            <Sparkles size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
+            AI design review is part of Pro
+          </a>
+        </p>
+      )}
 
       {state.status === 'unavailable' && (
         <div role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink">
@@ -79,14 +150,35 @@ export default function ReviewPanel({ source, input, onSelect, reviewer = defaul
           The review failed: {state.message}
         </p>
       )}
+      {state.status === 'done' && state.notice && <NoticeLine notice={state.notice} />}
       {state.status === 'done' && <Review review={state.review} stale={state.source !== source} locs={state.locs} onSelect={onSelect} />}
     </div>
   );
 }
 
+function NoticeLine({ notice }: { notice: Notice }) {
+  if (notice.kind === 'error') {
+    return (
+      <p role="alert" className="flex gap-2 rounded-sm border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink" data-testid="review-notice">
+        <AlertCircle size={16} className="mt-0.5 shrink-0" />
+        <span>
+          The AI review failed ({notice.message}), so here is the automatic review. Try the AI review again in a minute.
+        </span>
+      </p>
+    );
+  }
+  return (
+    <p role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink" data-testid="review-notice">
+      {notice.kind === 'limit'
+        ? `You have used today’s ${notice.usage?.limit ?? 20} AI reviews${notice.usage ? `; more at ${time(notice.usage.resetAt)}` : ''}. Here is the automatic review meanwhile.`
+        : 'The AI reviewer is not available right now, so here is the automatic review.'}
+    </p>
+  );
+}
+
 function Review({ review, stale, locs, onSelect }: { review: DesignReview; stale: boolean; locs: Map<string, SourceLoc>; onSelect?: (loc: SourceLoc) => void }) {
   return (
-    <div className="space-y-3" data-testid="review-result">
+    <div className="space-y-3" data-testid="review-result" data-by={review.by ?? 'ai'}>
       {stale && <p className="text-xs text-muted">Of an earlier version of your design.</p>}
       <p className="text-ink">{review.summary}</p>
       {SEVERITY_ORDER.map((severity) => {

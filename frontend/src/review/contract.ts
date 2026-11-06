@@ -4,9 +4,8 @@
  * Worker validates request bodies with the same definition the page builds
  * them from (backend/src/review.ts imports this file).
  *
- * Until an LLM is wired in, the page reviews designs itself with rules over
- * the same request (./rules.ts, ./reviewer.ts); builds with VITE_AI_REVIEW=true
- * call the endpoint, which answers 501 `{error: "not_implemented"}` for now.
+ * The endpoint is Pro's AI review; everyone else gets the page's own review,
+ * rules over the same request (./rules.ts, ./reviewer.ts).
  */
 
 /** One node of the design, as the review sees it. */
@@ -185,6 +184,14 @@ export interface DesignReviewRequest {
   problem?: { id: string; version: number; title: string };
   /** The design as written (for a problem: the solver's file, which imports the given). */
   source: string;
+  /** The design's own path, which its relative imports start from (the editor's file name); absent for a problem. */
+  path?: string;
+  /**
+   * The files its imports read, path → source (other diagrams in the editor,
+   * `cloud:` versions), at most MAX_REVIEW_IMPORTS; absent for a problem,
+   * whose given the server has. The server parses them as data.
+   */
+  imports?: Record<string, string>;
   model: ModelSummary;
   /** The tests of the current source; absent when there are none (outside practice). */
   tests?: ReviewTests;
@@ -213,6 +220,28 @@ export interface DesignReview {
   by?: 'rules';
 }
 
+/** A Pro user's AI reviews today (GET /api/review/usage, and with each review and each 429 daily_limit). */
+export interface ReviewUsage {
+  /** Reviews a UTC day (20, docs/design/paid-plans.md P17). */
+  limit: number;
+  used: number;
+  remaining: number;
+  /** Unix milliseconds: the next UTC midnight, when the count starts again. */
+  resetAt: number;
+}
+
+/** What `POST /api/review` answers with: the review and the usage after it. */
+export interface DesignReviewResponse extends DesignReview {
+  usage: ReviewUsage;
+}
+
+/** A ReviewUsage from an untrusted answer; undefined for anything else. */
+export function parseReviewUsage(data: unknown): ReviewUsage | undefined {
+  if (!isObj(data)) return undefined;
+  const { limit, used, remaining, resetAt } = data;
+  return [limit, used, remaining, resetAt].every(isNum) ? { limit: limit as number, used: used as number, remaining: remaining as number, resetAt: resetAt as number } : undefined;
+}
+
 // ---------- limits ----------
 
 /** Same as a recorded run's source (backend/src/progress.ts MAX_SOURCE). */
@@ -220,6 +249,9 @@ export const MAX_REVIEW_SOURCE = 64 * 1024;
 /** The whole JSON body. */
 export const MAX_REVIEW_BODY = 192 * 1024;
 export const MAX_REVIEW_ITEMS = 500;
+/** Imported files in one request; each is at most MAX_REVIEW_SOURCE, and all of them count in MAX_REVIEW_BODY. */
+export const MAX_REVIEW_IMPORTS = 50;
+const MAX_PATH = 1024;
 const MAX_TEXT = 2000;
 /** reviewRequestProblem's answer for a source past MAX_REVIEW_SOURCE (the Worker answers 413 for it, 400 for the rest). */
 export const SOURCE_TOO_LONG = 'source is too long';
@@ -312,11 +344,20 @@ function isUseCaseMetrics(u: unknown): boolean {
  */
 export function reviewRequestProblem(body: unknown): string | undefined {
   if (!isObj(body)) return 'The body must be a JSON object';
-  const known = ['problem', 'source', 'model', 'tests', 'metrics'];
+  const known = ['problem', 'source', 'path', 'imports', 'model', 'tests', 'metrics'];
   const unknown = Object.keys(body).find((k) => !known.includes(k));
   if (unknown) return `Unknown field ${JSON.stringify(unknown.slice(0, 64))}`;
   if (typeof body.source !== 'string') return 'source must be a string';
   if (body.source.length > MAX_REVIEW_SOURCE) return SOURCE_TOO_LONG;
+  if (!optional(body.path, (p) => isStr(p, MAX_PATH))) return 'path must be a string';
+  if (body.imports !== undefined) {
+    const imports = body.imports;
+    if (!isObj(imports) || Object.keys(imports).length > MAX_REVIEW_IMPORTS) return `imports must be an object of at most ${MAX_REVIEW_IMPORTS} path → source`;
+    for (const [path, source] of Object.entries(imports)) {
+      if (!path || path.length > MAX_PATH || typeof source !== 'string') return 'each import must be a path and its source';
+      if (source.length > MAX_REVIEW_SOURCE) return SOURCE_TOO_LONG;
+    }
+  }
   if (body.problem !== undefined) {
     const p = body.problem;
     if (!isObj(p) || typeof p.id !== 'string' || !PROBLEM_ID.test(p.id) || p.id.length > 100) return 'problem.id must be a problem id';

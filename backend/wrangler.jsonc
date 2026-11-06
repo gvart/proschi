@@ -61,7 +61,9 @@
     { "name": "SHARE_LIMITER", "namespace_id": "1011", "simple": { "limit": 10, "period": 60 } },
     { "name": "DOCS_LIMITER", "namespace_id": "1012", "simple": { "limit": 120, "period": 60 } },
     { "name": "EMAIL_LIMITER", "namespace_id": "1013", "simple": { "limit": 3, "period": 60 } },
-    { "name": "ADMIN_LIMITER", "namespace_id": "1014", "simple": { "limit": 30, "period": 60 } }
+    { "name": "ADMIN_LIMITER", "namespace_id": "1014", "simple": { "limit": 30, "period": 60 } },
+    // AI design reviews per user (src/review.ts); the daily cap is counted in D1.
+    { "name": "AI_REVIEW_LIMITER", "namespace_id": "1015", "simple": { "limit": 5, "period": 60 } }
   ],
   // The deployed version's id and time, for the admin panel's health page (src/admin.ts).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
@@ -105,7 +107,8 @@
         { "name": "SHARE_LIMITER", "namespace_id": "2011", "simple": { "limit": 10, "period": 60 } },
         { "name": "DOCS_LIMITER", "namespace_id": "2012", "simple": { "limit": 120, "period": 60 } },
         { "name": "EMAIL_LIMITER", "namespace_id": "2013", "simple": { "limit": 3, "period": 60 } },
-        { "name": "ADMIN_LIMITER", "namespace_id": "2014", "simple": { "limit": 30, "period": 60 } }
+        { "name": "ADMIN_LIMITER", "namespace_id": "2014", "simple": { "limit": 30, "period": 60 } },
+        { "name": "AI_REVIEW_LIMITER", "namespace_id": "2015", "simple": { "limit": 5, "period": 60 } }
       ],
       "version_metadata": { "binding": "CF_VERSION_METADATA" }
     }

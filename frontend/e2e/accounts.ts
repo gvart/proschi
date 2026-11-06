@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 
 /** GET /api/me's answer (Me in src/services/api.ts, which this tsconfig cannot compile). */
 interface Me {
-  user: { id: string; displayName: string; publicProfile: boolean; dailyGoal?: number; providers?: string[] };
+  user: { id: string; displayName: string; publicProfile: boolean; dailyGoal?: number; providers?: string[]; plan?: string };
   progress: Record<string, unknown>;
 }
 
