@@ -3,6 +3,7 @@ import { purgeAdminSessions } from './adminAuth';
 import { TOMBSTONE_TTL_MS } from './documents';
 import { now, type Env } from './env';
 import { pruneEvents, recordEvent } from './events';
+import { pruneInterviewTranscripts } from './interviews';
 import { errorText, log } from './log';
 import { pruneDailyCounts } from './metrics';
 import { sendReminders } from './reminders';
@@ -58,6 +59,7 @@ export async function dailyCron(env: Env): Promise<void> {
     return { deleted };
   });
   await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
+  await runJob(env, 'interview_transcripts', async () => ({ cleared: await pruneInterviewTranscripts(env) }));
 }
 
 /**
