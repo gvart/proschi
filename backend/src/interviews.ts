@@ -7,6 +7,7 @@ import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewSta
 import type { Ctx } from './context';
 import { balance, refund, spend } from './credits';
 import type { Env } from './env';
+import { can, planRequired } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { recommendAfterInterview } from './roadmap';
@@ -123,6 +124,7 @@ function summary(row: Row) {
 /** POST /api/interviews {problem, minutes, replace?}. */
 export async function startInterview(request: Request, ctx: Ctx): Promise<Response> {
   const user = await signedIn(request, ctx, ctx.env.INTERVIEW_START_LIMITER);
+  if (!can(user, 'ai_interview', ctx.env).ok) return planRequired('ai_interview');
   const body = await readJson(request);
   const context = typeof body.problem === 'string' ? problemContext(body.problem) : undefined;
   if (!context) throw new HttpError(400, 'Unknown problem');
@@ -326,7 +328,7 @@ export async function listInterviews(request: Request, ctx: Ctx): Promise<Respon
   const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
   const { results } = await ctx.env.DB.prepare('SELECT * FROM ai_interviews WHERE user_id = ? ORDER BY started_at DESC, id LIMIT ?').bind(user.id, LIST_MAX).all<Row>();
   const latest = results.find((r) => r.verdict)?.id;
-  const rows = user.plan === 'pro' ? results : results.map((r) => (r.id === latest ? r : { ...r, verdict: null }));
+  const rows = can(user, 'interview_history', ctx.env).ok ? results : results.map((r) => (r.id === latest ? r : { ...r, verdict: null }));
   return json({ interviews: rows.map(summary), credits: await balance(ctx.env, user.id) }, 200, NO_STORE);
 }
 
@@ -341,7 +343,7 @@ const HISTORY_MAX = 200;
  */
 export async function interviewHistory(request: Request, ctx: Ctx): Promise<Response> {
   const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
-  const full = user.plan === 'pro';
+  const full = can(user, 'interview_history', ctx.env).ok;
   const { DB } = ctx.env;
   const [rows, count] = await DB.batch([
     DB.prepare("SELECT id, problem_id, duration_min, started_at, ended_at, verdict FROM ai_interviews WHERE user_id = ? AND status = 'finished' AND verdict IS NOT NULL ORDER BY started_at DESC, id LIMIT ?").bind(

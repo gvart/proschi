@@ -1,7 +1,7 @@
 import { titleOf } from '../../frontend/src/playground/documents';
-import type { User } from './auth';
 import type { Ctx } from './context';
 import { checkId, limited } from './documents';
+import { can, FEATURES, planRequired } from './features';
 import { HttpError, json, rateLimit } from './http';
 
 /**
@@ -25,9 +25,6 @@ import { HttpError, json, rateLimit } from './http';
 /** 16 random bytes in base64url: 22 characters. */
 export const SHARE_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
-
-/** Whether the account may make share links: `users.plan` is 'pro'. Read here, not from src/plans.ts. */
-export const isPro = (user: Pick<User, 'plan'>): boolean => user.plan === 'pro';
 
 /** 128 random bits, base64url without padding. */
 export function newShareToken(): string {
@@ -64,7 +61,7 @@ export async function getDocumentShare(request: Request, ctx: Ctx, rawId: string
 export async function createDocumentShare(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
   const id = checkId(rawId);
   const user = await limited(request, ctx);
-  if (!isPro(user)) return json({ error: 'plan_required', message: 'Live share links are part of Pro' }, 402, NO_STORE);
+  if (!can(user, 'share_links', ctx.env).ok) return planRequired('share_links');
   const { DB } = ctx.env;
   const existing = await liveShare(DB, user.id, id);
   if (existing) return json({ share: shareOf(request, existing) }, 200, NO_STORE);
@@ -101,6 +98,9 @@ interface PublicRow {
   updated_at: number;
 }
 
+/** The plans whose links answer (src/features.ts share_links), as SQL: the owner's plan is read in the query. */
+const SHARING_PLANS = FEATURES.share_links.plans.map((p) => `'${p}'`).join(', ');
+
 /** GET /api/share/<token>: no sign-in, rate-limited per IP, never cached (a revoke takes effect at once). */
 export async function getSharedDocument(ctx: Ctx, token: string): Promise<Response> {
   await rateLimit(ctx.env.STATS_LIMITER, ctx.ip, 'Too many requests; wait a minute');
@@ -110,7 +110,7 @@ export async function getSharedDocument(ctx: Ctx, token: string): Promise<Respon
          FROM document_shares s
          JOIN documents d ON d.user_id = s.user_id AND d.id = s.document_id
          JOIN users u ON u.id = s.user_id
-         WHERE s.token = ? AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND u.plan = 'pro'`,
+         WHERE s.token = ? AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND u.plan IN (${SHARING_PLANS})`,
       )
         .bind(token)
         .first<PublicRow>()

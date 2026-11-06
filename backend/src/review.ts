@@ -2,9 +2,10 @@ import { MAX_REVIEW_BODY, reviewRequestProblem, SOURCE_TOO_LONG, type DesignRevi
 import { AiError, aiEnabled, createClient } from './ai/client';
 import { problemContext } from './ai/context';
 import { aiReview, serverReviewRequest } from './ai/reviewer';
-import { requireUser } from './auth';
+import type { User } from './auth';
 import type { Ctx } from './context';
 import type { Env } from './env';
+import { requireFeature } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { refreshAfterReview } from './roadmap';
@@ -60,14 +61,6 @@ async function usedToday(DB: D1Database, userId: string, at: number): Promise<nu
   return row?.count ?? 0;
 }
 
-/** The signed-in user when on Pro, undefined when on another plan; 401 signed out. */
-async function proUser(request: Request, ctx: Ctx) {
-  const user = await requireUser(request, ctx);
-  return user.plan === 'pro' ? user : undefined;
-}
-
-const planRequired = () => json({ error: 'plan_required', message: 'AI design review is part of Pro' }, 402, NO_STORE);
-
 export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response> {
   const { env } = ctx;
   await rateLimit(env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
@@ -76,9 +69,12 @@ export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response
   if (problem) throw new HttpError(problem === SOURCE_TOO_LONG ? 413 : 400, problem);
   const page = body as unknown as DesignReviewRequest;
   if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
+  return reviewFor(request, ctx, page);
+}
 
-  const user = await proUser(request, ctx);
-  if (!user) return planRequired();
+/** The review itself, past the body and the key: 401 signed out, 402 off a plan with ai_review (src/features.ts). */
+const reviewFor = requireFeature('ai_review', async (_request: Request, ctx: Ctx, user: User, page: DesignReviewRequest): Promise<Response> => {
+  const { env } = ctx;
   await rateLimit(env.AI_REVIEW_LIMITER, user.id, 'Too many reviews; wait a minute');
   const solved = page.problem ? findProblem(page.problem.id) : undefined;
   if (page.problem && !solved) throw new HttpError(404, 'Unknown problem');
@@ -110,17 +106,19 @@ export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response
       ? json({ error: 'ai_unavailable', message: 'The AI reviewer is busy; try again in a minute' }, 503, NO_STORE)
       : json({ error: 'review_failed', message: 'The AI review failed; try again' }, 502, NO_STORE);
   }
-}
+});
 
 /** GET /api/review/usage: {limit, used, remaining, resetAt} for a Pro user; 402 off Pro, 501 without the key. */
 export async function getReviewUsage(request: Request, ctx: Ctx): Promise<Response> {
   const { env } = ctx;
   if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
-  const user = await proUser(request, ctx);
-  if (!user) return planRequired();
-  const at = Date.now();
-  return json(usageOf(await usedToday(env.DB, user.id, at), at), 200, NO_STORE);
+  return usageFor(request, ctx);
 }
+
+const usageFor = requireFeature('ai_review', async (_request: Request, ctx: Ctx, user: User): Promise<Response> => {
+  const at = Date.now();
+  return json(usageOf(await usedToday(ctx.env.DB, user.id, at), at), 200, NO_STORE);
+});
 
 /** Days of review_usage kept: the cap only needs today; a week is enough to look back on. */
 export const REVIEW_USAGE_DAYS = 7;

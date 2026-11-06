@@ -143,7 +143,7 @@ describe('POST /api/review: the AI review', () => {
     const { id, token } = await signedInUser();
     const refused = await review(valid, { token });
     expect(refused.status).toBe(402);
-    expect(await refused.json()).toMatchObject({ error: 'plan_required' });
+    expect(await refused.json()).toMatchObject({ error: 'plan_required', feature: 'ai_review' });
     expect((await usage(token)).status).toBe(402);
     expect(calls).toHaveLength(0);
     expect(await countToday(id)).toBe(0);

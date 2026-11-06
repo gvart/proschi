@@ -179,7 +179,7 @@ describe('the AI roadmap: routes', () => {
     expect(await recCount(userId)).toBe(0);
     const refused = await next(token);
     expect(refused.status).toBe(402);
-    expect(await refused.json()).toMatchObject({ error: 'plan_required' });
+    expect(await refused.json()).toMatchObject({ error: 'plan_required', feature: 'ai_roadmap' });
     expect((await next()).status).toBe(401);
     delete env.ANTHROPIC_API_KEY;
     expect((await next(token)).status).toBe(501);

@@ -5,6 +5,7 @@ import { balance, grantStatement, revokeStatement } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
+import { featureMap } from './features';
 import { limitsFor, planName, UNLIMITED } from './plans';
 
 /**
@@ -120,7 +121,8 @@ export async function createPortal(request: Request, ctx: Ctx): Promise<Response
 
 /**
  * GET /api/me/plan: the plan, the subscription's state and renewal, the
- * plan's limits (null where unlimited) and the interview credits. Works
+ * plan's limits (null where unlimited), the interview credits and every
+ * paid feature's answer (src/features.ts can: {ok, reason?}). Works
  * without billing set up (everyone is on free), so the AI interview can
  * read credits; `billing` says whether checkout is on.
  */
@@ -141,6 +143,7 @@ export async function getPlan(request: Request, ctx: Ctx): Promise<Response> {
       customer: !!row?.polar_customer_id,
       limits: { documents: cap(limits.documents), versionsPerDocument: cap(limits.versionsPerDocument), documentBytes: limits.documentBytes, interviewsPerMonth: limits.interviewsPerMonth },
       credits,
+      features: featureMap(user, ctx.env),
     },
     200,
     NO_STORE,
