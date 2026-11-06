@@ -7,9 +7,6 @@ import { api } from './api';
  * shows the diagram as last saved to the account, and its owner can revoke it.
  */
 
-/** Paid plans are on in this build (docs/design/paid-plans.md P10): only then do non-Pro users see the upgrade hint. */
-export const billingEnabled = import.meta.env.VITE_BILLING === 'true';
-
 /** Where the upgrade hint sends people, from the site root. */
 export const UPGRADE_PATH = 'pricing/';
 

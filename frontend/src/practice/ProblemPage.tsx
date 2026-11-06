@@ -338,6 +338,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onExit={exitInterview}
           onRestart={() => setSession(undefined)}
           signedIn={account.state.status === 'signed-in'}
+          pro={account.state.status === 'signed-in' && account.state.user.plan === 'pro'}
           getSource={getSource}
         >
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />

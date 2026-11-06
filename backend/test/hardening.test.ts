@@ -271,6 +271,7 @@ describe('data export', () => {
       billing: null,
       credits: [],
       reviewUsage: [],
+      roadmapRecs: [],
       aiInterviews: [],
     });
     expect(text).not.toContain(await sha256(token));

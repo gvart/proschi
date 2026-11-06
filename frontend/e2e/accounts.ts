@@ -56,6 +56,9 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     ],
     // The AI interviewer on interview mode's start screen: none yet, the trial credit left (aiInterview.accounts.e2e.ts mocks a session).
     [/^\/api\/interviews$/, { interviews: [], credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' } }],
+    // The progress page's interview history and the roadmap's AI picks: none yet (history.accounts.e2e.ts mocks real ones).
+    [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
+    [/^\/api\/roadmap\/next$/, { next: null }],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),

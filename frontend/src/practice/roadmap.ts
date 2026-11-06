@@ -108,8 +108,9 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
  * Whether the viewer may work through the roadmap: `open`, `checking` while
  * the account loads, or `sign-in`. Anyone can see the stages and work through
  * the first one signed out, with progress kept in this browser; the stages
- * after it take an account (see stepLock). This is the one place to put a paid
- * plan later (an `upgrade` answer for an account without one).
+ * after it take an account (see stepLock). The roadmap itself stays free; its
+ * paid part, the AI's "Next for you" picks, is gated next to it
+ * (aiRoadmapAccess).
  *
  * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e
  * build, forks) has nothing to sign in to, so the roadmap is open there.
@@ -126,6 +127,23 @@ export function roadmapAccess(account: AccountState): RoadmapAccess {
     case 'signed-out':
       return 'sign-in';
   }
+}
+
+/**
+ * Whether the viewer gets the AI roadmap's "Next for you" picks
+ * (docs/design/paid-plans.md P1, P9; GET /api/roadmap/next): `pro` for a
+ * signed-in Pro account; `upgrade` for any other signed-in account where paid
+ * plans are on (`billing`, services/billing.ts billingEnabled), which shows
+ * the way to Pro; `hidden` otherwise (signed out, loading, no accounts, or no
+ * paid plans). Even on `pro` the server may have no AI key (501): the page
+ * then keeps the roadmap's own order (P10).
+ */
+export type AiRoadmapAccess = 'pro' | 'upgrade' | 'hidden';
+
+export function aiRoadmapAccess(account: AccountState, billing: boolean): AiRoadmapAccess {
+  if (account.status !== 'signed-in') return 'hidden';
+  if (account.user.plan === 'pro') return 'pro';
+  return billing ? 'upgrade' : 'hidden';
 }
 
 /** A problem opened from the roadmap: `roadmap/<id>` (lesson first while unread) or `roadmap/<id>/lesson`. */

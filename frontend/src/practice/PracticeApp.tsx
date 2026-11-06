@@ -6,7 +6,10 @@ import type { Engine } from '../hld/engine';
 import PaneLoading from '../components/PaneLoading';
 import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
-import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
+import NextForYou from './history/NextForYou';
+import { verdictIdOf } from './history/api';
+import { billingEnabled } from '../services/billing';
+import { aiRoadmapAccess, ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
 import { useLessonsRead } from './useLessonsRead';
@@ -166,7 +169,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const lock = target ? routeLock(roadmapNow, target, access) : undefined;
   const onRoadmap = !guide && (route === 'roadmap' || (fromRoadmap && lock?.kind !== 'open'));
   const onReview = route === 'review' || route.startsWith('review/');
-  const onProgress = route === 'progress';
+  const verdictId = verdictIdOf(route);
+  const onProgress = route === 'progress' || verdictId !== undefined;
   const onChallenge = route === 'challenge';
   const onArcade = route === 'arcade' || route === 'arcade/daily';
   const onMe = route === 'me';
@@ -270,7 +274,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
               </ProblemList>
             ) : onProgress ? (
               <Suspense fallback={<PageLoading label="Loading your progress…" />}>
-                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} />
+                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} verdictId={verdictId} />
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PageLoading label="Loading Scale or Fail…" />}>
@@ -300,6 +304,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
+                nextForYou={<NextForYou access={aiRoadmapAccess(account.state, billingEnabled)} problemTitle={(id) => problems.find((p) => p.id === id)?.title} />}
               />
             )}
           </PracticeHub>

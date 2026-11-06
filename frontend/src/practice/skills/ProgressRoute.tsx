@@ -22,6 +22,7 @@ import { nextBadges, profileBadge, type ProfileBadge } from '../profile/profile'
 import SkillRadar, { type RadarPoint } from './SkillRadar';
 import type { Achievements } from './useAchievements';
 import { useChallengeSummary } from './useChallengeSummary';
+import InterviewHistory, { InterviewVerdictPage } from '../history/InterviewHistory';
 
 /**
  * The progress page (`#/progress`), the one place for progress, read top to
@@ -32,7 +33,8 @@ import { useChallengeSummary } from './useChallengeSummary';
  * (each topic's mastery as a radar, with a table for screen readers, and the
  * "interview ready" score with the weakest topics to train), the roadmap's
  * progress, the next badges to earn with every badge behind "All badges"
- * (BadgeGrid), and the problems solved. Signed out, a locked preview with a
+ * (BadgeGrid), the AI interview history (history/InterviewHistory.tsx, each
+ * verdict at `#/progress/interview/<id>`), and the problems solved. Signed out, a locked preview with a
  * sign-in invitation. A tab of the practice hub; the account's settings are
  * on `#/me`.
  *
@@ -51,8 +53,11 @@ export default function ProgressRoute({
   stages,
   activity,
   progress,
+  verdictId,
 }: {
   account: Account;
+  /** `#/progress/interview/<id>`: show that AI interview's verdict instead. */
+  verdictId?: string;
   achievements: Achievements;
   activity: Activity;
   /** This browser's progress (merged with the account's when signed in): the problems solved. */
@@ -64,11 +69,13 @@ export default function ProgressRoute({
   const { state, refresh } = achievements;
   const challenge = useChallengeSummary(account);
   useEffect(() => {
-    document.title = 'Your progress · Proschi practice';
-  }, []);
+    // A verdict page names itself.
+    if (!verdictId) document.title = 'Your progress · Proschi practice';
+  }, [verdictId]);
   // Opening the page checks for anything new.
   useEffect(() => refresh(), [refresh]);
 
+  if (verdictId) return <InterviewVerdictPage id={verdictId} pro={account.state.status === 'signed-in' && account.state.user.plan === 'pro'} />;
   if (state.status === 'loading') return <PaneLoading label="Loading your progress…" />;
 
   const answer: AchievementsAnswer | undefined = state.status === 'ready' ? state.answer : undefined;
@@ -243,6 +250,8 @@ export default function ProgressRoute({
           </table>
         </section>
       </div>
+
+      {account.state.status === 'signed-in' && <InterviewHistory />}
 
       <RoadmapProgress roadmap={roadmap} stages={stages} />
 

@@ -27,7 +27,8 @@ import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sha
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
 import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
-import { finishInterview, getInterview, interviewTurn, listInterviews, startInterview } from './interviews';
+import { finishInterview, getInterview, interviewHistory, interviewTurn, listInterviews, startInterview } from './interviews';
+import { getRoadmapNext } from './roadmap';
 
 /**
  * proschi.app: the site (frontend/dist, served as static assets without
@@ -108,6 +109,8 @@ import { finishInterview, getInterview, interviewTurn, listInterviews, startInte
  *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
  *   GET    /api/interviews/<id>            one session with its transcript, to resume
  *   GET    /api/interviews                 the user's sessions and the credits left
+ *   GET    /api/interviews/history         verdict summaries with skill scores, newest first: all on Pro, the latest only on free
+ *   GET    /api/roadmap/next[?interview=]  the AI roadmap's next 3 picks, Pro (402 plan_required, 501 without the AI key)
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
@@ -202,9 +205,11 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'review', 'usage')) return getReviewUsage(request, ctx);
   if (is('POST', 'api', 'interviews')) return startInterview(request, ctx);
   if (is('GET', 'api', 'interviews')) return listInterviews(request, ctx);
+  if (is('GET', 'api', 'interviews', 'history')) return interviewHistory(request, ctx);
   if (is('GET', 'api', 'interviews', '*')) return getInterview(request, ctx, parts[2]);
   if (is('POST', 'api', 'interviews', '*', 'turn')) return interviewTurn(request, ctx, parts[2]);
   if (is('POST', 'api', 'interviews', '*', 'finish')) return finishInterview(request, ctx, parts[2]);
+  if (is('GET', 'api', 'roadmap', 'next')) return getRoadmapNext(request, ctx);
   if (is('POST', 'api', 'shares')) return createShare(request, ctx);
   if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
   if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);

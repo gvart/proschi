@@ -18,6 +18,8 @@ export interface Hint {
 export const SKILLS = ['requirements', 'estimation', 'design', 'tradeoffs', 'communication'] as const;
 export type Skill = (typeof SKILLS)[number];
 
+export const SKILL_LABEL: Record<Skill, string> = { requirements: 'Requirements', estimation: 'Estimation', design: 'Design', tradeoffs: 'Trade-offs', communication: 'Communication' };
+
 export interface Verdict {
   passed: boolean;
   scores: Record<Skill, number>;

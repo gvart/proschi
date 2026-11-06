@@ -1,5 +1,5 @@
 import { MAX_REVIEW_BODY, reviewRequestProblem, SOURCE_TOO_LONG, type DesignReviewRequest, type ReviewUsage } from '../../frontend/src/review/contract';
-import { AiError, aiEnabled, createClient, type AiEnv } from './ai/client';
+import { AiError, aiEnabled, createClient } from './ai/client';
 import { problemContext } from './ai/context';
 import { aiReview, serverReviewRequest } from './ai/reviewer';
 import { requireUser } from './auth';
@@ -7,6 +7,7 @@ import type { Ctx } from './context';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
+import { refreshAfterReview } from './roadmap';
 import { findProblem } from './verify';
 
 /**
@@ -20,13 +21,13 @@ import { findProblem } from './verify';
  * uses its rule reviewer (P10). The source is never logged.
  *
  * GET /api/review/usage: the signed-in Pro user's reviews today.
+ *
+ * A review also refreshes the AI roadmap's next steps when they are a day old
+ * or missing (src/roadmap.ts), after the answer is sent.
  */
 
 /** Pro's AI design reviews per UTC day (P17). */
 export const REVIEWS_PER_DAY = 20;
-
-/** The Worker's env with the AI secrets and the per-user limiter (wrangler.jsonc). */
-type ReviewEnv = Env & AiEnv & { AI_REVIEW_LIMITER: RateLimit };
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
 const DAY_MS = 86_400_000;
@@ -68,7 +69,7 @@ async function proUser(request: Request, ctx: Ctx) {
 const planRequired = () => json({ error: 'plan_required', message: 'AI design review is part of Pro' }, 402, NO_STORE);
 
 export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response> {
-  const env = ctx.env as ReviewEnv;
+  const { env } = ctx;
   await rateLimit(env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
   const body = await readJson(request, MAX_REVIEW_BODY);
   const problem = reviewRequestProblem(body);
@@ -96,6 +97,8 @@ export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response
   try {
     const req = serverReviewRequest(page.source, solved, { path: page.path, imports: page.imports });
     const { review, usage } = await aiReview(createClient(env), req, solved ? problemContext(solved.id) : undefined);
+    // The AI roadmap's next steps, at most once a day from a review (src/roadmap.ts); after the answer, and never failing it.
+    ctx.exec.waitUntil(refreshAfterReview(env, user, solved?.id, review, ctx.requestId).catch((e: unknown) => log('warn', 'roadmap.failed', { requestId: ctx.requestId, error: errorText(e) })));
     log('info', 'review.done', { requestId: ctx.requestId, userId: user.id, problem: solved?.id, tokens: usage.reduce((n, u) => n + u.input_tokens + u.output_tokens + u.cache_creation_input_tokens, 0) });
     return json({ ...review, usage: usageOf(used, at) }, 200, NO_STORE);
   } catch (e) {
@@ -111,7 +114,7 @@ export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response
 
 /** GET /api/review/usage: {limit, used, remaining, resetAt} for a Pro user; 402 off Pro, 501 without the key. */
 export async function getReviewUsage(request: Request, ctx: Ctx): Promise<Response> {
-  const env = ctx.env as ReviewEnv;
+  const { env } = ctx;
   if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
   const user = await proUser(request, ctx);
   if (!user) return planRequired();

@@ -513,7 +513,7 @@ How it works (`src/review.ts`, `src/ai/reviewer.ts`):
   statement that increments only under the cap (`INSERT … ON CONFLICT DO
   UPDATE … WHERE count < 20 RETURNING`), so concurrent reviews cannot pass
   it, and given back when the call fails. Rows older than 7 days are pruned
-  (`pruneReviewUsage`, for the daily cron). The counts are in Download my
+  (`pruneReviewUsage`, the daily cron's `review_usage` job). The counts are in Download my
   data and deleted with the account.
 - One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)
   through `src/ai/client.ts`, so `AI_GATEWAY_URL` applies as for interviews,
@@ -544,6 +544,44 @@ request id, method, path (never the query), status, time and user id.
 
 Sign-in fails closed: without a `SESSION_SECRET` of at least 32 characters no
 provider is offered and `/auth/<provider>/…` answers 503.
+
+### Interview history and the AI roadmap
+
+Both are Pro (docs/design/paid-plans.md P1, P9) and need `ANTHROPIC_API_KEY`
+(501 without it, P10).
+
+- **`GET /api/interviews/history`**: `{full, total, sessions: [{id,
+  problem, minutes, startedAt, endedAt?, passed, scores}]}`, the finished AI
+  interviews' verdict summaries (pass or fail and the score per skill, 1 to
+  5), newest first. Pro gets every one (`full: true`, up to 200); any other
+  plan gets the latest only (`full: false`), with `total` saying how many
+  there are. 401 signed out.
+- **`GET /api/roadmap/next[?interview=<id>]`**: `{next: {createdAt, source:
+  "interview" | "review", sourceId?, picks: [{kind: "problem" | "cards", id,
+  reason}]} | null, pending?}`, the newest picks, or those made after that
+  interview. Without `?interview`, `pending` names a verdict from the last
+  minute whose picks are still being made. 401 signed out, 402
+  `{error: "plan_required"}` off Pro.
+- **`GET /api/interviews`** lists every session for the start screen; off
+  Pro only the latest finished one keeps its verdict.
+
+How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
+
+- After a Pro user's verdict (`POST /api/interviews/<id>/finish`), one Haiku
+  call (`claude-haiku-5-5`, thinking off, effort low, a JSON schema) gets
+  the verdict (as data, in `<report>`), the weakest card topics and the
+  candidates: every roadmap problem (solved or not) and every card topic
+  with the user's mastery, by id. It picks 3, each with a one-sentence
+  reason. `parsePicks` keeps only picks that name a candidate of the right
+  kind, once each; none left is a failure. The picks are stored in
+  `roadmap_recs` (migration 0021), and Haiku's tokens count with the
+  session. The verdict is answered first and the picks are made in
+  `waitUntil`, so it never waits on them; the page asks again at about 2, 5
+  and 10 s. A failure (the model, the check, the database) is logged and
+  never fails the verdict.
+- An AI design review refreshes the picks after its answer is sent, when
+  the newest are a day old or missing.
+- Picks are in Download my data and deleted with the account.
 
 ### Open Graph images
 
