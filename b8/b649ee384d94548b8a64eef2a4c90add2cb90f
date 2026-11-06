@@ -1,0 +1,44 @@
+backend/test/interviews.test.ts
+  s_e17b87e0a1b3ca::t_917ff64ce343bd 1-263
+backend/src/cron.ts
+  s_e17b87e0a1b3ca::t_32493fcdee6d1a 6,62
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_32493fcdee6d1a 21,246-247
+backend/migrations/0019_ai_interviews.sql
+  s_e17b87e0a1b3ca::t_fe986f673f75ef 1-49
+backend/wrangler.jsonc
+  s_e17b87e0a1b3ca::t_f874b9b211f60b 64-69,79-80,115-119
+backend/src/interviews.ts
+  s_e17b87e0a1b3ca::t_4d23567b8efbe3 145-146,228
+  s_e17b87e0a1b3ca::t_1a7e7119dbdb82 3,185,271
+  s_e17b87e0a1b3ca::t_b417af429d86e4 1-2,4-144,147-184,186-224,229-270,272-343
+  s_e17b87e0a1b3ca::t_36f80ab3503a5b 225-227
+backend/test/admin.test.ts
+  s_e17b87e0a1b3ca::t_5c2fcd2d286b05 391
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_f3efee8370a60d 273
+backend/src/env.ts
+  s_e17b87e0a1b3ca::t_f874b9b211f60b 25-29,78-86
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_32493fcdee6d1a 30,105-109,201-205
+backend/src/admin.ts
+  s_e17b87e0a1b3ca::t_c780000b0dc376 154
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_c780000b0dc376 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b8b649ee384d94548b8a64eef2a4c90add2cb90f",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
