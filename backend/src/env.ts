@@ -56,6 +56,20 @@ export interface Env {
    * passkey exists; unset, the admin cannot be set up.
    */
   ADMIN_SETUP_TOKEN?: string;
+  /**
+   * Billing through Polar (src/billing.ts; backend/README.md "Billing and
+   * credits"). Without the token, the webhook secret and the three product
+   * ids, checkout, the portal and the webhook answer 501.
+   */
+  POLAR_ACCESS_TOKEN?: string;
+  /** The webhook endpoint's secret, as Polar shows it (`polar_whs_…` or `whsec_…`). */
+  POLAR_WEBHOOK_SECRET?: string;
+  /** `sandbox` for Polar's sandbox (sandbox-api.polar.sh); anything else is production. */
+  POLAR_SERVER?: string;
+  /** Polar product ids of Pro monthly, Pro yearly and the 5 interview pack. */
+  POLAR_PRODUCT_PRO_MONTHLY?: string;
+  POLAR_PRODUCT_PRO_YEARLY?: string;
+  POLAR_PRODUCT_PACK_5?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

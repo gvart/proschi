@@ -2,7 +2,7 @@
 // `siteHref` prefixes them with the page's way back to it ('./' or '../'),
 // so the links work under any sub-path, like the rest of the build.
 
-export type SitePage = 'home' | 'editor' | 'practice' | 'docs' | 'blog';
+export type SitePage = 'home' | 'editor' | 'practice' | 'docs' | 'blog' | 'pricing';
 
 export interface SiteLink {
   label: string;
@@ -38,10 +38,22 @@ export const ARCADE_HREF = 'practice/#/arcade';
  * one hub (the problems, the roadmap, daily review, the challenge, the Arcade
  * and progress are its tabs), marked current on every one of its addresses.
  */
+/**
+ * Whether the build has paid plans (VITE_BILLING=true), so the pricing page
+ * exists (vite.config.ts). Also read from the environment, for the header
+ * and footer that plugins/siteShell.ts renders at build time in Node.
+ */
+export const PRICING_ON =
+  import.meta.env?.VITE_BILLING === 'true' || (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_BILLING === 'true';
+
+/** The pricing page (src/pricing/), linked only in builds that have it. */
+export const PRICING_LINK: SiteLink = { label: 'Pricing', href: 'pricing/', page: 'pricing' };
+
 export const NAV: SiteLink[] = [
   { label: 'Docs', href: 'docs/', page: 'docs' },
   { label: 'Practice', href: PRACTICE_HREF, page: 'practice', accent: true },
   { label: 'Blog', href: 'blog/', page: 'blog' },
+  ...(PRICING_ON ? [PRICING_LINK] : []),
   { label: 'GitHub', href: GITHUB_URL },
 ];
 
@@ -74,9 +86,11 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
     links: [
       { label: 'GitHub', href: GITHUB_URL },
       { label: 'Blog', href: 'blog/' },
+      ...(PRICING_ON ? [PRICING_LINK] : []),
       { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
       { label: 'Privacy', href: 'docs/privacy/' },
+      { label: 'Terms', href: 'docs/terms/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },

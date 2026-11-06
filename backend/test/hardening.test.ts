@@ -268,6 +268,8 @@ describe('data export', () => {
       documentVersions: [],
       documentShares: [],
       emailReminders: null,
+      billing: null,
+      credits: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

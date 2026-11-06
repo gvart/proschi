@@ -42,6 +42,18 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
     // Cloud sync of the editor's diagrams: an empty account (editor.accounts.e2e.ts mocks a real one).
     [/^\/api\/me\/documents$/, { documents: [], cursor: 0, limit: 5, used: 0 }],
+    // Plan & billing on the account page (VITE_BILLING): the free plan (billing.accounts.e2e.ts mocks Pro).
+    [
+      /^\/api\/me\/plan$/,
+      {
+        plan: 'free',
+        billing: true,
+        subscription: null,
+        customer: false,
+        limits: { documents: 5, versionsPerDocument: 20, documentBytes: 65536, interviewsPerMonth: 0 },
+        credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' },
+      },
+    ],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),

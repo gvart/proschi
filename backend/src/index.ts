@@ -26,6 +26,7 @@ import { servePublicProfile } from './profilePage';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
+import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
 
 /**
  * proschi.app: the site (frontend/dist, served as static assets without
@@ -69,6 +70,10 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   DELETE /api/me/documents/<id>/share     revokes it
  *   GET    /api/share/<token>               a live share link's diagram (no sign-in, no owner named)
  *   GET    /api/me/limits                   the account's plan, its limits and what it uses
+ *   GET    /api/me/plan                     plan, subscription (status, renewal), limits and AI interview credits
+ *   POST   /api/billing/checkout {product: pro_monthly|pro_yearly|pack_5}   a Polar checkout: {url} (501 without Polar set up)
+ *   POST   /api/billing/portal              Polar's customer portal for the user: {url}
+ *   POST   /api/billing/webhook             Polar's signed events (Standard Webhooks; no session, no Origin)
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
@@ -150,6 +155,10 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);
   if (is('DELETE', 'api', 'me', 'documents')) return deleteAllDocuments(request, ctx);
   if (is('GET', 'api', 'me', 'limits')) return getLimits(request, ctx);
+  if (is('GET', 'api', 'me', 'plan')) return getPlan(request, ctx);
+  if (is('POST', 'api', 'billing', 'checkout')) return createCheckout(request, ctx);
+  if (is('POST', 'api', 'billing', 'portal')) return createPortal(request, ctx);
+  if (is('POST', 'api', 'billing', 'webhook')) return billingWebhook(request, ctx);
   if (is('POST', 'api', 'me', 'documents', '*', 'versions')) return createVersion(request, ctx, parts[3]);
   if (is('GET', 'api', 'me', 'documents', '*', 'versions')) return listVersions(request, ctx, parts[3]);
   if (is('GET', 'api', 'me', 'documents', '*', 'versions', '*')) return getVersion(request, ctx, parts[3], parts[5]);

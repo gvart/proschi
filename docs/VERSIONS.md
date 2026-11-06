@@ -137,13 +137,17 @@ scenarios, requirements, traffic, capacity and systems, then the counts.
 
 ## Limits
 
-Limits are set per account plan. On the free plan, an account keeps:
+Limits are set per account plan:
 
-| What | Free plan |
-|---|---|
-| Diagrams synced to the account | 5 |
-| Versions per diagram | 20 |
-| Size of a diagram with its imports | 64 KiB |
+| What | Free plan | Pro |
+|---|---|---|
+| Diagrams synced to the account | 5 | Unlimited (fair use: 1000) |
+| Versions per diagram | 20 | Unlimited (fair use: 1000) |
+| Size of a diagram with its imports | 64 KiB | 512 KiB |
+
+If Pro ends, nothing is deleted: past 5 diagrams, the ones saved least
+recently become read-only in the account until you delete some, and your
+edits to them stay in the browser. See [Terms](TERMS.md#pro).
 
 The panel shows how many versions a diagram uses. Deleting a diagram from
 the account deletes its versions too. What the account stores is listed in

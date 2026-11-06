@@ -5,6 +5,7 @@ import { allFolders, baseOf, buildTree, cleanFolder, folderOf, matchesQuery, typ
 import { PROVIDER_LABEL } from '../../practice/account';
 import { loadJson, saveJson } from '../../services/storage';
 import { MenuItem } from './Menu';
+import UpgradeHint from './UpgradeHint';
 import { cloudLabel, type CloudSync } from './useCloudSync';
 import { eyebrow, field } from './ui';
 
@@ -452,6 +453,7 @@ function StorageFooter({ cloud }: { cloud: CloudSync }) {
         {local ? <HardDrive size={13} className="mt-px shrink-0" aria-hidden="true" /> : <Cloud size={13} className="mt-px shrink-0" aria-hidden="true" />}
         <span>{state.kind === 'signed-out' ? 'Saved in this browser only' : cloudLabel(state)}</span>
       </p>
+      <UpgradeHint state={state} className="mt-1" />
       {state.kind === 'signed-out' && state.providers.length > 0 && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {state.providers.map((provider) => (

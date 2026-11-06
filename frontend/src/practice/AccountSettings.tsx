@@ -3,6 +3,7 @@ import { Download, Link, LogOut, MonitorX, Pencil, Trash2, Unlink } from 'lucide
 import { field, outlineButton, primaryButton } from '../components/Playground/ui';
 import { removeSyncedFromBrowser, syncedInBrowser } from '../playground/localDocs';
 import type { ProviderId } from '../services/api';
+import { billingEnabled } from '../services/billing';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
@@ -153,6 +154,7 @@ export default function AccountSettings({ account }: { account: Account }) {
         </h2>
         <p className="mt-2 max-w-2xl text-sm text-ink/80">
           Deleting your account removes it and the progress stored on the server. Progress kept in this browser stays.
+          {billingEnabled && ' A Pro subscription is canceled at once, and unused interview credits are lost.'}
         </p>
         <button type="button" className={`mt-3 ${dangerButton}`} onClick={() => setPending({ kind: 'delete' })}>
           <Trash2 size={14} aria-hidden="true" />
