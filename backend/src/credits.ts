@@ -1,4 +1,5 @@
-import type { Env } from './env';
+import { hmacSha256 } from './crypto';
+import { secretOk, type Env } from './env';
 import { limitsFor } from './plans';
 
 /**
@@ -154,6 +155,54 @@ export function revokeStatement(DB: D1Database, orderId: string, at = Date.now()
      FROM credits g WHERE g.kind = 'grant' AND g.ref_id = ?1
      ON CONFLICT (kind, ref_id) DO NOTHING`,
   ).bind(orderId, at);
+}
+
+// --- Deleted accounts and the trial --------------------------------------
+//
+// Deleting an account leaves one tombstone per identity it signed in with
+// (migration 0022): an HMAC of the provider and its user id, and whether the
+// trial interview was used. A new account made with a tombstoned identity
+// starts with that trial already used, so deleting and signing up again
+// doesn't give a fresh free interview. Nothing else about the account stays.
+
+const tombstoneKey = (secret: string) => `${secret}/account-tombstone`;
+
+/** The tombstone's key of an identity: HMAC-SHA256 of the provider and the provider's user id. */
+export function identityHash(secret: string, provider: string, subject: string): Promise<string> {
+  return hmacSha256(`${provider}\n${subject}`, tombstoneKey(secret));
+}
+
+/** The statements that leave the account's tombstones, to run with its deletion. None without a usable SESSION_SECRET (no one can sign in then). */
+export async function tombstoneStatements(env: Pick<Env, 'DB' | 'SESSION_SECRET'>, userId: string): Promise<D1PreparedStatement[]> {
+  if (!secretOk(env as Env)) return [];
+  const { DB } = env;
+  const [identities, trial] = await DB.batch([
+    DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ?').bind(userId),
+    DB.prepare("SELECT COALESCE(-SUM(delta), 0) AS used FROM credits WHERE user_id = ? AND bucket = 'trial'").bind(userId),
+  ]);
+  const used = ((trial.results[0] as { used: number } | undefined)?.used ?? 0) > 0 ? 1 : 0;
+  return Promise.all(
+    (identities.results as { provider: string; subject: string }[]).map(async (i) =>
+      DB.prepare('INSERT INTO account_tombstones (identity_hash, trial_used) VALUES (?1, ?2) ON CONFLICT (identity_hash) DO UPDATE SET trial_used = MAX(trial_used, excluded.trial_used)').bind(
+        await identityHash(env.SESSION_SECRET as string, i.provider, i.subject),
+        used,
+      ),
+    ),
+  );
+}
+
+/**
+ * The statement that marks a new account's trial as used when its identity's
+ * earlier account used it (a 'spend' of the trial bucket with no session,
+ * ref_id `prior:<user id>`); run in the batch that creates the account.
+ */
+export async function priorTrialStatement(env: Pick<Env, 'DB' | 'SESSION_SECRET'>, userId: string, provider: string, subject: string, at: number): Promise<D1PreparedStatement | undefined> {
+  if (!secretOk(env as Env)) return undefined;
+  return env.DB.prepare(
+    `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at)
+     SELECT ?1, 'spend', 'trial', '', -1, 'prior_account', 'prior:' || ?1, ?2 WHERE EXISTS (SELECT 1 FROM account_tombstones WHERE identity_hash = ?3 AND trial_used = 1)
+     ON CONFLICT (kind, ref_id) DO NOTHING`,
+  ).bind(userId, at, await identityHash(env.SESSION_SECRET as string, provider, subject));
 }
 
 /** The ledger in "Download my data". */

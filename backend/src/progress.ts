@@ -17,7 +17,7 @@ import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
 import { BOARD_METRICS, cacheKey } from './stats';
 import { exportBilling, revokeOnDelete } from './billing';
-import { exportCredits } from './credits';
+import { exportCredits, tombstoneStatements } from './credits';
 import { exportReviewUsage } from './review';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
@@ -129,7 +129,8 @@ export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
   await revokeOnDelete(ctx.env, user.id);
-  await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
+  // Only an HMAC of each identity and whether the trial was used stay, so signing up again doesn't give a new trial (src/credits.ts).
+  await ctx.env.DB.batch([...(await tombstoneStatements(ctx.env, user.id)), ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id)]);
   ctx.setCookies = [sessionCookie('', 0)];
   return new Response(null, { status: 204 });
 }
@@ -137,6 +138,10 @@ export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
 /**
  * GET /api/me/export: everything stored about the user, as a JSON download.
  * Session tokens are stored only as hashes, and those stay out of it too.
+ *
+ * It is complete on purpose, data a paid feature gates included (every
+ * verdict off interview_history, for one): it is the user's right of access
+ * to their own data, not a feature (docs/design/paid-plans.md P23).
  */
 export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const { DB } = ctx.env;

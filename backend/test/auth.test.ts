@@ -111,6 +111,31 @@ describe('sign-in', () => {
     expect(results).toEqual([{ event: 'sign_in', count: 2 }]);
   });
 
+  it('gives no new trial interview to an identity whose deleted account used it, and keeps only a hash of it', async () => {
+    mockProviders();
+    const trialOf = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { credits: { trial: number } }).credits.trial;
+    const first = await signIn();
+    expect(await trialOf(first.token)).toBe(1);
+    const { id } = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!;
+    // Deleted before the trial was used: signing up again gets it.
+    expect((await call('/api/me', { method: 'DELETE', token: first.token })).status).toBe(204);
+    const second = await signIn();
+    expect(await trialOf(second.token)).toBe(1);
+
+    const { id: secondId } = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!;
+    expect(secondId).not.toBe(id);
+    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'trial', -1, 'interview', 'session-1', 0)").bind(secondId).run();
+    expect((await call('/api/me', { method: 'DELETE', token: second.token })).status).toBe(204);
+    const tombstones = (await env.DB.prepare('SELECT * FROM account_tombstones').all()).results;
+    expect(tombstones).toEqual([{ identity_hash: expect.stringMatching(/^[\w-]{43}$/), trial_used: 1 }]);
+    expect(JSON.stringify(tombstones)).not.toMatch(/42|octocat|github/);
+
+    const third = await signIn();
+    expect(await trialOf(third.token)).toBe(0);
+    // Another identity is not affected.
+    expect(await trialOf((await signIn('google')).token)).toBe(1);
+  });
+
   it('signs in with Google', async () => {
     mockProviders();
     const { token } = await signIn('google');

@@ -28,6 +28,11 @@ function hmacKey(secret: string): Promise<CryptoKey> {
   return crypto.subtle.importKey('raw', encoder.encode(secret), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign', 'verify']);
 }
 
+/** HMAC-SHA256 of the UTF-8 text, keyed with `secret`, base64url. */
+export async function hmacSha256(text: string, secret: string): Promise<string> {
+  return base64url(await crypto.subtle.sign('HMAC', await hmacKey(secret), encoder.encode(text)));
+}
+
 /** `value.signature`; `value` must not contain a dot. */
 export async function sign(value: string, secret: string): Promise<string> {
   const signature = await crypto.subtle.sign('HMAC', await hmacKey(secret), encoder.encode(value));
