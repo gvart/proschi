@@ -222,7 +222,7 @@ function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemI
               </span>
             </ModeChoice>
           </div>
-          {billingEnabled && chosen === 'ai' && credits.total <= 1 && (
+          {billingEnabled && chosen === 'ai' && (
             <p className="mt-2 text-xs text-ink">
               <UpgradeLink />
             </p>
