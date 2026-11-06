@@ -1,3 +1,4 @@
+import type { ReactNode } from 'react';
 import { ArrowRight, BookCheck, BookOpen, Lock, LogIn, Map as MapIcon, PartyPopper } from 'lucide-react';
 import { DifficultyBadge, StatusIcon } from './Badges';
 import type { ProblemListing } from './listing';
@@ -28,6 +29,8 @@ interface RoadmapProps {
   locked?: { id: string; lock: StepLock };
   /** The lessons and guides read (progress.ts lessonsRead). */
   read?: readonly string[];
+  /** The AI roadmap's "Next for you" card (history/NextForYou.tsx), under the progress. */
+  nextForYou?: ReactNode;
 }
 
 /** "Read", next to a lesson or guide that was read. */
@@ -41,7 +44,7 @@ function ReadChip() {
 }
 
 /** The interview prep roadmap, the hub's first tab: stages of problems, each unlocked once every problem before it is solved. */
-export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked, read = [] }: RoadmapProps) {
+export default function Roadmap({ stages, problems, progress, access, providers, onSignIn, lessons = {}, guide, locked, read = [], nextForYou }: RoadmapProps) {
   const checking = access === 'checking';
   const readSet = new Set(read);
   const withLesson = roadmapState(stages, progress).steps.filter((s) => lessons[s.id] !== undefined);
@@ -119,6 +122,8 @@ export default function Roadmap({ stages, problems, progress, access, providers,
           </div>
         </section>
       )}
+
+      {nextForYou}
 
       {guest && <SignInToKeep providers={providers} onSignIn={onSignIn} stages={stages.length} />}
 

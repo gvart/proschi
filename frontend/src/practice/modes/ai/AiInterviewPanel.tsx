@@ -4,8 +4,11 @@ import Markdown from '../../Markdown';
 import { useNow } from '../useNow';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../../components/Playground/ui';
 import { formatClock, PHASES, type Phase } from '../session';
-import { finishInterview, getInterview, sendTurn, shownPhase, SKILLS, TurnError, type AiInterview, type AiMessage, type Hint, type HintKind, type Skill, type Verdict } from './api';
+import { finishInterview, getInterview, sendTurn, shownPhase, SKILL_LABEL, SKILLS, TurnError, type AiInterview, type AiMessage, type Hint, type HintKind, type Skill, type Verdict } from './api';
 import { useDictation } from './useDictation';
+import listings from 'virtual:practice-listings';
+import { getRoadmapNext, type RoadmapPick } from '../../history/api';
+import { PickList } from '../../history/NextForYou';
 
 /**
  * Interview mode with the AI interviewer (backend/src/interviews.ts): a chat
@@ -23,8 +26,6 @@ const HINT_LABEL: Record<HintKind, string> = { focus: 'Focus now', improve: 'Can
 const HINT_STYLE: Record<HintKind, string> = { focus: 'bg-pop-yellow/30', improve: 'bg-pop-blue/25', wrapup: 'bg-pop-pink/25' };
 const HINT_ICON: Record<HintKind, typeof Target> = { focus: Target, improve: Lightbulb, wrapup: Flag };
 
-const SKILL_LABEL: Record<Skill, string> = { requirements: 'Requirements', estimation: 'Estimation', design: 'Design', tradeoffs: 'Trade-offs', communication: 'Communication' };
-
 interface Props {
   id: string;
   /** The problem statement without its scale and constraints. */
@@ -35,9 +36,11 @@ interface Props {
   onExit: () => void;
   /** Back to the start screen, to start another interview. */
   onRestart: () => void;
+  /** A Pro account: the verdict links the AI roadmap's picks made after it. */
+  pro?: boolean;
 }
 
-export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart }: Props) {
+export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart, pro = false }: Props) {
   const [interview, setInterview] = useState<AiInterview>();
   const [loadError, setLoadError] = useState<string>();
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -91,7 +94,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
     );
   }
   if (!interview) return <p className="px-4 py-4 text-sm text-muted">Loading the interview…</p>;
-  if (interview.status === 'finished' && interview.verdict) return <VerdictView verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
+  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={pro ? interview.id : undefined} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
 
   const left = interview.minutes * 60_000 - (now - interview.startedAt);
   const timeUp = interview.deadline !== undefined && now >= interview.deadline;
@@ -347,8 +350,30 @@ function ChatBubble({ message, pending }: { message: AiMessage; pending?: boolea
   );
 }
 
-/** The verdict: pass or fail, a score per skill, what went well and wrong, and what to practise next. */
-export function VerdictView({ verdict, onRestart, onExit }: { verdict: Verdict; onRestart: () => void; onExit: () => void }) {
+/** The AI roadmap's picks made after this interview's verdict (Pro); none off Pro, without the AI or before they exist. */
+function useVerdictPicks(id: string | undefined): RoadmapPick[] {
+  const [picks, setPicks] = useState<RoadmapPick[]>([]);
+  useEffect(() => {
+    if (!id) return;
+    let live = true;
+    void getRoadmapNext(id).then((a) => live && a.status === 'ok' && a.data && setPicks(a.data.picks));
+    return () => {
+      live = false;
+    };
+  }, [id]);
+  return picks;
+}
+
+const problemTitle = (id: string) => listings.find((p) => p.id === id)?.title;
+
+/**
+ * The verdict: pass or fail, a score per skill, what went well and wrong, and
+ * what to practise next, with the AI roadmap's picks made after it linked
+ * (`picksFor`, the session's id, for a Pro account only). In interview mode it
+ * ends with Start again and Leave; on the progress page's history without them.
+ */
+export function VerdictView({ picksFor, verdict, onRestart, onExit }: { picksFor?: string; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
+  const picks = useVerdictPicks(picksFor);
   return (
     <section aria-label="Interview verdict" className="px-4 py-4 space-y-4">
       <h2 className="font-display text-lg font-bold text-ink">Interview verdict</h2>
@@ -393,14 +418,26 @@ export function VerdictView({ verdict, onRestart, onExit }: { verdict: Verdict; 
           </ol>
         </div>
       )}
-      <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={onRestart} className={outlineButton}>
-          Start again
-        </button>
-        <button type="button" onClick={onExit} className={toolButton}>
-          Leave interview mode
-        </button>
-      </div>
+      {picks.length > 0 && (
+        <div className="space-y-2" data-testid="verdict-picks">
+          <h3 className="text-sm font-semibold text-ink">Practise them here</h3>
+          <PickList picks={picks} problemTitle={problemTitle} />
+        </div>
+      )}
+      {(onRestart || onExit) && (
+        <div className="flex flex-wrap gap-2">
+          {onRestart && (
+            <button type="button" onClick={onRestart} className={outlineButton}>
+              Start again
+            </button>
+          )}
+          {onExit && (
+            <button type="button" onClick={onExit} className={toolButton}>
+              Leave interview mode
+            </button>
+          )}
+        </div>
+      )}
     </section>
   );
 }

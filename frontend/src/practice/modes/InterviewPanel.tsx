@@ -64,10 +64,12 @@ interface InterviewPanelProps {
   signedIn?: boolean;
   /** The editor's source now, for the AI interviewer's "Send my design". */
   getSource?: () => string;
+  /** A Pro account: the AI verdict links the AI roadmap's picks. */
+  pro?: boolean;
 }
 
 /** Interview mode in the left column: the start screen, then one phase at a time, or the AI interviewer's chat. */
-export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, signedIn = false, getSource }: InterviewPanelProps) {
+export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, signedIn = false, getSource, pro = false }: InterviewPanelProps) {
   const [aiId, setAiId] = useState(() => (apiEnabled ? loadActive(problemId) : undefined));
   const redacted = useMemo(() => redactedStatement(statement), [statement]);
   const setAi = (id: string | undefined) => {
@@ -81,6 +83,7 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
         id={aiId}
         statement={redacted}
         getSource={getSource}
+        pro={pro}
         onRestart={() => setAi(undefined)}
         onExit={() => {
           setAi(undefined);
