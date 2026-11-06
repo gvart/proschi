@@ -1,0 +1,42 @@
+backend/src/review.ts
+  s_e17b87e0a1b3ca::t_db7029c75d0c16 17-18,97,122-128
+  s_e17b87e0a1b3ca::t_94def8a8057698 129-130
+frontend/src/review/review.test.ts
+  s_e17b87e0a1b3ca::t_544d898c37f511 4-6
+  s_e17b87e0a1b3ca::t_2e1bb675c950eb 70-74,78-88
+  s_e17b87e0a1b3ca::t_daf0bec3b29a8a 89
+backend/test/review.test.ts
+  s_e17b87e0a1b3ca::t_d71965b8e531ea 3-6
+  s_e17b87e0a1b3ca::t_1990ca92557058 282-341
+frontend/src/review/request.ts
+  s_e17b87e0a1b3ca::t_c984404ac1181c 28-30,243,247-248
+backend/src/ai/reviewer.ts
+  s_e17b87e0a1b3ca::t_db7029c75d0c16 1,23-34,38-41,43,45,48,53,60,71,149
+  s_e17b87e0a1b3ca::t_5c79e35b9a5a0d 17-19
+  s_e17b87e0a1b3ca::t_4fd366449a3424 22
+backend/README.md
+  s_e17b87e0a1b3ca::t_1be7aa8551f9c4 515-517
+  s_e17b87e0a1b3ca::t_4b68a01e41a430 477-489
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_c984404ac1181c 1203
+frontend/src/review/contract.ts
+  s_e17b87e0a1b3ca::t_c984404ac1181c 187-194,252-254,347,352-360
+frontend/src/review/editor.ts
+  s_e17b87e0a1b3ca::t_c984404ac1181c 7-9,13,15,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "07fd784712e779fe5bf179e7e2551113f76734d4",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
