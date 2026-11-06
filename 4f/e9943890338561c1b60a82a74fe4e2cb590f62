@@ -1,0 +1,69 @@
+frontend/e2e/accounts.ts
+  s_e17b87e0a1b3ca::t_70dc4526388267 59-61
+frontend/src/practice/roadmap.test.ts
+  s_e17b87e0a1b3ca::t_95753149fb7925 3,108-120
+  s_e17b87e0a1b3ca::t_9417e266b485de 121-122
+frontend/src/practice/history/SkillTrends.tsx
+  s_e17b87e0a1b3ca::t_d85dc312d8c2e7 2
+  s_e17b87e0a1b3ca::t_5379cda0eb6ff6 1,4-33,37-43,45-117
+  s_e17b87e0a1b3ca::t_456913ade461a0 34-36,44
+  s_e17b87e0a1b3ca::t_1962631b6350de 3
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_70dc4526388267 341
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_70dc4526388267 78
+  s_e17b87e0a1b3ca::t_20521286f3717b 25,36-37,56,59-60,254
+  s_e17b87e0a1b3ca::t_5d111a1f421670 72-74
+  s_e17b87e0a1b3ca::t_7dfbdcf5bbcc4a 255
+frontend/src/practice/modes/ai/AiInterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_d85dc312d8c2e7 7
+  s_e17b87e0a1b3ca::t_e7699ee766f782 9-11,353-370,374,421-440
+  s_e17b87e0a1b3ca::t_70dc4526388267 39-40,43,97,371-373,375-376
+frontend/src/practice/roadmap.ts
+  s_e17b87e0a1b3ca::t_e13cb16ddf370a 111-113,132-146
+  s_e17b87e0a1b3ca::t_b84c3602b74464 147-148
+frontend/src/practice/history/InterviewHistory.tsx
+  s_e17b87e0a1b3ca::t_456913ade461a0 103-105
+  s_e17b87e0a1b3ca::t_d4cd9441267e75 1-8,11-102,106-117,119-148,150-163
+  s_e17b87e0a1b3ca::t_1962631b6350de 9-10
+  s_e17b87e0a1b3ca::t_70dc4526388267 118,149
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_70dc4526388267 67-68,72,86
+frontend/src/practice/modes/ai/api.ts
+  s_e17b87e0a1b3ca::t_d85dc312d8c2e7 21-22
+frontend/src/practice/history/NextForYou.tsx
+  s_e17b87e0a1b3ca::t_18a2faf18b84a4 1-111
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_20521286f3717b 10,172-173,277
+  s_e17b87e0a1b3ca::t_11928d7267fb3e 9,11-12,307
+frontend/src/practice/history/api.test.ts
+  s_e17b87e0a1b3ca::t_b984e7e2d40c8f 1-19
+frontend/src/practice/history/api.ts
+  s_e17b87e0a1b3ca::t_1962631b6350de 86-88
+  s_e17b87e0a1b3ca::t_969edeec4ee301 1-85
+frontend/src/practice/RoadmapView.tsx
+  s_e17b87e0a1b3ca::t_11928d7267fb3e 1,32-33,47,126
+  s_e17b87e0a1b3ca::t_f122a376b406bf 127
+frontend/e2e/history.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_f3e4d555f45c29 23
+  s_e17b87e0a1b3ca::t_0a228fa3f0d4f2 2-22,24-94
+  s_e17b87e0a1b3ca::t_46b9ea8cfa5d86 1
+frontend/e2e/history.ts
+  s_e17b87e0a1b3ca::t_fb38f0c4fceedf 1-53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4fe9943890338561c1b60a82a74fe4e2cb590f62",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
