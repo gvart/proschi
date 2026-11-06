@@ -151,7 +151,7 @@ const TABLES = [
 ] as const;
 
 /** The daily and hourly jobs (src/cron.ts) that record a `cron` event when they run. */
-export const CRON_JOBS = ['reminders', 'sessions', 'game_runs', 'tombstones', 'usage_counts', 'app_events', 'interview_transcripts'] as const;
+export const CRON_JOBS = ['reminders', 'sessions', 'game_runs', 'tombstones', 'usage_counts', 'app_events', 'interview_transcripts', 'review_usage'] as const;
 
 /** GET /api/admin/health */
 export async function getHealth(request: Request, ctx: Ctx): Promise<Response> {

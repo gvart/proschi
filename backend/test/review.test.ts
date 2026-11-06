@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MAX_REVIEW_BODY, MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE, type DesignReviewRequest } from '../../frontend/src/review/contract';
 import { REVIEW_SCHEMA, serverReviewRequest } from '../src/ai/reviewer';
+import { dailyCron } from '../src/cron';
 import { pruneReviewUsage, REVIEWS_PER_DAY, takeReview } from '../src/review';
 import { findProblem } from '../src/verify';
 import { call, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
@@ -337,6 +338,16 @@ describe('POST /api/review: the AI review', () => {
     expect(await pruneReviewUsage(env, now)).toBe(2);
     const left = await env.DB.prepare('SELECT day FROM review_usage WHERE user_id = ? ORDER BY day').bind(id).all<{ day: string }>();
     expect(left.results.map((r) => r.day)).toEqual([day(7), day(6), day(0)]);
+  });
+
+  it('the daily cron prunes them and reports it to the admin health page', async () => {
+    const { id } = await proUser();
+    const old = new Date(Date.now() - 30 * 86_400_000).toISOString().slice(0, 10);
+    await env.DB.prepare('INSERT INTO review_usage (user_id, day, count) VALUES (?, ?, 1)').bind(id, old).run();
+    await dailyCron(env);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM review_usage WHERE user_id = ?').bind(id).first<{ n: number }>()).toEqual({ n: 0 });
+    const event = await env.DB.prepare("SELECT detail FROM app_events WHERE kind = 'cron' AND message = 'review_usage'").first<{ detail: string }>();
+    expect(JSON.parse(event!.detail)).toMatchObject({ deleted: 1 });
   });
 
   it('is in Download my data, and deleted with the account', async () => {

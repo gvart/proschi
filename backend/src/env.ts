@@ -27,6 +27,8 @@ export interface Env {
   INTERVIEW_TURN_LIMITER: RateLimit;
   INTERVIEW_FINISH_LIMITER: RateLimit;
   INTERVIEW_READ_LIMITER: RateLimit;
+  /** AI design reviews (src/review.ts), per user, on top of the daily cap. */
+  AI_REVIEW_LIMITER: RateLimit;
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
@@ -76,8 +78,8 @@ export interface Env {
   POLAR_PRODUCT_PRO_YEARLY?: string;
   POLAR_PRODUCT_PACK_5?: string;
   /**
-   * The AI interviewer (src/interviews.ts, src/ai/client.ts). Without the
-   * key its routes answer 501 (docs/design/paid-plans.md P10).
+   * The AI features (src/interviews.ts, src/review.ts, src/ai/client.ts).
+   * Without the key their routes answer 501 (docs/design/paid-plans.md P10).
    */
   ANTHROPIC_API_KEY?: string;
   /** Cloudflare AI Gateway's Anthropic endpoint; the Claude API when unset. */

@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, ExternalLink, Link2, Sparkles, Unlink, X } from 'lucide-react';
 import { ApiError } from '../../services/api';
-import { UPGRADE_PATH, billingEnabled, createLiveShare, getLiveShare, revokeLiveShare, type LiveShare } from '../../services/documentShares';
+import { billingEnabled } from '../../services/billing';
+import { UPGRADE_PATH, createLiveShare, getLiveShare, revokeLiveShare, type LiveShare } from '../../services/documentShares';
 import { field, outlineButton, primaryButton } from './ui';
 
 interface ShareLinkDialogProps {
