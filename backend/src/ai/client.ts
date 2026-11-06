@@ -7,7 +7,9 @@
  *
  * The base URL is configurable so requests can go through Cloudflare AI
  * Gateway (docs/design/paid-plans.md, P4): set AI_GATEWAY_URL to
- * `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`.
+ * `https://gateway.ai.cloudflare.com/v1/<account>/<gateway>/anthropic`. An
+ * authenticated gateway also needs AI_GATEWAY_TOKEN, sent as
+ * `cf-aig-authorization: Bearer <token>`.
  */
 
 export const SONNET = 'claude-sonnet-5-5';
@@ -26,6 +28,8 @@ export interface AiEnv {
   ANTHROPIC_API_KEY?: string;
   /** Cloudflare AI Gateway's Anthropic endpoint; the Claude API when unset. */
   AI_GATEWAY_URL?: string;
+  /** The token of an authenticated AI Gateway (`cf-aig-authorization`); only sent with AI_GATEWAY_URL. */
+  AI_GATEWAY_TOKEN?: string;
 }
 
 export function aiEnabled(env: AiEnv): env is AiEnv & { ANTHROPIC_API_KEY: string } {
@@ -157,6 +161,7 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': API_VERSION,
       ...(req.model === SONNET ? { 'anthropic-beta': FALLBACK_BETA } : {}),
+      ...(env.AI_GATEWAY_URL && env.AI_GATEWAY_TOKEN ? { 'cf-aig-authorization': `Bearer ${env.AI_GATEWAY_TOKEN}` } : {}),
     };
     for (let attempt = 0; ; attempt++) {
       const controller = new AbortController();
