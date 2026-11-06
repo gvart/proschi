@@ -34,7 +34,7 @@ describe('features', () => {
   });
 
   it('requireFeature: 401 signed out, 402 plan_required with the feature, else the handler with the user and its arguments', async () => {
-    const route = requireFeature('ai_roadmap', async (_request: Request, _ctx: Ctx, user: User, extra: string) => new Response(`${user.id} ${extra}`));
+    const route = requireFeature('ai_roadmap', async (_request: Request, _ctx: Ctx, user: User, _pre: undefined, extra: string) => new Response(`${user.id} ${extra}`));
     const ctx = { env, exec: { waitUntil: () => undefined }, ip: '127.0.0.1', requestId: 'r', setCookies: [] } as unknown as Ctx;
     const request = (token?: string) => new Request(`${ORIGIN}/x`, token ? { headers: { Cookie: `${SESSION_COOKIE}=${token}` } } : {});
     await expect(route(request(), ctx, 'a')).rejects.toMatchObject({ status: 401 });

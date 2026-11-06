@@ -133,13 +133,7 @@ function nextOf(row: RecRow): RoadmapNext | null {
 }
 
 /** GET /api/roadmap/next[?interview=<id>]. */
-export async function getRoadmapNext(request: Request, ctx: Ctx): Promise<Response> {
-  const { env } = ctx;
-  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
-  return nextFor(request, ctx);
-}
-
-const nextFor = requireFeature('ai_roadmap', async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
+export const getRoadmapNext = requireFeature('ai_roadmap', async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const { env } = ctx;
   await rateLimit(env.INTERVIEW_READ_LIMITER, user.id, 'Too many requests; wait a minute');
   const interview = new URL(request.url).searchParams.get('interview');
@@ -161,7 +155,7 @@ const nextFor = requireFeature('ai_roadmap', async (request: Request, ctx: Ctx, 
         .first<RecRow>()
     : await env.DB.prepare('SELECT created_at, source, source_id, recs FROM roadmap_recs WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').bind(user.id).first<RecRow>();
   return json({ next: row ? nextOf(row) : null }, 200, NO_STORE);
-});
+}, (_request: Request, ctx: Ctx) => (aiEnabled(ctx.env) ? undefined : json({ error: 'not_implemented' }, 501, NO_STORE)));
 
 /** Download my data: every set of picks, oldest first. */
 export async function exportRoadmapRecs(DB: D1Database, userId: string): Promise<{ createdAt: number; source: RecSource; sourceId: string | null; picks: Pick[] }[]> {

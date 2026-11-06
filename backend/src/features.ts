@@ -50,18 +50,40 @@ export function featureMap(user: Pick<User, 'plan'>, env: Env): Record<FeatureId
 export const planRequired = (feature: FeatureId): Response =>
   json({ error: 'plan_required', feature, message: FEATURES[feature].description }, 402, { 'Cache-Control': 'no-store' });
 
+/** A route handler over its path's `*` parts. */
+export type Route<A extends unknown[] = string[]> = (request: Request, ctx: Ctx, ...args: A) => Promise<Response>;
+
+/** A route made by requireFeature, which says the feature it needs; src/index.ts dispatches the paid paths only to these and to openRoute's. */
+export type FeatureRoute<A extends unknown[] = string[]> = Route<A> & { readonly feature: FeatureId };
+
+/** A route under a paid path that is open on purpose, with why (say, revoking a share link after a downgrade). */
+export type OpenRoute<A extends unknown[] = string[]> = Route<A> & { readonly open: string };
+
 /**
- * A route that needs `feature`: 401 signed out (requireUser's answer), 402
+ * A route that needs `feature`, the only way into one (backend/README.md
+ * "Adding a paid feature"): `before` first, if given (what must answer
+ * before sign-in: a 501 without the AI key, a bad body), then 401 signed out
+ * (requireUser, which reads the account and its plan from D1 on every
+ * request, whatever the credential: cookie or app/CLI token), then 402
  * `{error: 'plan_required', feature}` off a plan that has it, else `handler`
- * with the user. Checks that must come first (a 501 without the AI key, the
- * body) go around it.
+ * with the user and what `before` returned. A Response from `before` is
+ * answered as is.
  */
-export function requireFeature<A extends unknown[]>(
+export function requireFeature<P = undefined, A extends unknown[] = []>(
   feature: FeatureId,
-  handler: (request: Request, ctx: Ctx, user: User, ...args: A) => Promise<Response>,
-): (request: Request, ctx: Ctx, ...args: A) => Promise<Response> {
-  return async (request, ctx, ...args) => {
+  handler: (request: Request, ctx: Ctx, user: User, pre: P, ...args: A) => Promise<Response>,
+  before?: (request: Request, ctx: Ctx, ...args: A) => Promise<P | Response> | P | Response,
+): FeatureRoute<A> {
+  const route = async (request: Request, ctx: Ctx, ...args: A): Promise<Response> => {
+    const pre = before ? await before(request, ctx, ...args) : (undefined as P);
+    if (pre instanceof Response) return pre;
     const user = await requireUser(request, ctx);
-    return can(user, feature, ctx.env).ok ? handler(request, ctx, user, ...args) : planRequired(feature);
+    return can(user, feature, ctx.env).ok ? handler(request, ctx, user, pre, ...args) : planRequired(feature);
   };
+  return Object.assign(route, { feature });
+}
+
+/** Marks a route under a paid path as open on purpose: `why` is for the reader and the route table's test. */
+export function openRoute<A extends unknown[]>(why: string, route: Route<A>): OpenRoute<A> {
+  return Object.assign(route, { open: why });
 }

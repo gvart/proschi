@@ -94,3 +94,21 @@ id; don't rewrite old ones.
   interview start screen, but off Pro only the latest finished one keeps its
   verdict.
   `roadmapAccess` stays sign-in gated; `aiRoadmapAccess` gates the picks.
+- **P22. One registry for paid features.** `backend/src/features.ts` has
+  `FEATURES` (`ai_interview` on free and Pro, the credits deciding how
+  many; `ai_review`, `interview_history`, `ai_roadmap` and `share_links` on
+  Pro), `can(user, feature, env)` → `{ok}` or `{ok: false, reason:
+  signed_out | needs_pro | billing_off}`, and `requireFeature`, the route
+  wrapper (401, or 402 `{error: 'plan_required', feature}`). `billing_off`
+  only names why: it refuses exactly what `needs_pro` refuses, when the
+  server has no Polar secrets. A Pro account keeps its features then. The
+  ids are shared with the page (`frontend/src/services/featureContract.ts`);
+  `GET /api/me/plan` answers `features`, which `useFeature` and
+  `<Feature pro free both hint>` read. The page never reads the plan string.
+  The automatic upgrade hint shows where paid plans are on (`VITE_BILLING`)
+  and the viewer is signed out or needs Pro. Nothing shows while loading.
+  The paid paths reach only `PAID_ROUTES` (`src/index.ts`), whose routes each
+  name a feature or why they are open. That holds for GET and DELETE of a
+  share link, so an account off Pro can still revoke one. Off
+  `interview_history`, only the latest verdict is kept with its session,
+  also by id. Numeric limits stay in `plans.ts`.

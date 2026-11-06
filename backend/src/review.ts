@@ -61,19 +61,18 @@ async function usedToday(DB: D1Database, userId: string, at: number): Promise<nu
   return row?.count ?? 0;
 }
 
-export async function reviewDesign(request: Request, ctx: Ctx): Promise<Response> {
-  const { env } = ctx;
-  await rateLimit(env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
+/** Before sign-in is read: the per-IP limit, the body (400, 413), then 501 without the key. */
+async function reviewBody(request: Request, ctx: Ctx): Promise<DesignReviewRequest | Response> {
+  await rateLimit(ctx.env.REVIEW_LIMITER, ctx.ip, 'Too many reviews; wait a minute');
   const body = await readJson(request, MAX_REVIEW_BODY);
   const problem = reviewRequestProblem(body);
   if (problem) throw new HttpError(problem === SOURCE_TOO_LONG ? 413 : 400, problem);
-  const page = body as unknown as DesignReviewRequest;
-  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
-  return reviewFor(request, ctx, page);
+  if (!aiEnabled(ctx.env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
+  return body as unknown as DesignReviewRequest;
 }
 
-/** The review itself, past the body and the key: 401 signed out, 402 off a plan with ai_review (src/features.ts). */
-const reviewFor = requireFeature('ai_review', async (_request: Request, ctx: Ctx, user: User, page: DesignReviewRequest): Promise<Response> => {
+/** POST /api/review: the ai_review feature (src/features.ts), 401 signed out, 402 off a plan with it. */
+export const reviewDesign = requireFeature('ai_review', async (_request: Request, ctx: Ctx, user: User, page: DesignReviewRequest): Promise<Response> => {
   const { env } = ctx;
   await rateLimit(env.AI_REVIEW_LIMITER, user.id, 'Too many reviews; wait a minute');
   const solved = page.problem ? findProblem(page.problem.id) : undefined;
@@ -106,19 +105,20 @@ const reviewFor = requireFeature('ai_review', async (_request: Request, ctx: Ctx
       ? json({ error: 'ai_unavailable', message: 'The AI reviewer is busy; try again in a minute' }, 503, NO_STORE)
       : json({ error: 'review_failed', message: 'The AI review failed; try again' }, 502, NO_STORE);
   }
-});
+}, reviewBody);
+
+/** 501 without ANTHROPIC_API_KEY, before sign-in is read. */
+const notImplemented = (_request: Request, ctx: Ctx): Response | undefined => (aiEnabled(ctx.env) ? undefined : json({ error: 'not_implemented' }, 501, NO_STORE));
 
 /** GET /api/review/usage: {limit, used, remaining, resetAt} for a Pro user; 402 off Pro, 501 without the key. */
-export async function getReviewUsage(request: Request, ctx: Ctx): Promise<Response> {
-  const { env } = ctx;
-  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
-  return usageFor(request, ctx);
-}
-
-const usageFor = requireFeature('ai_review', async (_request: Request, ctx: Ctx, user: User): Promise<Response> => {
-  const at = Date.now();
-  return json(usageOf(await usedToday(ctx.env.DB, user.id, at), at), 200, NO_STORE);
-});
+export const getReviewUsage = requireFeature(
+  'ai_review',
+  async (_request: Request, ctx: Ctx, user: User): Promise<Response> => {
+    const at = Date.now();
+    return json(usageOf(await usedToday(ctx.env.DB, user.id, at), at), 200, NO_STORE);
+  },
+  notImplemented,
+);
 
 /** Days of review_usage kept: the cap only needs today; a week is enough to look back on. */
 export const REVIEW_USAGE_DAYS = 7;
