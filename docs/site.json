@@ -138,6 +138,12 @@
       "title": "Privacy",
       "source": "PRIVACY.md",
       "description": "What Proschi keeps in your browser, what an account stores on the server, what is logged and shared, and how to export or delete it."
+    },
+    {
+      "slug": "terms",
+      "title": "Terms",
+      "source": "TERMS.md",
+      "description": "The terms of the hosted Proschi service: the free plan, Pro, interview packs, payment through Polar, canceling, refunds and AI interviews."
     }
   ],
   "anchorRedirects": {
@@ -237,6 +243,7 @@
       "title": "About",
       "items": [
         { "page": "privacy" },
+        { "page": "terms" },
         { "href": "blog/", "label": "Blog" },
         { "href": "https://github.com/gvart/proschi/blob/main/CHANGELOG.md", "label": "Changelog" },
         { "href": "https://github.com/gvart/proschi", "label": "GitHub" }

@@ -77,6 +77,7 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
       { label: 'Privacy', href: 'docs/privacy/' },
+      { label: 'Terms', href: 'docs/terms/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
     ],
   },

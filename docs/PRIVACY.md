@@ -2,7 +2,8 @@
 
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
-(private, and you can turn that off). There are no analytics or tracking
+(private, and you can turn that off). Payments for Pro go through Polar,
+and AI interviews are sent to an AI provider only when you start one. There are no analytics or tracking
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
@@ -121,8 +122,8 @@ above are about events, not about you).
 - Your account: the sign-in provider and the user id it gives Proschi, a
   display name (your GitHub login or Google first name, which you can
   change), whether you chose to appear on the leaderboard, when the
-  account was created, and its plan (everyone is on the free plan; it only
-  sets how much the account may keep).
+  account was created, and its plan (free or Pro; it sets how much the
+  account may keep and how many AI interviews it gets).
 - Sessions: a hash of each session's cookie, with when it started and when
   it expires. A session lasts 30 days and renews while you use it; expired
   ones are deleted daily.
@@ -174,7 +175,7 @@ above are about events, not about you).
   profile or a leaderboard, and only you can read them. Deleting a diagram
   leaves a marker (its id, version and when) for 30 days, so your other
   devices delete their copy too; its text is removed at once. Your account
-  keeps at most 5 diagrams on the free plan, 64 KiB each; the others stay in your browser only, marked "This browser only" in
+  keeps at most 5 diagrams on the free plan, 64 KiB each (Pro: no practical limit, 512 KiB each); the others stay in your browser only, marked "This browser only" in
   the editor's list of diagrams, and are never lost. **Move to this browser
   only**, in a diagram's actions there, takes it out of your account (and
   your other devices) to free a slot. Turning sync off keeps the copies in
@@ -279,6 +280,55 @@ nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
 
+## Pro, interview packs and payments
+
+Pro and interview packs are paid through [Polar](https://polar.sh), the
+merchant of record: Polar runs the checkout and the billing portal on its
+own pages, charges your card, handles VAT and sends the invoices, under
+[its privacy policy](https://polar.sh/legal/privacy). Proschi never sees or
+stores your card, billing address or the email address you give Polar.
+
+**What Polar gets from Proschi**: your account's id (so a payment lands on
+the right account) and which product you chose. Nothing else is sent.
+
+**What is stored here**, once you buy something:
+
+- your Polar customer id and subscription id, the subscription's status
+  (active, canceled and so on), which plan (Pro monthly or yearly), when the
+  paid period ends, whether it is canceled at that date, and when this was
+  last updated;
+- your AI interview credits, as a ledger: each pack bought (5 credits, with
+  Polar's order id), each interview started (1 credit, with the
+  interview's id) and each credit given back for an interview that failed
+  early, with the time of each;
+- for every message Polar's webhook sends: its id, its type and when it
+  arrived, to apply it only once. It holds nothing about you.
+
+**What it is used for**: only to know your plan, renewal date and how many
+AI interviews you have left. It is shown in **Plan & billing** on your
+account page.
+
+**How long**: as long as the account. Deleting the account cancels a
+subscription still running at Polar at once, then removes all of the above
+(the webhook log aside, which names no account). Polar keeps its own
+records of the payments, such as invoices, as the law requires of it.
+
+## AI interviews
+
+An AI interview (one a lifetime on the free plan, 4 a month on Pro, more
+with packs) is started only by you, knowing it is sent to an AI provider:
+the problem, your diagram and everything you write or dictate in the
+interview are sent to Anthropic's Claude, through Cloudflare's AI Gateway,
+to ask the questions and write the hints and the verdict. The provider uses
+them only to answer, not to train its models.
+
+**What is stored**: the interview's transcript, kept 90 days and then
+deleted, and its verdict summary (pass or fail, and what went well and
+wrong per skill), kept for your interview history. Both are private, part
+of **Download my data**, and deleted with your account. Dictation, where
+your browser offers it, is done by the browser; Proschi receives only the
+text.
+
 ## The site's operator
 
 Proschi has one operator, who signs in to an admin panel (`/admin/`) with a
@@ -357,7 +407,8 @@ reminder run hold your user id, never the address, when a send fails.
 In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
-  synced diagrams and their versions included, every session with its kind (the site or an
+  synced diagrams and their versions included, your plan, subscription and
+  interview credits, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
@@ -367,7 +418,9 @@ In Settings on the practice page (`#/me`, from the account menu):
   own.
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
-  synced diagrams and their versions, and the email reminders' address from the server at once;
+  synced diagrams and their versions, the email reminders' address, the
+  billing data and interview credits from the server at once (a Pro
+  subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
