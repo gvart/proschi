@@ -70,7 +70,9 @@ export async function listInterviews(): Promise<{ interviews: AiInterview[]; cre
   }
 }
 
-export const startInterview = (problem: string, minutes: Duration) => api<{ interview: AiInterview; credits: Credits }>('/api/interviews', { method: 'POST', body: { problem, minutes } });
+/** Starts one; `replace` ends the open one first (its credit is not returned). */
+export const startInterview = (problem: string, minutes: Duration, replace = false) =>
+  api<{ interview: AiInterview; credits: Credits }>('/api/interviews', { method: 'POST', body: { problem, minutes, ...(replace ? { replace: true } : {}) } });
 export const getInterview = (id: string) => api<{ interview: AiInterview }>(`/api/interviews/${encodeURIComponent(id)}`);
 export const finishInterview = (id: string) => api<{ interview: AiInterview }>(`/api/interviews/${encodeURIComponent(id)}/finish`, { method: 'POST' });
 
@@ -164,8 +166,10 @@ export async function sendTurn(id: string, input: TurnInput, onText: (text: stri
 }
 
 /** Why a start was refused, for the start screen. */
-export function startError(e: unknown): { code: 'no_credits'; credits?: Credits } | { code: 'other'; message: string } {
+export function startError(e: unknown): { code: 'no_credits'; credits?: Credits } | { code: 'active_session'; id: string; problem: string } | { code: 'other'; message: string } {
   if (e instanceof ApiError && e.status === 402) return { code: 'no_credits', credits: (e.body as { credits?: Credits } | undefined)?.credits };
+  const open = e instanceof ApiError && e.status === 409 ? (e.body as { error?: string; id?: unknown; problem?: unknown } | undefined) : undefined;
+  if (open?.error === 'active_session' && typeof open.id === 'string' && typeof open.problem === 'string') return { code: 'active_session', id: open.id, problem: open.problem };
   return { code: 'other', message: e instanceof Error ? e.message : String(e) };
 }
 

@@ -103,7 +103,7 @@ import { finishInterview, getInterview, interviewTurn, listInterviews, startInte
  *   GET    /api/oembed?url=                 oEmbed for a short link
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review: Pro, 20 a day (402 plan_required, 429 daily_limit, 501 without the key)
  *   GET    /api/review/usage                Pro's AI reviews today: {limit, used, remaining, resetAt}
- *   POST   /api/interviews {problem, minutes}   starts an AI interview, spending a credit (402 no_credits; 501 without the AI key)
+ *   POST   /api/interviews {problem, minutes, replace?}   starts an AI interview, spending a credit (402 no_credits; 409 active_session; 501 without the AI key)
  *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
  *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
  *   GET    /api/interviews/<id>            one session with its transcript, to resume

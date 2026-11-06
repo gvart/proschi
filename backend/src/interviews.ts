@@ -15,7 +15,7 @@ import { errorText, log } from './log';
  * the engine in src/ai/interviewer.ts. Signed in only, each route with its
  * own per-user rate limit; without ANTHROPIC_API_KEY every route answers 501.
  *
- *   POST /api/interviews {problem, minutes}       spends a credit, opens a session (402 no_credits)
+ *   POST /api/interviews {problem, minutes, replace?}   spends a credit, opens a session (402 no_credits, 409 active_session)
  *   POST /api/interviews/<id>/turn {message, design?, advance?}
  *                                                 the reply as Server-Sent Events: text…, then hint, grade, done
  *   POST /api/interviews/<id>/finish              the verdict (once; again answers the same one)
@@ -26,7 +26,7 @@ import { errorText, log } from './log';
  * limit) on its first turn or in its first 5 minutes; the session then ends.
  * The limits (60-minute wall clock, token cap, turns, message and design
  * size) are the engine's; the routes add a body cap and one session at a
- * time: starting a new one abandons the one before.
+ * time: with one open, a start answers 409 active_session unless `replace` ends it (its credit is not returned).
  */
 
 export const REFUND_WINDOW_MS = 5 * 60_000;
@@ -113,7 +113,7 @@ function summary(row: Row) {
   };
 }
 
-/** POST /api/interviews {problem, minutes}. */
+/** POST /api/interviews {problem, minutes, replace?}. */
 export async function startInterview(request: Request, ctx: Ctx): Promise<Response> {
   const user = await signedIn(request, ctx, ctx.env.INTERVIEW_START_LIMITER);
   const body = await readJson(request);
@@ -121,6 +121,13 @@ export async function startInterview(request: Request, ctx: Ctx): Promise<Respon
   if (!context) throw new HttpError(400, 'Unknown problem');
   const minutes = body.minutes ?? 45;
   if (!DURATIONS.includes(minutes as Duration)) throw new HttpError(400, `minutes must be one of ${DURATIONS.join(', ')}`);
+
+  if (body.replace !== undefined && typeof body.replace !== 'boolean') throw new HttpError(400, 'replace must be a boolean');
+  // One session at a time: an open one is resumed, or ended on purpose (its credit is not returned).
+  const open = await ctx.env.DB.prepare("SELECT id, problem_id FROM ai_interviews WHERE user_id = ? AND status IN ('active', 'finishing') ORDER BY started_at DESC LIMIT 1")
+    .bind(user.id)
+    .first<{ id: string; problem_id: string }>();
+  if (open && body.replace !== true) return json({ error: 'active_session', id: open.id, problem: open.problem_id }, 409, NO_STORE);
 
   const id = crypto.randomUUID();
   const now = Date.now();
@@ -130,7 +137,7 @@ export async function startInterview(request: Request, ctx: Ctx): Promise<Respon
   const { state, opening } = start(context, minutes as Duration, now);
   const { DB } = ctx.env;
   await DB.batch([
-    DB.prepare("UPDATE ai_interviews SET status = 'abandoned', ended_at = ?2 WHERE user_id = ?1 AND status = 'active'").bind(user.id, now),
+    DB.prepare("UPDATE ai_interviews SET status = 'abandoned', ended_at = ?2 WHERE user_id = ?1 AND status IN ('active', 'finishing')").bind(user.id, now),
     DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, state, started_at) VALUES (?, ?, ?, ?, 'active', ?, ?)").bind(id, user.id, context.problem.id, minutes, JSON.stringify(state), now),
     DB.prepare("INSERT INTO ai_interview_messages (interview_id, role, text, at) VALUES (?, 'interviewer', ?, ?)").bind(id, opening, now),
   ]);

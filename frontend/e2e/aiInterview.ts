@@ -37,14 +37,18 @@ export const FAIL_VERDICT = {
 
 export interface InterviewMock {
   turns: { message: string; design?: string; advance?: boolean }[];
+  starts: { replace: boolean }[];
 }
 
-export async function mockInterviews(page: Page, opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number }): Promise<InterviewMock> {
-  const mock: InterviewMock = { turns: [] };
+/** `open`: a session already in progress on the server (started in another tab or browser), with its first message. */
+export async function mockInterviews(page: Page, opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string }): Promise<InterviewMock> {
+  const mock: InterviewMock = { turns: [], starts: [] };
   const credits = (total: number) => ({ total, monthly: 0, trial: total, pack: 0, period: '2026-11' });
   let left = opts.credits ?? 1;
-  let session: Record<string, unknown> | undefined;
-  const messages: Record<string, unknown>[] = [];
+  let session: Record<string, unknown> | undefined = opts.open
+    ? { id: 'iv-0', problem: 'url-shortener', minutes: 45, status: 'active', startedAt: Date.now() - 5 * 60_000, deadline: Date.now() + 55 * 60_000 }
+    : undefined;
+  const messages: Record<string, unknown>[] = opts.open ? [{ role: 'interviewer', text: opts.open, at: Date.now() - 5 * 60_000 }] : [];
   let phase = 'clarify';
   await page.route(
     (url) => url.pathname.startsWith('/api/interviews'),
@@ -53,9 +57,13 @@ export async function mockInterviews(page: Page, opts: { replies: MockReply[]; v
       const parts = new URL(req.url()).pathname.split('/').filter(Boolean);
       if (req.method() === 'GET' && parts.length === 2) return route.fulfill({ json: { interviews: session ? [session] : [], credits: credits(left) } });
       if (req.method() === 'POST' && parts.length === 2) {
+        const replace = (req.postDataJSON() as { replace?: boolean }).replace === true;
+        mock.starts.push({ replace });
+        if (session?.status === 'active' && !replace) return route.fulfill({ status: 409, json: { error: 'active_session', id: session.id, problem: session.problem } });
         if (left <= 0) return route.fulfill({ status: 402, json: { error: 'no_credits', credits: credits(0) } });
         left--;
         const startedAt = opts.startedAt ?? Date.now();
+        messages.length = 0;
         messages.push({
           role: 'interviewer',
           text: "Hi, I'll be your interviewer. Today we'll design URL Shortener. We have 45 minutes. Start by asking me what you need to know.",

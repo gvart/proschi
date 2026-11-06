@@ -72,6 +72,37 @@ test.describe('AI interviewer', () => {
     await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
   });
 
+  for (const choice of ['resume', 'replace'] as const) {
+    test(`an interview already open: ${choice === 'resume' ? 'Resume it (the default)' : 'End it and start a new one'}`, async ({ page, errors }) => {
+      await mockSignedIn(page);
+      const mock = await mockInterviews(page, { replies: [], credits: 2, open: 'Welcome back: where were we on the read path?' });
+      await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
+      await page.goto('practice/#/url-shortener');
+      await page.getByRole('button', { name: 'Interview mode' }).click();
+      const start = page.getByRole('region', { name: 'Interview mode' });
+      await start.getByRole('radio', { name: /AI interviewer/ }).click();
+      await start.getByRole('button', { name: 'Start the AI interview' }).click();
+
+      const open = page.getByRole('region', { name: 'AI interview in progress' });
+      await expect(open.getByRole('heading', { name: 'You have an AI interview in progress' })).toBeVisible();
+      await expect(open.getByRole('button', { name: 'Resume it' })).toBeFocused();
+      await expect(open.getByText(/credit is not returned/)).toBeVisible();
+      const chat = page.getByRole('region', { name: 'AI interview', exact: true });
+      if (choice === 'resume') {
+        await open.getByRole('button', { name: 'Resume it' }).click();
+        await expect(chat.getByText('Welcome back: where were we on the read path?')).toBeVisible();
+        expect(mock.starts).toEqual([{ replace: false }]);
+      } else {
+        await open.getByRole('button', { name: 'End it and start a new one' }).click();
+        await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
+        await expect(chat.getByText('Welcome back: where were we on the read path?')).toHaveCount(0);
+        expect(mock.starts).toEqual([{ replace: false }, { replace: true }]);
+      }
+      // The 409 active_session is expected; Chromium logs every non-2xx load.
+      for (let i = errors.length - 1; i >= 0; i--) if (/status of 409/.test(errors[i])) errors.splice(i, 1);
+    });
+  }
+
   test('the scripted mode still starts by default, and no credits disables the AI start', async ({ page }) => {
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [], credits: 0 });

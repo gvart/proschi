@@ -97,7 +97,8 @@ describe('AI interviews', () => {
     expect(body.interview).toMatchObject({ status: 'active', phase: 'clarify', problem: 'url-shortener', minutes: 45 });
     expect(body.interview.messages).toEqual([expect.objectContaining({ role: 'interviewer', text: expect.stringContaining('URL Shortener') })]);
     expect(body.credits.total).toBe(0);
-    const refused = await startOne(token);
+    // Even ending the open one: without a credit nothing changes.
+    const refused = await startOne(token, { problem: 'url-shortener', minutes: 45, replace: true });
     expect(refused.status).toBe(402);
     expect(await refused.json()).toMatchObject({ error: 'no_credits', credits: { total: 0, trial: 0, monthly: 0, pack: 0 } });
   });
@@ -216,14 +217,28 @@ describe('AI interviews', () => {
     expect(list.interviews).toMatchObject([{ id, status: 'finished', verdict: { passed: true } }]);
   });
 
-  it('abandons the session before when a new one starts', async () => {
+  it('answers 409 active_session while one is open, and ends it only when asked, without returning its credit', async () => {
     claude();
     const { id: userId, token } = await signedInUser();
     await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'grant', 'pack', 5, 'pack_5', 'ord', 0)").bind(userId).run();
     const first = await started(token);
-    const second = await started(token);
+    expect(await credits(token)).toBe(5);
+    const refused = await startOne(token, { problem: 'url-shortener', minutes: 30 });
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toEqual({ error: 'active_session', id: first, problem: 'url-shortener' });
+    expect(await credits(token)).toBe(5);
+    expect((await row(first))!.status).toBe('active');
+    expect((await startOne(token, { problem: 'url-shortener', minutes: 45, replace: 'yes' })).status).toBe(400);
+
+    const replaced = await startOne(token, { problem: 'url-shortener', minutes: 45, replace: true });
+    expect(replaced.status).toBe(201);
+    const second = ((await replaced.json()) as { interview: { id: string } }).interview.id;
     expect((await row(first))!.status).toBe('abandoned');
     expect((await row(second))!.status).toBe('active');
+    expect(await credits(token)).toBe(4);
+    // A finished one doesn't block a new start.
+    await call(`/api/interviews/${second}/finish`, { method: 'POST', token });
+    expect((await startOne(token)).status).toBe(201);
   });
 
   it('exports the sessions with their transcripts, and deletes them with the account', async () => {

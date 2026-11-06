@@ -133,15 +133,19 @@ function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemI
   }, [ai]);
   const chosen: Kind = ai && credits ? kind : 'scripted';
 
-  const startAi = async () => {
+  /** An AI interview still open (409 active_session): resume it, or end it and start this one. */
+  const [open, setOpen] = useState<{ id: string; problem: string }>();
+
+  const startAi = async (replace = false) => {
     setStarting(true);
     setError(undefined);
     try {
-      const { interview } = await startInterview(problemId, duration);
+      const { interview } = await startInterview(problemId, duration, replace);
       onStartAi(interview.id);
     } catch (e) {
       const why = startError(e);
-      if (why.code === 'no_credits') {
+      if (why.code === 'active_session') setOpen({ id: why.id, problem: why.problem });
+      else if (why.code === 'no_credits') {
         if (why.credits) setCredits(why.credits);
         setError(<>No AI interviews left. {billingEnabled && <UpgradeLink />}</>);
       } else setError(`The interview could not start (${why.message}). Try again in a moment.`);
@@ -155,6 +159,44 @@ function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemI
     if (!hasConsent()) return setConsenting(true);
     void startAi();
   };
+  const resume = (session: { id: string; problem: string }) => {
+    if (session.problem === problemId) return onStartAi(session.id);
+    // On another problem: its page opens the interview (InterviewPanel reads the stored id).
+    saveActive(session.problem, session.id);
+    window.location.hash = `#/${session.problem}`;
+  };
+
+  if (open) {
+    return (
+      <section aria-label="AI interview in progress" className="px-4 py-4 space-y-3">
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+          <Bot size={18} aria-hidden="true" />
+          You have an AI interview in progress
+        </h2>
+        <p className="text-sm text-ink">{open.problem === problemId ? 'It is on this problem.' : `It is on another problem (${open.problem}).`} You can have one AI interview at a time.</p>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" autoFocus onClick={() => resume(open)} className={primaryButton}>
+            Resume it
+          </button>
+          <button
+            type="button"
+            disabled={starting}
+            onClick={() => {
+              setOpen(undefined);
+              void startAi(true);
+            }}
+            className={`${outlineButton} disabled:opacity-50`}
+          >
+            End it and start a new one
+          </button>
+        </div>
+        <p className="text-xs text-ink">Ending it uses one more AI interview for the new one. The old interview’s credit is not returned, and it gets no verdict.</p>
+        <button type="button" onClick={() => setOpen(undefined)} className={toolButton}>
+          Back
+        </button>
+      </section>
+    );
+  }
 
   if (consenting) {
     return (
