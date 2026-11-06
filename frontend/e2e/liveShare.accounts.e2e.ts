@@ -156,11 +156,14 @@ test('on Pro, File → Share link… makes a link, copies it and revokes it', as
   expect(calls).toEqual(['GET', 'POST', 'DELETE']);
 });
 
-test('off Pro, without paid plans on, the File menu has no Share link', async ({ page }) => {
+test('off Pro, with paid plans on (build:accounts), Share link points to Pro', async ({ page }) => {
   await mockSignedIn(page);
   await page.goto('app/');
   await expect(codeEditor(page)).toBeVisible();
   await page.getByRole('button', { name: 'File' }).click();
   await expect(page.getByRole('menuitem', { name: 'Versions…' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Share link…' })).toHaveCount(0);
+  await page.getByRole('menuitem', { name: 'Share link…' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Share link' });
+  await expect(dialog).toContainText('Live share links are part of Pro');
+  await expect(dialog.getByRole('link', { name: 'See Pro' })).toHaveAttribute('href', '../pricing/');
 });
