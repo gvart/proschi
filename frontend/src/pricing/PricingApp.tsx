@@ -29,7 +29,7 @@ export default function PricingApp() {
   }, []);
   return (
     <div className="min-h-[100dvh] flex flex-col bg-paper">
-      <Header base="../" actions={<AccountMenu account={account} />} />
+      <Header base="../" current="pricing" actions={<AccountMenu account={account} />} />
       <main className="flex-1 w-full max-w-5xl mx-auto px-4 py-8 sm:py-14">
         <Pricing account={account} plan={plan} />
       </main>
