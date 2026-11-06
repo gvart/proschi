@@ -1,0 +1,14 @@
+docs/design/paid-plans.md
+  h_bdd87144da84ba 76-81
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a9adc18c727a7d9d93d00aeeb6093b4b4998ba6a",
+  "prompts": {},
+  "humans": {
+    "h_bdd87144da84ba": {
+      "author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
