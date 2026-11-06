@@ -1,10 +1,14 @@
-import { useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { CircleAlert, CircleCheck, Flag, Pause, Play, Timer, X } from 'lucide-react';
+import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import { Bot, CircleAlert, CircleCheck, Flag, Pause, Play, ShieldCheck, Sparkles, Timer, X } from 'lucide-react';
 import Markdown from '../Markdown';
 import { useNow } from './useNow';
 import { formatFactor, formatNumber, hashText, parseNumber, seededRandom } from '../../learn/grade';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { redactedStatement, type EstimateQuestion, type Interview } from './interviewFile';
+import { apiEnabled } from '../../services/api';
+import { billingEnabled, pricingHref } from '../../services/billing';
+import AiInterviewPanel from './ai/AiInterviewPanel';
+import { giveConsent, hasConsent, listInterviews, loadActive, saveActive, startError, startInterview, type Credits } from './ai/api';
 import {
   CHECKLIST,
   DEFAULT_DURATION,
@@ -56,11 +60,36 @@ interface InterviewPanelProps {
   onRestart: () => void;
   /** The full statement with hints and the reference solution, shown from the design phase on. */
   children: ReactNode;
+  /** Signed in (a build with accounts): the AI interviewer is on offer when the server has it. */
+  signedIn?: boolean;
+  /** The editor's source now, for the AI interviewer's "Send my design". */
+  getSource?: () => string;
 }
 
-/** Interview mode in the left column: the start screen, then one phase at a time. */
-export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children }: InterviewPanelProps) {
-  if (!session) return <StartScreen onStart={onStart} onCancel={onExit} />;
+/** Interview mode in the left column: the start screen, then one phase at a time, or the AI interviewer's chat. */
+export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, signedIn = false, getSource }: InterviewPanelProps) {
+  const [aiId, setAiId] = useState(() => (apiEnabled ? loadActive(problemId) : undefined));
+  const redacted = useMemo(() => redactedStatement(statement), [statement]);
+  const setAi = (id: string | undefined) => {
+    saveActive(problemId, id);
+    setAiId(id);
+  };
+  if (aiId && getSource) {
+    return (
+      <AiInterviewPanel
+        key={aiId}
+        id={aiId}
+        statement={redacted}
+        getSource={getSource}
+        onRestart={() => setAi(undefined)}
+        onExit={() => {
+          setAi(undefined);
+          onExit();
+        }}
+      />
+    );
+  }
+  if (!session) return <StartScreen problemId={problemId} onStart={onStart} onStartAi={setAi} onCancel={onExit} ai={signedIn && apiEnabled && !!getSource} />;
   const advance = () => dispatch({ type: 'advance', now: Date.now() });
   return (
     <section aria-label="Interview mode" className="flex flex-col">
@@ -84,8 +113,94 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
   );
 }
 
-function StartScreen({ onStart, onCancel }: { onStart: (d: Duration) => void; onCancel: () => void }) {
+type Kind = 'scripted' | 'ai';
+
+function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemId: string; onStart: (d: Duration) => void; onStartAi: (id: string) => void; onCancel: () => void; ai: boolean }) {
   const [duration, setDuration] = useState<Duration>(DEFAULT_DURATION);
+  const [kind, setKind] = useState<Kind>('scripted');
+  /** The credits left; undefined until known, null when the server has no AI interviewer. */
+  const [credits, setCredits] = useState<Credits | null>();
+  const [consenting, setConsenting] = useState(false);
+  const [starting, setStarting] = useState(false);
+  const [error, setError] = useState<ReactNode>();
+  useEffect(() => {
+    if (!ai) return;
+    let live = true;
+    void listInterviews().then((r) => live && setCredits(r ? r.credits : null));
+    return () => {
+      live = false;
+    };
+  }, [ai]);
+  const chosen: Kind = ai && credits ? kind : 'scripted';
+
+  const startAi = async () => {
+    setStarting(true);
+    setError(undefined);
+    try {
+      const { interview } = await startInterview(problemId, duration);
+      onStartAi(interview.id);
+    } catch (e) {
+      const why = startError(e);
+      if (why.code === 'no_credits') {
+        if (why.credits) setCredits(why.credits);
+        setError(<>No AI interviews left. {billingEnabled && <UpgradeLink />}</>);
+      } else setError(`The interview could not start (${why.message}). Try again in a moment.`);
+      setConsenting(false);
+    } finally {
+      setStarting(false);
+    }
+  };
+  const start = () => {
+    if (chosen === 'scripted') return onStart(duration);
+    if (!hasConsent()) return setConsenting(true);
+    void startAi();
+  };
+
+  if (consenting) {
+    return (
+      <section aria-label="AI interviewer consent" className="px-4 py-4 space-y-3">
+        <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
+          <ShieldCheck size={18} aria-hidden="true" />
+          Before your first AI interview
+        </h2>
+        <p className="text-sm text-ink">The AI interviewer is Claude, made by Anthropic. To run the interview, Proschi sends Anthropic:</p>
+        <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
+          <li>everything you type or dictate in the interview chat (your browser turns dictation into text first),</li>
+          <li>the design in the editor each time you press “Send my design”, with its test results,</li>
+          <li>the problem, the time and the phase.</li>
+        </ul>
+        <p className="text-sm text-ink">
+          Nothing else about you or your account is sent. Proschi keeps the transcript for 90 days and the verdict for your history; both are in Download my data and are deleted with your account.{' '}
+          <a href="../docs/privacy/" target="_blank" rel="noopener" className="font-semibold underline underline-offset-2">
+            Privacy
+          </a>
+        </p>
+        {error && (
+          <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+            {error}
+          </p>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            disabled={starting}
+            onClick={() => {
+              giveConsent();
+              void startAi();
+            }}
+            className={`${primaryButton} disabled:opacity-50`}
+          >
+            <Bot size={14} aria-hidden="true" />
+            {starting ? 'Starting…' : 'I agree, start the interview'}
+          </button>
+          <button type="button" onClick={() => setConsenting(false)} className={toolButton}>
+            Back
+          </button>
+        </div>
+      </section>
+    );
+  }
+
   return (
     <section aria-label="Interview mode" className="px-4 py-4 space-y-4">
       <h2 className="font-display text-lg font-bold text-ink">Interview mode</h2>
@@ -93,6 +208,27 @@ function StartScreen({ onStart, onCancel }: { onStart: (d: Duration) => void; on
         Practise the whole interview against the clock. The statement starts without its scale and constraints: ask clarifying questions to uncover them, estimate the load, design and run the tests, then review your
         design.
       </p>
+      {ai && credits && (
+        <fieldset>
+          <legend className={eyebrow}>Interviewer</legend>
+          <div className="mt-1 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Interviewer">
+            <ModeChoice checked={chosen === 'scripted'} onSelect={() => setKind('scripted')} title="Scripted (free)" icon={<Timer size={14} aria-hidden="true" />}>
+              Pick questions from a list and check your estimates. Stays in this browser.
+            </ModeChoice>
+            <ModeChoice checked={chosen === 'ai'} onSelect={() => setKind('ai')} title="AI interviewer" icon={<Bot size={14} aria-hidden="true" />}>
+              A live interviewer that answers, follows up, coaches you and gives a verdict.{' '}
+              <span data-testid="ai-credits" className="font-semibold">
+                {credits.total === 1 ? '1 interview left' : `${credits.total} interviews left`}
+              </span>
+            </ModeChoice>
+          </div>
+          {billingEnabled && chosen === 'ai' && credits.total <= 1 && (
+            <p className="mt-2 text-xs text-ink">
+              <UpgradeLink />
+            </p>
+          )}
+        </fieldset>
+      )}
       <fieldset>
         <legend className={eyebrow}>Time</legend>
         <div className="mt-1 flex gap-2" role="radiogroup" aria-label="Interview length">
@@ -120,17 +256,53 @@ function StartScreen({ onStart, onCancel }: { onStart: (d: Duration) => void; on
           </li>
         ))}
       </ol>
-      <p className="text-xs text-muted">Your time per phase, questions, estimates and the summary stay in this browser.</p>
+      <p className="text-xs text-muted">
+        {chosen === 'ai'
+          ? 'Starting uses one AI interview. If the interviewer fails in the first 5 minutes, you get it back.'
+          : 'Your time per phase, questions, estimates and the summary stay in this browser.'}
+      </p>
+      {error && (
+        <p role="alert" className="text-sm text-red-700 dark:text-red-300">
+          {error}
+        </p>
+      )}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={() => onStart(duration)} className={primaryButton}>
-          <Timer size={14} aria-hidden="true" />
-          Start the interview
+        <button type="button" onClick={start} disabled={starting || (chosen === 'ai' && credits?.total === 0)} className={`${primaryButton} disabled:opacity-50`}>
+          {chosen === 'ai' ? <Bot size={14} aria-hidden="true" /> : <Timer size={14} aria-hidden="true" />}
+          {chosen === 'ai' ? (starting ? 'Starting…' : 'Start the AI interview') : 'Start the interview'}
         </button>
         <button type="button" onClick={onCancel} className={toolButton}>
           Cancel
         </button>
       </div>
     </section>
+  );
+}
+
+function ModeChoice({ checked, onSelect, title, icon, children }: { checked: boolean; onSelect: () => void; title: string; icon: ReactNode; children: ReactNode }) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={checked}
+      onClick={onSelect}
+      className={`rounded-sm border-bw-1 px-3 py-2 text-left text-sm ${checked ? 'border-ink bg-pop-yellow/30 shadow-brutal-sm' : 'border-ink/40 hover:border-ink'}`}
+    >
+      <span className="flex items-center gap-1.5 font-semibold text-ink">
+        {icon}
+        {title}
+      </span>
+      <span className="mt-0.5 block text-xs text-ink/80">{children}</span>
+    </button>
+  );
+}
+
+function UpgradeLink() {
+  return (
+    <a href={pricingHref('../')} data-testid="ai-upgrade" className="inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink">
+      <Sparkles size={12} aria-hidden="true" />
+      Get more with Pro or an interview pack
+    </a>
   );
 }
 
