@@ -59,6 +59,8 @@ export interface User {
   providers?: ProviderId[];
   /** Unix seconds: when the account was made (GET /api/me). */
   createdAt?: number;
+  /** The account's plan (`users.plan`): 'free' or 'pro'; absent from an older Worker. */
+  plan?: string;
 }
 
 /** A problem's progress as the server keeps it. */

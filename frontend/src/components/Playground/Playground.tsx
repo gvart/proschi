@@ -101,6 +101,7 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
+import { billingEnabled, isPro } from '../../services/documentShares';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
@@ -137,6 +138,7 @@ const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
 const VersionsDialog = lazy(() => import('./VersionsDialog'));
+const ShareLinkDialog = lazy(() => import('./ShareLinkDialog'));
 const VersionViewer = lazy(() => import('./VersionViewer'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
@@ -252,6 +254,7 @@ export default function Playground() {
   const [shortening, setShortening] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showShareLink, setShowShareLink] = useState(false);
   /** A saved version open read-only, or two compared, over the editor. */
   const [versionView, setVersionView] = useState<{ mode: VersionMode; versions: VersionInfo[] } | null>(null);
   /** The code and diagram panes' sizes, as last set with the splitter. */
@@ -532,6 +535,7 @@ export default function Playground() {
   };
 
   const signedIn = account.state.status === 'signed-in';
+  const pro = account.state.status === 'signed-in' && isPro(account.state.user.plan);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -760,6 +764,19 @@ export default function Playground() {
     if (state.kind === 'offline') return { message: 'Offline: versions are in your account, so they need a connection.', actions: [] };
     return null;
   })();
+  /** Why this diagram cannot have a live share link yet (it is not in the account), with what to do; null when it can. */
+  const shareHint = ((): { message: string; actions: { label: string; run: () => void }[] } | null => {
+    if (cloud.state.kind === 'off' || !cloud.enabled) return { message: 'A share link shows the diagram kept in your account, and cloud sync is off in this browser.', actions: [{ label: 'Turn on cloud sync', run: () => cloud.setEnabled(true) }] };
+    if (cloud.local.has(current.id)) {
+      return {
+        message: 'This diagram stays in this browser only. Keep it in your account to share a link to it.',
+        actions: cloud.canKeep ? [{ label: 'Keep in cloud', run: () => cloud.keepInCloud(current.id) }] : [],
+      };
+    }
+    if (cloud.state.kind === 'loading') return { message: 'Connecting to your account…', actions: [] };
+    if (cloud.state.kind === 'offline') return { message: 'Offline: share links are made in your account, so they need a connection.', actions: [] };
+    return null;
+  })();
   const versionDraft = useMemo(() => ({ source, files: JSON.parse(importableKey) as Record<string, string> }), [source, importableKey]);
   /** "Restore into draft": the version's text replaces the draft's; the version stays as it is, and Undo puts the draft back. */
   const restoreVersion = (text: string, tag: string) => {
@@ -888,6 +905,18 @@ export default function Playground() {
                 >
                   Versions…
                 </MenuItem>
+                {/* Pro only; others see it (with an upgrade hint) only when paid plans are on. */}
+                {(pro || (signedIn && billingEnabled)) && (
+                  <MenuItem
+                    icon={<Link2 size={14} />}
+                    onSelect={() => {
+                      setShowShareLink(true);
+                      close();
+                    }}
+                  >
+                    Share link…
+                  </MenuItem>
+                )}
                 <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<ArchiveRestore size={14} />}
@@ -1291,6 +1320,12 @@ export default function Playground() {
               if (shortLinkRef.current?.id === id) shortLinkRef.current = null;
             }}
           />
+        </Suspense>
+      )}
+
+      {showShareLink && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ShareLinkDialog docId={current.id} title={titleOf(source)} pro={pro} hint={shareHint} pushedVersion={cloud.pushedVersion} onClose={() => setShowShareLink(false)} />
         </Suspense>
       )}
 

@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). Styles allow 'unsafe-inline' because CodeMirror
+         inserts <style> elements at runtime; scripts stay 'self' only. frame-ancestors cannot be set from a meta tag. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data: blob:; connect-src 'self'; worker-src 'self' blob:; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <!-- The address holds the link's token, its only secret: never sent on in a Referer. -->
+    <meta name="referrer" content="no-referrer" />
+    <!-- A private link: never indexed (the Worker also sends X-Robots-Tag: noindex). -->
+    <meta name="robots" content="noindex, nofollow" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#FFF8E7" />
+    <!-- Applies the saved or system theme before first paint. The page is served at /share/<token>, so ../ is the site root. -->
+    <script src="../theme-init.js"></script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Shared diagram · Proschi</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <noscript><p>This shared Proschi diagram needs JavaScript.</p></noscript>
+    <script type="module" src="../src/share/main.tsx"></script>
+  </body>
+</html>
