@@ -266,6 +266,7 @@ describe('data export', () => {
       shares: [],
       documents: [],
       documentVersions: [],
+      documentShares: [],
       emailReminders: null,
     });
     expect(text).not.toContain(await sha256(token));

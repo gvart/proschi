@@ -10,6 +10,7 @@ import { rejectName } from './moderation';
 import { findProblem, problemIds, verify, type Verdict } from './verify';
 import { exportGame } from './game';
 import { exportDocuments } from './documents';
+import { exportDocumentShares } from './documentShares';
 import { exportVersions } from './versions';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
@@ -118,7 +119,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams and their versions and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
@@ -229,6 +230,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     documents: await exportDocuments(DB, user.id),
     // Their tagged versions, with content; deleted ones as tombstones (tag and seq kept, content cleared).
     documentVersions: await exportVersions(DB, user.id),
+    // Live share links of those diagrams (Pro), revoked ones too.
+    documentShares: await exportDocumentShares(DB, user.id, new URL(request.url).origin),
     // Email reminders: the address and its settings; null without one.
     emailReminders: await exportEmailPrefs(DB, user.id),
   };

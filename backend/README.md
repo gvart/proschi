@@ -310,6 +310,32 @@ users (`src/shares.ts`, `migrations/0010_shares.sql`, docs/SHARING.md):
 - Shares are in `GET /api/me/export` (`shares`, each with its `imageUrl`)
   and are deleted with the account (`ON DELETE CASCADE`).
 
+### Live share links
+
+A short link is a snapshot. A live share link (`src/documentShares.ts`,
+`migrations/0018_document_shares.sql`, docs/SHARING.md) is a Pro user's
+private, revocable, read-only link to one of their synced diagrams, showing
+it as it is now (docs/design/paid-plans.md P11, P13):
+
+- **Creating**: `POST /api/me/documents/<id>/share` needs a session, the
+  same-origin check and `DOCS_LIMITER`; off Pro (`users.plan` is not
+  `'pro'`) it answers 402 `{error: 'plan_required'}`. A diagram has at most one
+  live link (a partial unique index); asking again returns it. The token is
+  16 random bytes in base64url (22 characters, 128 bits), stored as is so
+  the owner can copy the link again (`GET /api/me/documents/<id>/share`).
+- **Revoking**: `DELETE /api/me/documents/<id>/share` sets `revoked_at`; the
+  row stays so the token is never reused. Sharing again makes a new token.
+- **Reading**: `GET /api/share/<token>` needs no sign-in and is counted per IP
+  (`STATS_LIMITER`). It answers `{name, title, source, imports?, updatedAt}`:
+  no owner, no document id, never cached. A guessed or revoked token, a
+  deleted diagram, a blocked owner and an owner no longer on Pro all get the
+  same 404.
+- **The page**: `/share/<token>` is in `run_worker_first`; the Worker serves
+  the static `frontend/share/` page for it with `X-Robots-Tag: noindex` and
+  `Referrer-Policy: no-referrer`, and the page reads the token from its address.
+- Links are in `GET /api/me/export` (`documentShares`, revoked ones too) and
+  are deleted with the diagram's row and with the account (`ON DELETE CASCADE`).
+
 ### Usage counts
 
 Product metrics without tracking (docs/PRIVACY.md, "Usage counts"): the page
