@@ -25,6 +25,10 @@ export default defineConfig(async () => {
             POLAR_PRODUCT_PRO_MONTHLY: 'prod-pro-monthly',
             POLAR_PRODUCT_PRO_YEARLY: 'prod-pro-yearly',
             POLAR_PRODUCT_PACK_5: 'prod-pack-5',
+            // Never a developer's .dev.vars, which wrangler reads: the AI is off unless a test sets a key, with fetch mocked.
+            ANTHROPIC_API_KEY: '',
+            AI_GATEWAY_URL: '',
+            AI_GATEWAY_TOKEN: '',
           },
         },
       }),
