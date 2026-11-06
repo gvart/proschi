@@ -49,3 +49,21 @@ id; don't rewrite old ones.
   Pro only.
 - **P12. Migration numbers.** 0017 billing and credits, 0018 share links,
   0019 AI interviews, 0020 and later for history and roadmap if needed.
+- **P13. Live share links are separate from snapshots.** Pro links live at
+  `/share/<token>` (table `document_shares`) and show the latest synced
+  source; the free `/s/<id>` snapshot links are unchanged. The UI calls
+  them "live, revocable". A link answers only while its owner is on Pro.
+- **P14. Billing edge cases.** `past_due` keeps Pro. The monthly interview
+  allowance resets on the UTC calendar month and is spent first, then the
+  lifetime trial, then packs. Refunds and lost chargebacks take back what
+  is left of a pack. Deleting the account revokes the subscription at once.
+- **P15. Pro "unlimited" means fair-use caps.** 1000 diagrams, 1000
+  versions per diagram, 512 KiB per diagram.
+- **P16. Downgrades keep data.** Past the free limit, the most recently
+  saved diagrams stay writable; the rest answer 409 `readOnly` for edits
+  and new versions, and the editor keeps those edits in the browser.
+- **P17. AI design review is Pro, capped per day.** 20 reviews a day per
+  user, counted in D1 (migration 0020); free users get the rule-based
+  reviewer. Reviews don't use interview credits.
+- **P18. Migration numbers, continued.** 0019 AI interviews, 0020 AI
+  review usage, 0021 history and roadmap if needed.
