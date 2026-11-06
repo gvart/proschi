@@ -12,7 +12,7 @@ describe('plans', () => {
   });
 
   it('give an unknown plan the free limits', () => {
-    expect(FREE_LIMITS).toEqual({ documents: 5, versionsPerDocument: 20, documentBytes: 64 * 1024 });
+    expect(FREE_LIMITS).toEqual({ documents: 5, versionsPerDocument: 20, documentBytes: 64 * 1024, interviewsPerMonth: 0, interviewsLifetime: 1 });
     expect(limitsFor('free')).toBe(FREE_LIMITS);
     expect(limitsFor('gold')).toBe(FREE_LIMITS);
     expect(limitsFor('toString')).toBe(FREE_LIMITS);
@@ -34,7 +34,7 @@ describe('plans', () => {
   });
 
   it("apply the account's plan to synced diagrams", async () => {
-    PLANS.team = { documents: 1, versionsPerDocument: 2, documentBytes: 10 };
+    PLANS.team = { ...FREE_LIMITS, documents: 1, versionsPerDocument: 2, documentBytes: 10 };
     const { id, token } = await signedInUser();
     await env.DB.prepare("UPDATE users SET plan = 'team' WHERE id = ?").bind(id).run();
     expect(await (await call('/api/me/limits', { token })).json()).toMatchObject({ plan: 'team', limits: PLANS.team });

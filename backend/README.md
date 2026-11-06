@@ -96,7 +96,8 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
   the free plan ([Plans and limits](#plans-and-limits)). A new diagram past
   the limit gets 409
   `{error: 'document_limit', limit, used}`; saving one the account keeps is
-  always allowed. The page decides which diagrams sync (`cloudPlan` in
+  allowed while the account is within its limit (past it, after a downgrade,
+  see [Plans and limits](#plans-and-limits)). The page decides which diagrams sync (`cloudPlan` in
   `sync.ts`): those in the account keep their slot, new ones take free
   slots most recently edited first, and the rest stay in the browser,
   marked "This browser only" in the Diagrams menu, where the user can swap
@@ -108,7 +109,10 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
   immutable, tagged snapshots of a synced diagram, which cloud references
   resolve to, in the signed-in account only.
 - **Plans and limits** ([below](#plans-and-limits), `src/plans.ts`): what an
-  account may keep. Everyone is on the free plan; there are no payments.
+  account may keep, on the free or the Pro plan.
+- **Billing and credits** ([below](#billing-and-credits), `src/billing.ts`,
+  `src/credits.ts`): Pro and interview packs through Polar, and the ledger of
+  AI interview credits. Off without the Polar secrets.
 - **Short links and embeds** ([below](#short-links-and-embeds)): a
   signed-in user stores a diagram at `/s/<id>` with a preview image; anyone
   with the link opens it in the editor or the embed page.
@@ -154,7 +158,11 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /api/me/documents/<id>/versions/<tag>` | `{version: {tag, seq, note, createdAt, size, sha256, documentId, name, source, imports}}`; `<tag>` may be `latest`. 404 for a tag it does not have (or deleted) |
 | `DELETE /api/me/documents/<id>/versions/<tag>` | Deletes the version's content at once; its tag stays taken. 204 (also for a tag it does not have), 400 for `latest`, 404 for a diagram the account does not have |
 | `GET /api/me/versions/resolve?name=<name>&tag=<tag or latest>` | A cloud reference: `{documentId, name, tag, seq, sha256, source, imports}`. 404 when no live diagram has the name or it has no such version; 409 `{error: 'ambiguous_name', message, documentIds}` when several do; 400 for a missing name or `bad_tag` |
-| `GET /api/me/limits` | `{plan, limits: {documents, versionsPerDocument, documentBytes}, usage: {documents}}` ([Plans and limits](#plans-and-limits)) |
+| `GET /api/me/limits` | `{plan, limits: {documents, versionsPerDocument, documentBytes, interviewsPerMonth, interviewsLifetime}, usage: {documents}}` ([Plans and limits](#plans-and-limits)) |
+| `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, limits, credits: {total, monthly, trial, pack, period}}` ([Billing and credits](#billing-and-credits)); `limits.documents` and `versionsPerDocument` are null where unlimited |
+| `POST /api/billing/checkout {product}` | `product`: `pro_monthly`, `pro_yearly` or `pack_5`. `{url}` of a Polar checkout to send the browser to. 409 `already_pro` for a second subscription; 501 without Polar set up |
+| `POST /api/billing/portal` | `{url}` of Polar's customer portal (invoices, payment method, cancel). 404 before a first purchase; 501 without Polar set up |
+| `POST /api/billing/webhook` | Polar's signed events (no session). 403 on a bad signature; a replay answers `{ok: true, duplicate: true}`; 501 without Polar set up |
 | `GET /api/me/email` | Email reminders ([below](#email-reminders)): `{email, confirmed, timeZone, streak, cards, recap, paused}`, or `{email: null}` |
 | `PUT /api/me/email {email, timeZone, streak?, cards?, recap?}` | Sets the address (`timeZone` the browser's IANA zone). A new address, or the same one still unconfirmed, gets a confirmation email: `confirmationSent: true`. 503 without the `EMAIL` binding, 502 when the send fails |
 | `PATCH /api/me/email {streak?, cards?, recap?, timeZone?, resume?}` | Which reminders; `resume: true` lifts a pause. 404 without an address |
@@ -260,20 +268,79 @@ tagged.
 
 ### Plans and limits
 
-`users.plan` (`'free'` for everyone; no payments and no plan UI, changed
-only by SQL) picks the account's limits in `src/plans.ts`, the one place a
-paid plan will raise them. An unknown plan gets, and reports, the free
+`users.plan` (`'free'` or `'pro'`, set by the [Polar webhook](#billing-and-credits);
+any other value only by SQL) picks the account's limits in `src/plans.ts`,
+the one place the numbers live. An unknown plan gets, and reports, the free
 limits.
 
-| Limit | `limitsFor(plan)` | Free |
-|---|---|---|
-| Live synced diagrams | `documents` | 5 |
-| Live versions per diagram | `versionsPerDocument` | 20 |
-| A diagram's source plus imports (as JSON), in characters | `documentBytes` | 65536 (64 KiB) |
+| Limit | `limitsFor(plan)` | Free | Pro |
+|---|---|---|---|
+| Live synced diagrams | `documents` | 5 | 1000 (shown as unlimited) |
+| Live versions per diagram | `versionsPerDocument` | 20 | 1000 (shown as unlimited) |
+| A diagram's source plus imports (as JSON), in characters | `documentBytes` | 65536 (64 KiB) | 524288 (512 KiB) |
+| AI interviews a UTC month | `interviewsPerMonth` | 0 | 4 |
+| AI interviews for life | `interviewsLifetime` | 1 | 1 |
+
+Pro's "unlimited" is a fair-use cap of 1000 (`UNLIMITED`) that hand-made
+diagrams never reach; 512 KiB keeps a diagram with its imports under D1's
+2 MB row even in UTF-8.
 
 `GET /api/me/limits` answers `{plan, limits, usage: {documents}}`; `GET
 /api/me/documents` still answers `limit` and `used` for the diagrams, and
 `GET /api/me/documents/<id>/versions` `limit` for versions.
+
+**Downgrades keep everything.** When Pro ends, no diagram or version is
+deleted. An account past the free plan's 5 diagrams can still save its 5
+most recently saved ones; saving any other gets 409
+`{error: 'document_limit', readOnly: true}`, and the editor keeps those edits
+in the browser, as it does for diagrams past the limit. Deleting diagrams (or
+subscribing again) makes the rest writable. Pack credits never expire, on
+any plan.
+
+### Billing and credits
+
+Polar ([polar.sh](https://polar.sh)) is the merchant of record: it hosts the
+checkout and the customer portal, charges, and handles VAT. Proschi stores
+the Polar customer and subscription ids, the subscription's status and
+renewal date (`billing`, migration 0017), and never any card data.
+
+- `POST /api/billing/checkout` creates a Polar checkout with the user's id as
+  Polar's `external_customer_id`, and back to `/practice/#/me?checkout=done`.
+- The webhook (`POST /api/billing/webhook`) is the only thing that changes
+  `users.plan` or adds credits. It checks the Standard Webhooks signature
+  (`webhook-id`, `webhook-timestamp` within 5 minutes, `webhook-signature`,
+  HMAC-SHA256 keyed with the secret's bytes as Polar shows it, or a
+  `whsec_` secret's base64 part), and applies each `webhook-id` once, in one
+  D1 batch with the event's row, so a replay changes nothing.
+  `subscription.*` events store the subscription unless an event with a
+  later `modified_at` is stored already, and set the plan from it: `pro`
+  while `active`, `trialing` or `past_due`, else `free`. `order.paid` for
+  the pack grants 5 credits, once per order id.
+- Deleting the account revokes a subscription still billing at Polar first
+  (the deletion fails with 502 if Polar can't be reached), then the billing
+  row and the ledger go with the account. Both are in Download my data.
+
+**Credits** (`src/credits.ts`, table `credits`): an append-only ledger of
+grants (+5, a pack), spends (-1, an interview started) and refunds (+1, the
+same interview failed early). A balance is summed, never stored. Spends draw
+on, in order, the plan's monthly allowance (Pro: 4 for the UTC month, no
+roll-over), the lifetime interview every account gets, then pack credits.
+`spend(env, userId, kind, refId)` is one conditional INSERT per bucket, so
+concurrent spends never take more than there is, and `UNIQUE (kind, ref_id)`
+makes each spend and each refund happen once. The AI interview calls
+`balance`, `spend` and `refund`; the refund rule (failed in the first 5
+minutes) is its own.
+
+**Setup.** In Polar (sandbox first): create the products Pro monthly
+(€12/month), Pro yearly (€89/year) and Interview pack (5 interviews, €15,
+one-time); a webhook endpoint at `https://proschi.app/api/billing/webhook`
+with the `subscription.*` and `order.paid` events; and an organization
+access token with `checkouts:write`, `customer_sessions:write` and
+`subscriptions:write`. Then set the Worker's secrets `POLAR_ACCESS_TOKEN`,
+`POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`
+and `POLAR_PRODUCT_PACK_5` (and `POLAR_SERVER=sandbox` against the sandbox).
+Build the site with `VITE_BILLING=true` as well as `VITE_ACCOUNTS=true` to
+show the pricing page and the upgrade buttons.
 
 ### Short links and embeds
 
@@ -814,6 +881,8 @@ solve locally either way.
      answers 404; counting works either way.
    - `ADMIN_SETUP_TOKEN` (once): registers the [admin panel](#admin-panel)'s
      first passkey; delete it afterwards.
+   - The `POLAR_*` secrets (optional): [billing](#billing-and-credits). Without
+     them checkout, the portal and the webhook answer 501.
 
    A provider is offered once both of its secrets are set; no redeploy is
    needed.

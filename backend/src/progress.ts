@@ -16,6 +16,8 @@ import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
 import { BOARD_METRICS, cacheKey } from './stats';
+import { exportBilling, revokeOnDelete } from './billing';
+import { exportCredits } from './credits';
 
 /** The signed-in user's account and practice progress. */
 
@@ -122,6 +124,8 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
 /** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
+  // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
+  await revokeOnDelete(ctx.env, user.id);
   await ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
   ctx.setCookies = [sessionCookie('', 0)];
   return new Response(null, { status: 204 });
@@ -234,6 +238,10 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     documentShares: await exportDocumentShares(DB, user.id, new URL(request.url).origin),
     // Email reminders: the address and its settings; null without one.
     emailReminders: await exportEmailPrefs(DB, user.id),
+    // The Polar customer and subscription (no card data is ever stored); null before a purchase.
+    billing: await exportBilling(DB, user.id),
+    // AI interview credits: each grant, spend and refund.
+    credits: await exportCredits(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }

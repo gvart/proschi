@@ -118,7 +118,10 @@ function readImports(value: unknown): Record<string, string> | null {
  * created again. 413 past the size cap. A new document (or a deleted one
  * restored) past the account's limit (documentLimit) gets 409
  * {error: 'document_limit', limit, used}; saving one the account keeps is
- * always allowed.
+ * allowed while the account is within its limit. Past it (a downgrade
+ * from Pro keeps every diagram), only the `limit` most recently saved can
+ * be saved; the others get the same 409 with `readOnly: true` until enough
+ * are deleted. Deleting is always allowed.
  */
 export async function putDocument(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
   const id = checkId(rawId);
@@ -141,10 +144,12 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
   const t = Date.now();
   const limit = documentLimit(ctx, user);
   const room = `(SELECT COUNT(*) FROM documents WHERE user_id = ?1 AND deleted_at IS NULL) < ${limit}`;
+  // Past the limit (after a downgrade from Pro), only the `limit` most recently saved live diagrams can be saved; the rest are read-only until some are deleted.
+  const writable = `(SELECT COUNT(*) FROM documents d WHERE d.user_id = ?1 AND d.deleted_at IS NULL AND (d.updated_at > documents.updated_at OR (d.updated_at = documents.updated_at AND d.id > documents.id))) < ${limit}`;
   // The version it was based on: saved. A tombstone counts toward the limit again once restored.
   const updated = await DB.prepare(
     `UPDATE documents SET name = ?3, source = ?4, imports = ?5, updated_at = ?6, deleted_at = NULL, version = version + 1
-     WHERE user_id = ?1 AND id = ?2 AND version = ?7 AND (deleted_at IS NULL OR ${room})
+     WHERE user_id = ?1 AND id = ?2 AND version = ?7 AND (deleted_at IS NULL AND ${writable} OR deleted_at IS NOT NULL AND ${room})
      RETURNING ${COLUMNS}`,
   )
     .bind(userId, id, body.name, body.source, importsJson, t, baseVersion)
@@ -165,10 +170,14 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
   if (existing && existing.version !== baseVersion) {
     return json({ error: 'The diagram changed on another device', document: documentOf(existing) }, 409, NO_STORE);
   }
+  const readOnly = existing !== null && existing.deleted_at === null;
   return json(
     {
       error: 'document_limit',
-      message: `Your account keeps ${limit} diagrams, the most it can; the rest stay in this browser`,
+      message: readOnly
+        ? `Your account is over its plan's ${limit} diagrams, so this one is read-only there; your edits stay in this browser`
+        : `Your account keeps ${limit} diagrams, the most it can; the rest stay in this browser`,
+      ...(readOnly ? { readOnly: true } : {}),
       limit,
       used: await liveCount(DB, userId),
     },
