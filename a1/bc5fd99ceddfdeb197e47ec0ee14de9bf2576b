@@ -1,0 +1,24 @@
+backend/test/ai/client.test.ts
+  s_e17b87e0a1b3ca::t_9d74eea0f501d2 1-106
+backend/src/ai/client.ts
+  s_e17b87e0a1b3ca::t_7f671339a9d316 1-238,240,242-304
+  s_e17b87e0a1b3ca::t_a99a1ebccff555 239,241
+backend/test/ai/mockClaude.ts
+  s_e17b87e0a1b3ca::t_003619f753baf2 1-62
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a1bc5fd99ceddfdeb197e47ec0ee14de9bf2576b",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
