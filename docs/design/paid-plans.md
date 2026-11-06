@@ -79,3 +79,13 @@ id; don't rewrite old ones.
   (default) or "End it and start a new one", which says the old credit is
   not returned. Model calls can go through AI Gateway with
   `AI_GATEWAY_TOKEN`.
+- **P21. History and AI roadmap details.** Free users see their latest AI
+  verdict only; Pro sees every verdict, the trend per skill and the AI next
+  steps (`GET /api/interviews/history`, `GET /api/roadmap/next`). Picks are
+  roadmap problems or card topics (every problem is a roadmap step), made
+  with one Haiku call after a Pro verdict and at most once a day after an AI
+  review, stored in `roadmap_recs` (migration 0021); Haiku's tokens count
+  with the interview. Free verdicts get no picks, so they cost nothing.
+  `GET /api/interviews` still lists every session with its verdict for the
+  interview start screen; the Pro gate is on the history and trends.
+  `roadmapAccess` stays sign-in gated; `aiRoadmapAccess` gates the picks.

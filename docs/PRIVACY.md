@@ -341,7 +341,8 @@ deleted, and its verdict summary (pass or fail, and what went well and
 wrong per skill), kept for your interview history. Both are private, part
 of **Download my data**, and deleted with your account. A daily job deletes
 each transcript, and the design sent with it, once the interview is 90 days
-old; the verdict stays. Dictation, where
+old; the verdict stays. On Pro, the AI roadmap's next steps are picked after
+each verdict (below). Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 
@@ -358,6 +359,19 @@ page itself and nothing is sent.
 **What is stored**: not the design or the review, only how many AI reviews
 you asked for each day (UTC), for the limit of 20 a day. The counts are part
 of **Download my data** and deleted with your account.
+
+## AI roadmap (Pro)
+
+On Pro, after an AI interview's verdict, and at most once a day after an AI
+design review, Proschi asks Anthropic's Claude to pick your next 3 steps. It
+sends the verdict (or the review's summary and issues), your weakest card
+topics, which roadmap problems you have solved and your mastery of each card
+topic. The provider uses them only to answer, not to train its models.
+
+**What is stored**: each set of picks (the problem or card topic ids, the
+reason for each, when, and the interview or reviewed problem that prompted
+it). They are private, part of **Download my data**, and deleted with your
+account.
 
 ## The site's operator
 
@@ -438,7 +452,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan, subscription, interview credits and AI reviews a day, every session with its kind (the site or an
+  plan, subscription, interview credits, AI reviews a day and AI interviews with the AI roadmap's picks, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
@@ -449,7 +463,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
   synced diagrams and their versions and live share links, the email reminders' address, the
-  billing data and interview credits from the server at once (a Pro
+  billing data, interview credits, AI interviews and AI roadmap picks from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)

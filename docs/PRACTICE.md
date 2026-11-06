@@ -253,9 +253,21 @@ it up again.
   communication, what went well and what went wrong per skill, and up to five
   next steps.
 
+On Pro, the verdict also links **Practise them here**: the AI roadmap's 3
+picks made after it (below, "Next for you").
+
 If the interviewer fails on the first turn or in the first 5 minutes, the
 credit is given back and the session ends. Transcripts are kept 90 days, the
 verdicts for history ([Privacy](PRIVACY.md#ai-interviews)).
+
+**Interview history**, on the progress page (`practice/#/progress`, signed
+in, when the server has the AI): each finished AI interview with its problem,
+date and pass or fail, linking to its verdict (`practice/#/progress/interview/<id>`).
+Pro also sees every past session and the score of each skill over time, as
+five small charts on the same 1 to 5 scale (with a table for screen
+readers). Other plans see their latest verdict, and, with billing on, how
+many earlier ones are kept and a link to Pro (`GET /api/interviews/history`,
+backend `src/interviews.ts`).
 
 Every problem has an `interview.md` (`interviewFile.test.ts` fails without
 one). It holds exactly two sections, each item a `### ` heading opened by
@@ -547,10 +559,24 @@ idea per test (nodes, connections, a use case's request and response, the
 traffic, requirements, a replica), opens signed out too. It is optional:
 recommended first to a learner who has solved nothing, but unsolved it locks
 no later step, keeps no stage from counting as complete and is in no badge's
-target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`, the one
-place to change when the roadmap moves behind a paid plan. A build without
+target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`. A build without
 accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.
+
+**Next for you** is the roadmap's paid part (Pro), gated next to it by
+`aiRoadmapAccess`. After a Pro user's AI interview verdict, and at most once
+a day after an AI design review, one Claude Haiku call picks the next 3
+steps, each with a one-sentence reason. It gets the verdict (or the review),
+the weakest card topics, and every roadmap problem (solved or not) and card
+topic (with your mastery) by id; it only picks from those, and the server
+drops any pick whose id is not a real problem or topic. A failed pick never
+fails the verdict. The card under the roadmap's progress links each pick to
+its roadmap step (`practice/#/roadmap/<id>`) or its card deck
+(`practice/#/review/<topic>`); the verdict links the same picks. Signed in
+without Pro, with billing on, the card shows the way to Pro instead. Without
+the AI on the server (`GET /api/roadmap/next` answers 501), or with no picks
+yet, the roadmap keeps its own order (backend `src/roadmap.ts`,
+`src/ai/roadmap.ts`).
 
 The stages are plain data in `frontend/src/practice/roadmap.ts` (`ROADMAP`):
 each has an `id`, a `title`, a sentence or two on what it teaches and why it
