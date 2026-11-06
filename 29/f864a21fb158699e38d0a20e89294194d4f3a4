@@ -1,0 +1,37 @@
+docs/TERMS.md
+  s_e17b87e0a1b3ca::t_b6fd279fb0567d 50-51
+backend/migrations/0022_paid_hardening.sql
+  s_e17b87e0a1b3ca::t_8ef68f8233c385 20-27
+backend/src/credits.ts
+  s_e17b87e0a1b3ca::t_cb5b454c392384 136-139,142-143,148-150
+  s_e17b87e0a1b3ca::t_6bcefafaaedb12 151-152
+backend/src/billing.ts
+  s_e17b87e0a1b3ca::t_ae3082b660c929 293-297
+  s_e17b87e0a1b3ca::t_f4d2b00024a8a2 324-325
+  s_e17b87e0a1b3ca::t_0aeb7f118a494d 279-280,282-284
+  s_e17b87e0a1b3ca::t_3f33c152d30f07 4
+  s_e17b87e0a1b3ca::t_44c39683952a8d 243-244
+  s_e17b87e0a1b3ca::t_dcc8e464ee7637 251
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_014feaf4eeccdd 115-128
+backend/test/billing.test.ts
+  s_e17b87e0a1b3ca::t_5851ba9658eef0 135-175
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_d7539295265936 57
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "29f864a21fb158699e38d0a20e89294194d4f3a4",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
