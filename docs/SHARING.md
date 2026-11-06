@@ -2,7 +2,8 @@
 
 A diagram in the [editor](https://proschi.app/app/) leaves it three ways,
 all from the **Share** menu: a link that carries the diagram, a short link
-with a preview image, and an embed for other pages.
+with a preview image, and an embed for other pages. On Pro, **File → Share
+link** adds a fourth: a private, live link you can revoke.
 
 ## Links that carry the diagram
 
@@ -55,6 +56,40 @@ account deletes all of them (see [Privacy](PRIVACY.md)).
 | Preview image | 300 KiB |
 | Short links per account | 100 |
 | New short links | 10 a minute |
+
+## Share a live, revocable link (Pro)
+
+A short link is a snapshot. A share link shows the diagram as you last saved
+it to your account, so later edits reach everyone who has it, and you can
+revoke it. It needs Pro and a diagram kept in your account (cloud sync on).
+
+1. Open the diagram and pick **File → Share link…**.
+2. **Create share link** makes an address like
+   `https://proschi.app/share/q2Hl…` and **Copy** copies it.
+3. **Revoke link** stops it at once for everyone. Sharing again makes a new
+   address; the old one never works again.
+
+Whoever opens the link sees the diagram read-only, signed in or not:
+
+- the code, which can't be edited, and the diagram, with **Play** for its use
+  cases;
+- the **Results** and **HLD** tabs, so the simulation runs as in the editor;
+- **Make a copy**, when signed in, which opens it in their own editor as a new
+  diagram. Changes to the copy don't touch yours.
+
+The page never shows who shared it. Its address holds 128 random bits, so it
+can't be guessed, and search engines are told not to index it. A link stops
+working when you revoke it, delete the diagram or your account, or leave Pro.
+A `cloud:` import inside the diagram only resolves for you (see
+[Versions](VERSIONS.md)), so viewers see it as unresolved.
+
+| | Short link | Share link |
+|---|---|---|
+| Who can make one | Anyone signed in | Pro |
+| What it shows | The diagram when you made it | The diagram as last saved |
+| Stopping it | Delete it | Revoke it |
+| Link preview image | Yes | No |
+| Address | `/s/<10 characters>` | `/share/<22 characters>` |
 
 ## Embed a diagram in a page
 

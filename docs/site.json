@@ -101,7 +101,7 @@
       "slug": "sharing",
       "title": "Sharing and embedding diagrams",
       "source": "SHARING.md",
-      "description": "Share a Proschi diagram as a link, as a short link with a preview image, or embed it read-only in a blog post, a wiki or docs with an iframe or oEmbed."
+      "description": "Share a Proschi diagram as a link, a short link with a preview image or a live, revocable share link, or embed it read-only in a blog post, a wiki or docs."
     },
     {
       "slug": "agents",
