@@ -54,7 +54,7 @@ export async function signedInUser(name = `user${++users}`, publicProfile = fals
 }
 
 export async function resetDatabase(): Promise<void> {
-  await env.DB.batch(['roadmap_recs', 'admin_sessions', 'admin_challenges', 'admin_passkeys', 'admin_audit', 'review_usage', 'app_events', 'lesson_reads', 'email_prefs', 'ai_interview_messages', 'ai_interviews', 'credits', 'billing', 'billing_events', 'document_shares', 'document_versions', 'documents', 'shares', 'daily_counts', 'game_runs', 'game_meta', 'challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'app_auth_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
+  await env.DB.batch(['account_tombstones', 'refunded_orders','roadmap_recs','admin_sessions', 'admin_challenges', 'admin_passkeys', 'admin_audit', 'review_usage', 'app_events', 'lesson_reads', 'email_prefs', 'ai_interview_messages', 'ai_interviews', 'credits', 'billing', 'billing_events', 'document_shares', 'document_versions', 'documents', 'shares', 'daily_counts', 'game_runs', 'game_meta', 'challenge_attempts', 'achievements', 'card_reviews', 'card_state', 'app_auth_codes', 'sessions', 'progress', 'identities', 'users'].map((t) => env.DB.prepare(`DELETE FROM ${t}`)));
   await clearStatsCache();
 }
 

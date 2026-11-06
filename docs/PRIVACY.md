@@ -466,6 +466,10 @@ In Settings on the practice page (`#/me`, from the account menu):
   billing data, interview credits, AI interviews and AI roadmap picks from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
+  Only a one-way keyed hash of each sign-in identity (GitHub or Google and
+  its user id) stays, with whether the free trial interview was used, so a
+  new account with that identity doesn't get the trial again; nothing else
+  about the account is kept.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in

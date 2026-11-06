@@ -79,7 +79,15 @@ export interface Deps {
   context: ProblemContext;
   /** Epoch milliseconds. */
   now: number;
+  /**
+   * The session's billed tokens as stored (src/interviews.ts), which also
+   * count calls that failed or whose turn was not kept; the cap checks use it
+   * when it is more than the state's own usage.
+   */
+  tokens?: number;
 }
+
+const billedSoFar = (deps: Deps, state: InterviewState): number => Math.max(billedTokens(state.usage), deps.tokens ?? 0);
 
 const REPLY_MAX_TOKENS = 1_024;
 const HINT_MAX_TOKENS = 400;
@@ -218,7 +226,7 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
 
   // Sonnet sees the new turn and the reply; Haiku sees them again in its window.
   const estimate = 2 * approxTokens(rendered) + REPLY_MAX_TOKENS + HINT_MAX_TOKENS + 2_000;
-  if (!turnFits(state.usage, estimate)) throw new InterviewLimitError('budget', 'The interview has used its token budget; ask for the verdict');
+  if (!turnFits(billedSoFar(deps, state), estimate)) throw new InterviewLimitError('budget', 'The interview has used its token budget; ask for the verdict');
 
   let next: InterviewState = {
     ...state,
@@ -416,7 +424,7 @@ export async function verdict(deps: Deps, state: InterviewState): Promise<{ verd
   if (context.problem.id !== state.problemId) throw new InterviewLimitError('problem', 'The context is of another problem');
   if (state.finished) throw new InterviewLimitError('finished', 'The interview is over');
   // The reserve is kept for this call; past the cap entirely (it cannot happen through turn()), refuse.
-  if (billedTokens(state.usage) > TOKEN_CAP - VERDICT_RESERVE / 4) throw new InterviewLimitError('budget', 'The interview has used its token budget');
+  if (billedSoFar(deps, state) > TOKEN_CAP - VERDICT_RESERVE / 4) throw new InterviewLimitError('budget', 'The interview has used its token budget');
   const request: MessageRequest = {
     model: SONNET,
     max_tokens: VERDICT_MAX_TOKENS,
@@ -427,7 +435,14 @@ export async function verdict(deps: Deps, state: InterviewState): Promise<{ verd
   };
   let spent = emptyUsage();
   for (let attempt = 0; ; attempt++) {
-    const result = await client.create(request);
+    let result;
+    try {
+      result = await client.create(request);
+    } catch (e) {
+      // A failed second attempt still bills the first one's tokens.
+      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: addUsage(spent, SONNET, e.usage)[SONNET] });
+      throw e;
+    }
     spent = addUsage(spent, SONNET, result.usage);
     const parsed = parseVerdict(result.text);
     if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, SONNET, spent[SONNET]), finished: true } };

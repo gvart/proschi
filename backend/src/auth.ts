@@ -1,5 +1,6 @@
 import { appRedirect, CLI_CLIENT, isAppState, isChallenge, isRedirectUriFor, issueAppCode, type AppClient, type AppLogin } from './apptokens';
 import type { Ctx } from './context';
+import { priorTrialStatement } from './credits';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, secretOk, type Env } from './env';
 import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
@@ -329,9 +330,13 @@ async function upsertUser(env: Env, provider: ProviderId, profile: Profile): Pro
   const id = crypto.randomUUID();
   const cleaned = cleanName(profile.name);
   const name = cleaned && !rejectName(cleaned) ? cleaned : 'Proschi user';
+  const t = now();
+  // An identity whose deleted account used the trial interview doesn't get it again (src/credits.ts).
+  const priorTrial = await priorTrialStatement(env, id, provider, profile.subject, t);
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO users (id, display_name, public_profile, created_at) VALUES (?, ?, 0, ?)').bind(id, name, now()),
+    env.DB.prepare('INSERT INTO users (id, display_name, public_profile, created_at) VALUES (?, ?, 0, ?)').bind(id, name, t),
     env.DB.prepare('INSERT INTO identities (provider, subject, user_id) VALUES (?, ?, ?)').bind(provider, profile.subject, id),
+    ...(priorTrial ? [priorTrial] : []),
   ]);
   return id;
 }

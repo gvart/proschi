@@ -311,6 +311,7 @@ function turnErrorText(e: unknown): string {
     if (e.code === 'budget' || e.code === 'turns') return 'This interview has used what one session may. Get the verdict.';
     if (e.code === 'message') return 'Say something first, at most 4,000 characters.';
     if (e.code === 'design') return 'The design is too large to send (at most 64 KiB).';
+    if (e.code === 'turn_in_progress') return 'Still answering your last message.';
     if (e.status === 429) return 'Too many messages; wait a minute.';
   }
   return 'The interviewer did not answer. Send it again in a moment.';

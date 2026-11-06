@@ -1,7 +1,7 @@
 import { DURATIONS, type Duration } from '../../frontend/src/practice/modes/session';
 import type { User } from './auth';
-import { aiEnabled, AiError, createClient, HAIKU } from './ai/client';
-import { addUsage, billedTokens, emptyUsage, sessionCostUsd, WALL_CLOCK_MS } from './ai/budget';
+import { aiEnabled, AiError, createClient, HAIKU, SONNET } from './ai/client';
+import { addUsage, billedTokens, emptyUsage, sessionCostUsd, usageSince, WALL_CLOCK_MS, type SessionUsage } from './ai/budget';
 import { problemContext } from './ai/context';
 import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewState, type InterviewVerdict } from './ai/interviewer';
 import type { Ctx } from './context';
@@ -31,13 +31,27 @@ import { recommendAfterInterview } from './roadmap';
  * every session, with the verdict of the latest only off Pro.
  *
  * The credit (P3) is refunded when the session fails (a model error, not a
- * limit) on its first turn or in its first 5 minutes; the session then ends.
- * The limits (60-minute wall clock, token cap, turns, message and design
- * size) are the engine's; the routes add a body cap and one session at a
- * time: with one open, a start answers 409 active_session unless `replace` ends it (its credit is not returned).
+ * limit) on its first turn or in its first 5 minutes, while it has billed at
+ * most REFUND_MAX_TOKENS; the session then ends. Every call's tokens are
+ * added to the stored total, failed ones too, and the token cap is checked
+ * against it. The limits (60-minute wall clock, token cap, turns, message
+ * and design size) are the engine's; the routes add a body cap, one turn at a
+ * time per session (a turn meanwhile answers 409 turn_in_progress) and one
+ * session at a time: with one open, a start answers 409 active_session unless `replace` ends it (its credit is not returned).
  */
 
 export const REFUND_WINDOW_MS = 5 * 60_000;
+/**
+ * A failed session is refunded only while it has billed at most this many
+ * tokens (P3): about what one failed first call costs, the opening being
+ * free. Past it the model did work, and a refund would pay for it.
+ */
+export const REFUND_MAX_TOKENS = 2_000;
+/**
+ * How long a turn holds its session (P3): one turn at a time, so parallel
+ * turns can't each call the model. A turn that died is let go after this.
+ */
+export const TURN_LEASE_MS = 90_000;
 /** Transcripts are kept this long (P8); the verdict stays. */
 export const TRANSCRIPT_TTL_MS = 90 * 86_400_000;
 /** A turn's body: a 64 KiB design and a 4,000-character message, with room for JSON escaping. */
@@ -61,6 +75,7 @@ interface Row {
   tokens: number;
   cost_usd: number;
   verdict: string | null;
+  turning_until: number | null;
 }
 
 interface MessageRow {
@@ -164,10 +179,37 @@ export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITE
   return json({ interview: await view(ctx, row), credits: await balance(ctx.env, user.id, now) }, 201, NO_STORE);
 });
 
-/** P3: a session that fails on its first turn or in its first 5 minutes gives its credit back and ends. */
+/**
+ * Adds a call's usage to the session's stored total (also of a failed call,
+ * or of a turn whose state was not kept) and, with `lease`, lets go of the
+ * turn that held it. The stored total is what the cap checks and the refund
+ * read.
+ */
+function settle(DB: D1Database, id: string, used: SessionUsage, lease?: number): D1PreparedStatement {
+  return DB.prepare('UPDATE ai_interviews SET tokens = tokens + ?1, cost_usd = cost_usd + ?2, turning_until = CASE WHEN turning_until = ?3 THEN NULL ELSE turning_until END WHERE id = ?4').bind(
+    billedTokens(used),
+    sessionCostUsd(used),
+    lease ?? null,
+    id,
+  );
+}
+
+/** A failed call's tokens, as a session's usage (every interview call that can fail is Sonnet's; a failed hint is part of its turn). */
+const failedUsage = (e: AiError): SessionUsage => addUsage(emptyUsage(), SONNET, e.usage);
+
+/**
+ * P3: a session that fails on its first turn or in its first 5 minutes gives
+ * its credit back and ends, but only while it has billed no more than
+ * REFUND_MAX_TOKENS (read after the failed call's usage was added), so a
+ * refund never pays for model calls. A session that is no longer open (a
+ * stale turn failing after it finished) is left as it is, and not refunded.
+ */
 async function failEarly(env: Env, row: Row, state: InterviewState, now: number): Promise<boolean> {
   if (state.turns > 0 && now - row.started_at >= REFUND_WINDOW_MS) return false;
-  await env.DB.prepare("UPDATE ai_interviews SET status = 'failed', ended_at = ? WHERE id = ?").bind(now, row.id).run();
+  const ended = await env.DB.prepare("UPDATE ai_interviews SET status = 'failed', ended_at = ? WHERE id = ? AND status IN ('active', 'finishing') AND tokens <= ?")
+    .bind(now, row.id, REFUND_MAX_TOKENS)
+    .run();
+  if (ended.meta.changes === 0) return false;
   await refund(env, row.id, now);
   return true;
 }
@@ -190,24 +232,36 @@ const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.str
  *   event: error  {error, refunded?}     instead of done, when the turn failed midway
  */
 export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER, async (request: Request, ctx: Ctx, user: User, id: string): Promise<Response> => {
-  const row = await load(ctx, user.id, id);
+  const loaded = await load(ctx, user.id, id);
   const body = await readJson(request, MAX_TURN_BODY);
-  if (row.status !== 'active') throw new HttpError(409, 'finished');
+  if (loaded.status !== 'active') throw new HttpError(409, 'finished');
   const message = body.message ?? '';
   if (typeof message !== 'string') throw new HttpError(400, 'message must be a string');
   if (body.design !== undefined && typeof body.design !== 'string') throw new HttpError(400, 'design must be a string');
   if (body.advance !== undefined && typeof body.advance !== 'boolean') throw new HttpError(400, 'advance must be a boolean');
-  const state = stateOf(row);
-  const context = problemContext(row.problem_id);
+  stateOf(loaded);
+  const context = problemContext(loaded.problem_id);
   if (!context) throw new HttpError(409, 'The problem is no longer available');
   const now = Date.now();
+
+  // One turn at a time (P3): the session is claimed before any model call, so parallel turns can't each pay for one.
+  const { DB } = ctx.env;
+  const lease = now + TURN_LEASE_MS;
+  const row = await DB.prepare("UPDATE ai_interviews SET turning_until = ?1 WHERE id = ?2 AND user_id = ?3 AND status = 'active' AND (turning_until IS NULL OR turning_until < ?4) RETURNING *")
+    .bind(lease, id, user.id, now)
+    .first<Row>();
+  if (!row) {
+    if ((await load(ctx, user.id, id)).status !== 'active') throw new HttpError(409, 'finished');
+    return json({ error: 'turn_in_progress', message: 'Still answering your last message' }, 409, NO_STORE);
+  }
+  const state = stateOf(row);
 
   const { readable, writable } = new TransformStream<string, string>();
   const writer = writable.getWriter();
   let streaming = false;
   let markStarted!: () => void;
   const started = new Promise<void>((resolve) => (markStarted = resolve));
-  const run = turn({ client: createClient(ctx.env), context, now }, state, {
+  const run = turn({ client: createClient(ctx.env), context, now, tokens: row.tokens }, state, {
     message,
     ...(body.design !== undefined ? { design: body.design as string } : {}),
     ...(body.advance ? { advance: true } : {}),
@@ -224,6 +278,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
   const early = await Promise.race([started.then(() => undefined), run.then(() => undefined, (e: unknown) => e)]);
   if (early !== undefined && !streaming) {
     void writer.abort();
+    const used = early instanceof AiError ? failedUsage(early) : emptyUsage();
+    await settle(DB, id, used, lease).run();
     if (early instanceof InterviewLimitError) return json({ error: early.reason, message: early.message }, limitStatus(early), NO_STORE);
     if (early instanceof AiError) {
       log('warn', 'AI interview turn failed', { requestId: ctx.requestId, kind: early.kind, status: early.status });
@@ -234,19 +290,15 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
   }
 
   const finish = (async () => {
+    // What this turn billed, added to the stored total whether or not its state is kept.
+    let used = emptyUsage();
     try {
       const result = await run;
       const s = result.state;
-      const { DB } = ctx.env;
-      const [saved] = await DB.batch([
-        DB.prepare('UPDATE ai_interviews SET state = ?1, version = version + 1, tokens = ?2, cost_usd = ?3 WHERE id = ?4 AND version = ?5 AND status = ?6').bind(
-          JSON.stringify(s),
-          billedTokens(s.usage),
-          sessionCostUsd(s.usage),
-          row.id,
-          row.version,
-          'active',
-        ),
+      used = usageSince(s.usage, state.usage);
+      const [, saved] = await DB.batch([
+        settle(DB, id, used, lease),
+        DB.prepare('UPDATE ai_interviews SET state = ?1, version = version + 1 WHERE id = ?2 AND version = ?3 AND status = ?4').bind(JSON.stringify(s), row.id, row.version, 'active'),
         // Only kept when the state above was (changes() counts the statement before): a concurrent turn that saved first wins.
         DB.prepare("INSERT INTO ai_interview_messages (interview_id, role, text, design, at) SELECT ?, 'candidate', ?, ?, ? WHERE changes() > 0").bind(row.id, message, body.design !== undefined ? 1 : 0, now),
         DB.prepare("INSERT INTO ai_interview_messages (interview_id, role, text, hint, at) SELECT ?, 'interviewer', ?, ?, ? WHERE changes() > 0").bind(
@@ -265,6 +317,10 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
       await writer.write(sse('done', { reply: result.reply, phase: s.phase, elapsedMs: result.elapsedMs, turns: s.turns }));
     } catch (e) {
       log('warn', 'AI interview turn failed midway', { requestId: ctx.requestId, error: errorText(e).split('\n')[0] });
+      if (e instanceof AiError) used = failedUsage(e);
+      await settle(DB, id, used, lease)
+        .run()
+        .catch((err: unknown) => log('error', 'AI interview usage not saved', { requestId: ctx.requestId, error: errorText(err) }));
       const refunded = e instanceof AiError ? await failEarly(ctx.env, row, state, Date.now()) : false;
       await writer.write(sse('error', { error: e instanceof AiError ? 'ai_failed' : 'internal', refunded })).catch(() => {});
     } finally {
@@ -298,20 +354,26 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
   const context = problemContext(row.problem_id);
   if (!context) throw new HttpError(409, 'The problem is no longer available');
   const { DB } = ctx.env;
-  // Claims the session, so two finishes at once don't both pay for a verdict.
-  const claimed = await DB.prepare("UPDATE ai_interviews SET status = 'finishing' WHERE id = ? AND status = 'active' AND version = ?").bind(id, row.version).run();
-  if (claimed.meta.changes === 0) throw new HttpError(409, 'busy');
   const now = Date.now();
+  // Claims the session, so two finishes at once (or a finish during a turn) don't both pay for the model.
+  const claimed = await DB.prepare("UPDATE ai_interviews SET status = 'finishing' WHERE id = ? AND status = 'active' AND version = ? AND (turning_until IS NULL OR turning_until < ?) RETURNING tokens")
+    .bind(id, row.version, now)
+    .first<{ tokens: number }>();
+  if (!claimed) throw new HttpError(409, 'busy');
   try {
-    const result = await verdict({ client: createClient(ctx.env), context, now }, state);
+    const result = await verdict({ client: createClient(ctx.env), context, now, tokens: claimed.tokens }, state);
     const s = result.state;
-    await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = ?, cost_usd = ?, verdict = ? WHERE id = ?")
-      .bind(JSON.stringify(s), Date.now(), billedTokens(s.usage), sessionCostUsd(s.usage), JSON.stringify(result.verdict), id)
+    const used = usageSince(s.usage, state.usage);
+    await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = tokens + ?, cost_usd = cost_usd + ?, verdict = ? WHERE id = ?")
+      .bind(JSON.stringify(s), Date.now(), billedTokens(used), sessionCostUsd(used), JSON.stringify(result.verdict), id)
       .run();
     // The next steps (Pro), after the verdict is answered: the page asks for them again until they land.
     ctx.exec.waitUntil(pickAfterVerdict(ctx, user, id, row.problem_id, result.verdict));
   } catch (e) {
-    await DB.prepare("UPDATE ai_interviews SET status = 'active' WHERE id = ? AND status = 'finishing'").bind(id).run();
+    const used = e instanceof AiError ? failedUsage(e) : emptyUsage();
+    await DB.prepare("UPDATE ai_interviews SET tokens = tokens + ?, cost_usd = cost_usd + ?, status = CASE WHEN status = 'finishing' THEN 'active' ELSE status END WHERE id = ?")
+      .bind(billedTokens(used), sessionCostUsd(used), id)
+      .run();
     if (e instanceof InterviewLimitError) return json({ error: e.reason, message: e.message }, limitStatus(e), NO_STORE);
     if (!(e instanceof AiError)) throw e;
     log('warn', 'AI interview verdict failed', { requestId: ctx.requestId, kind: e.kind, status: e.status });

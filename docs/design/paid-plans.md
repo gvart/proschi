@@ -112,3 +112,17 @@ id; don't rewrite old ones.
   share link, so an account off Pro can still revoke one. Off
   `interview_history`, only the latest verdict is kept with its session,
   also by id. Numeric limits stay in `plans.ts`.
+- **P23. Security hardening of the paid features.** An AI interview takes
+  one turn at a time: a turn claims its session with a 90-second lease
+  (`turning_until`, migration 0022) before any model call, and another turn
+  meanwhile answers 409 `turn_in_progress`. Every call's tokens are added to
+  the stored total, failed ones too, and the token cap checks that total.
+  A failed session is refunded only while it has billed at most 2,000
+  tokens, and only while it is still open. Deleting an account leaves an
+  HMAC of each identity and whether the trial was used
+  (`account_tombstones`), so signing up again gives no new trial. A refund
+  that arrives before its pack's `order.paid` blocks the later grant
+  (`refunded_orders`). A cancel or revoke of a subscription other than the
+  account's current active one doesn't downgrade it. "Download my data"
+  stays complete, gated data included (the history off Pro, every verdict):
+  it is the user's right of access to their own data, not a paid feature.

@@ -179,6 +179,100 @@ describe('AI interviews', () => {
     expect(await credits(token)).toBe(0);
   });
 
+  it('takes one turn at a time: parallel turns call the model once and the others answer 409 turn_in_progress', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const calls = claude({ reply: async () => (await gate, sseResponse(streamEvents('Sure.'))) });
+    const { token } = await signedInUser();
+    const id = await started(token);
+    const N = 4;
+    const pending = Array.from({ length: N }, (_, i) => turnOf(token, id, { message: `Turn ${i}` }));
+    // The losers answer while the winner's model call is still held.
+    const settled = pending.map((p) => p.then((res) => res));
+    await new Promise((resolve) => setTimeout(resolve, 200));
+    open();
+    const responses = await Promise.all(settled);
+    const refused = responses.filter((r) => r.status === 409);
+    expect(refused).toHaveLength(N - 1);
+    for (const r of refused) expect(await r.json()).toEqual({ error: 'turn_in_progress', message: 'Still answering your last message' });
+    const ok = responses.find((r) => r.status === 200)!;
+    expect((await events(ok)).at(-1)!.event).toBe('done');
+    expect(calls.filter((c) => c.body.model !== HAIKU)).toHaveLength(1);
+    // The lease is let go: the next turn goes through.
+    expect((await turnOf(token, id, { message: 'Next' })).status).toBe(200);
+  });
+
+  it('lets a turn go once its lease is past, and refuses a finish while a turn holds the session', async () => {
+    claude();
+    const { token } = await signedInUser();
+    const id = await started(token);
+    await env.DB.prepare('UPDATE ai_interviews SET turning_until = ? WHERE id = ?').bind(Date.now() + 60_000, id).run();
+    expect(await (await turnOf(token, id, { message: 'hi' })).json()).toMatchObject({ error: 'turn_in_progress' });
+    expect((await call(`/api/interviews/${id}/finish`, { method: 'POST', token })).status).toBe(409);
+    await env.DB.prepare('UPDATE ai_interviews SET turning_until = ? WHERE id = ?').bind(Date.now() - 1, id).run();
+    const res = await turnOf(token, id, { message: 'hi' });
+    expect(res.status).toBe(200);
+    await events(res);
+    expect((await env.DB.prepare('SELECT turning_until FROM ai_interviews WHERE id = ?').bind(id).first<{ turning_until: number | null }>())!.turning_until).toBeNull();
+  });
+
+  it('counts a failed call’s tokens, and gives no refund once the session billed more than the threshold', async () => {
+    // The stream fails after the model billed the input: no refund loop pays for model calls.
+    const broken = () => sseResponse([{ type: 'message_start', message: { id: 'm', model: 'claude-sonnet-5-5', usage: { input_tokens: 3000, output_tokens: 1 } } }, { type: 'error', error: { type: 'overloaded_error', message: 'busy' } }]);
+    claude({ reply: broken });
+    const { token } = await signedInUser();
+    const id = await started(token);
+    const res = await turnOf(token, id, { message: 'Hello' });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ error: 'ai_failed', refunded: false, retryable: true });
+    expect(await row(id)).toMatchObject({ status: 'active', tokens: 3001 });
+    expect(await credits(token)).toBe(0);
+    // Failed calls add up against the cap too.
+    const again = await turnOf(token, id, { message: 'Hello' });
+    expect(again.status).toBe(502);
+    expect((await row(id))!.tokens).toBe(6002);
+  });
+
+  it('checks the token cap against the stored total, failed calls included', async () => {
+    const calls = claude();
+    const { token } = await signedInUser();
+    const id = await started(token);
+    await env.DB.prepare('UPDATE ai_interviews SET tokens = 590000 WHERE id = ?').bind(id).run();
+    const budget = await turnOf(token, id, { message: 'hi' });
+    expect(budget.status).toBe(409);
+    expect(await budget.json()).toMatchObject({ error: 'budget' });
+    expect(calls).toHaveLength(0);
+  });
+
+  it('counts a failed verdict’s tokens and keeps the session open without a refund', async () => {
+    claude({ verdict: () => messageResponse('', { stop: 'refusal', usage: { input_tokens: 5000 } }) });
+    const { token } = await signedInUser();
+    const id = await started(token);
+    const res = await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ error: 'ai_failed', refunded: false });
+    expect(await row(id)).toMatchObject({ status: 'active', tokens: 5050 });
+    expect(await credits(token)).toBe(0);
+  });
+
+  it('never flips a finished session to failed, or refunds it, from a stale failing turn', async () => {
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    claude({ reply: async () => (await gate, failing()) });
+    const { token } = await signedInUser();
+    const id = await started(token);
+    const pending = turnOf(token, id, { message: 'Hello' });
+    await new Promise((resolve) => setTimeout(resolve, 100));
+    // Meanwhile the session ended (as after a lease ran out and a verdict was written).
+    await env.DB.prepare("UPDATE ai_interviews SET status = 'finished', verdict = ? WHERE id = ?").bind(JSON.stringify(verdictJson), id).run();
+    open();
+    const res = await pending;
+    expect(res.status).toBe(502);
+    expect(await res.json()).toMatchObject({ refunded: false });
+    expect((await row(id))!.status).toBe('finished');
+    expect(await credits(token)).toBe(0);
+  });
+
   it('refuses turns past the 60-minute wall clock or the token budget, and oversized input', async () => {
     const calls = claude();
     const { token } = await signedInUser();

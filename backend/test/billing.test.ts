@@ -132,6 +132,47 @@ describe('billing', () => {
     expect(await pack()).toBe(0);
   });
 
+  it('grants nothing for a pack whose refund arrived before its order.paid', async () => {
+    const { id, token } = await signedInUser();
+    await deliver({ type: 'refund.updated', data: { id: 'ref-e', order_id: 'ord-early', status: 'succeeded' } });
+    await deliver({ type: 'order.paid', data: { id: 'ord-early', product_id: 'prod-pack-5', customer: { id: 'cus-e', external_id: id } } });
+    const credits = (await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } };
+    expect(credits.credits.pack).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credits WHERE ref_id = 'ord-early'").first<{ n: number }>()).toEqual({ n: 0 });
+    // Another order still grants.
+    await deliver({ type: 'order.paid', data: { id: 'ord-other', product_id: 'prod-pack-5', customer: { id: 'cus-e', external_id: id } } });
+    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack).toBe(5);
+  });
+
+  it('keeps a pack’s used credits after its refund: the balance never goes below 0', async () => {
+    const { id, token } = await signedInUser();
+    await deliver({ type: 'order.paid', data: { id: 'ord-u', product_id: 'prod-pack-5', customer: { id: 'cus-u', external_id: id } } });
+    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'pack', -1, 'interview', ?, 0)").bind(id, 's1').run();
+    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'pack', -1, 'interview', ?, 0)").bind(id, 's2').run();
+    await deliver({ type: 'order.refunded', data: { id: 'ord-u', product_id: 'prod-pack-5', status: 'refunded' } });
+    const pack = await env.DB.prepare("SELECT SUM(delta) AS n FROM credits WHERE user_id = ? AND bucket = 'pack'").bind(id).first<{ n: number }>();
+    expect(pack).toEqual({ n: 0 });
+    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack).toBe(0);
+  });
+
+  it('does not downgrade on a late cancel of an old subscription after a new active one', async () => {
+    const { id } = await signedInUser();
+    await deliver(subscription(id, 'active', '2026-11-01T10:00:00Z'));
+    await deliver(subscription(id, 'active', '2026-11-05T10:00:00Z', { id: 'sub-2' }));
+    expect(await planOf(id)).toBe('pro');
+    // The old one's revoke, later than the new one's last change.
+    await deliver({ ...subscription(id, 'canceled', '2026-11-06T10:00:00Z'), type: 'subscription.revoked' });
+    await deliver(subscription(id, 'canceled', '2026-11-06T11:00:00Z'));
+    expect(await planOf(id)).toBe('pro');
+    expect(await env.DB.prepare('SELECT polar_subscription_id, status FROM billing WHERE user_id = ?').bind(id).first()).toEqual({ polar_subscription_id: 'sub-2', status: 'active' });
+    // The current one's own cancel still downgrades.
+    await deliver({ ...subscription(id, 'canceled', '2026-11-07T10:00:00Z', { id: 'sub-2' }), type: 'subscription.revoked' });
+    expect(await planOf(id)).toBe('free');
+    // And a new subscription after that replaces it, even when its event carries an older time.
+    await deliver(subscription(id, 'active', '2026-11-06T12:00:00Z', { id: 'sub-3' }));
+    expect(await planOf(id)).toBe('pro');
+  });
+
   it('ignores a late, older subscription event', async () => {
     const { id } = await signedInUser();
     await deliver(subscription(id, 'canceled', '2026-11-06T12:00:00Z'));
