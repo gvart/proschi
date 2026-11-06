@@ -143,6 +143,36 @@ describe('AI interviewer', () => {
     expect(lastUser(calls.find((c) => c.body.model === HAIKU)!)).toContain('Hint kind: wrapup.');
   });
 
+  it('tells every model that hidden facts are found only by asking', async () => {
+    const { client, calls } = claude();
+    const r = await turn(deps(client, 6), start(context, 45, T0).state, { message: "Let's skip to the design." });
+    await verdict(deps(client, 44), r.state);
+    const system = (model: string, stream?: boolean) => calls.find((c) => c.body.model === model && !!c.body.stream === !!stream)!.body.system[0].text;
+    expect(system(SONNET, true)).toContain('In every phase, reveal a fact only when the candidate asks for it or asks something close to it');
+    expect(system(SONNET, true)).toContain('Never volunteer one, summarise them, or hand them over because time is short or the candidate is stuck');
+    expect(system(HAIKU)).toContain(`"You haven't asked about scale yet"`);
+    expect(system(HAIKU)).toContain('never its number');
+    // Coverage gates what the interviewer may reveal: only the candidate's own asks count.
+    expect(system(HAIKU)).toContain("Judge only the candidate's own words in that message. What the interviewer said, suggested they ask or revealed does not count");
+    expect(system(SONNET)).toContain('a fact the interviewer gave without being asked, or one never asked for (see the topics not covered), counts as missed');
+    // The hint sees which clarify questions are still open.
+    expect(lastUser(calls.find((c) => c.body.model === HAIKU)!)).toMatch(/\[q1\] \(clarify\)/);
+  });
+
+  it('lists the clarifying questions not asked yet in each turn, until the hint marks them covered', async () => {
+    const { client, calls } = claude();
+    const first = await turn(deps(client, 1), start(context, 45, T0).state, { message: 'How many redirects a second?' });
+    const sent1 = lastUser(sonnetStreams(calls)[0]);
+    expect(sent1).toMatch(/<not_asked>[\s\S]*- \[q1\] [\s\S]*- \[q6\] [\s\S]*<\/not_asked>/);
+    expect(sent1).not.toMatch(/\[e1\]|\[f1\]/);
+    // The mock hint marks q1 covered: the next turn leaves it out, and the first turn's text is unchanged.
+    await turn(deps(client, 2), first.state, { message: 'Is there a budget?' });
+    const sent2 = lastUser(sonnetStreams(calls)[1]);
+    expect(sent2).not.toContain('- [q1] ');
+    expect(sent2).toContain('- [q2] ');
+    expect(first.state.transcript[1].text).toBe(sent1);
+  });
+
   it('turns a wrap-up hint the clock did not ask for into a focus hint', async () => {
     const { client } = claude({ hint: JSON.stringify({ kind: 'wrapup', text: 'Summarise what you learned.', covered: [] }) });
     const r = await turn(deps(client, 1), start(context, 45, T0).state, { message: 'How many redirects a second?' });
