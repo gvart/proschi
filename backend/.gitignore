@@ -2,6 +2,7 @@ node_modules
 .wrangler
 .dev.vars
 src/problems.gen.ts
+src/ai/interviewFiles.gen.ts
 src/cards.gen.ts
 src/game.gen.ts
 email-previews/
