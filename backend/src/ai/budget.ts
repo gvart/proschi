@@ -59,7 +59,23 @@ export function sessionCostUsd(total: SessionUsage): number {
   }, 0);
 }
 
-/** Whether a turn estimated at `tokens` still fits under the cap, the verdict's reserve kept. */
-export function turnFits(total: SessionUsage, tokens: number): boolean {
-  return billedTokens(total) + tokens <= TOKEN_CAP - VERDICT_RESERVE;
+/** What `after` used beyond `before` (the same session's usage, later): one turn's bill. */
+export function usageSince(after: SessionUsage, before: SessionUsage): SessionUsage {
+  const out = emptyUsage();
+  for (const model of Object.keys(out) as Model[]) {
+    const a = after[model];
+    const b = before[model];
+    out[model] = {
+      input_tokens: a.input_tokens - b.input_tokens,
+      output_tokens: a.output_tokens - b.output_tokens,
+      cache_creation_input_tokens: a.cache_creation_input_tokens - b.cache_creation_input_tokens,
+      cache_read_input_tokens: a.cache_read_input_tokens - b.cache_read_input_tokens,
+    };
+  }
+  return out;
+}
+
+/** Whether a turn estimated at `tokens` still fits under the cap, the verdict's reserve kept; `billed` is what the session has used so far (billedTokens). */
+export function turnFits(billed: number, tokens: number): boolean {
+  return billed + tokens <= TOKEN_CAP - VERDICT_RESERVE;
 }
