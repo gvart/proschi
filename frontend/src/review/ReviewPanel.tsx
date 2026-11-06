@@ -2,7 +2,9 @@ import { useEffect, useState } from 'react';
 import { AlertCircle, ClipboardCheck, Sparkles } from 'lucide-react';
 import type { SourceLoc } from '../dsl';
 import { outlineButton } from '../components/Playground/ui';
-import { billingEnabled, pricingHref } from '../services/billing';
+import { Feature } from '../components/Feature';
+import { useFeature } from '../components/featureState';
+import UpgradeHint from '../components/UpgradeHint';
 import { REVIEW_SEVERITIES, type DesignReview, type DesignReviewIssue, type ReviewSeverity, type ReviewUsage } from './contract';
 import { buildReviewRequest, type ReviewInput } from './request';
 import { aiReviewEnabled, apiReviewer, DailyLimitError, getReviewUsage, ReviewUnavailableError, ruleReviewer, type DesignReviewer } from './reviewer';
@@ -14,8 +16,6 @@ interface ReviewPanelProps {
   input: () => ReviewInput;
   /** Jumps to a node the review names. */
   onSelect?: (loc: SourceLoc) => void;
-  /** The signed-in account's plan (`pro`, `free`); undefined signed out or without accounts. */
-  plan?: string;
   /** A reviewer of the caller's (tests): used as is, without the plan's AI review or upgrade hint. */
   reviewer?: DesignReviewer;
 }
@@ -48,15 +48,16 @@ const time = (ms: number) => new Date(ms).toLocaleTimeString(undefined, { hour: 
 
 /**
  * "Review my design": a review of the design's trade-offs, next to the
- * tests. Pro accounts on the hosted site get an AI review (./reviewer.ts,
+ * tests. Accounts with the ai_review feature (components/Feature.tsx) on the hosted site get an AI review (./reviewer.ts,
  * 20 a day, the count shown); everyone else, and Pro when the AI reviewer is
  * off, busy or used up for the day, gets the rule reviewer (./rules.ts),
  * which writes it from the simulation and the test results. Where paid plans
- * are on, non-Pro accounts see a small hint that AI review is part of Pro.
+ * are on, everyone else sees a small hint that AI review is part of Pro.
  */
-export default function ReviewPanel({ source, input, onSelect, plan, reviewer: injected }: ReviewPanelProps) {
+export default function ReviewPanel({ source, input, onSelect, reviewer: injected }: ReviewPanelProps) {
   const [state, setState] = useState<State>({ status: 'idle' });
-  const wantsAi = !injected && aiReviewEnabled && plan === 'pro';
+  const aiReview = useFeature('ai_review');
+  const wantsAi = !injected && aiReviewEnabled && aiReview.ok;
   // GET /api/review/usage's answer: undefined until it comes, null when there is no AI review for this account.
   const [usage, setUsage] = useState<ReviewUsage | null | undefined>(undefined);
   useEffect(() => {
@@ -72,7 +73,6 @@ export default function ReviewPanel({ source, input, onSelect, plan, reviewer: i
   const aiOn = ai.status === 'on';
   const reviewer = injected ?? (aiOn ? apiReviewer : ruleReviewer);
   const showsAi = injected ? injected.ai : aiOn;
-  const upgradeHint = !injected && billingEnabled && plan !== 'pro';
 
   const review = async () => {
     setState({ status: 'loading' });
@@ -126,17 +126,18 @@ export default function ReviewPanel({ source, input, onSelect, plan, reviewer: i
           Reading your design and its test results; this can take up to a minute.
         </p>
       )}
-      {upgradeHint && (
-        <p className="text-xs text-muted" data-testid="review-upgrade-hint">
-          Want an AI reviewer to explain your design’s trade-offs?{' '}
-          <a
-            href={pricingHref('../')}
-            className="inline-flex items-start gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink"
-          >
-            <Sparkles size={12} className="mt-0.5 shrink-0" aria-hidden="true" />
-            AI design review is part of Pro
-          </a>
-        </p>
+      {!injected && (
+        <Feature
+          name="ai_review"
+          hint={<UpgradeHint>AI design review is part of Pro</UpgradeHint>}
+          free={(hint) =>
+            hint && (
+              <p className="text-xs text-muted" data-testid="review-upgrade-hint">
+                Want an AI reviewer to explain your design’s trade-offs? {hint}
+              </p>
+            )
+          }
+        />
       )}
 
       {state.status === 'unavailable' && (

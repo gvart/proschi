@@ -1,5 +1,5 @@
 import { DURATIONS, type Duration } from '../../frontend/src/practice/modes/session';
-import { requireUser, type User } from './auth';
+import type { User } from './auth';
 import { aiEnabled, AiError, createClient, HAIKU } from './ai/client';
 import { addUsage, billedTokens, emptyUsage, sessionCostUsd, WALL_CLOCK_MS } from './ai/budget';
 import { problemContext } from './ai/context';
@@ -7,6 +7,7 @@ import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewSta
 import type { Ctx } from './context';
 import { balance, refund, spend } from './credits';
 import type { Env } from './env';
+import { can, requireFeature, type FeatureRoute } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { recommendAfterInterview } from './roadmap';
@@ -74,11 +75,23 @@ function requireAi(env: Env): void {
   if (!aiEnabled(env)) throw new HttpError(501, 'ai_disabled');
 }
 
-async function signedIn(request: Request, ctx: Ctx, limiter: RateLimit) {
-  requireAi(ctx.env);
-  const user = await requireUser(request, ctx);
-  await rateLimit(limiter, user.id, 'Too many interview requests; wait a minute');
-  return user;
+/**
+ * An interview route (the ai_interview feature, src/features.ts): 501
+ * without the AI key, 401 signed out, 402 off a plan without it, then the
+ * route's own per-user rate limit.
+ */
+function interviewRoute<A extends unknown[]>(limiter: (env: Env) => RateLimit, handler: (request: Request, ctx: Ctx, user: User, ...args: A) => Promise<Response>): FeatureRoute<A> {
+  return requireFeature(
+    'ai_interview',
+    async (request: Request, ctx: Ctx, user: User, _pre: undefined, ...args: A) => {
+      await rateLimit(limiter(ctx.env), user.id, 'Too many interview requests; wait a minute');
+      return handler(request, ctx, user, ...args);
+    },
+    (_request: Request, ctx: Ctx, ..._args: A) => {
+      requireAi(ctx.env);
+      return undefined;
+    },
+  );
 }
 
 async function load(ctx: Ctx, userId: string, id: string): Promise<Row> {
@@ -121,8 +134,7 @@ function summary(row: Row) {
 }
 
 /** POST /api/interviews {problem, minutes, replace?}. */
-export async function startInterview(request: Request, ctx: Ctx): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_START_LIMITER);
+export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITER, async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const body = await readJson(request);
   const context = typeof body.problem === 'string' ? problemContext(body.problem) : undefined;
   if (!context) throw new HttpError(400, 'Unknown problem');
@@ -150,7 +162,7 @@ export async function startInterview(request: Request, ctx: Ctx): Promise<Respon
   ]);
   const row = await load(ctx, user.id, id);
   return json({ interview: await view(ctx, row), credits: await balance(ctx.env, user.id, now) }, 201, NO_STORE);
-}
+});
 
 /** P3: a session that fails on its first turn or in its first 5 minutes gives its credit back and ends. */
 async function failEarly(env: Env, row: Row, state: InterviewState, now: number): Promise<boolean> {
@@ -177,8 +189,7 @@ const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.str
  *   event: done   {reply, phase, elapsedMs, turns}
  *   event: error  {error, refunded?}     instead of done, when the turn failed midway
  */
-export async function interviewTurn(request: Request, ctx: Ctx, id: string): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_TURN_LIMITER);
+export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER, async (request: Request, ctx: Ctx, user: User, id: string): Promise<Response> => {
   const row = await load(ctx, user.id, id);
   const body = await readJson(request, MAX_TURN_BODY);
   if (row.status !== 'active') throw new HttpError(409, 'finished');
@@ -265,13 +276,23 @@ export async function interviewTurn(request: Request, ctx: Ctx, id: string): Pro
     status: 200,
     headers: { 'Content-Type': 'text/event-stream; charset=utf-8', 'Cache-Control': 'no-store', 'X-Accel-Buffering': 'no' },
   });
+});
+
+/**
+ * The session as this account may see it: off the interview_history feature
+ * (src/features.ts) only the latest verdict is kept with its session, as in
+ * the list and the history (P1, P21), so an older one can't be read by its id.
+ */
+async function visible(ctx: Ctx, user: User, row: Row): Promise<Row> {
+  if (!row.verdict || can(user, 'interview_history', ctx.env).ok) return row;
+  const latest = await ctx.env.DB.prepare('SELECT id FROM ai_interviews WHERE user_id = ? AND verdict IS NOT NULL ORDER BY started_at DESC, id LIMIT 1').bind(user.id).first<{ id: string }>();
+  return latest?.id === row.id ? row : { ...row, verdict: null };
 }
 
-/** POST /api/interviews/<id>/finish: the verdict, once; asked again, the same one. */
-export async function finishInterview(request: Request, ctx: Ctx, id: string): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_FINISH_LIMITER);
+/** POST /api/interviews/<id>/finish: the verdict, once; asked again, the same one (off interview_history, only while it is the latest). */
+export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMITER, async (_request: Request, ctx: Ctx, user: User, id: string): Promise<Response> => {
   const row = await load(ctx, user.id, id);
-  if (row.status === 'finished') return json({ interview: summary(row) }, 200, NO_STORE);
+  if (row.status === 'finished') return json({ interview: summary(await visible(ctx, user, row)) }, 200, NO_STORE);
   if (row.status !== 'active') throw new HttpError(409, row.status);
   const state = stateOf(row);
   const context = problemContext(row.problem_id);
@@ -298,7 +319,7 @@ export async function finishInterview(request: Request, ctx: Ctx, id: string): P
     return json({ error: 'ai_failed', retryable: e.retryable && !refunded, refunded }, 502, NO_STORE);
   }
   return json({ interview: summary(await load(ctx, user.id, id)) }, 200, NO_STORE);
-}
+});
 
 /** The AI roadmap's picks after a verdict; their tokens are added to the session's. Never throws. */
 async function pickAfterVerdict(ctx: Ctx, user: User, id: string, problemId: string, v: InterviewVerdict): Promise<void> {
@@ -311,24 +332,22 @@ async function pickAfterVerdict(ctx: Ctx, user: User, id: string, problemId: str
     .catch((e: unknown) => log('warn', 'roadmap.tokens_failed', { requestId: ctx.requestId, error: errorText(e) }));
 }
 
-/** GET /api/interviews/<id>: the session and its transcript, to resume after a reload. */
-export async function getInterview(request: Request, ctx: Ctx, id: string): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
-  return json({ interview: await view(ctx, await load(ctx, user.id, id)) }, 200, NO_STORE);
-}
+/** GET /api/interviews/<id>: the session and its transcript, to resume after a reload; off interview_history an older session's verdict is left out. */
+export const getInterview = interviewRoute((env) => env.INTERVIEW_READ_LIMITER, async (_request: Request, ctx: Ctx, user: User, id: string): Promise<Response> => {
+  return json({ interview: await view(ctx, await visible(ctx, user, await load(ctx, user.id, id))) }, 200, NO_STORE);
+});
 
 /**
  * GET /api/interviews: the newest sessions (no transcripts) and the credits
  * left. Off Pro only the latest verdict comes with them (P1, as the history):
  * the others are listed without it.
  */
-export async function listInterviews(request: Request, ctx: Ctx): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
+export const listInterviews = interviewRoute((env) => env.INTERVIEW_READ_LIMITER, async (_request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const { results } = await ctx.env.DB.prepare('SELECT * FROM ai_interviews WHERE user_id = ? ORDER BY started_at DESC, id LIMIT ?').bind(user.id, LIST_MAX).all<Row>();
   const latest = results.find((r) => r.verdict)?.id;
-  const rows = user.plan === 'pro' ? results : results.map((r) => (r.id === latest ? r : { ...r, verdict: null }));
+  const rows = can(user, 'interview_history', ctx.env).ok ? results : results.map((r) => (r.id === latest ? r : { ...r, verdict: null }));
   return json({ interviews: rows.map(summary), credits: await balance(ctx.env, user.id) }, 200, NO_STORE);
-}
+});
 
 const HISTORY_MAX = 200;
 
@@ -339,9 +358,8 @@ const HISTORY_MAX = 200;
  * any other plan gets the latest only (P1), with `total` saying how many
  * there are and `full: false`.
  */
-export async function interviewHistory(request: Request, ctx: Ctx): Promise<Response> {
-  const user = await signedIn(request, ctx, ctx.env.INTERVIEW_READ_LIMITER);
-  const full = user.plan === 'pro';
+export const interviewHistory = interviewRoute((env) => env.INTERVIEW_READ_LIMITER, async (_request: Request, ctx: Ctx, user: User): Promise<Response> => {
+  const full = can(user, 'interview_history', ctx.env).ok;
   const { DB } = ctx.env;
   const [rows, count] = await DB.batch([
     DB.prepare("SELECT id, problem_id, duration_min, started_at, ended_at, verdict FROM ai_interviews WHERE user_id = ? AND status = 'finished' AND verdict IS NOT NULL ORDER BY started_at DESC, id LIMIT ?").bind(
@@ -355,7 +373,7 @@ export async function interviewHistory(request: Request, ctx: Ctx): Promise<Resp
     return { id: r.id, problem: r.problem_id, minutes: r.duration_min, startedAt: r.started_at, endedAt: r.ended_at ?? undefined, passed: v.passed, scores: v.scores };
   });
   return json({ full, total: (count.results[0] as { n: number }).n, sessions }, 200, NO_STORE);
-}
+});
 
 /**
  * The daily retention job (src/cron.ts, P8): transcripts older than 90 days

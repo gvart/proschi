@@ -1,7 +1,7 @@
 import { ArrowRight, Layers, Loader2, Puzzle, Sparkles } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
-import { pricingHref } from '../../services/billing';
-import type { AiRoadmapAccess } from '../roadmap';
+import { Feature } from '../../components/Feature';
+import UpgradeHint from '../../components/UpgradeHint';
 import { pickHref, pickTitle, type RoadmapPick } from './api';
 import { useRoadmapNext } from './useRoadmapNext';
 
@@ -49,33 +49,46 @@ export function PickList({ picks, problemTitle }: { picks: RoadmapPick[]; proble
 
 const card = 'mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md';
 
-/** "Next for you" on the roadmap: the picks for Pro, the way to Pro for other accounts with paid plans on; nothing otherwise, or without the AI (P10). */
-export default function NextForYou({ access, problemTitle, base = '../' }: { access: AiRoadmapAccess; problemTitle: (id: string) => string | undefined; base?: string }) {
-  const picks = useRoadmapNext(access === 'pro');
+const heading = (
+  <h2 id="next-for-you" className={`flex items-center gap-1.5 ${eyebrow}`}>
+    <Sparkles size={13} aria-hidden="true" />
+    Next for you
+  </h2>
+);
 
-  if (access === 'hidden') return null;
-  const heading = (
-    <h2 id="next-for-you" className={`flex items-center gap-1.5 ${eyebrow}`}>
-      <Sparkles size={13} aria-hidden="true" />
-      Next for you
-    </h2>
-  );
-  if (access === 'upgrade') {
-    return (
-      <section aria-labelledby="next-for-you" className={card} data-testid="next-for-you">
-        {heading}
-        <p className="mt-1 text-sm text-ink/80">After each AI interview, Pro picks your next 3 steps from the roadmap and the cards, with a reason for each.</p>
-        <a
-          href={pricingHref(base)}
-          data-testid="next-for-you-upgrade"
+/** "Next for you" on the roadmap: the picks with the ai_roadmap feature, else the way to Pro where paid plans are on; nothing otherwise, or without the AI (P10). */
+export default function NextForYou({ problemTitle, base = '../' }: { problemTitle: (id: string) => string | undefined; base?: string }) {
+  return (
+    <Feature
+      name="ai_roadmap"
+      pro={<Picks problemTitle={problemTitle} />}
+      hint={
+        <UpgradeHint
+          base={base}
+          testId="next-for-you-upgrade"
+          icon={false}
           className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink"
         >
           Upgrade to Pro
           <ArrowRight size={13} aria-hidden="true" />
-        </a>
-      </section>
-    );
-  }
+        </UpgradeHint>
+      }
+      free={(hint) =>
+        hint && (
+          <section aria-labelledby="next-for-you" className={card} data-testid="next-for-you">
+            {heading}
+            <p className="mt-1 text-sm text-ink/80">After each AI interview, Pro picks your next 3 steps from the roadmap and the cards, with a reason for each.</p>
+            {hint}
+          </section>
+        )
+      }
+    />
+  );
+}
+
+/** The picks themselves: shown only with the feature, so they are always asked for. */
+function Picks({ problemTitle }: { problemTitle: (id: string) => string | undefined }) {
+  const picks = useRoadmapNext(true);
   // Loading, or no AI on the server: the roadmap's own order stands.
   if (picks.status === 'off' || picks.status === 'loading') return null;
   const next = picks.status === 'ready' ? picks.next : null;

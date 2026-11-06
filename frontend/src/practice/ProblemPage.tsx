@@ -337,8 +337,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
           onExit={exitInterview}
           onRestart={() => setSession(undefined)}
-          signedIn={account.state.status === 'signed-in'}
-          pro={account.state.status === 'signed-in' && account.state.user.plan === 'pro'}
           getSource={getSource}
         >
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
@@ -424,7 +422,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             source={source}
             input={() => practiceReviewInput(problem, source, engine)}
             onSelect={goTo}
-            plan={account.state.status === 'signed-in' ? (account.state.user.plan ?? 'free') : undefined}
           />
         }
         mistake={

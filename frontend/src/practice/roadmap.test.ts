@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { problems } from './catalog';
-import { aiRoadmapAccess, OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
+import { OPTIONAL_STEPS, ROADMAP, requiredStages, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock, stepLock, validateRoadmap, type RoadmapStage } from './roadmap';
 import type { Progress } from './progress';
 import { roadmapAfterSolve } from './solveSummary';
 import { ruleProgress, type StatsSnapshot } from '../learn/achievements';
@@ -103,21 +103,6 @@ describe('roadmapAccess', () => {
   });
 
   it('is open in a build without accounts', () => expect(roadmapAccess({ status: 'off' })).toBe('open'));
-});
-
-describe('aiRoadmapAccess', () => {
-  const user = (plan?: string) => ({ status: 'signed-in' as const, user: { id: 'u1', displayName: 'Ada', publicProfile: false, ...(plan ? { plan } : {}) }, providers: [] });
-
-  it('gives the AI picks to Pro, the way to Pro to other accounts where paid plans are on, and nothing otherwise', () => {
-    expect(aiRoadmapAccess(user('pro'), true)).toBe('pro');
-    expect(aiRoadmapAccess(user('pro'), false)).toBe('pro');
-    expect(aiRoadmapAccess(user('free'), true)).toBe('upgrade');
-    expect(aiRoadmapAccess(user(), true)).toBe('upgrade');
-    expect(aiRoadmapAccess(user('free'), false)).toBe('hidden');
-    expect(aiRoadmapAccess({ status: 'signed-out', providers: [] }, true)).toBe('hidden');
-    expect(aiRoadmapAccess({ status: 'loading' }, true)).toBe('hidden');
-    expect(aiRoadmapAccess({ status: 'off' }, true)).toBe('hidden');
-  });
 });
 
 describe('roadmapTarget', () => {

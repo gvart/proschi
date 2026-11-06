@@ -1,15 +1,15 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, ExternalLink, Link2, Sparkles, Unlink, X } from 'lucide-react';
 import { ApiError } from '../../services/api';
-import { billingEnabled } from '../../services/billing';
-import { UPGRADE_PATH, createLiveShare, getLiveShare, revokeLiveShare, type LiveShare } from '../../services/documentShares';
+import { createLiveShare, getLiveShare, revokeLiveShare, type LiveShare } from '../../services/documentShares';
+import { Feature } from '../Feature';
+import { useFeature } from '../featureState';
+import UpgradeHint from '../UpgradeHint';
 import { field, outlineButton, primaryButton } from './ui';
 
 interface ShareLinkDialogProps {
   docId: string;
   title: string;
-  /** The account is on Pro, which live share links need. */
-  pro: boolean;
   /** Why this diagram cannot have a link yet (it is not in the account), with what to do; null when it can. */
   hint: { message: string; actions: { label: string; run: () => void }[] } | null;
   /** The account's version of the diagram once its edits are pushed; null when it is not in the account. */
@@ -30,12 +30,12 @@ function errorText(e: unknown): string {
 
 /**
  * The current diagram's live share link (backend/README.md "Live share
- * links"): make one, copy it, or revoke it. Pro only; without Pro the dialog
- * says so, with an upgrade link when paid plans are on (VITE_BILLING).
+ * links"): make one, copy it, or revoke it. Pro only (the share_links
+ * feature); without it the dialog says so, with the upgrade hint.
  */
-export default function ShareLinkDialog({ docId, title, pro, hint, pushedVersion, onClose }: ShareLinkDialogProps) {
-  const ready = pro && !hint;
-  const [share, setShare] = useState<LiveShare | null | undefined>(ready ? undefined : null);
+export default function ShareLinkDialog({ docId, title, hint, pushedVersion, onClose }: ShareLinkDialogProps) {
+  const ready = useFeature('share_links').ok && !hint;
+  const [share, setShare] = useState<LiveShare | null | undefined>(undefined);
   const [busy, setBusy] = useState(false);
   const [copied, setCopied] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -119,63 +119,70 @@ export default function ShareLinkDialog({ docId, title, pro, hint, pushedVersion
           </button>
         </div>
         <div className="grid gap-4 p-5 text-sm">
-          {!pro ? (
-            <div className="grid gap-3">
-              <p>
-                Live share links are part of <span className="font-semibold">Pro</span>. Share → Short link still gives anyone a snapshot of the diagram as it is now.
-              </p>
-              {billingEnabled && (
-                <a className={`${primaryButton} justify-self-start`} href={`../${UPGRADE_PATH}`}>
-                  <Sparkles size={16} />
-                  <span>See Pro</span>
-                </a>
-              )}
-            </div>
-          ) : hint ? (
-            <div className="grid gap-3">
-              <p>{hint.message}</p>
-              {hint.actions.length > 0 && (
-                <div className="flex flex-wrap gap-2">
-                  {hint.actions.map((a) => (
-                    <button key={a.label} type="button" className={outlineButton} onClick={a.run}>
-                      {a.label}
-                    </button>
-                  ))}
+          <Feature
+            name="share_links"
+            free={(upgrade) => (
+              <div className="grid gap-3">
+                <p>
+                  Live share links are part of <span className="font-semibold">Pro</span>. Share → Short link still gives anyone a snapshot of the diagram as it is now.
+                </p>
+                {upgrade}
+              </div>
+            )}
+            hint={
+              <UpgradeHint className={`${primaryButton} justify-self-start`} icon={false}>
+                <Sparkles size={16} />
+                <span>See Pro</span>
+              </UpgradeHint>
+            }
+            pro={
+              hint ? (
+                <div className="grid gap-3">
+                  <p>{hint.message}</p>
+                  {hint.actions.length > 0 && (
+                    <div className="flex flex-wrap gap-2">
+                      {hint.actions.map((a) => (
+                        <button key={a.label} type="button" className={outlineButton} onClick={a.run}>
+                          {a.label}
+                        </button>
+                      ))}
+                    </div>
+                  )}
                 </div>
-              )}
-            </div>
-          ) : share === undefined ? (
-            <p className="text-muted">Loading…</p>
-          ) : share ? (
-            <div className="grid gap-3">
-              <div className="flex gap-2">
-                <input aria-label="Share link" readOnly value={share.url} onFocus={(e) => e.currentTarget.select()} className={`${field} min-w-0 flex-1 font-mono`} />
-                <button type="button" className={primaryButton} onClick={() => void copy(share.url)}>
-                  {copied ? <Check size={16} /> : <Copy size={16} />}
-                  <span>{copied ? 'Copied' : 'Copy'}</span>
-                </button>
-              </div>
-              <p className="text-xs text-muted">Made on {dateOf(share.createdAt)}. Later saves show at the same link.</p>
-              <div className="flex flex-wrap gap-2">
-                <a className={outlineButton} href={share.url} target="_blank" rel="noopener noreferrer">
-                  <ExternalLink size={16} />
-                  <span>Open</span>
-                </a>
-                <button type="button" className={outlineButton} disabled={busy} onClick={revoke}>
-                  <Unlink size={16} />
-                  <span>Revoke link</span>
-                </button>
-              </div>
-            </div>
-          ) : (
-            <div className="grid gap-3">
-              <p>No link yet. Revoking a link later stops it at once; sharing again makes a new one.</p>
-              <button type="button" className={`${primaryButton} justify-self-start`} disabled={busy} onClick={() => void create()}>
-                <Link2 size={16} />
-                <span>{busy ? 'Making the link…' : 'Create share link'}</span>
-              </button>
-            </div>
-          )}
+              ) : share === undefined ? (
+                <p className="text-muted">Loading…</p>
+              ) : share ? (
+                <div className="grid gap-3">
+                  <div className="flex gap-2">
+                    <input aria-label="Share link" readOnly value={share.url} onFocus={(e) => e.currentTarget.select()} className={`${field} min-w-0 flex-1 font-mono`} />
+                    <button type="button" className={primaryButton} onClick={() => void copy(share.url)}>
+                      {copied ? <Check size={16} /> : <Copy size={16} />}
+                      <span>{copied ? 'Copied' : 'Copy'}</span>
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted">Made on {dateOf(share.createdAt)}. Later saves show at the same link.</p>
+                  <div className="flex flex-wrap gap-2">
+                    <a className={outlineButton} href={share.url} target="_blank" rel="noopener noreferrer">
+                      <ExternalLink size={16} />
+                      <span>Open</span>
+                    </a>
+                    <button type="button" className={outlineButton} disabled={busy} onClick={revoke}>
+                      <Unlink size={16} />
+                      <span>Revoke link</span>
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="grid gap-3">
+                  <p>No link yet. Revoking a link later stops it at once; sharing again makes a new one.</p>
+                  <button type="button" className={`${primaryButton} justify-self-start`} disabled={busy} onClick={() => void create()}>
+                    <Link2 size={16} />
+                    <span>{busy ? 'Making the link…' : 'Create share link'}</span>
+                  </button>
+                </div>
+              )
+            }
+          />
           {error && (
             <p role="alert" className="text-fail">
               {error}

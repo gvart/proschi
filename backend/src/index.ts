@@ -13,6 +13,7 @@ import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
 import { createDocumentShare, getDocumentShare, getSharedDocument, revokeDocumentShare, shareViewPage } from './documentShares';
 import { recordThrottled, routeOf } from './events';
+import type { FeatureRoute, OpenRoute } from './features';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
@@ -127,6 +128,37 @@ import { getRoadmapNext } from './roadmap';
  *   GET    /share/<token>                   frontend/share/, noindex
  */
 
+/**
+ * Every route under the paid paths (isPaidPath): each a requireFeature route
+ * (src/features.ts), which names its feature, or an openRoute, which says
+ * why it is open. Matched in order; `*` parts are passed to the handler.
+ * test/paidRoutes.test.ts fails on a route here that is neither, and runs
+ * each one with a free and a Pro account under every kind of credential.
+ */
+export const PAID_ROUTES: readonly (readonly [method: string, path: string, route: FeatureRoute<string[]> | OpenRoute<string[]>])[] = [
+  ['POST', 'api/interviews', startInterview],
+  ['GET', 'api/interviews', listInterviews],
+  ['GET', 'api/interviews/history', interviewHistory],
+  ['GET', 'api/interviews/*', getInterview],
+  ['POST', 'api/interviews/*/turn', interviewTurn],
+  ['POST', 'api/interviews/*/finish', finishInterview],
+  ['POST', 'api/review', reviewDesign],
+  ['GET', 'api/review/usage', getReviewUsage],
+  ['GET', 'api/roadmap/next', getRoadmapNext],
+  ['GET', 'api/me/documents/*/share', getDocumentShare],
+  ['POST', 'api/me/documents/*/share', createDocumentShare],
+  ['DELETE', 'api/me/documents/*/share', revokeDocumentShare],
+] as const;
+
+/** /api/interviews*, /api/review*, /api/roadmap* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
+export function isPaidPath(parts: string[]): boolean {
+  if (parts[0] !== 'api') return false;
+  if (parts[1] === 'interviews' || parts[1] === 'review' || parts[1] === 'roadmap') return true;
+  return parts[1] === 'me' && parts[2] === 'documents' && parts[4] === 'share';
+}
+
+const wildcards = (path: string, parts: string[]): string[] => path.split('/').flatMap((p, i) => (p === '*' ? [parts[i]] : []));
+
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
   const { env } = ctx;
   const method = request.method;
@@ -139,6 +171,12 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   assertSameOrigin(request);
 
+  // The paid paths go only to PAID_ROUTES: each route there says the feature it needs, or why it is open.
+  if (isPaidPath(parts)) {
+    const paid = PAID_ROUTES.find(([m, path]) => is(m, ...path.split('/')));
+    if (!paid) return errorResponse(404, 'Not found');
+    return paid[2](request, ctx, ...wildcards(paid[1], parts));
+  }
   if (is('GET', 'auth', 'providers')) return json({ providers: configuredProviders(env) }, 200, { 'Cache-Control': 'public, max-age=300' });
   if ((is('GET', 'auth', '*', 'start') || is('GET', 'auth', '*', 'callback')) && isProvider(parts[1])) {
     return parts[2] === 'start' ? startLogin(request, ctx, parts[1]) : finishLogin(request, ctx, parts[1]);
@@ -174,9 +212,6 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'me', 'documents', '*', 'versions', '*')) return getVersion(request, ctx, parts[3], parts[5]);
   if (is('DELETE', 'api', 'me', 'documents', '*', 'versions', '*')) return deleteVersion(request, ctx, parts[3], parts[5]);
   if (is('GET', 'api', 'me', 'versions', 'resolve')) return resolveVersion(request, ctx);
-  if (is('GET', 'api', 'me', 'documents', '*', 'share')) return getDocumentShare(request, ctx, parts[3]);
-  if (is('POST', 'api', 'me', 'documents', '*', 'share')) return createDocumentShare(request, ctx, parts[3]);
-  if (is('DELETE', 'api', 'me', 'documents', '*', 'share')) return revokeDocumentShare(request, ctx, parts[3]);
   if (is('GET', 'api', 'share', '*')) return getSharedDocument(ctx, parts[2]);
   if (is('PUT', 'api', 'me', 'documents', '*')) return putDocument(request, ctx, parts[3]);
   if (is('DELETE', 'api', 'me', 'documents', '*')) return deleteDocument(request, ctx, parts[3]);
@@ -201,15 +236,6 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'equip')) return postGameEquip(request, ctx);
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
-  if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
-  if (is('GET', 'api', 'review', 'usage')) return getReviewUsage(request, ctx);
-  if (is('POST', 'api', 'interviews')) return startInterview(request, ctx);
-  if (is('GET', 'api', 'interviews')) return listInterviews(request, ctx);
-  if (is('GET', 'api', 'interviews', 'history')) return interviewHistory(request, ctx);
-  if (is('GET', 'api', 'interviews', '*')) return getInterview(request, ctx, parts[2]);
-  if (is('POST', 'api', 'interviews', '*', 'turn')) return interviewTurn(request, ctx, parts[2]);
-  if (is('POST', 'api', 'interviews', '*', 'finish')) return finishInterview(request, ctx, parts[2]);
-  if (is('GET', 'api', 'roadmap', 'next')) return getRoadmapNext(request, ctx);
   if (is('POST', 'api', 'shares')) return createShare(request, ctx);
   if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
   if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);

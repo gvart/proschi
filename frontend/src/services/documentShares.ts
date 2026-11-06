@@ -7,9 +7,6 @@ import { api } from './api';
  * shows the diagram as last saved to the account, and its owner can revoke it.
  */
 
-/** Where the upgrade hint sends people, from the site root. */
-export const UPGRADE_PATH = 'pricing/';
-
 export interface LiveShare {
   token: string;
   url: string;
@@ -25,8 +22,6 @@ export interface SharedDocument {
   /** Unix milliseconds: when the owner last saved it. */
   updatedAt: number;
 }
-
-export const isPro = (plan: string | undefined): boolean => plan === 'pro';
 
 const path = (docId: string) => `/api/me/documents/${encodeURIComponent(docId)}/share`;
 

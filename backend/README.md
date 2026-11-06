@@ -342,6 +342,41 @@ and `POLAR_PRODUCT_PACK_5` (and `POLAR_SERVER=sandbox` against the sandbox).
 Build the site with `VITE_BILLING=true` as well as `VITE_ACCOUNTS=true` to
 show the pricing page and the upgrade buttons.
 
+### Adding a paid feature
+
+Which plans get a paid feature is decided in one place, `src/features.ts`
+(docs/design/paid-plans.md P22). How much of it a plan gets (diagrams,
+interviews) stays a number in `src/plans.ts`.
+
+1. Add the id to `FEATURE_IDS` in `frontend/src/services/featureContract.ts`
+   (the Worker imports that file) and an entry to `FEATURES` in
+   `src/features.ts`: `{plans: ['pro'], description}`. The description is
+   the 402's message. `GET /api/me/plan` then answers the feature in its
+   `features` map.
+2. Make the route with `requireFeature(id, handler, before?)`: 401 signed
+   out, 402 `{error: 'plan_required', feature}` off a plan with it.
+   `before` runs first, for what must answer before sign-in (a 501 without
+   the AI key, the body's 400). If it sits under a paid path
+   (`/api/interviews*`, `/api/review*`, `/api/roadmap*`,
+   `/api/me/documents/<id>/share`), add it to `PAID_ROUTES` in
+   `src/index.ts`. Those paths reach only that table, and only
+   `requireFeature` or `openRoute(why, handler)` routes. Then give it a case in
+   `test/paidRoutes.test.ts`, which fails until you do. The case runs it
+   with a free and a Pro account under the cookie and an app token. Code
+   that isn't a route asks `can(user, id, env).ok`.
+3. On the page, wrap the UI in `<Feature name="id" pro={…} free={…} />`
+   (`frontend/src/components/Feature.tsx`), or read `useFeature('id')`.
+   `free` gets the standard upgrade hint where paid plans are on and the
+   viewer is signed out or needs Pro. Pass `hint={false}` to drop it, or
+   another node to replace it.
+
+Every credential reads the account, and with it the plan, from D1 on each
+request (`src/auth.ts` `authenticate`). That covers the session cookie and
+an app's or the CLI's bearer access token, which are `app_access` sessions
+(a refresh token is refused). So a downgrade counts from the next request.
+Admin sessions are a cookie of their own and reach only `/api/admin/*`.
+Only the signed webhook and SQL change `users.plan`.
+
 ### Short links and embeds
 
 Share links put the whole diagram in the address after `#`, which no server

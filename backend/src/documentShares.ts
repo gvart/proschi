@@ -2,6 +2,7 @@ import { titleOf } from '../../frontend/src/playground/documents';
 import type { User } from './auth';
 import type { Ctx } from './context';
 import { checkId, limited } from './documents';
+import { FEATURES, openRoute, requireFeature } from './features';
 import { HttpError, json, rateLimit } from './http';
 
 /**
@@ -26,9 +27,6 @@ import { HttpError, json, rateLimit } from './http';
 export const SHARE_TOKEN = /^[A-Za-z0-9_-]{22}$/;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-/** Whether the account may make share links: `users.plan` is 'pro'. Read here, not from src/plans.ts. */
-export const isPro = (user: Pick<User, 'plan'>): boolean => user.plan === 'pro';
-
 /** 128 random bits, base64url without padding. */
 export function newShareToken(): string {
   const bytes = crypto.getRandomValues(new Uint8Array(16));
@@ -52,19 +50,20 @@ function shareOf(request: Request, row: ShareRow) {
 const liveShare = (DB: D1Database, userId: string, documentId: string) =>
   DB.prepare('SELECT token, created_at FROM document_shares WHERE user_id = ? AND document_id = ? AND revoked_at IS NULL').bind(userId, documentId).first<ShareRow>();
 
-/** GET /api/me/documents/<id>/share */
-export async function getDocumentShare(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
+/** GET /api/me/documents/<id>/share: on any plan, so an account that left Pro still sees (and can revoke) the link it made; the link itself stops answering. */
+export const getDocumentShare = openRoute('an account that left Pro still sees the link it made, to revoke it', async (request: Request, ctx: Ctx, rawId: string): Promise<Response> => {
   const id = checkId(rawId);
   const user = await limited(request, ctx);
   const row = await liveShare(ctx.env.DB, user.id, id);
   return json({ share: row ? shareOf(request, row) : null }, 200, NO_STORE);
-}
+});
 
-/** POST /api/me/documents/<id>/share: 402 {error: 'plan_required'} off Pro, 404 for a diagram the account does not keep. */
-export async function createDocumentShare(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
-  const id = checkId(rawId);
-  const user = await limited(request, ctx);
-  if (!isPro(user)) return json({ error: 'plan_required', message: 'Live share links are part of Pro' }, 402, NO_STORE);
+/** POST /api/me/documents/<id>/share: the share_links feature (402 {error: 'plan_required'} off Pro), 404 for a diagram the account does not keep. */
+export const createDocumentShare = requireFeature('share_links', makeShare, (_request: Request, _ctx: Ctx, rawId: string) => checkId(rawId));
+
+/** Past the id (400), sign-in and the plan: `id` is the checked one. */
+async function makeShare(request: Request, ctx: Ctx, user: User, id: string, _rawId: string): Promise<Response> {
+  await rateLimit(ctx.env.DOCS_LIMITER, user.id, 'Too many diagram saves; wait a minute');
   const { DB } = ctx.env;
   const existing = await liveShare(DB, user.id, id);
   if (existing) return json({ share: shareOf(request, existing) }, 200, NO_STORE);
@@ -83,8 +82,8 @@ export async function createDocumentShare(request: Request, ctx: Ctx, rawId: str
   throw new HttpError(404, 'No such diagram in your account; it may not be synced yet');
 }
 
-/** DELETE /api/me/documents/<id>/share: the link stops working at once; its token is never reused. */
-export async function revokeDocumentShare(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
+/** DELETE /api/me/documents/<id>/share: the link stops working at once; its token is never reused. On any plan: revoking is never paid for. */
+export const revokeDocumentShare = openRoute('revoking a link is never paid for, also after leaving Pro', async (request: Request, ctx: Ctx, rawId: string): Promise<Response> => {
   const id = checkId(rawId);
   const user = await limited(request, ctx);
   const { meta } = await ctx.env.DB.prepare('UPDATE document_shares SET revoked_at = ? WHERE user_id = ? AND document_id = ? AND revoked_at IS NULL')
@@ -92,7 +91,7 @@ export async function revokeDocumentShare(request: Request, ctx: Ctx, rawId: str
     .run();
   if (meta.changes === 0) throw new HttpError(404, 'This diagram has no share link');
   return new Response(null, { status: 204 });
-}
+});
 
 interface PublicRow {
   name: string;
@@ -100,6 +99,9 @@ interface PublicRow {
   imports: string | null;
   updated_at: number;
 }
+
+/** The plans whose links answer (src/features.ts share_links), as SQL: the owner's plan is read in the query. */
+const SHARING_PLANS = FEATURES.share_links.plans.map((p) => `'${p}'`).join(', ');
 
 /** GET /api/share/<token>: no sign-in, rate-limited per IP, never cached (a revoke takes effect at once). */
 export async function getSharedDocument(ctx: Ctx, token: string): Promise<Response> {
@@ -110,7 +112,7 @@ export async function getSharedDocument(ctx: Ctx, token: string): Promise<Respon
          FROM document_shares s
          JOIN documents d ON d.user_id = s.user_id AND d.id = s.document_id
          JOIN users u ON u.id = s.user_id
-         WHERE s.token = ? AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND u.plan = 'pro'`,
+         WHERE s.token = ? AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND u.plan IN (${SHARING_PLANS})`,
       )
         .bind(token)
         .first<PublicRow>()

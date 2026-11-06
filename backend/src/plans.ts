@@ -5,6 +5,9 @@
  * place a plan's numbers live.
  */
 
+/** The plans an account can be on (`users.plan`); src/features.ts says which get each paid feature. */
+export type Plan = 'free' | 'pro';
+
 export interface Limits {
   /** Live (not deleted) synced diagrams (src/documents.ts). */
   documents: number;

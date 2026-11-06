@@ -60,7 +60,7 @@ describe('live share links', () => {
     expect((await put(token, 'doc1', SOURCE)).status).toBe(200);
     const response = await share(token, 'doc1');
     expect(response.status).toBe(402);
-    expect(await response.json()).toMatchObject({ error: 'plan_required' });
+    expect(await response.json()).toMatchObject({ error: 'plan_required', feature: 'share_links' });
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM document_shares').first('n')).toBe(0);
   });
 

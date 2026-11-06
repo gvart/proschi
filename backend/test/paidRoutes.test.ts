@@ -1,0 +1,349 @@
+import { env } from 'cloudflare:workers';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { HAIKU } from '../src/ai/client';
+import { sha256 } from '../src/crypto';
+import { FEATURES } from '../src/features';
+import { isPaidPath, PAID_ROUTES } from '../src/index';
+import { call, resetDatabase, signedInUser } from './helpers';
+import { messageResponse, sseResponse, streamEvents } from './ai/mockClaude';
+
+/**
+ * The paid routes (src/index.ts PAID_ROUTES): every one declares its feature
+ * or why it is open, and each is run with a free and a Pro account under
+ * every kind of user credential: the session cookie, and an app's or the
+ * CLI's bearer access token (both `app_access` sessions, src/apptokens.ts).
+ * The plan is read from D1 on every request (src/auth.ts authenticate), so a
+ * downgrade counts from the next request.
+ */
+
+type AiEnv = { ANTHROPIC_API_KEY?: string };
+const aiEnv = env as unknown as AiEnv;
+
+const VERDICT = {
+  passed: true,
+  scores: { requirements: 4, estimation: 3, design: 4, tradeoffs: 3, communication: 4 },
+  wentWell: [{ skill: 'requirements', text: 'Asked about the read to write ratio first.' }],
+  wentWrong: [{ skill: 'estimation', text: 'Skipped the storage estimate.' }],
+  nextSteps: ['Practise storage estimates'],
+};
+const REVIEW = { summary: 'A small, sound design.', strengths: ['Two API replicas.'], issues: [], suggestions: ['Add a replica.'] };
+const REVIEW_BODY = {
+  problem: { id: 'url-shortener', version: 1, title: 'URL Shortener' },
+  source: 'import "problem.proschi"\n',
+  model: { nodes: [{ id: 'user', name: 'User', tech: 'Actor', kind: 'client', given: true }], edges: [], useCases: [], decisions: [], diagnostics: [] },
+  tests: { passed: 0, total: 0, solved: false, results: [] },
+  metrics: { costUsd: 0, worstP99Ms: 0, minAvailability: 1, useCases: [], singlePointsOfFailure: [], saturated: [], warnings: [] },
+};
+const SOURCE = 'title "Checkout"\n\napi "API" [Go]\ndb "Orders" [Postgres]\napi -> db\n';
+
+/** The Claude API: streamed replies, hints and picks from Haiku, the verdict and the review as JSON. */
+function claude(): void {
+  const real = globalThis.fetch;
+  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+    const url = String(input instanceof Request ? input.url : input);
+    if (!url.startsWith('https://api.anthropic.com/')) return real(input, init);
+    const text = String(init?.body);
+    const body = JSON.parse(text) as { model: string; stream?: boolean };
+    if (body.model === HAIKU) return messageResponse(text.includes('"picks"') ? JSON.stringify({ picks: [] }) : JSON.stringify({ kind: 'focus', text: 'Ask about writes.', covered: [] }), { model: HAIKU });
+    if (body.stream) return sseResponse(streamEvents('About 100M new links a month.'));
+    return messageResponse(JSON.stringify(text.includes('wentWell') ? VERDICT : REVIEW));
+  });
+}
+
+type Credential = 'cookie' | 'bearer';
+interface Who {
+  id: string;
+  /** Call options for this account under the credential. */
+  as: { token?: string; bearer?: string };
+}
+
+let bearers = 0;
+async function account(plan: 'free' | 'pro', credential: Credential): Promise<Who> {
+  const { id, token } = await signedInUser();
+  if (plan === 'pro') await env.DB.prepare("UPDATE users SET plan = 'pro' WHERE id = ?").bind(id).run();
+  if (credential === 'cookie') return { id, as: { token } };
+  const bearer = `bearer-${++bearers}-${id}`;
+  await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_access', ?)").bind(await sha256(bearer), id, `f-${id}`).run();
+  return { id, as: { bearer } };
+}
+
+const send = (who: Who, method: string, path: string, body?: unknown) => call(path, { method, body, ...who.as });
+
+/** A finished interview of `who`'s, with its verdict, `ago` ms in the past; its id. */
+async function finishedInterview(who: Who, ago = 0): Promise<string> {
+  const id = crypto.randomUUID();
+  const t = Date.now() - ago;
+  await env.DB.prepare(
+    "INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, state, version, started_at, ended_at, tokens, cost_usd, verdict) VALUES (?, ?, 'url-shortener', 45, 'finished', NULL, 1, ?, ?, 0, 0, ?)",
+  )
+    .bind(id, who.id, t, t + 1000, JSON.stringify(VERDICT))
+    .run();
+  return id;
+}
+
+async function startedInterview(who: Who): Promise<string> {
+  const res = await send(who, 'POST', '/api/interviews', { problem: 'url-shortener', minutes: 45 });
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { interview: { id: string } }).interview.id;
+}
+
+async function syncedDocument(who: Who, id = 'doc1'): Promise<void> {
+  expect((await send(who, 'PUT', `/api/me/documents/${id}`, { name: 'checkout.proschi', source: SOURCE, imports: null, baseVersion: 0 })).status).toBe(200);
+}
+
+interface Case {
+  /** Free: what the route answers an account on the free plan. */
+  free: (who: Who) => Promise<void>;
+  /** Pro: it works. */
+  pro: (who: Who) => Promise<void>;
+}
+
+const planRequired = async (res: Response, feature: string) => {
+  expect(res.status).toBe(402);
+  expect(await res.json()).toMatchObject({ error: 'plan_required', feature });
+};
+
+/** Every entry of PAID_ROUTES, by `${method} ${path}`. A route without a case here fails the first test. */
+const CASES: Record<string, Case> = {
+  // ai_interview is on every plan; the credits decide how many (402 no_credits).
+  'POST api/interviews': {
+    free: async (who) => {
+      await startedInterview(who);
+      // The one trial interview is spent: ending the open one with `replace`, or any other field, starts no other.
+      const again = await send(who, 'POST', '/api/interviews', { problem: 'url-shortener', minutes: 45, replace: true, credits: 99, bucket: 'pack', refId: 'x', plan: 'pro' });
+      expect(again.status).toBe(402);
+      expect(await again.json()).toMatchObject({ error: 'no_credits', credits: { total: 0 } });
+      expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM credits WHERE user_id = ? AND kind = 'spend'").bind(who.id).first<{ n: number }>())!.n).toBe(1);
+    },
+    pro: async (who) => void (await startedInterview(who)),
+  },
+  'GET api/interviews': {
+    free: async (who) => {
+      await finishedInterview(who, 2000);
+      const latest = await finishedInterview(who, 1000);
+      const { interviews } = (await (await send(who, 'GET', '/api/interviews')).json()) as { interviews: { id: string; verdict?: unknown }[] };
+      expect(interviews.filter((i) => i.verdict).map((i) => i.id)).toEqual([latest]);
+    },
+    pro: async (who) => {
+      await finishedInterview(who, 2000);
+      await finishedInterview(who, 1000);
+      const { interviews } = (await (await send(who, 'GET', '/api/interviews')).json()) as { interviews: { verdict?: unknown }[] };
+      expect(interviews.filter((i) => i.verdict)).toHaveLength(2);
+    },
+  },
+  'GET api/interviews/history': {
+    free: async (who) => {
+      await finishedInterview(who, 2000);
+      await finishedInterview(who, 1000);
+      expect(await (await send(who, 'GET', '/api/interviews/history')).json()).toMatchObject({ full: false, total: 2, sessions: [expect.anything()] });
+    },
+    pro: async (who) => {
+      await finishedInterview(who, 2000);
+      await finishedInterview(who, 1000);
+      const body = (await (await send(who, 'GET', '/api/interviews/history')).json()) as { full: boolean; sessions: unknown[] };
+      expect(body.full).toBe(true);
+      expect(body.sessions).toHaveLength(2);
+    },
+  },
+  // An older verdict can't be read by its id off Pro (it is kept, as the history says).
+  'GET api/interviews/*': {
+    free: async (who) => {
+      const older = await finishedInterview(who, 2000);
+      const latest = await finishedInterview(who, 1000);
+      const get = async (id: string) => ((await (await send(who, 'GET', `/api/interviews/${id}`)).json()) as { interview: { verdict?: unknown } }).interview.verdict;
+      expect(await get(older)).toBeUndefined();
+      expect(await get(latest)).toEqual(VERDICT);
+    },
+    pro: async (who) => {
+      const older = await finishedInterview(who, 2000);
+      await finishedInterview(who, 1000);
+      expect(((await (await send(who, 'GET', `/api/interviews/${older}`)).json()) as { interview: { verdict?: unknown } }).interview.verdict).toEqual(VERDICT);
+    },
+  },
+  'POST api/interviews/*/turn': {
+    free: async (who) => expect((await send(who, 'POST', `/api/interviews/${await startedInterview(who)}/turn`, { message: 'How many links?' })).status).toBe(200),
+    pro: async (who) => expect((await send(who, 'POST', `/api/interviews/${await startedInterview(who)}/turn`, { message: 'How many links?' })).status).toBe(200),
+  },
+  'POST api/interviews/*/finish': {
+    free: async (who) => {
+      // Its own verdict, the latest; asked again for an older one, none.
+      const older = await finishedInterview(who, 60_000);
+      const id = await startedInterview(who);
+      const res = await send(who, 'POST', `/api/interviews/${id}/finish`);
+      expect(res.status).toBe(200);
+      expect(((await res.json()) as { interview: { verdict?: unknown } }).interview.verdict).toEqual(VERDICT);
+      expect(((await (await send(who, 'POST', `/api/interviews/${older}/finish`)).json()) as { interview: { verdict?: unknown } }).interview.verdict).toBeUndefined();
+    },
+    pro: async (who) => {
+      const older = await finishedInterview(who, 60_000);
+      const id = await startedInterview(who);
+      expect((await send(who, 'POST', `/api/interviews/${id}/finish`)).status).toBe(200);
+      expect(((await (await send(who, 'POST', `/api/interviews/${older}/finish`)).json()) as { interview: { verdict?: unknown } }).interview.verdict).toEqual(VERDICT);
+    },
+  },
+  'POST api/review': {
+    free: async (who) => planRequired(await send(who, 'POST', '/api/review', REVIEW_BODY), 'ai_review'),
+    pro: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
+  },
+  'GET api/review/usage': {
+    free: async (who) => planRequired(await send(who, 'GET', '/api/review/usage'), 'ai_review'),
+    pro: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
+  },
+  'GET api/roadmap/next': {
+    free: async (who) => planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap'),
+    pro: async (who) => expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200),
+  },
+  'POST api/me/documents/*/share': {
+    free: async (who) => {
+      await syncedDocument(who);
+      await planRequired(await send(who, 'POST', '/api/me/documents/doc1/share'), 'share_links');
+    },
+    pro: async (who) => {
+      await syncedDocument(who);
+      expect((await send(who, 'POST', '/api/me/documents/doc1/share')).status).toBe(201);
+    },
+  },
+  // Open on purpose: an account that left Pro still sees and revokes its links; the links themselves stop answering.
+  'GET api/me/documents/*/share': {
+    free: async (who) => expect(await (await send(who, 'GET', '/api/me/documents/doc1/share')).json()).toEqual({ share: null }),
+    pro: async (who) => expect((await send(who, 'GET', '/api/me/documents/doc1/share')).status).toBe(200),
+  },
+  'DELETE api/me/documents/*/share': {
+    free: async (who) => expect((await send(who, 'DELETE', '/api/me/documents/doc1/share')).status).toBe(404),
+    pro: async (who) => {
+      await syncedDocument(who);
+      expect((await send(who, 'POST', '/api/me/documents/doc1/share')).status).toBe(201);
+      expect((await send(who, 'DELETE', '/api/me/documents/doc1/share')).status).toBe(204);
+    },
+  },
+};
+
+const key = ([method, path]: readonly [string, string, unknown]) => `${method} ${path}`;
+
+describe('paid routes', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    aiEnv.ANTHROPIC_API_KEY = 'sk-test';
+    claude();
+  });
+  afterEach(() => {
+    delete aiEnv.ANTHROPIC_API_KEY;
+    vi.restoreAllMocks();
+  });
+
+  it('every route under a paid path names its feature, or why it is open, and has a case here', () => {
+    for (const entry of PAID_ROUTES) {
+      const [, path, route] = entry;
+      expect(isPaidPath(path.split('/')), path).toBe(true);
+      const feature = 'feature' in route ? route.feature : undefined;
+      const open = 'open' in route ? route.open : undefined;
+      expect(feature !== undefined ? feature in FEATURES : typeof open === 'string' && open.length > 0, `${key(entry)} is neither requireFeature nor openRoute`).toBe(true);
+      expect(CASES[key(entry)], `${key(entry)} has no case in this test`).toBeDefined();
+    }
+    expect(Object.keys(CASES).sort()).toEqual(PAID_ROUTES.map(key).sort());
+  });
+
+  it('a paid path not in the table answers 404, whatever the credential', async () => {
+    const who = await account('pro', 'cookie');
+    for (const [method, path] of [
+      ['GET', '/api/review'],
+      ['POST', '/api/review/usage'],
+      ['GET', '/api/roadmap'],
+      ['POST', '/api/roadmap/next'],
+      ['PUT', '/api/me/documents/doc1/share'],
+      ['DELETE', '/api/interviews/x'],
+    ]) {
+      expect((await send(who, method, path)).status, `${method} ${path}`).toBe(404);
+    }
+  });
+
+  it('signed out, every route answers 401', async () => {
+    for (const [method, path] of PAID_ROUTES) {
+      const url = `/${path.replace(/\*/g, 'doc1')}`;
+      const res = await call(url, { method, body: method === 'POST' ? (path === 'api/review' ? REVIEW_BODY : { problem: 'url-shortener', minutes: 45, message: 'hi' }) : undefined });
+      expect(res.status, `${method} ${path}`).toBe(401);
+    }
+  });
+
+  for (const credential of ['cookie', 'bearer'] as const) {
+    for (const [method, path] of PAID_ROUTES) {
+      it(`${method} ${path}, ${credential}: free, then Pro`, async () => {
+        await CASES[`${method} ${path}`].free(await account('free', credential));
+        await CASES[`${method} ${path}`].pro(await account('pro', credential));
+      });
+    }
+  }
+
+  it('a refresh token, an expired access token or an admin session is no credential for them', async () => {
+    const { id } = await account('pro', 'cookie');
+    const refresh = 'refresh-token';
+    const expired = 'expired-access-token';
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_refresh', 'f1')").bind(await sha256(refresh), id),
+      env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 1, 0, 'app_access', 'f2')").bind(await sha256(expired), id),
+    ]);
+    for (const bearer of [refresh, expired]) expect((await call('/api/roadmap/next', { bearer })).status).toBe(401);
+    expect((await call('/api/roadmap/next', { headers: { Cookie: '__Host-proschi_admin=anything' } })).status).toBe(401);
+  });
+
+  it('the public link stops answering while its owner is not on Pro', async () => {
+    const owner = await account('pro', 'cookie');
+    await syncedDocument(owner);
+    const { share } = (await (await send(owner, 'POST', '/api/me/documents/doc1/share')).json()) as { share: { token: string } };
+    expect((await call(`/api/share/${share.token}`)).status).toBe(200);
+    await env.DB.prepare("UPDATE users SET plan = 'free' WHERE id = ?").bind(owner.id).run();
+    expect((await call(`/api/share/${share.token}`)).status).toBe(404);
+  });
+});
+
+// --- A downgrade through Polar, between two requests --------------------------
+
+const SECRET = 'polar_whs_test-secret';
+let events = 0;
+
+async function deliver(event: unknown): Promise<Response> {
+  const id = `evt-paid-${++events}`;
+  const ts = String(Math.floor(Date.now() / 1000));
+  const body = JSON.stringify(event);
+  const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
+  const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${ts}.${body}`)));
+  return call('/api/billing/webhook', { method: 'POST', headers: { 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': `v1,${btoa(String.fromCharCode(...mac))}` }, body: event });
+}
+
+const subscription = (userId: string, status: string, modified: string) => ({
+  type: `subscription.${status === 'canceled' ? 'canceled' : 'updated'}`,
+  data: { id: 'sub-1', status, product_id: 'prod-pro-monthly', customer_id: `cus-${userId}`, customer: { id: `cus-${userId}`, external_id: userId }, current_period_end: '2026-12-06T00:00:00Z', cancel_at_period_end: false, modified_at: modified },
+});
+
+describe('a downgrade', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    aiEnv.ANTHROPIC_API_KEY = 'sk-test';
+    claude();
+  });
+  afterEach(() => {
+    delete aiEnv.ANTHROPIC_API_KEY;
+    vi.restoreAllMocks();
+  });
+
+  for (const credential of ['cookie', 'bearer'] as const) {
+    it(`counts from the next request (${credential})`, async () => {
+      const who = await account('free', credential);
+      expect((await deliver(subscription(who.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
+      expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
+      expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
+      expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
+      await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
+      await planRequired(await send(who, 'GET', '/api/review/usage'), 'ai_review');
+      await planRequired(await send(who, 'POST', '/api/review', REVIEW_BODY), 'ai_review');
+    });
+  }
+
+  it('nothing a client sends sets the plan: only the signed webhook does', async () => {
+    const who = await account('free', 'cookie');
+    expect((await send(who, 'PATCH', '/api/me', { plan: 'pro', displayName: 'Ada' })).status).toBe(200);
+    expect((await call('/api/billing/webhook', { method: 'POST', body: subscription(who.id, 'active', '2026-11-06T10:00:00Z') })).status).toBe(403);
+    expect((await env.DB.prepare('SELECT plan FROM users WHERE id = ?').bind(who.id).first<{ plan: string }>())!.plan).toBe('free');
+    await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
+  });
+});

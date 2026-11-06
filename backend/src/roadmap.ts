@@ -3,10 +3,11 @@ import { evaluate } from './achievements';
 import { aiEnabled, AiError, createClient, type Usage } from './ai/client';
 import { pickNext, type Candidates, type Pick } from './ai/roadmap';
 import type { InterviewVerdict } from './ai/interviewer';
-import { requireUser, type User } from './auth';
+import type { User } from './auth';
 import { cardTopics } from './cards';
 import type { Ctx } from './context';
 import { now, type Env } from './env';
+import { can, requireFeature } from './features';
 import { json, rateLimit } from './http';
 import { errorText, log } from './log';
 import { findProblem } from './verify';
@@ -49,8 +50,6 @@ interface RecRow {
   source_id: string | null;
   recs: string;
 }
-
-const isPro = (user: { plan: string }) => user.plan === 'pro';
 
 /** The candidates for this user: every roadmap problem (solved or not) and every card topic with its mastery; the weakest topics. */
 async function candidatesFor(env: Env, user: User): Promise<{ candidates: Candidates; weakest: string[] }> {
@@ -107,13 +106,13 @@ export function verdictReport(problemId: string, v: InterviewVerdict): string {
 
 /** After an AI interview's verdict (src/interviews.ts finishInterview): Pro only. Returns Haiku's tokens, or undefined. */
 export async function recommendAfterInterview(env: Env, user: User, interviewId: string, problemId: string, verdict: InterviewVerdict, requestId?: string): Promise<Usage | undefined> {
-  if (!isPro(user) || !aiEnabled(env)) return undefined;
+  if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return undefined;
   return recommend(env, user, 'interview', interviewId, verdictReport(problemId, verdict), requestId);
 }
 
 /** After an AI design review (src/review.ts): Pro only, and only when the newest picks are a day old or there are none. */
 export async function refreshAfterReview(env: Env, user: User, problemId: string | undefined, review: { summary: string; issues: { title: string; detail: string }[] }, requestId?: string): Promise<void> {
-  if (!isPro(user) || !aiEnabled(env)) return;
+  if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return;
   const last = await env.DB.prepare('SELECT MAX(created_at) AS at FROM roadmap_recs WHERE user_id = ?').bind(user.id).first<{ at: number | null }>();
   if (last?.at && Date.now() - last.at < REVIEW_REFRESH_MS) return;
   const title = problemId ? (findProblem(problemId)?.title ?? problemId) : undefined;
@@ -134,11 +133,8 @@ function nextOf(row: RecRow): RoadmapNext | null {
 }
 
 /** GET /api/roadmap/next[?interview=<id>]. */
-export async function getRoadmapNext(request: Request, ctx: Ctx): Promise<Response> {
+export const getRoadmapNext = requireFeature('ai_roadmap', async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const { env } = ctx;
-  if (!aiEnabled(env)) return json({ error: 'not_implemented' }, 501, NO_STORE);
-  const user = await requireUser(request, ctx);
-  if (!isPro(user)) return json({ error: 'plan_required', message: 'AI next steps are part of Pro' }, 402, NO_STORE);
   await rateLimit(env.INTERVIEW_READ_LIMITER, user.id, 'Too many requests; wait a minute');
   const interview = new URL(request.url).searchParams.get('interview');
   if (!interview) {
@@ -159,7 +155,7 @@ export async function getRoadmapNext(request: Request, ctx: Ctx): Promise<Respon
         .first<RecRow>()
     : await env.DB.prepare('SELECT created_at, source, source_id, recs FROM roadmap_recs WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').bind(user.id).first<RecRow>();
   return json({ next: row ? nextOf(row) : null }, 200, NO_STORE);
-}
+}, (_request: Request, ctx: Ctx) => (aiEnabled(ctx.env) ? undefined : json({ error: 'not_implemented' }, 501, NO_STORE)));
 
 /** Download my data: every set of picks, oldest first. */
 export async function exportRoadmapRecs(DB: D1Database, userId: string): Promise<{ createdAt: number; source: RecSource; sourceId: string | null; picks: Pick[] }[]> {

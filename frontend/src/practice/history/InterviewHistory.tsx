@@ -3,7 +3,8 @@ import { ArrowLeft, ArrowRight, CircleCheck, CircleX, History as HistoryIcon, Sp
 import problems from 'virtual:practice-listings';
 import { eyebrow, outlineButton } from '../../components/Playground/ui';
 import PaneLoading from '../../components/PaneLoading';
-import { billingEnabled, pricingHref } from '../../services/billing';
+import { Feature } from '../../components/Feature';
+import UpgradeHint from '../../components/UpgradeHint';
 import { getInterview, type AiInterview } from '../modes/ai/api';
 import { VerdictView } from '../modes/ai/AiInterviewPanel';
 import { formatDay, getHistory, verdictHref, type History, type HistorySession } from './api';
@@ -99,14 +100,20 @@ export default function InterviewHistory() {
               </div>
             )}
           </div>
-          {!full && billingEnabled && (
-            <p className="mt-3 text-sm text-ink/80" data-testid="history-upgrade">
-              <Sparkles size={14} className="mr-1 inline-block -mt-0.5 text-ink" aria-hidden="true" />
-              {earlier > 0 ? `${earlier} earlier ${earlier === 1 ? 'interview is' : 'interviews are'} kept. ` : ''}Pro shows every verdict and how each skill trends.{' '}
-              <a href={pricingHref('../')} className="font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink">
-                Upgrade to Pro
-              </a>
-            </p>
+          {!full && (
+            <Feature
+              name="interview_history"
+              hint={<UpgradeHint icon={false} className="font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink" />}
+              free={(hint) =>
+                hint && (
+                  <p className="mt-3 text-sm text-ink/80" data-testid="history-upgrade">
+                    <Sparkles size={14} className="mr-1 inline-block -mt-0.5 text-ink" aria-hidden="true" />
+                    {earlier > 0 ? `${earlier} earlier ${earlier === 1 ? 'interview is' : 'interviews are'} kept. ` : ''}Pro shows every verdict and how each skill trends.{' '}
+                    {hint}
+                  </p>
+                )
+              }
+            />
           )}
         </>
       )}
@@ -114,8 +121,8 @@ export default function InterviewHistory() {
   );
 }
 
-/** `#/progress/interview/<id>`: one past session's verdict, with the picks made after it (Pro). */
-export function InterviewVerdictPage({ id, pro }: { id: string; pro: boolean }) {
+/** `#/progress/interview/<id>`: one past session's verdict, with the picks made after it (the ai_roadmap feature). */
+export function InterviewVerdictPage({ id }: { id: string }) {
   const [interview, setInterview] = useState<AiInterview | null>();
   useEffect(() => {
     let live = true;
@@ -146,7 +153,7 @@ export function InterviewVerdictPage({ id, pro }: { id: string; pro: boolean }) 
             AI interview · {formatDay(interview.startedAt)} · {interview.minutes} min
           </p>
           <div className={`mt-4 ${card}`}>
-            <VerdictView picksFor={pro ? interview.id : undefined} endedAt={interview.endedAt} verdict={interview.verdict} />
+            <VerdictView picksFor={interview.id} endedAt={interview.endedAt} verdict={interview.verdict} />
           </div>
           <a href={`#/${interview.problem}`} className={`mt-4 ${outlineButton}`}>
             Open the problem
