@@ -143,6 +143,12 @@ describe('AI interviewer', () => {
     expect(lastUser(calls.find((c) => c.body.model === HAIKU)!)).toContain('Hint kind: wrapup.');
   });
 
+  it('turns a wrap-up hint the clock did not ask for into a focus hint', async () => {
+    const { client } = claude({ hint: JSON.stringify({ kind: 'wrapup', text: 'Summarise what you learned.', covered: [] }) });
+    const r = await turn(deps(client, 1), start(context, 45, T0).state, { message: 'How many redirects a second?' });
+    expect(r.hint).toEqual({ kind: 'focus', text: 'Summarise what you learned.' });
+  });
+
   it('keeps the turn when the hint is malformed', async () => {
     const { client } = claude({ hint: 'Sure! Here is a hint: {kind: focus' });
     const r = await turn(deps(client, 1), start(context, 45, T0).state, { message: 'Hello' });

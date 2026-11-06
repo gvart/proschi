@@ -296,7 +296,9 @@ async function coach(client: ClaudeClient, context: ProblemContext, state: Inter
   });
   const parsed = parseHint(result.text, new Set(context.topics.map((t) => t.id)));
   if (!parsed) throw new AiError('malformed', 'The hint is not valid JSON', { usage: result.usage });
-  return { hint: { kind: forced ?? parsed.kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
+  // Only the clock asks for a wrap-up hint; one the model picks on its own is a focus hint.
+  const kind = forced ?? (parsed.kind === 'wrapup' ? 'focus' : parsed.kind);
+  return { hint: { kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
 }
 
 /** Haiku's JSON, checked; topic ids it made up are dropped. */
