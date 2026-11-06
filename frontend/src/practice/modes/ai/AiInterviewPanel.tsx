@@ -8,6 +8,7 @@ import { finishInterview, getInterview, sendTurn, shownPhase, SKILL_LABEL, SKILL
 import { useDictation } from './useDictation';
 import listings from 'virtual:practice-listings';
 import { PICK_PENDING_MS } from '../../history/api';
+import { useFeature } from '../../../components/featureState';
 import { NoNewPicks, Picking, PickList } from '../../history/NextForYou';
 import { useRoadmapNext } from '../../history/useRoadmapNext';
 
@@ -37,11 +38,9 @@ interface Props {
   onExit: () => void;
   /** Back to the start screen, to start another interview. */
   onRestart: () => void;
-  /** A Pro account: the verdict links the AI roadmap's picks made after it. */
-  pro?: boolean;
 }
 
-export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart, pro = false }: Props) {
+export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart }: Props) {
   const [interview, setInterview] = useState<AiInterview>();
   const [loadError, setLoadError] = useState<string>();
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -95,7 +94,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
     );
   }
   if (!interview) return <p className="px-4 py-4 text-sm text-muted">Loading the interview…</p>;
-  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={pro ? interview.id : undefined} endedAt={interview.endedAt} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
+  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={interview.id} endedAt={interview.endedAt} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
 
   const left = interview.minutes * 60_000 - (now - interview.startedAt);
   const timeUp = interview.deadline !== undefined && now >= interview.deadline;
@@ -356,13 +355,14 @@ const problemTitle = (id: string) => listings.find((p) => p.id === id)?.title;
 /**
  * The verdict: pass or fail, a score per skill, what went well and wrong, and
  * what to practise next, with the AI roadmap's picks made after it linked
- * (`picksFor`, the session's id, for a Pro account only). In interview mode it
+ * (`picksFor`, the session's id; with the ai_roadmap feature only). In interview mode it
  * ends with Start again and Leave; on the progress page's history without them.
  */
 export function VerdictView({ picksFor, endedAt, verdict, onRestart, onExit }: { picksFor?: string; endedAt?: number; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
   // A verdict that just ended may still be getting its picks: they are asked for again a few times.
   const [wait] = useState(() => endedAt !== undefined && Date.now() - endedAt < PICK_PENDING_MS);
-  const picks = useRoadmapNext(!!picksFor, { interview: picksFor, wait });
+  const roadmap = useFeature('ai_roadmap');
+  const picks = useRoadmapNext(roadmap.ok && !!picksFor, { interview: picksFor, wait });
   return (
     <section aria-label="Interview verdict" className="px-4 py-4 space-y-4">
       <h2 className="font-display text-lg font-bold text-ink">Interview verdict</h2>

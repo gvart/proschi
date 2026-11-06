@@ -6,7 +6,8 @@ import { formatFactor, formatNumber, hashText, parseNumber, seededRandom } from 
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { redactedStatement, type EstimateQuestion, type Interview } from './interviewFile';
 import { apiEnabled } from '../../services/api';
-import { billingEnabled, pricingHref } from '../../services/billing';
+import { useFeature } from '../../components/featureState';
+import UpgradeHint from '../../components/UpgradeHint';
 import AiInterviewPanel from './ai/AiInterviewPanel';
 import { giveConsent, hasConsent, listInterviews, loadActive, saveActive, startError, startInterview, type Credits } from './ai/api';
 import {
@@ -60,16 +61,14 @@ interface InterviewPanelProps {
   onRestart: () => void;
   /** The full statement with hints and the reference solution, shown from the design phase on. */
   children: ReactNode;
-  /** Signed in (a build with accounts): the AI interviewer is on offer when the server has it. */
-  signedIn?: boolean;
   /** The editor's source now, for the AI interviewer's "Send my design". */
   getSource?: () => string;
-  /** A Pro account: the AI verdict links the AI roadmap's picks. */
-  pro?: boolean;
 }
 
 /** Interview mode in the left column: the start screen, then one phase at a time, or the AI interviewer's chat. */
-export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, signedIn = false, getSource, pro = false }: InterviewPanelProps) {
+export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, getSource }: InterviewPanelProps) {
+  // The AI interviewer is on offer with the ai_interview feature (signed in) when the server has it.
+  const aiInterview = useFeature('ai_interview');
   const [aiId, setAiId] = useState(() => (apiEnabled ? loadActive(problemId) : undefined));
   const redacted = useMemo(() => redactedStatement(statement), [statement]);
   const setAi = (id: string | undefined) => {
@@ -83,7 +82,6 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
         id={aiId}
         statement={redacted}
         getSource={getSource}
-        pro={pro}
         onRestart={() => setAi(undefined)}
         onExit={() => {
           setAi(undefined);
@@ -92,7 +90,7 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
       />
     );
   }
-  if (!session) return <StartScreen problemId={problemId} onStart={onStart} onStartAi={setAi} onCancel={onExit} ai={signedIn && apiEnabled && !!getSource} />;
+  if (!session) return <StartScreen problemId={problemId} onStart={onStart} onStartAi={setAi} onCancel={onExit} ai={aiInterview.ok && apiEnabled && !!getSource} />;
   const advance = () => dispatch({ type: 'advance', now: Date.now() });
   return (
     <section aria-label="Interview mode" className="flex flex-col">
@@ -150,7 +148,11 @@ function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemI
       if (why.code === 'active_session') setOpen({ id: why.id, problem: why.problem });
       else if (why.code === 'no_credits') {
         if (why.credits) setCredits(why.credits);
-        setError(<>No AI interviews left. {billingEnabled && <UpgradeLink />}</>);
+        setError(
+          <>
+            No AI interviews left. <UpgradeLink />
+          </>,
+        );
       } else setError(`The interview could not start (${why.message}). Try again in a moment.`);
       setConsenting(false);
     } finally {
@@ -267,11 +269,7 @@ function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemI
               </span>
             </ModeChoice>
           </div>
-          {billingEnabled && chosen === 'ai' && (
-            <p className="mt-2 text-xs text-ink">
-              <UpgradeLink />
-            </p>
-          )}
+          {chosen === 'ai' && <UpgradeLink className="mt-2 text-xs" />}
         </fieldset>
       )}
       <fieldset>
@@ -342,12 +340,13 @@ function ModeChoice({ checked, onSelect, title, icon, children }: { checked: boo
   );
 }
 
-function UpgradeLink() {
+/** More interviews: Pro's monthly ones or a pack, for any plan (nothing without paid plans). */
+function UpgradeLink({ className = '' }: { className?: string }) {
   return (
-    <a href={pricingHref('../')} data-testid="ai-upgrade" className="inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink">
+    <UpgradeHint testId="ai-upgrade" icon={false} className={`inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink ${className}`}>
       <Sparkles size={12} aria-hidden="true" />
       Get more with Pro or an interview pack
-    </a>
+    </UpgradeHint>
   );
 }
 

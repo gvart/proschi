@@ -1,4 +1,5 @@
 import { api, apiEnabled } from './api';
+import type { FeatureAccess, FeatureId } from './featureContract';
 
 /**
  * Pro and interview packs (backend/src/billing.ts, docs/design/paid-plans.md
@@ -28,6 +29,8 @@ export interface PlanInfo {
   customer: boolean;
   limits: { documents: number | null; versionsPerDocument: number | null; documentBytes: number; interviewsPerMonth: number };
   credits: { total: number; monthly: number; trial: number; pack: number; period: string };
+  /** Every paid feature's answer for the account (backend/src/features.ts); read through components/Feature.tsx. */
+  features: Record<FeatureId, FeatureAccess>;
 }
 
 export const getPlan = (): Promise<PlanInfo> => api<PlanInfo>('/api/me/plan');

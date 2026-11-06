@@ -24,6 +24,13 @@ export const GAME_ME = {
   daily: { day: new Date().toISOString().slice(0, 10), scenario: 'shortly' },
 };
 
+/** GET /api/me/plan's `features` for a plan, as backend/src/features.ts answers them with billing on. */
+export function featuresFor(plan: string | undefined): Record<string, { ok: boolean; reason?: string }> {
+  const pro = plan === 'pro';
+  const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
+  return { ai_interview: { ok: true }, ai_review: paid, interview_history: paid, ai_roadmap: paid, share_links: paid };
+}
+
 export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void> {
   const answers: [RegExp, unknown][] = [
     [/^\/api\/me$/, me],
@@ -52,6 +59,7 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
         customer: false,
         limits: { documents: 5, versionsPerDocument: 20, documentBytes: 65536, interviewsPerMonth: 0 },
         credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' },
+        features: featuresFor(me.user.plan),
       },
     ],
     // The AI interviewer on interview mode's start screen: none yet, the trial credit left (aiInterview.accounts.e2e.ts mocks a session).

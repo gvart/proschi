@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { mockSignedIn } from './accounts';
+import { featuresFor, mockSignedIn } from './accounts';
 import { codeEditor, expect, test } from './fixtures';
 
 /**
@@ -18,6 +18,7 @@ const FREE_PLAN: Plan = {
   customer: false,
   limits: { documents: 5, versionsPerDocument: 20, documentBytes: 65536, interviewsPerMonth: 0 },
   credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' },
+  features: featuresFor('free'),
 };
 
 const PRO_PLAN: Plan = {
@@ -27,6 +28,7 @@ const PRO_PLAN: Plan = {
   customer: true,
   limits: { documents: null, versionsPerDocument: null, documentBytes: 524288, interviewsPerMonth: 4 },
   credits: { total: 5, monthly: 4, trial: 1, pack: 0, period: '2026-11' },
+  features: featuresFor('pro'),
 };
 
 /** The billing API on top of mockSignedIn, with `plan()` as GET /api/me/plan; returns what was POSTed. */

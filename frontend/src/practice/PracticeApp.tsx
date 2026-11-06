@@ -8,8 +8,8 @@ import ProblemList from './ProblemList';
 import Roadmap, { RoadmapBanner } from './RoadmapView';
 import NextForYou from './history/NextForYou';
 import { verdictIdOf } from './history/api';
-import { billingEnabled } from '../services/billing';
-import { aiRoadmapAccess, ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
+import { FeaturesContext, useFeatures } from '../components/featureState';
+import { ROADMAP, roadmapAccess, roadmapFor, roadmapState, roadmapTarget, routeLock } from './roadmap';
 import { findGuide, GUIDES } from './guide/guides';
 import { lessonsRead, loadProgress, markLessonsRead, onLessonsRead, saveProgress, type Progress } from './progress';
 import { useLessonsRead } from './useLessonsRead';
@@ -147,6 +147,8 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     [updateProgress],
   );
   const account = useAccount(onSignedIn);
+  // The paid features (components/Feature.tsx), for every page below.
+  const features = useFeatures(account.state);
   const signedIn = account.state.status === 'signed-in';
   // Signed in, each lesson read here goes to the account too; without accounts, the badges are checked here at once.
   const accountsOff = account.state.status === 'off';
@@ -218,23 +220,25 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
 
   if (problem) {
     return (
-      <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
-        <ProblemRoute
-          key={problem.id}
-          id={problem.id}
-          progress={progress}
-          onProgress={updateProgress}
-          engine={engine}
-          account={account}
-          {...(fromRoadmap
-            ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
-            : { openLesson: lessonRoute ? ('always' as const) : ('unread' as const) })}
-        />
-      </Suspense>
+      <FeaturesContext.Provider value={features}>
+        <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
+          <ProblemRoute
+            key={problem.id}
+            id={problem.id}
+            progress={progress}
+            onProgress={updateProgress}
+            engine={engine}
+            account={account}
+            {...(fromRoadmap
+              ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
+              : { openLesson: lessonRoute ? ('always' as const) : ('unread' as const) })}
+          />
+        </Suspense>
+      </FeaturesContext.Provider>
     );
   }
 
-  return (
+  const page = (
     <div className="min-h-[100dvh] flex flex-col bg-paper">
       <Header
         base="../"
@@ -304,7 +308,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
                 guide={firstGuide}
                 locked={target && lock && lock.kind !== 'open' ? { id: target.id, lock } : undefined}
                 read={lessonsReadIds}
-                nextForYou={<NextForYou access={aiRoadmapAccess(account.state, billingEnabled)} problemTitle={(id) => problems.find((p) => p.id === id)?.title} />}
+                nextForYou={<NextForYou problemTitle={(id) => problems.find((p) => p.id === id)?.title} />}
               />
             )}
           </PracticeHub>
@@ -329,4 +333,5 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       />
     </div>
   );
+  return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
 }

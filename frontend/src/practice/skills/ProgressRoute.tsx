@@ -75,7 +75,7 @@ export default function ProgressRoute({
   // Opening the page checks for anything new.
   useEffect(() => refresh(), [refresh]);
 
-  if (verdictId) return <InterviewVerdictPage id={verdictId} pro={account.state.status === 'signed-in' && account.state.user.plan === 'pro'} />;
+  if (verdictId) return <InterviewVerdictPage id={verdictId} />;
   if (state.status === 'loading') return <PaneLoading label="Loading your progress…" />;
 
   const answer: AchievementsAnswer | undefined = state.status === 'ready' ? state.answer : undefined;

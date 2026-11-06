@@ -101,8 +101,7 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
-import { billingEnabled } from '../../services/billing';
-import { isPro } from '../../services/documentShares';
+import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
@@ -536,7 +535,8 @@ export default function Playground() {
   };
 
   const signedIn = account.state.status === 'signed-in';
-  const pro = account.state.status === 'signed-in' && isPro(account.state.user.plan);
+  const features = useFeatures(account.state);
+  const shareLinks = features('share_links');
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -799,7 +799,7 @@ export default function Playground() {
   const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
 
-  return (
+  const page = (
     <div
       className="h-[100dvh] flex flex-col bg-paper text-ink"
       style={keyboard.style}
@@ -907,7 +907,7 @@ export default function Playground() {
                   Versions…
                 </MenuItem>
                 {/* Pro only; others see it (with an upgrade hint) only when paid plans are on. */}
-                {(pro || (signedIn && billingEnabled)) && (
+                {(shareLinks.ok || showsUpgrade(shareLinks)) && (
                   <MenuItem
                     icon={<Link2 size={14} />}
                     onSelect={() => {
@@ -1203,7 +1203,6 @@ export default function Playground() {
                         source={source}
                         input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
                         onSelect={selectDiagnostic}
-                        plan={account.state.status === 'signed-in' ? (account.state.user.plan ?? 'free') : undefined}
                       />
                     }
                   />
@@ -1333,7 +1332,7 @@ export default function Playground() {
 
       {showShareLink && (
         <Suspense fallback={<PaneLoading overlay />}>
-          <ShareLinkDialog docId={current.id} title={titleOf(source)} pro={pro} hint={shareHint} pushedVersion={cloud.pushedVersion} onClose={() => setShowShareLink(false)} />
+          <ShareLinkDialog docId={current.id} title={titleOf(source)} hint={shareHint} pushedVersion={cloud.pushedVersion} onClose={() => setShowShareLink(false)} />
         </Suspense>
       )}
 
@@ -1426,6 +1425,8 @@ export default function Playground() {
       )}
     </div>
   );
+  // The paid features (components/Feature.tsx) for everything below: the review panel, the share link dialog.
+  return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
 }
 
 function UseCaseOption({ useCase }: { useCase: DiagramUseCase }) {
