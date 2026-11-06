@@ -75,9 +75,14 @@ export default function ShareView() {
             Read-only
           </span>
           {loaded.status === 'ready' && account.state.status === 'signed-in' && (
-            <a className={`${primaryButton} ml-auto flex-none`} href={`${SITE_ROOT}app/${encodeShareHash(loaded.doc.source, undefined, loaded.doc.imports)}`}>
+            <a
+              aria-label="Make a copy"
+              title="Open a copy in your editor"
+              className={`${primaryButton} ml-auto mr-2 flex-none`}
+              href={`${SITE_ROOT}app/${encodeShareHash(loaded.doc.source, undefined, loaded.doc.imports)}`}
+            >
               <Copy size={16} />
-              <span>Make a copy</span>
+              <span className="max-sm:hidden">Make a copy</span>
             </a>
           )}
         </div>
@@ -134,7 +139,7 @@ function Shared({ doc }: { doc: SharedDocument }) {
   return (
     <>
       <p className={`${subBar} px-3 py-1.5 text-xs text-muted`}>
-        Shared with you by link, read-only. It shows the diagram as its owner last saved it, on {dateOf(doc.updatedAt)}.
+        Shared by link, read-only: the diagram as its owner last saved it, on {dateOf(doc.updatedAt)}.
       </p>
       <div className="md:hidden bg-surface">
         <Tabs

@@ -67,7 +67,7 @@ test('signed out, a share link opens the diagram read-only, with its simulation'
   await expect(page.getByRole('heading', { name: 'Live Orders' })).toBeVisible();
   await expect(page).toHaveTitle('Live Orders · Shared · Proschi');
   await expect(page.locator('meta[name="robots"]')).toHaveAttribute('content', 'noindex, nofollow');
-  await expect(page.getByText('Shared with you by link, read-only.')).toBeVisible();
+  await expect(page.getByText('Shared by link, read-only')).toBeVisible();
 
   // Read-only code, the diagram, and its use case plays.
   await expect(codeEditor(page)).toHaveAttribute('contenteditable', 'false');
