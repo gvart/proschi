@@ -11,6 +11,7 @@ import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
+import { createDocumentShare, getDocumentShare, getSharedDocument, revokeDocumentShare, shareViewPage } from './documentShares';
 import { recordThrottled, routeOf } from './events';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
@@ -63,6 +64,10 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   GET    /api/me/documents/<id>/versions/<tag|latest>   one, with its content
  *   DELETE /api/me/documents/<id>/versions/<tag>   deletes one (its tag stays taken)
  *   GET    /api/me/versions/resolve?name=&tag=   a cloud reference by diagram name and tag (409 ambiguous_name)
+ *   GET    /api/me/documents/<id>/share     its live share link, or null (src/documentShares.ts)
+ *   POST   /api/me/documents/<id>/share     makes one, Pro only (402 plan_required)
+ *   DELETE /api/me/documents/<id>/share     revokes it
+ *   GET    /api/share/<token>               a live share link's diagram (no sign-in, no owner named)
  *   GET    /api/me/limits                   the account's plan, its limits and what it uses
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
@@ -101,6 +106,10 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *
  *   GET    /u/<id>                          the practice page showing the profile, with its title and image in the meta tags
  *   GET    /u/<id>.png                      the profile's Open Graph card (1200×630)
+ *
+ * and the read-only page of a live share link (src/documentShares.ts):
+ *
+ *   GET    /share/<token>                   frontend/share/, noindex
  */
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
@@ -146,6 +155,10 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'me', 'documents', '*', 'versions', '*')) return getVersion(request, ctx, parts[3], parts[5]);
   if (is('DELETE', 'api', 'me', 'documents', '*', 'versions', '*')) return deleteVersion(request, ctx, parts[3], parts[5]);
   if (is('GET', 'api', 'me', 'versions', 'resolve')) return resolveVersion(request, ctx);
+  if (is('GET', 'api', 'me', 'documents', '*', 'share')) return getDocumentShare(request, ctx, parts[3]);
+  if (is('POST', 'api', 'me', 'documents', '*', 'share')) return createDocumentShare(request, ctx, parts[3]);
+  if (is('DELETE', 'api', 'me', 'documents', '*', 'share')) return revokeDocumentShare(request, ctx, parts[3]);
+  if (is('GET', 'api', 'share', '*')) return getSharedDocument(ctx, parts[2]);
   if (is('PUT', 'api', 'me', 'documents', '*')) return putDocument(request, ctx, parts[3]);
   if (is('DELETE', 'api', 'me', 'documents', '*')) return deleteDocument(request, ctx, parts[3]);
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
@@ -229,6 +242,8 @@ async function health(ctx: Ctx): Promise<Response> {
 export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
+    // A live share link: the share page, which loads the diagram with GET /api/share/<token>.
+    if ((request.method === 'GET' || request.method === 'HEAD') && /^\/share\/[A-Za-z0-9_-]{22}$/.test(pathname)) return shareViewPage(request, env.ASSETS);
     const page = pathname.startsWith('/u/');
     if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();

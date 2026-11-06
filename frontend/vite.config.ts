@@ -77,6 +77,8 @@ export default defineConfig(async () => ({
         admin: fileURLToPath(new URL('./admin/index.html', import.meta.url)),
         // The read-only diagram other sites frame (src/embed/main.tsx).
         embed: fileURLToPath(new URL('./embed/index.html', import.meta.url)),
+        // A live share link's read-only page, served at /share/<token> (src/share/ShareView.tsx), noindex.
+        share: fileURLToPath(new URL('./share/index.html', import.meta.url)),
         // The review cards' index, and the templates of each topic's and card's page (plugins/cardPages.ts).
         cardsIndex: fileURLToPath(new URL('./practice/cards/index.html', import.meta.url)),
         cardTopicPage: fileURLToPath(new URL('./practice/cards/_topic/index.html', import.meta.url)),

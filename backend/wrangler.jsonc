@@ -15,12 +15,13 @@
   // OAuth callbacks and the same-origin check would see proschi.app.
   "dev": { "host": "localhost:8787", "upstream_protocol": "http" },
   // The built site: `npm run build` in frontend/ first. Paths outside /api, /auth,
-  // /s (short links, src/shares.ts) and /u (public profile pages, src/profilePage.ts)
-  // are served straight from these files, without running the Worker.
+  // /s (short links, src/shares.ts), /u (public profile pages, src/profilePage.ts)
+  // and /share (live share links, src/documentShares.ts) are served straight
+  // from these files, without running the Worker.
   "assets": {
     "directory": "../frontend/dist",
     "binding": "ASSETS",
-    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*"],
+    "run_worker_first": ["/api/*", "/auth/*", "/s/*", "/u/*", "/share/*"],
     "not_found_handling": "404-page"
   },
   // Hourly: the email reminders of users whose local time it is (src/reminders.ts);
