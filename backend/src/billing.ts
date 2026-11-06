@@ -1,7 +1,7 @@
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { timingSafeEqual } from './crypto';
-import { balance, grantStatement } from './credits';
+import { balance, grantStatement, revokeStatement } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
@@ -210,6 +210,8 @@ interface PolarObject {
   cancel_at_period_end?: boolean;
   modified_at?: string | null;
   created_at?: string;
+  /** A refund's or dispute's order. */
+  order_id?: string;
 }
 
 const msOf = (iso: string | null | undefined): number | null => {
@@ -239,6 +241,9 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  *   or past_due, else free. A downgrade keeps every diagram; those past the
  *   free limit turn read-only (src/documents.ts).
  * - `order.paid` for the pack: 5 credits, once per order.
+ * - `order.refunded`, a succeeded `refund.created|updated`, or a lost
+ *   `dispute.*` (a chargeback) of a pack order: its credits are taken back,
+ *   what is left of them (the balance never goes below 0), once per order.
  *
  * Everything else is acknowledged and ignored.
  */
@@ -292,6 +297,17 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
       grantStatement(DB, userId, PACK_CREDITS, 'pack_5', data.id, t),
     );
   }
+
+  // A pack's money back: order.refunded (the order), refund.created|updated (a succeeded refund of it) or a chargeback (a dispute lost).
+  const refundedOrder =
+    type === 'order.refunded'
+      ? data.id
+      : (type === 'refund.created' || type === 'refund.updated') && data.status === 'succeeded'
+        ? data.order_id
+        : type.startsWith('dispute.') && (data.status === 'lost' || data.status === 'charge_back')
+          ? data.order_id
+          : undefined;
+  if (refundedOrder) statements.push(revokeStatement(DB, refundedOrder, t));
 
   try {
     await DB.batch(statements);

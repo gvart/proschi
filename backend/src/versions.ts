@@ -1,5 +1,5 @@
 import type { Ctx } from './context';
-import { checkId, limited } from './documents';
+import { checkId, documentLimit, isReadOnly, limited } from './documents';
 import { HttpError, json, readJson } from './http';
 import { limitsFor } from './plans';
 
@@ -130,7 +130,8 @@ async function findVersion(DB: D1Database, userId: string, documentId: string, t
  * POST /api/me/documents/<id>/versions {tag, note?, documentVersion}:
  * snapshots the stored document. `documentVersion` is the document version
  * the client has: 409 `stale` when the stored one is another, so the client
- * syncs first and never tags what it has not seen.
+ * syncs first and never tags what it has not seen. 409 `document_limit`
+ * with `readOnly: true` for a diagram past the account's limit.
  */
 export async function createVersion(request: Request, ctx: Ctx, rawId: string): Promise<Response> {
   const id = checkId(rawId);
@@ -152,6 +153,15 @@ export async function createVersion(request: Request, ctx: Ctx, rawId: string): 
     .first<{ name: string; source: string; imports: string | null; version: number }>();
   if (!doc) throw new HttpError(404, 'No such diagram');
   if (doc.version !== documentVersion) return stale(doc.version);
+  // A diagram past the account's limit (after a downgrade) is read-only: no new versions either.
+  const documents = documentLimit(ctx, user);
+  if (await isReadOnly(DB, user.id, id, documents)) {
+    return json(
+      { error: 'document_limit', readOnly: true, message: `Your account is over its plan's ${documents} diagrams, so this one is read-only there`, limit: documents },
+      409,
+      NO_STORE,
+    );
+  }
   const imports = doc.imports === null ? null : (JSON.parse(doc.imports) as Record<string, string>);
   const limit = limitsFor(user.plan).versionsPerDocument;
   // One statement: the document still at that version, room under the limit, the next seq, the tag free (UNIQUE).

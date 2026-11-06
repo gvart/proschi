@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { balance, grantStatement, periodOf, refund, spend } from '../src/credits';
+import { balance, grantStatement, periodOf, refund, revokeStatement, spend } from '../src/credits';
 import { resetDatabase, signedInUser } from './helpers';
 
 /** The AI interview credit ledger (src/credits.ts). */
@@ -76,5 +76,27 @@ describe('credits', () => {
     await grant(id, 5, 'order-x');
     await setPlan(id, 'free');
     expect(await balance(env, id, NOV)).toMatchObject({ total: 6, monthly: 0, trial: 1, pack: 5 });
+  });
+
+  it('take back a refunded pack once, never below 0', async () => {
+    const { id } = await signedInUser();
+    await grant(id, 5, 'order-a');
+    await grant(id, 5, 'order-b');
+    expect((await balance(env, id, NOV)).pack).toBe(10);
+    await revokeStatement(env.DB, 'order-a').run();
+    await revokeStatement(env.DB, 'order-a').run();
+    expect((await balance(env, id, NOV)).pack).toBe(5);
+    // 3 of the other pack spent (after the free one): only the 2 left are taken back.
+    for (let i = 0; i < 4; i++) await spend(env, id, 'interview', `p${i}`, NOV);
+    expect((await balance(env, id, NOV)).pack).toBe(2);
+    await revokeStatement(env.DB, 'order-b').run();
+    expect(await balance(env, id, NOV)).toMatchObject({ total: 0, pack: 0 });
+    // A new pack is not touched by a replayed revoke.
+    await grant(id, 5, 'order-c');
+    await revokeStatement(env.DB, 'order-b').run();
+    expect((await balance(env, id, NOV)).pack).toBe(5);
+    // An order that granted nothing takes nothing.
+    await revokeStatement(env.DB, 'no-such-order').run();
+    expect((await balance(env, id, NOV)).pack).toBe(5);
   });
 });

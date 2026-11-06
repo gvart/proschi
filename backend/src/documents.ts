@@ -74,6 +74,21 @@ export async function limited(request: Request, ctx: Ctx): Promise<User> {
   return user;
 }
 
+/**
+ * SQL true for a `documents` row the account may still save: within the
+ * `limit` most recently saved live diagrams. Past the limit (a downgrade
+ * from Pro) the others are read-only; `?1` is the user id.
+ */
+function writableClause(limit: number): string {
+  return `(SELECT COUNT(*) FROM documents d WHERE d.user_id = ?1 AND d.deleted_at IS NULL AND (d.updated_at > documents.updated_at OR (d.updated_at = documents.updated_at AND d.id > documents.id))) < ${limit}`;
+}
+
+/** Whether the user's live diagram `id` is read-only: past the account's limit (writableClause). */
+export async function isReadOnly(DB: D1Database, userId: string, id: string, limit: number): Promise<boolean> {
+  const row = await DB.prepare(`SELECT ${writableClause(limit)} AS ok FROM documents WHERE user_id = ?1 AND id = ?2 AND deleted_at IS NULL`).bind(userId, id).first<{ ok: number }>();
+  return row !== null && row.ok === 0;
+}
+
 export async function liveCount(DB: D1Database, userId: string): Promise<number> {
   const row = await DB.prepare('SELECT COUNT(*) AS n FROM documents WHERE user_id = ? AND deleted_at IS NULL').bind(userId).first<{ n: number }>();
   return row?.n ?? 0;
@@ -145,7 +160,7 @@ export async function putDocument(request: Request, ctx: Ctx, rawId: string): Pr
   const limit = documentLimit(ctx, user);
   const room = `(SELECT COUNT(*) FROM documents WHERE user_id = ?1 AND deleted_at IS NULL) < ${limit}`;
   // Past the limit (after a downgrade from Pro), only the `limit` most recently saved live diagrams can be saved; the rest are read-only until some are deleted.
-  const writable = `(SELECT COUNT(*) FROM documents d WHERE d.user_id = ?1 AND d.deleted_at IS NULL AND (d.updated_at > documents.updated_at OR (d.updated_at = documents.updated_at AND d.id > documents.id))) < ${limit}`;
+  const writable = writableClause(limit);
   // The version it was based on: saved. A tombstone counts toward the limit again once restored.
   const updated = await DB.prepare(
     `UPDATE documents SET name = ?3, source = ?4, imports = ?5, updated_at = ?6, deleted_at = NULL, version = version + 1

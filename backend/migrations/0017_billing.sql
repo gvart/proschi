@@ -39,15 +39,17 @@ CREATE TABLE billing_events (
 --   kind 'grant'  +n  pack credits from a paid order (ref_id: Polar's order id)
 --   kind 'spend'  -1  an interview started (ref_id: its session id)
 --   kind 'refund' +1  that interview failed early (ref_id: the same session id)
+--   kind 'revoke' -n  a pack's order refunded or charged back: its credits taken
+--                     back, never below a zero pack balance (ref_id: the order id)
 -- `bucket` says which allowance a row draws on or gives back to:
 --   'monthly' Pro's allowance for the UTC month in `period` (YYYY-MM; it does not roll over)
 --   'trial'   the one interview every account gets for life
 --   'pack'    bought credits, which never expire
--- UNIQUE (kind, ref_id) makes a grant, a spend and a refund each happen once.
+-- UNIQUE (kind, ref_id) makes a grant, a spend, a refund and a revoke each happen once.
 CREATE TABLE credits (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   user_id TEXT NOT NULL REFERENCES users (id) ON DELETE CASCADE,
-  kind TEXT NOT NULL CHECK (kind IN ('grant', 'spend', 'refund')),
+  kind TEXT NOT NULL CHECK (kind IN ('grant', 'spend', 'refund', 'revoke')),
   bucket TEXT NOT NULL CHECK (bucket IN ('monthly', 'trial', 'pack')),
   period TEXT NOT NULL DEFAULT '',
   delta INTEGER NOT NULL,

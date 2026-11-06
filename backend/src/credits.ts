@@ -11,7 +11,8 @@ import { limitsFor } from './plans';
  * 1. `monthly`: its plan's `interviewsPerMonth` (Pro: 4) for the current UTC
  *    month. A new month starts at its full allowance; unused ones don't roll over.
  * 2. `trial`: `interviewsLifetime` (1) for the account's whole life, on any plan.
- * 3. `pack`: bought credits (src/billing.ts grants 5 per pack), which never expire.
+ * 3. `pack`: bought credits (src/billing.ts grants 5 per pack), which never
+ *    expire; a refunded or charged-back pack takes back what is left of them.
  *
  * The API the AI interview calls:
  *
@@ -137,6 +138,22 @@ export function grantStatement(DB: D1Database, userId: string, credits: number, 
     `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at) VALUES (?1, 'grant', 'pack', '', ?2, ?3, ?4, ?5)
      ON CONFLICT (kind, ref_id) DO NOTHING`,
   ).bind(userId, credits, item, orderId, at);
+}
+
+/**
+ * The statement that takes back the pack credits of a refunded (or charged
+ * back) order: the grant's credits, but no more than the pack balance has
+ * left, so it never goes below 0 (credits already spent stay spent). Once
+ * per order, also when its balance was 0 then; nothing when the order
+ * granted no credits.
+ */
+export function revokeStatement(DB: D1Database, orderId: string, at = Date.now()): D1PreparedStatement {
+  return DB.prepare(
+    `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at)
+     SELECT g.user_id, 'revoke', 'pack', '', -MIN(g.delta, MAX(0, (SELECT COALESCE(SUM(c.delta), 0) FROM credits c WHERE c.user_id = g.user_id AND c.bucket = 'pack'))), g.item, g.ref_id, ?2
+     FROM credits g WHERE g.kind = 'grant' AND g.ref_id = ?1
+     ON CONFLICT (kind, ref_id) DO NOTHING`,
+  ).bind(orderId, at);
 }
 
 /** The ledger in "Download my data". */

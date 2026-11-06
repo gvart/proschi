@@ -110,6 +110,28 @@ describe('billing', () => {
     expect(sum?.s).toBe(5);
   });
 
+  it('takes back a refunded or charged-back pack, once', async () => {
+    const { id, token } = await signedInUser();
+    const paid = (order: string) => deliver({ type: 'order.paid', data: { id: order, product_id: 'prod-pack-5', customer: { id: 'cus-r', external_id: id } } });
+    await paid('ord-r1');
+    await paid('ord-r2');
+    await paid('ord-r3');
+    const pack = async () => ((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack;
+    expect(await pack()).toBe(15);
+    await deliver({ type: 'order.refunded', data: { id: 'ord-r1', product_id: 'prod-pack-5', status: 'refunded', customer: { id: 'cus-r', external_id: id } } });
+    // The same refund, told again as refund.updated: nothing more.
+    await deliver({ type: 'refund.updated', data: { id: 'ref-1', order_id: 'ord-r1', status: 'succeeded' } });
+    expect(await pack()).toBe(10);
+    // A pending refund takes nothing; a succeeded one does.
+    await deliver({ type: 'refund.created', data: { id: 'ref-2', order_id: 'ord-r2', status: 'pending' } });
+    expect(await pack()).toBe(10);
+    await deliver({ type: 'refund.updated', data: { id: 'ref-2', order_id: 'ord-r2', status: 'succeeded' } });
+    expect(await pack()).toBe(5);
+    // A chargeback lost.
+    await deliver({ type: 'dispute.updated', data: { id: 'dis-1', order_id: 'ord-r3', status: 'lost' } });
+    expect(await pack()).toBe(0);
+  });
+
   it('ignores a late, older subscription event', async () => {
     const { id } = await signedInUser();
     await deliver(subscription(id, 'canceled', '2026-11-06T12:00:00Z'));
@@ -146,6 +168,12 @@ describe('billing', () => {
     expect((await call('/api/me/documents/d5', { method: 'DELETE', token })).status).toBe(200);
     expect((await put('d1', 1, 'b')).status).toBe(200);
     expect((await put('d0', 1, 'b')).status).toBe(409);
+    // A read-only diagram takes no new versions; a writable one does.
+    const tag = (doc: string, documentVersion: number) => call(`/api/me/documents/${doc}/versions`, { method: 'POST', token, body: { tag: 'v1', documentVersion } });
+    const refused = await tag('d0', 1);
+    expect(refused.status).toBe(409);
+    expect(await refused.json()).toMatchObject({ error: 'document_limit', readOnly: true, limit: 5 });
+    expect((await tag('d6', 2)).status).toBe(201);
   });
 
   it('creates a checkout and a portal session at Polar', async () => {
