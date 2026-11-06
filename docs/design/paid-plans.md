@@ -67,3 +67,9 @@ id; don't rewrite old ones.
   reviewer. Reviews don't use interview credits.
 - **P18. Migration numbers, continued.** 0019 AI interviews, 0020 AI
   review usage, 0021 history and roadmap if needed.
+- **P19. AI review details.** Signed out answers 401 (not 402); a failed
+  review isn't counted; the review cap lives in `review.ts`. Practice
+  solutions resolve `import "problem.proschi"` on the server; editor
+  diagrams send their imported files (at most 50, 64 KiB each), which the
+  server reads as data and never fetches. `VITE_AI_REVIEW` is gone: billing
+  decides.
