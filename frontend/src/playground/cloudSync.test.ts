@@ -10,6 +10,8 @@ class FakeServer implements Transport {
   online = true;
   /** The account's limit (documentLimit); none unless a test sets it. */
   limit?: number;
+  /** Diagrams past the limit after a downgrade, which the server keeps but won't save (readOnly). */
+  readOnly = new Set<string>();
   calls: string[] = [];
   private clock = 1_000;
 
@@ -33,6 +35,7 @@ class FakeServer implements Transport {
     const existing = this.docs.get(id);
     if (existing && existing.version !== body.baseVersion) throw new SyncError(409, 'changed', undefined, { ...existing });
     if (body.source.length > 100) throw new SyncError(413, 'too large');
+    if (this.readOnly.has(id)) throw new SyncError(409, 'read-only', undefined, undefined, { code: 'document_limit', limit: this.limit });
     if (this.limit !== undefined && (!existing || existing.deletedAt !== null) && this.live() >= this.limit) {
       throw new SyncError(409, 'Your account keeps 2 diagrams', undefined, undefined, { code: 'document_limit', limit: this.limit });
     }
@@ -407,6 +410,26 @@ describe('DocSync', () => {
       expect(server.calls.filter((c) => c === 'put b@0')).toHaveLength(1);
       expect(sync.getStatus()).toMatchObject({ kind: 'saved' });
       expect(sync.plan().local.has('b')).toBe(true);
+    });
+
+    it('after a downgrade, keeps edits to read-only diagrams in this browser and says why', async () => {
+      add('b', 2);
+      add('c', 3);
+      makeSync().start();
+      await settle();
+      expect(server.docs.size).toBe(3);
+      // Pro ended: the account keeps all 3 but saves only the 2 most recently saved.
+      server.limit = 2;
+      server.readOnly.add('a');
+      await sync.sync();
+      store.set((s) => updateCurrent(selectDoc(s, 'a'), 'title "a2"\n'));
+      await settle(PUSH_DELAY_MS);
+      expect(server.docs.get('a')?.source).toBe('title "A"\n');
+      expect(store.get().docs.find((d) => d.id === 'a')?.source).toBe('title "a2"\n');
+      expect(sync.getStatus()).toMatchObject({ kind: 'saved', used: 3, limit: 2, note: expect.stringContaining("more diagrams than its plan's 2") });
+      server.calls = [];
+      await settle(PUSH_DELAY_MS * 10);
+      expect(server.calls.filter((c) => c.startsWith('put a'))).toHaveLength(0);
     });
 
     it('move to this browser only, and keep in cloud', async () => {

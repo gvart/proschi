@@ -8,6 +8,7 @@ import { PROVIDER_LABEL } from '../account';
 import AccountSettings from '../AccountSettings';
 import type { Account } from '../useAccount';
 import EmailReminders from './EmailReminders';
+import PlanBilling from './PlanBilling';
 import { PUBLIC_FIELDS } from './profile';
 
 /**
@@ -84,6 +85,7 @@ export default function AccountRoute({ account }: { account: Account }) {
           </div>
         )}
       </section>
+      <PlanBilling />
       <EmailReminders />
       <AccountSettings account={account} />
     </main>

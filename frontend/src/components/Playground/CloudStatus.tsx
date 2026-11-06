@@ -1,5 +1,6 @@
 import { Cloud, CloudOff, LogIn, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
 import { MenuItem } from './Menu';
+import UpgradeHint from './UpgradeHint';
 import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
 
 const PROVIDER_LABEL = { github: 'GitHub', google: 'Google' } as const;
@@ -21,6 +22,7 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
         {cloudLabel(state)}
         {note && <span className="block">{note}</span>}
       </p>
+      <UpgradeHint state={state} className="mx-3 mb-1.5 text-xs" />
       {state.kind === 'signed-out' &&
         state.providers.map((provider) => (
           <MenuItem key={provider} icon={<LogIn size={14} />} onSelect={() => cloud.signIn(provider)}>

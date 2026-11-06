@@ -98,8 +98,8 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
     products: [productIds(env)[product as Product]],
     ...(row?.polar_customer_id ? { customer_id: row.polar_customer_id } : { external_customer_id: user.id }),
     metadata: { user_id: user.id, product },
-    success_url: `${origin}/practice/#/me?checkout=done`,
-    return_url: `${origin}/practice/#/pricing`,
+    success_url: `${origin}/practice/?checkout=done#/me`,
+    return_url: `${origin}/pricing/`,
   });
   return json({ url: checkout.url }, 200, NO_STORE);
 }
