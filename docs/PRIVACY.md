@@ -335,7 +335,9 @@ them only to answer, not to train its models.
 **What is stored**: the interview's transcript, kept 90 days and then
 deleted, and its verdict summary (pass or fail, and what went well and
 wrong per skill), kept for your interview history. Both are private, part
-of **Download my data**, and deleted with your account. Dictation, where
+of **Download my data**, and deleted with your account. A daily job deletes
+each transcript, and the design sent with it, once the interview is 90 days
+old; the verdict stays. Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 
