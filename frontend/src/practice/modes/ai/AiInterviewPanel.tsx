@@ -7,8 +7,9 @@ import { formatClock, PHASES, type Phase } from '../session';
 import { finishInterview, getInterview, sendTurn, shownPhase, SKILL_LABEL, SKILLS, TurnError, type AiInterview, type AiMessage, type Hint, type HintKind, type Skill, type Verdict } from './api';
 import { useDictation } from './useDictation';
 import listings from 'virtual:practice-listings';
-import { getRoadmapNext, type RoadmapPick } from '../../history/api';
-import { PickList } from '../../history/NextForYou';
+import { PICK_PENDING_MS } from '../../history/api';
+import { NoNewPicks, Picking, PickList } from '../../history/NextForYou';
+import { useRoadmapNext } from '../../history/useRoadmapNext';
 
 /**
  * Interview mode with the AI interviewer (backend/src/interviews.ts): a chat
@@ -94,7 +95,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
     );
   }
   if (!interview) return <p className="px-4 py-4 text-sm text-muted">Loading the interview…</p>;
-  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={pro ? interview.id : undefined} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
+  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={pro ? interview.id : undefined} endedAt={interview.endedAt} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
 
   const left = interview.minutes * 60_000 - (now - interview.startedAt);
   const timeUp = interview.deadline !== undefined && now >= interview.deadline;
@@ -350,20 +351,6 @@ function ChatBubble({ message, pending }: { message: AiMessage; pending?: boolea
   );
 }
 
-/** The AI roadmap's picks made after this interview's verdict (Pro); none off Pro, without the AI or before they exist. */
-function useVerdictPicks(id: string | undefined): RoadmapPick[] {
-  const [picks, setPicks] = useState<RoadmapPick[]>([]);
-  useEffect(() => {
-    if (!id) return;
-    let live = true;
-    void getRoadmapNext(id).then((a) => live && a.status === 'ok' && a.data && setPicks(a.data.picks));
-    return () => {
-      live = false;
-    };
-  }, [id]);
-  return picks;
-}
-
 const problemTitle = (id: string) => listings.find((p) => p.id === id)?.title;
 
 /**
@@ -372,8 +359,10 @@ const problemTitle = (id: string) => listings.find((p) => p.id === id)?.title;
  * (`picksFor`, the session's id, for a Pro account only). In interview mode it
  * ends with Start again and Leave; on the progress page's history without them.
  */
-export function VerdictView({ picksFor, verdict, onRestart, onExit }: { picksFor?: string; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
-  const picks = useVerdictPicks(picksFor);
+export function VerdictView({ picksFor, endedAt, verdict, onRestart, onExit }: { picksFor?: string; endedAt?: number; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
+  // A verdict that just ended may still be getting its picks: they are asked for again a few times.
+  const [wait] = useState(() => endedAt !== undefined && Date.now() - endedAt < PICK_PENDING_MS);
+  const picks = useRoadmapNext(!!picksFor, { interview: picksFor, wait });
   return (
     <section aria-label="Interview verdict" className="px-4 py-4 space-y-4">
       <h2 className="font-display text-lg font-bold text-ink">Interview verdict</h2>
@@ -418,10 +407,10 @@ export function VerdictView({ picksFor, verdict, onRestart, onExit }: { picksFor
           </ol>
         </div>
       )}
-      {picks.length > 0 && (
+      {(picks.status === 'picking' || (picks.status === 'ready' && (picks.next || picks.missed))) && (
         <div className="space-y-2" data-testid="verdict-picks">
           <h3 className="text-sm font-semibold text-ink">Practise them here</h3>
-          <PickList picks={picks} problemTitle={problemTitle} />
+          {picks.status !== 'ready' ? <Picking /> : picks.next ? <PickList picks={picks.next.picks} problemTitle={problemTitle} /> : <NoNewPicks />}
         </div>
       )}
       {(onRestart || onExit) && (

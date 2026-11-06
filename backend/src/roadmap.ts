@@ -19,6 +19,7 @@ import { findProblem } from './verify';
  * (src/ai/roadmap.ts). A failed pick never fails what prompted it.
  *
  *   GET /api/roadmap/next[?interview=<id>]   the newest picks (or the picks made after that interview): {next: {…} | null}
+ *                                            without `interview`, also `pending: <id>` while a verdict's picks are being made
  *
  * 401 signed out, 402 plan_required off Pro, 501 without ANTHROPIC_API_KEY
  * (the page then keeps the roadmap's own order, P10).
@@ -27,6 +28,8 @@ import { findProblem } from './verify';
 const NO_STORE = { 'Cache-Control': 'no-store' };
 /** The picks a review refreshes are at least this old. */
 export const REVIEW_REFRESH_MS = 86_400_000;
+/** How long after a verdict its picks count as still coming (the call's timeout twice, and room). */
+export const PENDING_MS = 60_000;
 /** A pick is a nicety: it gets less time than the verdict, and one retry. */
 const PICK_TIMEOUT_MS = 20_000;
 
@@ -138,6 +141,18 @@ export async function getRoadmapNext(request: Request, ctx: Ctx): Promise<Respon
   if (!isPro(user)) return json({ error: 'plan_required', message: 'AI next steps are part of Pro' }, 402, NO_STORE);
   await rateLimit(env.INTERVIEW_READ_LIMITER, user.id, 'Too many requests; wait a minute');
   const interview = new URL(request.url).searchParams.get('interview');
+  if (!interview) {
+    // A verdict whose picks are still being made (in the background, src/interviews.ts): the page asks for them by its id.
+    const [latest, pending] = await env.DB.batch([
+      env.DB.prepare('SELECT created_at, source, source_id, recs FROM roadmap_recs WHERE user_id = ? ORDER BY created_at DESC, id DESC LIMIT 1').bind(user.id),
+      env.DB.prepare(
+        "SELECT id FROM ai_interviews i WHERE user_id = ?1 AND status = 'finished' AND ended_at > ?2 AND NOT EXISTS (SELECT 1 FROM roadmap_recs r WHERE r.user_id = ?1 AND r.source = 'interview' AND r.source_id = i.id) ORDER BY ended_at DESC LIMIT 1",
+      ).bind(user.id, Date.now() - PENDING_MS),
+    ]);
+    const row = latest.results[0] as RecRow | undefined;
+    const waiting = (pending.results[0] as { id: string } | undefined)?.id;
+    return json({ next: row ? nextOf(row) : null, ...(waiting ? { pending: waiting } : {}) }, 200, NO_STORE);
+  }
   const row = interview
     ? await env.DB.prepare("SELECT created_at, source, source_id, recs FROM roadmap_recs WHERE user_id = ? AND source = 'interview' AND source_id = ? ORDER BY created_at DESC, id DESC LIMIT 1")
         .bind(user.id, interview)

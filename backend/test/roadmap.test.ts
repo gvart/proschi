@@ -114,16 +114,27 @@ describe('the AI roadmap: routes', () => {
     vi.restoreAllMocks();
   });
 
-  it('picks the next steps after a Pro verdict, from real ids only, and answers them on GET /api/roadmap/next', async () => {
-    const calls = claude();
+  it('answers the verdict at once, then picks the next steps from real ids only, and answers them on GET /api/roadmap/next', async () => {
+    // The pick waits until the test lets it go: the verdict must not.
+    let release!: () => void;
+    const gate = new Promise<void>((r) => (release = r));
+    const calls = claude({ picks: async () => (await gate, messageResponse(JSON.stringify(PICKS), { model: HAIKU })) });
     const { id: userId, token } = await signedInUser();
     const id = await interview(token, userId);
     const res = await finish(token, id);
     expect(res.status).toBe(200);
-    const picker = calls.filter(isPicker);
-    expect(picker).toHaveLength(1);
+    expect(await res.json()).toMatchObject({ interview: { status: 'finished', verdict: verdictJson } });
+    await vi.waitFor(() => expect(calls.filter(isPicker)).toHaveLength(1));
+    expect(await recCount(userId)).toBe(0);
+    expect(((await (await next(token, `?interview=${id}`)).json()) as { next: unknown }).next).toBeNull();
+    // Meanwhile the newest picks name the verdict whose picks are coming.
+    expect(await (await next(token)).json()).toEqual({ next: null, pending: id });
+    release();
+    await vi.waitFor(async () => expect(await recCount(userId)).toBe(1));
+    expect(await (await next(token)).json()).not.toHaveProperty('pending');
+
     // The input names the verdict, the weak topics and the candidates by id; the verdict is fenced as data.
-    const prompt = picker[0].body.messages[0].content as string;
+    const prompt = calls.filter(isPicker)[0].body.messages[0].content as string;
     expect(prompt).toContain('<report>');
     expect(prompt).toContain('Skipped the storage estimate.');
     expect(prompt).toContain('- pastebin | Pastebin |');
@@ -137,22 +148,25 @@ describe('the AI roadmap: routes', () => {
     expect(((await (await next(token, `?interview=${id}`)).json()) as { next: unknown }).next).toMatchObject({ sourceId: id });
     expect(((await (await next(token, '?interview=other')).json()) as { next: unknown }).next).toBeNull();
     // Haiku's tokens count with the session: 150 for the verdict, 150 for the picks (mockClaude usage()).
-    const { tokens } = (await env.DB.prepare('SELECT tokens FROM ai_interviews WHERE id = ?').bind(id).first<{ tokens: number }>())!;
-    expect(tokens).toBe(300);
+    await vi.waitFor(async () => expect((await env.DB.prepare('SELECT tokens FROM ai_interviews WHERE id = ?').bind(id).first<{ tokens: number }>())!.tokens).toBe(300));
   });
 
   it('keeps the verdict when the pick fails: an API error, or no known id', async () => {
     for (const picks of [() => Response.json({ type: 'error', error: { type: 'api_error', message: 'down' } }, { status: 500 }), () => messageResponse(JSON.stringify({ picks: [{ kind: 'problem', id: 'nope', reason: 'x' }] }), { model: HAIKU })]) {
       await resetDatabase();
       vi.restoreAllMocks();
-      claude({ picks });
+      const calls = claude({ picks });
       const { id: userId, token } = await signedInUser();
       const id = await interview(token, userId);
       const res = await finish(token, id);
       expect(res.status).toBe(200);
       expect(await res.json()).toMatchObject({ interview: { status: 'finished', verdict: verdictJson } });
+      // The 500 is retried once; give the background pick time to give up.
+      await vi.waitFor(() => expect(calls.filter(isPicker).length).toBeGreaterThan(0));
+      await new Promise((r) => setTimeout(r, 1500));
       expect(await recCount(userId)).toBe(0);
       expect(((await (await next(token)).json()) as { next: unknown }).next).toBeNull();
+      expect(await env.DB.prepare('SELECT status FROM ai_interviews WHERE id = ?').bind(id).first()).toEqual({ status: 'finished' });
     }
   });
 
@@ -232,6 +246,23 @@ describe('GET /api/interviews/history', () => {
     expect(pro.sessions[0]).toMatchObject({ passed: true, scores: { requirements: 5 } });
     // Summaries only: no notes.
     expect(pro.sessions[0]).not.toHaveProperty('wentWrong');
+  });
+
+  it('GET /api/interviews lists every session, with the latest verdict only off Pro', async () => {
+    const { id: userId, token } = await signedInUser();
+    const ids = [];
+    for (let d = 3; d >= 1; d--) ids.push(await finished(userId, d, verdictJson.scores));
+    await env.DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, state, started_at) VALUES ('open', ?, 'url-shortener', 45, 'active', '{}', ?)").bind(userId, Date.now()).run();
+    type List = { interviews: { id: string; status: string; verdict?: unknown }[]; credits: { total: number } };
+    const free = (await (await call('/api/interviews', { token })).json()) as List;
+    // The open session and every id stay, for the start screen; only the newest finished one has its verdict.
+    expect(free.interviews.map((i) => i.id)).toEqual(['open', ids[2], ids[1], ids[0]]);
+    expect(free.interviews.filter((i) => i.verdict).map((i) => i.id)).toEqual([ids[2]]);
+    expect(free.interviews[0]).toMatchObject({ status: 'active' });
+    expect(free.credits).toBeDefined();
+    await setPlan(userId, 'pro');
+    const pro = (await (await call('/api/interviews', { token })).json()) as List;
+    expect(pro.interviews.filter((i) => i.verdict).map((i) => i.id)).toEqual([ids[2], ids[1], ids[0]]);
   });
 
   it('answers 401 signed out and 501 without the key', async () => {

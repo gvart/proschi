@@ -86,6 +86,11 @@ id; don't rewrite old ones.
   with one Haiku call after a Pro verdict and at most once a day after an AI
   review, stored in `roadmap_recs` (migration 0021); Haiku's tokens count
   with the interview. Free verdicts get no picks, so they cost nothing.
-  `GET /api/interviews` still lists every session with its verdict for the
-  interview start screen; the Pro gate is on the history and trends.
+  The verdict is answered first and the picks are made afterwards
+  (`waitUntil`); the page asks again at about 2, 5 and 10 s ("Picking your
+  next steps…"), then says quietly that none came. `GET /api/roadmap/next`
+  without `?interview` names a verdict from the last minute still without
+  picks as `pending`. `GET /api/interviews` lists every session for the
+  interview start screen, but off Pro only the latest finished one keeps its
+  verdict.
   `roadmapAccess` stays sign-in gated; `aiRoadmapAccess` gates the picks.

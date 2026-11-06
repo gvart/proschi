@@ -558,8 +558,12 @@ Both are Pro (docs/design/paid-plans.md P1, P9) and need `ANTHROPIC_API_KEY`
   there are. 401 signed out.
 - **`GET /api/roadmap/next[?interview=<id>]`**: `{next: {createdAt, source:
   "interview" | "review", sourceId?, picks: [{kind: "problem" | "cards", id,
-  reason}]} | null}`, the newest picks, or those made after that interview.
-  401 signed out, 402 `{error: "plan_required"}` off Pro.
+  reason}]} | null, pending?}`, the newest picks, or those made after that
+  interview. Without `?interview`, `pending` names a verdict from the last
+  minute whose picks are still being made. 401 signed out, 402
+  `{error: "plan_required"}` off Pro.
+- **`GET /api/interviews`** lists every session for the start screen; off
+  Pro only the latest finished one keeps its verdict.
 
 How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
 
@@ -571,7 +575,9 @@ How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
   reason. `parsePicks` keeps only picks that name a candidate of the right
   kind, once each; none left is a failure. The picks are stored in
   `roadmap_recs` (migration 0021), and Haiku's tokens count with the
-  session. A failure (the model, the check, the database) is logged and
+  session. The verdict is answered first and the picks are made in
+  `waitUntil`, so it never waits on them; the page asks again at about 2, 5
+  and 10 s. A failure (the model, the check, the database) is logged and
   never fails the verdict.
 - An AI design review refreshes the picks after its answer is sent, when
   the newest are a day old or missing.

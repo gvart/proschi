@@ -1,9 +1,9 @@
-import { useEffect, useState } from 'react';
-import { ArrowRight, Layers, Puzzle, Sparkles } from 'lucide-react';
+import { ArrowRight, Layers, Loader2, Puzzle, Sparkles } from 'lucide-react';
 import { eyebrow } from '../../components/Playground/ui';
 import { pricingHref } from '../../services/billing';
 import type { AiRoadmapAccess } from '../roadmap';
-import { getRoadmapNext, pickHref, pickTitle, type RoadmapNext, type RoadmapPick } from './api';
+import { pickHref, pickTitle, type RoadmapPick } from './api';
+import { useRoadmapNext } from './useRoadmapNext';
 
 /**
  * The AI roadmap's picks (docs/design/paid-plans.md P9): the next 3 steps,
@@ -51,20 +51,7 @@ const card = 'mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-b
 
 /** "Next for you" on the roadmap: the picks for Pro, the way to Pro for other accounts with paid plans on; nothing otherwise, or without the AI (P10). */
 export default function NextForYou({ access, problemTitle, base = '../' }: { access: AiRoadmapAccess; problemTitle: (id: string) => string | undefined; base?: string }) {
-  const [next, setNext] = useState<RoadmapNext | null>();
-  const [off, setOff] = useState(false);
-  useEffect(() => {
-    if (access !== 'pro') return;
-    let live = true;
-    void getRoadmapNext().then((a) => {
-      if (!live) return;
-      if (a.status === 'ok') setNext(a.data);
-      else setOff(true);
-    });
-    return () => {
-      live = false;
-    };
-  }, [access]);
+  const picks = useRoadmapNext(access === 'pro');
 
   if (access === 'hidden') return null;
   const heading = (
@@ -90,22 +77,47 @@ export default function NextForYou({ access, problemTitle, base = '../' }: { acc
     );
   }
   // Loading, or no AI on the server: the roadmap's own order stands.
-  if (off || next === undefined) return null;
+  if (picks.status === 'off' || picks.status === 'loading') return null;
+  const next = picks.status === 'ready' ? picks.next : null;
   return (
     <section aria-labelledby="next-for-you" className={card} data-testid="next-for-you">
       {heading}
-      {next ? (
+      {picks.status === 'picking' ? (
+        <Picking />
+      ) : next ? (
         <>
           <p className="mt-1 text-sm text-ink/80">
             Picked {next.source === 'interview' ? 'after your last AI interview' : 'after your last AI review'}, from the roadmap and the cards.
           </p>
+          {picks.status === 'ready' && picks.missed && <NoNewPicks />}
           <div className="mt-3">
             <PickList picks={next.picks} problemTitle={problemTitle} />
           </div>
         </>
+      ) : picks.status === 'ready' && picks.missed ? (
+        <NoNewPicks />
       ) : (
         <p className="mt-1 text-sm text-ink/80">After your next AI interview, your next 3 steps appear here, each with the reason it was picked.</p>
       )}
     </section>
+  );
+}
+
+/** While the picks for a verdict that just ended are being made. */
+export function Picking() {
+  return (
+    <p role="status" className="mt-1 inline-flex items-center gap-1.5 text-sm text-muted" data-testid="picks-picking">
+      <Loader2 size={14} className="animate-spin motion-reduce:animate-none" aria-hidden="true" />
+      Picking your next steps…
+    </p>
+  );
+}
+
+/** The wait for the newest verdict's picks ended without them: said quietly. */
+export function NoNewPicks() {
+  return (
+    <p className="mt-1 text-sm text-muted" data-testid="picks-missed">
+      No new picks this time. Try again later.
+    </p>
   );
 }

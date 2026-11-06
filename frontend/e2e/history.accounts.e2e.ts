@@ -64,6 +64,48 @@ test.describe('Interview history', () => {
   });
 });
 
+test.describe('Picks made after the verdict is answered', () => {
+  test('the verdict says it is picking, asks again, then links the picks', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page, PRO);
+    const asked = await mockHistory(page, { full: true, total: 1, sessions: SESSIONS.slice(0, 1) }, { arriveOn: 3 });
+    await page.goto('practice/#/progress/interview/iv-1');
+    const verdict = page.getByRole('region', { name: 'Interview verdict' });
+    await expect(verdict.getByTestId('picks-picking')).toHaveText('Picking your next steps…');
+    await page.clock.runFor(2_100);
+    await expect(verdict.getByTestId('picks-picking')).toBeVisible();
+    await page.clock.runFor(3_000);
+    await expect(verdict.getByTestId('verdict-picks').getByRole('link')).toHaveCount(3);
+    await expect(verdict.getByTestId('picks-picking')).toHaveCount(0);
+    expect(asked.filter((p) => p === '/api/roadmap/next?interview=iv-1')).toHaveLength(3);
+  });
+
+  test('no picks after 10 seconds: said quietly, and no more asking', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page, PRO);
+    const asked = await mockHistory(page, { full: true, total: 1, sessions: SESSIONS.slice(0, 1) }, {});
+    await page.goto('practice/#/progress/interview/iv-1');
+    const verdict = page.getByRole('region', { name: 'Interview verdict' });
+    await expect(verdict.getByTestId('picks-picking')).toBeVisible();
+    await page.clock.runFor(10_100);
+    await expect(verdict.getByTestId('picks-missed')).toHaveText('No new picks this time. Try again later.');
+    await page.clock.runFor(30_000);
+    // The first ask and the three retries, then nothing.
+    expect(asked.filter((p) => p === '/api/roadmap/next?interview=iv-1')).toHaveLength(4);
+  });
+
+  test('the roadmap card waits for a verdict whose picks are coming', async ({ page }) => {
+    await page.clock.install();
+    await mockSignedIn(page, PRO);
+    await mockHistory(page, { full: true, total: 0, sessions: [] }, { arriveOn: 1 });
+    await page.goto('practice/#/roadmap');
+    const card = page.getByRole('region', { name: 'Next for you' });
+    await expect(card.getByTestId('picks-picking')).toBeVisible();
+    await page.clock.runFor(2_100);
+    await expect(card.getByTestId('roadmap-picks').getByRole('link')).toHaveCount(3);
+  });
+});
+
 test.describe('Next for you', () => {
   test('Pro: the 3 picks on the roadmap, each with its reason and link', async ({ page }) => {
     await mockSignedIn(page, PRO);

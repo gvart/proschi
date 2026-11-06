@@ -61,9 +61,18 @@ async function answer<T>(call: () => Promise<T>): Promise<Answer<T>> {
 
 export const getHistory = (): Promise<Answer<History>> => answer(() => api<History>('/api/interviews/history'));
 
-/** The newest picks, or (with `interview`) the picks made after that interview's verdict; null when there are none. */
-export const getRoadmapNext = (interview?: string): Promise<Answer<RoadmapNext | null>> =>
-  answer(async () => (await api<{ next: RoadmapNext | null }>(`/api/roadmap/next${interview ? `?interview=${encodeURIComponent(interview)}` : ''}`)).next);
+/**
+ * The newest picks, or (with `interview`) the picks made after that
+ * interview's verdict; `next` is null when there are none. Without
+ * `interview`, `pending` names a verdict whose picks are still being made.
+ */
+export const getRoadmapNext = (interview?: string): Promise<Answer<{ next: RoadmapNext | null; pending?: string }>> =>
+  answer(() => api<{ next: RoadmapNext | null; pending?: string }>(`/api/roadmap/next${interview ? `?interview=${encodeURIComponent(interview)}` : ''}`));
+
+/** The picks are made after the verdict is answered (backend/src/interviews.ts): asked for again this long after the first ask, then not. */
+export const PICK_RETRY_MS = [2_000, 5_000, 10_000] as const;
+/** A verdict this recent may still be getting its picks (backend/src/roadmap.ts PENDING_MS). */
+export const PICK_PENDING_MS = 60_000;
 
 /** Where a pick goes: a problem's roadmap step, or a card topic's review deck. */
 export const pickHref = (pick: Pick<RoadmapPick, 'kind' | 'id'>): string => (pick.kind === 'problem' ? roadmapHref(pick.id) : `#/review/${pick.id}`);

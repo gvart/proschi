@@ -32,21 +32,34 @@ export const PICKS = [
 
 const next = { createdAt: Date.UTC(2026, 10, 5), source: 'interview', sourceId: 'iv-1', picks: PICKS };
 
-/** The history, the picks and one session's verdict. Register after mockSignedIn: the later route wins. */
-export async function mockHistory(page: Page, history: { full: boolean; total: number; sessions: typeof SESSIONS }): Promise<string[]> {
+/**
+ * The history, the picks and one session's verdict. Register after
+ * mockSignedIn: the later route wins. `picking`: the picks are still being
+ * made (the newest answer names `iv-1` as pending, and each session ended
+ * just now); asked for by interview, they arrive on the `arriveOn`-th ask
+ * (never when absent).
+ */
+export async function mockHistory(page: Page, history: { full: boolean; total: number; sessions: typeof SESSIONS }, picking?: { arriveOn?: number }): Promise<string[]> {
   const asked: string[] = [];
+  let asks = 0;
   await page.route(
     (url) => /^\/api\/(interviews|roadmap)(\/|$)/.test(url.pathname),
     (route) => {
       const url = new URL(route.request().url());
       asked.push(url.pathname + url.search);
       if (url.pathname === '/api/interviews/history') return route.fulfill({ json: history });
-      if (url.pathname === '/api/roadmap/next') return route.fulfill({ json: { next } });
+      if (url.pathname === '/api/roadmap/next') {
+        if (!picking) return route.fulfill({ json: { next } });
+        if (!url.searchParams.has('interview')) return route.fulfill({ json: { next: null, pending: 'iv-1' } });
+        asks += 1;
+        return route.fulfill({ json: { next: picking.arriveOn !== undefined && asks >= picking.arriveOn ? next : null } });
+      }
       if (url.pathname === '/api/interviews') return route.fulfill({ json: { interviews: [], credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' } } });
       const id = url.pathname.split('/')[3];
       const s = SESSIONS.find((x) => x.id === id);
       if (!s) return route.fulfill({ status: 404, json: { error: 'Not found' } });
-      return route.fulfill({ json: { interview: { ...s, status: 'finished', verdict: s.passed ? PASS_VERDICT : FAIL_VERDICT, messages: [] } } });
+      const ended = picking ? { endedAt: Date.now() } : {};
+      return route.fulfill({ json: { interview: { ...s, ...ended, status: 'finished', verdict: s.passed ? PASS_VERDICT : FAIL_VERDICT, messages: [] } } });
     },
   );
   return asked;

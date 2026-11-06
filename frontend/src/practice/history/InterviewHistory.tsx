@@ -146,7 +146,7 @@ export function InterviewVerdictPage({ id, pro }: { id: string; pro: boolean }) 
             AI interview · {formatDay(interview.startedAt)} · {interview.minutes} min
           </p>
           <div className={`mt-4 ${card}`}>
-            <VerdictView picksFor={pro ? interview.id : undefined} verdict={interview.verdict} />
+            <VerdictView picksFor={pro ? interview.id : undefined} endedAt={interview.endedAt} verdict={interview.verdict} />
           </div>
           <a href={`#/${interview.problem}`} className={`mt-4 ${outlineButton}`}>
             Open the problem

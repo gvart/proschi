@@ -569,8 +569,10 @@ a day after an AI design review, one Claude Haiku call picks the next 3
 steps, each with a one-sentence reason. It gets the verdict (or the review),
 the weakest card topics, and every roadmap problem (solved or not) and card
 topic (with your mastery) by id; it only picks from those, and the server
-drops any pick whose id is not a real problem or topic. A failed pick never
-fails the verdict. The card under the roadmap's progress links each pick to
+drops any pick whose id is not a real problem or topic. The verdict never
+waits on the picks: they are made after it is answered, and the page shows
+"Picking your next steps…" and asks again about 2, 5 and 10 s later, then
+says quietly if none came. A failed pick never fails the verdict. The card under the roadmap's progress links each pick to
 its roadmap step (`practice/#/roadmap/<id>`) or its card deck
 (`practice/#/review/<topic>`); the verdict links the same picks. Signed in
 without Pro, with billing on, the card shows the way to Pro instead. Without
