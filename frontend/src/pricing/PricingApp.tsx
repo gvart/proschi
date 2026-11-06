@@ -17,7 +17,7 @@ import { usePlan } from './usePlan';
  */
 
 const noop = () => undefined;
-const card = 'flex flex-col rounded-brutal border-bw-2 border-ink bg-surface p-5 shadow-brutal-md';
+const card = 'flex flex-col rounded-brutal border-bw-2 border-ink p-5 shadow-brutal-md';
 const YEARLY_SAVING = Math.round((1 - PRICES.proYearly / (PRICES.proMonthly * 12)) * 100);
 
 export default function PricingApp() {
@@ -113,7 +113,7 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
       )}
 
       <div className="mt-6 grid gap-5 md:grid-cols-2">
-        <section aria-labelledby="plan-free" className={card}>
+        <section aria-labelledby="plan-free" className={`${card} bg-surface`}>
           <h2 id="plan-free" className="font-display text-2xl font-bold text-ink">
             Free
           </h2>
@@ -132,7 +132,7 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
           </div>
         </section>
 
-        <section aria-labelledby="plan-pro" className={`${card} relative bg-pop-yellow/15`}>
+        <section aria-labelledby="plan-pro" className={`${card} relative bg-pop-yellow/15 dark:bg-pop-yellow/10`}>
           <span className="absolute -top-3 right-4 rounded-sm border-bw-1 border-ink bg-pop-yellow px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-on-accent">
             Interview prep
           </span>
@@ -168,7 +168,7 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
         </section>
       </div>
 
-      <section aria-labelledby="plan-pack" className={`mt-5 ${card} sm:flex-row sm:items-center sm:gap-6`}>
+      <section aria-labelledby="plan-pack" className={`mt-5 ${card} bg-surface sm:flex-row sm:items-center sm:gap-6`}>
         <div className="flex-1">
           <h2 id="plan-pack" className="font-display text-xl font-bold text-ink">
             Interview pack

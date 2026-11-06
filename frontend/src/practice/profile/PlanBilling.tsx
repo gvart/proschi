@@ -14,12 +14,17 @@ import { billingEnabled, checkout, openPortal, PRICES, pricingHref, type PlanInf
 
 const card = 'mt-8 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md';
 
+/** Whether this page load came back from a checkout; read once (the page may mount this more than once) and taken off the address. */
+let checkoutDone: boolean | undefined;
 function takeCheckoutDone(): boolean {
+  if (checkoutDone !== undefined) return checkoutDone;
   const url = new URL(window.location.href);
-  if (url.searchParams.get('checkout') !== 'done') return false;
-  url.searchParams.delete('checkout');
-  window.history.replaceState(window.history.state, '', url.toString());
-  return true;
+  checkoutDone = url.searchParams.get('checkout') === 'done';
+  if (checkoutDone) {
+    url.searchParams.delete('checkout');
+    window.history.replaceState(window.history.state, '', url.toString());
+  }
+  return checkoutDone;
 }
 
 const dateOf = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
