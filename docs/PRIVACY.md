@@ -313,6 +313,16 @@ subscription still running at Polar at once, then removes all of the above
 (the webhook log aside, which names no account). Polar keeps its own
 records of the payments, such as invoices, as the law requires of it.
 
+## Live share links (Pro)
+
+On Pro you can make a live share link to one of your synced diagrams.
+**What is stored**: a random token (the link's address), which diagram it
+opens, and when it was made and, once you revoke it, when. Anyone with the
+link sees the diagram as it is now, read-only, while you are on Pro;
+nothing about who opens it is kept. A revoked link stays as that row so its
+token is never reused. The links are in **Download my data**, and are
+deleted with the diagram or the account.
+
 ## AI interviews
 
 An AI interview (one a lifetime on the free plan, 4 a month on Pro, more
@@ -407,8 +417,8 @@ reminder run hold your user id, never the address, when a send fails.
 In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
-  synced diagrams and their versions included, your plan, subscription and
-  interview credits, every session with its kind (the site or an
+  synced diagrams and their versions included, your live share links, your
+  plan, subscription and interview credits, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
@@ -418,7 +428,7 @@ In Settings on the practice page (`#/me`, from the account menu):
   own.
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
-  synced diagrams and their versions, the email reminders' address, the
+  synced diagrams and their versions and live share links, the email reminders' address, the
   billing data and interview credits from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
