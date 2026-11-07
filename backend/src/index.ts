@@ -13,6 +13,7 @@ import {
   getBilling,
   getHealth,
   getOverview,
+  getTrends,
   getUser,
   listAdminShares,
   listAudit,
@@ -289,6 +290,7 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('DELETE', 'api', 'admin', 'passkeys', '*')) return deletePasskey(request, ctx, id);
   if (is('POST', 'api', 'admin', 'sessions', 'revoke-all')) return revokeAdminSessions(request, ctx);
   if (is('GET', 'api', 'admin', 'overview')) return getOverview(request, ctx);
+  if (is('GET', 'api', 'admin', 'trends')) return getTrends(request, ctx);
   if (is('GET', 'api', 'admin', 'health')) return getHealth(request, ctx);
   if (is('GET', 'api', 'admin', 'users')) return listUsers(request, ctx);
   if (is('GET', 'api', 'admin', 'users', '*')) return getUser(request, ctx, id);

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { addPasskey, deletePasskey, getPasskeys, revokeAdminSessions } from './api';
 import { formatAgo, formatDate } from './format';
 import { useAction, useLoad } from './hooks';
-import { ErrorNote, Loading, Section } from './ui';
+import { ErrorNote, PageHeader, Section, Skeleton } from './ui';
 
 /** The admin's passkeys: add a backup, remove a lost one (never the last), end every admin session. */
 export default function PasskeysTab({ onSignedOut }: { onSignedOut: () => void }) {
@@ -12,10 +12,11 @@ export default function PasskeysTab({ onSignedOut }: { onSignedOut: () => void }
   const data = passkeys.data;
   return (
     <>
+      <PageHeader page="passkeys" />
       <Section title="Passkeys">
         <ErrorNote>{passkeys.error ?? action.error}</ErrorNote>
         {!data ? (
-          !passkeys.error && <Loading what="passkeys" />
+          !passkeys.error && <Skeleton what="passkeys" />
         ) : (
           <>
             {data.passkeys.length === 1 && (

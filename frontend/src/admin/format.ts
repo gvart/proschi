@@ -64,3 +64,6 @@ export const formatPercent = (share: number | null | undefined): string => (shar
 
 /** 1234567 → "1.2M": token counts. */
 export const formatCompact = (n: number): string => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
+
+/** "2026-11-07" → "Nov 7": a UTC day on a chart axis. */
+export const shortDay = (day: string): string => new Date(`${day}T00:00:00Z`).toLocaleDateString(undefined, { month: 'short', day: 'numeric', timeZone: 'UTC' });

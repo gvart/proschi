@@ -3,9 +3,10 @@ import type { Page } from '@playwright/test';
 /**
  * The admin API (backend/src/admin.ts) mocked with seeded data, for
  * admin.accounts.e2e.ts: a handful of accounts, one comped, subscribers, pack
- * orders and a refund, 30 days of AI interviews and reviews, Polar's webhook
- * deliveries and live share links. Times are Unix seconds, as the admin API
- * answers them.
+ * orders and a refund, 30 days of AI interviews and reviews, the overview's
+ * trends for any range, Polar's webhook deliveries, short and live share
+ * links, app events, the audit log and passkeys. Times are Unix seconds, as
+ * the admin API answers them.
  */
 
 export const USER = '22222222-2222-4222-8222-222222222222';
@@ -20,13 +21,51 @@ export const days = Array.from({ length: 30 }, (_, i) => new Date(Date.now() - (
 const wave = (i: number, base: number, amp: number, phase = 0) => Math.max(0, Math.round(base + amp * Math.sin(i / 3 + phase) + (i % 5) - 2));
 
 export const OVERVIEW = {
-  users: { total: 3, blocked: 0, public: 1, emailReminders: 1, new: { day: 1, week: 2, month: 3 }, active: { day: 1, week: 2, month: 2 } },
+  users: { total: 1284, blocked: 3, public: 212, emailReminders: 341, new: { day: 14, week: 88, month: 352 }, active: { day: 96, week: 298, month: 611 } },
   signups: days.map((day) => ({ day, count: day === today ? 1 : 0 })),
-  content: { shares: 1, documents: 0, attempts: 1, solves: 1, cardReviews: 0, challenges: 0, gameRuns: 0 },
+  content: { shares: 917, documents: 2_406, attempts: 5_830, solves: 3_112, cardReviews: 48_221, challenges: 7_904, gameRuns: 2_689 },
   usage: { events: ['editor_open', 'practice_open'], days: days.map((day) => ({ day, counts: day === today ? { editor_open: 41 } : {} })) },
-  events: [{ kind: 'server_error', level: 'error', n: 2 }],
+  events: [
+    { kind: 'server_error', level: 'error', n: 2 },
+    { kind: 'rate_limited', level: 'warn', n: 5 },
+  ],
   aiSpend: days.map((day, i) => ({ day, costUsd: wave(i, 9, 4) * 0.37 })),
 };
+
+/**
+ * The overview's trends (GET /api/admin/trends?days=): `days` and as many
+ * before them, a growing product with weekly rhythm: sign-ups, weekly
+ * actives, AI interviews and spend, Pro subscribers, pack orders, and a
+ * webhook failure now and then.
+ */
+export function trends(days: number) {
+  const span = 2 * days;
+  const day = (i: number) => new Date(Date.now() - (span - 1 - i) * 86_400_000).toISOString().slice(0, 10);
+  const points = Array.from({ length: span }, (_, i) => {
+    // 0 at 180 days ago, 1 today: everything grows with it.
+    const g = (180 - span + i) / 180;
+    const weekend = new Date(Date.now() - (span - 1 - i) * 86_400_000).getUTCDay() % 6 === 0;
+    const started = Math.max(0, Math.round((4 + 6 * g) * (weekend ? 0.6 : 1) + 2 * Math.sin(i / 2.3)));
+    return {
+      day: day(i),
+      signups: Math.max(0, Math.round((6 + 10 * g) * (weekend ? 0.55 : 1) + 3 * Math.sin(i / 1.7))),
+      active: Math.round(140 + 160 * g + 12 * Math.sin(i / 3.5)),
+      interviewsStarted: started,
+      interviewsFinished: Math.max(0, started - (i % 5 === 0 ? 1 : 0)),
+      aiCostUsd: Math.round(started * (0.38 + 0.08 * Math.sin(i)) * 100) / 100,
+      packOrders: (i * 7) % 11 < 3 ? 1 + (i % 2) : 0,
+      webhookFailures: i % 23 === 4 ? 2 : i % 17 === 9 ? 1 : 0,
+      proSubscribers: Math.round(18 + 34 * g + (i % 9 === 0 ? -1 : 0)),
+    };
+  });
+  return {
+    days,
+    from: day(0),
+    to: day(span - 1),
+    points,
+    usage: { events: ['editor_open', 'practice_open'], days: points.map((p, i) => ({ day: p.day, counts: { editor_open: 30 + p.signups * 4 + (i % 7), practice_open: 12 + p.signups } })) },
+  };
+}
 
 export const USERS = {
   total: 2,
@@ -208,7 +247,55 @@ export const HEALTH = {
   },
 };
 
-const EMPTY_LIST = { total: 0, offset: 0, pageSize: 50, shares: [] };
+const SHARES = {
+  total: 4,
+  offset: 0,
+  pageSize: 50,
+  shares: [
+    { id: 'Xk29dLq0aZ', url: 'https://proschi.app/s/Xk29dLq0aZ', title: 'URL shortener, 99.9% under 120 ms', createdAt: now - 3_600, hasImage: true, bytes: 2_310, owner: { id: PRO_USER, displayName: 'Ada Lovelace', blocked: false } },
+    { id: 'Mn7Pq2Rs4T', url: 'https://proschi.app/s/Mn7Pq2Rs4T', title: 'Chat fan-out with a queue', createdAt: now - DAY, hasImage: true, bytes: 3_904, owner: { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', blocked: false } },
+    { id: 'AbCdEf1234', url: 'https://proschi.app/s/AbCdEf1234', title: 'Buy cheap stuff', createdAt: now - 3 * DAY, hasImage: false, bytes: 410, owner: { id: USER, displayName: 'spammer9000', blocked: true } },
+    { id: 'Qw8Er6Ty4U', url: 'https://proschi.app/s/Qw8Er6Ty4U', title: 'Rate limiter at the edge', createdAt: now - 9 * DAY, hasImage: true, bytes: 1_877, owner: { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', blocked: false } },
+  ],
+};
+
+export const EVENTS = {
+  events: [
+    { id: 40, at: now - 900, level: 'error', kind: 'server_error', message: 'D1_ERROR: database is locked', detail: { route: 'POST /api/problems/:id/runs', status: 500, stack: 'Error: D1_ERROR: database is locked\n    at progress.ts:291' } },
+    { id: 39, at: now - 2_400, level: 'warn', kind: 'rate_limited', message: 'Too many runs; wait a minute', detail: { route: 'POST /api/problems/:id/runs' } },
+    { id: 38, at: now - 3_600, level: 'info', kind: 'cron', message: 'reminders', detail: { sent: 14, ms: 212 } },
+    { id: 37, at: now - 5_400, level: 'error', kind: 'server_error', message: 'Anthropic API answered 529 (overloaded)', detail: { route: 'POST /api/interviews/:id/turns', status: 502 } },
+    { id: 36, at: now - 8_000, level: 'warn', kind: 'sign_in_failed', message: 'OAuth state did not match', detail: { provider: 'google' } },
+    { id: 35, at: now - 4 * 3_600, level: 'info', kind: 'cron', message: 'billing_webhooks', detail: { deleted: 3, ms: 4 } },
+  ],
+  kinds: [
+    { kind: 'cron', n: 212 },
+    { kind: 'rate_limited', n: 31 },
+    { kind: 'server_error', n: 6 },
+    { kind: 'sign_in_failed', n: 4 },
+  ],
+  next: null,
+};
+
+export const AUDIT = {
+  entries: [
+    { id: 18, at: now - 1_800, action: 'user.credits.grant', target: PRO_USER, detail: { credits: 2, reason: 'Support ticket 1234' }, passkey: 'Laptop' },
+    { id: 17, at: now - 2 * DAY, action: 'user.comp', target: '66666666-6666-4666-8666-666666666666', detail: { until: now + 45 * DAY, reason: 'Conference speaker' }, passkey: 'Laptop' },
+    { id: 16, at: now - 3 * DAY, action: 'user.block', target: USER, detail: { reason: 'spam' }, passkey: 'YubiKey' },
+    { id: 15, at: now - 3 * DAY - 60, action: 'share.delete', target: 'AbCdEf1234', detail: { owner: USER }, passkey: 'YubiKey' },
+    { id: 14, at: now - 6 * DAY, action: 'document_share.revoke', target: 'AbCdEfGhIjKlMnOpQrStUv', detail: { owner: PRO_USER }, passkey: 'Laptop' },
+    { id: 13, at: now - 20 * DAY, action: 'admin.passkey.add', target: null, detail: { name: 'YubiKey' }, passkey: 'Laptop' },
+  ],
+  next: null,
+};
+
+export const PASSKEYS = {
+  passkeys: [
+    { id: 'pk1', name: 'Laptop', transports: ['internal'], createdAt: now - 60 * DAY, lastUsedAt: now - 1_800, current: true },
+    { id: 'pk2', name: 'YubiKey', transports: ['usb', 'nfc'], createdAt: now - 20 * DAY, lastUsedAt: now - 3 * DAY, current: false },
+  ],
+  sessions: 2,
+};
 
 /** Mocks /api/admin/*; returns every change the page sent, with its body. */
 export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAvailable: boolean; signedIn: boolean }) {
@@ -230,13 +317,17 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
       }
       if (path === '/api/admin/status') return route.fulfill({ json: status });
       if (path === '/api/admin/overview') return route.fulfill({ json: OVERVIEW });
+      if (path === '/api/admin/trends') return route.fulfill({ json: trends(Number(new URL(request.url()).searchParams.get('days'))) });
       if (path === '/api/admin/health') return route.fulfill({ json: HEALTH });
       if (path === '/api/admin/users') return route.fulfill({ json: USERS });
       if (path === '/api/admin/billing') return route.fulfill({ json: BILLING });
       if (path === '/api/admin/ai') return route.fulfill({ json: AI });
       if (path === '/api/admin/webhooks') return route.fulfill({ json: WEBHOOKS });
-      if (path === '/api/admin/shares') return route.fulfill({ json: EMPTY_LIST });
+      if (path === '/api/admin/shares') return route.fulfill({ json: SHARES });
       if (path === '/api/admin/document-shares') return route.fulfill({ json: LIVE_SHARES });
+      if (path === '/api/admin/events') return route.fulfill({ json: EVENTS });
+      if (path === '/api/admin/audit') return route.fulfill({ json: AUDIT });
+      if (path === '/api/admin/passkeys') return route.fulfill({ json: PASSKEYS });
       const credits = /^\/api\/admin\/users\/([^/]+)\/credits$/.exec(path);
       if (credits) return route.fulfill({ json: ledger(credits[1]) });
       const user = /^\/api\/admin\/users\/([^/]+)$/.exec(path);

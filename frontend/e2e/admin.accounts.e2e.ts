@@ -1,3 +1,4 @@
+import type { Page } from '@playwright/test';
 import { mockAdmin, PRO_USER, USER } from './admin';
 import { expect, test } from './fixtures';
 
@@ -10,6 +11,8 @@ import { expect, test } from './fixtures';
  */
 
 const signedIn = { passkeys: true, setupAvailable: false, signedIn: true };
+
+const nav = (page: Page) => page.getByRole('navigation', { name: 'Admin sections' });
 
 test.describe('admin panel', () => {
   test('asks for the setup token before the first passkey, and for the passkey after', async ({ page }) => {
@@ -36,13 +39,23 @@ test.describe('admin panel', () => {
   test('signed in: the overview, an account, and blocking it', async ({ page }) => {
     const posts = await mockAdmin(page, signedIn);
     await page.goto('admin/');
-    await expect(page.getByRole('tab', { name: 'Overview' })).toHaveAttribute('aria-selected', 'true');
-    await expect(page.getByRole('figure', { name: /Sign-ups/ })).toBeVisible();
-    await expect(page.getByRole('figure', { name: /AI interview spend/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
+    await expect(nav(page).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
+    const kpis = page.getByRole('region', { name: 'Key numbers' });
+    for (const label of ['Sign-ups', 'Weekly active users', 'Pro subscribers', 'Interviews finished', 'AI spend', 'Webhook failures']) await expect(kpis.getByText(label, { exact: true })).toBeVisible();
+    await expect(kpis.getByText('vs previous 30 days').first()).toBeVisible();
+    for (const chart of ['Sign-ups', 'Weekly active users', 'AI spend (USD)', 'AI interviews finished', 'Pro subscribers', 'Interview pack orders']) {
+      await expect(page.getByRole('figure', { name: chart, exact: true })).toBeVisible();
+    }
+    const attention = page.getByRole('region', { name: 'Needs attention' });
+    await expect(attention.getByText('POLAR_PRODUCT_PACK_5')).toBeVisible();
+    await expect(attention.getByText('1 delivery refused or failed in the last 7 days')).toBeVisible();
+    await expect(attention.getByRole('link', { name: 'Open Missing secrets' })).toHaveAttribute('href', '#/health');
+    await expect(attention.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
 
-    await page.getByRole('tab', { name: 'Users' }).click();
+    await nav(page).getByRole('link', { name: 'Users' }).click();
     await expect(page).toHaveURL(/#\/users$/);
+    await expect(nav(page).getByRole('link', { name: 'Users' })).toHaveAttribute('aria-current', 'page');
+    await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
     await page.getByRole('button', { name: 'spammer9000' }).click();
     await expect(page).toHaveURL(new RegExp(`#/users/${USER}$`));
     await expect(page.getByRole('heading', { name: 'spammer9000' })).toBeVisible();
@@ -97,16 +110,74 @@ test.describe('admin panel', () => {
     expect(posts[2]).toEqual({ method: 'POST', path: `/api/admin/users/${PRO_USER}/comp/end`, body: { reason: 'Talk cancelled' } });
   });
 
-  test('the billing tab: subscribers, orders, refunds and the webhook log', async ({ page }) => {
+  test('the overview’s time range scopes every KPI and chart, and lives in the address', async ({ page }) => {
+    await mockAdmin(page, signedIn);
+    const asked: string[] = [];
+    page.on('request', (r) => r.url().includes('/api/admin/trends') && asked.push(new URL(r.url()).searchParams.get('days')!));
+    await page.goto('admin/');
+    const range = page.getByRole('group', { name: 'Time range' });
+    await expect(range.getByRole('button', { name: 'Last 30 days' })).toHaveAttribute('aria-pressed', 'true');
+    const signups = page.getByRole('figure', { name: 'Sign-ups', exact: true });
+    await expect(signups.getByText('in 30 days')).toBeVisible();
+
+    await range.getByRole('button', { name: 'Last 90 days' }).click();
+    await expect(page).toHaveURL(/#\/overview\/90$/);
+    await expect(range.getByRole('button', { name: 'Last 90 days' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(signups.getByText('in 90 days')).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Interview pack orders', exact: true }).getByText('in 90 days')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Key numbers' }).getByText('vs previous 90 days')).toHaveCount(6);
+    // Every day of the range is in the chart's table.
+    await signups.getByText('Show numbers').click();
+    await expect(signups.getByRole('row')).toHaveCount(91);
+
+    await page.goto('admin/#/overview/7');
+    await expect(range.getByRole('button', { name: 'Last 7 days' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(signups.getByText('in 7 days')).toBeVisible();
+    expect(asked).toEqual(['30', '90', '7']);
+
+    // Hovering a day shows its values.
+    const plot = page.getByRole('group', { name: /^Weekly active users: arrow keys/ });
+    await plot.hover({ position: { x: 5, y: 40 } });
+    await expect(page.locator('.adm-tip')).toBeVisible();
+  });
+
+  test('the sidebar groups the pages, marks the current one, and keeps the old hashes working', async ({ page }) => {
+    await mockAdmin(page, signedIn);
+    await page.goto('admin/#/shares');
+    await expect(page).toHaveURL(/#\/links$/);
+    await expect(nav(page).getByRole('link', { name: 'Links' })).toHaveAttribute('aria-current', 'page');
+    for (const group of ['People', 'Revenue', 'AI', 'Content', 'System']) await expect(nav(page).getByText(group, { exact: true })).toBeVisible();
+    await expect(nav(page).getByRole('link')).toHaveCount(10);
+    await expect(nav(page).locator('[aria-current="page"]')).toHaveCount(1);
+
+    await nav(page).getByRole('link', { name: 'Webhooks' }).click();
+    await expect(page).toHaveURL(/#\/webhooks$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Webhooks' })).toBeVisible();
+    await page.goBack();
+    await expect(page).toHaveURL(/#\/links$/);
+    await expect(page.getByRole('heading', { level: 1, name: 'Links' })).toBeVisible();
+  });
+
+  test('the billing page: subscribers, orders and refunds', async ({ page }) => {
     await mockAdmin(page, signedIn);
     await page.goto('admin/#/billing');
-    await expect(page.getByRole('tab', { name: 'Billing' })).toHaveAttribute('aria-selected', 'true');
+    await expect(nav(page).getByRole('link', { name: 'Billing' })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { name: 'Pro accounts (4)' })).toBeVisible();
     await expect(page.getByText('Comp until')).toBeVisible();
     await expect(page.getByRole('link', { name: 'ord_01JC7N2V8F' })).toHaveAttribute('href', 'https://sandbox.polar.sh/to/dashboard/sales/ord_01JC7N2V8F');
-    await expect(page.getByRole('heading', { name: 'Webhook log' })).toBeVisible();
-    await expect(page.getByText('Bad signature', { exact: true })).toBeVisible();
+  });
+
+  test('the webhooks page: deliveries, filtered by outcome', async ({ page }) => {
+    await mockAdmin(page, signedIn);
+    await page.goto('admin/#/webhooks');
     await expect(page.getByText('subscription.updated')).toBeVisible();
+    await expect(page.getByText('Bad signature', { exact: true })).toBeVisible();
+    const filter = page.getByRole('group', { name: 'Outcome' });
+    await expect(filter.getByRole('button', { name: /^All/ })).toHaveAttribute('aria-pressed', 'true');
+    const request = page.waitForRequest((r) => r.url().includes('/api/admin/webhooks') && r.url().includes('outcome=bad_signature'));
+    await filter.getByRole('button', { name: /Bad signature/ }).click();
+    await request;
+    await expect(filter.getByRole('button', { name: /Bad signature/ })).toHaveAttribute('aria-pressed', 'true');
   });
 
   test('the AI tab: interviews per day, cost, top accounts and the token cap', async ({ page }) => {
@@ -126,7 +197,7 @@ test.describe('admin panel', () => {
     await expect(page.getByText('POLAR_SERVER: sandbox (test payments)')).toBeVisible();
     await expect(page.getByText(/Billing is off/)).toBeVisible();
 
-    await page.getByRole('tab', { name: 'Links' }).click();
+    await nav(page).getByRole('link', { name: 'Links' }).click();
     await expect(page.getByRole('heading', { name: 'Live share links' })).toBeVisible();
     page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Revoke' }).click();

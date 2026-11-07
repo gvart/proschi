@@ -17,6 +17,7 @@ import { effectivePlan, effectivePlanSql } from './plans';
  * written to the audit log (`admin_audit`) in the same batch as the change.
  *
  *   GET    /api/admin/overview                   users, sign-ups, activity, content and usage counts
+ *   GET    /api/admin/trends?days=7|30|90       the overview's daily series for the range and the one before
  *   GET    /api/admin/health                     database, cron jobs, configuration, errors
  *   GET    /api/admin/users?q=&filter=&sort=&offset=   accounts, 50 at a time
  *   GET    /api/admin/users/<id>                 one account in detail
@@ -1034,4 +1035,114 @@ export async function adminRevokeDocumentShare(request: Request, ctx: Ctx, token
     auditStatement(ctx.env, admin, 'document_share.revoke', token, { owner: row.user_id }),
   ]);
   return new Response(null, { status: 204 });
+}
+
+/** The time ranges the overview offers, in days. */
+export const TREND_RANGES = [7, 30, 90] as const;
+
+/**
+ * GET /api/admin/trends?days=7|30|90: the overview's daily series for the
+ * range and the range before it (2 × days points, oldest first), so each
+ * number can be compared with the period before:
+ *
+ * - `signups`: accounts created that UTC day;
+ * - `active`: weekly active accounts, those with any recorded activity in the
+ *   7 days to that day (a card review, a daily challenge, a game run, a
+ *   lesson read, a problem's latest run, an AI interview, the day an account
+ *   was created or last seen). D1 keeps no visit log, so this undercounts
+ *   visits that left nothing behind; today's value matches `last_seen_day`;
+ * - `interviewsStarted`, `aiCostUsd` by the day an AI interview started,
+ *   `interviewsFinished` by the day it finished;
+ * - `packOrders`: interview packs paid (`credits` grants);
+ * - `webhookFailures`: Polar deliveries refused (`bad_signature`) or failed (`error`);
+ * - `proSubscribers`: subscriptions that keep Pro, counted back from today's
+ *   with the applied `subscription.active` (one more) and
+ *   `subscription.revoked` (one fewer) deliveries. The webhook log is kept
+ *   90 days, so before that the line is flat.
+ *
+ * Plus the daily usage counts (`daily_counts`) for the same days.
+ */
+export async function getTrends(request: Request, ctx: Ctx): Promise<Response> {
+  await requireAdmin(request, ctx);
+  const days = Number(new URL(request.url).searchParams.get('days') ?? 30);
+  if (!(TREND_RANGES as readonly number[]).includes(days)) throw new HttpError(400, `days must be one of ${TREND_RANGES.join(', ')}`);
+  const { DB } = ctx.env;
+  const t = now();
+  const dayAgo = (n: number) => utcDay(t - n * DAY);
+  const span = 2 * days;
+  const from = dayAgo(span - 1);
+  const to = dayAgo(0);
+  const fromS = Date.parse(`${from}T00:00:00Z`) / 1000;
+  const fromMs = fromS * 1000;
+  // Activity reaches 6 days before the first day: that day's week.
+  const actFrom = dayAgo(span + 5);
+  const actFromS = Date.parse(`${actFrom}T00:00:00Z`) / 1000;
+  const [signups, active, started, finished, packs, webhooks, proNow, usage] = await DB.batch([
+    DB.prepare(`SELECT date(created_at, 'unixepoch') AS day, COUNT(*) AS n FROM users WHERE created_at >= ? GROUP BY day`).bind(fromS),
+    DB.prepare(
+      // D1 allows few terms in one compound SELECT, so the activity is two unions of four.
+      `WITH d(day) AS (SELECT value FROM json_each(?1)),
+       act(user_id, day) AS (
+         SELECT * FROM (
+           SELECT user_id, day FROM card_reviews WHERE day >= ?2
+           UNION SELECT user_id, day FROM challenge_attempts WHERE day >= ?2
+           UNION SELECT user_id, date(started_at, 'unixepoch') FROM game_runs WHERE started_at >= ?3
+           UNION SELECT user_id, date(read_at, 'unixepoch') FROM lesson_reads WHERE read_at >= ?3
+         )
+         UNION SELECT * FROM (
+           SELECT user_id, date(updated_at, 'unixepoch') FROM progress WHERE updated_at >= ?3
+           UNION SELECT user_id, date(started_at / 1000, 'unixepoch') FROM ai_interviews WHERE started_at >= ?3 * 1000
+           UNION SELECT id, last_seen_day FROM users WHERE last_seen_day >= ?2
+           UNION SELECT id, date(created_at, 'unixepoch') FROM users WHERE created_at >= ?3
+         )
+       )
+       SELECT d.day, COUNT(DISTINCT act.user_id) AS n FROM d LEFT JOIN act ON act.day BETWEEN date(d.day, '-6 days') AND d.day GROUP BY d.day`,
+    ).bind(JSON.stringify(Array.from({ length: span }, (_, i) => dayAgo(span - 1 - i))), actFrom, actFromS),
+    DB.prepare(`SELECT date(started_at / 1000, 'unixepoch') AS day, COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost FROM ai_interviews WHERE started_at >= ? GROUP BY day`).bind(fromMs),
+    DB.prepare(`SELECT date(ended_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM ai_interviews WHERE status = 'finished' AND ended_at >= ? GROUP BY day`).bind(fromMs),
+    DB.prepare(`SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM credits WHERE kind = 'grant' AND created_at >= ? GROUP BY day`).bind(fromMs),
+    DB.prepare(
+      `SELECT date(received_at / 1000, 'unixepoch') AS day,
+         COALESCE(SUM(outcome IN ('bad_signature', 'error')), 0) AS failures,
+         COALESCE(SUM(outcome = 'applied' AND type = 'subscription.active'), 0) AS pro_new,
+         COALESCE(SUM(outcome = 'applied' AND type = 'subscription.revoked'), 0) AS pro_ended
+       FROM billing_webhooks WHERE received_at >= ? GROUP BY day`,
+    ).bind(fromMs),
+    DB.prepare(`SELECT COUNT(*) AS n FROM billing WHERE status IN ${PRO_STATUSES_SQL}`),
+    DB.prepare('SELECT day, event, count FROM daily_counts WHERE day >= ?').bind(from),
+  ]);
+  const byDay = <T extends Row>(rows: unknown[]) => new Map((rows as T[]).map((r) => [r.day as string, r]));
+  const s = byDay(signups.results);
+  const a = byDay(active.results);
+  const st = byDay(started.results);
+  const fi = byDay(finished.results);
+  const pk = byDay(packs.results);
+  const wh = byDay(webhooks.results);
+  const counts = new Map<string, Record<string, number>>();
+  for (const r of usage.results as { day: string; event: string; count: number }[]) {
+    if (!counts.has(r.day)) counts.set(r.day, {});
+    counts.get(r.day)![r.event] = r.count;
+  }
+  const n = (row: Row | undefined, key: string) => Number(row?.[key] ?? 0);
+  const points = Array.from({ length: span }, (_, i) => {
+    const day = dayAgo(span - 1 - i);
+    return {
+      day,
+      signups: n(s.get(day), 'n'),
+      active: n(a.get(day), 'n'),
+      interviewsStarted: n(st.get(day), 'n'),
+      interviewsFinished: n(fi.get(day), 'n'),
+      aiCostUsd: n(st.get(day), 'cost'),
+      packOrders: n(pk.get(day), 'n'),
+      webhookFailures: n(wh.get(day), 'failures'),
+      proSubscribers: 0,
+    };
+  });
+  // Today's subscribers, then back a day at a time: before a day's changes there was one fewer per start and one more per end.
+  let pro = (proNow.results[0] as { n: number }).n;
+  for (let i = span - 1; i >= 0; i--) {
+    points[i].proSubscribers = pro;
+    pro = Math.max(0, pro - n(wh.get(points[i].day), 'pro_new') + n(wh.get(points[i].day), 'pro_ended'));
+  }
+  return json({ days, from, to, points, usage: { events: METRIC_EVENTS, days: points.map(({ day }) => ({ day, counts: counts.get(day) ?? {} })) } }, 200, NO_STORE);
 }

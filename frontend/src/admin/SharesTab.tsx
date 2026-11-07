@@ -2,12 +2,13 @@ import { useCallback, useState } from 'react';
 import { deleteShare, listLiveShares, listShares, revokeLiveShare } from './api';
 import { formatBytes, formatDateTime } from './format';
 import { useAction, useLoad } from './hooks';
-import { ErrorNote, Loading, Pager, SearchBox, Section } from './ui';
+import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton } from './ui';
 
 /** Every short link and live share link, newest first: the only user content other people see. */
 export default function SharesTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
   return (
     <>
+      <PageHeader page="links" />
       <ShortLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
       <LiveLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
     </>
@@ -31,7 +32,9 @@ function ShortLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => v
       </div>
       <ErrorNote>{shares.error ?? action.error}</ErrorNote>
       {!shares.data ? (
-        !shares.error && <Loading what="short links" />
+        !shares.error && <Skeleton what="short links" />
+      ) : shares.data.shares.length === 0 ? (
+        <Empty>{q ? 'No short links match.' : 'No short links yet.'}</Empty>
       ) : (
         <>
           <div className="adm-scroll">
@@ -110,7 +113,9 @@ function LiveLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => vo
       </div>
       <ErrorNote>{links.error ?? action.error}</ErrorNote>
       {!links.data ? (
-        !links.error && <Loading what="live share links" />
+        !links.error && <Skeleton what="live share links" />
+      ) : links.data.links.length === 0 ? (
+        <Empty>{q ? 'No live share links match.' : state === 'live' ? 'No live share links.' : 'No live share links yet.'}</Empty>
       ) : (
         <>
           <div className="adm-scroll">
