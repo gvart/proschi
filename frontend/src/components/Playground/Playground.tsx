@@ -34,7 +34,6 @@ import {
   Upload,
   Code2,
   Pencil,
-  Plus,
   Gauge,
   Network,
   ArchiveRestore,
@@ -79,9 +78,11 @@ import { filesResolver, importableFiles, teamFileOf, usedImports, type TeamFile 
 import { LONG_LINK_MESSAGE, LONG_LINK_SHORTEN_MESSAGE, decodeShareLink, encodeShareHash, isLongLink, readShareLink, shareUrl, type PlaybackTarget } from '../../playground/share';
 import { applyMerge, backupFileName, buildBackup, mergeSummary, planMerge, readBackup } from '../../playground/backup';
 import { loadProgress, mergeProgress, saveProgress } from '../../practice/progress';
-import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition } from '../../dsl/edit';
+import { addConnection, addNode, clearPositions, removeConnections, removeNode, renameNode, setNodePosition, uniqueId } from '../../dsl/edit';
 import type { Diagram } from '../../dsl/types';
-import Palette, { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import { TECH_DRAG_TYPE } from '../Diagram/Palette';
+import { CanvasMenu, ConnectHint, EmptyCanvas, PaletteDock, PaletteToggle, type CanvasMenuState } from '../Diagram/CanvasEditing';
+import { historyKey, useConnectHint, usePaletteOpen } from '../Diagram/canvasEditState';
 import Inspector from '../Diagram/Inspector';
 import FlowParticles from '../Overlay/FlowParticles';
 import type { SimOverlay } from '../../sim/overlay';
@@ -156,8 +157,9 @@ const LEGACY_SOURCE_KEY = 'proschi.playground.source';
 /** The splitter's position between the code and diagram panes. */
 const SPLIT_KEY = 'proschi.playground.split';
 const PARSE_DELAY_MS = 150;
-/** Whether the diagrams sidebar is open, on wider screens. */
+/** Whether the diagrams sidebar is pinned open, on wider screens; until it is set, from this width on. */
 const FILES_KEY = 'proschi.playground.files';
+const FILES_PINNED_FROM = 1440;
 const MOD_KEY = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform) ? '⌘' : 'Ctrl';
 const VIEW_LABEL: Record<View, string> = { diagram: 'Diagram', results: 'Results', hld: 'HLD' };
 
@@ -253,8 +255,12 @@ export default function Playground() {
   const [initialStep, setInitialStep] = useState(linkPlayback ? linkPlayback.step - 1 : undefined);
   const [playStep, setPlayStep] = useState(0);
   const [showExamples, setShowExamples] = useState(false);
-  /** The diagrams sidebar on wider screens (remembered); phones open it as a drawer instead. */
-  const [filesOpen, setFilesOpen] = useState(() => loadJson<boolean>(FILES_KEY, true));
+  /**
+   * The diagrams sidebar on wider screens: pinned beside the code (remembered; by default from 1440px),
+   * else a rail that opens it over the panes ("peek"). Phones open it as a drawer instead.
+   */
+  const [filesPinned, setFilesPinned] = useState(() => loadJson<boolean | null>(FILES_KEY, null) ?? window.innerWidth >= FILES_PINNED_FROM);
+  const [filesPeek, setFilesPeek] = useState(false);
   const [drawer, setDrawer] = useState(false);
   const [quickOpen, setQuickOpen] = useState(false);
   const [showShortLinks, setShowShortLinks] = useState(false);
@@ -474,12 +480,17 @@ export default function Playground() {
     if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
   };
 
+  const pinFiles = (pinned: boolean) => {
+    setFilesPinned(pinned);
+    setFilesPeek(false);
+    saveJson(FILES_KEY, pinned);
+  };
   const toggleFiles = () => {
     if (!window.matchMedia('(min-width: 768px)').matches) return setDrawer((d) => !d);
-    setFilesOpen((open) => {
-      saveJson(FILES_KEY, !open);
-      return !open;
-    });
+    if (filesDocked) pinFiles(false);
+    // While the Design partner is open the sidebar stays folded, so the diagram keeps its width.
+    else if (partnerOpen) setFilesPeek((p) => !p);
+    else pinFiles(true);
   };
 
   /** Moves or renames files, then warns about the diagrams whose imports stopped finding a file. */
@@ -497,7 +508,10 @@ export default function Playground() {
   // Ctrl/Cmd+P: go to a diagram (instead of printing the page); Escape closes the phone drawer.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setDrawer(false);
+      if (e.key === 'Escape') {
+        setDrawer(false);
+        setFilesPeek(false);
+      }
       if ((e.ctrlKey || e.metaKey) && !e.altKey && !e.shiftKey && e.key.toLowerCase() === 'p') {
         e.preventDefault();
         setQuickOpen(true);
@@ -511,10 +525,12 @@ export default function Playground() {
     open: (id) => {
       if (id !== docState.currentId) openDoc((s) => selectDoc(s, id));
       setDrawer(false);
+      setFilesPeek(false);
     },
     create: (folder) => {
       openDoc((s) => addDocIn(s, BLANK_SOURCE, folder));
       setDrawer(false);
+      setFilesPeek(false);
     },
     renameFile: (id, base) =>
       changeFiles((s) => {
@@ -552,6 +568,8 @@ export default function Playground() {
   const [partnerOpen, setPartnerOpen] = useState(false);
   const phone = useIsPhone();
   const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
+  // The pinned sidebar folds into its rail while the partner panel is open (not remembered), so the diagram keeps its width.
+  const filesDocked = filesPinned && !(hasPartner && partnerOpen);
   const closePartner = useCallback(() => setPartnerOpen(false), []);
   usePartnerShortcut(togglePartner, hasPartner);
   const sourceNow = useRef(source);
@@ -730,11 +748,19 @@ export default function Playground() {
     else editSource((src) => renameNode(src, id, name));
   };
 
-  /** Adds a catalog component; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
+  /** Adds a catalog component and returns its id; one dropped on the canvas is pinned where it fell, a clicked one is laid out. */
   const addFromCanvas = (tech: string, position?: { x: number; y: number }) => {
-    if (systems.focusFile) return setNotice(`This is the design in ${systems.focusFile}; add components there.`);
-    editSource((src) => addNode(src, { name: tech, tech, position }).source);
+    if (systems.focusFile) {
+      setNotice(`This is the design in ${systems.focusFile}; add components there.`);
+      return undefined;
+    }
+    // The id is picked here, against imported nodes too, so the canvas can select the new node.
+    const id = uniqueId(source, tech, importedNodes.keys());
+    editSource((src) => addNode(src, { id, name: tech, tech, position }).source);
+    return id;
   };
+  const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
+  const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
 
   const connectNodes = (from: string, to: string) => {
     if (systems.focusFile || importedNodes.has(from) || importedNodes.has(to)) return setNotice(`Declared in ${systems.focusFile ?? importedNodes.get(from) ?? importedNodes.get(to)}; connect it there.`);
@@ -845,7 +871,7 @@ export default function Playground() {
           <button
             type="button"
             aria-label="Diagrams"
-            aria-pressed={filesOpen}
+            aria-pressed={filesDocked || filesPeek}
             title="Show or hide the diagrams list (Ctrl+P to jump to one)"
             onClick={toggleFiles}
             className={`${toolButton} min-w-0 aria-pressed:md:bg-ink/10`}
@@ -1162,20 +1188,29 @@ export default function Playground() {
         </div>
       </ZenCollapse>
 
-      <div className="flex flex-1 min-h-0">
+      <div className="relative flex flex-1 min-h-0">
       {!zen.zen &&
-        (filesOpen ? (
+        (filesDocked ? (
           <div className="max-md:hidden w-60 shrink-0 border-r-bw-1 border-ink">
-            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={toggleFiles} />
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onCollapse={() => pinFiles(false)} />
           </div>
         ) : (
-          // Folded: a rail that brings the diagrams back.
-          <div className="max-md:hidden shrink-0 flex flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface px-1 py-2">
-            <button type="button" aria-label="Show sidebar" title="Show sidebar" onClick={toggleFiles} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
-              <PanelLeftOpen size={16} />
-            </button>
-          </div>
+          <FilesRail
+            title={titleOf(source)}
+            cloud={cloud}
+            onShow={() => setFilesPeek(true)}
+            onQuickOpen={() => setQuickOpen(true)}
+            onCreate={() => fileActions.create(current ? folderOf(fileNameOf(current)) : '')}
+          />
         ))}
+      {!zen.zen && !filesDocked && filesPeek && (
+        // Opened from the rail, over the panes: a click beside it or Escape folds it again.
+        <div className="max-md:hidden absolute inset-0 z-30" onMouseDown={() => setFilesPeek(false)}>
+          <div className="h-full w-60 border-r-bw-1 border-ink shadow-brutal-lg" onMouseDown={(e) => e.stopPropagation()}>
+            <FileSidebar docs={docState.docs} currentId={docState.currentId} actions={fileActions} cloud={cloud} onPin={() => pinFiles(true)} onClose={() => setFilesPeek(false)} />
+          </div>
+        </div>
+      )}
       {/* Side by side on wider screens, with a splitter between; phones show one pane at a time (the tabs above). */}
       <Group
         id="playground-split"
@@ -1283,6 +1318,9 @@ export default function Playground() {
                           onRenameNode={renameFromCanvas}
                           onAddNode={addFromCanvas}
                           onEdit={editSource}
+                          onUndo={undoCanvas}
+                          onRedo={redoCanvas}
+                          phone={phone}
                           diagram={shown}
                           crumbs={systems.crumbs}
                           focusFile={systems.focusFile}
@@ -1316,11 +1354,7 @@ export default function Playground() {
                     </Suspense>
                   </div>
                 ) : (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                    <p className="text-sm text-muted">
-                      Start typing, e.g. <code className="px-1 bg-ink/5 rounded-sm font-mono">api -&gt; db</code>
-                    </p>
-                  </div>
+                  <EmptyCanvas />
                 ))}
             </div>
           </section>
@@ -1558,10 +1592,15 @@ interface DiagramViewProps {
   onMoveNodes: (moved: { id: string; position: { x: number; y: number } }[]) => void;
   onConnectNodes: (from: string, to: string) => void;
   onRenameNode: (id: string, name: string) => void;
-  /** Adds a component from the palette, at a canvas position when it was dropped. */
-  onAddNode: (techStack: string, position?: { x: number; y: number }) => void;
+  /** Adds a component from the palette, at a canvas position when it was dropped; returns its id, if it was added. */
+  onAddNode: (techStack: string, position?: { x: number; y: number }) => string | undefined;
   /** Applies an inspector edit to the text. */
   onEdit: (edit: (source: string) => string) => void;
+  /** Ctrl/Cmd+Z and Ctrl/Cmd+Shift+Z on the canvas: the code editor's undo and redo, where every canvas edit is one step. */
+  onUndo: () => void;
+  onRedo: () => void;
+  /** Phones add components from a bottom sheet instead of the docked palette. */
+  phone: boolean;
   /** The parsed diagram, for the inspector. */
   diagram: Diagram;
   /** The simulation drawn on the canvas, when "Overlay: load" is on. */
@@ -1615,6 +1654,9 @@ function DiagramView({
   onRenameNode,
   onAddNode,
   onEdit,
+  onUndo,
+  onRedo,
+  phone,
   diagram,
   overlay,
   canOverlay,
@@ -1641,7 +1683,23 @@ function DiagramView({
   const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
-  const [paletteOpen, setPaletteOpen] = useState(false);
+  // The palette: docked on wider screens (remembered, shown from 1280px until hidden once), a sheet on phones.
+  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette', 1280);
+  const [sheet, setSheet] = useState(false);
+  const [paletteFocus, setPaletteFocus] = useState(false);
+  const canAdd = !playing && crumbs.length === 1;
+  const paletteOpen = canAdd && (phone ? sheet : docked);
+  const togglePalette = () => {
+    setPaletteFocus(!paletteOpen);
+    if (phone) setSheet(!sheet);
+    else setDocked(!docked);
+  };
+  const closePalette = () => (phone ? setSheet(false) : setDocked(false));
+  const [menu, setMenu] = useState<CanvasMenuState | null>(null);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  const [hintSeen, dismissHint] = useConnectHint();
+  /** A component just added, selected once the layout draws it. */
+  const [pendingSelect, setPendingSelect] = useState<string | null>(null);
   /** The node or connection whose settings were closed, so they stay closed until something else is selected. */
   const [closedSettings, setClosedSettings] = useState<string | null>(null);
   const single = selection.nodes.length + selection.edges.length === 1 ? (selection.nodes[0] ?? selection.edges[0]) : undefined;
@@ -1652,6 +1710,24 @@ function DiagramView({
   const hasSelection = !playing && selectionCount > 0;
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
+
+  const addComponent = (tech: string, position?: { x: number; y: number }) => {
+    const id = onAddNode(tech, position);
+    if (id) setPendingSelect(id);
+  };
+  /** Selects only `id` (a node or a connection), as a click would. */
+  const selectOnly = useCallback(
+    (id: string) => {
+      onNodesChange((current) => current.map((n) => (!!n.selected === (n.id === id) ? n : { ...n, selected: n.id === id })));
+      onEdgesChange((current) => current.map((e) => (!!e.selected === (e.id === id) ? e : { ...e, selected: e.id === id })));
+    },
+    [onNodesChange, onEdgesChange],
+  );
+  useEffect(() => {
+    if (!pendingSelect || !nodes.some((n) => n.id === pendingSelect)) return;
+    selectOnly(pendingSelect);
+    setPendingSelect(null);
+  }, [nodes, pendingSelect, selectOnly]);
 
   // React Flow re-sends the selection when this handler changes, so it must be stable
   // and must not store an equal selection again.
@@ -1745,8 +1821,21 @@ function DiagramView({
 
   return (
     <div
+      className="flex h-full"
+      onKeyDown={(e) => {
+        const step = playing ? null : historyKey(e);
+        if (!step) return;
+        e.preventDefault();
+        if (step === 'undo') onUndo();
+        else onRedo();
+      }}
+    >
+    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} />
+    <div
       ref={wrapperRef}
-      className="relative h-full"
+      // Focusable, so the keys above work after a drop from the palette.
+      tabIndex={-1}
+      className={`relative h-full min-w-0 flex-1 outline-hidden ${playing ? '' : 'pc-editable'}`}
       data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
@@ -1757,8 +1846,8 @@ function DiagramView({
         const tech = e.dataTransfer.getData(TECH_DRAG_TYPE);
         if (!tech || playing) return;
         e.preventDefault();
-        setPaletteOpen(false);
-        onAddNode(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
+        e.currentTarget.focus();
+        addComponent(tech, screenToFlowPosition({ x: e.clientX, y: e.clientY }));
       }}
       onKeyDown={(e) => {
         const target = e.target as HTMLElement;
@@ -1800,7 +1889,25 @@ function DiagramView({
           }
           if (moved.length > locked.length) onMoveNodes(moved.map((n) => ({ id: n.id, position: n.position })));
         }}
-        onConnect={(connection) => connection.source && connection.target && onConnectNodes(connection.source, connection.target)}
+        onConnect={(connection) => {
+          if (!connection.source || !connection.target) return;
+          dismissHint();
+          onConnectNodes(connection.source, connection.target);
+        }}
+        onNodeContextMenu={(event, node) => {
+          if (playing) return;
+          event.preventDefault();
+          selectOnly(node.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: node.data?.name ?? node.id });
+        }}
+        onEdgeContextMenu={(event, edge) => {
+          if (playing || edge.id.startsWith('step:')) return;
+          event.preventDefault();
+          selectOnly(edge.id);
+          setClosedSettings(null);
+          setMenu({ x: event.clientX, y: event.clientY, label: `${edge.source} → ${edge.target}` });
+        }}
         // A system box opens its team design; renaming it stays in its settings and the selection bar.
         onNodeDoubleClick={(_event, node) => {
           if (playing) return;
@@ -1825,34 +1932,16 @@ function DiagramView({
             <Breadcrumbs crumbs={crumbs} file={focusFile} readOnly={focusReadOnly} inbound={focusInbound} onPick={onCrumb} />
           </Panel>
         )}
-        {!playing && crumbs.length === 1 && <Panel position="top-left">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => setPaletteOpen((o) => !o)}
-              aria-label="Add component"
-              aria-expanded={paletteOpen}
-              aria-haspopup="dialog"
-              className={`${toolButton} border-ink bg-surface shadow-brutal-sm aria-expanded:bg-pop-yellow aria-expanded:text-on-accent`}
-            >
-              <Plus size={16} />
-              <span className="whitespace-nowrap">
-                Add<span className="hidden sm:inline"> component</span>
-              </span>
-            </button>
-            {paletteOpen && (
-              <div className="absolute left-0 top-full z-10 mt-1">
-                <Palette
-                  onAdd={(tech) => {
-                    setPaletteOpen(false);
-                    onAddNode(tech);
-                  }}
-                  onClose={() => setPaletteOpen(false)}
-                />
-              </div>
-            )}
-          </div>
-        </Panel>}
+        {canAdd && (
+          <Panel position="top-left">
+            <PaletteToggle open={paletteOpen} onToggle={togglePalette} />
+          </Panel>
+        )}
+        {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
+          <Panel position="top-center" className="max-md:!top-12">
+            <ConnectHint onDismiss={dismissHint} />
+          </Panel>
+        )}
         {/* With the settings card open, Delete is in its header; this bar covers several items or a closed card. */}
         {(notice || (hasSelection && !showSettings)) && (
           <Panel position="bottom-center" className="flex flex-col items-center gap-2">
@@ -1890,7 +1979,7 @@ function DiagramView({
         )}
         {nodes.length > 0 && !playing && !(hasSelection && !showSettings) && (
           <Panel position="bottom-right" className="hidden md:block text-xs text-muted bg-paper/85 rounded-sm px-2 py-1">
-            Drag to pin · select to edit settings · drag between dots to connect · Delete removes
+            Drag to pin · select to edit · drag dot to dot to connect · right-click for more
           </Panel>
         )}
         {nodes.length > 0 && (!playing || diagram.legend) && (
@@ -1942,6 +2031,8 @@ function DiagramView({
           />
         </div>
       )}
+      {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}
+    </div>
     </div>
   );
 }
@@ -1986,6 +2077,35 @@ function Breadcrumbs({ crumbs, file, readOnly, inbound, onPick }: { crumbs: Crum
           {inbound}
         </span>
       )}
+    </nav>
+  );
+}
+
+/** The folded diagrams sidebar: open it, jump to a diagram (Ctrl/Cmd+P), start one, and the open diagram's name. */
+function FilesRail({ title, cloud, onShow, onQuickOpen, onCreate }: { title: string; cloud: { state: Parameters<typeof CloudIcon>[0]['state'] }; onShow: () => void; onQuickOpen: () => void; onCreate: () => void }) {
+  const rail = 'p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10';
+  return (
+    <nav aria-label="Diagrams rail" className="max-md:hidden shrink-0 flex w-10 flex-col items-center gap-1 border-r-bw-1 border-ink bg-surface py-2">
+      <button type="button" aria-label="Show sidebar" title="Show the diagrams" onClick={onShow} className={rail}>
+        <PanelLeftOpen size={16} />
+      </button>
+      <button type="button" aria-label="Go to diagram" title={`Go to diagram (${MOD_KEY}+P)`} onClick={onQuickOpen} className={rail}>
+        <Search size={16} />
+      </button>
+      <button type="button" aria-label="New diagram" title="New diagram" onClick={onCreate} className={rail}>
+        <FilePlus size={16} />
+      </button>
+      <span className="my-1 h-px w-5 bg-ink/15" aria-hidden="true" />
+      <CloudIcon state={cloud.state} />
+      <button
+        type="button"
+        onClick={onShow}
+        title={title}
+        aria-label={`Open diagram: ${title}`}
+        className="mt-1 min-h-0 flex-1 overflow-hidden rounded-sm px-1 py-1.5 text-xs font-semibold text-ink/75 hover:bg-ink/10 hover:text-ink"
+      >
+        <span className="block max-h-full truncate [writing-mode:vertical-rl] rotate-180">{title}</span>
+      </button>
     </nav>
   );
 }
