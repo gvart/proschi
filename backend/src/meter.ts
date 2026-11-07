@@ -26,8 +26,21 @@ import { MC } from './plans';
  * INSERT, and a settle one batch, which D1 runs atomically.
  */
 
-export type Usage = { model: string; input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
-export type Action = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps';
+export type Usage = {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  /** Speech-to-text (WHISPER): the audio's length, which it is priced by. */
+  audio_seconds?: number;
+};
+export type Action = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps' | 'voice';
+
+/** Workers AI's speech-to-text model for voice input (src/voice.ts, P39). */
+export const WHISPER = '@cf/openai/whisper-large-v3-turbo';
+/** What Whisper costs us, USD per audio minute (Workers AI pricing, checked 2026-11-07: $0.000513 a minute). At 2x and 0.95 EUR/USD, about 0.1 credit a minute. */
+export const WHISPER_USD_PER_MINUTE = 0.000513;
 
 /** How long a hold counts unless the caller asks otherwise. */
 export const HOLD_TTL_MS = 5 * 60_000;
@@ -77,6 +90,7 @@ export function usdToEur(env: Pick<Env, 'CREDITS_USD_EUR'>): number {
 
 /** What one call cost us, in USD. */
 export function costUsd(u: Usage): number {
+  if (u.model === WHISPER) return ((u.audio_seconds ?? 0) / 60) * WHISPER_USD_PER_MINUTE;
   const read = u.cache_read_input_tokens ?? 0;
   const write = u.cache_creation_input_tokens ?? 0;
   const p = priceOf(u.model, u.input_tokens + read + write);
@@ -326,6 +340,9 @@ export function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolea
   return interviewCapMc(minutes) - verdictHoldMc(env) + verdictHoldMc(env, deep);
 }
 
+/** What `seconds` of audio cost the user to transcribe, in millicredits (P39). */
+export const voiceMc = (seconds: number, env: Pick<Env, 'CREDITS_USD_EUR'>): number => costMc({ model: WHISPER, input_tokens: 0, output_tokens: 0, audio_seconds: seconds }, env);
+
 /** Opus's price over Sonnet's: what Deep mode multiplies a call by (P31). */
 export const DEEP_MULTIPLIER = PRICES[OPUS].output / PRICES[SONNET].output;
 
@@ -348,6 +365,8 @@ export function estimates(env: Pick<Env, 'CREDITS_USD_EUR'>) {
     partner_review: one(CALLS.partnerReview),
     partner_build: one(CALLS.partnerBuild),
     partner_turn: one(CALLS.partnerTurn),
+    /** Voice input's server speech-to-text, per minute of audio (P39): the same at its worst. */
+    voice_minute: range(voiceMc(60, env), voiceMc(60, env), voiceMc(60, env)),
     /** The verdict alone, in the mock interview's estimate: what Deep mode multiplies there (P31). */
     verdict: one(CALLS.verdict),
     deepMultiplier: DEEP_MULTIPLIER,

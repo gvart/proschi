@@ -31,6 +31,10 @@ export interface Env {
   WEBHOOK_LOG_LIMITER: RateLimit;
   /** Design partner (src/partner.ts), per user: sessions, turns, reads and change decisions. */
   PARTNER_LIMITER: RateLimit;
+  /** Voice input's server speech-to-text (src/voice.ts), per user: one request per recorded chunk. */
+  VOICE_LIMITER: RateLimit;
+  /** Workers AI (wrangler.jsonc `ai`): Whisper for voice input (src/voice.ts, P39). Unset, the route answers 501. */
+  AI?: { run(model: string, input: Record<string, unknown>): Promise<unknown> };
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**

@@ -17,7 +17,7 @@ export const ESTIMATE_MINUTES = 45;
 
 export const getEstimates = (): Promise<CreditEstimates> => api<CreditEstimates>('/api/credits/estimates');
 
-export type UsageAction = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps';
+export type UsageAction = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps' | 'voice';
 
 export interface UsageItem {
   /** Unix ms. */
@@ -33,6 +33,7 @@ export const USAGE_LABEL: Record<UsageAction, string> = {
   design_partner: 'Design partner',
   verdict: 'Verdict',
   next_steps: 'Your next steps',
+  voice: 'Voice input',
 };
 
 /** GET /api/credits/usage: the latest charges, newest first. */
