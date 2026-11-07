@@ -1,0 +1,57 @@
+frontend/e2e/interview.e2e.ts
+  s_e17b87e0a1b3ca::t_ce7e93f57c89fd 240-272
+backend/test/achievements.test.ts
+  s_e17b87e0a1b3ca::t_f516526a4c7cfe 81,103
+backend/test/soloInterviews.test.ts
+  s_e17b87e0a1b3ca::t_baf0df4945bf4d 1-71
+frontend/src/practice/interview/InterviewRoute.tsx
+  s_e17b87e0a1b3ca::t_9fcf0ee52e3244 11-12,14-15,39-42,45,57,69-71,82,85,97-103,110-111,113-115,117,125-126,130,145-146,159
+frontend/src/practice/interview/progressChange.ts
+  s_e17b87e0a1b3ca::t_fb1fa1b59bd8c3 1-37
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_53e08c7611cbec 8,26,38-39,153-154,156,161,261
+frontend/src/practice/interview/Result.tsx
+  s_e17b87e0a1b3ca::t_9fcf0ee52e3244 14-15,18,51
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_724111bc717036 266
+backend/src/achievements.ts
+  s_e17b87e0a1b3ca::t_7dbee6f46bc624 26,117,126-127,176
+frontend/src/practice/interview/record.ts
+  s_e17b87e0a1b3ca::t_3c7af03aa75712 1-31
+frontend/src/practice/skills/localAchievements.ts
+  s_e17b87e0a1b3ca::t_6139f88d213f4f 29,34-35,105-106
+frontend/src/practice/interview/progressChange.test.ts
+  s_e17b87e0a1b3ca::t_7792a839225c82 1-59
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_2433cd6ec78b70 40-41,167-169,315
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_7dbee6f46bc624 71,117,296
+backend/src/soloInterviews.ts
+  s_e17b87e0a1b3ca::t_12d922a4ff06a5 1-105
+backend/migrations/0032_solo_interviews.sql
+  s_e17b87e0a1b3ca::t_920eb5e98a9db6 1-17
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_7dbee6f46bc624 26,287-288
+  s_e17b87e0a1b3ca::t_7a05af2a236f62 168
+frontend/src/practice/history/SoloHistory.tsx
+  s_e17b87e0a1b3ca::t_4d69d7486faaec 1-65
+frontend/src/practice/interview/ResultProgress.tsx
+  s_e17b87e0a1b3ca::t_fb1fa1b59bd8c3 4,7
+  s_e17b87e0a1b3ca::t_c6a19bb3a8ceee 1-3,5-6,8-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0ffc182abebdb3f0d19c84f43b14fadf08b99a91",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
