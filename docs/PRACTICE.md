@@ -247,7 +247,8 @@ it up again.
 - **The phase and the clock**: the same four phases and 10/10/70/10 split of
   30, 45 or 60 minutes. The clock moves the phase on; **Next phase** moves
   on earlier. Whatever the length, a session stops taking turns after 60
-  minutes or at its token cap; the verdict can always be asked for.
+  minutes or at its credit cap (100, 150 or 200 credits for 30, 45 or 60
+  minutes); the verdict can always be asked for.
 - **Coaching cards** after each turn: **Focus now** (what to do next),
   **Can improve** (what to fix in what you just said) and **Wrap up** (near
   the end of a phase).

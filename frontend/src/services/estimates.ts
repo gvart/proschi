@@ -32,7 +32,7 @@ export interface CreditEstimates {
  * fails when the two differ, so change both together.
  */
 export const TYPICAL_COSTS: CreditEstimates = {
-  mock_interview: { min: 37.253, max: 57.039, worst: 1096.536 },
+  mock_interview: { min: 37.253, max: 57.039, worst: 150 },
   partner_review: { min: 8.36, max: 12.16, worst: 49.4 },
   partner_build: { min: 12.996, max: 20.596, worst: 72.2 },
   partner_turn: { min: 4.028, max: 5.928, worst: 30.4 },

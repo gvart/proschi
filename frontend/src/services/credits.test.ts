@@ -34,10 +34,11 @@ describe('estimates', () => {
     // Without the server's verdict range, the typical one.
     expect(interviewEstimate({ ...e, verdict: undefined }, 45, true)).toEqual({ min: 60, max: 75 });
   });
-  it('keeps the session’s cap whatever the length, plus a Deep verdict’s own hold beyond it', () => {
-    const e = { ...TYPICAL_COSTS, mock_interview: { min: 45, max: 60, worst: 1000 }, verdict: { min: 15, max: 50, worst: 53 } };
-    expect(interviewEstimate(e, 30).worst).toBe(1000);
-    expect(interviewEstimate(e, 60, true).worst).toBe(1053);
+  it('scales the session’s cap with its length (100, 150, 200), plus a Deep verdict’s own hold beyond it', () => {
+    const e = { ...TYPICAL_COSTS, mock_interview: { min: 45, max: 60, worst: 150 }, verdict: { min: 15, max: 50, worst: 53 } };
+    expect(interviewEstimate(e, 30).worst).toBe(100);
+    expect(interviewEstimate(e, 45).worst).toBe(150);
+    expect(interviewEstimate(e, 60, true).worst).toBe(253);
   });
 });
 

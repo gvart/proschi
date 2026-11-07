@@ -4,7 +4,7 @@ import { HAIKU } from '../src/ai/client';
 import { grantSignupCredits, topupStatement } from '../src/credits';
 import type { Env } from '../src/env';
 import { pruneInterviewTranscripts, TRANSCRIPT_TTL_MS } from '../src/interviews';
-import { balanceMc, costMc, hold, interviewTurnHoldMc, verdictHoldMc } from '../src/meter';
+import { balanceMc, costMc, estimates, hold, interviewCapMc, interviewTurnHoldMc, interviewTurnRoomMc, interviewWorstMc, verdictHoldMc } from '../src/meter';
 import { call, resetDatabase, signedInUser } from './helpers';
 import { messageResponse, sseResponse, streamEvents, type Recorded } from './ai/mockClaude';
 
@@ -294,6 +294,36 @@ describe('AI interviews', () => {
     expect(res.status).toBe(200);
     await events(res);
     expect((await env.DB.prepare('SELECT turning_until FROM ai_interviews WHERE id = ?').bind(id).first<{ turning_until: number | null }>())!.turning_until).toBeNull();
+  });
+
+  it('caps a session at 100, 150 or 200 credits for 30, 45 or 60 minutes, the verdict always within it (P40)', () => {
+    expect([30, 45, 60].map((m) => interviewCapMc(m) / 1000)).toEqual([100, 150, 200]);
+    expect(interviewWorstMc(e, false) / 1000).toBe(150);
+    expect(estimates(e).mock_interview.worst).toBe(150);
+    // Deep adds what its verdict holds beyond the ordinary one.
+    expect(interviewWorstMc(e, true) - interviewWorstMc(e, false)).toBe(verdictHoldMc(e, true) - verdictHoldMc(e));
+    const turnsMax = interviewCapMc(45) - verdictHoldMc(e);
+    expect(interviewTurnRoomMc(e, 45, 0)).toBe(interviewTurnHoldMc(e));
+    // Near the cap a turn holds only what is left; with less than a usual turn left, none.
+    expect(interviewTurnRoomMc(e, 45, turnsMax - 10_000)).toBe(10_000);
+    expect(interviewTurnRoomMc(e, 45, turnsMax - 1_000)).toBeUndefined();
+    expect(interviewTurnRoomMc(e, 60, turnsMax - 1_000)).toBe(interviewTurnHoldMc(e));
+  });
+
+  it('refuses a turn once the session has been charged up to its cap, and moves it to the wrap-up', async () => {
+    const calls = claude();
+    const { id: userId, token } = await user(200);
+    const id = await started(token);
+    // What earlier turns were charged: all but a few credits of the cap less the verdict.
+    const spent = interviewCapMc(45) - verdictHoldMc(e) - 1_000;
+    await env.DB.prepare("INSERT INTO credit_charges (hold_id, user_id, action, ref, deep, charged_mc, cost_usd, created_at) VALUES ('old', ?, 'mock_interview', ?, 0, ?, 0, ?)").bind(userId, id, spent, Date.now()).run();
+    const res = await turnOf(token, id, { message: 'One more question' });
+    expect(res.status).toBe(409);
+    expect(await res.json()).toMatchObject({ error: 'budget' });
+    expect(calls).toHaveLength(0);
+    expect(JSON.parse((await row(id))!.state!).phase).toBe('wrapup');
+    // The verdict still runs.
+    expect((await call(`/api/interviews/${id}/finish`, { method: 'POST', token })).status).toBe(200);
   });
 
   it('counts a failed call’s tokens against the cap, but charges the user nothing for it', async () => {

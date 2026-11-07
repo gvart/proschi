@@ -165,7 +165,7 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, limits, features, credits: {balance, monthly: {allowance, left, resetsAt} \| null, signup, topup}}` ([Billing and credits](#billing-and-credits)), credits with up to 3 decimals; `limits.documents` and `versionsPerDocument` are null where unlimited |
 | `POST /api/billing/checkout {product}` | `product`: `pro_monthly`, `pro_yearly`, `max_monthly`, `max_yearly` or `credits_1000`. `{url}` of a Polar checkout to send the browser to. 409 `has_subscription` for a plan while a subscription is running (switch it instead); a top-up is always allowed; 501 without Polar set up |
 | `POST /api/billing/change-plan {product}` | Switches the running subscription to another plan product at Polar (one subscription, never a second): `{ok: true, plan, effective: 'now'}`; the webhook then sets the plan. 409 `no_subscription`, `canceling` (set to end) or `same_plan`; 400 for `credits_1000`; 502 when Polar refuses |
-| `GET /api/credits/estimates` | Public: `{mock_interview, partner_review, partner_build, partner_turn, verdict: {min, max, worst}, deepMultiplier}`, in credits ([Credits](#credits)): `min` to `max` is what each usually costs (from typical token counts, `src/meter.ts`), `worst` what it can never cost more than (a call's hold; for a mock interview, its token cap and holds). The page's fallback before it answers (`frontend/src/services/estimates.ts`) must equal it; `test/credits.test.ts` checks |
+| `GET /api/credits/estimates` | Public: `{mock_interview, partner_review, partner_build, partner_turn, verdict: {min, max, worst}, deepMultiplier}`, in credits ([Credits](#credits)): `min` to `max` is what each usually costs (from typical token counts, `src/meter.ts`), `worst` what it can never cost more than (a call's hold; for a mock interview, the 45-minute session's credit cap, P40). The page's fallback before it answers (`frontend/src/services/estimates.ts`) must equal it; `test/credits.test.ts` checks |
 | `GET /api/credits/usage?limit=` | Signed in: `{items: [{at, action, ref, credits, deep}]}`, the newest charges first (at most 200) |
 | `POST /api/billing/portal` | `{url}` of Polar's customer portal (invoices, payment method, cancel). 404 before a first purchase; 501 without Polar set up |
 | `POST /api/billing/webhook` | Polar's signed events (no session). 403 on a bad signature; a replay answers `{ok: true, duplicate: true}`; 501 without Polar set up |
@@ -372,7 +372,12 @@ P31; the routes are in the [API table](#what-the-api-does)).
   turn's; the verdict's is held for the whole session. Each turn holds,
   then settles. At 0 credits the turn answers the 402 with `wrapUp: true`,
   the session moves to wrap-up, and the verdict still runs from its hold.
-  The token cap and the lease stay as they were.
+  A session is charged at most its cap (P40): 100, 150 or 200 credits for
+  30, 45 or 60 minutes. A turn holds two replies' worst case (the calculator
+  follow-up, P38) and the hint's, or only what is left of the cap less the
+  verdict's hold; with less than a usual turn left it answers `409 budget`
+  and the session moves to wrap-up. The token cap (a runaway guard) and the
+  lease stay as they were.
 - **Max extras** (P31). `POST /api/interviews {deep: true}` (feature
   `deep_mode`, else 402 `plan_required`) stores `deep` on the session
   (migration 0027): its verdict runs on `claude-opus-5-5`, holds Opus's

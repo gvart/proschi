@@ -1,4 +1,3 @@
-import { MAX_TURNS, TOKEN_CAP, VERDICT_RESERVE } from './ai/budget';
 import { AiError } from './ai/client';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
@@ -278,8 +277,28 @@ export function typicalMc(c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>, end: 
   return costMc({ model: c.model, input_tokens: Math.round(c.input * 0.2), cache_read_input_tokens: Math.round(c.input * 0.8), output_tokens: c.typicalOutput[end] }, env);
 }
 
-/** What one mock interview turn holds: the reply and the hint at their worst. */
-export const interviewTurnHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => worstMc(CALLS.interviewReply, env) + worstMc(CALLS.interviewHint, env);
+/** What one mock interview turn holds: the reply (twice: the calculator's follow-up, P38) and the hint at their worst. */
+export const interviewTurnHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => 2 * worstMc(CALLS.interviewReply, env) + worstMc(CALLS.interviewHint, env);
+
+/** The most a 45-minute mock interview is ever charged, in credits (P40); other lengths in proportion. */
+export const INTERVIEW_CAP_CREDITS = 150;
+const CAP_MINUTES = 45;
+
+/** A mock interview's cap in millicredits: 100 credits for 30 minutes, 150 for 45, 200 for 60 (P40). */
+export const interviewCapMc = (minutes: number): number => Math.round((INTERVIEW_CAP_CREDITS * minutes) / CAP_MINUTES) * MC;
+
+/**
+ * What the next turn of a session may hold (P40): its usual hold, or less
+ * when the session is near its cap. Its turns are charged at most the cap
+ * less the (ordinary) verdict's hold, so the verdict always fits under it.
+ * Undefined when what is left is less than a turn usually costs: the session
+ * has used its budget and goes to the verdict.
+ */
+export function interviewTurnRoomMc(env: Pick<Env, 'CREDITS_USD_EUR'>, minutes: number, chargedMc: number): number | undefined {
+  const room = interviewCapMc(minutes) - verdictHoldMc(env) - chargedMc;
+  const usual = 2 * (typicalMc(CALLS.interviewReply, env, 1) + typicalMc(CALLS.interviewHint, env, 1));
+  return room < usual ? undefined : Math.min(room, interviewTurnHoldMc(env));
+}
 
 /** A Deep verdict (Max, P31): the same call on Opus. */
 const DEEP_VERDICT: CallShape = { ...CALLS.verdict, model: OPUS };
@@ -296,17 +315,15 @@ export const verdictHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>, deep = false): 
 const TYPICAL_TURNS = [9, 13] as const;
 
 /**
- * The most a mock interview can be charged, whatever happens: its turns stop
- * once the session has used TOKEN_CAP less VERDICT_RESERVE billed tokens
- * (src/ai/budget.ts), no billed token of a turn costs more than Sonnet's
- * output, the turn that crosses the line is charged at most its hold, and
- * the verdict at most its hold (a settle never charges more than its hold).
- * MAX_TURNS turns at their holds bound it too.
+ * The most a mock interview of `minutes` can be charged, whatever happens
+ * (P40): each turn holds at most what is left of the cap less the verdict's
+ * hold (interviewTurnRoomMc) and a settle never charges more than its hold,
+ * so the turns together stay under it, and the verdict is charged at most
+ * its own hold. That is the cap; a Deep verdict (P31) adds what its hold is
+ * beyond the ordinary one.
  */
-function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolean): number {
-  const turnHold = interviewTurnHoldMc(env);
-  const turns = Math.min(costMc({ model: SONNET, input_tokens: 0, output_tokens: TOKEN_CAP - VERDICT_RESERVE }, env) + turnHold, MAX_TURNS * turnHold);
-  return turns + verdictHoldMc(env, deep);
+export function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolean, minutes = CAP_MINUTES): number {
+  return interviewCapMc(minutes) - verdictHoldMc(env) + verdictHoldMc(env, deep);
 }
 
 /** Opus's price over Sonnet's: what Deep mode multiplies a call by (P31). */
