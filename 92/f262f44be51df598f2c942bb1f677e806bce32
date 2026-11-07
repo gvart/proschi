@@ -1,0 +1,63 @@
+frontend/e2e/prep.e2e.ts
+  s_e17b87e0a1b3ca::t_3adbad0458b070 34
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 2
+  s_e17b87e0a1b3ca::t_31ae6e9f28951c 6-14,20,23,33,36-39,41-65,73,75,79-88,91-92,95,100-101,107,111,115-118,123-127,129,135-136,158,175-176
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_848cad9527718e 20,199
+frontend/e2e/header.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 101-103
+frontend/e2e/review.e2e.ts
+  s_e17b87e0a1b3ca::t_1104853b78f0e6 2
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 24,26
+  s_e17b87e0a1b3ca::t_3bbd00471e7e4c 172-173
+frontend/e2e/settings.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_d88a09335ed353 84,86-94
+frontend/e2e/mobile.e2e.ts
+  s_e17b87e0a1b3ca::t_e8eb4ffcd9a8fd 3,129,192,199,205-207,209-215
+frontend/e2e/challenge.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 3,62,64-65
+  s_e17b87e0a1b3ca::t_e8eb4ffcd9a8fd 102,104-105,107-108
+frontend/src/practice/hub/hub.test.tsx
+  s_e17b87e0a1b3ca::t_a6974110af24ea 6-7,10,14-15,19-23,63-69,76-89
+  s_e17b87e0a1b3ca::t_93f6fc82bc7977 90-91
+frontend/src/practice/hub/PracticeHub.tsx
+  s_e17b87e0a1b3ca::t_3adbad0458b070 1,154
+  s_e17b87e0a1b3ca::t_5b5c1c339fede4 138,140,146-147
+frontend/e2e/challenge.e2e.ts
+  s_e17b87e0a1b3ca::t_a5f8837dcc2ed7 2,73-74,76
+  s_e17b87e0a1b3ca::t_8f78d3627147b7 78,80-81,122,126
+frontend/e2e/streak.e2e.ts
+  s_e17b87e0a1b3ca::t_8f78d3627147b7 2,55-57,70,74
+  s_e17b87e0a1b3ca::t_e8eb4ffcd9a8fd 137-138
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 164
+frontend/src/practice/Streak.tsx
+  s_e17b87e0a1b3ca::t_911612aeca1bd1 79-98
+  s_e17b87e0a1b3ca::t_eef0bc3c9b2583 51,53,64
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_3d642281403dd3 164,167,169-170,178,190
+frontend/e2e/billing.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 286
+frontend/e2e/roadmap.e2e.ts
+  s_e17b87e0a1b3ca::t_3ef1adc6507ef5 2,13
+frontend/src/practice/hub/HomeExtras.tsx
+  s_e17b87e0a1b3ca::t_f37cd680c9105d 153,155
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_d4115e77129879 21-32
+  s_e17b87e0a1b3ca::t_55f889e9c4d9a0 33-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "92f262f44be51df598f2c942bb1f677e806bce32",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
