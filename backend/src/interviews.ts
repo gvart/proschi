@@ -1,13 +1,13 @@
 import { DURATIONS, type Duration } from '../../frontend/src/practice/modes/session';
 import type { User } from './auth';
-import { aiEnabled, AiError, createClient, HAIKU, SONNET, type Model } from './ai/client';
+import { aiEnabled, AiError, createClient, HAIKU, OPUS, SONNET, type Model } from './ai/client';
 import { addUsage, billedTokens, emptyUsage, sessionCostUsd, usageSince, WALL_CLOCK_MS, type SessionUsage } from './ai/budget';
 import { problemContext } from './ai/context';
 import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewState, type InterviewVerdict } from './ai/interviewer';
 import type { Ctx } from './context';
 import { creditsView } from './credits';
 import type { Env } from './env';
-import { can, requireFeature, type FeatureRoute } from './features';
+import { can, planRequired, requireFeature, type FeatureRoute } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { balanceMc, CALLS, hold, HOLD_TTL_MS, interviewTurnHoldMc, noCredits, release, settle, verdictHoldMc, worstMc, type Usage as MeterUsage } from './meter';
@@ -18,13 +18,20 @@ import { recommendAfterInterview } from './roadmap';
  * the engine in src/ai/interviewer.ts. Signed in only, each route with its
  * own per-user rate limit; without ANTHROPIC_API_KEY every route answers 501.
  *
- *   POST /api/interviews {problem, minutes, replace?}   holds the verdict's credits, opens a session (402 no_credits, 409 active_session)
+ *   POST /api/interviews {problem, minutes, replace?, deep?}   holds the verdict's credits, opens a session (402 no_credits or plan_required, 409 active_session)
  *   POST /api/interviews/<id>/turn {message, design?, advance?}
  *                                                 the reply as Server-Sent Events: text…, then hint, grade, done
  *   POST /api/interviews/<id>/finish              the verdict (once; again answers the same one)
  *   GET  /api/interviews/<id>                     the session with its transcript, to resume
  *   GET  /api/interviews                          the user's sessions, newest first, and the credits left
  *   GET  /api/interviews/history                  verdict summaries with skill scores: every one on Pro, the latest on free (P1)
+ *   GET  /api/interviews/<id>/report              a finished session's printable report (interview_report, Max; P31), without the AI key too
+ *
+ * Deep mode (deep_mode, Max; P31): a session started with `deep` has its
+ * verdict written by Opus, held and charged at Opus's price; its turns and
+ * hints stay on Sonnet and Haiku. The server checks the plan at the start
+ * (402 plan_required) and again at the verdict: an account that left Max
+ * meanwhile gets the ordinary verdict.
  *
  * A Pro user's verdict is followed by the AI roadmap's next steps
  * (src/roadmap.ts, P9): one Haiku call made after the verdict is answered
@@ -78,6 +85,7 @@ interface Row {
   verdict: string | null;
   turning_until: number | null;
   verdict_hold: string | null;
+  deep: number;
 }
 
 interface MessageRow {
@@ -146,11 +154,12 @@ function summary(row: Row) {
     status: row.status,
     startedAt: row.started_at,
     endedAt: row.ended_at ?? undefined,
+    deep: row.deep === 1,
     ...(row.verdict ? { verdict: JSON.parse(row.verdict) as InterviewVerdict } : {}),
   };
 }
 
-/** POST /api/interviews {problem, minutes, replace?}. */
+/** POST /api/interviews {problem, minutes, replace?, deep?}. */
 export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITER, async (request: Request, ctx: Ctx, user: User): Promise<Response> => {
   const body = await readJson(request);
   const context = typeof body.problem === 'string' ? problemContext(body.problem) : undefined;
@@ -159,6 +168,9 @@ export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITE
   if (!DURATIONS.includes(minutes as Duration)) throw new HttpError(400, `minutes must be one of ${DURATIONS.join(', ')}`);
 
   if (body.replace !== undefined && typeof body.replace !== 'boolean') throw new HttpError(400, 'replace must be a boolean');
+  if (body.deep !== undefined && typeof body.deep !== 'boolean') throw new HttpError(400, 'deep must be a boolean');
+  const deep = body.deep === true;
+  if (deep && !can(user, 'deep_mode', ctx.env).ok) return planRequired('deep_mode');
   // One session at a time: an open one is resumed, or ended on purpose (its credit is not returned).
   const open = await ctx.env.DB.prepare("SELECT id, problem_id FROM ai_interviews WHERE user_id = ? AND status IN ('active', 'finishing') ORDER BY started_at DESC LIMIT 1")
     .bind(user.id)
@@ -172,16 +184,16 @@ export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITE
   const replaced = await DB.prepare("SELECT verdict_hold FROM ai_interviews WHERE user_id = ? AND status IN ('active', 'finishing') AND verdict_hold IS NOT NULL").bind(user.id).all<{ verdict_hold: string }>();
   for (const r of replaced.results) await release(ctx.env, r.verdict_hold);
   // Enough for the verdict and one turn (P28); only the verdict is held, for the whole session.
-  const needed = verdictHoldMc(ctx.env) + interviewTurnHoldMc(ctx.env);
+  const needed = verdictHoldMc(ctx.env, deep) + interviewTurnHoldMc(ctx.env);
   const balance = await balanceMc(ctx.env, user.id);
   if (balance < needed) return noCredits(needed, balance);
-  const held = await hold(ctx.env, user.id, verdictHoldMc(ctx.env), id, WALL_CLOCK_MS + VERDICT_HOLD_EXTRA_MS);
+  const held = await hold(ctx.env, user.id, verdictHoldMc(ctx.env, deep), id, WALL_CLOCK_MS + VERDICT_HOLD_EXTRA_MS);
   if (!held.ok) return noCredits(needed, held.balanceMc);
 
   const { state, opening } = start(context, minutes as Duration, now);
   await DB.batch([
     DB.prepare("UPDATE ai_interviews SET status = 'abandoned', ended_at = ?2, verdict_hold = NULL WHERE user_id = ?1 AND status IN ('active', 'finishing')").bind(user.id, now),
-    DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, state, started_at, verdict_hold) VALUES (?, ?, ?, ?, 'active', ?, ?, ?)").bind(
+    DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, state, started_at, verdict_hold, deep) VALUES (?, ?, ?, ?, 'active', ?, ?, ?, ?)").bind(
       id,
       user.id,
       context.problem.id,
@@ -189,6 +201,7 @@ export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITE
       JSON.stringify(state),
       now,
       held.holdId,
+      deep ? 1 : 0,
     ),
     DB.prepare("INSERT INTO ai_interview_messages (interview_id, role, text, at) VALUES (?, 'interviewer', ?, ?)").bind(id, opening, now),
   ]);
@@ -227,8 +240,8 @@ function addTokens(DB: D1Database, id: string, used: SessionUsage, lease?: numbe
   );
 }
 
-/** A failed call's tokens, as a session's usage (every interview call that can fail is Sonnet's; a failed hint is part of its turn). */
-const failedUsage = (e: AiError): SessionUsage => addUsage(emptyUsage(), SONNET, e.usage);
+/** A failed call's tokens, as a session's usage (a turn's is Sonnet's, a failed hint part of it; a Deep verdict's is Opus's). */
+const failedUsage = (e: AiError, model: Model = SONNET): SessionUsage => addUsage(emptyUsage(), model, e.usage);
 
 
 function limitStatus(e: InterviewLimitError): number {
@@ -389,6 +402,8 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
   if (!context) throw new HttpError(409, 'The problem is no longer available');
   const { DB } = ctx.env;
   const now = Date.now();
+  // Deep only while the account still has it (P31); else the ordinary verdict, within the Deep hold.
+  const deep = row.deep === 1 && can(user, 'deep_mode', ctx.env).ok;
   // Claims the session, so two finishes at once (or a finish during a turn) don't both pay for the model.
   const claimed = await DB.prepare("UPDATE ai_interviews SET status = 'finishing' WHERE id = ? AND status = 'active' AND version = ? AND (turning_until IS NULL OR turning_until < ?) RETURNING tokens")
     .bind(id, row.version, now)
@@ -398,24 +413,24 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
   const kept = row.verdict_hold
     ? await DB.prepare('SELECT id FROM credit_holds WHERE id = ? AND expires_at > ?').bind(row.verdict_hold, now).first<{ id: string }>()
     : null;
-  const held = kept ? ({ ok: true, holdId: kept.id } as const) : await hold(ctx.env, user.id, verdictHoldMc(ctx.env), id, HOLD_TTL_MS);
+  const held = kept ? ({ ok: true, holdId: kept.id } as const) : await hold(ctx.env, user.id, verdictHoldMc(ctx.env, deep), id, HOLD_TTL_MS);
   if (!held.ok) {
     await DB.prepare("UPDATE ai_interviews SET status = 'active' WHERE id = ? AND status = 'finishing'").bind(id).run();
     return noCredits(held.neededMc, held.balanceMc);
   }
   try {
-    const result = await verdict({ client: createClient(ctx.env), context, now, tokens: claimed.tokens }, state);
+    const result = await verdict({ client: createClient(ctx.env), context, now, tokens: claimed.tokens }, state, { deep });
     const s = result.state;
     const used = usageSince(s.usage, state.usage);
-    // Only the answer that validated is charged (P27).
-    await settle(ctx.env, held.holdId, [{ model: SONNET, ...result.billable }], 'verdict', false);
-    await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = tokens + ?, cost_usd = cost_usd + ?, verdict = ?, verdict_hold = NULL WHERE id = ?")
-      .bind(JSON.stringify(s), Date.now(), billedTokens(used), sessionCostUsd(used), JSON.stringify(result.verdict), id)
+    // Only the answer that validated is charged (P27), at the price of the model asked for.
+    await settle(ctx.env, held.holdId, [{ model: result.model, ...result.billable }], 'verdict', deep);
+    await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = tokens + ?, cost_usd = cost_usd + ?, verdict = ?, verdict_hold = NULL, deep = ? WHERE id = ?")
+      .bind(JSON.stringify(s), Date.now(), billedTokens(used), sessionCostUsd(used), JSON.stringify(result.verdict), deep ? 1 : 0, id)
       .run();
     // The next steps (Pro), after the verdict is answered: the page asks for them again until they land.
     ctx.exec.waitUntil(pickAfterVerdict(ctx, user, id, row.problem_id, result.verdict));
   } catch (e) {
-    const used = e instanceof AiError ? failedUsage(e) : emptyUsage();
+    const used = e instanceof AiError ? failedUsage(e, deep ? OPUS : SONNET) : emptyUsage();
     await DB.prepare("UPDATE ai_interviews SET tokens = tokens + ?, cost_usd = cost_usd + ?, status = CASE WHEN status = 'finishing' THEN 'active' ELSE status END WHERE id = ?")
       .bind(billedTokens(used), sessionCostUsd(used), id)
       .run();
@@ -467,6 +482,21 @@ export const listInterviews = interviewRoute((env) => env.INTERVIEW_READ_LIMITER
   const rows = can(user, 'interview_history', ctx.env).ok ? results : results.map((r) => (r.id === latest ? r : { ...r, verdict: null }));
   return json({ interviews: rows.map(summary), credits: await creditsView(ctx.env, user.id) }, 200, NO_STORE);
 
+});
+
+/**
+ * GET /api/interviews/<id>/report: a finished session's printable report
+ * (interview_report, Max; P31): the verdict, the length and dates, whether it
+ * was Deep, and the last design sent with the server's run of its tests,
+ * while the transcript is kept (90 days, P8). 404 for a session without a
+ * verdict. No model call, so it answers without the AI key too.
+ */
+export const interviewReport = requireFeature('interview_report', async (_request: Request, ctx: Ctx, user: User, _pre: undefined, id: string): Promise<Response> => {
+  await rateLimit(ctx.env.INTERVIEW_READ_LIMITER, user.id, 'Too many interview requests; wait a minute');
+  const row = await load(ctx, user.id, id);
+  if (row.status !== 'finished' || !row.verdict) throw new HttpError(404, 'This interview has no verdict yet');
+  const design = row.state ? (JSON.parse(row.state) as InterviewState).design : undefined;
+  return json({ report: { ...summary(row), ...(design ? { design } : {}) } }, 200, NO_STORE);
 });
 
 const HISTORY_MAX = 200;

@@ -22,7 +22,7 @@ millicredits). Plan is `'free' | 'pro' | 'max'`.
   and `plan` may be `'max'`. `features` gains `design_partner`, `deep_mode`,
   `interview_report`; `ai_review` is retired (design_partner replaces it).
 - `GET /api/credits/estimates` →
-  `{ mock_interview: {min, max}, partner_review: {min, max}, partner_build: {min, max}, partner_turn: {min, max}, deepMultiplier: number }`
+  `{ mock_interview: {min, max}, partner_review: {min, max}, partner_build: {min, max}, partner_turn: {min, max}, verdict: {min, max}, deepMultiplier: number }` (`verdict`: the mock interview's verdict alone, what Deep multiplies there)
 - `GET /api/credits/usage?limit=50` →
   `{ items: [{ at: number /*ms*/, action: 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps', ref: string, credits: number, deep: boolean }] }`
 - Not enough credits: `402 { error: 'no_credits', needed: number, balance: number }`.

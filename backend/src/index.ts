@@ -57,7 +57,7 @@ import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
 import { changePlan, createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
 import { getEstimates, getUsage } from './meter';
-import { finishInterview, getInterview, interviewHistory, interviewTurn, listInterviews, startInterview } from './interviews';
+import { finishInterview, getInterview, interviewHistory, interviewReport, interviewTurn, listInterviews, startInterview } from './interviews';
 import { createPartnerSession, decidePartnerChange, getPartnerSession, postPartnerTurn } from './partner';
 import { getRoadmapNext } from './roadmap';
 
@@ -140,12 +140,13 @@ import { getRoadmapNext } from './roadmap';
  *   GET    /api/oembed?url=                 oEmbed for a short link
  *   POST   /api/review {source, model, problem?, tests?, metrics?}   in-depth review, paid in credits (402 no_credits, 501 without the key)
  *   GET    /api/review/usage                reviews the balance covers: {limit, used, remaining, resetAt}
- *   POST   /api/interviews {problem, minutes, replace?}   starts an AI interview, holding its verdict's credits (402 no_credits; 409 active_session; 501 without the AI key)
+ *   POST   /api/interviews {problem, minutes, replace?, deep?}   starts an AI interview, holding its verdict's credits (402 no_credits, or plan_required for deep off Max; 409 active_session; 501 without the AI key)
  *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
  *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
  *   GET    /api/interviews/<id>            one session with its transcript, to resume
  *   GET    /api/interviews                 the user's sessions and the credits left
  *   GET    /api/interviews/history         verdict summaries with skill scores, newest first: all on Pro, the latest only on free
+ *   GET    /api/interviews/<id>/report     a finished session's printable report, Max (402 plan_required)
  *   POST   /api/partner/sessions {context, deep?}   a Design partner chat: {id} (409 interview_active; 501 without the AI key)
  *   GET    /api/partner/sessions/<id>      the chat with its turns
  *   POST   /api/partner/sessions/<id>/turns {intent, message, source, files?, changeId?}   one turn: {turn, credits} (402 no_credits, 409 turn_in_progress)
@@ -181,6 +182,7 @@ export const PAID_ROUTES: readonly (readonly [method: string, path: string, rout
   ['GET', 'api/interviews/*', getInterview],
   ['POST', 'api/interviews/*/turn', interviewTurn],
   ['POST', 'api/interviews/*/finish', finishInterview],
+  ['GET', 'api/interviews/*/report', interviewReport],
   ['POST', 'api/review', reviewDesign],
   ['GET', 'api/review/usage', getReviewUsage],
   ['GET', 'api/roadmap/next', getRoadmapNext],

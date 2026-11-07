@@ -200,6 +200,11 @@ const CASES: Record<string, Case> = {
       expect(((await (await send(who, 'POST', `/api/interviews/${older}/finish`)).json()) as { interview: { verdict?: unknown } }).interview.verdict).toEqual(VERDICT);
     },
   },
+  // interview_report is Max's (P31): Pro is refused too; test/interviews.test.ts runs it on Max.
+  'GET api/interviews/*/report': {
+    free: async (who) => planRequired(await send(who, 'GET', `/api/interviews/${await finishedInterview(who)}/report`), 'interview_report'),
+    pro: async (who) => planRequired(await send(who, 'GET', `/api/interviews/${await finishedInterview(who)}/report`), 'interview_report'),
+  },
   // design_partner is on every plan, paid in credits.
   'POST api/review': {
     free: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
