@@ -28,7 +28,7 @@
   // in the 03:xx UTC run also delete expired sessions, abandoned game runs,
   // usage counts older than 400 days and old diagram tombstones (src/cron.ts).
   "triggers": { "crons": ["17 * * * *"] },
-  // Cloudflare Email Service: the reminder and confirmation emails (src/email.ts).
+  // Cloudflare Email Service: the reminders, their confirmation and email sign-in's links (src/email.ts).
   // proschi.app must be onboarded to Email Service (backend/README.md "Email reminders").
   "send_email": [{ "name": "EMAIL", "allowed_sender_addresses": ["reminders@proschi.app"] }],
   // APP_REDIRECT_URIS: where native apps may be sent back to after signing in
@@ -84,6 +84,8 @@
   // POLAR_PRODUCT_PACK_5 and, against Polar's sandbox, POLAR_SERVER=sandbox (billing, src/billing.ts; unset: 501)
   // ANTHROPIC_API_KEY (the AI interviewer, src/interviews.ts; unset: 501), and through Cloudflare AI Gateway
   // AI_GATEWAY_URL and, for an authenticated gateway, AI_GATEWAY_TOKEN
+  // TURNSTILE_SECRET_KEY (email sign-in's human check, src/turnstile.ts; unset: skipped); its public site key
+  // is TURNSTILE_SITE_KEY, a var (dashboard → Turnstile; README "Email sign-in")
 
   "env": {
     // staging.proschi.app: every deploy goes here first (`npm run deploy:staging`).
