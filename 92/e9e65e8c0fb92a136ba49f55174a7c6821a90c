@@ -1,0 +1,34 @@
+frontend/src/partner/partner.css
+  s_e17b87e0a1b3ca::t_480f20947c37bf 16,35
+  s_e17b87e0a1b3ca::t_0053e06039c362 34,36-38
+frontend/e2e/partner.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_9eda3ea0247905 113
+  s_e17b87e0a1b3ca::t_238e72ffddf009 11,26-32,34,36-40,42,44-57,69,96-112,131,150-154,177-179,191-192,214,230-232,250-254
+  s_e17b87e0a1b3ca::t_2653d66fc854ef 292,294,296-297,305-342
+frontend/e2e/partner.ts
+  s_e17b87e0a1b3ca::t_d10cf1b5c0e9b3 47,50-51
+frontend/src/partner/partner.test.ts
+  s_e17b87e0a1b3ca::t_bce6f49851ba04 5-6,112-133
+frontend/src/partner/preview.ts
+  s_e17b87e0a1b3ca::t_abb1605de655d4 1,5-9,12,14,23-30,34-36
+frontend/src/partner/ChangePreview.tsx
+  s_e17b87e0a1b3ca::t_0053e06039c362 8,13,30,33,37,45-50,72,100,103-107,109-113
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_64646815c6b477 252-266
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "92e9e65e8c0fb92a136ba49f55174a7c6821a90c",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
