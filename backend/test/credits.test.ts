@@ -60,14 +60,13 @@ describe('plans and buckets', () => {
     await setPlan(id, 'pro');
     expect((await buckets(env, id, NOV)).monthly).toBe(800_000);
     expect(await creditsView(env, id, NOV)).toEqual({ balance: 800, monthly: { allowance: 800, left: 800, resetsAt: DEC }, signup: 0, topup: 0 });
-    // An upgrade mid-month adds the difference, once.
+    // A plan change mid-month adds nothing by itself: an upgrade's difference comes with its paid order (P35, src/billing.ts).
     await setPlan(id, 'max');
-    expect((await buckets(env, id, NOV)).monthly).toBe(2_200_000);
-    expect((await buckets(env, id, NOV)).monthly).toBe(2_200_000);
-    // A downgrade takes nothing back this month; December is the new plan's allowance, November's doesn't roll over.
+    expect((await buckets(env, id, NOV)).monthly).toBe(800_000);
+    // December is the new plan's allowance, November's doesn't roll over.
+    expect((await buckets(env, id, DEC)).monthly).toBe(2_200_000);
     await setPlan(id, 'pro');
-    expect((await buckets(env, id, NOV)).monthly).toBe(2_200_000);
-    expect((await buckets(env, id, DEC)).monthly).toBe(800_000);
+    expect((await buckets(env, id, DEC)).monthly).toBe(2_200_000);
     await setPlan(id, 'free');
     expect(await creditsView(env, id, Date.parse('2027-01-02T00:00:00Z'))).toMatchObject({ balance: 0, monthly: null });
   });

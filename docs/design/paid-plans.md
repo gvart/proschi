@@ -224,3 +224,16 @@ id; don't rewrite old ones.
   A verdict that failed after the model answered uses up the session's
   verdict hold, so each further try holds and pays again. Hold-then-settle,
   the estimates and parallel safety of P27 stay.
+- **P35. An upgrade's credits come with its payment (refines P32).** A plan
+  change no longer tops the month up by itself. The month's base grant is
+  written once, for the plan the account had (a subscription event writes
+  it for the plan before it applies). Pro to Max (or Max monthly to yearly)
+  is billed by Polar as a proration invoice (`proration_behavior:
+  invoice`); its `order.paid` (`billing_reason: subscription_update`, a Max
+  product) grants Max's allowance less the month's base, times the fraction
+  of the UTC month that is left, less what earlier upgrades still give this
+  month; once per order. Any subscription event that leaves the account off
+  Max takes back what this month's upgrades gave, as far as the month's
+  credits are unspent, never below 0. A new subscription (from free) still
+  gets its plan's full allowance; a downgrade still keeps the base. So Max
+  for a minute, paid at Pro's price, gains nothing.

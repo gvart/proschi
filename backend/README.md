@@ -347,7 +347,9 @@ P31, docs/impl/design-partner.md "Credits").
   append-only list of rows in millicredits (`delta_mc`), in one of three
   buckets. A balance is summed, never stored. `monthly`: Pro's 800 or Max's
   2200, granted when the balance is first read in a UTC calendar month and
-  gone at its end (an upgrade mid-month adds the difference). `signup`: 100
+  gone at its end (an upgrade mid-month adds Max's difference, prorated to
+  the rest of the month, once its proration invoice's `order.paid` arrives;
+  a downgrade takes back what is unspent of it, P35). `signup`: 100
   once, given by `grantSignupCredits(env, userId, identityKey)` after the
   sign-up's own checks, once per account and per identity (a keyed hash in
   `signup_identities` outlives a deleted account). `topup`: bought or
