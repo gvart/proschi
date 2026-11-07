@@ -3,15 +3,22 @@ import { mockSignedIn } from './accounts';
 import { mockInterviews } from './aiInterview';
 import { answerDialog, expect, test } from './fixtures';
 
-/** Signs in, agrees to the consent and starts a mock interview; the chat region. */
-async function startInterview(page: Page) {
-  await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
-  await page.goto('practice/#/url-shortener');
-  await page.getByRole('button', { name: 'Interview mode' }).click();
-  const start = page.getByRole('region', { name: 'Interview mode' });
-  await start.getByRole('radio', { name: /Mock interview/ }).click();
-  await start.getByRole('button', { name: 'Start a mock interview' }).click();
-  const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+/**
+ * The mock interview with the interviewer (build with accounts, API mocked):
+ * the set-up (credits, consent line, voice or text), the room (the
+ * whiteboard, the chat on the right with coaching inline and as toasts,
+ * Send my design, resume after a reload), the hands-free voice mode and the
+ * result. On your own, see interview.e2e.ts.
+ */
+
+const chatOf = (page: Page) => page.getByRole('region', { name: 'Mock interview', exact: true });
+
+/** From the set-up, on URL Shortener: Start, then the room's chat. */
+async function startInterview(page: Page, opts: { talk?: 'Voice' | 'Text' } = {}) {
+  await page.goto('practice/#/interview?problem=url-shortener');
+  if (opts.talk) await page.getByRole('radiogroup', { name: 'How you talk' }).getByRole('radio', { name: new RegExp(`^${opts.talk}`) }).click();
+  await page.getByRole('button', { name: 'Start the mock interview' }).click();
+  const chat = chatOf(page);
   await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
   return chat;
 }
@@ -23,6 +30,11 @@ const overlaps = (a: { x: number; y: number; width: number; height: number }, b:
 /** Every toast's box (the hint toasts are inside them). */
 const toastBoxes = (page: Page) => page.locator('.ps-toast').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as { x: number; y: number; width: number; height: number }));
 
+/** Drops the expected non-2xx loads Chromium logs. */
+const allowStatus = (errors: string[], status: number) => {
+  for (let i = errors.length - 1; i >= 0; i--) if (new RegExp(`status of ${status}`).test(errors[i])) errors.splice(i, 1);
+};
+
 /**
  * A fake Web Speech recognizer: `window.__speech.say(text, final)` sends a
  * result to the running one, and `window.__speech.deny = true` makes the
@@ -31,9 +43,15 @@ const toastBoxes = (page: Page) => page.locator('.ps-toast').evaluateAll((els) =
 async function fakeSpeech(page: Page) {
   await page.addInitScript(() => {
     type Handler = ((e: unknown) => void) | null;
-    const speech = { current: undefined as undefined | FakeRecognition, deny: false, starts: 0, say(text: string, final: boolean) {
-      speech.current?.onresult?.({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: final })] });
-    } };
+    const speech = {
+      current: undefined as undefined | FakeRecognition,
+      deny: false,
+      starts: 0,
+      on: false,
+      say(text: string, final: boolean) {
+        speech.current?.onresult?.({ resultIndex: 0, results: [Object.assign([{ transcript: text }], { isFinal: final })] });
+      },
+    };
     class FakeRecognition {
       continuous = false;
       interimResults = false;
@@ -49,10 +67,14 @@ async function fakeSpeech(page: Page) {
           if (speech.deny) {
             this.onerror?.({ error: 'not-allowed' });
             this.onend?.(undefined);
-          } else this.onstart?.(undefined);
+          } else {
+            speech.on = true;
+            this.onstart?.(undefined);
+          }
         }, 10);
       }
       stop() {
+        speech.on = false;
         setTimeout(() => this.onend?.(undefined), 10);
       }
       abort() {
@@ -63,52 +85,32 @@ async function fakeSpeech(page: Page) {
   });
 }
 
-/** A fake speechSynthesis that records what it was asked to say in `window.__spoken`. */
+/** A fake speechSynthesis: records what it says in `window.__spoken`, and ends each utterance after `window.__speakMs` (300 ms). */
 async function fakeSynthesis(page: Page) {
   await page.addInitScript(() => {
     const spoken: string[] = [];
     let cancels = 0;
+    Object.assign(window, { __spoken: spoken, __cancels: () => cancels, __speakMs: 300 });
     Object.defineProperty(window, 'speechSynthesis', {
       value: {
         getVoices: () => [],
-        speak: (u: { text: string }) => spoken.push(u.text),
+        speak: (u: { text: string; onend?: () => void }) => {
+          spoken.push(u.text);
+          setTimeout(() => u.onend?.(), (window as unknown as { __speakMs: number }).__speakMs);
+        },
         cancel: () => cancels++,
         addEventListener() {},
         removeEventListener() {},
         onvoiceschanged: null,
       },
     });
-    Object.assign(window, { __spoken: spoken, __cancels: () => cancels });
   });
 }
 
-/**
- * The AI interviewer in interview mode (build with accounts, API mocked):
- * pick it on the start screen, agree once to what is sent, talk over three
- * turns with coaching hints (toasts, two at most, and a history list), send
- * the design, resume after a reload, finish and read the verdict. Voice
- * input, spoken replies and the phone layout too. The scripted mode stays
- * the default.
- */
-test.describe('AI interviewer', () => {
-  test('the coaching toasts sit above the tests bar, never on Run tests', async ({ page }) => {
-    await page.setViewportSize({ width: 1440, height: 900 });
-    await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
-    const chat = await startInterview(page);
-    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
-    await chat.getByRole('button', { name: 'Send my design' }).click();
-    await expect(page.getByTestId('hint-toast')).toBeVisible();
-    const run = (await page.getByRole('button', { name: 'Run tests' }).boundingBox())!;
-    const boxes = await toastBoxes(page);
-    expect(boxes.length).toBeGreaterThan(0);
-    for (const box of boxes) {
-      expect(overlaps(box, run)).toBe(false);
-      expect(box.y + box.height).toBeLessThanOrEqual(run.y);
-    }
-  });
+const say = (page: Page, text: string, final: boolean) => page.evaluate(([t, f]) => (window as unknown as { __speech: { say(t: string, f: boolean): void } }).__speech.say(t as string, f as boolean), [text, final] as const);
 
-  test('a full session: start, three turns with hint toasts, resume, finish and the verdict', async ({ page }) => {
+test.describe('mock interview with the interviewer', () => {
+  test('a full session: the set-up, three turns with coaching, the design sent, a reload, the verdict and the result', async ({ page }) => {
     await mockSignedIn(page);
     const mock = await mockInterviews(page, {
       replies: [
@@ -117,57 +119,47 @@ test.describe('AI interviewer', () => {
         { text: 'Good. Where is the bottleneck now?', hint: { kind: 'focus', text: 'Name the component that saturates first.' }, phase: 'design' },
       ],
     });
-    await page.goto('practice/#/url-shortener');
-    await page.getByRole('button', { name: 'Interview mode' }).click();
+    await page.goto('practice/#/interview?problem=url-shortener');
+    // The interviewer is chosen when there is one; the estimate for the length, against the balance.
+    await expect(page.getByRole('radiogroup', { name: 'Interviewer' }).getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min; you have 100.');
+    await expect(page.getByTestId('ai-credits-cap')).toHaveText(', never more than 100 credits');
+    await page.getByRole('radio', { name: '30 min' }).click();
+    await expect(page.getByTestId('ai-credits')).toContainText('about 30–40 credits for 30 min; you have 100.');
+    await page.getByRole('radio', { name: '45 min' }).click();
+    // Starting is the agreement: the line names what goes to Anthropic.
+    await expect(page.getByTestId('consent-line')).toContainText('Starting sends Anthropic');
+    await expect(page.getByTestId('consent-line')).toContainText('90 days');
+    await page.getByRole('button', { name: 'Start the mock interview' }).click();
 
-    const start = page.getByRole('region', { name: 'Interview mode' });
-    await expect(start.getByRole('radio', { name: /On your own \(free\)/ })).toHaveAttribute('aria-checked', 'true');
-    await start.getByRole('radio', { name: /Mock interview/ }).click();
-    // The estimate for the chosen length, against the balance.
-    await expect(start.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min; you have 100.');
-    // Never more than the cap, and never more than what there is: the interview wraps up at 0.
-    await expect(start.getByTestId('ai-credits-cap')).toHaveText(', never more than 100 credits');
-    await start.getByRole('radio', { name: '30 min' }).click();
-    await expect(start.getByTestId('ai-credits')).toContainText('about 30–40 credits for 30 min; you have 100.');
-    await start.getByRole('radio', { name: '45 min' }).click();
-    await start.getByRole('button', { name: 'Start a mock interview' }).click();
-
-    // The one-time consent names what goes to the AI provider.
-    const consent = page.getByRole('region', { name: 'Mock interview consent' });
-    await expect(consent.getByText(/Proschi sends Anthropic/)).toBeVisible();
-    await expect(consent.getByText(/90 days/)).toBeVisible();
-    await consent.getByRole('button', { name: 'I agree, start the interview' }).click();
-
-    const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+    await expect(page).toHaveURL(/#\/interview\/url-shortener$/);
+    const chat = chatOf(page);
     await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
-    await expect(chat.getByRole('timer', { name: 'Time left' })).toHaveText(/^(45:00|44:5\d)$/);
-    await expect(chat.locator('[aria-current="step"]')).toHaveText('1. Clarify');
+    await expect(page.getByRole('timer')).toHaveAccessibleName(/^Time left: (45:00|44:5\d)$/);
+    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Clarify');
+    await expect(chat.getByText('The problem: URL Shortener')).toBeVisible();
 
-    await chat.getByRole('textbox', { name: 'Your answer' }).fill('How many new links a month, and what is the read to write ratio?');
-    await chat.getByRole('button', { name: 'Send', exact: true }).click();
+    const box = chat.getByRole('textbox', { name: 'Your answer' });
+    await box.fill('How many new links a month, and what is the read to write ratio?');
+    await box.press('Enter');
     await expect(chat.getByText(/reads outnumber writes 100 to 1/)).toBeVisible();
-    // The hint comes as a toast in the corner, and stays in the panel's coaching list.
+    // The hint comes as a toast and stays inline under the reply.
     const toasts = page.getByTestId('hint-toast');
     await expect(toasts).toHaveCount(1);
     await expect(toasts.first()).toHaveText('Ask how fast a redirect must be.');
-    await expect(page.getByRole('status').filter({ hasText: 'Focus now' })).toBeVisible();
+    await expect(chat.getByTestId('coaching-card')).toHaveCount(1);
 
-    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
+    await box.fill('Here is my design.');
     await chat.getByRole('button', { name: 'Send my design' }).click();
     await expect(chat.getByText(/What happens when the cache misses\?/)).toBeVisible();
-    await expect(toasts).toHaveCount(2);
-    await expect(toasts.last()).toHaveAttribute('data-kind', 'improve');
     await expect(chat.getByText('Design sent')).toBeVisible();
-    await chat.getByRole('textbox', { name: 'Your answer' }).fill('The cache misses read the database, then set the code.');
+    await box.fill('The cache misses read the database, then set the code.');
     await chat.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(chat.getByText('Good. Where is the bottleneck now?')).toBeVisible();
-    // Never more than two at once: the oldest went.
+    // Never more than two toasts at once: the oldest went. All three stay in the chat.
     await expect(toasts).toHaveCount(2);
     await expect(toasts).toHaveText(['Explain the cache miss path and its p99.', 'Name the component that saturates first.']);
-    const history = chat.getByTestId('coaching-history');
-    await history.getByText('Coaching').click();
-    await expect(history.getByTestId('coaching-card')).toHaveCount(3);
-    await expect(history.getByTestId('coaching-card').first()).toContainText('Name the component that saturates first.');
+    await expect(chat.getByTestId('coaching-card')).toHaveCount(3);
     expect(mock.turns).toHaveLength(3);
     expect(mock.turns[0]).toEqual({ message: 'How many new links a month, and what is the read to write ratio?' });
     expect(mock.turns[1].message).toBe('Here is my design.');
@@ -177,40 +169,48 @@ test.describe('AI interviewer', () => {
     await page.reload();
     await expect(chat.getByText('Good. Where is the bottleneck now?')).toBeVisible();
     await expect(toasts).toHaveCount(0);
-    await chat.getByTestId('coaching-history').getByText('Coaching').click();
-    await expect(chat.getByTestId('coaching-history')).toContainText('Explain the cache miss path');
-    await expect(chat.locator('[aria-current="step"]')).toHaveText('3. Design');
+    await expect(chat.getByTestId('coaching-card')).toHaveCount(3);
+    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Design');
 
-    await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+    await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
     await answerDialog(page, 'Finish');
-    const verdict = page.getByRole('region', { name: 'Interview verdict' });
+    const result = page.getByTestId('interview-result');
+    const verdict = result.getByRole('region', { name: 'Interview verdict' });
     await expect(verdict.getByTestId('verdict-result')).toHaveText('Pass');
     await expect(verdict.getByRole('row', { name: /Communication 5\/5/ })).toBeVisible();
-    await expect(verdict.getByText(/storage estimate skipped the 5-year retention/)).toBeVisible();
     await expect(verdict.getByText('Try the Pastebin problem next')).toBeVisible();
+    await expect(result.getByRole('link', { name: 'Try this problem again' })).toHaveAttribute('href', '#/interview?problem=url-shortener&with=mock');
+    await result.getByRole('link', { name: 'New interview' }).click();
+    await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
+    await expect(page.getByRole('radio', { name: 'Same as last time' })).toBeVisible();
+  });
 
-    await verdict.getByRole('button', { name: 'Leave interview mode' }).click();
-    await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
+  test('Surprise me starts on a problem the account has not done, revealed in the room', async ({ page }) => {
+    await mockSignedIn(page);
+    const mock = await mockInterviews(page, { replies: [] });
+    const problems: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') problems.push((r.postDataJSON() as { problem: string }).problem);
+    });
+    await page.goto('practice/#/interview');
+    await page.getByRole('radiogroup', { name: 'Difficulty' }).getByRole('radio', { name: 'Easy' }).click();
+    await page.getByRole('button', { name: 'Start the mock interview' }).click();
+    await expect(chatOf(page)).toBeVisible();
+    expect(mock.starts).toHaveLength(1);
+    expect(['pastebin', 'rate-limiter', 'snowflake-ids', 'shopping-cart', 'url-shortener']).toContain(problems[0]);
+    await expect(page).toHaveURL(new RegExp(`#/interview/${problems[0]}$`));
   });
 
   for (const param of ['mock', 'ai'] as const) {
-    test(`a deep link, #/<problem>?interview=${param}, opens interview mode with the mock interview chosen, starting nothing`, async ({ page }) => {
+    test(`a deep link, #/<problem>?interview=${param}, opens the set-up with the problem and the interviewer, starting nothing`, async ({ page }) => {
       await mockSignedIn(page);
-      await mockInterviews(page, { replies: [] });
-      const starts: string[] = [];
-      page.on('request', (r) => {
-        if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') starts.push(r.url());
-      });
+      const mock = await mockInterviews(page, { replies: [] });
       await page.goto(`practice/#/url-shortener?interview=${param}`);
-      const start = page.getByRole('region', { name: 'Interview mode' });
-      await expect(start.getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
-      await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeVisible();
-      await expect(page.getByRole('region', { name: 'Mock interview', exact: true })).toHaveCount(0);
-      expect(starts).toEqual([]);
-      // Without the query, the same problem opens as usual: no interview mode.
-      await page.goto('practice/#/');
-      await page.goto('practice/#/url-shortener');
-      await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
+      await expect(page).toHaveURL(/#\/interview\?problem=url-shortener&with=mock$/);
+      await expect(page.getByTestId('chosen-problem')).toContainText('URL Shortener');
+      await expect(page.getByRole('radiogroup', { name: 'Interviewer' }).getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+      await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeVisible();
+      expect(mock.starts).toEqual([]);
     });
   }
 
@@ -218,187 +218,196 @@ test.describe('AI interviewer', () => {
     test(`an interview already open: ${choice === 'resume' ? 'Resume it (the default)' : 'End it and start a new one'}`, async ({ page, errors }) => {
       await mockSignedIn(page);
       const mock = await mockInterviews(page, { replies: [], credits: 120, open: 'Welcome back: where were we on the read path?' });
-      await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
-      await page.goto('practice/#/url-shortener');
-      await page.getByRole('button', { name: 'Interview mode' }).click();
-      const start = page.getByRole('region', { name: 'Interview mode' });
-      await start.getByRole('radio', { name: /Mock interview/ }).click();
-      await start.getByRole('button', { name: 'Start a mock interview' }).click();
+      await page.goto('practice/#/interview?problem=pastebin');
+      // The set-up says so before Start, too.
+      await expect(page.getByTestId('open-interview')).toContainText('URL Shortener');
+      await page.getByRole('button', { name: 'Start the mock interview' }).click();
 
       const open = page.getByRole('region', { name: 'Mock interview in progress' });
       await expect(open.getByRole('heading', { name: 'You have a mock interview in progress' })).toBeVisible();
       await expect(open.getByRole('button', { name: 'Resume it' })).toBeFocused();
       await expect(open.getByText(/credits the old interview used are not returned/)).toBeVisible();
-      const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+      const chat = chatOf(page);
       if (choice === 'resume') {
         await open.getByRole('button', { name: 'Resume it' }).click();
+        await expect(page).toHaveURL(/#\/interview\/url-shortener$/);
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toBeVisible();
         expect(mock.starts).toEqual([{ replace: false, deep: false }]);
       } else {
         await open.getByRole('button', { name: 'End it and start a new one' }).click();
-        await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
+        await expect(page).toHaveURL(/#\/interview\/pastebin$/);
+        await expect(chat.getByText(/Today we'll design/)).toBeVisible();
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toHaveCount(0);
         expect(mock.starts).toEqual([{ replace: false, deep: false }, { replace: true, deep: false }]);
       }
-      // The 409 active_session is expected; Chromium logs every non-2xx load.
-      for (let i = errors.length - 1; i >= 0; i--) if (/status of 409/.test(errors[i])) errors.splice(i, 1);
+      allowStatus(errors, 409);
     });
   }
 
   test('a start refused for want of credits (402 no_credits) says what it needs', async ({ page, errors }) => {
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [], credits: 50, needed: 70 });
-    await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
-    await page.goto('practice/#/url-shortener');
-    await page.getByRole('button', { name: 'Interview mode' }).click();
-    const start = page.getByRole('region', { name: 'Interview mode' });
-    await start.getByRole('radio', { name: /Mock interview/ }).click();
-    await start.getByRole('button', { name: 'Start a mock interview' }).click();
-    await expect(start.getByTestId('ai-credits')).toContainText('You have 50 credits. A 45-minute mock interview takes at least 70.');
-    await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeDisabled();
-    // The 402 is expected; Chromium logs every non-2xx load.
-    for (let i = errors.length - 1; i >= 0; i--) if (/status of 402/.test(errors[i])) errors.splice(i, 1);
+    await page.goto('practice/#/interview?problem=url-shortener');
+    await page.getByRole('button', { name: 'Start the mock interview' }).click();
+    await expect(page.getByTestId('ai-credits')).toContainText('You have 50 credits. A 45-minute mock interview takes at least 70.');
+    await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeDisabled();
+    allowStatus(errors, 402);
+  });
+
+  test('too few credits offers a top-up, and On my own still starts for free', async ({ page, errors }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [], credits: 12 });
+    await page.goto('practice/#/interview?problem=url-shortener');
+    await expect(page.getByTestId('ai-credits')).toContainText('You have 12 credits. A 45-minute mock interview takes about 45–60.');
+    await expect(page.getByRole('button', { name: 'Buy 1,000 credits, €12' })).toBeVisible();
+    await expect(page.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
+    await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeDisabled();
+    expect(errors).toEqual([]);
+    await page.getByRole('radio', { name: /On my own \(free, no interviewer\)/ }).click();
+    await page.getByRole('button', { name: 'Start the interview' }).click();
+    await expect(page.getByRole('region', { name: 'Interview on your own' }).getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
   });
 
   test('out of credits mid-interview: a calm note, the wrap-up and the verdict', async ({ page }) => {
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [{ text: 'Let us wrap up: summarise your design.', phase: 'wrapup' }], runsOutAfter: 1 });
-    await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
-    await page.goto('practice/#/url-shortener');
-    await page.getByRole('button', { name: 'Interview mode' }).click();
-    const start = page.getByRole('region', { name: 'Interview mode' });
-    await start.getByRole('radio', { name: /Mock interview/ }).click();
-    await start.getByRole('button', { name: 'Start a mock interview' }).click();
-    const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+    const chat = await startInterview(page);
     await expect(chat.getByTestId('out-of-credits')).toHaveCount(0);
     await chat.getByRole('textbox', { name: 'Your answer' }).fill('How many links a month?');
     await chat.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(chat.getByTestId('out-of-credits')).toHaveText(/out of credits, so the interviewer is wrapping up\. Your verdict is already paid for/);
-    await expect(chat.locator('[aria-current="step"]')).toHaveText('4. Wrap-up');
-    await page.getByRole('button', { name: 'Account' }).click();
-    await expect(page.getByTestId('account-credits')).toHaveAttribute('data-low', 'true');
-    await page.keyboard.press('Escape');
-    await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Wrap-up');
+    await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
     await answerDialog(page, 'Finish');
     await expect(page.getByRole('region', { name: 'Interview verdict' }).getByTestId('verdict-result')).toHaveText('Pass');
   });
 
-  test('the scripted mode still starts by default, and too few credits offers a top-up instead of the AI start', async ({ page, errors }) => {
+  test('Check my design runs the tests on the whiteboard and can send it to the interviewer', async ({ page }) => {
     await mockSignedIn(page);
-    await mockInterviews(page, { replies: [], credits: 12 });
-    await page.goto('practice/#/url-shortener');
-    await page.getByRole('button', { name: 'Interview mode' }).click();
-    const start = page.getByRole('region', { name: 'Interview mode' });
-    await start.getByRole('radio', { name: /Mock interview/ }).click();
-    await expect(start.getByTestId('ai-credits')).toContainText('You have 12 credits. A 45-minute mock interview takes about 45–60.');
-    await expect(start.getByRole('button', { name: 'Buy 1,000 credits, €12' })).toBeVisible();
-    await expect(start.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
-    await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeDisabled();
-    expect(errors).toEqual([]);
-    await start.getByRole('radio', { name: /On your own \(free\)/ }).click();
-    await start.getByRole('button', { name: 'Start the interview' }).click();
-    await expect(start.getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
-  });
-
-  test('voice input: the mic listens hands-free, shows the words as they come and says when it is blocked', async ({ page }) => {
-    await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'About 100 million links a month.' }] });
-    await fakeSpeech(page);
+    const mock = await mockInterviews(page, { replies: [{ text: 'Thanks, I see the design.' }] });
     const chat = await startInterview(page);
-    const mic = chat.getByTestId('mic-button');
-    const box = chat.getByRole('textbox', { name: 'Your answer' });
-    await expect(mic).toHaveAttribute('data-state', 'idle');
-    await mic.click();
-    await expect(mic).toHaveAttribute('data-state', 'listening');
-    await expect(mic).toContainText('Listening');
-    // Interim words show in the composer, then the finished phrase stays.
-    await page.evaluate(() => (window as unknown as { __speech: { say(t: string, f: boolean): void } }).__speech.say('how many links', false));
-    await expect(box).toHaveValue('how many links');
-    await page.evaluate(() => (window as unknown as { __speech: { say(t: string, f: boolean): void } }).__speech.say('How many links a month?', true));
-    await expect(box).toHaveValue('How many links a month?');
-    // The browser ends a session on its own; listening goes on.
-    await page.evaluate(() => (window as unknown as { __speech: { current: { onend(): void } } }).__speech.current.onend());
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __speech: { starts: number } }).__speech.starts)).toBe(2);
-    await expect(mic).toHaveAttribute('data-state', 'listening');
-    await chat.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(chat.getByText('About 100 million links a month.')).toBeVisible();
-    await expect(mic).toHaveAttribute('data-state', 'idle');
-    await expect(box).toHaveValue('');
-
-    await page.evaluate(() => ((window as unknown as { __speech: { deny: boolean } }).__speech.deny = true));
-    await mic.click();
-    await expect(mic).toHaveAttribute('data-state', 'denied');
-    await expect(chat.getByTestId('mic-note')).toContainText('The microphone is blocked');
+    await page.getByRole('button', { name: 'Check my design' }).click();
+    const checks = page.getByTestId('checks');
+    await expect(checks.getByRole('status')).toHaveText(/^\d+ of 10 checks pass$/);
+    await checks.getByRole('button', { name: 'Send my design to the interviewer' }).click();
+    await expect(chat.getByText('Thanks, I see the design.')).toBeVisible();
+    expect(mock.turns[0].design).toContain('import "problem.proschi"');
   });
 
-  test('the speaker reads replies aloud when on, is off by default and is remembered', async ({ page }) => {
-    await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'About 100 million links a month.' }, { text: 'Go on.' }] });
-    await fakeSynthesis(page);
-    const chat = await startInterview(page);
-    const speaker = chat.getByTestId('speaker-toggle');
-    await expect(speaker).toHaveAttribute('aria-pressed', 'false');
-    const box = chat.getByRole('textbox', { name: 'Your answer' });
-    await box.fill('How many links?');
-    await chat.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(chat.getByText('About 100 million links a month.')).toBeVisible();
-    expect(await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).toEqual([]);
-    await speaker.click();
-    await expect(speaker).toHaveAttribute('aria-pressed', 'true');
-    await page.reload();
-    await expect(chat.getByTestId('speaker-toggle')).toHaveAttribute('aria-pressed', 'true');
-    await box.fill('And the reads?');
-    await chat.getByRole('button', { name: 'Send', exact: true }).click();
-    await expect(chat.getByText('Go on.')).toBeVisible();
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).toEqual(['Go on.']);
-    // Typing stops the voice.
-    const before = await page.evaluate(() => (window as unknown as { __cancels(): number }).__cancels());
-    await box.fill('x');
-    expect(await page.evaluate(() => (window as unknown as { __cancels(): number }).__cancels())).toBeGreaterThan(before);
-  });
-});
-
-test.describe('AI interviewer on a phone', () => {
-  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
-
-  test('the coaching toasts sit above the composer, and the Design partner tab never floats over the chat', async ({ page }) => {
+  test('the coaching toasts sit clear of the chat on the right', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
     const chat = await startInterview(page);
-    // Partner is off during an interview: on a phone it isn't drawn at all, rather than over the bubbles.
-    await expect(page.getByTestId('partner-button')).toHaveCount(0);
     await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
     await chat.getByRole('button', { name: 'Send my design' }).click();
     await expect(page.getByTestId('hint-toast')).toBeVisible();
-    const composer = (await chat.locator('form').last().boundingBox())!;
-    for (const box of await toastBoxes(page)) expect(box.y + box.height).toBeLessThanOrEqual(composer.y);
+    const rail = (await page.getByTestId('interview-rail').boundingBox())!;
+    const boxes = await toastBoxes(page);
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) expect(overlaps(box, rail)).toBe(false);
   });
 
-  test('the chat has its own Interview tab, and a reply on another tab says so with a way back', async ({ page }) => {
+  test('voice: hands-free listening, sent after a pause with a countdown, replies spoken, then text again', async ({ page }) => {
     await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
+    await mockInterviews(page, { replies: [{ text: 'About 100 million links a month.' }, { text: 'Go on.' }] });
+    await fakeSpeech(page);
+    await fakeSynthesis(page);
+    const chat = await startInterview(page, { talk: 'Voice' });
+    const talk = page.getByRole('radiogroup', { name: 'Talk with the interviewer' });
+    await expect(talk.getByRole('radio', { name: 'Voice' })).toHaveAttribute('aria-checked', 'true');
+    const mic = chat.getByTestId('mic-button');
+    const status = chat.getByTestId('voice-status');
+    // The mic starts on its own.
+    await expect(mic).toHaveAttribute('data-state', 'listening');
+    await expect(status).toHaveAttribute('data-state', 'listening');
+
+    // Words, then silence: a countdown, which Cancel stops.
+    await say(page, 'how many', false);
+    await expect(chat.getByRole('textbox', { name: 'Your answer' })).toHaveValue('how many');
+    await say(page, 'How many links a month?', true);
+    await expect(status).toHaveAttribute('data-state', 'sending');
+    await expect(status).toContainText(/Sending in \d\.\d s/);
+    await status.getByRole('button', { name: 'Cancel' }).click();
+    await expect(status).toHaveAttribute('data-state', 'listening');
+    // New words start the countdown again; this time it sends.
+    await say(page, 'And the reads?', true);
+    await expect(status).toHaveAttribute('data-state', 'sending');
+    await expect(chat.getByText('About 100 million links a month.')).toBeVisible({ timeout: 5000 });
+    // The reply is spoken while the mic waits, then it listens again.
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).toEqual(['About 100 million links a month.']);
+    await expect(status).toHaveAttribute('data-state', 'listening');
+    await expect(mic).toHaveAttribute('data-state', 'listening');
+
+    // Barge in: Interrupt stops the voice.
+    await page.evaluate(() => ((window as unknown as { __speakMs: number }).__speakMs = 60_000));
+    await say(page, 'Go on then.', true);
+    await status.getByRole('button', { name: 'Send now' }).click();
+    await expect(chat.getByText('Go on.', { exact: true })).toBeVisible();
+    await expect(status).toHaveAttribute('data-state', 'speaking');
+    const before = await page.evaluate(() => (window as unknown as { __cancels(): number }).__cancels());
+    await status.getByRole('button', { name: 'Interrupt' }).click();
+    expect(await page.evaluate(() => (window as unknown as { __cancels(): number }).__cancels())).toBeGreaterThan(before);
+    await expect(mic).toHaveAttribute('data-state', 'listening');
+
+    // Text mode: the mic stops, and the choice is remembered.
+    await talk.getByRole('radio', { name: 'Text' }).click();
+    await expect(mic).toHaveAttribute('data-state', 'idle');
+    await expect(status).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('radiogroup', { name: 'Talk with the interviewer' }).getByRole('radio', { name: 'Text' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  test('a blocked microphone says so, and typing still works', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [{ text: 'Typed is fine.' }] });
+    await fakeSpeech(page);
+    await page.addInitScript(() => ((window as unknown as { __speech: { deny: boolean } }).__speech.deny = true));
+    const chat = await startInterview(page, { talk: 'Voice' });
+    await expect(chat.getByTestId('mic-button')).toHaveAttribute('data-state', 'denied');
+    await expect(chat.getByTestId('mic-note')).toContainText('The microphone is blocked');
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Typing instead.');
+    await chat.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(chat.getByText('Typed is fine.')).toBeVisible();
+  });
+});
+
+test.describe('mock interview on a phone', () => {
+  test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('Chat first, the toasts above the composer, and a reply on the whiteboard says so with a way back', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }, { text: 'Go on.' }] });
     const chat = await startInterview(page);
-    const tab = page.getByTestId('tab-interview');
-    await expect(tab).toHaveText('Interview');
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
-    // The reply waits until the candidate has gone to the Code tab.
+    const tabs = page.getByRole('tablist', { name: 'Room' });
+    await expect(tabs.getByRole('tab')).toHaveText(['Chat', 'Whiteboard']);
+    await expect(tabs.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('partner-button')).toHaveCount(0);
+
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
+    await chat.getByRole('button', { name: 'Send my design' }).click();
+    await expect(page.getByTestId('hint-toast')).toBeVisible();
+    const composer = (await chat.getByRole('form', { name: 'Your answer' }).boundingBox())!;
+    for (const box of await toastBoxes(page)) expect(box.y + box.height).toBeLessThanOrEqual(composer.y);
+
+    // The next reply waits until the candidate is on the whiteboard.
     let release = () => {};
     const gate = new Promise<void>((r) => (release = r));
     await page.route(/\/api\/interviews\/[^/]+\/turn$/, async (route) => {
       await gate;
       await route.fallback();
     });
-    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
-    await chat.getByRole('button', { name: 'Send my design' }).click();
-    await page.getByRole('tab', { name: 'Code' }).click();
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('The cache comes first.');
+    await chat.getByRole('button', { name: 'Send', exact: true }).click();
+    await tabs.getByRole('tab', { name: 'Whiteboard' }).click();
     await expect(chat).toBeHidden();
     release();
     const toast = page.getByRole('status').filter({ hasText: 'The interviewer replied' });
     await expect(toast).toBeVisible();
-    await expect(page.getByTestId('hint-toast')).toHaveText('Explain the cache miss path.');
-    await toast.getByRole('button', { name: 'Open the interview' }).click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
-    await expect(chat.getByText('Seven of ten tests pass.')).toBeVisible();
+    await expect(tabs.getByRole('tab', { name: 'Chat' }).getByLabel('New message')).toBeVisible();
+    await toast.getByRole('button', { name: 'Open the chat' }).click();
+    await expect(tabs.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(chat.getByText('Go on.', { exact: true })).toBeVisible();
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(width).toBeLessThanOrEqual(390);
   });
