@@ -21,19 +21,19 @@ test.describe('AI interviewer', () => {
     await page.getByRole('button', { name: 'Interview mode' }).click();
 
     const start = page.getByRole('region', { name: 'Interview mode' });
-    await expect(start.getByRole('radio', { name: /Scripted \(free\)/ })).toHaveAttribute('aria-checked', 'true');
-    await start.getByRole('radio', { name: /AI interviewer/ }).click();
-    await expect(start.getByTestId('ai-credits')).toHaveText('1 interview left');
+    await expect(start.getByRole('radio', { name: /On your own \(free\)/ })).toHaveAttribute('aria-checked', 'true');
+    await start.getByRole('radio', { name: /Mock interview/ }).click();
+    await expect(start.getByTestId('ai-credits')).toHaveText('1 mock interview left');
     await expect(start.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
-    await start.getByRole('button', { name: 'Start the AI interview' }).click();
+    await start.getByRole('button', { name: 'Start a mock interview' }).click();
 
     // The one-time consent names what goes to the AI provider.
-    const consent = page.getByRole('region', { name: 'AI interviewer consent' });
+    const consent = page.getByRole('region', { name: 'Mock interview consent' });
     await expect(consent.getByText(/Proschi sends Anthropic/)).toBeVisible();
     await expect(consent.getByText(/90 days/)).toBeVisible();
     await consent.getByRole('button', { name: 'I agree, start the interview' }).click();
 
-    const chat = page.getByRole('region', { name: 'AI interview', exact: true });
+    const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
     await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
     await expect(chat.getByRole('timer', { name: 'Time left' })).toHaveText(/^(45:00|44:5\d)$/);
     await expect(chat.locator('[aria-current="step"]')).toHaveText('1. Clarify');
@@ -72,24 +72,26 @@ test.describe('AI interviewer', () => {
     await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
   });
 
-  test('a deep link, #/<problem>?interview=ai, opens interview mode with the AI interviewer chosen, starting nothing', async ({ page }) => {
-    await mockSignedIn(page);
-    await mockInterviews(page, { replies: [] });
-    const starts: string[] = [];
-    page.on('request', (r) => {
-      if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') starts.push(r.url());
+  for (const param of ['mock', 'ai'] as const) {
+    test(`a deep link, #/<problem>?interview=${param}, opens interview mode with the mock interview chosen, starting nothing`, async ({ page }) => {
+      await mockSignedIn(page);
+      await mockInterviews(page, { replies: [] });
+      const starts: string[] = [];
+      page.on('request', (r) => {
+        if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') starts.push(r.url());
+      });
+      await page.goto(`practice/#/url-shortener?interview=${param}`);
+      const start = page.getByRole('region', { name: 'Interview mode' });
+      await expect(start.getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+      await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeVisible();
+      await expect(page.getByRole('region', { name: 'Mock interview', exact: true })).toHaveCount(0);
+      expect(starts).toEqual([]);
+      // Without the query, the same problem opens as usual: no interview mode.
+      await page.goto('practice/#/');
+      await page.goto('practice/#/url-shortener');
+      await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
     });
-    await page.goto('practice/#/url-shortener?interview=ai');
-    const start = page.getByRole('region', { name: 'Interview mode' });
-    await expect(start.getByRole('radio', { name: /AI interviewer/ })).toHaveAttribute('aria-checked', 'true');
-    await expect(start.getByRole('button', { name: 'Start the AI interview' })).toBeVisible();
-    await expect(page.getByRole('region', { name: 'AI interview', exact: true })).toHaveCount(0);
-    expect(starts).toEqual([]);
-    // Without the query, the same problem opens as usual: no interview mode.
-    await page.goto('practice/#/');
-    await page.goto('practice/#/url-shortener');
-    await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
-  });
+  }
 
   for (const choice of ['resume', 'replace'] as const) {
     test(`an interview already open: ${choice === 'resume' ? 'Resume it (the default)' : 'End it and start a new one'}`, async ({ page, errors }) => {
@@ -99,14 +101,14 @@ test.describe('AI interviewer', () => {
       await page.goto('practice/#/url-shortener');
       await page.getByRole('button', { name: 'Interview mode' }).click();
       const start = page.getByRole('region', { name: 'Interview mode' });
-      await start.getByRole('radio', { name: /AI interviewer/ }).click();
-      await start.getByRole('button', { name: 'Start the AI interview' }).click();
+      await start.getByRole('radio', { name: /Mock interview/ }).click();
+      await start.getByRole('button', { name: 'Start a mock interview' }).click();
 
-      const open = page.getByRole('region', { name: 'AI interview in progress' });
-      await expect(open.getByRole('heading', { name: 'You have an AI interview in progress' })).toBeVisible();
+      const open = page.getByRole('region', { name: 'Mock interview in progress' });
+      await expect(open.getByRole('heading', { name: 'You have a mock interview in progress' })).toBeVisible();
       await expect(open.getByRole('button', { name: 'Resume it' })).toBeFocused();
       await expect(open.getByText(/credit is not returned/)).toBeVisible();
-      const chat = page.getByRole('region', { name: 'AI interview', exact: true });
+      const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
       if (choice === 'resume') {
         await open.getByRole('button', { name: 'Resume it' }).click();
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toBeVisible();
@@ -128,10 +130,10 @@ test.describe('AI interviewer', () => {
     await page.goto('practice/#/url-shortener');
     await page.getByRole('button', { name: 'Interview mode' }).click();
     const start = page.getByRole('region', { name: 'Interview mode' });
-    await start.getByRole('radio', { name: /AI interviewer/ }).click();
-    await expect(start.getByTestId('ai-credits')).toHaveText('0 interviews left');
-    await expect(start.getByRole('button', { name: 'Start the AI interview' })).toBeDisabled();
-    await start.getByRole('radio', { name: /Scripted \(free\)/ }).click();
+    await start.getByRole('radio', { name: /Mock interview/ }).click();
+    await expect(start.getByTestId('ai-credits')).toHaveText('0 mock interviews left');
+    await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeDisabled();
+    await start.getByRole('radio', { name: /On your own \(free\)/ }).click();
     await start.getByRole('button', { name: 'Start the interview' }).click();
     await expect(start.getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
   });

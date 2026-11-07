@@ -63,7 +63,7 @@ interface InterviewPanelProps {
   children: ReactNode;
   /** The editor's source now, for the AI interviewer's "Send my design". */
   getSource?: () => string;
-  /** The start screen opens with the AI interviewer chosen, when it is on offer (practice/#/<id>?interview=ai). */
+  /** The start screen opens with the mock interview chosen, when it is on offer (practice/#/<id>?interview=mock). */
   preferAi?: boolean;
 }
 
@@ -166,7 +166,7 @@ function StartScreen({
         if (why.credits) setCredits(why.credits);
         setError(
           <>
-            No AI interviews left. <UpgradeLink />
+            No mock interviews left. <UpgradeLink />
           </>,
         );
       } else setError(`The interview could not start (${why.message}). Try again in a moment.`);
@@ -189,12 +189,12 @@ function StartScreen({
 
   if (open) {
     return (
-      <section aria-label="AI interview in progress" className="px-4 py-4 space-y-3">
+      <section aria-label="Mock interview in progress" className="px-4 py-4 space-y-3">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
           <Bot size={18} aria-hidden="true" />
-          You have an AI interview in progress
+          You have a mock interview in progress
         </h2>
-        <p className="text-sm text-ink">{open.problem === problemId ? 'It is on this problem.' : `It is on another problem (${open.problem}).`} You can have one AI interview at a time.</p>
+        <p className="text-sm text-ink">{open.problem === problemId ? 'It is on this problem.' : `It is on another problem (${open.problem}).`} You can have one mock interview at a time.</p>
         <div className="flex flex-wrap gap-2">
           <button type="button" autoFocus onClick={() => resume(open)} className={primaryButton}>
             Resume it
@@ -211,7 +211,7 @@ function StartScreen({
             End it and start a new one
           </button>
         </div>
-        <p className="text-xs text-ink">Ending it uses one more AI interview for the new one. The old interview’s credit is not returned, and it gets no verdict.</p>
+        <p className="text-xs text-ink">Ending it uses one more mock interview for the new one. The old interview’s credit is not returned, and it gets no verdict.</p>
         <button type="button" onClick={() => setOpen(undefined)} className={toolButton}>
           Back
         </button>
@@ -221,12 +221,12 @@ function StartScreen({
 
   if (consenting) {
     return (
-      <section aria-label="AI interviewer consent" className="px-4 py-4 space-y-3">
+      <section aria-label="Mock interview consent" className="px-4 py-4 space-y-3">
         <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
           <ShieldCheck size={18} aria-hidden="true" />
-          Before your first AI interview
+          Before your first mock interview
         </h2>
-        <p className="text-sm text-ink">The AI interviewer is Claude, made by Anthropic. To run the interview, Proschi sends Anthropic:</p>
+        <p className="text-sm text-ink">Your interviewer is Claude, an AI model made by Anthropic. To run the interview, Proschi sends Anthropic:</p>
         <ul className="list-disc space-y-1 pl-5 text-sm text-ink">
           <li>everything you type or dictate in the interview chat (your browser turns dictation into text first),</li>
           <li>the design in the editor each time you press “Send my design”, with its test results,</li>
@@ -275,13 +275,13 @@ function StartScreen({
         <fieldset>
           <legend className={eyebrow}>Interviewer</legend>
           <div className="mt-1 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Interviewer">
-            <ModeChoice checked={chosen === 'scripted'} onSelect={() => setKind('scripted')} title="Scripted (free)" icon={<Timer size={14} aria-hidden="true" />}>
+            <ModeChoice checked={chosen === 'scripted'} onSelect={() => setKind('scripted')} title="On your own (free)" icon={<Timer size={14} aria-hidden="true" />}>
               Pick questions from a list and check your estimates. Stays in this browser.
             </ModeChoice>
-            <ModeChoice checked={chosen === 'ai'} onSelect={() => setKind('ai')} title="AI interviewer" icon={<Bot size={14} aria-hidden="true" />}>
+            <ModeChoice checked={chosen === 'ai'} onSelect={() => setKind('ai')} title="Mock interview" icon={<Bot size={14} aria-hidden="true" />}>
               A live interviewer that answers, follows up, coaches you and gives a verdict.{' '}
               <span data-testid="ai-credits" className="font-semibold">
-                {credits.total === 1 ? '1 interview left' : `${credits.total} interviews left`}
+                {credits.total === 1 ? '1 mock interview left' : `${credits.total} mock interviews left`}
               </span>
             </ModeChoice>
           </div>
@@ -317,7 +317,7 @@ function StartScreen({
       </ol>
       <p className="text-xs text-muted">
         {chosen === 'ai'
-          ? 'Starting uses one AI interview. If the interviewer fails in the first 5 minutes, you get it back.'
+          ? 'Starting uses one mock interview. If the interviewer fails in the first 5 minutes, you get it back.'
           : 'Your time per phase, questions, estimates and the summary stay in this browser.'}
       </p>
       {error && (
@@ -328,7 +328,7 @@ function StartScreen({
       <div className="flex flex-wrap gap-2">
         <button type="button" onClick={start} disabled={starting || (chosen === 'ai' && credits?.total === 0)} className={`${primaryButton} disabled:opacity-50`}>
           {chosen === 'ai' ? <Bot size={14} aria-hidden="true" /> : <Timer size={14} aria-hidden="true" />}
-          {chosen === 'ai' ? (starting ? 'Starting…' : 'Start the AI interview') : 'Start the interview'}
+          {chosen === 'ai' ? (starting ? 'Starting…' : 'Start a mock interview') : 'Start the interview'}
         </button>
         <button type="button" onClick={onCancel} className={toolButton}>
           Cancel
@@ -361,7 +361,7 @@ function UpgradeLink({ className = '' }: { className?: string }) {
   return (
     <UpgradeHint testId="ai-upgrade" icon={false} className={`inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink ${className}`}>
       <Sparkles size={12} aria-hidden="true" />
-      Get more with Pro or an interview pack
+      Get more with Pro or a mock interview pack
     </UpgradeHint>
   );
 }

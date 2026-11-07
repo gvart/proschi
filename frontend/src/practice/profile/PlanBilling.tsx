@@ -114,7 +114,7 @@ export default function PlanBilling() {
               <span className={`rounded-sm border-bw-1 border-ink px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${pro ? 'bg-pop-yellow text-on-accent' : 'bg-paper'}`}>
                 {pro ? 'Pro' : 'Free'}
               </span>
-              {renewalText(plan) ?? `Pro adds unlimited diagrams and ${PRICES.proInterviews} AI interviews a month.`}
+              {renewalText(plan) ?? `Pro adds unlimited diagrams and ${PRICES.proInterviews} mock interviews a month.`}
             </p>
             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
               {!pro && (
@@ -126,7 +126,7 @@ export default function PlanBilling() {
               {plan.billing && (
                 <button type="button" className={outlineButton} disabled={busy} onClick={() => go(() => checkout('pack_5'))}>
                   <CreditCard size={14} aria-hidden="true" />
-                  Buy {PRICES.packInterviews} interviews, €{PRICES.pack}
+                  Buy {PRICES.packInterviews} mock interviews, €{PRICES.pack}
                 </button>
               )}
               {plan.billing && plan.customer && (
@@ -143,8 +143,8 @@ export default function PlanBilling() {
             </p>
           )}
           <div className="grid divide-y divide-ink/15 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
-            <Figure label="AI interviews left" value={plan.credits.total}>
-              <Meter label="AI interviews left" value={plan.credits.total} max={Math.max(plan.credits.total, plan.limits.interviewsPerMonth + plan.credits.trial + plan.credits.pack)} />
+            <Figure label="Mock interviews left" value={plan.credits.total}>
+              <Meter label="Mock interviews left" value={plan.credits.total} max={Math.max(plan.credits.total, plan.limits.interviewsPerMonth + plan.credits.trial + plan.credits.pack)} />
               <p className="mt-2 text-xs text-muted" data-testid="credits">
                 {creditsText(plan)}
               </p>

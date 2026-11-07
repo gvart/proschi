@@ -91,7 +91,7 @@ interface ProblemPageProps {
    * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
    */
   openLesson?: 'always' | 'unread';
-  /** `ai` (practice/#/<id>?interview=ai): open on interview mode's start screen with the AI interviewer chosen, past the lesson; nothing starts. */
+  /** `ai` (practice/#/<id>?interview=mock, or the alias ?interview=ai): open on interview mode's start screen with the mock interview chosen, past the lesson; nothing starts. */
   interviewWith?: 'ai';
 }
 

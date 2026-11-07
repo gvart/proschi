@@ -119,9 +119,9 @@ function Banner({ state, checkoutId, again }: { state: ReturnState; checkoutId: 
   );
 }
 
-/** Where Pro starts: links on the practice page (`#/…`, a problem opened on interview mode with the AI interviewer) and to the editor, whose Results tab has the AI review. */
+/** Where Pro starts: links on the practice page (`#/…`, a problem opened on interview mode with the mock interview chosen) and to the editor, whose Results tab has the in-depth review. */
 const STARTS = [
-  { href: '#/url-shortener?interview=ai', label: 'Start an AI interview', Icon: MessagesSquare },
+  { href: '#/url-shortener?interview=mock', label: 'Start a mock interview', Icon: MessagesSquare },
   { href: '../app/', label: 'Review a design', Icon: ScanSearch },
   { href: '#/roadmap', label: 'See your roadmap', Icon: MapIcon },
 ] as const;

@@ -18,10 +18,10 @@ export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src
  * which reads the answers from GET /api/me/plan.
  */
 export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; description: string }>> = {
-  ai_interview: { plans: ['free', 'pro'], description: 'AI mock interviews are on every plan; the credits decide how many' },
-  ai_review: { plans: ['pro'], description: 'AI design review is part of Pro' },
-  interview_history: { plans: ['pro'], description: 'Every AI verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
-  ai_roadmap: { plans: ['pro'], description: 'AI next steps are part of Pro' },
+  ai_interview: { plans: ['free', 'pro'], description: 'Mock interviews are on every plan; the credits decide how many' },
+  ai_review: { plans: ['pro'], description: 'The in-depth review is part of Pro' },
+  interview_history: { plans: ['pro'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
+  ai_roadmap: { plans: ['pro'], description: 'Your next steps are part of Pro' },
   share_links: { plans: ['pro'], description: 'Live share links are part of Pro' },
 };
 

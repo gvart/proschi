@@ -83,7 +83,7 @@ export const reviewDesign = requireFeature('ai_review', async (_request: Request
   if (used === undefined) {
     const reset = resetAt(at);
     return json(
-      { error: 'daily_limit', message: `You have used today's ${REVIEWS_PER_DAY} AI reviews`, usage: usageOf(REVIEWS_PER_DAY, at) },
+      { error: 'daily_limit', message: `You have used today's ${REVIEWS_PER_DAY} in-depth reviews`, usage: usageOf(REVIEWS_PER_DAY, at) },
       429,
       { ...NO_STORE, 'Retry-After': String(Math.ceil((reset - at) / 1000)) },
     );
@@ -102,8 +102,8 @@ export const reviewDesign = requireFeature('ai_review', async (_request: Request
     log('error', 'review.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, error: errorText(e) });
     // Busy or unreachable: worth trying again (503, the page offers the rule review meanwhile); anything else failed outright.
     return e.retryable
-      ? json({ error: 'ai_unavailable', message: 'The AI reviewer is busy; try again in a minute' }, 503, NO_STORE)
-      : json({ error: 'review_failed', message: 'The AI review failed; try again' }, 502, NO_STORE);
+      ? json({ error: 'ai_unavailable', message: 'The in-depth review is busy; try again in a minute' }, 503, NO_STORE)
+      : json({ error: 'review_failed', message: 'The in-depth review failed; try again' }, 502, NO_STORE);
   }
 }, reviewBody);
 

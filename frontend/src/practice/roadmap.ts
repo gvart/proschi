@@ -109,7 +109,7 @@ export function roadmapState(stages: RoadmapStage[], progress: Progress): Roadma
  * the account loads, or `sign-in`. Anyone can see the stages and work through
  * the first one signed out, with progress kept in this browser; the stages
  * after it take an account (see stepLock). The roadmap itself stays free; its
- * paid part, the AI's "Next for you" picks, is the ai_roadmap feature
+ * paid part, the "Your next steps" picks, is the ai_roadmap feature
  * (history/NextForYou.tsx, components/Feature.tsx).
  *
  * A build without accounts (`VITE_ACCOUNTS` unset: local development, the e2e

@@ -22,7 +22,7 @@ export interface DesignReviewer {
 
 /** No reviewer behind this build or endpoint: not a failure, so the panel says so instead of showing an error. */
 export class ReviewUnavailableError extends Error {
-  constructor(message = 'AI review is not available yet') {
+  constructor(message = 'The in-depth review is not available yet') {
     super(message);
     this.name = 'ReviewUnavailableError';
   }
@@ -32,7 +32,7 @@ export class ReviewUnavailableError extends Error {
 export class DailyLimitError extends Error {
   readonly usage?: ReviewUsage;
   constructor(usage?: ReviewUsage) {
-    super('You have used today’s AI reviews');
+    super('You have used today’s in-depth reviews');
     this.name = 'DailyLimitError';
     this.usage = usage;
   }

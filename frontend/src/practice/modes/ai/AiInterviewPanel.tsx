@@ -78,7 +78,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
 
   if (loadError) {
     return (
-      <section aria-label="AI interview" className="px-4 py-4 space-y-3">
+      <section aria-label="Mock interview" className="px-4 py-4 space-y-3">
         <p role="alert" className="text-sm text-ink">
           This interview could not be loaded ({loadError}).
         </p>
@@ -157,10 +157,10 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
 
   if (interview.status === 'failed') {
     return (
-      <section aria-label="AI interview" className="px-4 py-4 space-y-3">
+      <section aria-label="Mock interview" className="px-4 py-4 space-y-3">
         <p role="alert" className="flex items-start gap-2 rounded-sm border-bw-1 border-ink bg-pop-pink/25 px-3 py-2 text-sm text-ink">
           <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          The AI interviewer stopped working early in this interview, so your credit was given back. Start again when you are ready.
+          The interviewer stopped working early in this interview, so your credit was given back. Start again when you are ready.
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onRestart} className={primaryButton}>
@@ -176,12 +176,12 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
 
   const canTalk = active && !timeUp && !busy;
   return (
-    <section aria-label="AI interview" className="flex h-full min-h-0 flex-col">
+    <section aria-label="Mock interview" className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-10 border-b-bw-1 border-ink bg-surface px-3 py-2 space-y-2">
         <div className="flex items-center gap-2">
           <span className={`${eyebrow} inline-flex items-center gap-1`}>
             <Bot size={13} aria-hidden="true" />
-            AI interview
+            Mock interview
           </span>
           <span role="timer" aria-label="Time left" className={`font-mono text-base font-bold tabular-nums ${left < 0 ? 'text-red-700 dark:text-red-300' : 'text-ink'}`}>
             {formatClock(left)}

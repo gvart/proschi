@@ -99,21 +99,21 @@ test.describe('Picks made after the verdict is answered', () => {
     await mockSignedIn(page, PRO);
     await mockHistory(page, { full: true, total: 0, sessions: [] }, { arriveOn: 1 });
     await page.goto('practice/#/roadmap');
-    const card = page.getByRole('region', { name: 'Next for you' });
+    const card = page.getByRole('region', { name: 'Your next steps' });
     await expect(card.getByTestId('picks-picking')).toBeVisible();
     await page.clock.runFor(2_100);
     await expect(card.getByTestId('roadmap-picks').getByRole('link')).toHaveCount(3);
   });
 });
 
-test.describe('Next for you', () => {
+test.describe('Your next steps', () => {
   test('Pro: the 3 picks on the roadmap, each with its reason and link', async ({ page }) => {
     await mockSignedIn(page, PRO);
     await mockHistory(page, { full: true, total: 0, sessions: [] });
     await page.goto('practice/#/roadmap');
 
-    const card = page.getByRole('region', { name: 'Next for you' });
-    await expect(card.getByText('Picked after your last AI interview')).toBeVisible();
+    const card = page.getByRole('region', { name: 'Your next steps' });
+    await expect(card.getByText('Picked after your last mock interview')).toBeVisible();
     const picks = card.getByRole('link');
     await expect(picks).toHaveCount(3);
     await expect(picks.nth(0)).toContainText('Pastebin');
@@ -128,7 +128,7 @@ test.describe('Next for you', () => {
     await mockSignedIn(page, FREE);
     const asked = await mockHistory(page, { full: false, total: 0, sessions: [] });
     await page.goto('practice/#/roadmap');
-    const card = page.getByRole('region', { name: 'Next for you' });
+    const card = page.getByRole('region', { name: 'Your next steps' });
     await expect(card.getByTestId('next-for-you-upgrade')).toHaveAttribute('href', '../pricing/');
     await expect(card.getByTestId('roadmap-picks')).toHaveCount(0);
     expect(asked.filter((p) => p.startsWith('/api/roadmap'))).toEqual([]);

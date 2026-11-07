@@ -66,7 +66,7 @@ async function shots(page: Page, name: string) {
   await page.emulateMedia({ colorScheme: 'light' });
 }
 
-test('Pro gets the AI review, graded on the server, with the reviews left today', async ({ page }) => {
+test('Pro gets the in-depth review, graded on the server, with the reviews left today', async ({ page }) => {
   await mockSignedIn(page, { ...SIGNED_IN, user: { ...SIGNED_IN.user, plan: 'pro' } });
   const sent: unknown[] = [];
   let release!: () => void;
@@ -80,8 +80,8 @@ test('Pro gets the AI review, graded on the server, with the reviews left today'
 
   await openReview(page);
   const panel = page.getByTestId('design-review');
-  await expect(panel.getByText(/An AI reviewer reads your design/)).toBeVisible();
-  await expect(panel.getByTestId('reviews-left')).toHaveText('17 of 20 AI reviews left today');
+  await expect(panel.getByText(/An in-depth review: Claude, by Anthropic, reads your design/)).toBeVisible();
+  await expect(panel.getByTestId('reviews-left')).toHaveText('17 of 20 in-depth reviews left today');
   await expect(panel.getByTestId('review-upgrade-hint')).toHaveCount(0);
 
   await panel.getByRole('button', { name: 'Review my design' }).click();
@@ -95,40 +95,40 @@ test('Pro gets the AI review, graded on the server, with the reviews left today'
   await expect(result.getByText(AI_REVIEW.summary)).toBeVisible();
   await expect(result.getByRole('heading', { name: /^Critical/ })).toBeVisible();
   await expect(result.getByRole('heading', { name: 'Strengths' })).toBeVisible();
-  await expect(result.getByText('AI feedback can be wrong; the tests are the verdict.')).toBeVisible();
-  await expect(panel.getByTestId('reviews-left')).toHaveText('16 of 20 AI reviews left today');
+  await expect(result.getByText('The in-depth review can be wrong; the tests are the verdict.')).toBeVisible();
+  await expect(panel.getByTestId('reviews-left')).toHaveText('16 of 20 in-depth reviews left today');
   expect(sent).toHaveLength(1);
   expect(sent[0]).toMatchObject({ problem: { id: 'url-shortener' }, source: expect.any(String) });
   await shots(page, 'ai-review');
 });
 
-test('Pro past the day’s AI reviews gets the automatic review, with when more come', async ({ page, errors }) => {
+test('Pro past the day’s in-depth reviews gets the automatic review, with when more come', async ({ page, errors }) => {
   await mockSignedIn(page, { ...SIGNED_IN, user: { ...SIGNED_IN.user, plan: 'pro' } });
   await page.route('**/api/review/usage', (route) => route.fulfill({ json: usage(19) }));
   await page.route('**/api/review', (route) => route.fulfill({ status: 429, json: { error: 'daily_limit', usage: usage(20) } }));
   await openReview(page);
   const panel = page.getByTestId('design-review');
-  await expect(panel.getByTestId('reviews-left')).toHaveText('1 of 20 AI reviews left today');
+  await expect(panel.getByTestId('reviews-left')).toHaveText('1 of 20 in-depth reviews left today');
   await panel.getByRole('button', { name: 'Review my design' }).click();
-  await expect(panel.getByTestId('review-notice')).toContainText('You have used today’s 20 AI reviews; more at 12:00 AM. Here is the automatic review meanwhile.');
+  await expect(panel.getByTestId('review-notice')).toContainText('You have used today’s 20 in-depth reviews; more at 12:00 AM. Here is the automatic review meanwhile.');
   await expect(panel.getByTestId('review-result')).toHaveAttribute('data-by', 'rules');
-  await expect(panel.getByTestId('reviews-left')).toHaveText('No AI reviews left today · more at 12:00 AM');
+  await expect(panel.getByTestId('reviews-left')).toHaveText('No in-depth reviews left today · more at 12:00 AM');
   allowStatus(errors, 429);
 });
 
-test('Pro gets the automatic review when the AI review fails', async ({ page, errors }) => {
+test('Pro gets the automatic review when the in-depth review fails', async ({ page, errors }) => {
   await mockSignedIn(page, { ...SIGNED_IN, user: { ...SIGNED_IN.user, plan: 'pro' } });
   await page.route('**/api/review/usage', (route) => route.fulfill({ json: usage(0) }));
   await page.route('**/api/review', (route) => route.fulfill({ status: 502, json: { error: 'review_failed' } }));
   await openReview(page);
   const panel = page.getByTestId('design-review');
   await panel.getByRole('button', { name: 'Review my design' }).click();
-  await expect(panel.getByRole('alert')).toContainText('The AI review failed (review_failed), so here is the automatic review.');
+  await expect(panel.getByRole('alert')).toContainText('The in-depth review failed (review_failed), so here is the automatic review.');
   await expect(panel.getByTestId('review-result')).toHaveAttribute('data-by', 'rules');
   allowStatus(errors, 502);
 });
 
-test('the free plan gets the automatic review, with a hint that AI review is part of Pro', async ({ page }) => {
+test('the free plan gets the automatic review, with a hint that the in-depth review is part of Pro', async ({ page }) => {
   await mockSignedIn(page);
   let asked = 0;
   await page.route('**/api/review**', (route) => {
@@ -139,8 +139,8 @@ test('the free plan gets the automatic review, with a hint that AI review is par
   const panel = page.getByTestId('design-review');
   await expect(panel.getByText('An automatic review, based on the simulation and the tests.')).toBeVisible();
   const hint = panel.getByTestId('review-upgrade-hint');
-  await expect(hint).toContainText('AI design review is part of Pro');
-  await expect(hint.getByRole('link', { name: 'AI design review is part of Pro' })).toHaveAttribute('href', '../pricing/');
+  await expect(hint).toContainText('The in-depth review is part of Pro');
+  await expect(hint.getByRole('link', { name: 'The in-depth review is part of Pro' })).toHaveAttribute('href', '../pricing/');
   await expect(panel.getByTestId('reviews-left')).toHaveCount(0);
   await panel.getByRole('button', { name: 'Review my design' }).click();
   const result = panel.getByTestId('review-result');

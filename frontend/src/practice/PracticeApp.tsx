@@ -76,7 +76,7 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
 
 /**
  * `#/` is the list, `#/<problem id>` a problem (on its lesson until read; `#/<problem id>/lesson` always opens
- * on its lesson; `#/<problem id>?interview=ai` on interview mode, the AI interviewer chosen, nothing started), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
+ * on its lesson; `#/<problem id>?interview=mock` on interview mode, the mock interview chosen, nothing started; `?interview=ai` is an alias), `#/roadmap` the roadmap, `#/roadmap/<problem id>` a problem
  * opened from it, `#/roadmap/<guide id>` an article of the roadmap,
  * `#/review` daily review (`#/review/<topic>` one topic of it), `#/arcade` the
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
@@ -120,9 +120,10 @@ async function sendLessonsRead(ids: string[]): Promise<void> {
 /** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const hash = useHashRoute();
-  // A query after the route: `#/<problem id>?interview=ai` opens the problem on interview mode with the AI interviewer chosen.
+  // A query after the route: `#/<problem id>?interview=mock` (or the older `?interview=ai`) opens the problem on interview mode with the mock interview chosen.
   const [route, query = ''] = hash.split('?', 2);
-  const interviewAi = new URLSearchParams(query).get('interview') === 'ai';
+  const interviewParam = new URLSearchParams(query).get('interview');
+  const interviewAi = interviewParam === 'mock' || interviewParam === 'ai';
   const [progress, setProgress] = useState<Progress>(loadProgress);
   useEffect(() => track('practice_open', { once: 'session' }), []);
   const updateProgress = useCallback((update: (p: Progress) => Progress) => {

@@ -66,7 +66,7 @@ describe('Pro', () => {
     expect(returnMessage(s)).toBe('Payment received. Activating Pro…');
     s = onPlan(s, plan({ plan: 'pro', status: 'active', perMonth: 4 }));
     expect(s.phase).toBe('done');
-    expect(returnMessage(s)).toBe("You're on Pro: 4 AI interviews this month.");
+    expect(returnMessage(s)).toBe("You're on Pro: 4 mock interviews this month.");
   });
   it('is not done by an admin’s comp alone', () => {
     expect(onPlan(PRO, plan({ plan: 'pro' })).phase).toBe('activating');
@@ -82,12 +82,12 @@ describe('a pack', () => {
   it('is done once the pack credits go up from the first answer', () => {
     let s = onPlan(PACK, plan({ pack: 2 }));
     expect(s).toMatchObject({ phase: 'activating', baseline: 2 });
-    expect(returnMessage(s)).toBe('Payment received. Adding 5 interviews…');
+    expect(returnMessage(s)).toBe('Payment received. Adding 5 mock interviews…');
     s = onPlan(s, plan({ pack: 2 }));
     expect(s.phase).toBe('activating');
     s = onPlan(s, plan({ pack: 7 }));
     expect(s).toMatchObject({ phase: 'done', interviews: 5 });
-    expect(returnMessage(s)).toBe('5 interviews added.');
+    expect(returnMessage(s)).toBe('5 mock interviews added.');
     expect(onPlan(s, plan({ pack: 12 }))).toBe(s);
   });
   it('is not done by Pro', () => {
