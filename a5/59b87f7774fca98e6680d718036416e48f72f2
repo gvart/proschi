@@ -1,0 +1,45 @@
+frontend/src/partner/usePartner.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 29-30,48,99,129-133,156,183
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 574,1331,1345
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 340,436-437,451,455
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_8e061525cd1846 252-266
+frontend/e2e/partner.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 11,26-32,34,36-40,42,44-57,69,96-113,131,150-154,177-179,191-192,214,230-232,250-254,292,294,296-297,305-342
+frontend/src/partner/PartnerButton.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 11-21,23-38
+frontend/src/partner/ChangeCard.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 2,5-6,14-15,17-18,35-38,41,43,51-65,79-90,123,127-128,131,279-287,290
+frontend/src/partner/ChangePreview.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 1-168
+frontend/src/partner/partner.test.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 5-6,112-133
+frontend/src/partner/partner.css
+  s_e17b87e0a1b3ca::t_8e061525cd1846 13-38
+frontend/src/partner/PartnerPanel.tsx
+  s_e17b87e0a1b3ca::t_8e061525cd1846 4,12,14,22-24,50-51,141,147-148,182,184-201,215-216,230,243,255,286-287,300,312,315,321,331,333,335-347,349,355,357,362-370,372-388,407
+frontend/src/partner/preview.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 1-37
+frontend/e2e/partner.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 47,50-51
+frontend/src/partner/store.ts
+  s_e17b87e0a1b3ca::t_8e061525cd1846 6-7,18-19,34-35
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a559b87f7774fca98e6680d718036416e48f72f2",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
