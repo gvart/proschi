@@ -118,11 +118,14 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
   const deep = deepAllowed && (state.sessionId ? state.sessionDeep : deepChoice);
   const busy = state.status !== 'idle';
 
-  // The newest message in view.
+  // A new answer is read from its top; anything else (a message sent, the thinking line) brings the end into view.
+  const newest = state.turns[state.turns.length - 1];
   useEffect(() => {
     const el = scroller.current;
-    if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
-  }, [state.turns.length, state.status]);
+    if (!el) return;
+    const answer = newest?.role === 'partner' && state.status === 'idle' ? el.querySelector<HTMLElement>(`[data-turn="${CSS.escape(newest.id)}"]`) : null;
+    el.scrollTo({ top: answer ? answer.offsetTop - 16 : el.scrollHeight, behavior: 'smooth' });
+  }, [newest, state.status]);
 
   // The composer grows with its text, up to about six lines.
   useEffect(() => {
@@ -191,7 +194,7 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
         )}
       </PanelHeader>
 
-      <div ref={scroller} className="flex-1 min-h-0 overflow-y-auto overscroll-contain" aria-busy={busy}>
+      <div ref={scroller} className="relative flex-1 min-h-0 overflow-y-auto overscroll-contain" aria-busy={busy}>
         {state.status === 'resuming' ? (
           <div className="p-4">
             <Skeleton label="Loading your conversation…" />
@@ -430,7 +433,7 @@ function UserMessage({ turn }: { turn: Turn }) {
 
 function PartnerMessage({ turn, charge, questions, onAnswer, children }: { turn: Turn; charge?: number; questions?: Question[]; onAnswer: (text: string) => void; children?: ReactNode }) {
   return (
-    <li aria-label="Design partner" data-testid="partner-turn">
+    <li aria-label="Design partner" data-testid="partner-turn" data-turn={turn.id}>
       {turn.message && <Markdown source={turn.message} />}
       {turn.questions && <Questions questions={turn.questions} active={!!questions} onAnswer={onAnswer} />}
       {children && <div className="mt-3 space-y-3">{children}</div>}
@@ -469,7 +472,7 @@ function Questions({ questions, active, onAnswer }: { questions: Question[]; act
                   disabled={!active}
                   aria-pressed={single ? undefined : picked[q.id] === o}
                   onClick={() => choose(q, o)}
-                  className="rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-xs font-semibold text-ink transition-colors duration-d1 hover:bg-pop-yellow/40 aria-pressed:bg-pop-yellow aria-pressed:text-on-accent disabled:border-ink/25 disabled:text-muted disabled:hover:bg-surface"
+                  className="rounded-full border-bw-1 border-ink bg-surface px-3 py-1 text-xs font-semibold text-ink transition-colors duration-d1 hover:bg-pop-yellow/40 aria-pressed:bg-pop-yellow aria-pressed:text-on-accent disabled:border-ink/25 disabled:bg-transparent disabled:text-muted"
                 >
                   {o}
                 </button>
