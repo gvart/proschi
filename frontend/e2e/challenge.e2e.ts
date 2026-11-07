@@ -1,5 +1,5 @@
 import type { APIRequestContext, Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, sectionLink, setPracticeGoal, test } from './fixtures';
 
 /**
  * The daily challenge in a build without accounts: scored and kept in this
@@ -23,7 +23,6 @@ async function loadCards(request: APIRequestContext): Promise<Map<string, Bundle
   return new Map(bundle.cards.map((c) => [c.id, c]));
 }
 
-const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
 
 const challengeCard = (page: Page, n: number) => page.getByRole('article', { name: `Challenge card ${n} of 5` });
 
@@ -71,13 +70,15 @@ test.describe('daily challenge', () => {
 
   test('play, score, share; only the first attempt counts and every answer is a review', async ({ page, context, request }) => {
     await context.grantPermissions(['clipboard-read', 'clipboard-write']);
+    // A daily habit, so the streak shows after the challenge.
+    await setPracticeGoal(page, ['habit']);
     const cards = await loadCards(request);
-    // The problem list points to interview prep, whose Challenge tab it is.
+    // The practice page's More practice menu holds the daily challenge.
     await page.goto('practice/');
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
-    await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
+    await (await sectionLink(page, 'Daily challenge')).click();
     await expect(page).toHaveURL(/#\/challenge$/);
-    await expect(prepNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
+    await expect(await sectionLink(page, 'Daily challenge')).toHaveAttribute('aria-current', 'page');
+    await page.keyboard.press('Escape');
     await expect(page).toHaveTitle('Daily challenge · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Daily challenge' })).toBeVisible();
     const intro = page.getByRole('region', { name: 'Today’s challenge' });
@@ -118,11 +119,11 @@ test.describe('daily challenge', () => {
     await expect(page.getByRole('button', { name: 'Start the challenge' })).toHaveCount(0);
 
     // Every answer counted as a review today.
-    await prepNav(page).getByRole('link', { name: 'Review', exact: true }).click();
+    await (await sectionLink(page, 'Review cards')).click();
     await expect(page).toHaveURL(/#\/review$/);
     const reviewed = page.getByRole('region', { name: 'Today' }).locator('dt', { hasText: /^Reviewed today$/ }).locator('xpath=following-sibling::dd[1]');
     await expect(reviewed).toHaveText('5');
-    await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
+    await (await sectionLink(page, 'Daily challenge')).click();
     await expect(page).toHaveURL(/#\/challenge$/);
   });
 

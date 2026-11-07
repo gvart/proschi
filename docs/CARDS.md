@@ -216,8 +216,8 @@ signed out there is no streak. The streak badges count the same streak.
 
 ### Daily challenge
 
-The practice page's daily challenge (`practice/#/challenge`, the Challenge
-tab of the practice hub) is the same five cards for everyone each day. The day is the **UTC date**, so it starts at
+The practice page's daily challenge (`practice/#/challenge`, in the practice
+page's More practice menu) is the same five cards for everyone each day. The day is the **UTC date**, so it starts at
 00:00 UTC everywhere. The rules are `frontend/src/learn/challenge.ts`, which
 the Worker runs too:
 

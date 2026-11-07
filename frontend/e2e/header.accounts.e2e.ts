@@ -98,7 +98,9 @@ test('every page has the same account control in the header, signed in', async (
     await expect(account, path).toHaveClass(/ps-account__button/);
     await account.click();
     const menu = page.getByRole('menu');
-    await expect(menu.getByRole('menuitem'), path).toHaveText(['Your progress', 'Settings', 'Sign out']);
+    // With billing on, the credits left (the free plan's 100), linking to Plan & billing; no chip in the header.
+    await expect(menu.getByRole('menuitem'), path).toHaveText(['Your progress', /^100 credits\s*Plan & billing$/, 'Settings', 'Sign out']);
+    await expect(page.getByTestId('credits-chip'), path).toHaveCount(0);
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
   }

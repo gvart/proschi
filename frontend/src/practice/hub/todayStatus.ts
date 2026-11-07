@@ -7,7 +7,7 @@ import { guestChallenge, localResults } from '../challenge/store';
 import type { Account } from '../useAccount';
 
 /**
- * What the Today panel (TodayPanel.tsx) shows of today's daily challenge and
+ * What the practice home's daily line (HomeExtras.tsx) shows of today's daily challenge and
  * daily Arcade run, read from where their own pages keep them: this browser's
  * results in a build without accounts or signed out, the server signed in.
  */

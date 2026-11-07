@@ -120,22 +120,27 @@ test('pricing: signed out, the buttons sign in first', async ({ page }) => {
   await expect(page.getByTestId('credits-chip')).toHaveCount(0);
 });
 
-test('header: the credits chip links to Plan & billing and turns orange when low; the plan badge', async ({ page }) => {
+test('header: no credits chip; the account menu says the credits left, links to Plan & billing and warns when low; the plan badge', async ({ page }) => {
   let current = PRO_PLAN;
   await mockBilling(page, () => current);
   await page.goto('pricing/');
-  const chip = page.getByTestId('credits-chip');
-  await expect(chip).toContainText('652');
-  await expect(chip).toHaveAttribute('href', '../practice/#/me');
-  await expect(chip).not.toHaveAttribute('data-low');
   await expect(page.getByTestId('plan-badge')).toHaveText('Pro');
+  await expect(page.getByTestId('credits-chip')).toHaveCount(0);
+  const account = page.getByRole('button', { name: 'Account' });
+  await account.click();
+  const credits = page.getByTestId('account-credits');
+  await expect(credits).toHaveText(/^652 credits\s*Plan & billing$/);
+  await expect(credits).not.toHaveAttribute('data-low');
 
   current = { ...MAX_PLAN_NOW, credits: { balance: 150, monthly: { allowance: 2200, left: 150, resetsAt: 0 }, signup: 0, topup: 0 } };
   await page.reload();
-  await expect(chip).toContainText('150');
-  await expect(chip).toHaveAttribute('data-low', 'true');
-  await expect(chip).toHaveAccessibleName('150 credits left, running low. Plan and billing');
   await expect(page.getByTestId('plan-badge')).toHaveText('Max');
+  await account.click();
+  await expect(credits).toContainText('150 credits');
+  await expect(credits).toContainText('running low');
+  await expect(credits).toHaveAttribute('data-low', 'true');
+  await page.getByRole('menuitem', { name: /150 credits/ }).click();
+  await expect(page).toHaveURL(/practice\/#\/me$/);
 });
 
 test('settings: plan, monthly credits with the reset date, the balances, top-up and the usage list', async ({ page }) => {
@@ -277,8 +282,10 @@ test('checkout return: a top-up shows the credits added; no parameters, no banne
   const welcome = page.getByRole('region', { name: 'Credits added' });
   await expect(welcome).toContainText('1,000 credits added. They never expire.');
   await expect(page.getByTestId('credits')).toContainText('Top-ups1,000never expire');
-  await expect(page.getByTestId('credits-chip')).toContainText('1,100');
   await expect(page.getByTestId('plan-badge')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
+  await expect(page.getByTestId('account-credits')).toContainText('1,100 credits');
+  await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/checkout|product/);
 
   // A reload (the address without the parameters, as after Polar's back button to the pricing page) shows no banner.

@@ -3,7 +3,7 @@
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
 (private, and you can turn that off). Payments for Pro go through Polar,
-and mock interviews and in-depth reviews are sent to an AI provider (Anthropic) only when you start one. There are no analytics or tracking
+and mock interviews and Design partner chats are sent to an AI provider (Anthropic) only when you start one. There are no analytics or tracking
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
@@ -26,6 +26,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
+| `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off |
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
 | `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
 | `proschi.aiInterview.<problem>` | Signed in: the id of the mock interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
@@ -359,31 +360,36 @@ each verdict (below). Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 
-## In-depth review
+## Design partner
 
-On Pro, **Review my design** sends the design you review (its source and,
-for a practice problem, the problem's id) to the server, which runs the
-simulation and the tests on it and sends the design, those results and the
-problem to Anthropic's Claude to write the review. The provider uses them
-only to answer, not to train its models. On the free plan, signed out, and
-on Pro once the day's in-depth reviews are used up, the review is written by the
-page itself and nothing is sent.
+Signed in, **Design partner** (paid for in credits, on any plan) is a chat
+about your design, in the editor or on a practice problem, started only by
+you. Each message you send goes to the server with your design's source (in
+the editor, also the files it imports; on a practice problem, the problem's
+id). The server runs the simulation and the tests on it and sends your
+message, the design, those results, the problem and the chat's earlier
+messages to Anthropic's Claude, through Cloudflare's AI Gateway, to write the
+answer and any changes it proposes. The provider uses them only to answer,
+not to train its models.
 
-**What is stored**: not the design or the review, only how many in-depth reviews
-you asked for each day (UTC), for the limit of 20 a day. The counts are part
-of **Download my data** and deleted with your account.
+**What is stored**: each chat (where it was opened, and on a practice problem
+which one), its messages and the partner's answers, the changes it proposed
+with the server's check of each and whether you accepted or rejected it. A
+chat is private, part of **Download my data**, and deleted with your account;
+a daily job deletes it 90 days after its last message. What each message
+cost is in the credits ledger (above).
 
 ## Your next steps (Pro)
 
-On Pro, after a mock interview's verdict, and at most once a day after an
-in-depth review, Proschi asks Anthropic's Claude to pick your next 3 steps. It
-sends the verdict (or the review's summary and issues), your weakest card
+On Pro, after a mock interview's verdict, Proschi asks Anthropic's Claude to
+pick your next 3 steps. It sends the verdict, your weakest card
 topics, which roadmap problems you have solved and your mastery of each card
 topic. The provider uses them only to answer, not to train its models.
 
 **What is stored**: each set of picks (the problem or card topic ids, the
-reason for each, when, and the interview or reviewed problem that prompted
-it). They are private, part of **Download my data**, and deleted with your
+reason for each, when, and the interview that prompted it; older picks made
+after a design review, a feature Design partner replaced, keep the reviewed
+problem instead). They are private, part of **Download my data**, and deleted with your
 account.
 
 ## The site's operator
@@ -511,7 +517,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, in-depth reviews a day and mock interviews with the picks for your next steps, every session with its kind (the site or an
+  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, mock interviews with the picks for your next steps, Design partner chats, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).

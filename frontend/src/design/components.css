@@ -435,43 +435,26 @@
     display: none;
   }
 }
-/* The credits left beside the account control (practice/AccountMenu.tsx on
-   the React pages, account.ts on the static ones): a link to Plan & billing,
-   orange when running low. */
-.ps-credits {
-  display: inline-flex;
-  flex-shrink: 0;
-  align-items: center;
-  gap: 6px;
-  height: 40px;
-  padding: 0 10px;
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-sm);
-  background: rgb(var(--c-surface));
-  color: rgb(var(--c-ink));
-  box-shadow: var(--sh-sm);
-  font: 600 var(--fs-14) / 1.25 var(--font-sans);
+/* The credits left in the account menu (practice/AccountMenu.tsx on the
+   React pages, account.ts on the static ones): a link to Plan & billing. */
+.ps-account__credits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0 12px;
   font-variant-numeric: tabular-nums;
-  text-decoration: none;
-  white-space: nowrap;
 }
-.ps-credits:hover {
-  background: rgb(var(--c-yellow));
-  color: rgb(var(--c-on-accent));
+.ps-account__low {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: light-dark(#c2410c, #fdba74);
 }
-.ps-credits[data-low] {
-  border-color: light-dark(#c2410c, #fdba74);
-  background: light-dark(#ffedd5, rgb(251 146 60 / 0.2));
-  color: light-dark(#431407, #ffedd5);
-}
-.ps-credits__word {
+.ps-account__hint {
+  font-size: 12px;
   font-weight: 400;
-}
-/* The credits chip takes the wordmark's room on phones. */
-@media (max-width: 429px) {
-  .ps-header--actions:not(.ps-header--compact):has([data-credits-chip]) .ps-wordmark__text {
-    display: none;
-  }
+  opacity: 0.75;
 }
 
 .ps-nav {
@@ -722,17 +705,11 @@
 }
 /* From 1280px the bar stays one row: what is too long (a diagram's or a
    problem's title) is cut short instead of wrapping. To make room for the
-   toolbar, the account control shows its icon only, and the credits chip its
-   number only, until the bar is wide enough (both say the rest in their
-   label and menu). */
+   toolbar, the account control shows its icon only until the bar is wide
+   enough (it says the rest in its label and menu). */
 @media (min-width: 1280px) {
   .ps-header__tools {
     flex-wrap: nowrap;
-  }
-}
-@media (max-width: 1439px) {
-  .ps-header--compact .ps-credits__word {
-    display: none;
   }
 }
 @media (max-width: 1599px) {

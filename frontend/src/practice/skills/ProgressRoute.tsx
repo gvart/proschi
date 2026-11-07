@@ -48,6 +48,7 @@ const preview: ProfileBadge[] = ACHIEVEMENTS.map((a) => ({ ...a, earned: false }
 
 export default function ProgressRoute({
   account,
+  showStreak = false,
   achievements,
   roadmap,
   stages,
@@ -58,6 +59,8 @@ export default function ProgressRoute({
   account: Account;
   /** `#/progress/interview/<id>`: show that AI interview's verdict instead. */
   verdictId?: string;
+  /** The streak section, for those who keep one (hub/goal.ts). */
+  showStreak?: boolean;
   achievements: Achievements;
   activity: Activity;
   /** This browser's progress (merged with the account's when signed in): the problems solved. */
@@ -158,13 +161,13 @@ export default function ProgressRoute({
         </div>
       </section>
 
-      {(streak || challenge) && (
+      {((showStreak && streak) || challenge) && (
         <section aria-labelledby="streak-title" className="mt-10">
           <h2 id="streak-title" className="font-display text-2xl font-extrabold text-ink">
-            Streak
+            {showStreak ? 'Streak' : 'Daily challenge'}
           </h2>
-          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Streak">
-            {streak && (
+          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={showStreak ? 'Streak' : 'Daily challenge'}>
+            {showStreak && streak && (
               <Tile
                 label="Current streak"
                 value={streak.current}
@@ -172,7 +175,7 @@ export default function ProgressRoute({
                 icon={<Flame size={16} aria-hidden="true" className={streak.current > 0 ? 'fill-pop-yellow text-ink' : 'text-muted'} />}
               />
             )}
-            {streak && <Tile label="Streak freezes" value={streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />}
+            {showStreak && streak && <Tile label="Streak freezes" value={streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />}
             {challenge && (
               <Tile
                 label="Challenge streak"
@@ -184,7 +187,7 @@ export default function ProgressRoute({
             )}
             {challenge && <Tile label="Best challenge" value={challenge.best} unit={`/ ${MAX_SCORE}`} testId="profile-challenge-best" />}
           </dl>
-          {ready && (
+          {showStreak && ready && (
             <div className="mt-4">
               <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />
             </div>

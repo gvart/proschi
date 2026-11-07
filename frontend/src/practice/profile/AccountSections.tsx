@@ -9,6 +9,7 @@ import { announcePlanChanged, billingEnabled } from '../../services/billing';
 import { PROVIDER_LABEL } from '../account';
 import type { Activity } from '../activity';
 import { GoalChoices } from '../Streak';
+import { GOALS, setGoal, useGoal, wantsStreak } from '../hub/goal';
 import type { Account } from '../useAccount';
 import { PUBLIC_FIELDS } from './profile';
 import { Confirm, dangerButton, Row, Section, switchInput } from './settingsUi';
@@ -125,20 +126,63 @@ export function ProfileSection({ account, user }: { account: Account; user: User
 
 export function LearningSection({ activity }: { activity: Activity }) {
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
+  const goal = useGoal();
+  const streakOn = wantsStreak(goal);
   return (
-    <Section id="learning" title="Learning" description="What counts as a day of practice for your streak.">
+    <Section id="learning" title="Learning" description="What the practice page shows around the problems, and what counts as a day of practice.">
       <Row
-        label="Daily goal"
-        labelId="settings-daily-goal"
-        help="Cards a day. A solved problem, the daily challenge or an Arcade run meets it too."
+        label="What you’re here for"
+        labelId="settings-focus"
+        help="Interview prep adds the roadmap and mock interviews to the practice page; a daily habit adds your streak and today’s review. Kept in this browser."
         control={
-          ready ? (
-            <GoalChoices goal={ready.goal} onPick={(n) => void activity.setGoal(n)} labelledBy="settings-daily-goal" />
-          ) : (
-            <span className="text-sm text-muted">{activity.state.status === 'error' ? 'Could not load your goal.' : 'Loading…'}</span>
-          )
+          <div role="group" aria-labelledby="settings-focus" className="flex flex-wrap gap-2">
+            {GOALS.map(({ id, label }) => {
+              const on = goal.goals.includes(id);
+              return (
+                <button
+                  key={id}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => setGoal((g) => ({ ...g, asked: true, goals: on ? g.goals.filter((x) => x !== id) : [...g.goals, id] }))}
+                  className={`min-h-[36px] rounded-sm border-bw-1 border-ink px-2.5 text-sm font-semibold ${on ? 'bg-ink text-paper' : 'bg-surface text-ink hover:bg-pop-yellow/30'}`}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
         }
       />
+      <Row
+        label="Daily streak"
+        htmlFor="settings-streak-switch"
+        help="Your streak and today’s review, challenge and Arcade run on the practice page, and the streak on your progress."
+        inline
+        control={
+          <input
+            id="settings-streak-switch"
+            type="checkbox"
+            role="switch"
+            checked={streakOn}
+            onChange={(e) => setGoal((g) => ({ ...g, asked: true, streak: e.target.checked }))}
+            className={switchInput}
+          />
+        }
+      />
+      {streakOn && (
+        <Row
+          label="Daily goal"
+          labelId="settings-daily-goal"
+          help="Cards a day. A solved problem, the daily challenge or an Arcade run meets it too."
+          control={
+            ready ? (
+              <GoalChoices goal={ready.goal} onPick={(n) => void activity.setGoal(n)} labelledBy="settings-daily-goal" />
+            ) : (
+              <span className="text-sm text-muted">{activity.state.status === 'error' ? 'Could not load your goal.' : 'Loading…'}</span>
+            )
+          }
+        />
+      )}
     </Section>
   );
 }
