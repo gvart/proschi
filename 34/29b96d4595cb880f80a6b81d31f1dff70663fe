@@ -1,0 +1,21 @@
+backend/src/partner.ts
+  s_e17b87e0a1b3ca::t_3f4140f59a95bd 393
+backend/scripts/partner-smoke.mjs
+  s_e17b87e0a1b3ca::t_628870b657f8f3 1-100
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3429b96d4595cb880f80a6b81d31f1dff70663fe",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
