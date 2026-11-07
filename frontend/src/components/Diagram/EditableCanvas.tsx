@@ -51,7 +51,6 @@ interface EditableCanvasProps {
 type Selected = { kind: 'node' | 'edge'; id: string } | null;
 
 function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, problemCapacity, paletteKey, phone }: EditableCanvasProps) {
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`);
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -62,6 +61,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const paletteOpen = phone ? sheet : docked;
+  // Showing or hiding the palette changes the canvas's width: fit the diagram to it again.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}#${paletteOpen}`);
   /** A component just added, selected once the layout draws it. */
   const [pending, setPending] = useState<string | null>(null);
 

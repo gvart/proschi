@@ -18,7 +18,7 @@ export default function StarterCard({ onTemplate, onExamples }: StarterCardProps
         Start a diagram
       </h2>
       <p className="mt-0.5 text-sm text-muted">
-        Type in the code pane, e.g. <code className="rounded-sm bg-ink/5 px-1">api -&gt; db</code>, use Add component, or pick a start:
+        Drag a component here from Add component or describe it in code, e.g. <code className="rounded-sm bg-ink/5 px-1">api -&gt; db</code>. Or pick a start:
       </p>
       <div className="mt-3 space-y-2">
         <button type="button" onClick={() => onTemplate(STARTER_TEMPLATE)} className={optionClass}>

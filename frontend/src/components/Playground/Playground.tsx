@@ -1810,8 +1810,8 @@ function DiagramView({
   }, [coverKey, fitKey]);
   // No animated fit: d3-zoom reads the pane size on the transition's first tick, and a pane hidden by
   // then (phone Code/Diagram tabs) is 0×0, which interpolates the viewport to NaN. Nodes already glide via settle.
-  // The exception: playback and the splitter resize a pane that stays shown, and there the diagram glides to its new fit.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}` });
+  // The exception: playback, the splitter and the palette resize a pane that stays shown, and there the diagram glides to its new fit.
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { wrapper: wrapperRef, inset, glide: `${playing ? 'playing' : ''}:${glideKey}:${paletteOpen}` });
 
   const handleEdgesChange = useCallback(
     (changes: EdgeChange[]) => onEdgesChange((current) => applyEdgeChanges(changes, current)),
