@@ -1,5 +1,7 @@
+import { useEffect, useState } from 'react';
 import { ChartNoAxesColumn, LogIn, LogOut, Settings, UserRound } from 'lucide-react';
 import Menu, { MenuItem } from '../components/Playground/Menu';
+import { PLAN_CHANGED } from '../services/billing';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
@@ -7,11 +9,13 @@ import type { Account } from './useAccount';
  * The header's account control on the React pages (static pages get the same
  * button from design/account.ts). Signed out, sign in to sync progress and
  * appear in the stats; signed in, progress, settings (`#/me`, with the rest of
- * the account's actions: AccountSettings) and sign out. Absent without an API.
+ * the account's actions: AccountSettings) and sign out, with a Pro badge on
+ * Pro (the account's plan, or a purchase that just landed). Absent without an API.
  * `base` is the way back to the site root.
  */
 export default function AccountMenu({ account, base = '../' }: { account: Account; base?: string }) {
   const { state } = account;
+  const plan = usePlanName(state.status === 'signed-in' ? state.user.plan : undefined);
   if (state.status === 'off' || state.status === 'loading') return null;
   const message = state.message && <p className="px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-100 dark:border-amber-900">{state.message}</p>;
 
@@ -61,6 +65,11 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
         <>
           <UserRound size={16} aria-hidden="true" />
           <span className="ps-account__name ps-hide-sm">{user.displayName}</span>
+          {plan === 'pro' && (
+            <span data-testid="pro-badge" className="rounded-sm border-bw-1 border-ink bg-pop-yellow px-1 text-[10px] font-bold uppercase leading-4 tracking-wide text-on-accent">
+              Pro
+            </span>
+          )}
         </>
       }
     >
@@ -90,4 +99,18 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
       )}
     </Menu>
   );
+}
+
+/** The account's plan from GET /api/me, or the one PLAN_CHANGED announced since (a purchase landed). */
+function usePlanName(fromAccount: string | undefined): string | undefined {
+  const [announced, setAnnounced] = useState<string>();
+  useEffect(() => {
+    const on = (e: Event) => {
+      const plan = (e as CustomEvent<string | undefined>).detail;
+      if (plan) setAnnounced(plan);
+    };
+    window.addEventListener(PLAN_CHANGED, on);
+    return () => window.removeEventListener(PLAN_CHANGED, on);
+  }, []);
+  return announced ?? fromAccount;
 }

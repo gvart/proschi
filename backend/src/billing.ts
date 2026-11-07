@@ -102,7 +102,8 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
     products: [productIds(env)[product as Product]],
     ...(row?.polar_customer_id ? { customer_id: row.polar_customer_id } : { external_customer_id: user.id }),
     metadata: { user_id: user.id, product },
-    success_url: `${origin}/practice/?checkout=done#/me`,
+    // product and checkout_id (Polar fills in {CHECKOUT_ID}) are for the page's message only; entitlements come from the webhook.
+    success_url: `${origin}/practice/?checkout=done&product=${product}&checkout_id={CHECKOUT_ID}#/me`,
     return_url: `${origin}/pricing/`,
   });
   return json({ url: checkout.url }, 200, NO_STORE);

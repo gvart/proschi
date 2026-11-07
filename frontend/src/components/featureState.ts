@@ -1,6 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useState } from 'react';
 import type { AccountState } from '../practice/useAccount';
-import { billingEnabled, getPlan } from '../services/billing';
+import { billingEnabled, getPlan, PLAN_CHANGED } from '../services/billing';
 import type { FeatureAccess, FeatureId, FeatureReason } from '../services/featureContract';
 
 /**
@@ -30,10 +30,16 @@ export type FeatureLookup = (id: FeatureId) => FeatureState;
 /** Outside an app's provider (a build without accounts, a test): signed out. */
 export const FeaturesContext = createContext<FeatureLookup>(() => SIGNED_OUT);
 
-/** Reads the signed-in account's features once per account; `account` is the app's (practice/useAccount.ts). */
+/** Reads the signed-in account's features once per account, and again on PLAN_CHANGED; `account` is the app's (practice/useAccount.ts). */
 export function useFeatures(account: AccountState): FeatureLookup {
   const userId = account.status === 'signed-in' ? account.user.id : undefined;
   const [answer, setAnswer] = useState<{ userId: string; features: Partial<Record<FeatureId, FeatureAccess>> | null }>();
+  const [asked, setAsked] = useState(0);
+  useEffect(() => {
+    const again = () => setAsked((n) => n + 1);
+    window.addEventListener(PLAN_CHANGED, again);
+    return () => window.removeEventListener(PLAN_CHANGED, again);
+  }, []);
   useEffect(() => {
     if (!userId) return;
     let live = true;
@@ -44,7 +50,7 @@ export function useFeatures(account: AccountState): FeatureLookup {
     return () => {
       live = false;
     };
-  }, [userId]);
+  }, [userId, asked]);
   const status = account.status;
   return useCallback(
     (id: FeatureId) => {

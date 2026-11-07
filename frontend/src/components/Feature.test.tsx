@@ -12,6 +12,7 @@ vi.mock('../services/billing', () => ({
     return billing.on;
   },
   getPlan: billing.getPlan,
+  PLAN_CHANGED: 'proschi:plan-changed',
   pricingHref: (base: string) => `${base}pricing/`,
 }));
 
@@ -42,6 +43,17 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('<Feature>', () => {
+  it('asks again when a purchase lands (PLAN_CHANGED)', async () => {
+    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } });
+    expect(screen.getByText('rules')).toBeTruthy();
+    billing.getPlan.mockResolvedValue({ plan: 'pro', features: { ai_review: { ok: true } } as PlanInfo['features'] });
+    await act(async () => {
+      window.dispatchEvent(new CustomEvent('proschi:plan-changed', { detail: 'pro' }));
+    });
+    expect(screen.getByText('paid')).toBeTruthy();
+    expect(billing.getPlan).toHaveBeenCalledTimes(2);
+  });
+
   it('renders pro when the server says ok', async () => {
     await signedIn({ ai_review: { ok: true } });
     expect(screen.getByText('paid')).toBeTruthy();

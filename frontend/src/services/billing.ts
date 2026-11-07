@@ -35,6 +35,14 @@ export interface PlanInfo {
 
 export const getPlan = (): Promise<PlanInfo> => api<PlanInfo>('/api/me/plan');
 
+/**
+ * A window event: the account's plan or credits changed (a purchase landed),
+ * so usePlan and useFeatures read GET /api/me/plan again. Its `detail` is the
+ * new plan when that changed, for the header's badge (practice/AccountMenu.tsx).
+ */
+export const PLAN_CHANGED = 'proschi:plan-changed';
+export const announcePlanChanged = (plan?: string): void => void window.dispatchEvent(new CustomEvent(PLAN_CHANGED, { detail: plan }));
+
 /** Sends the browser to Polar's checkout for `product`. */
 export async function checkout(product: Product): Promise<void> {
   const { url } = await api<{ url: string }>('/api/billing/checkout', { method: 'POST', body: { product } });
