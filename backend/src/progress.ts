@@ -21,6 +21,7 @@ import { exportCredits, tombstoneStatements } from './credits';
 import { exportReviewUsage } from './review';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
+import { exportPartnerSessions } from './partner';
 
 /** The signed-in user's account and practice progress. */
 
@@ -258,6 +259,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     reviewUsage: await exportReviewUsage(DB, user.id),
     // AI interviews: each session with its verdict and, for 90 days, its transcript.
     aiInterviews: await exportInterviews(DB, user.id),
+    // Design partner chats, each with its turns and proposed changes, for 90 days after its last turn.
+    partnerSessions: await exportPartnerSessions(ctx.env, user.id),
     // The AI roadmap's picks (Pro): the next steps picked after an interview or a review, each with its reason.
     roadmapRecs: await exportRoadmapRecs(DB, user.id),
   };

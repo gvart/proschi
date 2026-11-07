@@ -274,6 +274,7 @@ describe('data export', () => {
       reviewUsage: [],
       roadmapRecs: [],
       aiInterviews: [],
+      partnerSessions: [],
     });
     expect(text).not.toContain(await sha256(token));
     expect(text).not.toContain(token);

@@ -32,6 +32,8 @@ export interface Env {
   /** Polar's webhook (src/billing.ts), per IP, before the signature is checked; and the bad signatures logged, one per IP a minute. */
   WEBHOOK_LIMITER: RateLimit;
   WEBHOOK_LOG_LIMITER: RateLimit;
+  /** Design partner (src/partner.ts), per user: sessions, turns, reads and change decisions. */
+  PARTNER_LIMITER: RateLimit;
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
