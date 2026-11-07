@@ -1,7 +1,7 @@
 import type { CreditEstimates, Range } from '../services/credits';
 
 /**
- * Design partner's API types (docs/impl/design-partner.md, "Design partner"
+ * Design partner's API types (backend/README.md "Design partner",
  * docs/design/paid-plans.md P29–P31) and the parsers that
  * read the server's answers. A malformed field reads as absent rather than
  * breaking the panel.

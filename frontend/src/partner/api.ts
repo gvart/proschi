@@ -2,7 +2,7 @@ import { api, ApiError } from '../services/api';
 import { noCredits } from '../services/credits';
 import { parseSession, parseTurnAnswer, type PartnerContext, type Session, type TurnAnswer, type TurnRequest } from './contract';
 
-/** Design partner's endpoints (docs/impl/design-partner.md, "Design partner"). */
+/** Design partner's endpoints (backend/README.md "Design partner"). */
 
 /** 402 `no_credits`: the turn needs about `needed`, the account has `balance`. */
 export class NoCreditsError extends Error {

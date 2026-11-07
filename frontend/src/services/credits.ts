@@ -4,7 +4,7 @@ import { TYPICAL_COSTS, type CreditEstimates, type Range } from './estimates';
 
 /**
  * Metered credits on the page (docs/design/paid-plans.md P26–P28, the
- * contract in docs/impl/design-partner.md): what an action is likely to
+ * routes in backend/README.md): what an action is likely to
  * cost, what was spent, and the 402 a call answers without enough credits.
  * 1 credit is €0.01. The balance itself comes with the plan
  * (services/useCredits.ts).

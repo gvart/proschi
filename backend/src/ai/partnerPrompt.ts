@@ -8,7 +8,7 @@ import { testsText } from './reviewer';
 
 /**
  * The Design partner's prompt, answer schema and request (docs/design/
- * paid-plans.md P29–P31; docs/impl/design-partner.md). One call per turn
+ * paid-plans.md P29–P31; README.md "Design partner"). One call per turn
  * with a JSON schema: a Markdown message, clarifying questions, and changes
  * as find-and-replace edits on the source the page sent, which the server
  * then checks (./partnerChanges.ts).

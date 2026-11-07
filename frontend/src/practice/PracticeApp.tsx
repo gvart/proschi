@@ -31,7 +31,7 @@ import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import HomeExtras, { GoalSummary } from './hub/HomeExtras';
-import { useGoal, wantsInterview, wantsStreak } from './hub/goal';
+import { asksGoal, useGoal, wantsInterview, wantsStreak, type AnnouncementState } from './hub/goal';
 import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
@@ -156,6 +156,9 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   // The paid features (components/Feature.tsx), for every page below.
   const features = useFeatures(account.state);
   const signedIn = account.state.status === 'signed-in';
+  // One card above the problem list at a time: the announcement, then the goal question.
+  const [announcement, setAnnouncement] = useState<AnnouncementState>('loading');
+  const onAnnouncement = useCallback((shown: boolean) => setAnnouncement(shown ? 'shown' : 'none'), []);
   // Signed in, each lesson read here goes to the account too; without accounts, the badges are checked here at once.
   const accountsOff = account.state.status === 'off';
   useEffect(() => {
@@ -277,14 +280,14 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         )}
         {hubTab ? (
           <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' ? undefined : streak}>
-            {signedIn && <Announcement />}
+            {signedIn && <Announcement onChange={onAnnouncement} />}
             {hubTab === 'problems' ? (
               <ProblemList
                 problems={problems}
                 progress={progress}
                 stats={stats}
                 meta={<GoalSummary goal={goal} />}
-                top={<HomeExtras goal={goal} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
+                top={<HomeExtras goal={goal} ask={asksGoal(goal, account.state.status, announcement)} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
               >
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>

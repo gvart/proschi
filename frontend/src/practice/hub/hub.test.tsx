@@ -3,7 +3,7 @@ import { describe, expect, it } from 'vitest';
 import LeaderboardPanel from '../LeaderboardPanel';
 import { roadmapState, type RoadmapStage } from '../roadmap';
 import { continueTarget } from './continue';
-import { parseGoal, wantsInterview, wantsStreak } from './goal';
+import { asksGoal, parseGoal, wantsInterview, wantsStreak } from './goal';
 import { HUB_GROUPS, HUB_TABS, hubTabOf, mockInterviewHref } from './tabs';
 
 describe('practice hub', () => {
@@ -86,6 +86,19 @@ describe('goal', () => {
     expect(wantsStreak(parseGoal({ goals: ['solve'], streak: true }))).toBe(true);
     expect(wantsStreak(parseGoal({}))).toBe(false);
     expect(wantsInterview(parseGoal({ goals: ['interview'] }))).toBe(true);
+  });
+
+  it('asks the question only when no announcement is on the page, and never once answered', () => {
+    const fresh = parseGoal({});
+    expect(asksGoal(fresh, 'signed-out', 'loading')).toBe(true);
+    expect(asksGoal(fresh, 'off', 'loading')).toBe(true);
+    // Signed in: the announcement first, the question once it is gone or there is none.
+    expect(asksGoal(fresh, 'signed-in', 'loading')).toBe(false);
+    expect(asksGoal(fresh, 'signed-in', 'shown')).toBe(false);
+    expect(asksGoal(fresh, 'signed-in', 'none')).toBe(true);
+    // Not while the account loads: it may turn out signed in, with an announcement.
+    expect(asksGoal(fresh, 'loading', 'loading')).toBe(false);
+    expect(asksGoal(parseGoal({ asked: true }), 'signed-in', 'none')).toBe(false);
   });
 });
 

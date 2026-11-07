@@ -7,7 +7,7 @@ import { sentFilesResolver } from './reviewer';
 
 /**
  * A Design partner change checked on the server (docs/design/paid-plans.md
- * P29; docs/impl/design-partner.md "Change"): its find-and-replace edits are
+ * P29; README.md "Design partner", Change): its find-and-replace edits are
  * applied in order to the source the page sent, the result is parsed,
  * simulated and, on a practice problem, tested, and the change carries the
  * numbers before and after. The model's edits are never trusted: an edit

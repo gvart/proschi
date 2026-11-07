@@ -104,9 +104,20 @@ test.describe('product news for a user', () => {
     await expect(card.getByRole('heading', { name: '150 credits are on your Proschi account' })).toBeVisible();
     await expect(card.getByText('mock interview')).toHaveJSProperty('tagName', 'STRONG');
     await expect(card.getByText('<script>alert(1)</script>')).toBeVisible();
+    // One card above the list at a time: the goal question waits for the announcement to go.
+    const goalQuestion = page.getByRole('region', { name: 'What are you here for?' });
+    await expect(goalQuestion).toHaveCount(0);
     await card.getByRole('button', { name: 'Dismiss announcement' }).click();
     await expect(card).toHaveCount(0);
+    await expect(goalQuestion).toBeVisible();
     await expect.poll(() => posts).toEqual(['/api/me/announcement/camp-1/dismiss']);
+  });
+
+  test('asks the goal question when there is no announcement', async ({ page }) => {
+    await mockSignedIn(page);
+    await page.goto('practice/');
+    await expect(page.getByRole('region', { name: 'What are you here for?' })).toBeVisible();
+    await expect(page.getByRole('complementary', { name: 'Announcement' })).toHaveCount(0);
   });
 
   test('turns product news off in Settings', async ({ page }) => {

@@ -40,6 +40,7 @@ export default function HomeExtras({
   next,
   nextTitle,
   streak,
+  ask = !goal.asked,
 }: {
   goal: GoalState;
   account: Account;
@@ -48,11 +49,13 @@ export default function HomeExtras({
   nextTitle?: string;
   /** The compact streak, or the way to start one, as PracticeApp builds it. */
   streak?: ReactNode;
+  /** Whether to ask "What are you here for?" (goal.ts asksGoal: not while an announcement is on the page). */
+  ask?: boolean;
 }) {
   const interview = wantsInterview(goal);
   return (
     <>
-      {!goal.asked && <GoalPrompt goal={goal} />}
+      {ask && <GoalPrompt goal={goal} />}
       {(next || interview) && <ContinueLine next={next} title={nextTitle} interview={interview} />}
       {wantsStreak(goal) && <HabitLine account={account} streak={streak} />}
     </>

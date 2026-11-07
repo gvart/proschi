@@ -21,8 +21,9 @@ import { isEmail, siteOrigin } from './reminders';
  * email, and an announcement in the app, in any mix. A campaign is a draft
  * until sent; sending snapshots its audience into `campaign_recipients`
  * (one row per account, UNIQUE, so nobody is granted or emailed twice), and
- * the recipients are processed in the background, BATCH at a time: after
- * the send's answer (waitUntil), and every hour by the cron until done.
+ * the recipients are processed in the background, BATCH at a time: right
+ * after the send's (or resume's) answer (waitUntil), that campaign first,
+ * and every hour by the cron until done.
  *
  *   - Credits: a ledger row `admin_grant` in the top-up bucket (never
  *     expires, P24) with ref 'campaign:<id>:<user>', once per account.
@@ -446,7 +447,7 @@ export async function sendCampaign(request: Request, ctx: Ctx, id: string): Prom
   if (!claimed.meta.changes) throw new HttpError(409, 'This campaign was already sent');
   const recipients = (await readCampaign(DB, id)).recipients;
   await DB.batch([auditStatement(env, admin, 'campaign.send', id, { reason, recipients, credits: creditsOf(row.credits_mc), email: row.email === 1, inapp: row.inapp === 1 })]);
-  ctx.exec.waitUntil(runCampaigns(env));
+  ctx.exec.waitUntil(runCampaigns(env, { first: id }));
   return json({ ...view(await readCampaign(DB, id)), recipients }, 200, NO_STORE);
 }
 
@@ -477,7 +478,7 @@ export async function resumeCampaign(request: Request, ctx: Ctx, id: string): Pr
     env.DB.prepare("UPDATE campaigns SET status = 'sending', finished_at = NULL, updated_at = ? WHERE id = ?").bind(now(), id),
     auditStatement(env, admin, 'campaign.resume', id, { reason }),
   ]);
-  ctx.exec.waitUntil(runCampaigns(env));
+  ctx.exec.waitUntil(runCampaigns(env, { first: id }));
   return json(view(await readCampaign(env.DB, id)), 200, NO_STORE);
 }
 
@@ -631,15 +632,17 @@ export async function processBatch(env: Env, c: CampaignRow, t = now()): Promise
 /**
  * Processes every campaign that is sending, a batch at a time, until each is
  * done, the daily cap is reached, or `budgetMs` has passed (the cron and the
- * send's waitUntil). A campaign with nobody left is marked done.
+ * send's waitUntil). A campaign with nobody left is marked done. `first`,
+ * the campaign just sent or resumed, goes before the others, so its first
+ * batch never waits for an older campaign's run or the next cron.
  */
-export async function runCampaigns(env: Env, { budgetMs = 20_000, t = now() } = {}): Promise<{ emailed: number; done: number }> {
+export async function runCampaigns(env: Env, { budgetMs = 20_000, t = now(), first = '' } = {}): Promise<{ emailed: number; done: number }> {
   const started = Date.now();
   const { DB } = env;
   let emailed = 0;
   let done = 0;
   try {
-    const ids = (await DB.prepare("SELECT id FROM campaigns WHERE status = 'sending' ORDER BY started_at").all<{ id: string }>()).results.map((r) => r.id);
+    const ids = (await DB.prepare("SELECT id FROM campaigns WHERE status = 'sending' ORDER BY id = ? DESC, started_at").bind(first).all<{ id: string }>()).results.map((r) => r.id);
     for (const id of ids) {
       for (;;) {
         // Read each time: a cancel takes effect at the next batch.

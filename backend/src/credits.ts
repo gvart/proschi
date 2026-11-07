@@ -34,7 +34,7 @@ export interface Buckets {
   held: number;
 }
 
-/** The credits object of GET /api/me/plan (docs/impl/design-partner.md), in credits with up to 3 decimals. */
+/** The credits object of GET /api/me/plan (README.md "Credits"), in credits with up to 3 decimals. */
 export interface CreditsView {
   /** What can be spent now: the buckets less what is held. */
   balance: number;
