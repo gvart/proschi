@@ -28,7 +28,8 @@ export const GAME_ME = {
 export function featuresFor(plan: string | undefined): Record<string, { ok: boolean; reason?: string }> {
   const pro = plan === 'pro' || plan === 'max';
   const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
-  return { ai_interview: { ok: true }, ai_review: paid, interview_history: paid, ai_roadmap: paid, share_links: paid };
+  const max = plan === 'max' ? { ok: true } : { ok: false, reason: 'needs_pro' };
+  return { ai_interview: { ok: true }, ai_review: paid, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max };
 }
 
 /** GET /api/credits/estimates as the server answers it with the default prices. */

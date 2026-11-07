@@ -47,7 +47,7 @@ export function mergeServerProgress(local: Progress, server: Record<string, Serv
     const mine = out[id];
     const status = !mine || RANK.indexOf(remote.status) > RANK.indexOf(mine.status) ? remote.status : mine.status;
     const source = mine?.source ?? remote.source;
-    out[id] = { status, ...(source !== undefined ? { source } : {}) };
+    out[id] = { status, ...(source !== undefined ? { source } : {}), ...(mine?.assisted ? { assisted: true as const } : {}) };
   }
   return out;
 }

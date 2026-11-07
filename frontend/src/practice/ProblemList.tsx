@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
+import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import ContributeCard from './ContributeCard';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
@@ -73,6 +73,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
                   </span>
                 </span>
                 <SolveRate summary={stats?.problems[p.id]} />
+                {progress[p.id]?.assisted && <AssistedTag />}
                 <span className="hidden sm:inline text-xs text-muted">{STATUS_LABEL[s]}</span>
                 <DifficultyBadge difficulty={p.difficulty} />
               </a>
