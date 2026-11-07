@@ -2,13 +2,17 @@
 // problem and card pages, 404), which have no React: the same button as
 // AccountMenu on the React pages, filled in from the session cookie. Signed
 // out, "Sign in" with a link per provider; signed in, the name with "Your
-// progress", "Settings" and "Sign out". Absent in builds without the API.
+// progress", "Settings" and "Sign out", and with paid plans on, the credits
+// left before it (GET /api/me/plan, read once). Absent in builds without the API.
 
 import { apiEnabled, loginUrl, type Me, type ProviderId } from '../services/api';
+import { billingEnabled, getPlan, type CreditBalance } from '../services/billing';
+import { formatCredits, isLow } from '../services/credits';
 import { PROVIDER_LABEL } from '../practice/account';
 
 const SIGN_IN_ICON = '<path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>';
 const USER_ICON = '<circle cx="12" cy="8" r="5"/><path d="M20 21a8 8 0 0 0-16 0"/>';
+const COINS_ICON = '<path d="M13.744 17.736a6 6 0 1 1-7.48-7.48"/><path d="M15 6h1v4"/><path d="m6.134 14.768.866-.5 2 3.464"/><circle cx="16" cy="8" r="6"/>';
 
 function icon(paths: string): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -83,6 +87,21 @@ function item<K extends 'a' | 'button'>(tag: K, text: string): HTMLElementTagNam
 
 const link = (href: string, text: string) => Object.assign(item('a', text), { href });
 
+/** The credits chip, as AccountMenu's CreditsChip draws it. */
+function creditsChip(credits: CreditBalance, href: string): HTMLAnchorElement {
+  const low = isLow(credits);
+  const left = formatCredits(credits.balance, { floor: true });
+  const chip = Object.assign(element('a', 'ps-credits'), { href, title: low ? 'Running low on credits' : 'Credits left' });
+  chip.dataset.testid = 'credits-chip';
+  chip.dataset.creditsChip = '';
+  if (low) chip.dataset.low = 'true';
+  chip.setAttribute('aria-label', `${left} credits left${low ? ', running low' : ''}. Plan and billing`);
+  const coins = icon(COINS_ICON);
+  coins.style.cssText = 'width:15px;height:15px';
+  chip.append(coins, left, element('span', 'ps-credits__word ps-hide-sm', 'credits'));
+  return chip;
+}
+
 /** Fills a [data-account] slot of the static header; `base` is the way back to the site root. Returns the cleanup. */
 export function bindAccount(slot: HTMLElement): () => void {
   if (!apiEnabled) return () => undefined;
@@ -129,6 +148,13 @@ export function bindAccount(slot: HTMLElement): () => void {
         signOut,
       ]),
     );
+    if (!billingEnabled) return;
+    getPlan()
+      .then(({ credits }) => {
+        if (!cancelled && credits && slot.querySelector('.ps-account')) slot.prepend(creditsChip(credits, `${base}practice/#/me`));
+      })
+      // Without the plan, the page simply shows no chip.
+      .catch(() => undefined);
   };
 
   fetch('/api/me', { credentials: 'same-origin' })

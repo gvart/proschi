@@ -435,7 +435,39 @@
     display: none;
   }
 }
-/* The credits chip (practice/AccountMenu.tsx) takes the wordmark's room on phones. */
+/* The credits left beside the account control (practice/AccountMenu.tsx on
+   the React pages, account.ts on the static ones): a link to Plan & billing,
+   orange when running low. */
+.ps-credits {
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 6px;
+  height: 40px;
+  padding: 0 10px;
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-sm);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  box-shadow: var(--sh-sm);
+  font: 600 var(--fs-14) / 1.25 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  text-decoration: none;
+  white-space: nowrap;
+}
+.ps-credits:hover {
+  background: rgb(var(--c-yellow));
+  color: rgb(var(--c-on-accent));
+}
+.ps-credits[data-low] {
+  border-color: light-dark(#c2410c, #fdba74);
+  background: light-dark(#ffedd5, rgb(251 146 60 / 0.2));
+  color: light-dark(#431407, #ffedd5);
+}
+.ps-credits__word {
+  font-weight: 400;
+}
+/* The credits chip takes the wordmark's room on phones. */
 @media (max-width: 429px) {
   .ps-header--actions:not(.ps-header--compact):has([data-credits-chip]) .ps-wordmark__text {
     display: none;
@@ -595,6 +627,10 @@
 }
 
 /* The account control, the same on every page: AccountMenu on React pages, account.ts on static ones. */
+/* The static header's account slot (account.ts): its chip and button sit in the bar's own row. */
+[data-account]:not([hidden]) {
+  display: contents;
+}
 .ps-account {
   position: relative;
 }
