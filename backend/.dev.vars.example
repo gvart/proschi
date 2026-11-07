@@ -51,6 +51,9 @@ TURNSTILE_SECRET_KEY=
 ADMIN_SETUP_TOKEN=
 # The X-Metrics-Token of GET /api/metrics/summary, 16+ characters; unset answers 404.
 METRICS_TOKEN=
+# Admin campaigns: where "Send a test to me" goes (unset: no test sends), and the campaign emails a UTC day (unset: 500).
+ADMIN_EMAIL=
+CAMPAIGN_DAILY_CAP=
 
 # --- Set in wrangler.jsonc `vars`, not here ---
 # ENVIRONMENT (production or staging; only labels /api/health and the admin's health page).

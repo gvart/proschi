@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 
 /**
- * Design partner's API (docs/impl/design-partner.md, "Design partner") kept
+ * Design partner's API (backend/README.md "Design partner") kept
  * in memory for the build with accounts: sessions, turns and decisions, with
  * the answers a test queues or a default per intent. Changes are built from
  * the source the page sends, as the server builds them, so their edits apply.

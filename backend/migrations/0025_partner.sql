@@ -1,5 +1,5 @@
 -- Design partner chats (src/partner.ts, docs/design/paid-plans.md P29, P30;
--- docs/impl/design-partner.md). A session is one chat in the editor or on a
+-- backend/README.md "Design partner"). A session is one chat in the editor or on a
 -- practice problem; its turns are the user's messages and the partner's
 -- answers, and its changes the edits the partner proposed. Transcripts are
 -- kept for 90 days after the session was last used, then the daily cron

@@ -333,7 +333,7 @@ renewal date (`billing`, migration 0017), and never any card data.
 #### Credits
 
 The AI features (mock interviews, your next steps and the design partner) are paid in credits (docs/design/paid-plans.md P26 to
-P31, docs/impl/design-partner.md "Credits").
+P31; the routes are in the [API table](#what-the-api-does)).
 
 - **Price.** A call is charged twice what it cost us: the model's price per
   token (`PRICES` in `src/meter.ts`, with cache reads and writes), times 2,
@@ -546,6 +546,31 @@ request id, method, path (never the query), status, time and user id.
 
 Sign-in fails closed: without a `SESSION_SECRET` of at least 32 characters no
 provider is offered and `/auth/<provider>/…` answers 503.
+
+### Design partner
+
+The AI chat beside the editor and on practice problems (`src/partner.ts`,
+migration 0025, docs/design/paid-plans.md P29 to P31), feature
+`design_partner`, paid in [credits](#credits). Credits in requests and
+answers are decimals with up to 3 places (the ledger stores millicredits).
+The page's types are `frontend/src/partner/contract.ts`.
+
+| Route | What it does |
+|---|---|
+| `POST /api/partner/sessions {context: {kind: 'editor'} \| {kind: 'practice', problemId}, deep?}` | A new chat: `{id}`. `deep` (Max, `deep_mode`) runs it on Opus at Opus's price |
+| `GET /api/partner/sessions/<id>` | `{id, context, deep, turns: Turn[]}`; another account's session is 404 |
+| `POST /api/partner/sessions/<id>/turns {intent, message, source, files?: [{name, source}], changeId?}` | `intent`: `review`, `build`, `chat`, `improve` (with `changeId`) or `solve`. `{turn: Turn, credits: {charged, balance}}`. 409 `turn_in_progress` while another turn runs, 409 `interview_active` during a mock interview, 402 `no_credits` |
+| `POST /api/partner/sessions/<id>/changes/<changeId> {decision: 'accepted' \| 'rejected'}` | 204, free; feedback for the next turn |
+
+- `Turn = {id, role: 'user' | 'partner', message /* Markdown */, questions?: [{id, text, options?}], changes?: Change[], assisted?, at}`
+- `Change = {id, title, why, edits: [{find, replace}], result}`, where
+  `result` is `{ok: true, source /* the whole new source */, summary: string[], before: Metrics, after: Metrics}`
+  or `{ok: false, reason}`; the server applies and checks every change
+  itself (`src/ai/partnerChanges.ts`).
+- `Metrics = {tests: {passed, total} | null, p99Ms, availability, costPerMonth}` (each `null` when unknown).
+- On a practice problem it coaches (P30): only `intent: 'solve'`, the
+  user's explicit ask, returns `changes`, and such a turn has
+  `assisted: true`, which marks the problem's progress assisted.
 
 ### Interview history and the AI roadmap
 
@@ -891,7 +916,8 @@ audit log, like every change to it, a test, a cancel and a resume).
   only once they are granted) shows on the practice hub for 30 days.
 - **Sending** runs in the background, 50 recipients at a time: right after
   the send or resume (`waitUntil`, up to 20 seconds, that campaign before any
-  older one still sending) and in every hourly cron run until done. At most `CAMPAIGN_DAILY_CAP` emails a UTC day (default 500); the rest
+  older one still sending) and in every hourly cron run until done. At most
+  `CAMPAIGN_DAILY_CAP` emails a UTC day (default 500); the rest
   wait for the next day. **Send a test to me** emails the draft, marked
   `[Test]`, to `ADMIN_EMAIL` (a secret) and grants nothing.
 
@@ -1127,6 +1153,8 @@ solve locally either way.
      first passkey; delete it afterwards.
    - The `POLAR_*` secrets (optional): [billing](#billing-and-credits). Without
      them checkout, the portal and the webhook answer 501.
+   - The AI, Turnstile and campaign secrets: the
+     [production checklist](#production-checklist).
 
    A provider is offered once both of its secrets are set; no redeploy is
    needed.
@@ -1301,47 +1329,77 @@ a local key.
 
 ### Production checklist
 
-Before turning the paid features on at proschi.app:
+Before turning the paid features on at proschi.app, in this order (each step
+needs only the ones before it):
 
-- **Worker secrets** (`npx wrangler secret put <NAME>` or the dashboard):
-  `SESSION_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
-  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`,
-  `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`,
-  `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_MAX_MONTHLY`,
-  `POLAR_PRODUCT_MAX_YEARLY`, `POLAR_PRODUCT_CREDITS_1000`; optionally
-  `AI_GATEWAY_URL` and `AI_GATEWAY_TOKEN`, `METRICS_TOKEN`,
-  `CREDITS_USD_EUR` (the dollar-to-euro rate credits are priced at;
-  unset: 0.95), and
-  `ADMIN_SETUP_TOKEN` (once); `TURNSTILE_SECRET_KEY`, with the site key in
-  `wrangler.jsonc` `vars` ([Email sign-in](#email-sign-in)). `POLAR_SERVER` must not be `sandbox` (leave
-  it unset).
-- **Polar (production, not the sandbox)**:
-  - products: Pro monthly (€12/month), Pro yearly (€99/year), Max monthly
-    (€29/month), Max yearly (€249/year) and 1000 credits (€12, one-time);
-  - a webhook endpoint at `https://proschi.app/api/billing/webhook` with the
-    events `subscription.created`, `subscription.updated`,
-    `subscription.active`, `subscription.canceled`, `subscription.uncanceled`,
-    `subscription.revoked`, `order.paid`, `order.refunded`,
-    `refund.created`, `refund.updated` and the `dispute.*` events, and
-    webhook API version 2026-10 (Polar pins it per endpoint; src/billing.ts
-    reads that version's `data.modified_at`, `current_period_end`,
-    `cancel_at_period_end`, `product_id`, `customer.external_id` and
-    `metadata.user_id`);
-  - an organization access token with `checkouts:write`,
-    `customer_sessions:write` and `subscriptions:write`.
-- **An AI spend cap**: a monthly limit on the key in the Anthropic console
-  (Settings → Limits), or a rate or spend limit on the Cloudflare AI Gateway
-  in front of it.
-- **The feedback bucket**: `npx wrangler r2 bucket create proschi-feedback`
-  once ([Feedback](#feedback)); `wrangler dev` and the tests simulate it
-  locally.
-- **Migrations**: `npm run deploy` (and so every push to `main`) applies the
-  pending ones, 0017 onwards, before it deploys the Worker; nothing to run by
-  hand.
-- **The UI**: the deploy builds the site with `VITE_ACCOUNTS: 'true'` only.
-  Add `VITE_BILLING: 'true'` next to it in `.github/workflows/site.yml` (the
-  production build, and staging's) to show the pricing page and the upgrade
-  buttons. Without it the API works, but nothing links to it.
+1. **Cloudflare resources.**
+   - The feedback bucket, once: `npx wrangler r2 bucket create proschi-feedback`
+     ([Feedback](#feedback)); `wrangler dev` and the tests simulate it.
+   - Email Service: `proschi.app` onboarded and verified, the sender
+     `reminders@proschi.app` allowed ([Email reminders](#email-reminders)).
+     Email sign-in, its resets and campaign emails all go through it.
+   - A Turnstile widget (dashboard → Turnstile → Add widget, hostname
+     `proschi.app`, mode Managed) for email sign-up, sign-in and reset
+     ([Email sign-in](#email-sign-in)). Note its site key and secret.
+   - Google's OAuth consent screen: add the `email` scope (GitHub's app needs
+     nothing new).
+2. **Polar (production, not the sandbox).**
+   - Products: Pro monthly (€12/month), Pro yearly (€99/year), Max monthly
+     (€29/month), Max yearly (€249/year) and 1000 credits (€12, one-time).
+     Note each product id.
+   - A webhook endpoint at `https://proschi.app/api/billing/webhook`, format
+     Raw, with the events `subscription.created`, `subscription.updated`,
+     `subscription.active`, `subscription.canceled`,
+     `subscription.uncanceled`, `subscription.revoked`, `order.paid`,
+     `order.refunded`, `refund.created`, `refund.updated` and the
+     `dispute.*` events, and webhook API version 2026-10 (Polar pins it per
+     endpoint; src/billing.ts reads that version's `data.modified_at`,
+     `current_period_end`, `cancel_at_period_end`, `product_id`,
+     `billing_reason`, `customer.external_id` and `metadata.user_id`). Note
+     its secret.
+   - An organization access token with `checkouts:write`,
+     `customer_sessions:write` and `subscriptions:write`.
+3. **Anthropic.** An API key, with a monthly spend limit on it (console →
+   Settings → Limits), or a Cloudflare AI Gateway in front of it with a rate
+   or spend limit.
+4. **Worker secrets** (`npx wrangler secret put <NAME>`, or the dashboard as
+   type *Secret*; deploys keep them):
+
+   | Secret | Needed for |
+   |---|---|
+   | `SESSION_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET` | Sign-in (set already) |
+   | `ANTHROPIC_API_KEY` | Mock interviews, Design partner, history and Next for you (501 without it) |
+   | `AI_GATEWAY_URL`, `AI_GATEWAY_TOKEN` | Optional: the AI Gateway's Anthropic endpoint and, if authenticated, its token |
+   | `CREDITS_USD_EUR` | Optional: the dollar-to-euro rate credits are priced at (unset: 0.95) |
+   | `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET` | Checkout, the portal, plan changes and the webhook (501 without them) |
+   | `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_MAX_MONTHLY`, `POLAR_PRODUCT_MAX_YEARLY`, `POLAR_PRODUCT_CREDITS_1000` | The five product ids from step 2 |
+   | `TURNSTILE_SECRET_KEY` | Turnstile's check (skipped without it) |
+   | `ADMIN_EMAIL` | Optional: where campaigns' **Send a test to me** goes (501 without it) |
+   | `CAMPAIGN_DAILY_CAP` | Optional: campaign emails a UTC day (unset: 500) |
+   | `METRICS_TOKEN`, `ADMIN_SETUP_TOKEN` | Optional: the usage summary; the admin's first passkey (once, then delete it) |
+
+   `POLAR_SERVER` must not be `sandbox` in production: leave it unset.
+5. **Vars** (`wrangler.jsonc`, public, in git): add
+   `"TURNSTILE_SITE_KEY": "<the widget's site key>"` to `vars`. A dashboard
+   variable would be overwritten by the next deploy. Turnstile is on only
+   with both the site key and the secret.
+6. **Deploy** (a push to `main`, or `npm run deploy`). It applies the
+   pending D1 migrations before the Worker goes out; nothing to run by hand.
+   This branch adds 0017 to 0029: `0017_billing`, `0018_document_shares`,
+   `0019_ai_interviews`, `0020_review_usage`, `0021_roadmap_recs`,
+   `0022_paid_hardening`, `0023_admin_paid`, `0024_metered_credits`,
+   `0025_partner`, `0026_email_auth`, `0027_interview_deep`,
+   `0028_campaigns` and `0029_feedback`.
+   `npx wrangler d1 migrations list proschi --remote` shows what is left.
+7. **The UI.** The deploy builds the site with `VITE_ACCOUNTS: 'true'` only.
+   Add `VITE_BILLING: 'true'` next to it in `.github/workflows/site.yml` (the
+   production build, and staging's) to show the pricing page and the
+   upgrade buttons. Without it the API works, but nothing links to it.
+8. **Check.** The admin panel's **Health** tab: the AI key, the gateway and
+   the seven Polar secrets set, Polar live (not sandbox). Then one real
+   purchase of the top-up (refund it in Polar) and see it as `applied` in
+   the **Billing** tab's webhook log; a `bad_signature` row means the
+   webhook secret is wrong. Send a campaign test to yourself.
 
 **Admin.** The admin panel (`/admin/`, "Admin panel" above) covers the paid
 product once it is on: the **Health** tab says whether `ANTHROPIC_API_KEY`,

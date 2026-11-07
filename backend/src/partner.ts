@@ -15,7 +15,7 @@ import { credits, partnerBilling } from './partnerBilling';
 
 /**
  * Design partner's routes (docs/design/paid-plans.md P29–P31; the contract
- * is docs/impl/design-partner.md "Design partner"). Signed in (feature
+ * is README.md "Design partner"). Signed in (feature
  * design_partner), the credits deciding how much; without ANTHROPIC_API_KEY
  * every route answers 501.
  *

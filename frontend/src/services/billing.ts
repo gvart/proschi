@@ -34,7 +34,7 @@ export function productPlan(p: Product | null | undefined): { plan: 'pro' | 'max
   return { plan: p.startsWith('max') ? 'max' : 'pro', period: p.endsWith('yearly') ? 'yearly' : 'monthly' };
 }
 
-/** GET /api/me/plan's `credits` (docs/impl/design-partner.md): decimals with up to 3 places. */
+/** GET /api/me/plan's `credits` (backend/README.md "Credits"): decimals with up to 3 places. */
 export interface CreditBalance {
   /** Everything spendable now. */
   balance: number;

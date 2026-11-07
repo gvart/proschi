@@ -1,6 +1,6 @@
 /**
  * What each paid action is likely to cost, in credits (GET
- * /api/credits/estimates, docs/impl/design-partner.md). Pure and
+ * /api/credits/estimates, backend/README.md). Pure and
  * dependency-free, so the Worker's tests can check its fallback against the
  * server's own numbers (backend/test/credits.test.ts).
  */
