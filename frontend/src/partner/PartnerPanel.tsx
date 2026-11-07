@@ -167,13 +167,14 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     el.scrollTo({ top: answer ? answer.offsetTop - 16 : el.scrollHeight, behavior: 'smooth' });
   }, [newest, state.status]);
 
-  // The composer grows with its text, up to about six lines.
+  // The composer grows with its text, up to about eight lines, then scrolls; "Build" starts four rows tall so its whole hint reads.
   useEffect(() => {
     const el = input.current;
     if (!el) return;
     el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, 148)}px`;
-  }, [draft, voice.interim]);
+    el.style.height = `${Math.min(el.scrollHeight, COMPOSER_MAX)}px`;
+    el.style.overflowY = el.scrollHeight > COMPOSER_MAX ? 'auto' : 'hidden';
+  }, [draft, voice.interim, starter]);
 
   const estimate = (intent: Intent) => `${formatRange(estimateFor(estimates, intent, deep))} credits`;
 
@@ -320,12 +321,12 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
               setDraft(e.target.value.slice(0, MAX_MESSAGE));
             }}
             onKeyDown={onKey}
-            rows={1}
+            rows={starter === 'build' ? 4 : 1}
             placeholder={starter !== 'chat' ? STARTERS[starter].placeholder : openQuestions?.length ? 'Answer in your own words, or pick an option' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
-            className="max-h-[148px] min-h-[36px] flex-1 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none"
+            className="max-h-[172px] min-h-[36px] flex-1 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none"
           />
           <MicButton ref={mic} onText={voice.onText} />
-          <button type="submit" disabled={busy || !voice.shown(draft).trim()} aria-label="Send" title="Send (Enter)" className={`${primaryButton} !h-9 !w-9 !justify-center !p-0 disabled:opacity-40`}>
+          <button type="submit" disabled={busy || !voice.shown(draft).trim()} aria-label="Send" title="Send (Enter)" className={`${primaryButton} !h-9 !w-9 shrink-0 !justify-center !p-0 !shadow-none disabled:opacity-40`}>
             <ArrowUp size={16} aria-hidden="true" />
           </button>
         </div>
@@ -341,6 +342,9 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 type Ask = (intent: Intent, message: string, changeId?: string) => Promise<boolean>;
 
 const SOLVE_MESSAGE = 'Show me the changes that solve this problem.';
+
+/** The composer's tallest height in px: eight 20px lines plus its padding. */
+const COMPOSER_MAX = 172;
 
 type Starter = 'chat' | 'review' | 'build' | 'hint';
 

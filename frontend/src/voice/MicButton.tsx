@@ -117,7 +117,7 @@ export default function MicButton({ onText, onState, disabled, lang, server = tr
         title={LABEL[state]}
         data-testid="mic-button"
         data-state={state}
-        className={`relative inline-flex items-center justify-center gap-1.5 rounded-sm border-bw-1 px-2.5 py-1.5 text-sm font-semibold shadow-brutal-sm transition-colors disabled:opacity-50 ${
+        className={`relative inline-flex items-center justify-center gap-1.5 h-9 min-w-9 shrink-0 rounded-sm border-bw-1 px-2 text-sm font-semibold transition-colors disabled:opacity-50 ${
           on ? 'border-ink bg-red-600 text-white dark:bg-red-500' : state === 'denied' ? 'border-ink bg-pop-yellow/40 text-ink' : 'border-ink bg-surface text-ink hover:bg-pop-yellow/30'
         }`}
       >
