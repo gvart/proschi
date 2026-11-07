@@ -1,0 +1,56 @@
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_bef6d871a0ff1c 52,117,668
+frontend/src/design/Footer.tsx
+  s_e17b87e0a1b3ca::t_dff54272afac42 1-2
+  s_e17b87e0a1b3ca::t_18224b8bb8fbaf 10
+  s_e17b87e0a1b3ca::t_91b8ab60064ee0 26
+frontend/src/feedback/links.ts
+  s_e17b87e0a1b3ca::t_dcc02accdb9f99 1-19
+frontend/src/feedback/api.ts
+  s_e17b87e0a1b3ca::t_3b98e12499322c 1-28
+frontend/src/feedback/open.tsx
+  s_e17b87e0a1b3ca::t_148ffe17486377 1-11,14,16-22,24
+  s_e17b87e0a1b3ca::t_b7f63ae666604f 12-13,15,23
+frontend/src/feedback/FeedbackDialog.tsx
+  s_e17b87e0a1b3ca::t_45e5e8b7697ed9 1-347
+frontend/src/feedback/context.test.ts
+  s_e17b87e0a1b3ca::t_f8c5efa49154ae 1-32
+frontend/src/design/site.ts
+  s_e17b87e0a1b3ca::t_5146b8dba7ed2a 15-16,51-54,98-99
+frontend/src/feedback/context.ts
+  s_e17b87e0a1b3ca::t_505dc7322c7d91 40-50
+  s_e17b87e0a1b3ca::t_4e94f47268797d 1-39,51-75
+frontend/src/practice/profile/AccountSections.tsx
+  s_e17b87e0a1b3ca::t_f4ffd2854835ee 353
+  s_e17b87e0a1b3ca::t_19a994843b956a 2,4,349-352,354-358
+frontend/src/feedback/diagram.ts
+  s_e17b87e0a1b3ca::t_d6bdcd7767d7f8 1-23
+frontend/src/onboarding/HelpMenuItems.tsx
+  s_e17b87e0a1b3ca::t_0cf07c0ec7f0a6 1,3-4,11-12
+  s_e17b87e0a1b3ca::t_4eb80d84b694fb 17
+  s_e17b87e0a1b3ca::t_4ae278143769cf 40-46,48-53
+  s_e17b87e0a1b3ca::t_f4ffd2854835ee 47
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_bef6d871a0ff1c 136,228
+frontend/src/design/enhance.ts
+  s_e17b87e0a1b3ca::t_7a280b3e849b8b 7
+  s_e17b87e0a1b3ca::t_14b541aa2217e0 43-44
+frontend/src/onboarding/HelpMenu.tsx
+  s_e17b87e0a1b3ca::t_2823a10ae7e423 38
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "acc7b620d46910ff99d735c727abde26d27962e4",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
