@@ -125,7 +125,7 @@ function SectionMenu({ group, tab, onIntent }: { group: HubGroup; tab: HubTab; o
             })}
             {group.id === 'prep' && (
               <li>
-                <MenuLink href={mockInterviewHref()} icon={MessagesSquare} label="Mock interview" about="Interview mode on a problem: clarify, estimate, design" onPick={() => setOpen(false)} />
+                <MenuLink href={mockInterviewHref()} icon={MessagesSquare} label="Mock interview" about="A timed design interview on a whiteboard" onPick={() => setOpen(false)} />
               </li>
             )}
           </ul>

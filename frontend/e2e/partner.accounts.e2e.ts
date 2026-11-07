@@ -268,11 +268,14 @@ test.describe('practice', () => {
     await expect(page.getByRole('link', { name: /URL Shortener/ }).getByTestId('assisted-tag')).toBeVisible();
   });
 
-  test('is off during an interview, saying why', async ({ page }) => {
+  test('is not in the interview room, so the interview stays your own work', async ({ page }) => {
     await openProblem(page);
-    await page.getByRole('button', { name: 'Interview mode' }).click();
-    await expect(page.getByTestId('partner-button')).toBeDisabled();
-    await expect(page.getByTestId('partner-button')).toHaveAttribute('title', /off during an interview/);
+    await expect(page.getByTestId('partner-button')).toBeVisible();
+    await page.getByRole('link', { name: 'Interview mode' }).click();
+    await page.getByRole('radio', { name: /On my own/ }).click();
+    await page.getByRole('button', { name: 'Start the interview' }).click();
+    await expect(page.getByTestId('interview-room')).toBeVisible();
+    await expect(page.getByTestId('partner-button')).toHaveCount(0);
   });
 });
 

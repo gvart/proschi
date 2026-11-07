@@ -1,0 +1,41 @@
+/* The interview room (Room.tsx): the visual pulses that go with its sounds.
+   Under prefers-reduced-motion they are off; the sounds and the text say the same. */
+
+@keyframes ps-room-pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgb(var(--c-yellow) / 0.9);
+  }
+  100% {
+    box-shadow: 0 0 0 10px rgb(var(--c-yellow) / 0);
+  }
+}
+
+@keyframes ps-room-warn {
+  0%,
+  100% {
+    transform: none;
+  }
+  30% {
+    transform: scale(1.08);
+  }
+}
+
+.ps-room-pulse {
+  animation: ps-room-pulse 900ms var(--e-out) 2;
+}
+
+.ps-room-warn {
+  animation: ps-room-warn 600ms var(--e-out) 2;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .ps-room-pulse,
+  .ps-room-warn {
+    animation: none;
+  }
+}
+
+/* A dotted whiteboard behind the canvas, in both themes. */
+.ps-room-board {
+  background-color: rgb(var(--c-surface));
+}

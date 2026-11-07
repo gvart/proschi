@@ -13,7 +13,8 @@ import { addConnection, addNode, removeConnections, removeNode, uniqueId } from 
 import { FIT_VIEW_OPTIONS, useFitOnChange } from './useFitOnChange';
 import Inspector from './Inspector';
 import { TECH_DRAG_TYPE } from './Palette';
-import { CanvasMenu, ConnectHint, PaletteDock, PaletteToggle, type CanvasMenuState } from './CanvasEditing';
+import { CanvasMenu, ConnectHint, FlowsToggle, PaletteDock, PaletteToggle, type CanvasMenuState } from './CanvasEditing';
+import FlowsPanel, { type StepPick } from './FlowsPanel';
 import { historyKey, useConnectHint, usePaletteOpen } from './canvasEditState';
 
 /**
@@ -46,6 +47,8 @@ interface EditableCanvasProps {
   /** Where the palette's shown state is remembered. */
   paletteKey: string;
   phone: boolean;
+  /** Offers the Flows builder (use cases and scenarios without code, FlowsPanel.tsx). */
+  flows?: boolean;
 }
 
 type Selected = { kind: 'node' | 'edge'; id: string } | null;
@@ -54,7 +57,7 @@ type Selected = { kind: 'node' | 'edge'; id: string } | null;
 const FLOATING_PALETTE = 256 + 8;
 const FLOATING_SETTINGS = 288 + 8;
 
-function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, problemCapacity, paletteKey, phone }: EditableCanvasProps) {
+function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, problemCapacity, paletteKey, phone, flows = false }: EditableCanvasProps) {
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
@@ -64,7 +67,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [docked, setDocked] = usePaletteOpen(paletteKey);
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
-  const paletteOpen = phone ? sheet : docked;
+  const [flowsShown, setFlowsShown] = usePaletteOpen(`${paletteKey}.flows`);
+  const flowsOpen = flows && flowsShown;
+  /** The step being added in the Flows builder: node clicks pick its ends instead of selecting. */
+  const [pick, setPick] = useState<StepPick | null>(null);
+  const paletteOpen = (phone ? sheet : docked) && !flowsOpen;
   /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
   const [floating, setFloating] = useState(false);
   /** A component just added, selected once the layout draws it. */
@@ -123,15 +130,36 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     setSelected(null);
   };
 
-  const shownNodes = useMemo(() => nodes.map((n) => (current?.kind === 'node' && n.id === current.id ? { ...n, selected: true } : n)), [nodes, current]);
+  const shownNodes = useMemo(() => {
+    // While a step is picked, its ends are marked instead of the selection.
+    const marked = pick && flowsOpen ? [pick.from, pick.to] : current?.kind === 'node' ? [current.id] : [];
+    return nodes.map((n) => (marked.includes(n.id) ? { ...n, selected: true } : n));
+  }, [nodes, current, pick, flowsOpen]);
+  const pickNode = (id: string) => {
+    if (!pick) return;
+    if (!pick.from || (pick.to && pick.from !== id)) setPick({ from: id });
+    else if (id !== pick.from) setPick({ ...pick, to: id });
+  };
+  const toggleFlows = () => {
+    setPick(null);
+    if (!flowsOpen) {
+      setSelected(null);
+      if (phone) setSheet(false);
+      else setDocked(false);
+    }
+    setFlowsShown(!flowsOpen);
+  };
+  const flowsPanel = flowsOpen && (
+    <FlowsPanel source={source} diagram={diagram} onChange={onChange} pick={pick} onPick={setPick} onClose={toggleFlows} />
+  );
   const shownEdges = useMemo(() => edges.map((e) => (current?.kind === 'edge' && e.id === current.id ? { ...e, selected: true } : e)), [edges, current]);
 
   // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
-  const dockSettings = !!current && !settingsClosed && paletteOpen && !phone;
+  const dockSettings = !!current && !settingsClosed && (paletteOpen || flowsOpen) && !phone;
   // Showing or hiding a panel glides the diagram to a new fit (unless the reader zoomed or panned): a docked one
   // changes the canvas's width, a floating one (the palette in a narrow pane, the settings) covers its right side.
-  const cover = paletteOpen && !phone && floating ? FLOATING_PALETTE : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}`, right: cover });
+  const cover = (paletteOpen || flowsOpen) && !phone && floating ? (flowsOpen ? FLOATING_SETTINGS : FLOATING_PALETTE) : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}:${flowsOpen}`, right: cover });
   const inspector = current && !settingsClosed && (
     <Inspector
       key={current.id}
@@ -159,7 +187,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       }}
     >
       <PaletteDock
-        open={paletteOpen}
+        open={paletteOpen || (flowsOpen && !phone)}
+        flows={flowsPanel || undefined}
         phone={phone}
         focus={paletteFocus}
         onAdd={(tech) => add(tech, phone)}
@@ -198,9 +227,9 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           nodesDraggable={false}
           nodesConnectable
           elementsSelectable
-          onNodeClick={(_e, n) => select({ kind: 'node', id: n.id })}
+          onNodeClick={(_e, n) => (pick && flowsOpen ? pickNode(n.id) : select({ kind: 'node', id: n.id }))}
           onEdgeClick={(_e, ed) => select({ kind: 'edge', id: ed.id })}
-          onPaneClick={() => setSelected(null)}
+          onPaneClick={() => (pick ? undefined : setSelected(null))}
           onConnect={(c) => c.source && c.target && connect(c.source, c.target)}
           onNodeContextMenu={(e, n) => {
             e.preventDefault();
@@ -221,17 +250,20 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         >
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           <Controls showInteractive={false} />
-          <Panel position="top-left">
+          <Panel position="top-left" className="flex flex-wrap gap-2">
             {/* While the settings stand in for the palette, the button brings the palette back. */}
             <PaletteToggle
               open={paletteOpen && !dockSettings}
               onToggle={() => {
                 if (dockSettings) return setSettingsClosed(true);
+                if (flowsOpen) setFlowsShown(false);
+                setPick(null);
                 setPaletteFocus(!paletteOpen);
                 if (phone) setSheet(!sheet);
                 else setDocked(!docked);
               }}
             />
+            {flows && <FlowsToggle open={flowsOpen && !dockSettings} onToggle={() => (dockSettings ? setSettingsClosed(true) : toggleFlows())} />}
           </Panel>
           {!hintSeen && nodes.length >= 2 && edges.length === 0 && (
             <Panel position="top-center" className="max-md:!top-12">
@@ -254,6 +286,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         {inspector && !dockSettings && (
           <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
             {inspector}
+          </div>
+        )}
+        {phone && flowsPanel && (
+          <div data-testid="flows-sheet" className="absolute inset-x-0 bottom-0 z-20 flex max-h-[55%] flex-col overflow-hidden rounded-t-brutal border-t-bw-2 border-ink bg-surface shadow-brutal-lg">
+            {flowsPanel}
           </div>
         )}
         {menu && <CanvasMenu menu={menu} onSettings={() => setSettingsClosed(false)} onDelete={remove} onClose={closeMenu} />}

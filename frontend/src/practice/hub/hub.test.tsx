@@ -20,7 +20,7 @@ describe('practice hub', () => {
       ['Interview prep', ['roadmap']],
       ['More practice', ['review', 'challenge', 'arcade']],
     ]);
-    expect(mockInterviewHref()).toBe('#/url-shortener?interview=mock');
+    expect(mockInterviewHref()).toBe('#/interview');
   });
 
   it('marks the tab of every address that opens inside it', () => {

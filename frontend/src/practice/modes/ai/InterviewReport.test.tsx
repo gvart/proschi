@@ -4,7 +4,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FeaturesContext, type FeatureLookup } from '../../../components/featureState';
 import type { FeatureId } from '../../../services/featureContract';
 import { getReport, startInterview, type Verdict } from './api';
-import { VerdictView } from './AiInterviewPanel';
+import { VerdictView } from './VerdictView';
 import InterviewReport from './InterviewReport';
 
 const verdict: Verdict = {

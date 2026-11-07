@@ -18,8 +18,6 @@ interface ProblemRouteProps {
   banner?: ReactNode;
   /** Open on the lesson: see ProblemPage. */
   openLesson?: 'always' | 'unread';
-  /** Open on interview mode with the AI interviewer chosen: see ProblemPage. */
-  interviewWith?: 'ai';
 }
 
 /**
@@ -27,7 +25,7 @@ interface ProblemRouteProps {
  * chunk only when a problem is opened, and it fetches only that problem's
  * files (suspending until they are there), so the list stays light.
  */
-export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine, account, back, banner, openLesson, interviewWith }: ProblemRouteProps) {
+export default function ProblemRoute({ id, progress, onProgress, engine = defaultEngine, account, back, banner, openLesson }: ProblemRouteProps) {
   const problem = use(loadProblem(id));
   if (!problem) {
     return (
@@ -36,5 +34,5 @@ export default function ProblemRoute({ id, progress, onProgress, engine = defaul
       </p>
     );
   }
-  return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={onProgress} engine={engine} account={account} back={back} banner={banner} openLesson={openLesson} interviewWith={interviewWith} />;
+  return <ProblemPage key={problem.id} problem={problem} progress={progress} onProgress={onProgress} engine={engine} account={account} back={back} banner={banner} openLesson={openLesson} />;
 }

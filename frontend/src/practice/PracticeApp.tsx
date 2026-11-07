@@ -36,6 +36,7 @@ import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
 import { track } from '../services/metrics';
+import { setupHref } from './interview/links';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -56,6 +57,8 @@ const ProgressRoute = lazy(loadProgressCode);
 // The account and settings page; public profiles, with the cards' topics.
 const AccountRoute = lazy(() => import('./profile/AccountRoute'));
 const PublicProfileRoute = lazy(() => import('./profile/PublicProfileRoute'));
+// The mock interview: the set-up, the room (editor, canvas, simulation) and the result.
+const InterviewRoute = lazy(() => import('./interview/InterviewRoute'));
 
 /** The hub's sections whose code loads on first use: pointing at one's link starts loading it, so the click rarely waits. */
 const SECTION_CODE: Partial<Record<HubTab, () => Promise<unknown>>> = { review: loadReviewCode, challenge: loadChallengeCode, arcade: loadArcadeCode, progress: loadProgressCode };
@@ -131,10 +134,11 @@ async function sendGoal(goal: GoalState): Promise<void> {
 /** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const hash = useHashRoute();
-  // A query after the route: `#/<problem id>?interview=mock` (or the older `?interview=ai`) opens the problem on interview mode with the mock interview chosen.
+  // A query after the route: `#/interview?problem=<id>`; the older `#/<problem id>?interview=mock` (or `?interview=ai`) goes to the mock interview's set-up with the problem chosen.
   const [route, query = ''] = hash.split('?', 2);
-  const interviewParam = new URLSearchParams(query).get('interview');
-  const interviewAi = interviewParam === 'mock' || interviewParam === 'ai';
+  const params = new URLSearchParams(query);
+  const interviewParam = params.get('interview');
+  const interviewLink = interviewParam === 'mock' || interviewParam === 'ai';
   const [progress, setProgress] = useState<Progress>(loadProgress);
   useEffect(() => track('practice_open', { once: 'session' }), []);
   const updateProgress = useCallback((update: (p: Progress) => Progress) => {
@@ -203,10 +207,11 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onChallenge = route === 'challenge';
   const onArcade = route === 'arcade' || route === 'arcade/daily';
   const onMe = route === 'me';
+  const onInterview = route === 'interview' || route.startsWith('interview/');
   const profileId = profileIdOf(route);
   const onProfile = onMe || profileId !== undefined;
   /** A page other than the list or a problem. */
-  const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onArcade || onProfile;
+  const onPage = onRoadmap || !!guide || onReview || onProgress || onChallenge || onArcade || onProfile || onInterview;
   const lessonRoute = fromRoadmap ? !!target?.lesson : route.endsWith('/lesson');
   const problemId = fromRoadmap ? (target?.id ?? '') : lessonRoute ? route.slice(0, -'/lesson'.length) : route;
   const problem = problemId && !onPage ? problems.find((p) => p.id === problemId) : undefined;
@@ -242,7 +247,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const unseen = achievements.state.status === 'ready' ? achievements.state.answer.achievements.filter((a) => a.unseen) : [];
   useEffect(() => {
     // The review, challenge, progress and profile pages name themselves.
-    if (onReview || onProgress || onChallenge || onArcade || onProfile) return;
+    if (onReview || onProgress || onChallenge || onArcade || onProfile || onInterview) return;
     document.title = problem
       ? `${problem.title} · Proschi practice`
       : guide
@@ -250,14 +255,20 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         : onRoadmap
           ? 'Interview prep roadmap · Proschi practice'
           : 'System design practice problems with automatic tests · Proschi';
-  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge, onArcade, onProfile]);
+  }, [problem, guide, onRoadmap, onReview, onProgress, onChallenge, onArcade, onProfile, onInterview]);
+
+  const redirect = problem && interviewLink ? setupHref(problem.id, 'mock') : undefined;
+  useEffect(() => {
+    if (redirect) window.location.replace(redirect);
+  }, [redirect]);
+  if (redirect) return null;
 
   if (problem) {
     return (
       <FeaturesContext.Provider value={features}>
         <Suspense fallback={<div className="h-[100dvh]"><PaneLoading label={`Loading ${problem.title}…`} /></div>}>
           <ProblemRoute
-            key={interviewAi ? `${problem.id}?ai` : problem.id}
+            key={problem.id}
             id={problem.id}
             progress={progress}
             onProgress={updateProgress}
@@ -266,8 +277,37 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
             {...(fromRoadmap
               ? { back: { href: '#/roadmap', label: 'Roadmap' }, banner: <RoadmapBanner id={problem.id} stages={roadmap} problems={problems} progress={progress} />, openLesson: lessonRoute ? ('always' as const) : ('unread' as const) }
               : { openLesson: lessonRoute ? ('always' as const) : ('unread' as const) })}
-            interviewWith={interviewAi ? 'ai' : undefined}
           />
+        </Suspense>
+      </FeaturesContext.Provider>
+    );
+  }
+
+  const header = (
+    <Header
+      base="../"
+      current={onProfile ? undefined : 'practice'}
+      actions={
+        <>
+          <AccountMenu account={account} />
+          <HelpMenu
+            tourLabel="Take the practice tour"
+            onTour={() => {
+              // The tour runs on a problem page: open the first (easiest) problem with it.
+              requestTour('practice');
+              window.location.hash = `#/${problems[0]?.id ?? ''}`;
+            }}
+          />
+        </>
+      }
+    />
+  );
+
+  if (onInterview) {
+    return (
+      <FeaturesContext.Provider value={features}>
+        <Suspense fallback={<PageLoading label="Loading the mock interview…" />}>
+          <InterviewRoute problemId={route.slice('interview/'.length) || undefined} query={params} engine={engine} header={header} />
         </Suspense>
       </FeaturesContext.Provider>
     );
@@ -275,23 +315,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
 
   const page = (
     <div className="min-h-[100dvh] flex flex-col bg-paper">
-      <Header
-        base="../"
-        current={onProfile ? undefined : 'practice'}
-        actions={
-          <>
-            <AccountMenu account={account} />
-            <HelpMenu
-              tourLabel="Take the practice tour"
-              onTour={() => {
-                // The tour runs on a problem page: open the first (easiest) problem with it.
-                requestTour('practice');
-                window.location.hash = `#/${problems[0]?.id ?? ''}`;
-              }}
-            />
-          </>
-        }
-      />
+      {header}
       <div className="flex-1 bg-paper">
         {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>

@@ -5,16 +5,16 @@ import { answerDialog, expect, test } from './fixtures';
 
 /**
  * Max's extras on the mock interview (docs/design/paid-plans.md P31; build
- * with accounts, API mocked): the Deep verdict toggle on the start screen,
+ * with accounts, API mocked): the Deep verdict toggle on the set-up,
  * the "Deep verdict" mark on the verdict, and its printable report. Pro sees
- * neither, only a quiet hint on the start screen.
+ * neither, only a quiet hint on the set-up.
  */
 
+/** The mock interview's set-up on URL Shortener, with the interviewer chosen. */
 async function toStart(page: Page) {
-  await page.goto('practice/#/url-shortener');
-  await page.getByRole('button', { name: 'Interview mode' }).click();
-  const start = page.getByRole('region', { name: 'Interview mode' });
-  await start.getByRole('radio', { name: /Mock interview/ }).click();
+  await page.goto('practice/#/interview?problem=url-shortener&with=mock');
+  const start = page.getByRole('main');
+  await expect(start.getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
   return start;
 }
 
@@ -28,15 +28,14 @@ test('Max: a Deep verdict costs more, says so on the verdict, and the report pri
   await deep.check();
   // Only the verdict runs Deep: the estimate adds its extra (15–55 credits, ×2).
   await expect(start.getByTestId('ai-credits')).toContainText('about 60–115 credits for 45 min');
-  await start.getByRole('button', { name: 'Start a mock interview' }).click();
-  await page.getByRole('button', { name: 'I agree, start the interview' }).click();
-  expect(mock.starts).toEqual([{ replace: false, deep: true }]);
-
+  await start.getByRole('button', { name: 'Start the mock interview' }).click();
   const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+  await expect(chat).toBeVisible();
+  expect(mock.starts).toEqual([{ replace: false, deep: true }]);
   await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
   await chat.getByRole('button', { name: 'Send my design' }).click();
   await expect(chat.getByText(/Why this cache\?/)).toBeVisible();
-  await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+  await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
   await answerDialog(page, 'Finish');
 
   const verdict = page.getByRole('region', { name: 'Interview verdict' });
@@ -77,11 +76,10 @@ test('Pro: no Deep toggle (a quiet hint instead) and no report', async ({ page }
   await expect(start.getByRole('checkbox', { name: /Deep verdict/ })).toHaveCount(0);
   await expect(start.getByTestId('interview-deep-hint')).toContainText('Deep verdicts come with Max');
   await expect(start.getByTestId('interview-deep-hint').getByRole('link', { name: 'See Max' })).toHaveAttribute('href', '../pricing/');
-  await start.getByRole('button', { name: 'Start a mock interview' }).click();
-  await page.getByRole('button', { name: 'I agree, start the interview' }).click();
+  await start.getByRole('button', { name: 'Start the mock interview' }).click();
+  await expect(page.getByRole('region', { name: 'Mock interview', exact: true })).toBeVisible();
   expect(mock.starts).toEqual([{ replace: false, deep: false }]);
-  const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
-  await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+  await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
   await answerDialog(page, 'Finish');
   const verdict = page.getByRole('region', { name: 'Interview verdict' });
   await expect(verdict.getByTestId('verdict-result')).toHaveText('Pass');

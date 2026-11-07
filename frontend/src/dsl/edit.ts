@@ -381,3 +381,235 @@ function replaceInLine(source: string, line: number, from: number, to: number, i
 function end(token: Token): number {
   return token.col - 1 + token.length;
 }
+
+// ---------------------------------------------------------------------------
+// Use cases and scenarios (the canvas's Flows builder, docs/design/paid-plans.md P46).
+// A use case is read as an outline of its own text: its steps, and its
+// scenarios (`alt` branches that follow each other) with theirs. Anything else
+// in it (a `par` block, an `alt` inside a branch) is kept and counted as
+// written in code. The edits add or remove whole lines, so the rest stays as it is.
+
+/** How a step is drawn: a request `->`, its response `-->`, or a message nobody waits for `->>`. */
+export type StepKind = 'request' | 'response' | 'async';
+
+const STEP_ARROW: Record<StepKind, string> = { request: '->', response: '-->', async: '->>' };
+
+export interface OutlineStep {
+  /** 1-based line of the step (its first line, for a multi-line payload). */
+  line: number;
+  from: string;
+  to: string;
+  kind: StepKind | 'failed';
+  label: string;
+}
+
+export interface OutlineBranch {
+  name: string;
+  /** The line of `alt "name" … {`, and of the `}` that closes it. */
+  line: number;
+  endLine: number;
+  /** The branch opens on the line that closes the one before (`} alt "B" {`). */
+  shared: boolean;
+  steps: OutlineStep[];
+  /** Statements in it that are not plain steps (a nested block), left to the code. */
+  other: number;
+}
+
+export type OutlineItem = { kind: 'step'; step: OutlineStep } | { kind: 'scenarios'; branches: OutlineBranch[] } | { kind: 'other'; line: number };
+
+export interface UseCaseOutline {
+  name: string;
+  /** The `usecase` line and the line of its closing `}`. */
+  line: number;
+  endLine: number;
+  items: OutlineItem[];
+}
+
+/** The last line (0-based) of the statement starting at `index`: later than it when its label opens a payload. */
+function statementEnd(lines: string[], index: number): number {
+  const label = tokenizeLine(lines[index] ?? '', index + 1).tokens.find((t) => t.kind === 'label')?.value ?? '';
+  let depth = bracketDepth(label);
+  let at = index;
+  while (depth > 0 && at + 1 < lines.length) {
+    at++;
+    depth += bracketDepth(lines[at]);
+  }
+  return at;
+}
+
+function readStep(tokens: Token[], line: number): OutlineStep | undefined {
+  // `a -> b`, `a.port -> b`: the id, an optional port, the arrow, the id.
+  const [a, b] = tokens;
+  if (a?.kind !== 'ident') return undefined;
+  const arrowAt = b?.kind === 'arrow' ? 1 : b?.kind === 'tag' && tokens[2]?.kind === 'arrow' ? 2 : -1;
+  if (arrowAt === -1) return undefined;
+  const to = tokens[arrowAt + 1];
+  if (to?.kind !== 'ident') return undefined;
+  const arrow = tokens[arrowAt].value;
+  const kind = arrow === '-->' ? 'response' : arrow === '->>' ? 'async' : arrow === '-x' ? 'failed' : 'request';
+  return { line, from: a.value, to: to.value, kind, label: tokens.find((t) => t.kind === 'label')?.value.trim() ?? '' };
+}
+
+/** The line (0-based) that closes the block opened at `index`. */
+function blockEnd(lines: string[], index: number): number {
+  let depth = 0;
+  for (let i = index; i < lines.length; i++) {
+    for (const t of tokenizeLine(lines[i], i + 1).tokens) {
+      if (t.kind === 'lbrace') depth++;
+      else if (t.kind === 'rbrace') depth--;
+    }
+    if (depth <= 0) return i;
+  }
+  return lines.length - 1;
+}
+
+/** The outline of the use case called `name` in this document's own text, or undefined when it has none. */
+export function outlineOf(source: string, name: string): UseCaseOutline | undefined {
+  const useCase = parse(source).diagram.useCases.find((u) => u.name === name && u.loc.file === undefined);
+  if (!useCase) return undefined;
+  const lines = source.split('\n');
+  const items: OutlineItem[] = [];
+  let group: OutlineBranch[] | undefined;
+  /** The branch being read, if any. */
+  let branch: OutlineBranch | undefined;
+  const openBranch = (tokens: Token[], at: number, shared: boolean) => {
+    branch = { name: tokens[1]?.value ?? '', line: at + 1, endLine: at + 1, shared, steps: [], other: 0 };
+    if (!group) {
+      group = [];
+      items.push({ kind: 'scenarios', branches: group });
+    }
+    group.push(branch);
+  };
+  let i = useCase.loc.line;
+  for (; i < lines.length; i++) {
+    const { tokens } = tokenizeLine(lines[i], i + 1);
+    if (tokens.length === 0) continue;
+    const first = tokens[0];
+    if (first.kind === 'rbrace') {
+      if (!branch) break;
+      branch.endLine = i + 1;
+      branch = undefined;
+      // `} alt "B" {`: the next branch of the same scenarios.
+      if (tokens[1]?.kind === 'ident' && tokens[1].value === 'alt') openBranch(tokens.slice(1), i, true);
+      continue;
+    }
+    if (first.kind === 'ident' && first.value === 'alt' && !branch) {
+      openBranch(tokens, i, false);
+      continue;
+    }
+    const step = readStep(tokens, i + 1);
+    const end = step ? statementEnd(lines, i) : tokens.some((t) => t.kind === 'lbrace') ? blockEnd(lines, i) : i;
+    if (branch) {
+      if (step) branch.steps.push(step);
+      else branch.other++;
+    } else {
+      // Anything between two alt blocks ends their scenarios.
+      group = undefined;
+      items.push(step ? { kind: 'step', step } : { kind: 'other', line: i + 1 });
+    }
+    i = end;
+  }
+  return { name: useCase.name, line: useCase.loc.line, endLine: i + 1, items };
+}
+
+/** Adds an empty `usecase "name" { }` at the end of the document; nothing when the name is empty or taken. */
+export function addUseCase(source: string, name: string): string {
+  const clean = cleanText(name);
+  if (!clean || parse(source).diagram.useCases.some((u) => u.name === clean)) return source;
+  const block = `usecase ${quote(clean)} {\n}\n`;
+  if (source.trim() === '') return block;
+  return `${source.replace(/\n*$/, '')}\n\n${block}`;
+}
+
+/** Removes a use case's whole block, and the blank line before it. */
+export function removeUseCase(source: string, name: string): string {
+  const outline = outlineOf(source, name);
+  if (!outline) return source;
+  const lines = source.split('\n');
+  let from = outline.line - 1;
+  if (from > 0 && lines[from - 1].trim() === '') from--;
+  lines.splice(from, outline.endLine - from);
+  return lines.join('\n');
+}
+
+export interface NewStep {
+  from: string;
+  to: string;
+  kind: StepKind;
+  label?: string;
+}
+
+/** A label on one line whose brackets close, so it never swallows the lines after it. */
+function cleanLabel(label: string): string {
+  const text = cleanText(label);
+  return bracketDepth(text) === 0 ? text : text.replace(/[{}[\]]/g, '');
+}
+
+function indentOf(line: string | undefined): string {
+  return /^\s*/.exec(line ?? '')?.[0] ?? '';
+}
+
+/**
+ * Appends a step to a use case: at the end of its main flow, or of its
+ * scenario `scenario`. A request or message between two components that are
+ * not connected yet connects them too, as the step needs.
+ */
+export function addStep(source: string, useCase: string, step: NewStep, scenario?: string): EditResult {
+  const outline = outlineOf(source, useCase);
+  if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
+  if (step.from === step.to) return { error: 'A step goes from one component to another.' };
+  const lines = source.split('\n');
+  let at = outline.endLine - 1;
+  let indent = `${indentOf(lines[outline.line - 1])}  `;
+  if (scenario !== undefined) {
+    const branch = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : [])).find((b) => b.name === scenario);
+    if (!branch) return { error: `"${useCase}" has no scenario "${scenario}".` };
+    at = branch.endLine - 1;
+    indent = `${indentOf(lines[branch.line - 1])}  `;
+  }
+  const label = step.label ? cleanLabel(step.label) : '';
+  lines.splice(at, 0, `${indent}${step.from} ${STEP_ARROW[step.kind]} ${step.to}${label ? ` : ${label}` : ''}`);
+  const next = lines.join('\n');
+  return { source: step.kind === 'response' ? next : addConnection(next, step.from, step.to) };
+}
+
+/** Removes the step written at `line` (its whole payload too). */
+export function removeStep(source: string, line: number): string {
+  return removeStatementLines(source, [line]);
+}
+
+/**
+ * Adds a scenario, an `alt "name" { }` branch, to a use case: after its
+ * other scenarios when it has some, else at the end of its main flow.
+ */
+export function addScenario(source: string, useCase: string, name: string): EditResult {
+  const clean = cleanText(name);
+  if (!clean) return { error: 'Name the scenario.' };
+  const outline = outlineOf(source, useCase);
+  if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
+  const branches = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []));
+  if (branches.some((b) => b.name === clean)) return { error: `"${useCase}" already has a scenario "${clean}".` };
+  const lines = source.split('\n');
+  const last = branches.at(-1);
+  const at = last ? last.endLine : outline.endLine - 1;
+  const indent = last ? indentOf(lines[last.endLine - 1]) : `${indentOf(lines[outline.line - 1])}  `;
+  lines.splice(at, 0, `${indent}alt ${quote(clean)} {`, `${indent}}`);
+  return { source: lines.join('\n') };
+}
+
+/** Removes a scenario and its steps; one that opens on the line closing another (`} alt "B" {`) is left to the code. */
+export function removeScenario(source: string, useCase: string, name: string): EditResult {
+  const branch = outlineOf(source, useCase)
+    ?.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []))
+    .find((b) => b.name === name);
+  if (!branch) return { source };
+  if (branch.shared) return { error: `"${name}" opens on the line that closes the scenario before it; remove it in the code.` };
+  const lines = source.split('\n');
+  const closing = lines[branch.endLine - 1];
+  if (tokenizeLine(closing, branch.endLine).tokens.length > 1) {
+    // `} alt "C" {` closes this one and opens the next: the next keeps its opening.
+    lines[branch.endLine - 1] = closing.replace(/^(\s*)\}\s*/, '$1');
+    lines.splice(branch.line - 1, branch.endLine - branch.line);
+  } else lines.splice(branch.line - 1, branch.endLine - branch.line + 1);
+  return { source: lines.join('\n') };
+}

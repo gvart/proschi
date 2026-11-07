@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
-import { Blocks, Cable, Settings2, Trash2, X } from 'lucide-react';
+import { Blocks, Cable, Settings2, Trash2, Workflow, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
 import { iconButton, toolButton } from '../Playground/ui';
 import Palette from './Palette';
@@ -30,6 +30,23 @@ export function PaletteToggle({ open, onToggle }: { open: boolean; onToggle: () 
   );
 }
 
+/** The toolbar button that shows or hides the Flows builder (use cases and scenarios). */
+export function FlowsToggle({ open, onToggle }: { open: boolean; onToggle: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-label="Flows"
+      aria-expanded={open}
+      title={open ? 'Hide the flows' : 'Add use cases and their steps, without code'}
+      className={`${toolButton} border-ink bg-surface shadow-brutal-sm aria-expanded:bg-pop-yellow aria-expanded:text-on-accent`}
+    >
+      <Workflow size={16} />
+      <span className="whitespace-nowrap">Flows</span>
+    </button>
+  );
+}
+
 interface PaletteDockProps {
   open: boolean;
   phone: boolean;
@@ -39,6 +56,8 @@ interface PaletteDockProps {
   focus: boolean;
   /** The selection's settings (a docked Inspector): shown in the panel in place of the palette until closed. */
   settings?: ReactNode;
+  /** The Flows builder: shown in the panel in place of the palette (the settings still come first). */
+  flows?: ReactNode;
   /** Told whether the panel floats over the canvas (a narrow pane) instead of sitting beside it. */
   onFloatingChange?: (floating: boolean) => void;
 }
@@ -67,7 +86,7 @@ function useNarrowRow(open: boolean) {
  * diagram column) a panel floating over the canvas's right side, so the canvas
  * keeps its width; on a phone a bottom sheet where a tap adds.
  */
-export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, onFloatingChange }: PaletteDockProps) {
+export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, flows, onFloatingChange }: PaletteDockProps) {
   const [ref, narrow] = useNarrowRow(open && !phone);
   useEffect(() => onFloatingChange?.(narrow), [narrow, onFloatingChange]);
   if (!open) return null;
@@ -97,18 +116,23 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, onFl
     // One panel, the selection's settings, else the palette (hidden, not unmounted, so it keeps its search and
     // does not take the focus again). Beside the canvas, so neither covers the diagram; in a narrow pane over its
     // right side, from a zero-width box placed after the canvas.
-    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : 'w-60 shrink-0 border-r-bw-1 border-ink'}>
+    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : `${flows ? 'w-72' : 'w-60'} shrink-0 border-r-bw-1 border-ink`}>
       <div
         data-testid="palette-dock"
         data-floating={narrow || undefined}
         className={
           narrow
-            ? `absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] w-64 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md ${settings ? '' : 'h-[calc(100%-1rem)]'}`
+            ? `absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] ${flows ? 'w-72' : 'w-64'} flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md ${settings ? '' : 'h-[calc(100%-1rem)]'}`
             : 'h-full'
         }
       >
         {settings}
-        <div className="h-full" hidden={!!settings}>
+        {flows && (
+          <div className="h-full min-h-0" hidden={!!settings}>
+            {flows}
+          </div>
+        )}
+        <div className="h-full" hidden={!!settings || !!flows}>
           <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
         </div>
       </div>

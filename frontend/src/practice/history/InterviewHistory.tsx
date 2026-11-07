@@ -6,7 +6,7 @@ import PaneLoading from '../../components/PaneLoading';
 import { Feature } from '../../components/Feature';
 import UpgradeHint from '../../components/UpgradeHint';
 import { getInterview, type AiInterview } from '../modes/ai/api';
-import { VerdictView } from '../modes/ai/AiInterviewPanel';
+import { VerdictView } from '../modes/ai/VerdictView';
 import { formatDay, getHistory, verdictHref, type History, type HistorySession } from './api';
 import SkillTrends from './SkillTrends';
 

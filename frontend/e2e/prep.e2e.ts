@@ -53,7 +53,7 @@ test.describe('practice hub', () => {
     await expect(next).toContainText('Next on the roadmap');
     await expect(next.getByRole('link', { name: /Continue/ })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
     await expect(next.getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '#/roadmap');
-    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/url-shortener?interview=mock');
+    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/interview');
 
     // A daily habit too: the streak and today's review, challenge and Arcade run.
     await goalQuestion(page).getByRole('button', { name: /Build a daily habit/ }).click();
@@ -120,9 +120,9 @@ test.describe('practice hub', () => {
       await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
 
-    // The mock interview: interview mode on a problem, with the mock interview chosen.
+    // The mock interview: its set-up.
     await (await sectionLink(page, 'Mock interview')).click();
-    await expect(page).toHaveURL(/#\/url-shortener\?interview=mock$/);
+    await expect(page).toHaveURL(/#\/interview$/);
 
     // Older addresses open inside the hub, on their section.
     const inside: [string, string][] = [

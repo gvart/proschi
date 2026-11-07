@@ -66,7 +66,9 @@ export type InterviewAction =
   | { type: 'tests'; passed: number; total: number; solved: boolean }
   | { type: 'check'; id: string; checked: boolean }
   /** To the next phase; from the wrap-up it finishes the interview. */
-  | { type: 'advance'; now: number };
+  | { type: 'advance'; now: number }
+  /** Finishes the interview now, in whatever phase it is. */
+  | { type: 'finish'; now: number };
 
 const ZERO: Record<Phase, number> = { clarify: 0, estimate: 0, design: 0, wrapup: 0 };
 
@@ -100,6 +102,8 @@ export function interviewReducer(s: InterviewSession, a: InterviewAction): Inter
     case 'check':
       if (s.phase !== 'wrapup') return s;
       return { ...s, checked: a.checked ? [...new Set([...s.checked, a.id])] : s.checked.filter((id) => id !== a.id) };
+    case 'finish':
+      return { ...stopClock(s, a.now), finishedAt: a.now };
     case 'advance': {
       const running = s.runningSince !== undefined;
       const stopped = stopClock(s, a.now);
