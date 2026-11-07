@@ -70,9 +70,14 @@ test('upgrade: pricing, Polar checkout, back to Plan & billing on Pro', async ({
   current = PRO_PLAN;
   await page.goto('practice/?checkout=done&product=pro_yearly&checkout_id=chk_1#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
-  await expect(billing.getByRole('region', { name: 'Welcome to Pro' })).toContainText("You're on Pro: 4 AI interviews this month.");
+  // The welcome shows at the top of the page, above the sections, in view.
+  const welcome = page.getByRole('region', { name: 'Welcome to Pro' });
+  await expect(welcome).toContainText("You're on Pro: 4 AI interviews this month.");
+  await expect(welcome).toBeInViewport();
+  expect((await welcome.boundingBox())!.y).toBeLessThan((await billing.boundingBox())!.y);
+  await expect(billing.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
   await expect(billing).toContainText('Pro yearly, renews on 6 November 2027.');
-  await expect(billing.getByTestId('credits')).toHaveText('AI interviews left: 5 (4 of 4 this month, 1 free one).');
+  await expect(billing.getByTestId('credits')).toHaveText('4 of 4 this month, 1 free one.');
   await expect(page).not.toHaveURL(/checkout=done/);
   await expect(billing.getByRole('link', { name: 'Upgrade to Pro' })).toHaveCount(0);
 
@@ -92,7 +97,9 @@ test('pricing: signed out, the buttons sign in first; a pack can be bought from 
 
   await page.goto('practice/#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
-  await expect(billing).toContainText('5 diagrams in your account, 20 versions each.');
+  await expect(billing).toContainText('Pro adds unlimited diagrams and 4 AI interviews a month.');
+  await expect(billing.getByRole('meter', { name: 'Diagrams in your account' })).toHaveAttribute('aria-valuemax', '5');
+  await expect(billing).toContainText('Up to 20 versions of each.');
   await expect(billing.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute('href', '../pricing/');
   await expect(billing.getByRole('button', { name: 'Manage billing and invoices' })).toHaveCount(0);
   await billing.getByRole('button', { name: 'Buy 5 interviews, €15' }).click();
@@ -133,9 +140,9 @@ test('checkout return: activating, then Pro when the webhook lands after two ask
   await expect(page).toHaveURL(/checkout=done&product=pro_monthly/);
   current = PRO_PLAN;
   await page.clock.runFor(2000);
-  const welcome = billing.getByRole('region', { name: 'Welcome to Pro' });
+  const welcome = page.getByRole('region', { name: 'Welcome to Pro' });
   await expect(welcome).toContainText("You're on Pro: 4 AI interviews this month.");
-  await expect(welcome.getByRole('link', { name: 'Start an AI interview' })).toHaveAttribute('href', '#/url-shortener');
+  await expect(welcome.getByRole('link', { name: 'Start an AI interview' })).toHaveAttribute('href', '#/url-shortener?interview=ai');
   await expect(welcome.getByRole('link', { name: 'Review a design' })).toHaveAttribute('href', '../app/');
   await expect(welcome.getByRole('link', { name: 'See your roadmap' })).toHaveAttribute('href', '#/roadmap');
   // The rest of the page and the header read the new plan; the address forgets the checkout.
@@ -148,7 +155,7 @@ test('checkout return: activating, then Pro when the webhook lands after two ask
   // The same checkout again: its welcome was shown, so the banner alone.
   await page.goto('practice/?checkout=done&product=pro_monthly&checkout_id=chk_2#/me');
   await expect(banner(page)).toHaveText("You're on Pro: 4 AI interviews this month.");
-  await expect(billing.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
+  await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
 });
 
 test('checkout return: slow after a minute without the webhook, and Check again', async ({ page }) => {
@@ -180,7 +187,7 @@ test('checkout return: a pack shows the interviews added, without the welcome; n
   current = { ...FREE_PLAN, customer: true, credits: { total: 6, monthly: 0, trial: 1, pack: 5, period: '2026-11' } };
   await page.clock.runFor(1000);
   await expect(banner(page)).toHaveText('5 interviews added.');
-  await expect(page.getByTestId('credits')).toHaveText('AI interviews left: 6 (1 free one, 5 from packs).');
+  await expect(page.getByTestId('credits')).toHaveText('1 free one, 5 from packs.');
   await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
   await expect(page.getByTestId('pro-badge')).toHaveCount(0);
   await expect(page).not.toHaveURL(/checkout|product/);

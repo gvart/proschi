@@ -40,7 +40,7 @@ test('opting in sends the address and time zone, and waits for the confirmation'
   const state = { prefs: { email: null } as Prefs };
   const calls = await mockEmail(page, state);
   await page.goto('practice/#/me');
-  const section = page.getByRole('region', { name: 'Email reminders' });
+  const section = page.getByRole('region', { name: 'Notifications' });
   await expect(section).toBeVisible();
 
   await section.getByLabel('Email address').fill('not-an-address');
@@ -62,7 +62,7 @@ test('a confirmed address has a switch per reminder, resumes after a pause, and 
   const state = { prefs: { email: 'me@example.com', confirmed: true, timeZone: 'UTC', streak: true, cards: true, recap: true, paused: true } as Prefs };
   const calls = await mockEmail(page, state);
   await page.goto('practice/#/me');
-  const section = page.getByRole('region', { name: 'Email reminders' });
+  const section = page.getByRole('region', { name: 'Notifications' });
   await expect(section).toContainText('Reminders go to me@example.com.');
 
   await section.getByRole('button', { name: 'Resume reminders' }).click();

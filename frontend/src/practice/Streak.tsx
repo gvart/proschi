@@ -88,25 +88,32 @@ export function GoalPicker({ goal, onPick }: { goal: DailyGoal; onPick: (cards: 
       <span id="goal-picker" className={eyebrow}>
         Daily goal
       </span>
-      <div role="radiogroup" aria-labelledby="goal-picker" className="inline-flex overflow-hidden rounded-sm border-bw-1 border-ink shadow-brutal-sm">
-        {GOAL_CHOICES.map((n) => {
-          const on = n === goal.reviews;
-          return (
-            <button
-              key={n}
-              type="button"
-              role="radio"
-              aria-checked={on}
-              aria-label={`${n} cards a day`}
-              onClick={() => onPick(n)}
-              className={`min-h-[36px] min-w-[44px] border-l-bw-1 border-ink px-2.5 text-sm font-bold tabular-nums first:border-l-0 ${on ? 'bg-ink text-paper' : 'bg-surface text-ink hover:bg-pop-yellow/30'}`}
-            >
-              {n}
-            </button>
-          );
-        })}
-      </div>
+      <GoalChoices goal={goal} onPick={onPick} labelledBy="goal-picker" />
       <span className="text-xs text-muted">cards a day, or a problem solved, the daily challenge or an Arcade run</span>
+    </div>
+  );
+}
+
+/** GoalPicker's choices alone, labelled by the element `labelledBy` names (the settings page has its own label). */
+export function GoalChoices({ goal, onPick, labelledBy }: { goal: DailyGoal; onPick: (cards: number) => void; labelledBy: string }) {
+  return (
+    <div role="radiogroup" aria-labelledby={labelledBy} className="inline-flex overflow-hidden rounded-sm border-bw-1 border-ink shadow-brutal-sm">
+      {GOAL_CHOICES.map((n) => {
+        const on = n === goal.reviews;
+        return (
+          <button
+            key={n}
+            type="button"
+            role="radio"
+            aria-checked={on}
+            aria-label={`${n} cards a day`}
+            onClick={() => onPick(n)}
+            className={`min-h-[36px] min-w-[44px] border-l-bw-1 border-ink px-2.5 text-sm font-bold tabular-nums first:border-l-0 ${on ? 'bg-ink text-paper' : 'bg-surface text-ink hover:bg-pop-yellow/30'}`}
+          >
+            {n}
+          </button>
+        );
+      })}
     </div>
   );
 }

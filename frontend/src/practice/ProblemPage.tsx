@@ -91,6 +91,8 @@ interface ProblemPageProps {
    * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
    */
   openLesson?: 'always' | 'unread';
+  /** `ai` (practice/#/<id>?interview=ai): open on interview mode's start screen with the AI interviewer chosen, past the lesson; nothing starts. */
+  interviewWith?: 'ai';
 }
 
 /** The stage a problem opens on. */
@@ -105,12 +107,12 @@ function initialStage(problem: Problem, openLesson: ProblemPageProps['openLesson
  * side by side in resizable panes, the tests folded under them until the
  * first run). The lesson stays a click away, in a drawer. Tabs on phones.
  */
-export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, interviewWith }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const hasLesson = problem.lesson !== undefined;
-  const [stage, setStage] = useState<Stage>(() => initialStage(problem, openLesson));
+  const [stage, setStage] = useState<Stage>(() => initialStage(problem, interviewWith ? undefined : openLesson));
   const [drawer, setDrawer] = useState(false);
   // A heading to bring into view once the drawer shows (openLessonAt).
   const [lessonTarget, setLessonTarget] = useState<string>();
@@ -191,7 +193,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     return read.issues.length === 0 ? read.steps : undefined;
   }, [problem.guided]);
   const [session, setSession] = useState<InterviewSession | undefined>(() => (interview ? loadSession(problem.id) : undefined));
-  const [interviewOn, setInterviewOn] = useState(() => session !== undefined || (!!interview && hasAiInterview(problem.id)));
+  const [interviewOn, setInterviewOn] = useState(() => session !== undefined || (!!interview && (interviewWith === 'ai' || hasAiInterview(problem.id))));
   // The AI interviewer's "Send my design" reads the editor's source when pressed.
   const sourceNow = useRef(source);
   useEffect(() => {
@@ -338,6 +340,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onExit={exitInterview}
           onRestart={() => setSession(undefined)}
           getSource={getSource}
+          preferAi={interviewWith === 'ai'}
         >
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
         </InterviewPanel>

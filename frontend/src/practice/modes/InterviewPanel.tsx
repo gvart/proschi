@@ -63,10 +63,12 @@ interface InterviewPanelProps {
   children: ReactNode;
   /** The editor's source now, for the AI interviewer's "Send my design". */
   getSource?: () => string;
+  /** The start screen opens with the AI interviewer chosen, when it is on offer (practice/#/<id>?interview=ai). */
+  preferAi?: boolean;
 }
 
 /** Interview mode in the left column: the start screen, then one phase at a time, or the AI interviewer's chat. */
-export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, getSource }: InterviewPanelProps) {
+export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, getSource, preferAi = false }: InterviewPanelProps) {
   // The AI interviewer is on offer with the ai_interview feature (signed in) when the server has it.
   const aiInterview = useFeature('ai_interview');
   const [aiId, setAiId] = useState(() => (apiEnabled ? loadActive(problemId) : undefined));
@@ -90,7 +92,7 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
       />
     );
   }
-  if (!session) return <StartScreen problemId={problemId} onStart={onStart} onStartAi={setAi} onCancel={onExit} ai={aiInterview.ok && apiEnabled && !!getSource} />;
+  if (!session) return <StartScreen problemId={problemId} onStart={onStart} onStartAi={setAi} onCancel={onExit} ai={aiInterview.ok && apiEnabled && !!getSource} preferAi={preferAi} />;
   const advance = () => dispatch({ type: 'advance', now: Date.now() });
   return (
     <section aria-label="Interview mode" className="flex flex-col">
@@ -116,9 +118,23 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
 
 type Kind = 'scripted' | 'ai';
 
-function StartScreen({ problemId, onStart, onStartAi, onCancel, ai }: { problemId: string; onStart: (d: Duration) => void; onStartAi: (id: string) => void; onCancel: () => void; ai: boolean }) {
+function StartScreen({
+  problemId,
+  onStart,
+  onStartAi,
+  onCancel,
+  ai,
+  preferAi,
+}: {
+  problemId: string;
+  onStart: (d: Duration) => void;
+  onStartAi: (id: string) => void;
+  onCancel: () => void;
+  ai: boolean;
+  preferAi: boolean;
+}) {
   const [duration, setDuration] = useState<Duration>(DEFAULT_DURATION);
-  const [kind, setKind] = useState<Kind>('scripted');
+  const [kind, setKind] = useState<Kind>(preferAi ? 'ai' : 'scripted');
   /** The credits left; undefined until known, null when the server has no AI interviewer. */
   const [credits, setCredits] = useState<Credits | null>();
   const [consenting, setConsenting] = useState(false);
