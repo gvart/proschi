@@ -1,0 +1,36 @@
+backend/vitest.config.ts
+  s_e17b87e0a1b3ca::t_81925bc8e3b25b 37-41
+backend/.dev.vars.example
+  s_e17b87e0a1b3ca::t_65b0d0a913332d 57-64
+backend/src/cfUsage.ts
+  s_e17b87e0a1b3ca::t_2e7bff7ca48902 1-71,73-430
+  s_e17b87e0a1b3ca::t_21efd0bc927ec5 72
+backend/src/admin.ts
+  s_e17b87e0a1b3ca::t_81925bc8e3b25b 7,25,266-267
+backend/test/setup.ts
+  s_e17b87e0a1b3ca::t_81925bc8e3b25b 7,12
+backend/README.md
+  s_e17b87e0a1b3ca::t_65b0d0a913332d 845,855,943-992,1432-1433
+backend/test/cfUsage.test.ts
+  s_e17b87e0a1b3ca::t_b4b3a14a6bf527 1-318
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_21efd0bc927ec5 39,357
+backend/src/env.ts
+  s_e17b87e0a1b3ca::t_21efd0bc927ec5 119-129
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2d0cb272188dd47f56c3758f0266b07dfb86b625",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
