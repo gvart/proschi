@@ -399,3 +399,25 @@ id; don't rewrite old ones.
   `addStep`, `addScenario` and their removals, unit tested, down to
   building whole reference designs), so the code stays the source of truth
   (P41); a request step also adds the connection it needs.
+- **P47. Plans are sold by the mock interviews they cover.** The pricing
+  page leads with passing the system design interview, and each plan's
+  headline is how many 45-minute mock interviews (verdict included) its
+  credits cover, as an honest range: the credits over the estimate's high
+  and low end, rounded down (`frontend/src/pricing/planValue.ts`, unit
+  tested against `TYPICAL_COSTS`). Today: Free about 1-2 once, Pro about
+  14-21 a month, Max about 38-59, the top-up about 17-26. A second line
+  says what the same credits do with Design partner (Pro: about 65-95
+  design reviews or 38-61 systems built), for people who only design. The
+  credits stay the unit and are shown small ("800 credits a month"), with
+  a "How credits work" disclosure of the typical cost per action (an
+  interview, a review, a build, a refinement), and a note that both
+  features share the credits. Prices, credits and the backend are
+  unchanged. Settings > Plan & billing (what the balance is worth, the
+  upsell on Free, the top-up), the checkout return's message and Design
+  partner's sign-in line use the same counts. The landing's closing
+  section no longer says diagrams never leave the browser: the editor and
+  the simulation run in the browser with no account; builds with accounts
+  add sign-in to sync, and builds with billing add that mock interviews
+  and Design partner run on credits, with a free account's credits to try
+  one (`<!--if:accounts-->` and `<!--if:billing-->` blocks in
+  `index.html`, `src/landing/flags.ts`, filled at build time).

@@ -4,9 +4,10 @@ import Markdown from '../practice/Markdown';
 import { primaryButton, toolButton } from '../components/Playground/ui';
 import { useFeature } from '../components/featureState';
 import UpgradeHint from '../components/UpgradeHint';
-import { billingEnabled, pricingHref } from '../services/billing';
+import { billingEnabled, PLAN_CREDITS, pricingHref } from '../services/billing';
 import type { Account } from '../practice/useAccount';
 import { useEstimates } from '../services/useCredits';
+import { partnerText } from '../pricing/planValue';
 import { formatCredits, formatRange } from '../services/credits';
 import ChangeCard from './ChangeCard';
 import type { Diagram } from '../dsl/types';
@@ -585,7 +586,7 @@ function SignIn({ account }: { account: Account }) {
   return (
     <div className="space-y-3">
       <p className="text-sm font-semibold text-ink">Sign in to work with Design partner</p>
-      <p className="text-sm leading-relaxed text-ink/80">It reviews your design, answers questions and proposes changes you accept or reject. New accounts start with 100 free credits.</p>
+      <p className="text-sm leading-relaxed text-ink/80">It reviews your design, answers questions and proposes changes you accept or reject. New accounts start with {PLAN_CREDITS.free} free credits: {partnerText(PLAN_CREDITS.free)}.</p>
       <div className="flex flex-wrap gap-2">
         {providers.map((p) => (
           <button key={p} type="button" onClick={() => account.signIn(p)} className={primaryButton}>

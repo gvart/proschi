@@ -1,5 +1,5 @@
 import { useEffect, useState, type ReactNode } from 'react';
-import { Check, CreditCard, Hammer, LogIn, MessagesSquare, ScanSearch, Sparkles, Zap } from 'lucide-react';
+import { Check, ChevronRight, CreditCard, Hammer, LogIn, MessagesSquare, ScanSearch, Sparkles, Wand2, Zap } from 'lucide-react';
 import Footer from '../design/Footer';
 import Header from '../design/Header';
 import { eyebrow, outlineButton, primaryButton } from '../components/Playground/ui';
@@ -9,6 +9,7 @@ import { useAccount, type Account } from '../practice/useAccount';
 import { billingEnabled, buyPlan, FREE, openPortal, PLAN_CREDITS, PRICES, productPlan, type PlanInfo, type Product } from '../services/billing';
 import { formatCredits, formatRange, type CreditEstimates, type Range } from '../services/credits';
 import { useEstimates } from '../services/useCredits';
+import { formatCount, interviewsText, partnerText, planValue } from './planValue';
 import { usePlan } from './usePlan';
 
 /**
@@ -45,11 +46,6 @@ export default function PricingApp() {
 
 type Period = 'monthly' | 'yearly';
 type Busy = Product | 'portal' | null;
-
-/** How many mock interviews `credits` make, at the middle of the typical range: "17". */
-function interviews(credits: number, { min, max }: Range): string {
-  return `${Math.max(1, Math.round(credits / ((min + max) / 2)))}`;
-}
 
 export function Pricing({ account, plan, estimates }: { account: Account; plan?: PlanInfo; estimates: CreditEstimates }) {
   const [period, setPeriod] = useState<Period>('yearly');
@@ -126,10 +122,11 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
   return (
     <>
       <p className={eyebrow}>Pricing</p>
-      <h1 className="mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Free to design. Credits for the coaching.</h1>
+      <h1 className="mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Walk into your system design interview ready.</h1>
       <p className="mt-3 max-w-2xl text-ink/80">
-        The editor, the simulation and every practice problem stay free and open source. Mock interviews and Design partner run on credits, so you pay
-        for what you use: a short review costs a few, a full interview {formatRange(estimates.mock_interview)}.
+        Practise with mock interviews: an interviewer who asks the follow-ups, coaches you when you&rsquo;re stuck and grades each skill at the end.
+        Each plan covers a number of them a month, and Design partner when you just want to design. The editor, the simulation and every practice
+        problem stay free and open source.
       </p>
 
       <div role="radiogroup" aria-label="Billing period" className="mt-6 inline-flex rounded-sm border-bw-1 border-ink bg-surface p-0.5 shadow-brutal-sm">
@@ -157,14 +154,15 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
         <PlanCard
           id="free"
           name="Free"
-          tagline="Design, simulate, practise."
+          tagline="Try a mock interview."
           price={<Price amount={0} unit="forever" note="No card needed." />}
-          credits={<Credits amount={PLAN_CREDITS.free} when="once, at sign-up" note={`about ${interviews(PLAN_CREDITS.free, estimates.mock_interview)} mock interviews to try it`} />}
+          value={<Value credits={PLAN_CREDITS.free} when="once" creditsWhen="once, at sign-up" estimates={estimates} />}
           items={[
+            'A verdict on each skill after every mock interview',
+            'Coaching hints when you’re stuck',
+            'Voice or text: answer out loud, hear the interviewer',
             'The editor, simulation and every practice problem',
-            'Unlimited diagrams in your browser',
             `${FREE.documents} diagrams in your account, ${FREE.versions} versions each`,
-            'Design partner and mock interviews, on your credits',
           ]}
           footer={current === 'free' ? <p className="text-sm font-semibold text-ink">Your plan</p> : null}
         />
@@ -181,14 +179,14 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
               note={period === 'yearly' ? `${monthly(PRICES.proYearly)}, save ${SAVING.pro}%` : 'Billed monthly'}
             />
           }
-          credits={<Credits amount={PLAN_CREDITS.pro} when="every month" note={`about ${interviews(PLAN_CREDITS.pro, estimates.mock_interview)} mock interviews a month`} />}
-          items={['Everything in Free', 'Unlimited diagrams and versions', 'Interview history and trends per skill', 'Your next steps, picked after each interview', 'Private, revocable share links']}
+          value={<Value credits={PLAN_CREDITS.pro} when="a month" creditsWhen="a month" estimates={estimates} />}
+          items={['Everything in Free', 'Every verdict kept, and how each skill trends', 'Your next steps, picked after each interview', 'Unlimited diagrams and versions', 'Private, revocable share links']}
           footer={planAction('pro')}
         />
         <PlanCard
           id="max"
           name="Max"
-          tagline="The most credits and the strongest model."
+          tagline="For the weeks before the real one."
           ribbon={<Ribbon className="bg-pop-lilac">Most credits</Ribbon>}
           tone="bg-pop-lilac/15 dark:bg-pop-lilac/10"
           price={
@@ -198,36 +196,51 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
               note={period === 'yearly' ? `${monthly(PRICES.maxYearly)}, save ${SAVING.max}%` : 'Billed monthly'}
             />
           }
-          credits={<Credits amount={PLAN_CREDITS.max} when="every month" note={`about ${interviews(PLAN_CREDITS.max, estimates.mock_interview)} mock interviews a month`} />}
-          items={['Everything in Pro', 'Deep mode: the strongest model for verdicts and Design partner, charged at its price', 'Printable interview reports, saved as PDF']}
+          value={<Value credits={PLAN_CREDITS.max} when="a month" creditsWhen="a month" estimates={estimates} />}
+          items={['Everything in Pro', 'Deep verdict: the strongest model grades you, at its price', 'A printable interview report, saved as PDF', 'Deep mode for Design partner too']}
           footer={planAction('max')}
         />
       </div>
 
-      <section aria-labelledby="pricing-costs" className="mt-12">
-        <h2 id="pricing-costs" className="font-display text-xl font-bold text-ink">
-          What credits buy
-        </h2>
-        <p className="mt-1 max-w-2xl text-sm text-ink/80">
-          One credit is one cent of use. Every action shows its estimate before it starts and its real cost afterwards, in Settings.
-        </p>
-        <ul className="mt-4 grid gap-3 sm:grid-cols-3">
-          <Cost icon={<MessagesSquare size={16} aria-hidden="true" />} title="Mock interview" detail="45 minutes, with the verdict" range={estimates.mock_interview} />
-          <Cost icon={<ScanSearch size={16} aria-hidden="true" />} title="Design partner review" detail="Of one diagram, with changes to try" range={estimates.partner_review} />
-          <Cost icon={<Hammer size={16} aria-hidden="true" />} title="Build a system" detail="From a description, tested and simulated" range={estimates.partner_build} />
-        </ul>
-        <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
-          <Zap size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
-          Deep mode (Max) uses the strongest model and costs about {formatCredits(estimates.deepMultiplier)}× as much. It is off unless you switch it on.
-        </p>
+      <p className="mt-8 text-sm text-ink/80">
+        Mock interviews and Design partner share the same credits, so spend them on either. The counts are for 45-minute interviews; shorter ones go
+        further.
+      </p>
+
+      <section aria-labelledby="pricing-credits" className="mt-3">
+        <details className="group rounded-sm border-bw-1 border-ink/30 bg-surface">
+          <summary className="flex cursor-pointer list-none items-center gap-2 px-4 py-3 text-sm font-semibold text-ink hover:bg-ink/5 [&::-webkit-details-marker]:hidden">
+            <ChevronRight size={16} className="shrink-0 transition-transform group-open:rotate-90 motion-reduce:transition-none" aria-hidden="true" />
+            <h2 id="pricing-credits">How credits work</h2>
+          </summary>
+          <div className="border-t-bw-1 border-ink/15 px-4 pb-4 pt-3">
+            <p className="max-w-2xl text-sm text-ink/80">
+              One credit is one cent of use. An action costs what it took to answer, so it varies a little; each one shows its estimate before it starts
+              and its real cost afterwards, in Settings. Typical costs:
+            </p>
+            <ul className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <Cost icon={<MessagesSquare size={14} aria-hidden="true" />} title="Mock interview" detail="45 minutes, with the verdict" range={estimates.mock_interview} />
+              <Cost icon={<ScanSearch size={14} aria-hidden="true" />} title="Design review" detail="Of one diagram, with changes to try" range={estimates.partner_review} />
+              <Cost icon={<Hammer size={14} aria-hidden="true" />} title="Build a system" detail="From a description, tested and simulated" range={estimates.partner_build} />
+              <Cost icon={<Wand2 size={14} aria-hidden="true" />} title="Refine a design" detail="A question, or one more change" range={estimates.partner_turn} />
+            </ul>
+            <p className="mt-3 flex items-start gap-1.5 text-xs text-muted">
+              <Zap size={13} className="mt-0.5 shrink-0" aria-hidden="true" />
+              Deep mode (Max) uses the strongest model and costs about {formatCredits(estimates.deepMultiplier)}× as much. It is off unless you switch it on.
+            </p>
+          </div>
+        </details>
       </section>
 
       <section aria-labelledby="plan-topup" className={`mt-8 ${card} bg-surface sm:flex-row sm:items-center sm:gap-6`}>
         <div className="flex-1">
           <h2 id="plan-topup" className="font-display text-xl font-bold text-ink">
-            Top-up: {formatCredits(PRICES.topupCredits)} credits for €{PRICES.topup}
+            Top-up: {interviewsText(PRICES.topupCredits, estimates)} for €{PRICES.topup}
           </h2>
-          <p className="mt-1 text-sm text-ink/80">On any plan, Free too. Top-up credits never expire, and your monthly credits are spent first.</p>
+          <p className="mt-1 text-sm text-ink/80">
+            {formatCredits(PRICES.topupCredits)} credits, which also cover {partnerText(PRICES.topupCredits, estimates)} with Design partner. On any
+            plan, Free too. Top-up credits never expire, and your monthly credits are spent first.
+          </p>
           {plan && (
             <p className="mt-1 text-sm text-muted" data-testid="pricing-balance">
               You have {formatCredits(plan.credits.balance, { floor: true })} credits.
@@ -248,9 +261,10 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
             {formatCredits(estimates.partner_review.worst ?? estimates.partner_review.max, { floor: true })} credits, a 45-minute mock interview never more than{' '}
             {formatCredits(estimates.mock_interview.worst ?? estimates.mock_interview.max, { floor: true })} credits (30 or 60 minutes in proportion), nor more than the credits you have.
           </Faq>
-          <Faq q="Why credits, and not a number of interviews?">
-            You pay for what you use: a short review costs less than a full interview, and a 30-minute interview less than a 60-minute one. The plan only
-            sets how many credits come each month; everyone with credits can use every feature that runs on them.
+          <Faq q={`Why “about ${formatCount(planValue(PLAN_CREDITS.pro, estimates).interviews)}”, and not a fixed number of interviews?`}>
+            Because you pay for what you use. An interview costs what the interviewer wrote, so a quick one costs less than a long, talkative one, and a
+            30-minute interview less than a 60-minute one. The counts take a 45-minute interview with its verdict at the low and the high end of what it
+            usually costs. The plan only sets how many credits come each month; with credits you can use every feature that runs on them.
           </Faq>
           <Faq q="Do unused credits roll over?">
             Monthly credits reset at the start of each month and don&rsquo;t roll over. The {PLAN_CREDITS.free} sign-up credits and top-ups never expire.
@@ -296,7 +310,7 @@ function PlanCard({
   ribbon,
   tone = 'bg-surface',
   price,
-  credits,
+  value,
   items,
   footer,
 }: {
@@ -306,7 +320,7 @@ function PlanCard({
   ribbon?: ReactNode;
   tone?: string;
   price: ReactNode;
-  credits: ReactNode;
+  value: ReactNode;
   items: string[];
   footer: ReactNode;
 }) {
@@ -318,7 +332,7 @@ function PlanCard({
       </h2>
       <p className="mt-0.5 text-sm text-muted">{tagline}</p>
       {price}
-      {credits}
+      {value}
       <Features items={items} />
       <div className="mt-auto pt-5">{footer}</div>
     </section>
@@ -345,30 +359,44 @@ function Price({ amount, unit, note }: { amount: number; unit: string; note: str
   );
 }
 
-/** The plan's credits: the number, when they come, and what they are about worth. */
-function Credits({ amount, when, note }: { amount: number; when: string; note: string }) {
+/** `text` with each "38–61" kept on one line. */
+const keepRanges = (text: string): ReactNode[] =>
+  text.split(/(\d+–\d+)/).map((part, i) =>
+    i % 2 ? (
+      <span key={i} className="whitespace-nowrap tabular-nums">
+        {part}
+      </span>
+    ) : (
+      part
+    ),
+  );
+
+/** What the plan's credits cover: mock interviews first, Design partner second, and the credits themselves small (planValue.ts). */
+function Value({ credits, when, creditsWhen, estimates }: { credits: number; when: string; creditsWhen: string; estimates: CreditEstimates }) {
+  const headline = interviewsText(credits, estimates);
   return (
-    <div className="mt-3 rounded-sm border-bw-1 border-ink/30 bg-paper/60 px-3 py-2">
-      <p className="flex items-baseline gap-1.5">
-        <span className="font-display text-xl font-bold tabular-nums text-ink">{formatCredits(amount)}</span>
-        <span className="text-sm font-semibold text-ink">credits</span>
-        <span className="text-sm text-muted">{when}</span>
+    <div data-testid="plan-value" className="mt-3 rounded-sm border-bw-1 border-ink/30 bg-paper/60 px-3 py-2.5">
+      <p className="font-display text-lg font-bold leading-snug text-ink">
+        {keepRanges(headline.charAt(0).toUpperCase() + headline.slice(1))} {when}
       </p>
-      <p className="text-xs text-muted">{note}</p>
+      <p className="mt-1 text-sm leading-snug text-ink/80">or {keepRanges(partnerText(credits, estimates))} with Design partner</p>
+      <p className="mt-1.5 text-xs tabular-nums text-muted">
+        {formatCredits(credits)} credits {creditsWhen}
+      </p>
     </div>
   );
 }
 
 function Cost({ icon, title, detail, range }: { icon: ReactNode; title: string; detail: string; range: Range }) {
   return (
-    <li className="rounded-sm border-bw-1 border-ink bg-surface p-4 shadow-brutal-sm">
+    <li className="rounded-sm border-bw-1 border-ink/30 bg-paper/60 px-3 py-2.5">
       <p className="flex items-center gap-2 text-sm font-semibold text-ink">
         {icon}
         {title}
       </p>
-      <p className="mt-2 flex items-baseline gap-1.5 text-ink">
+      <p className="mt-1 flex items-baseline gap-1.5 text-ink">
         <span className="text-sm text-muted">about</span>
-        <span className="font-display text-2xl font-bold tabular-nums">{formatRange(range).replace('about ', '')}</span>
+        <span className="font-display text-lg font-bold tabular-nums">{formatRange(range).replace('about ', '')}</span>
         <span className="text-sm text-muted">credits</span>
       </p>
       <p className="mt-0.5 text-xs text-muted">{detail}</p>

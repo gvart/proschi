@@ -1,5 +1,6 @@
 import { PLAN_CREDITS, PRICES, productPlan, type PlanInfo, type Product } from '../services/billing';
 import { formatCredits } from '../services/credits';
+import { interviewsText } from './planValue';
 
 /**
  * Back from Polar's checkout (backend/src/billing.ts success_url:
@@ -101,9 +102,10 @@ export function nextPollIn(s: ReturnState, now: number): number | null {
 export function returnMessage(s: ReturnState): string {
   if (s.phase === 'done') {
     const credits = formatCredits(s.credits ?? 0);
-    if (s.kind === 'topup') return `${credits} credits added. They never expire.`;
-    if (s.kind === 'max') return `You're on Max: ${credits} credits a month, Deep mode and printable interview reports.`;
-    return `You're on Pro: ${credits} credits a month, starting now.`;
+    const worth = interviewsText(s.credits ?? 0);
+    if (s.kind === 'topup') return `${credits} credits added, enough for ${worth}. They never expire.`;
+    if (s.kind === 'max') return `You're on Max: ${worth} a month (${credits} credits), the Deep verdict and printable interview reports.`;
+    return `You're on Pro: ${worth} a month (${credits} credits), starting now.`;
   }
   if (s.phase === 'slow') {
     return "Polar hasn't confirmed the payment yet. It usually takes a few seconds; this page updates when it does. If it doesn't within a few minutes, contact support.";
