@@ -91,6 +91,17 @@ async function startedInterview(who: Who): Promise<string> {
   return ((await res.json()) as { interview: { id: string } }).interview.id;
 }
 
+/**
+ * One interview turn, its stream read to the end: the Worker writes the reply while it is read
+ * (src/interviews.ts, in waitUntil), so a body left unread would never finish and workerd would
+ * cancel it as hung.
+ */
+async function turn(who: Who): Promise<void> {
+  const res = await send(who, 'POST', `/api/interviews/${await startedInterview(who)}/turn`, { message: 'How many links?' });
+  expect(res.status).toBe(200);
+  expect(await res.text()).toContain('event: done');
+}
+
 async function partnerSession(who: Who): Promise<string> {
   const res = await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } });
   expect(res.status).toBe(201);
@@ -172,8 +183,8 @@ const CASES: Record<string, Case> = {
     },
   },
   'POST api/interviews/*/turn': {
-    free: async (who) => expect((await send(who, 'POST', `/api/interviews/${await startedInterview(who)}/turn`, { message: 'How many links?' })).status).toBe(200),
-    pro: async (who) => expect((await send(who, 'POST', `/api/interviews/${await startedInterview(who)}/turn`, { message: 'How many links?' })).status).toBe(200),
+    free: async (who) => turn(who),
+    pro: async (who) => turn(who),
   },
   'POST api/interviews/*/finish': {
     free: async (who) => {
