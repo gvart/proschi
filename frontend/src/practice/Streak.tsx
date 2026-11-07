@@ -48,9 +48,9 @@ function GoalRing({ progress, done, children }: { progress: number; done: boolea
 
 /**
  * The streak at a glance: a flame and its length, a ring toward today's
- * goal and the freezes held. `compact` drops the goal line, for tight rows.
+ * goal and the freezes held.
  */
-export function StreakWidget({ streak, goal, compact = false }: { streak: Streak; goal: DailyGoal; compact?: boolean }) {
+export function StreakWidget({ streak, goal }: { streak: Streak; goal: DailyGoal }) {
   const lit = streak.current > 0 || streak.todayDone;
   return (
     <div role="group" aria-label="Daily streak" className="inline-flex max-w-full items-center gap-3 rounded-brutal border-bw-2 border-ink bg-surface px-3 py-2 shadow-brutal-sm">
@@ -61,9 +61,7 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
         <p className="font-display text-lg font-extrabold leading-tight text-ink" data-streak={streak.current}>
           {streakLabel(streak.current)}
         </p>
-        {!compact && <p className="text-xs text-ink/75">{goalLabel(streak, goal)}</p>}
-        {/* The ring is drawn for the eye; this says the same for screen readers. */}
-        {compact && <span className="sr-only">{goalLabel(streak, goal)}</span>}
+        <p className="text-xs text-ink/75">{goalLabel(streak, goal)}</p>
       </div>
       {streak.freezes > 0 && (
         <span
@@ -74,6 +72,26 @@ export function StreakWidget({ streak, goal, compact = false }: { streak: Streak
           {plural(streak.freezes, 'freeze')}
         </span>
       )}
+    </div>
+  );
+}
+
+/** The streak as a slim chip for a row of links (the practice home, the hub's other sections): a flame, its length and the freezes held. */
+export function StreakChip({ streak, goal }: { streak: Streak; goal: DailyGoal }) {
+  const lit = streak.current > 0 || streak.todayDone;
+  return (
+    <div role="group" aria-label="Daily streak" className="inline-flex min-h-[32px] items-center gap-1.5 rounded-full border-bw-1 border-ink bg-surface px-2.5 py-0.5 text-sm font-bold text-ink">
+      <Flame size={14} aria-hidden="true" className={lit ? 'fill-pop-yellow text-ink' : 'text-muted'} />
+      <span data-streak={streak.current}>{streakLabel(streak.current)}</span>
+      {streak.todayDone && <span className="font-normal text-ink/75">· today done</span>}
+      {streak.freezes > 0 && (
+        <span className="inline-flex items-center gap-0.5 font-normal text-ink/75" title="A streak freeze covers a missed day. You earn one for every 7 days in a row, and hold up to 2.">
+          · <Snowflake size={12} aria-hidden="true" />
+          {streak.freezes}
+          <span className="sr-only"> {streak.freezes === 1 ? 'freeze' : 'freezes'}</span>
+        </span>
+      )}
+      <span className="sr-only">{goalLabel(streak, goal)}</span>
     </div>
   );
 }

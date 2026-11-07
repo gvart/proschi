@@ -17,7 +17,7 @@ import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
 import { summarize, useActivity } from './activity';
-import { StreakWidget } from './Streak';
+import { StreakChip } from './Streak';
 import AccountMenu from './AccountMenu';
 import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
@@ -196,7 +196,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const showStreak = wantsStreak(goal);
   const providers = account.state.status === 'signed-out' ? account.state.providers : [];
   const streak = !showStreak ? undefined : ready ? (
-    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} compact />
+    <StreakChip streak={summarize(ready).streak} goal={ready.goal} />
   ) : activity.state.status === 'sign-in' && providers.length > 0 ? (
     <p className="text-sm text-muted">
       <button type="button" onClick={() => account.signIn(providers[0])} className="font-semibold text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-ink">

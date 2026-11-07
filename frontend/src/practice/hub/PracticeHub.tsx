@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { ChevronDown, Gamepad2, Layers, Map as MapIcon, MessagesSquare, Radar, Zap, type LucideIcon } from 'lucide-react';
 import { HUB_GROUPS, mockInterviewHref, tabLink, type HubGroup, type HubTab } from './tabs';
 
@@ -135,19 +135,23 @@ function SectionMenu({ group, tab, onIntent }: { group: HubGroup; tab: HubTab; o
   );
 }
 
+/** A section in a menu: named by its label, described by its line. */
 function MenuLink({ href, icon: Icon, label, about, current = false, onPick, onIntent }: { href: string; icon: LucideIcon; label: string; about?: string; current?: boolean; onPick: () => void; onIntent?: () => void }) {
+  const aboutId = useId();
   return (
     <a
       href={href}
       onClick={onPick}
       onFocus={onIntent}
+      aria-label={label}
+      aria-describedby={about ? aboutId : undefined}
       aria-current={current ? 'page' : undefined}
       className={`flex items-start gap-2.5 rounded-sm px-2.5 py-2 hover:bg-pop-yellow/30 focus-visible:outline-hidden focus-visible:bg-pop-yellow/30 ${current ? 'bg-ink/5' : ''}`}
     >
       <Icon size={16} aria-hidden="true" className="mt-0.5 shrink-0 text-ink/70" />
       <span className="min-w-0">
         <span className="block text-sm font-bold text-ink">{label}</span>
-        {about && <span className="block text-xs text-muted">{about}</span>}
+        {about && <span id={aboutId} className="block text-xs text-muted">{about}</span>}
       </span>
     </a>
   );

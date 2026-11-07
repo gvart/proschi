@@ -99,7 +99,6 @@ test.describe('progress page', () => {
     await expect(toast(page)).toContainText('First lesson');
     await toast(page).getByRole('button', { name: 'Dismiss' }).click();
     await expect(toast(page)).toHaveCount(0);
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
     await prepTab(page, 'Progress').click();
     await expect(badge(page, 'first-solve')).toHaveAttribute('data-earned', 'true');
     await expect(badge(page, 'first-run-1')).toHaveAttribute('data-earned', 'true');

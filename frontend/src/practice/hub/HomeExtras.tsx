@@ -150,9 +150,9 @@ function ContinueLine({ next, title, interview }: { next?: ContinueTarget; title
       )}
       {interview && (
         <p className={`flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-ink/80 ${next ? 'mt-2 border-t-bw-1 border-dashed border-ink/25 pt-2' : ''}`}>
-          <span className={eyebrow}>Interview prep</span>
+          <span className={`max-sm:hidden ${eyebrow}`}>Interview prep</span>
           <a href="#/roadmap" className={textLink}>
-            The roadmap
+            See the roadmap
           </a>
           <a href={mockInterviewHref()} className={textLink}>
             Start a mock interview

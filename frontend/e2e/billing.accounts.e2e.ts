@@ -283,7 +283,7 @@ test('checkout return: a top-up shows the credits added; no parameters, no banne
   await expect(welcome).toContainText('1,000 credits added. They never expire.');
   await expect(page.getByTestId('credits')).toContainText('Top-ups1,000never expire');
   await expect(page.getByTestId('plan-badge')).toHaveCount(0);
-  await page.getByRole('button', { name: 'Account' }).click();
+  await page.getByRole('button', { name: 'Account', exact: true }).click();
   await expect(page.getByTestId('account-credits')).toContainText('1,100 credits');
   await page.keyboard.press('Escape');
   await expect(page).not.toHaveURL(/checkout|product/);
