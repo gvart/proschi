@@ -68,7 +68,11 @@
     { "name": "INTERVIEW_START_LIMITER", "namespace_id": "1016", "simple": { "limit": 5, "period": 60 } },
     { "name": "INTERVIEW_TURN_LIMITER", "namespace_id": "1017", "simple": { "limit": 20, "period": 60 } },
     { "name": "INTERVIEW_FINISH_LIMITER", "namespace_id": "1018", "simple": { "limit": 5, "period": 60 } },
-    { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "1019", "simple": { "limit": 60, "period": 60 } }
+    { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "1019", "simple": { "limit": 60, "period": 60 } },
+    // Polar's webhook, per IP, before the signature is checked (src/billing.ts): generous, Polar sends from few addresses and
+    // retries; and at most one logged bad signature per IP a minute, so the log isn't a free write for anyone.
+    { "name": "WEBHOOK_LIMITER", "namespace_id": "1020", "simple": { "limit": 300, "period": 60 } },
+    { "name": "WEBHOOK_LOG_LIMITER", "namespace_id": "1021", "simple": { "limit": 1, "period": 60 } }
   ],
   // The deployed version's id and time, for the admin panel's health page (src/admin.ts).
   "version_metadata": { "binding": "CF_VERSION_METADATA" },
@@ -119,7 +123,9 @@
         { "name": "INTERVIEW_START_LIMITER", "namespace_id": "2016", "simple": { "limit": 5, "period": 60 } },
         { "name": "INTERVIEW_TURN_LIMITER", "namespace_id": "2017", "simple": { "limit": 20, "period": 60 } },
         { "name": "INTERVIEW_FINISH_LIMITER", "namespace_id": "2018", "simple": { "limit": 5, "period": 60 } },
-        { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "2019", "simple": { "limit": 60, "period": 60 } }
+        { "name": "INTERVIEW_READ_LIMITER", "namespace_id": "2019", "simple": { "limit": 60, "period": 60 } },
+        { "name": "WEBHOOK_LIMITER", "namespace_id": "2020", "simple": { "limit": 300, "period": 60 } },
+        { "name": "WEBHOOK_LOG_LIMITER", "namespace_id": "2021", "simple": { "limit": 1, "period": 60 } }
       ],
       "version_metadata": { "binding": "CF_VERSION_METADATA" }
     }

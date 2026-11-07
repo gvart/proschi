@@ -7,7 +7,7 @@ import { hourlyCron } from '../src/cron';
 import type { Env } from '../src/env';
 import worker from '../src/index';
 import { effectivePlan } from '../src/plans';
-import { call, dailyRun, ORIGIN, resetDatabase, signedInUser } from './helpers';
+import { call, dailyRun, ORIGIN, resetDatabase, signedInUser, WINDOW_TIMEOUT, withinOneWindow } from './helpers';
 import { createPasskey } from './webauthn';
 
 /**
@@ -40,12 +40,13 @@ async function audit(action: string): Promise<{ target: string; detail: Record<s
 }
 
 let events = 0;
-async function deliver(event: unknown, { id = `evt-admin-${++events}`, sig }: { id?: string; sig?: string } = {}): Promise<Response> {
+/** Polar's delivery of `event`, signed unless `sig` says otherwise, from a new IP unless `ip` is given. */
+async function deliver(event: unknown, { id = `evt-admin-${++events}`, sig, ip }: { id?: string; sig?: string; ip?: string } = {}): Promise<Response> {
   const ts = String(Math.floor(Date.now() / 1000));
   const body = JSON.stringify(event);
   const key = await crypto.subtle.importKey('raw', new TextEncoder().encode(SECRET), { name: 'HMAC', hash: 'SHA-256' }, false, ['sign']);
   const mac = new Uint8Array(await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(`${id}.${ts}.${body}`)));
-  return call('/api/billing/webhook', { method: 'POST', headers: { 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': sig ?? `v1,${btoa(String.fromCharCode(...mac))}` }, body: event });
+  return call('/api/billing/webhook', { method: 'POST', headers: { 'webhook-id': id, 'webhook-timestamp': ts, 'webhook-signature': sig ?? `v1,${btoa(String.fromCharCode(...mac))}`, ...(ip ? { 'CF-Connecting-IP': ip } : {}) }, body: event });
 }
 
 const subscription = (userId: string, status: string, modified: string, product = 'prod-pro-monthly') => ({
@@ -294,6 +295,56 @@ describe('admin: the paid product', () => {
 
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
     expect(await env.DB.prepare('SELECT COUNT(*) AS n, COUNT(user_id) AS users FROM billing_webhooks').first()).toEqual({ n: 4, users: 0 });
+  });
+
+  it(
+    'rate-limits the webhook per IP before the signature is checked, and logs at most one bad signature per IP a minute',
+    async () => {
+      await withinOneWindow(15_000);
+      const ip = `test-flood-${crypto.randomUUID()}`;
+      const forged = { type: 'subscription.updated', data: {} };
+      for (let i = 0; i < 3; i++) expect((await deliver(forged, { sig: 'v1,AAAA', ip })).status).toBe(403);
+      expect((await deliver(forged, { sig: 'v1,AAAA', ip: `${ip}-other` })).status).toBe(403);
+      const rows = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM billing_webhooks WHERE outcome = 'bad_signature'").first<{ n: number }>())!.n;
+      expect(await rows()).toBe(2);
+      // 300 a minute per IP (wrangler.jsonc WEBHOOK_LIMITER): 297 more fill this one's window, then 429 before any read or write.
+      for (let i = 0; i < 297; i++) expect((await deliver(forged, { sig: 'v1,AAAA', ip })).status).toBe(403);
+      const limited = await deliver(forged, { sig: 'v1,AAAA', ip });
+      expect(limited.status).toBe(429);
+      expect(await rows()).toBe(2);
+      expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM billing_webhooks').first<{ n: number }>())!.n).toBe(2);
+      // Polar's own deliveries from other addresses are unaffected.
+      const user = await signedInUser();
+      expect((await deliver(subscription(user.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
+    },
+    WINDOW_TIMEOUT,
+  );
+
+  it('lets an account that is Pro only by a comp subscribe; an active subscription still answers already_pro', async () => {
+    const admin = await setUp();
+    const user = await signedInUser();
+    const real = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://sandbox-api.polar.sh/')) return real(input, init);
+      return Response.json({ url: 'https://sandbox.polar.sh/checkout/abc' }, { status: 201 });
+    });
+    await adminCall(`/api/admin/users/${user.id}/comp`, admin, { method: 'POST', body: { until: nowS() + 86_400, reason: 'Speaker' } });
+    expect(((await (await call('/api/me/plan', { token: user.token })).json()) as { plan: string }).plan).toBe('pro');
+    const checkout = await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_yearly' } });
+    expect(checkout.status).toBe(200);
+    expect(await checkout.json()).toEqual({ url: 'https://sandbox.polar.sh/checkout/abc' });
+
+    expect((await deliver(subscription(user.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
+    const again = await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_monthly' } });
+    expect(again.status).toBe(409);
+    expect(await again.json()).toMatchObject({ error: 'already_pro' });
+    // past_due keeps Pro, so it is a subscription too.
+    expect((await deliver(subscription(user.id, 'past_due', '2026-11-06T11:00:00Z'))).status).toBe(200);
+    expect((await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_monthly' } })).status).toBe(409);
+    // Once it is canceled, the comp alone keeps Pro, and subscribing is open again.
+    expect((await deliver(subscription(user.id, 'canceled', '2026-11-06T12:00:00Z'))).status).toBe(200);
+    expect((await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_monthly' } })).status).toBe(200);
   });
 
   it('reports whether each paid secret is set, never its value', async () => {

@@ -92,9 +92,12 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
   const body = await readJson(request, 1024);
   const product = body.product;
   if (typeof product !== 'string' || !PRODUCTS.includes(product as Product)) throw new HttpError(400, `product must be one of ${PRODUCTS.join(', ')}`);
-  if (product !== 'pack_5' && planName(user.plan) === 'pro') return json({ error: 'already_pro', message: 'You are on Pro already; change or cancel it in the billing portal' }, 409, NO_STORE);
-  const origin = new URL(request.url).origin;
   const row = await billingRow(env.DB, user.id);
+  // A second subscription is refused; Pro from the admin's comp alone (src/plans.ts effectivePlan) can still subscribe.
+  if (product !== 'pack_5' && PRO_STATUSES.includes(row?.status ?? '')) {
+    return json({ error: 'already_pro', message: 'You are on Pro already; change or cancel it in the billing portal' }, 409, NO_STORE);
+  }
+  const origin = new URL(request.url).origin;
   const checkout = await polar<{ url: string }>(env, '/v1/checkouts/', {
     products: [productIds(env)[product as Product]],
     ...(row?.polar_customer_id ? { customer_id: row.polar_customer_id } : { external_customer_id: user.id }),
@@ -250,19 +253,24 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  *   what is left of them (the balance never goes below 0), once per order.
  *   A refund that arrives before the order's `order.paid` keeps it from granting.
  *
- * Everything else is acknowledged and ignored. Every delivery, a bad
- * signature too, gets a row in `billing_webhooks` (the admin's webhook log,
- * migration 0023): when, its id and type, the outcome and the account, never
- * the payload.
+ * Everything else is acknowledged and ignored. Every delivery gets a row in
+ * `billing_webhooks` (the admin's webhook log, migration 0023): when, its id
+ * and type, the outcome and the account, never the payload. Requests are
+ * rate-limited per IP before the signature is checked (WEBHOOK_LIMITER, 429
+ * unlogged), and a bad signature is logged at most once per IP a minute
+ * (WEBHOOK_LOG_LIMITER).
  */
 export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
   const env = configured(ctx.env);
+  // Before anything is read or written: a flood answers 429 and isn't logged (Polar retries a 429).
+  await rateLimit(env.WEBHOOK_LIMITER, ctx.ip, 'Too many requests; wait a minute');
   // Every delivery is logged (billing_webhooks), however it ends: an error unless the handler says otherwise.
   const delivery: Delivery = { webhookId: request.headers.get('webhook-id')?.slice(0, 100) || null, type: null, outcome: 'error', userId: null };
   try {
     return await applyWebhook(request, env, delivery);
   } finally {
-    await logDelivery(env.DB, delivery);
+    // A bad signature is anyone's request: at most one is logged per IP a minute.
+    if (delivery.outcome !== 'bad_signature' || (await env.WEBHOOK_LOG_LIMITER.limit({ key: ctx.ip })).success) await logDelivery(env.DB, delivery);
   }
 }
 
