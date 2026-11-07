@@ -1,0 +1,22 @@
+backend/README.md
+  s_e17b87e0a1b3ca::t_2beb4778a188a5 338-339
+  s_e17b87e0a1b3ca::t_263d3a2e7479a7 1156-1157,1193-1194
+  s_e17b87e0a1b3ca::t_38beda8f7783b2 1210-1223
+  s_e17b87e0a1b3ca::t_dedec38f688a9b 1195-1197
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "76cd2f63943f1a93062c4de477b4610318375088",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
