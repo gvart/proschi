@@ -272,12 +272,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
-        {signedIn && <Announcement />}
         {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
         {hubTab ? (
           <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' ? undefined : streak}>
+            {signedIn && <Announcement />}
             {hubTab === 'problems' ? (
               <ProblemList
                 problems={problems}
