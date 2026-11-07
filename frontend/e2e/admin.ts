@@ -1,0 +1,248 @@
+import type { Page } from '@playwright/test';
+
+/**
+ * The admin API (backend/src/admin.ts) mocked with seeded data, for
+ * admin.accounts.e2e.ts: a handful of accounts, one comped, subscribers, pack
+ * orders and a refund, 30 days of AI interviews and reviews, Polar's webhook
+ * deliveries and live share links. Times are Unix seconds, as the admin API
+ * answers them.
+ */
+
+export const USER = '22222222-2222-4222-8222-222222222222';
+export const PRO_USER = '33333333-3333-4333-8333-333333333333';
+
+const DAY = 86_400;
+const now = Math.floor(Date.now() / 1000);
+const today = new Date().toISOString().slice(0, 10);
+export const days = Array.from({ length: 30 }, (_, i) => new Date(Date.now() - (29 - i) * 86_400_000).toISOString().slice(0, 10));
+
+/** A smooth, repeatable wave: the seeded numbers per day. */
+const wave = (i: number, base: number, amp: number, phase = 0) => Math.max(0, Math.round(base + amp * Math.sin(i / 3 + phase) + (i % 5) - 2));
+
+export const OVERVIEW = {
+  users: { total: 3, blocked: 0, public: 1, emailReminders: 1, new: { day: 1, week: 2, month: 3 }, active: { day: 1, week: 2, month: 2 } },
+  signups: days.map((day) => ({ day, count: day === today ? 1 : 0 })),
+  content: { shares: 1, documents: 0, attempts: 1, solves: 1, cardReviews: 0, challenges: 0, gameRuns: 0 },
+  usage: { events: ['editor_open', 'practice_open'], days: days.map((day) => ({ day, counts: day === today ? { editor_open: 41 } : {} })) },
+  events: [{ kind: 'server_error', level: 'error', n: 2 }],
+  aiSpend: days.map((day, i) => ({ day, costUsd: wave(i, 9, 4) * 0.37 })),
+};
+
+export const USERS = {
+  total: 2,
+  offset: 0,
+  pageSize: 50,
+  users: [
+    { id: USER, displayName: 'spammer9000', publicProfile: false, createdAt: 1_800_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['google'], solved: 0, hasEmail: false },
+    { id: PRO_USER, displayName: 'Ada Lovelace', publicProfile: true, createdAt: 1_790_000_000, lastSeenDay: today, blockedAt: null, blockedReason: null, providers: ['github'], solved: 12, hasEmail: true },
+  ],
+};
+
+const LEDGER = [
+  { id: 9, kind: 'admin_grant', bucket: 'pack', period: null, delta: 2, item: 'admin', refId: 'admin:7c1e2a40-0b8f-4c3e-9a51-1d2e3f4a5b6c', createdAt: now - 2 * DAY },
+  { id: 8, kind: 'spend', bucket: 'pack', period: null, delta: -1, item: 'interview', refId: '5b0a…-session', createdAt: now - 3 * DAY },
+  { id: 7, kind: 'refund', bucket: 'monthly', period: today.slice(0, 7), delta: 1, item: 'interview', refId: 'a91f…-session', createdAt: now - 4 * DAY },
+  { id: 6, kind: 'spend', bucket: 'monthly', period: today.slice(0, 7), delta: -1, item: 'interview', refId: 'a91f…-session', createdAt: now - 4 * DAY },
+  { id: 5, kind: 'spend', bucket: 'monthly', period: today.slice(0, 7), delta: -1, item: 'interview', refId: '3c2d…-session', createdAt: now - 6 * DAY },
+  { id: 4, kind: 'grant', bucket: 'pack', period: null, delta: 5, item: 'pack_5', refId: 'ord_01JAZ4X9Q2', createdAt: now - 9 * DAY },
+  { id: 3, kind: 'spend', bucket: 'trial', period: null, delta: -1, item: 'interview', refId: '0e7f…-session', createdAt: now - 20 * DAY },
+];
+
+export function userDetail(id: string, state: { blocked?: boolean; compUntil?: number | null } = {}) {
+  const pro = id === PRO_USER;
+  const compUntil = state.compUntil ?? null;
+  return {
+    user: {
+      id,
+      displayName: pro ? 'Ada Lovelace' : 'spammer9000',
+      publicProfile: pro,
+      dailyGoal: 10,
+      createdAt: 1_800_000_000,
+      lastSeenDay: today,
+      blockedAt: state.blocked ? 1_800_000_100 : null,
+      blockedReason: state.blocked ? 'spam' : null,
+      plan: pro ? 'pro' : 'free',
+      compUntil,
+      effectivePlan: pro || (compUntil && compUntil > now) ? 'pro' : 'free',
+    },
+    billing: pro
+      ? { polarCustomerId: 'cus_01JAZ2K7M3', polarSubscriptionId: 'sub_01JAZ2K9P0', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false, pastDue: false, updatedAt: now - 12 * DAY }
+      : null,
+    credits: pro ? { total: 9, monthly: 3, trial: 0, pack: 6, period: today.slice(0, 7) } : { total: 1, monthly: 0, trial: 1, pack: 0, period: today.slice(0, 7) },
+    polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
+    identities: [{ provider: pro ? 'github' : 'google', subject: pro ? 'gh-1815' : 'g-77' }],
+    sessions: state.blocked ? [] : [{ kind: 'web', count: 1, lastCreatedAt: 1_800_000_000 }],
+    progress: [],
+    cards: { reviews: 0, cards: 0, lastReviewAt: null },
+    achievements: 0,
+    lessonsRead: 0,
+    challenges: { submitted: 0, best: null, lastDay: null },
+    game: { runs: 0, submitted: 0, best: null, lastStartedAt: null },
+    shares: pro ? [] : [{ id: 'AbCdEf1234', title: 'Buy cheap stuff', createdAt: 1_800_000_000, hasImage: false }],
+    documents: { count: pro ? 4 : 0, bytes: pro ? 18_400 : 0, lastUpdatedAt: null },
+    email: null,
+    audit: state.blocked ? [{ id: 1, at: 1_800_000_100, action: 'user.block', detail: { reason: 'spam' } }] : [],
+  };
+}
+
+export const ledger = (id: string) => ({ total: id === PRO_USER ? LEDGER.length : 0, offset: 0, pageSize: 50, entries: id === PRO_USER ? LEDGER : [] });
+
+const owner = (id: string, displayName: string) => ({ id, displayName });
+
+export const BILLING = {
+  counts: { pro: 4, monthly: 2, yearly: 1, pastDue: 1, canceling: 1, comped: 1, packOrdersThisMonth: 3, packOrders: 7, refundedThisMonth: 1, refunded: 2 },
+  total: 4,
+  offset: 0,
+  pageSize: 50,
+  pro: [
+    { id: PRO_USER, displayName: 'Ada Lovelace', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JAZ2K7M3', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false },
+    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB0Q4T1R', status: 'past_due', product: 'pro_yearly', currentPeriodEnd: now + 2 * DAY, cancelAtPeriodEnd: false },
+    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB1C8W5D', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 9 * DAY, cancelAtPeriodEnd: true },
+    { id: '66666666-6666-4666-8666-666666666666', displayName: 'Linus Speaker', source: 'comp', compUntil: now + 45 * DAY, polarCustomerId: null, status: null, product: null, currentPeriodEnd: null, cancelAtPeriodEnd: false },
+  ],
+  orders: [
+    { orderId: 'ord_01JC7N2V8F', credits: 5, createdAt: now - 1 * DAY, refunded: false, user: owner(PRO_USER, 'Ada Lovelace') },
+    { orderId: 'ord_01JC5H6Y3A', credits: 5, createdAt: now - 3 * DAY, refunded: true, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { orderId: 'ord_01JBZ0T4K9', credits: 5, createdAt: now - 6 * DAY, refunded: false, user: owner('55555555-5555-4555-8555-555555555555', 'Katherine Johnson') },
+  ],
+  adjustments: [
+    { kind: 'admin_grant', refId: 'admin:7c1e2a40', delta: 2, createdAt: now - 2 * DAY, user: owner(PRO_USER, 'Ada Lovelace') },
+    { kind: 'revoke', refId: 'ord_01JC5H6Y3A', delta: -5, createdAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+  ],
+  refundedOrders: [{ orderId: 'ord_01JC5H6Y3A', refundedAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') }],
+  polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
+  billing: true,
+};
+
+const aiDays = days.map((day, i) => {
+  const started = wave(i, 6, 3);
+  const failed = i % 6 === 2 ? 1 : 0;
+  const finished = Math.max(0, started - failed - (i % 4 === 0 ? 1 : 0));
+  const tokens = started * 210_000 + (i % 3) * 40_000;
+  return { day, started, finished, failed, refunded: i % 12 === 2 ? 0 : failed, reviews: wave(i, 11, 5, 1), tokens, costUsd: (tokens / 1_000_000) * 1.9 };
+});
+
+export const AI = {
+  days: aiDays,
+  totals: {
+    sessions: aiDays.reduce((s, d) => s + d.started, 0),
+    finished: aiDays.reduce((s, d) => s + d.finished, 0),
+    tokens: aiDays.reduce((s, d) => s + d.tokens, 0),
+    costUsd: aiDays.reduce((s, d) => s + d.costUsd, 0),
+    avgCostPerFinished: 0.42,
+    capped: 4,
+    cappedShare: 4 / aiDays.reduce((s, d) => s + d.started, 0),
+    reviews: aiDays.reduce((s, d) => s + d.reviews, 0),
+  },
+  tokenCap: 600_000,
+  cappedAt: 540_000,
+  topUsers: [
+    { id: PRO_USER, displayName: 'Ada Lovelace', sessions: 14, tokens: 3_900_000, costUsd: 7.41 },
+    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', sessions: 9, tokens: 2_350_000, costUsd: 4.47 },
+    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', sessions: 6, tokens: 1_480_000, costUsd: 2.81 },
+  ],
+};
+
+export const WEBHOOKS = {
+  deliveries: [
+    { id: 12, at: now - 600, webhookId: 'msg_2pQ9vL1kX7', type: 'order.paid', outcome: 'applied', user: owner(PRO_USER, 'Ada Lovelace') },
+    { id: 11, at: now - 3_600, webhookId: 'msg_2pQ8tR4mZ2', type: 'subscription.updated', outcome: 'stale', user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { id: 10, at: now - 7_200, webhookId: null, type: null, outcome: 'bad_signature', user: null },
+    { id: 9, at: now - 2 * DAY, webhookId: 'msg_2pP1aB6cD3', type: 'order.refunded', outcome: 'applied', user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { id: 8, at: now - 2 * DAY - 30, webhookId: 'msg_2pP1aB6cD3', type: 'order.refunded', outcome: 'duplicate', user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { id: 7, at: now - 3 * DAY, webhookId: 'msg_2pN7eF2gH8', type: 'checkout.updated', outcome: 'ignored', user: null },
+    { id: 6, at: now - 12 * DAY, webhookId: 'msg_2pK3iJ9kL4', type: 'subscription.active', outcome: 'applied', user: owner(PRO_USER, 'Ada Lovelace') },
+  ],
+  counts: [
+    { outcome: 'applied', n: 2 },
+    { outcome: 'bad_signature', n: 1 },
+    { outcome: 'duplicate', n: 1 },
+    { outcome: 'ignored', n: 1 },
+    { outcome: 'stale', n: 1 },
+  ],
+  next: null,
+};
+
+export const LIVE_SHARES = {
+  total: 1,
+  offset: 0,
+  pageSize: 50,
+  links: [
+    {
+      token: 'AbCdEfGhIjKlMnOpQrStUv',
+      url: 'https://proschi.app/share/AbCdEfGhIjKlMnOpQrStUv',
+      document: { id: 'doc1', name: 'checkout.proschi' },
+      createdAt: now - 5 * DAY,
+      revokedAt: null,
+      owner: { id: PRO_USER, displayName: 'Ada Lovelace', blocked: false },
+    },
+  ],
+};
+
+export const HEALTH = {
+  checkedAt: now,
+  worker: { environment: 'production', simVersion: 1, versionId: '96faa81e-c531-46fa-913f-71b1cfdc7e37', deployedAt: new Date((now - 3 * 3600) * 1000).toISOString() },
+  database: { ok: true, latencyMs: 2, sizeBytes: 2_400_000, migration: '0023_admin_paid.sql', tables: { users: 3, billing: 3, billing_webhooks: 7, credits: 21, ai_interviews: 140 } },
+  cron: {
+    jobs: ['reminders', 'sessions', 'billing_webhooks'],
+    runs: [
+      { job: 'billing_webhooks', level: 'info', at: now - 5 * 3600, detail: { deleted: 0, ms: 3 } },
+      { job: 'reminders', level: 'info', at: now - 1800, detail: { sent: 2, ms: 40 } },
+      { job: 'sessions', level: 'info', at: now - 5 * 3600, detail: { deleted: 4, admin: 0, ms: 5 } },
+    ],
+  },
+  errors: {},
+  lastError: null,
+  email: { total: 1, confirmed: 1, paused: 0, bound: true, sentLast7Days: 3 },
+  config: {
+    sessionSecret: true,
+    providers: ['github', 'google'],
+    appRedirects: true,
+    metricsToken: true,
+    setupToken: false,
+    anthropicKey: true,
+    aiGateway: false,
+    polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productPack5: false },
+    polarServer: 'sandbox',
+    billing: false,
+  },
+};
+
+const EMPTY_LIST = { total: 0, offset: 0, pageSize: 50, shares: [] };
+
+/** Mocks /api/admin/*; returns every change the page sent, with its body. */
+export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAvailable: boolean; signedIn: boolean }) {
+  const state: { blocked: boolean; compUntil: number | null } = { blocked: false, compUntil: null };
+  const posts: { method: string; path: string; body: unknown }[] = [];
+  await page.route(
+    (url) => url.pathname.startsWith('/api/admin/'),
+    (route) => {
+      const request = route.request();
+      const path = new URL(request.url()).pathname;
+      if (request.method() !== 'GET') {
+        const body = request.postDataJSON() as Record<string, unknown> | null;
+        posts.push({ method: request.method(), path, body });
+        if (path.endsWith('/block')) state.blocked = true;
+        if (path.endsWith('/comp')) state.compUntil = body?.until as number;
+        if (path.endsWith('/comp/end')) state.compUntil = null;
+        if (path.endsWith('/credits')) return route.fulfill({ json: { delta: body?.kind === 'revoke' ? -Number(body.credits) : Number(body?.credits), credits: {} } });
+        return route.fulfill({ status: 204 });
+      }
+      if (path === '/api/admin/status') return route.fulfill({ json: status });
+      if (path === '/api/admin/overview') return route.fulfill({ json: OVERVIEW });
+      if (path === '/api/admin/health') return route.fulfill({ json: HEALTH });
+      if (path === '/api/admin/users') return route.fulfill({ json: USERS });
+      if (path === '/api/admin/billing') return route.fulfill({ json: BILLING });
+      if (path === '/api/admin/ai') return route.fulfill({ json: AI });
+      if (path === '/api/admin/webhooks') return route.fulfill({ json: WEBHOOKS });
+      if (path === '/api/admin/shares') return route.fulfill({ json: EMPTY_LIST });
+      if (path === '/api/admin/document-shares') return route.fulfill({ json: LIVE_SHARES });
+      const credits = /^\/api\/admin\/users\/([^/]+)\/credits$/.exec(path);
+      if (credits) return route.fulfill({ json: ledger(credits[1]) });
+      const user = /^\/api\/admin\/users\/([^/]+)$/.exec(path);
+      if (user) return route.fulfill({ json: userDetail(user[1], state) });
+      return route.fulfill({ status: 404, json: { error: `not mocked: ${path}` } });
+    },
+  );
+  return posts;
+}

@@ -403,6 +403,7 @@
   top: 0;
   display: flex;
   align-items: flex-end;
+  justify-content: center;
   padding: 0;
   background: none;
   border: 0;
@@ -416,6 +417,7 @@
 
 .adm-chart__bar {
   flex: 1;
+  max-width: 24px;
   background: rgb(var(--c-blue));
   border-radius: 4px 4px 0 0;
 }
@@ -440,4 +442,226 @@
 .adm-chart__table table {
   margin-top: 6px;
   max-width: 320px;
+}
+
+/* Line charts (LineChart.tsx): up to four series, the reference categorical
+   slots 1–4 (blue, orange, aqua, yellow), validated adjacent-pair CVD-safe
+   on the light surface and, stepped for it, on the dark one. Aqua and yellow
+   sit below 3:1 on white, so every line is named at its end and the numbers
+   are in the table. */
+.adm {
+  --adm-series-1: #2a78d6;
+  --adm-series-2: #eb6834;
+  --adm-series-3: #1baf7a;
+  --adm-series-4: #eda100;
+}
+:root[data-theme='dark'] .adm {
+  --adm-series-1: #3987e5;
+  --adm-series-2: #d95926;
+  --adm-series-3: #199e70;
+  --adm-series-4: #c98500;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .adm {
+    --adm-series-1: #3987e5;
+    --adm-series-2: #d95926;
+    --adm-series-3: #199e70;
+    --adm-series-4: #c98500;
+  }
+}
+.adm-series-1 {
+  --series: var(--adm-series-1);
+}
+.adm-series-2 {
+  --series: var(--adm-series-2);
+}
+.adm-series-3 {
+  --series: var(--adm-series-3);
+}
+.adm-series-4 {
+  --series: var(--adm-series-4);
+}
+
+.adm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+  font-size: var(--fs-14);
+}
+
+.adm-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* A line key, not a box: the legend mirrors the mark. */
+.adm-legend__key {
+  width: 16px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--series);
+}
+
+.adm-legend__value {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-lines {
+  display: flex;
+  gap: 8px;
+}
+
+.adm-lines__plot {
+  position: relative;
+  flex: 1;
+  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.4);
+}
+
+.adm-lines__svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.adm-lines__grid {
+  stroke: rgb(var(--c-ink) / 0.12);
+  stroke-width: 1;
+}
+
+.adm-lines__line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.adm-lines__crosshair {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: rgb(var(--c-ink) / 0.5);
+  pointer-events: none;
+}
+
+/* 8px, with a 2px ring in the surface colour where lines cross. */
+.adm-lines__dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--series);
+  border: 2px solid rgb(var(--c-surface));
+  pointer-events: none;
+}
+
+.adm-lines__slot {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  cursor: default;
+}
+
+.adm-lines__slot:focus-visible {
+  outline: 2px solid rgb(var(--c-ink));
+  outline-offset: -2px;
+}
+
+.adm-lines__labels {
+  position: relative;
+  width: 72px;
+  flex: none;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-lines__label {
+  position: absolute;
+  left: 0;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.adm-lines__axis {
+  margin-right: 80px;
+}
+
+/* The billing tab's two side-by-side cards. */
+.adm-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 0 24px;
+  align-items: start;
+}
+
+.adm-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  font-size: var(--fs-14);
+}
+
+.adm-dl dt {
+  color: rgb(var(--c-muted));
+}
+
+.adm-plus {
+  color: rgb(var(--c-pass));
+  font-weight: 700;
+}
+
+.adm-cut {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-dialog {
+  margin: auto;
+  width: min(460px, calc(100vw - 32px));
+  padding: 20px;
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  border: var(--bw-2) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-sm);
+}
+
+.adm-dialog::backdrop {
+  background: rgb(var(--c-slab) / 0.55);
+}
+
+.adm-dialog__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-20);
+  font-weight: 800;
+}
+
+.adm-dialog__actions {
+  justify-content: flex-end;
+}
+
+.adm-radios {
+  display: flex;
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.adm-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
 }

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatAgo, formatBytes, formatDayAgo, humanize } from './format';
+import { formatAgo, formatBytes, formatDayAgo, formatPercent, formatUsd, humanize } from './format';
 
 describe('admin formatting', () => {
   it('says how long ago', () => {
@@ -28,5 +28,14 @@ describe('admin formatting', () => {
   it('turns names into labels', () => {
     expect(humanize('sign_in_failed')).toBe('Sign in failed');
     expect(humanize('user.email.delete')).toBe('User email delete');
+  });
+  it('writes dollars and shares', () => {
+    expect(formatUsd(null)).toBe('—');
+    expect(formatUsd(0)).toBe('$0.00');
+    expect(formatUsd(80.4812)).toBe('$80.48');
+    expect(formatUsd(0.0042)).toBe('$0.0042');
+    expect(formatPercent(0.25)).toBe('25%');
+    expect(formatPercent(4 / 196)).toBe('2%');
+    expect(formatPercent(null)).toBe('—');
   });
 });

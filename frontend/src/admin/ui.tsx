@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 
 /** Shared pieces of the admin panel's tabs. */
 
@@ -82,4 +82,54 @@ export function SearchBox({ value, onChange, placeholder, label }: { value: stri
 export function LevelBadge({ level }: { level: string }) {
   const tone = level === 'error' ? 'fail' : level === 'warn' ? 'yellow' : 'neutral';
   return <span className={`ps-badge ps-badge--${tone}`}>{level}</span>;
+}
+
+/**
+ * A modal dialog (the native <dialog>, so focus is trapped and Escape
+ * closes it) holding a form: `onSubmit` runs on submit; the dialog stays
+ * open, with the error, until it resolves true.
+ */
+export function Dialog({ title, open, onClose, onSubmit, submitLabel, danger, busy, error, children }: {
+  title: string;
+  open: boolean;
+  onClose: () => void;
+  onSubmit: () => void;
+  submitLabel: string;
+  danger?: boolean;
+  busy?: boolean;
+  error?: string;
+  children: ReactNode;
+}) {
+  const ref = useRef<HTMLDialogElement>(null);
+  useEffect(() => {
+    const dialog = ref.current;
+    if (!dialog) return;
+    if (open && !dialog.open) dialog.showModal();
+    if (!open && dialog.open) dialog.close();
+  }, [open]);
+  return (
+    <dialog ref={ref} className="adm-dialog" aria-labelledby="adm-dialog-title" onClose={onClose}>
+      <form
+        className="adm-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          onSubmit();
+        }}
+      >
+        <h2 id="adm-dialog-title" className="adm-dialog__title">
+          {title}
+        </h2>
+        {children}
+        <ErrorNote>{error}</ErrorNote>
+        <div className="adm-actions adm-dialog__actions">
+          <button type="button" className="ps-btn ps-btn--ghost ps-btn--sm" onClick={onClose}>
+            Cancel
+          </button>
+          <button type="submit" className={`ps-btn ps-btn--${danger ? 'danger' : 'primary'} ps-btn--sm`} disabled={busy}>
+            {submitLabel}
+          </button>
+        </div>
+      </form>
+    </dialog>
+  );
 }

@@ -134,6 +134,22 @@ export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: 
         </ul>
       </Section>
 
+      <Section title="Paid features">
+        <ul className="adm-checks">
+          <Check ok={config.anthropicKey} label="ANTHROPIC_API_KEY set (AI interviews and reviews; 501 without)" />
+          <Check ok={config.aiGateway} label="AI_GATEWAY_URL set (rate limit and spend cap through Cloudflare AI Gateway)" optional />
+          <Check ok={config.polar.accessToken} label="POLAR_ACCESS_TOKEN set" />
+          <Check ok={config.polar.webhookSecret} label="POLAR_WEBHOOK_SECRET set" />
+          <Check ok={config.polar.productProMonthly} label="POLAR_PRODUCT_PRO_MONTHLY set" />
+          <Check ok={config.polar.productProYearly} label="POLAR_PRODUCT_PRO_YEARLY set" />
+          <Check ok={config.polar.productPack5} label="POLAR_PRODUCT_PACK_5 set" />
+          <li className={`adm-check adm-check--${config.polarServer === 'live' ? 'ok' : 'off'}`}>
+            <span aria-hidden="true">{config.polarServer === 'live' ? '✓' : '–'}</span> POLAR_SERVER: {config.polarServer === 'live' ? 'live (real payments)' : 'sandbox (test payments)'}
+          </li>
+        </ul>
+        <p className="adm-muted">{config.billing ? 'Billing is on.' : 'Billing is off: checkout answers 501 until all five Polar secrets are set.'} Only whether each is set is shown, never a value.</p>
+      </Section>
+
       <Section title="Rows per table">
         <table className="adm-table adm-table--compact">
           <tbody>

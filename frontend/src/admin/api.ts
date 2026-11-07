@@ -63,6 +63,8 @@ export interface Overview {
   content: { shares: number; documents: number; attempts: number; solves: number; cardReviews: number; challenges: number; gameRuns: number };
   usage: { events: string[]; days: { day: string; counts: Record<string, number> }[] };
   events: { kind: string; level: string; n: number }[];
+  /** What AI interviews cost, by the UTC day they started, in USD. */
+  aiSpend: { day: string; costUsd: number }[];
 }
 
 export const getOverview = () => api<Overview>('/api/admin/overview');
@@ -82,7 +84,19 @@ export interface Health {
   errors: Record<string, { day: number; week: number }>;
   lastError: { at: number; message: string; detail: Record<string, unknown> | null } | null;
   email: { total: number; confirmed: number; paused: number; bound: boolean; sentLast7Days: number };
-  config: { sessionSecret: boolean; providers: string[]; appRedirects: boolean; metricsToken: boolean; setupToken: boolean };
+  config: {
+    sessionSecret: boolean;
+    providers: string[];
+    appRedirects: boolean;
+    metricsToken: boolean;
+    setupToken: boolean;
+    /** The paid features' configuration: whether each is set, never its value. */
+    anthropicKey: boolean;
+    aiGateway: boolean;
+    polar: { accessToken: boolean; webhookSecret: boolean; productProMonthly: boolean; productProYearly: boolean; productPack5: boolean };
+    polarServer: 'sandbox' | 'live';
+    billing: boolean;
+  };
 }
 
 export const getHealth = () => api<Health>('/api/admin/health');
@@ -125,9 +139,16 @@ export interface UserDetail {
     lastSeenDay: string | null;
     blockedAt: number | null;
     blockedReason: string | null;
-    /** `users.plan`, e.g. free. */
+    /** `users.plan`, e.g. free: what the subscription set. */
     plan: string;
+    /** Pro given by the admin until then; null without. */
+    compUntil: number | null;
+    /** What the account gets now: Pro while subscribed or comped. */
+    effectivePlan: string;
   };
+  billing: Subscription | null;
+  credits: { total: number; monthly: number; trial: number; pack: number; period: string };
+  polarDashboard: PolarDashboard;
   identities: { provider: string; subject: string }[];
   sessions: { kind: string; count: number; lastCreatedAt: number }[];
   progress: { problemId: string; runs: number; firstRunAt: number; updatedAt: number; solvedAt: number | null; runsToSolve: number | null }[];
@@ -142,6 +163,35 @@ export interface UserDetail {
   audit: AuditEntry[];
 }
 
+/** Polar's dashboard: refunds are done there. Append a customer's or an order's id. */
+export interface PolarDashboard {
+  server: 'sandbox' | 'live';
+  customers: string;
+  orders: string;
+}
+
+export interface Subscription {
+  polarCustomerId: string | null;
+  polarSubscriptionId: string | null;
+  status: string | null;
+  product: string | null;
+  currentPeriodEnd: number | null;
+  cancelAtPeriodEnd: boolean;
+  pastDue: boolean;
+  updatedAt: number | null;
+}
+
+export interface LedgerEntry {
+  id: number;
+  kind: 'grant' | 'spend' | 'refund' | 'revoke' | 'admin_grant' | 'admin_revoke';
+  bucket: 'monthly' | 'trial' | 'pack';
+  period: string | null;
+  delta: number;
+  item: string;
+  refId: string;
+  createdAt: number;
+}
+
 const user = (id: string) => `/api/admin/users/${encodeURIComponent(id)}`;
 
 export const getUser = (id: string) => api<UserDetail>(user(id));
@@ -151,6 +201,104 @@ export const unblockUser = (id: string) => api(`${user(id)}/unblock`, { method: 
 export const signOutUser = (id: string) => api<{ sessions: number }>(`${user(id)}/sign-out`, { method: 'POST' });
 export const deleteUserEmail = (id: string) => api(`${user(id)}/email`, { method: 'DELETE' });
 export const deleteUser = (id: string) => api(user(id), { method: 'DELETE' });
+export const listUserCredits = (id: string, offset: number) =>
+  api<{ total: number; offset: number; pageSize: number; entries: LedgerEntry[] }>(`${user(id)}/credits?offset=${offset}`);
+/** `ref` names this one action: sending it again changes nothing. */
+export const adjustCredits = (id: string, body: { kind: 'grant' | 'revoke'; credits: number; ref: string; reason: string }) =>
+  api<{ delta: number; duplicate?: boolean }>(`${user(id)}/credits`, { method: 'POST', body });
+export const compUser = (id: string, until: number, reason: string) => api(`${user(id)}/comp`, { method: 'POST', body: { until, reason } });
+export const endComp = (id: string, reason: string) => api(`${user(id)}/comp/end`, { method: 'POST', body: { reason } });
+
+interface Owner {
+  id: string;
+  displayName: string;
+}
+
+export interface Billing {
+  counts: {
+    pro: number;
+    monthly: number;
+    yearly: number;
+    pastDue: number;
+    canceling: number;
+    comped: number;
+    packOrdersThisMonth: number;
+    packOrders: number;
+    refundedThisMonth: number;
+    refunded: number;
+  };
+  total: number;
+  offset: number;
+  pageSize: number;
+  pro: {
+    id: string;
+    displayName: string;
+    source: 'subscription' | 'comp' | 'plan';
+    compUntil: number | null;
+    polarCustomerId: string | null;
+    status: string | null;
+    product: string | null;
+    currentPeriodEnd: number | null;
+    cancelAtPeriodEnd: boolean;
+  }[];
+  orders: { orderId: string; credits: number; createdAt: number; refunded: boolean; user: Owner | null }[];
+  adjustments: { kind: string; refId: string; delta: number; createdAt: number; user: Owner | null }[];
+  refundedOrders: { orderId: string; refundedAt: number; user: Owner | null }[];
+  polarDashboard: PolarDashboard;
+  billing: boolean;
+}
+
+export const getBilling = (offset: number) => api<Billing>(`/api/admin/billing?offset=${offset}`);
+
+export interface AiDay {
+  day: string;
+  started: number;
+  finished: number;
+  failed: number;
+  refunded: number;
+  reviews: number;
+  tokens: number;
+  costUsd: number;
+}
+
+export interface AiUsage {
+  days: AiDay[];
+  totals: { sessions: number; finished: number; tokens: number; costUsd: number; avgCostPerFinished: number | null; capped: number; cappedShare: number | null; reviews: number };
+  tokenCap: number;
+  cappedAt: number;
+  topUsers: { id: string; displayName: string; sessions: number; tokens: number; costUsd: number }[];
+}
+
+export const getAi = () => api<AiUsage>('/api/admin/ai');
+
+export type WebhookOutcome = 'applied' | 'duplicate' | 'ignored' | 'bad_signature' | 'stale' | 'error';
+
+export interface WebhookDelivery {
+  id: number;
+  at: number;
+  webhookId: string | null;
+  type: string | null;
+  outcome: WebhookOutcome;
+  user: Owner | null;
+}
+
+export const listWebhooks = (outcome: string, before?: number) =>
+  api<{ deliveries: WebhookDelivery[]; counts: { outcome: WebhookOutcome; n: number }[]; next: number | null }>(
+    `/api/admin/webhooks?${new URLSearchParams({ outcome, ...(before ? { before: String(before) } : {}) })}`,
+  );
+
+export interface LiveShareRow {
+  token: string;
+  url: string;
+  document: { id: string; name: string | null };
+  createdAt: number;
+  revokedAt: number | null;
+  owner: { id: string; displayName: string; blocked: boolean };
+}
+
+export const listLiveShares = (q: string, state: 'live' | 'all', offset: number) =>
+  api<{ total: number; offset: number; pageSize: number; links: LiveShareRow[] }>(`/api/admin/document-shares?${new URLSearchParams({ q, state, offset: String(offset) })}`);
+export const revokeLiveShare = (token: string) => api(`/api/admin/document-shares/${encodeURIComponent(token)}`, { method: 'DELETE' });
 
 export interface ShareRow {
   id: string;

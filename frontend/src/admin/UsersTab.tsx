@@ -2,6 +2,7 @@ import { useCallback, useState } from 'react';
 import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, signOutUser, unblockUser, type UserFilter, type UserSort } from './api';
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
 import { useAction, useLoad } from './hooks';
+import UserBilling from './UserBilling';
 import { ErrorNote, Loading, Pager, SearchBox, Section, Stat } from './ui';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
@@ -137,7 +138,8 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
         <p className="adm-muted adm-mono">{user.id}</p>
         <div className="adm-badges">
           {blocked && <span className="ps-badge ps-badge--fail">blocked {formatDate(user.blockedAt)}</span>}
-          <span className="ps-badge ps-badge--neutral">{user.plan} plan</span>
+          <span className={`ps-badge ps-badge--${user.effectivePlan === 'pro' ? 'blue' : 'neutral'}`}>{user.effectivePlan} plan</span>
+          {user.compUntil !== null && user.compUntil * 1000 > Date.now() && <span className="ps-badge ps-badge--yellow">comped until {formatDate(user.compUntil)}</span>}
           {user.publicProfile ? <span className="ps-badge ps-badge--blue">public profile</span> : <span className="ps-badge ps-badge--neutral">private profile</span>}
           {data.identities.map((i) => (
             <span key={i.provider} className="ps-badge ps-badge--neutral" title={`${i.provider} user id ${i.subject}`}>
@@ -157,6 +159,8 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
           <Stat label="Synced diagrams" value={formatNumber(data.documents.count)} note={formatBytes(data.documents.bytes)} />
         </div>
       </Section>
+
+      <UserBilling id={id} data={data} onChanged={detail.reload} onSignedOut={onSignedOut} />
 
       <Section title="Moderation">
         <ErrorNote>{action.error}</ErrorNote>

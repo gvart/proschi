@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { getOverview } from './api';
 import BarChart from './BarChart';
-import { formatNumber, humanize } from './format';
+import { formatNumber, formatUsd, humanize } from './format';
 import { useLoad } from './hooks';
 import { ErrorNote, Loading, Section, Stat } from './ui';
 
@@ -24,6 +24,14 @@ export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut
           <Stat label="Email reminders" value={formatNumber(users.emailReminders)} note="confirmed addresses" />
         </div>
         <BarChart title="Sign-ups" bars={data.signups.map((s) => ({ day: s.day, value: s.count }))} />
+      </Section>
+
+      <Section title="AI spend">
+        <div className="adm-stats">
+          <Stat label="Today" value={formatUsd(data.aiSpend.at(-1)?.costUsd ?? 0)} note="AI interviews started today" />
+          <Stat label="30 days" value={formatUsd(data.aiSpend.reduce((sum, d) => sum + d.costUsd, 0))} />
+        </div>
+        <BarChart title="AI interview spend (USD)" bars={data.aiSpend.map((d) => ({ day: d.day, value: d.costUsd }))} format={formatUsd} />
       </Section>
 
       <Section title="Last 24 hours">

@@ -51,3 +51,16 @@ export function humanize(name: string): string {
   const text = name.replace(/[_.]/g, ' ');
   return text.charAt(0).toUpperCase() + text.slice(1);
 }
+
+/** US dollars, to the cent; below a cent with more digits (a model call costs fractions of one). */
+export function formatUsd(usd: number | null | undefined): string {
+  if (usd === null || usd === undefined) return '—';
+  if (usd !== 0 && Math.abs(usd) < 0.01) return `$${usd.toFixed(4)}`;
+  return `$${usd.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** 0.25 → "25%". */
+export const formatPercent = (share: number | null | undefined): string => (share === null || share === undefined ? '—' : `${Math.round(share * 1000) / 10}%`);
+
+/** 1234567 → "1.2M": token counts. */
+export const formatCompact = (n: number): string => new Intl.NumberFormat(undefined, { notation: 'compact', maximumFractionDigits: 1 }).format(n);
