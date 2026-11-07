@@ -1,0 +1,40 @@
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_10fd9db07e91b6 94
+  s_e17b87e0a1b3ca::t_d4803ee0932e85 95,110,115,196,343
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_a468afb7bfc445 79
+  s_e17b87e0a1b3ca::t_10fd9db07e91b6 122-125,229
+  s_e17b87e0a1b3ca::t_d4803ee0932e85 238
+frontend/src/practice/ProblemRoute.tsx
+  s_e17b87e0a1b3ca::t_d4803ee0932e85 22,30,39
+  s_e17b87e0a1b3ca::t_10fd9db07e91b6 21
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_99ea279f20e736 75-91
+  s_1a6e9ade9f303e::t_b00ddeffd0b672 73-74
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_10fd9db07e91b6 66-67,71,95,121-135,137
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b6ebc98bfee66e39703605ce14133b57c001884e",
+  "prompts": {},
+  "sessions": {
+    "s_1a6e9ade9f303e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c9e00ce-6ba5-4b5a-8be5-a4a273976934",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    },
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
