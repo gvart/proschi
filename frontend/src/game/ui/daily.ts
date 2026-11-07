@@ -1,7 +1,7 @@
 /**
  * The daily run played in this browser (signed out, or in a build without
  * accounts): its UTC day and score. Kept apart from the engine so the
- * practice hub's Today panel can read it without loading the game.
+ * practice home's daily line can read it without loading the game.
  */
 
 export const DAILY_KEY = 'proschi.game.daily';

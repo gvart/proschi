@@ -1,11 +1,18 @@
 import { pruneAudit } from './admin';
+import { runCampaigns } from './campaigns';
+import { pruneEmailAuth } from './emailAuth';
+import { pruneSignupIpGrants } from './signupChecks';
 import { purgeAdminSessions } from './adminAuth';
+import { pruneBillingWebhooks } from './billing';
 import { TOMBSTONE_TTL_MS } from './documents';
 import { now, type Env } from './env';
 import { pruneEvents, recordEvent } from './events';
+import { pruneInterviewTranscripts } from './interviews';
 import { errorText, log } from './log';
 import { pruneDailyCounts } from './metrics';
+import { prunePartnerSessions } from './partner';
 import { sendReminders } from './reminders';
+import { pruneHolds } from './meter';
 
 /** An unsubmitted game run counts as abandoned this long after its start. */
 export const ABANDONED_RUN_SECONDS = 7 * 86_400;
@@ -15,7 +22,8 @@ export const DAILY_HOUR = 3;
 
 /**
  * The hourly cron (wrangler.jsonc `triggers`, at minute 17): the email
- * reminders every hour (src/reminders.ts), the daily jobs once a day, in
+ * reminders and the admin campaigns still sending every hour
+ * (src/reminders.ts, src/campaigns.ts), the daily jobs once a day, in
  * the DAILY_HOUR UTC hour. One failing does not stop the other.
  */
 export async function hourlyCron(env: Env, scheduledTime: number): Promise<void> {
@@ -26,6 +34,7 @@ export async function hourlyCron(env: Env, scheduledTime: number): Promise<void>
     if (sent) log('info', 'Sent reminders', { sent });
     return { sent };
   });
+  await runJob(env, 'campaigns', () => runCampaigns(env));
 }
 
 /**
@@ -52,12 +61,17 @@ export async function dailyCron(env: Env): Promise<void> {
   await runJob(env, 'sessions', async () => ({ deleted: await purgeExpiredSessions(env), admin: await purgeAdminSessions(env) }));
   await runJob(env, 'game_runs', async () => ({ deleted: await pruneAbandonedGameRuns(env) }));
   await runJob(env, 'tombstones', async () => ({ deleted: await pruneDocumentTombstones(env) }));
+  await runJob(env, 'email_sign_in', async () => ({ deleted: await pruneEmailAuth(env), ipGrants: await pruneSignupIpGrants(env) }));
   await runJob(env, 'usage_counts', async () => {
     const deleted = await pruneDailyCounts(env);
     log('info', 'Pruned old usage counts', { deleted });
     return { deleted };
   });
   await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
+  await runJob(env, 'interview_transcripts', async () => ({ cleared: await pruneInterviewTranscripts(env) }));
+  await runJob(env, 'credit_holds', async () => ({ deleted: await pruneHolds(env) }));
+  await runJob(env, 'partner_transcripts', async () => ({ deleted: await prunePartnerSessions(env) }));
+  await runJob(env, 'billing_webhooks', async () => ({ deleted: await pruneBillingWebhooks(env) }));
 }
 
 /**

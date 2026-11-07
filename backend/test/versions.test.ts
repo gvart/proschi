@@ -1,6 +1,6 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { PLANS } from '../src/plans';
+import { FREE_LIMITS, PLANS } from '../src/plans';
 import { canonicalForm, type Version, type VersionMeta } from '../src/versions';
 import { call, resetDatabase, signedInUser } from './helpers';
 
@@ -171,7 +171,7 @@ describe('diagram versions', () => {
   });
 
   it("are limited per document by the account's plan, deleted ones not counted", async () => {
-    PLANS.team = { documents: 5, versionsPerDocument: 2, documentBytes: 64 * 1024 };
+    PLANS.team = { ...FREE_LIMITS, versionsPerDocument: 2 };
     const { id, token } = await signedInUser();
     await env.DB.prepare("UPDATE users SET plan = 'team' WHERE id = ?").bind(id).run();
     const v = await save(token, 'd', 'a');

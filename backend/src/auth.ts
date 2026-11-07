@@ -1,5 +1,6 @@
 import { appRedirect, CLI_CLIENT, isAppState, isChallenge, isRedirectUriFor, issueAppCode, type AppClient, type AppLogin } from './apptokens';
 import type { Ctx } from './context';
+import { identityHash, priorTrialStatement } from './credits';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, secretOk, type Env } from './env';
 import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
@@ -7,6 +8,9 @@ import { recordEvent } from './events';
 import { errorText, log } from './log';
 import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
+import { effectivePlan } from './plans';
+import { saveContactEmail } from './contactEmail';
+import { decideSignupCredits, emailClaim, normalizeEmail } from './signupChecks';
 
 /**
  * Sign-in with GitHub or Google (OAuth 2 authorization code flow with PKCE).
@@ -36,6 +40,8 @@ export type ProviderId = 'github' | 'google';
 interface Profile {
   subject: string;
   name: string;
+  /** The account's address when the provider says it is verified: only its HMAC is kept, for the sign-up credits' checks (src/signupChecks.ts). */
+  verifiedEmail?: string;
 }
 
 interface Provider {
@@ -57,10 +63,11 @@ const PROVIDERS: Record<ProviderId, Provider> = {
     clientId: (env) => env.GITHUB_CLIENT_ID,
     clientSecret: (env) => env.GITHUB_CLIENT_SECRET,
     authorizeUrl: (clientId, redirectUri, state, challenge) =>
-      // No scope: read-only access to the public profile.
+      // user:email: read-only, for the primary verified address (only its HMAC is kept, src/signupChecks.ts).
       `https://github.com/login/oauth/authorize?${new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
+        scope: 'user:email',
         state,
         code_challenge: challenge,
         code_challenge_method: 'S256',
@@ -82,7 +89,7 @@ const PROVIDERS: Record<ProviderId, Provider> = {
         headers: { Authorization: `Bearer ${String(token.access_token)}`, Accept: 'application/vnd.github+json', 'User-Agent': 'proschi-api' },
       });
       if (typeof user.id !== 'number') throw new Error('GitHub returned no user id');
-      return { subject: String(user.id), name: String(user.login ?? `user${user.id}`) };
+      return { subject: String(user.id), name: String(user.login ?? `user${user.id}`), ...(await githubEmail(String(token.access_token))) };
     },
   },
   google: {
@@ -93,7 +100,7 @@ const PROVIDERS: Record<ProviderId, Provider> = {
         client_id: clientId,
         redirect_uri: redirectUri,
         response_type: 'code',
-        scope: 'openid profile',
+        scope: 'openid profile email',
         state,
         code_challenge: challenge,
         code_challenge_method: 'S256',
@@ -116,10 +123,29 @@ const PROVIDERS: Record<ProviderId, Provider> = {
         headers: { Authorization: `Bearer ${String(token.access_token)}` },
       });
       if (typeof user.sub !== 'string') throw new Error('Google returned no subject');
-      return { subject: user.sub, name: String(user.given_name ?? user.name ?? 'Google user') };
+      return {
+        subject: user.sub,
+        name: String(user.given_name ?? user.name ?? 'Google user'),
+        ...(user.email_verified === true && typeof user.email === 'string' ? { verifiedEmail: user.email } : {}),
+      };
     },
   },
 };
+
+/** The GitHub account's primary verified address (GET /user/emails, scope user:email); none when it has none or the call fails. */
+async function githubEmail(accessToken: string): Promise<{ verifiedEmail?: string }> {
+  try {
+    const response = await fetch('https://api.github.com/user/emails', {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'proschi-api' },
+    });
+    if (!response.ok) return {};
+    const emails = (await response.json()) as { email?: unknown; primary?: unknown; verified?: unknown }[];
+    const primary = Array.isArray(emails) ? emails.find((e) => e.primary === true && e.verified === true && typeof e.email === 'string') : undefined;
+    return primary ? { verifiedEmail: primary.email as string } : {};
+  } catch {
+    return {};
+  }
+}
 
 export function isProvider(id: string): id is ProviderId {
   return Object.prototype.hasOwnProperty.call(PROVIDERS, id);
@@ -269,7 +295,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
 
   if (app) {
     // No cookie: the app exchanges this code, with its PKCE verifier, at POST /auth/token.
-    const userId = await upsertUser(env, provider, profile);
+    const userId = await upsertUser(ctx, provider, profile);
     if (await refuseBlocked(ctx, userId, provider)) return redirect(appRedirect(app.redirectUri, { error: 'access_denied', state: app.state }), [clearState]);
     ctx.userId = userId;
     const appCode = await issueAppCode(env, userId, app);
@@ -287,7 +313,7 @@ export async function finishLogin(request: Request, ctx: Ctx, provider: Provider
     return redirect(withParam(login.returnTo, 'linked', provider), [clearState]);
   }
 
-  const userId = await upsertUser(env, provider, profile);
+  const userId = await upsertUser(ctx, provider, profile);
   if (await refuseBlocked(ctx, userId, provider)) return redirect(withParam(login.returnTo, 'login_error', 'blocked'), [clearState]);
   const token = randomToken();
   const t = now();
@@ -321,19 +347,62 @@ async function linkIdentity(env: Env, userId: string, provider: ProviderId, subj
   return owner.user_id === userId ? 'already' : 'in_use';
 }
 
-async function upsertUser(env: Env, provider: ProviderId, profile: Profile): Promise<string> {
+async function upsertUser(ctx: Ctx, provider: ProviderId, profile: Profile): Promise<string> {
+  const { env } = ctx;
   const existing = await env.DB.prepare('SELECT user_id FROM identities WHERE provider = ? AND subject = ?')
     .bind(provider, profile.subject)
     .first<{ user_id: string }>();
-  if (existing) return existing.user_id;
+  if (existing) {
+    await saveContactEmail(env, existing.user_id, provider, profile.verifiedEmail);
+    return existing.user_id;
+  }
   const id = crypto.randomUUID();
   const cleaned = cleanName(profile.name);
   const name = cleaned && !rejectName(cleaned) ? cleaned : 'Proschi user';
+  const t = now();
+  // An identity whose deleted account used the trial interview doesn't get it again (src/credits.ts).
+  const priorTrial = await priorTrialStatement(env, id, provider, profile.subject, t);
   await env.DB.batch([
-    env.DB.prepare('INSERT INTO users (id, display_name, public_profile, created_at) VALUES (?, ?, 0, ?)').bind(id, name, now()),
+    env.DB.prepare('INSERT INTO users (id, display_name, public_profile, created_at) VALUES (?, ?, 0, ?)').bind(id, name, t),
     env.DB.prepare('INSERT INTO identities (provider, subject, user_id) VALUES (?, ?, ?)').bind(provider, profile.subject, id),
+    ...(priorTrial ? [priorTrial] : []),
   ]);
+  await oauthSignupCredits(ctx, id, provider, profile);
+  await saveContactEmail(env, id, provider, profile.verifiedEmail);
   return id;
+}
+
+/**
+ * A new GitHub or Google account's sign-up credits (src/signupChecks.ts): the
+ * provider verified it, so it counts as confirmed. Its claims are the
+ * provider's user id and, with a verified address, the normalized address.
+ * A failure is logged, never the sign-in's.
+ */
+async function oauthSignupCredits(ctx: Ctx, userId: string, provider: ProviderId, profile: Profile): Promise<void> {
+  const { env } = ctx;
+  if (!secretOk(env)) return;
+  try {
+    const address = normalizeEmail(profile.verifiedEmail);
+    const own = await identityHash(env.SESSION_SECRET, provider, profile.subject);
+    const claims = address ? [own, await emailClaim(env, address.normalized)] : [own];
+    // The ledger's key is the inbox, so GitHub, Google and a password on one address get the credits once.
+    const identityKey = address ? address.normalized : `${provider}\n${profile.subject}`;
+    await decideSignupCredits(env, { userId, identityKey, claims, domain: address?.domain, ip: ctx.ip });
+  } catch (e) {
+    log('error', 'Checking sign-up credits failed', { requestId: ctx.requestId, error: errorText(e) });
+  }
+}
+
+/** Starts a web session for the user: the session cookie goes out with the answer (email sign-in, src/emailAuth.ts). */
+export async function startWebSession(ctx: Ctx, userId: string): Promise<void> {
+  const token = randomToken();
+  const t = now();
+  await ctx.env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind) VALUES (?, ?, ?, ?, 'web')")
+    .bind(await sha256(token), userId, t + SESSION_TTL, t)
+    .run();
+  ctx.userId = userId;
+  ctx.setCookies.push(sessionCookie(token, SESSION_TTL));
+  await countServerEvent(ctx, 'sign_in');
 }
 
 /** Control, zero-width and bidirectional formatting characters. */
@@ -354,7 +423,7 @@ export interface User {
   publicProfile: boolean;
   /** Cards a day the user aims for (GOAL_CHOICES in frontend/src/learn/streak.ts); a solve also meets it. */
   dailyGoal: number;
-  /** The account's plan, for its limits (src/plans.ts). */
+  /** The account's effective plan (src/plans.ts effectivePlan: a comp counts), for its features and limits. */
   plan: string;
 }
 
@@ -364,11 +433,12 @@ interface UserRow {
   public_profile: number;
   daily_goal: number;
   plan: string;
+  comp_until: number | null;
   last_seen_day: string | null;
   expires_at: number;
 }
 
-const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal, plan: row.plan });
+const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal, plan: effectivePlan(row.plan, row.comp_until) });
 
 /**
  * Notes today (UTC) as the account's last seen day, at most once a day and
@@ -402,7 +472,7 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
     if (!bearer) return undefined;
     // Access tokens only: a refresh token or a cookie's token is refused here.
     const row = await ctx.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ? AND u.blocked_at IS NULL`,
     )
       .bind(await sha256(bearer), now())
@@ -417,7 +487,7 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
   const hash = await sha256(token);
   const t = now();
   const row = await ctx.env.DB.prepare(
-    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.kind = 'web' AND s.expires_at > ? AND u.blocked_at IS NULL`,
   )
     .bind(hash, t)

@@ -378,8 +378,16 @@ export class DocSync {
   private savedStatus(refusedNote: string | undefined): SyncStatus {
     const store = this.o.store.get();
     const tooLarge = store.docs.some((d) => this.meta.refused[d.id] !== undefined && Object.hasOwn(this.meta.docs, d.id));
-    const note = refusedNote ?? (tooLarge ? 'Some diagrams are too large to save to your account; they stay in this browser.' : undefined);
     const plan = cloudPlan(store, this.meta);
+    // Past the limit (a downgrade from Pro), the server refuses edits to all but the most recently saved diagrams.
+    const over = plan.limit !== null && plan.used > plan.limit;
+    const note =
+      refusedNote ??
+      (over && tooLarge
+        ? `Your account has more diagrams than its plan's ${plan.limit}: edits to the ones saved least recently stay in this browser until you delete some.`
+        : tooLarge
+          ? 'Some diagrams are too large to save to your account; they stay in this browser.'
+          : undefined);
     return { kind: 'saved', ...(note ? { note } : {}), ...(plan.limit !== null ? { used: plan.used, limit: plan.limit } : {}) };
   }
 

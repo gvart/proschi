@@ -56,4 +56,7 @@ tech stack, so it compares designs rather than measuring yours. [How the simulat
 says how far to trust its numbers.
 
 Start with the [Quickstart](QUICKSTART.md). Proschi is free and open source
-under the MIT license, on [GitHub](https://github.com/gvart/proschi).
+under the MIT license, on [GitHub](https://github.com/gvart/proschi). The
+hosted site has optional Pro and Max plans for a larger account and
+credits for mock interviews and Design partner ([Terms](TERMS.md)); the language, the editor, the simulation
+and the practice problems stay free.

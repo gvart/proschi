@@ -4,8 +4,8 @@ import { statusOf, type Progress } from '../progress';
 import { roadmapHref, stepLock, type RoadmapAccess, type RoadmapState } from '../roadmap';
 
 /**
- * "Continue" on the practice hub's Today panel: the last problem opened, while
- * it is not solved yet, else the next step of the roadmap. The last problem is
+ * "Continue" on the practice home: the last problem opened, while it is not
+ * solved yet, else (for interview prep) the next step of the roadmap. The last problem is
  * remembered in this browser only (docs/PRIVACY.md lists the key).
  */
 
@@ -47,6 +47,7 @@ export function continueTarget({
   known,
   roadmap,
   access,
+  roadmapStep = true,
 }: {
   last?: LastProblem;
   progress: Progress;
@@ -54,12 +55,14 @@ export function continueTarget({
   known: ReadonlySet<string>;
   roadmap: RoadmapState;
   access: RoadmapAccess;
+  /** Fall back to the roadmap's next step (interview prep); otherwise only an unsolved last problem continues. */
+  roadmapStep?: boolean;
 }): ContinueTarget | undefined {
   if (last && known.has(last.id) && statusOf(progress, last.id) !== 'solved') {
     return { kind: 'last', id: last.id, href: last.roadmap ? roadmapHref(last.id) : `#/${last.id}` };
   }
   const next = roadmap.next;
-  if (!next) return undefined;
+  if (!next || !roadmapStep) return undefined;
   const open = stepLock(roadmap, next.id, access).kind === 'open';
   return { kind: 'roadmap', id: next.id, href: open ? roadmapHref(next.id) : '#/roadmap' };
 }

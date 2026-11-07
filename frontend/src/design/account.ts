@@ -2,9 +2,13 @@
 // problem and card pages, 404), which have no React: the same button as
 // AccountMenu on the React pages, filled in from the session cookie. Signed
 // out, "Sign in" with a link per provider; signed in, the name with "Your
-// progress", "Settings" and "Sign out". Absent in builds without the API.
+// progress", "Settings" and "Sign out", and with paid plans on, the credits
+// left in the menu, linking to Plan & billing (GET /api/me/plan, read once);
+// the header itself shows no balance. Absent in builds without the API.
 
 import { apiEnabled, loginUrl, type Me, type ProviderId } from '../services/api';
+import { billingEnabled, getPlan, type CreditBalance } from '../services/billing';
+import { formatCredits, isLow } from '../services/credits';
 import { PROVIDER_LABEL } from '../practice/account';
 
 const SIGN_IN_ICON = '<path d="m10 17 5-5-5-5"/><path d="M15 12H3"/><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>';
@@ -83,6 +87,19 @@ function item<K extends 'a' | 'button'>(tag: K, text: string): HTMLElementTagNam
 
 const link = (href: string, text: string) => Object.assign(item('a', text), { href });
 
+/** "760 credits · Plan & billing", as AccountMenu's CreditsItem draws it. */
+function creditsItem(credits: CreditBalance, href: string): HTMLAnchorElement {
+  const low = isLow(credits);
+  const el = link(href, '');
+  el.classList.add('ps-account__credits');
+  el.dataset.testid = 'account-credits';
+  if (low) el.dataset.low = 'true';
+  const left = element('span', '', `${formatCredits(credits.balance, { floor: true })} credits`);
+  if (low) left.append(element('span', 'ps-account__low', 'running low'));
+  el.append(left, element('span', 'ps-account__hint', 'Plan & billing'));
+  return el;
+}
+
 /** Fills a [data-account] slot of the static header; `base` is the way back to the site root. Returns the cleanup. */
 export function bindAccount(slot: HTMLElement): () => void {
   if (!apiEnabled) return () => undefined;
@@ -121,14 +138,15 @@ export function bindAccount(slot: HTMLElement): () => void {
     });
     const who = element('p', 'ps-account__who', 'Signed in as ');
     who.append(element('strong', '', me.user.displayName));
-    show(
-      menu('Account', USER_ICON, me.user.displayName, [
-        who,
-        link(`${base}practice/#/progress`, 'Your progress'),
-        link(`${base}practice/#/me`, 'Settings'),
-        signOut,
-      ]),
-    );
+    const settings = link(`${base}practice/#/me`, 'Settings');
+    show(menu('Account', USER_ICON, me.user.displayName, [who, link(`${base}practice/#/progress`, 'Your progress'), settings, signOut]));
+    if (!billingEnabled) return;
+    getPlan()
+      .then(({ credits }) => {
+        if (!cancelled && credits && settings.isConnected) settings.before(creditsItem(credits, `${base}practice/#/me`));
+      })
+      // Without the plan, the menu simply shows no balance.
+      .catch(() => undefined);
   };
 
   fetch('/api/me', { credentials: 'same-origin' })

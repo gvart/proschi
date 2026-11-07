@@ -1,0 +1,12 @@
+/* The phone sheet slides up when it opens (display: none to shown replays it). */
+@media (prefers-reduced-motion: no-preference) {
+  .ps-partner-sheet {
+    animation: ps-partner-sheet-in var(--d-2) var(--e-out) both;
+  }
+}
+@keyframes ps-partner-sheet-in {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}

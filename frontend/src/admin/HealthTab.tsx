@@ -1,7 +1,8 @@
+import { RefreshCw } from 'lucide-react';
 import { getHealth } from './api';
 import { formatAgo, formatBytes, formatDateTime, formatNumber, humanize } from './format';
 import { useLoad } from './hooks';
-import { ErrorNote, LevelBadge, Loading, Section, Stat } from './ui';
+import { ErrorNote, LevelBadge, PageHeader, Section, Skeleton, Stat } from './ui';
 
 /** How long after its last run a job counts as late: the hourly reminders after 2 hours, the daily jobs after 26. */
 const LATE_AFTER: Record<string, number> = { reminders: 2 * 3600 };
@@ -13,19 +14,26 @@ const ERROR_KINDS = ['server_error', 'rate_limited', 'sign_in_failed', 'blocked_
 export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: () => void; onOpenEvents: (kind: string) => void }) {
   const health = useLoad(getHealth, [], onSignedOut);
   const data = health.data;
-  if (!data) return health.error ? <ErrorNote>{health.error}</ErrorNote> : <Loading what="the health checks" />;
+  if (!data)
+    return (
+      <>
+        <PageHeader page="health" />
+        <Section label="Health">{health.error ? <ErrorNote>{health.error}</ErrorNote> : <Skeleton rows={6} what="the health checks" />}</Section>
+      </>
+    );
   const { database, worker, config, email } = data;
   const runs = new Map(data.cron.runs.map((r) => [r.job, r]));
   return (
     <>
-      <Section
-        title="Worker and database"
+      <PageHeader
+        page="health"
         actions={
           <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" onClick={health.reload} disabled={health.loading}>
-            Check again
+            <RefreshCw size={14} aria-hidden="true" /> Check again
           </button>
         }
-      >
+      />
+      <Section title="Worker and database">
         <div className="adm-stats">
           <Stat label="Database" value={database.ok ? 'OK' : 'Down'} tone={database.ok ? 'pass' : 'fail'} note={database.ok ? `${database.latencyMs} ms` : database.error} />
           <Stat label="Database size" value={formatBytes(database.sizeBytes)} note={database.migration ?? undefined} />
@@ -116,38 +124,59 @@ export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: 
         <p className="adm-muted">Reminders run hourly; the other jobs once a day at 03:17 UTC.</p>
       </Section>
 
-      <Section title="Email reminders">
-        <div className="adm-stats">
-          <Stat label="Email service" value={email.bound ? 'Bound' : 'Not bound'} tone={email.bound ? 'pass' : 'warn'} />
-          <Stat label="Addresses" value={formatNumber(email.total)} note={`${formatNumber(email.confirmed)} confirmed, ${formatNumber(email.paused)} paused`} />
-          <Stat label="Sent in 7 days" value={formatNumber(email.sentLast7Days)} />
-        </div>
-      </Section>
+      <div className="adm-grid">
+        <Section title="Configuration">
+          <ul className="adm-checks">
+            <Check ok={config.sessionSecret} label="SESSION_SECRET set (sign-in works)" />
+            <Check ok={config.providers.length > 0} label={`Sign-in providers: ${config.providers.join(', ') || 'none'}`} />
+            <Check ok={config.metricsToken} label="METRICS_TOKEN set (the metrics CLI works)" optional />
+            <Check ok={config.appRedirects} label="APP_REDIRECT_URIS set (native app sign-in)" optional />
+            <Check ok={!config.setupToken} label={config.setupToken ? 'ADMIN_SETUP_TOKEN is still set: remove it (npx wrangler secret delete ADMIN_SETUP_TOKEN)' : 'ADMIN_SETUP_TOKEN removed'} />
+          </ul>
+        </Section>
 
-      <Section title="Configuration">
-        <ul className="adm-checks">
-          <Check ok={config.sessionSecret} label="SESSION_SECRET set (sign-in works)" />
-          <Check ok={config.providers.length > 0} label={`Sign-in providers: ${config.providers.join(', ') || 'none'}`} />
-          <Check ok={config.metricsToken} label="METRICS_TOKEN set (the metrics CLI works)" optional />
-          <Check ok={config.appRedirects} label="APP_REDIRECT_URIS set (native app sign-in)" optional />
-          <Check ok={!config.setupToken} label={config.setupToken ? 'ADMIN_SETUP_TOKEN is still set: remove it (npx wrangler secret delete ADMIN_SETUP_TOKEN)' : 'ADMIN_SETUP_TOKEN removed'} />
-        </ul>
-      </Section>
+        <Section title="Paid features">
+          <ul className="adm-checks">
+            <Check ok={config.anthropicKey} label="ANTHROPIC_API_KEY set (AI interviews and reviews; 501 without)" />
+            <Check ok={config.aiGateway} label="AI_GATEWAY_URL set (rate limit and spend cap through Cloudflare AI Gateway)" optional />
+            <Check ok={config.polar.accessToken} label="POLAR_ACCESS_TOKEN set" />
+            <Check ok={config.polar.webhookSecret} label="POLAR_WEBHOOK_SECRET set" />
+            <Check ok={config.polar.productProMonthly} label="POLAR_PRODUCT_PRO_MONTHLY set" />
+            <Check ok={config.polar.productProYearly} label="POLAR_PRODUCT_PRO_YEARLY set" />
+            <Check ok={config.polar.productMaxMonthly} label="POLAR_PRODUCT_MAX_MONTHLY set" />
+            <Check ok={config.polar.productMaxYearly} label="POLAR_PRODUCT_MAX_YEARLY set" />
+            <Check ok={config.polar.productCredits1000} label="POLAR_PRODUCT_CREDITS_1000 set" />
+            <li className={`adm-check adm-check--${config.polarServer === 'live' ? 'ok' : 'off'}`}>
+              <span aria-hidden="true">{config.polarServer === 'live' ? '✓' : '–'}</span> POLAR_SERVER: {config.polarServer === 'live' ? 'live (real payments)' : 'sandbox (test payments)'}
+            </li>
+          </ul>
+          <p className="adm-muted">{config.billing ? 'Billing is on.' : 'Billing is off: checkout answers 501 until all seven Polar secrets are set.'} Only whether each is set is shown, never a value.</p>
+        </Section>
+      </div>
 
-      <Section title="Rows per table">
-        <table className="adm-table adm-table--compact">
-          <tbody>
-            {Object.entries(database.tables).map(([table, n]) => (
-              <tr key={table}>
-                <td>
-                  <code>{table}</code>
-                </td>
-                <td className="adm-num">{formatNumber(n)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </Section>
+      <div className="adm-grid">
+        <Section title="Email reminders">
+          <div className="adm-stats">
+            <Stat label="Email service" value={email.bound ? 'Bound' : 'Not bound'} tone={email.bound ? 'pass' : 'warn'} />
+            <Stat label="Addresses" value={formatNumber(email.total)} note={`${formatNumber(email.confirmed)} confirmed, ${formatNumber(email.paused)} paused`} />
+            <Stat label="Sent in 7 days" value={formatNumber(email.sentLast7Days)} />
+          </div>
+        </Section>
+        <Section title="Rows per table">
+          <table className="adm-table adm-table--compact">
+            <tbody>
+              {Object.entries(database.tables).map(([table, n]) => (
+                <tr key={table}>
+                  <td>
+                    <code>{table}</code>
+                  </td>
+                  <td className="adm-num">{formatNumber(n)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </Section>
+      </div>
     </>
   );
 }

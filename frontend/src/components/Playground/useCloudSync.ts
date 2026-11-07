@@ -198,6 +198,14 @@ export function useCloudSync(store: DocStore, onConflict: (titles: string[]) => 
 }
 
 /** The sync status in words, for the File menu and the diagrams sidebar. */
+/** At or past this many, the account's limit is Pro's "unlimited" (backend/src/plans.ts). */
+const UNLIMITED = 1000;
+
+/** Whether the account is full (or past its limit, after a downgrade): where the editor offers Pro, with billing on. */
+export function cloudFull(state: CloudState): boolean {
+  return state.kind === 'saved' && state.limit !== undefined && state.used !== undefined && state.limit < UNLIMITED && state.used >= state.limit;
+}
+
 export function cloudLabel(state: CloudState): string {
   switch (state.kind) {
     case 'unavailable':
@@ -211,7 +219,8 @@ export function cloudLabel(state: CloudState): string {
     case 'saving':
       return 'Saving…';
     case 'saved':
-      if (state.limit === undefined || state.used === undefined) return 'Saved to your account';
+      // Pro's fair-use cap (backend/src/plans.ts UNLIMITED) is no number worth showing.
+      if (state.limit === undefined || state.used === undefined || state.limit >= UNLIMITED) return 'Saved to your account';
       return state.used >= state.limit
         ? `Cloud full: ${state.used} of ${state.limit} — new diagrams stay in this browser`
         : `Saved to your account (${state.used} of ${state.limit})`;

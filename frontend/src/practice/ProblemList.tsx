@@ -1,5 +1,5 @@
 import { useMemo, useState, type ReactNode } from 'react';
-import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
+import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
 import ContributeCard from './ContributeCard';
 import type { ProblemListing } from './listing';
 import { statusOf, type Progress } from './progress';
@@ -12,12 +12,16 @@ interface ProblemListProps {
   progress: Progress;
   /** Global solve rates, when the API is there. */
   stats?: StatsSummary;
+  /** Beside the solved count, e.g. the visitor's goal. */
+  meta?: ReactNode;
+  /** Between the intro and the search, e.g. the goal question and the Continue line (hub/HomeExtras.tsx). */
+  top?: ReactNode;
   /** After the list, e.g. the leaderboard. */
   children?: ReactNode;
 }
 
 /** Every problem with its difficulty, tags and status, filtered by those and by a search. */
-export default function ProblemList({ problems, progress, stats, children }: ProblemListProps) {
+export default function ProblemList({ problems, progress, stats, meta, top, children }: ProblemListProps) {
   const [query, setQuery] = useState('');
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   const { difficulty, tag, company, status } = filters;
@@ -37,7 +41,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
 
   return (
     <main className="max-w-4xl mx-auto px-4 pt-6 pb-8 sm:pb-14">
-      <h1 className="mt-3 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">System design practice</h1>
+      <h1 className="font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">System design practice</h1>
       <p className="mt-3 max-w-2xl text-base text-ink/80">
         Each problem gives use cases, traffic and requirements. Design the system in Proschi; the tests run in your browser and explain what holds up and
         what does not.
@@ -47,7 +51,9 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
           {solved} of {problems.length} solved
           {stats && stats.solvers > 0 && <> · {stats.solvers} {stats.solvers === 1 ? 'person has' : 'people have'} solved at least one</>}
         </p>
+        {meta}
       </div>
+      {top}
 
       <ProblemFilters query={query} onQuery={setQuery} filters={filters} onFilters={setFilters} tags={tags} companies={companies} />
 
@@ -73,6 +79,7 @@ export default function ProblemList({ problems, progress, stats, children }: Pro
                   </span>
                 </span>
                 <SolveRate summary={stats?.problems[p.id]} />
+                {progress[p.id]?.assisted && <AssistedTag />}
                 <span className="hidden sm:inline text-xs text-muted">{STATUS_LABEL[s]}</span>
                 <DifficultyBadge difficulty={p.difficulty} />
               </a>

@@ -4,9 +4,11 @@ import { api, ApiError, type EmailPrefs } from '../../services/api';
 import { track } from '../../services/metrics';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { browserTimeZone, isEmailAddress, REMINDER_KINDS, type ReminderKind } from './reminderForm';
+import ProductNews from './ProductNews';
+import { Row, Section, switchInput } from './settingsUi';
 
 /**
- * Email reminders on the account page (`#/me`), signed in only: an address
+ * Email reminders, the Notifications section of the settings page (`#/me`), signed in only: an address
  * (double opt-in: the server emails a confirmation link, and only a
  * confirmed address gets reminders), which reminders to get, resuming them
  * after a pause, and changing or removing the address. The browser's time
@@ -78,18 +80,14 @@ export default function EmailReminders() {
   const showForm = prefs && (prefs.email === null || editing);
 
   return (
-    <section aria-labelledby="email-reminders" className="mt-8 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-      <h2 id="email-reminders" className="font-display text-xl font-bold text-ink">
-        Email reminders
-      </h2>
-      <p className="mt-2 max-w-2xl text-sm text-ink/80">
-        Opt in to a nudge when your streak is at risk or cards are due, and a weekly recap. At most one email a day, sent in your evening; every email has a
-        one-click unsubscribe link. Your address is used for nothing else.
-      </p>
-
-      {load.status === 'loading' && <p className="mt-3 text-sm text-muted">Loading…</p>}
+    <Section
+      id="notifications"
+      title="Notifications"
+      description="Email reminders when your streak is at risk or cards are due, and a weekly recap."
+    >
+      {load.status === 'loading' && <p className="p-4 text-sm text-muted">Loading…</p>}
       {load.status === 'error' && (
-        <p role="alert" className="mt-3 flex flex-wrap items-center gap-2 text-sm text-ink">
+        <p role="alert" className="flex flex-wrap items-center gap-2 p-4 text-sm text-ink">
           {load.message}
           <button type="button" className={outlineButton} onClick={() => setAttempt((n) => n + 1)}>
             <RotateCcw size={14} aria-hidden="true" />
@@ -99,10 +97,10 @@ export default function EmailReminders() {
       )}
 
       {showForm && (
-        <form onSubmit={(e) => void submit(e)} className="mt-3 flex flex-wrap items-end gap-2" noValidate>
-          <label className="flex w-full min-w-0 flex-col gap-1 text-sm font-semibold text-ink sm:w-auto">
-            Email address
+        <Row label="Email address" htmlFor="reminder-email" help="At most one email a day, sent in your evening, each with a one-click unsubscribe link. We send a confirmation link first, and use your address for nothing else.">
+          <form onSubmit={(e) => void submit(e)} className="mt-3 flex flex-wrap items-center gap-2" noValidate>
             <input
+              id="reminder-email"
               type="email"
               autoComplete="email"
               value={address}
@@ -111,101 +109,118 @@ export default function EmailReminders() {
               className={`${field} w-full sm:w-72`}
               required
             />
-          </label>
-          <button type="submit" disabled={busy} className={primaryButton}>
-            <Mail size={14} aria-hidden="true" />
-            Send confirmation link
-          </button>
-          {editing && (
-            <button type="button" className={outlineButton} onClick={() => setEditing(false)}>
-              Cancel
+            <button type="submit" disabled={busy} className={primaryButton}>
+              <Mail size={14} aria-hidden="true" />
+              Send confirmation link
             </button>
-          )}
-        </form>
+            {editing && (
+              <button type="button" className={outlineButton} onClick={() => setEditing(false)}>
+                Cancel
+              </button>
+            )}
+          </form>
+        </Row>
       )}
 
       {prefs && prefs.email !== null && !editing && (
-        <div className="mt-3">
-          <p className="text-sm text-ink">
-            {prefs.confirmed ? 'Reminders go to ' : 'Waiting for you to confirm '}
-            <strong className="break-all">{prefs.email}</strong>
-            {prefs.confirmed ? '.' : ': follow the link we emailed you.'}
-          </p>
+        <>
+          <Row
+            label="Email address"
+            help={
+              <>
+                {prefs.confirmed ? 'Reminders go to ' : 'Waiting for you to confirm '}
+                <strong className="break-all font-semibold text-ink">{prefs.email}</strong>
+                {prefs.confirmed ? '.' : ': follow the link we emailed you.'}
+              </>
+            }
+            control={
+              <>
+                {!prefs.confirmed && (
+                  <button
+                    type="button"
+                    disabled={busy}
+                    className={outlineButton}
+                    onClick={() =>
+                      void run(
+                        () => api<EmailPrefs>('/api/me/email', { method: 'PUT', body: { email: prefs.email, timeZone: browserTimeZone() } }),
+                        `We sent a new confirmation link to ${prefs.email}.`,
+                      )
+                    }
+                  >
+                    <Mail size={14} aria-hidden="true" />
+                    Resend the link
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className={outlineButton}
+                  onClick={() => {
+                    setAddress(prefs.email);
+                    setEditing(true);
+                    setNotice(undefined);
+                  }}
+                >
+                  Change address
+                </button>
+                <button type="button" disabled={busy} className={outlineButton} onClick={() => void remove()}>
+                  <Trash2 size={14} aria-hidden="true" />
+                  Remove address
+                </button>
+              </>
+            }
+          />
           {prefs.confirmed && prefs.paused && (
-            <p className="mt-2 flex flex-wrap items-center gap-2 rounded-sm border-bw-1 border-ink bg-pop-yellow/30 p-2 text-sm text-ink">
-              We paused your reminders after three in a row went unanswered.
-              <button type="button" disabled={busy} className={primaryButton} onClick={() => void patch({ resume: true }, 'Reminders are back on.')}>
+            <div className="flex flex-col gap-3 bg-pop-yellow/20 p-4 text-sm text-ink sm:flex-row sm:items-center sm:justify-between">
+              <p>We paused your reminders after three in a row went unanswered.</p>
+              <button type="button" disabled={busy} className={`${primaryButton} self-start sm:self-auto`} onClick={() => void patch({ resume: true }, 'Reminders are back on.')}>
                 <Play size={14} aria-hidden="true" />
                 Resume reminders
               </button>
-            </p>
+            </div>
           )}
           {prefs.confirmed && (
-            <fieldset className="mt-3">
-              <legend className="text-sm font-semibold text-ink">Send me</legend>
+            <div role="group" aria-label="Send me" className="divide-y divide-ink/15">
               {REMINDER_KINDS.map((kind) => (
-                <label key={kind.key} className="mt-2 flex cursor-pointer items-start gap-3">
-                  <input
-                    type="checkbox"
-                    role="switch"
-                    checked={prefs[kind.key as ReminderKind]}
-                    disabled={busy}
-                    onChange={(e) => void patch({ [kind.key]: e.target.checked })}
-                    className="mt-0.5 h-5 w-5 shrink-0 accent-ink"
-                  />
-                  <span className="text-sm text-ink">
-                    <span className="font-semibold">{kind.label}</span> <span className="text-ink/70">— {kind.hint}</span>
-                  </span>
-                </label>
+                <Row
+                  key={kind.key}
+                  label={kind.label}
+                  htmlFor={`reminder-${kind.key}`}
+                  inline
+                  help={`${kind.hint[0].toUpperCase()}${kind.hint.slice(1)}.`}
+                  control={
+                    <input
+                      id={`reminder-${kind.key}`}
+                      type="checkbox"
+                      role="switch"
+                      checked={prefs[kind.key as ReminderKind]}
+                      disabled={busy}
+                      onChange={(e) => void patch({ [kind.key]: e.target.checked })}
+                      className={switchInput}
+                    />
+                  }
+                />
               ))}
-            </fieldset>
+            </div>
           )}
-          <div className="mt-3 flex flex-wrap gap-2">
-            {!prefs.confirmed && (
-              <button
-                type="button"
-                disabled={busy}
-                className={outlineButton}
-                onClick={() =>
-                  void run(
-                    () => api<EmailPrefs>('/api/me/email', { method: 'PUT', body: { email: prefs.email, timeZone: browserTimeZone() } }),
-                    `We sent a new confirmation link to ${prefs.email}.`,
-                  )
-                }
-              >
-                <Mail size={14} aria-hidden="true" />
-                Resend the link
-              </button>
-            )}
-            <button
-              type="button"
-              className={outlineButton}
-              onClick={() => {
-                setAddress(prefs.email);
-                setEditing(true);
-                setNotice(undefined);
-              }}
-            >
-              Change address
-            </button>
-            <button type="button" disabled={busy} className={outlineButton} onClick={() => void remove()}>
-              <Trash2 size={14} aria-hidden="true" />
-              Remove address
-            </button>
-          </div>
-        </div>
+        </>
       )}
 
-      {error && (
-        <p role="alert" className="mt-3 text-sm font-semibold text-ink">
-          {error}
-        </p>
+      <ProductNews />
+
+      {(error || notice) && (
+        <div className="p-4">
+          {error && (
+            <p role="alert" className="text-sm font-semibold text-ink">
+              {error}
+            </p>
+          )}
+          {notice && (
+            <p role="status" className="text-sm text-ink">
+              {notice}
+            </p>
+          )}
+        </div>
       )}
-      {notice && (
-        <p role="status" className="mt-3 text-sm text-ink">
-          {notice}
-        </p>
-      )}
-    </section>
+    </Section>
   );
 }

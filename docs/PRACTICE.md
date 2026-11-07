@@ -221,6 +221,61 @@ normal editor and tests, the clock still running) and **Wrap-up** (a
 self-review checklist and a summary). The session, time per phase and the
 summaries stay in the browser; nothing is sent to the server.
 
+### Mock interviews
+
+Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
+offers a choice: **On your own (free)**, the mode above, or a **Mock
+interview** with an interviewer, with its estimate in credits for the chosen
+length against your balance ("about 35–55 credits for 45 min; you have
+760", never more than what you have or the session's cap), and, without
+enough, a top-up and a link to the plans.
+`practice/#/<problem>?interview=mock` opens the start screen with the mock
+interview chosen (`?interview=ai` still works). The interview is charged
+for what it uses (the free plan gets 100 credits at sign-up); if the
+credits run out, it moves to the wrap-up and still gives its verdict. The
+first start asks once for consent and names what is sent to
+Anthropic. The interviewer is Claude by Anthropic (backend `src/ai/`, routes in
+`src/interviews.ts`), and the session lives on the server, so a reload picks
+it up again.
+
+- **A chat next to the editor**, in the statement column. The interviewer
+  greets, then answers clarifying questions from the hidden `## Scale` and
+  `## Constraints`, asks this file's estimates in the Estimate phase and the
+  lesson's "In the interview" follow-ups in Design and Wrap-up. Replies
+  stream in. A mic button dictates through the browser's speech recognition
+  where there is one (it is hidden elsewhere); typing always works.
+- **The phase and the clock**: the same four phases and 10/10/70/10 split of
+  30, 45 or 60 minutes. The clock moves the phase on; **Next phase** moves
+  on earlier. Whatever the length, a session stops taking turns after 60
+  minutes or at its token cap; the verdict can always be asked for.
+- **Coaching cards** after each turn: **Focus now** (what to do next),
+  **Can improve** (what to fix in what you just said) and **Wrap up** (near
+  the end of a phase).
+- **Send my design** attaches the editor's source to the message. The server
+  runs the problem's tests on it and hands the model those results; it never
+  trusts the page's.
+- **The verdict**, on **Finish and get the verdict**: pass or fail, a score
+  from 1 to 5 for requirements, estimation, design, trade-offs and
+  communication, what went well and what went wrong per skill, and up to five
+  next steps.
+
+On Pro, the verdict also links **Practise them here**: the 3
+picks made after it (below, "Your next steps").
+
+An answer that fails on our side isn't charged; one the model gave is, even
+when it was cut off or declined. If the interviewer fails on
+the first turn, the session ends. Transcripts are kept 90 days, the
+verdicts for history ([Privacy](PRIVACY.md#mock-interviews)).
+
+**Interview history**, on the progress page (`practice/#/progress`, signed
+in, when the server has an Anthropic key): each finished mock interview with its problem,
+date and pass or fail, linking to its verdict (`practice/#/progress/interview/<id>`).
+Pro also sees every past session and the score of each skill over time, as
+five small charts on the same 1 to 5 scale (with a table for screen
+readers). Other plans see their latest verdict, and, with billing on, how
+many earlier ones are kept and a link to Pro (`GET /api/interviews/history`,
+backend `src/interviews.ts`).
+
 Every problem has an `interview.md` (`interviewFile.test.ts` fails without
 one). It holds exactly two sections, each item a `### ` heading opened by
 `- key: value` lines and followed by Markdown:
@@ -511,10 +566,26 @@ idea per test (nodes, connections, a use case's request and response, the
 traffic, requirements, a replica), opens signed out too. It is optional:
 recommended first to a learner who has solved nothing, but unsolved it locks
 no later step, keeps no stage from counting as complete and is in no badge's
-target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`, the one
-place to change when the roadmap moves behind a paid plan. A build without
+target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`. A build without
 accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.
+
+**Your next steps** is the roadmap's paid part (Pro), gated next to it by
+`aiRoadmapAccess`. After a Pro user's mock interview verdict, one Claude
+Haiku call picks the next 3 steps, each with a one-sentence reason. It gets
+the verdict,
+the weakest card topics, and every roadmap problem (solved or not) and card
+topic (with your mastery) by id; it only picks from those, and the server
+drops any pick whose id is not a real problem or topic. The verdict never
+waits on the picks: they are made after it is answered, and the page shows
+"Picking your next steps…" and asks again about 2, 5 and 10 s later, then
+says quietly if none came. A failed pick never fails the verdict. The card under the roadmap's progress links each pick to
+its roadmap step (`practice/#/roadmap/<id>`) or its card deck
+(`practice/#/review/<topic>`); the verdict links the same picks. Signed in
+without Pro, with billing on, the card shows the way to Pro instead. Without
+an Anthropic key on the server (`GET /api/roadmap/next` answers 501), or with no picks
+yet, the roadmap keeps its own order (backend `src/roadmap.ts`,
+`src/ai/roadmap.ts`).
 
 The stages are plain data in `frontend/src/practice/roadmap.ts` (`ROADMAP`):
 each has an `id`, a `title`, a sentence or two on what it teaches and why it

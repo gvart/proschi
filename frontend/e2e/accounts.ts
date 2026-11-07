@@ -2,7 +2,7 @@ import type { Page } from '@playwright/test';
 
 /** GET /api/me's answer (Me in src/services/api.ts, which this tsconfig cannot compile). */
 interface Me {
-  user: { id: string; displayName: string; publicProfile: boolean; dailyGoal?: number; providers?: string[] };
+  user: { id: string; displayName: string; publicProfile: boolean; dailyGoal?: number; providers?: string[]; plan?: string };
   progress: Record<string, unknown>;
 }
 
@@ -24,11 +24,49 @@ export const GAME_ME = {
   daily: { day: new Date().toISOString().slice(0, 10), scenario: 'shortly' },
 };
 
+/** GET /api/me/plan's `features` for a plan, as backend/src/features.ts answers them with billing on. */
+export function featuresFor(plan: string | undefined): Record<string, { ok: boolean; reason?: string }> {
+  const pro = plan === 'pro' || plan === 'max';
+  const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
+  const max = plan === 'max' ? { ok: true } : { ok: false, reason: 'needs_pro' };
+  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max };
+}
+
+/** GET /api/credits/estimates as the server answers it with the default prices. */
+export const ESTIMATES = {
+  mock_interview: { min: 45, max: 60, worst: 1100 },
+  partner_review: { min: 5, max: 15, worst: 50 },
+  partner_build: { min: 20, max: 40, worst: 72 },
+  partner_turn: { min: 1, max: 5, worst: 30 },
+  verdict: { min: 15, max: 55, worst: 53 },
+  deepMultiplier: 2,
+};
+
+type Credits = { balance: number; monthly: { allowance: number; left: number; resetsAt: number } | null; signup: number; topup: number };
+
+/** GET /api/me/plan for `plan` with billing on: Free with its 100 sign-up credits, or a paid plan with its month untouched. */
+export function planAnswer(plan: 'free' | 'pro' | 'max', credits?: Credits): Record<string, unknown> {
+  const allowance = { pro: 800, max: 2200 }[plan as 'pro' | 'max'];
+  const resetsAt = Date.parse('2026-12-01T00:00:00Z');
+  return {
+    plan,
+    billing: true,
+    subscription: plan === 'free' ? null : { status: 'active', product: `${plan}_yearly`, currentPeriodEnd: Date.parse('2027-11-06T00:00:00Z'), cancelAtPeriodEnd: false },
+    customer: plan !== 'free',
+    limits: plan === 'free' ? { documents: 5, versionsPerDocument: 20, documentBytes: 65536 } : { documents: null, versionsPerDocument: null, documentBytes: 524288 },
+    credits: credits ?? (allowance ? { balance: allowance, monthly: { allowance, left: allowance, resetsAt }, signup: 0, topup: 0 } : { balance: 100, monthly: null, signup: 100, topup: 0 }),
+    features: featuresFor(plan),
+  };
+}
+
 export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void> {
   const answers: [RegExp, unknown][] = [
     [/^\/api\/me$/, me],
     [/^\/auth\/providers$/, { providers: ['github', 'google'] }],
     [/^\/api\/me\/email$/, { email: null }],
+    // Admin campaigns: no announcement, product news on without an address (campaigns.accounts.e2e.ts mocks real ones).
+    [/^\/api\/me\/announcement$/, { announcement: null }],
+    [/^\/api\/me\/news$/, { on: true, email: null, source: null }],
     [/^\/api\/me\/activity$/, { day: '', goal: { reviews: me.user.dailyGoal ?? 10, solves: 1 }, days: [] }],
     [/^\/api\/me\/achievements$/, { achievements: [], skills: { readiness: 0, topics: [], weakest: [] }, stats: { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 } }],
     [/^\/api\/cards\/state$/, { states: {}, today: { reviews: 0, new: 0 } }],
@@ -42,6 +80,16 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/game\/leaderboard$/, { board: 'daily', title: 'Daily run', players: 0, entries: [] }],
     // Cloud sync of the editor's diagrams: an empty account (editor.accounts.e2e.ts mocks a real one).
     [/^\/api\/me\/documents$/, { documents: [], cursor: 0, limit: 5, used: 0 }],
+    // Plan & billing on the account page (VITE_BILLING): the free plan (billing.accounts.e2e.ts mocks Pro).
+    [/^\/api\/me\/plan$/, planAnswer(me.user.plan === 'pro' || me.user.plan === 'max' ? me.user.plan : 'free')],
+    // Metered credits: the typical estimates and nothing spent yet (billing.accounts.e2e.ts mocks real use).
+    [/^\/api\/credits\/estimates$/, ESTIMATES],
+    [/^\/api\/credits\/usage$/, { items: [] }],
+    // The AI interviewer on interview mode's start screen: none yet (aiInterview.accounts.e2e.ts mocks a session).
+    [/^\/api\/interviews$/, { interviews: [] }],
+    // The progress page's interview history and the roadmap's AI picks: none yet (history.accounts.e2e.ts mocks real ones).
+    [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
+    [/^\/api\/roadmap\/next$/, { next: null }],
   ];
   await page.route(
     (url) => /^\/(api|auth)\//.test(url.pathname),

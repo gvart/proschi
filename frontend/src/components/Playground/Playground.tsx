@@ -101,6 +101,11 @@ import Menu, { MenuItem } from './Menu';
 import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng } from './exportDiagram';
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
+import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
+import PartnerButton from '../../partner/PartnerButton';
+import { usePartnerShortcut } from '../../partner/shortcut';
+import PartnerDock from '../../partner/PartnerDock';
+import { useIsPhone } from '../../onboarding/layout';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
@@ -128,15 +133,18 @@ import type { CoverBand } from '../../onboarding/Tour';
 import type { FitInset } from '../Diagram/useFitOnChange';
 import { PlaybackMiniMap, UseCasePlayback } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
+import { useFeedbackDiagram } from '../../feedback/diagram';
 
 // Panes that are not visible at start load on first use.
 const HldView = lazy(() => import('../Hld/HldView'));
 const ResultsPanel = lazy(() => import('../Analysis/ResultsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
+const PartnerPanel = lazy(() => import('../../partner/PartnerPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
 const VersionsDialog = lazy(() => import('./VersionsDialog'));
+const ShareLinkDialog = lazy(() => import('./ShareLinkDialog'));
 const VersionViewer = lazy(() => import('./VersionViewer'));
 // First-run help costs nothing until it is shown.
 const EditorTour = lazy(() => import('../../onboarding/EditorTour'));
@@ -197,6 +205,8 @@ function initialTourMode(): StartMode {
   return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
 }
 
+const EDITOR_CONTEXT = { kind: 'editor' } as const;
+
 /** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
 function initialMobilePane(): 'code' | 'diagram' {
   return !isDeepLink() && !isReturning() ? 'code' : 'diagram';
@@ -215,6 +225,7 @@ export default function Playground() {
   const [linkCloud, setLinkCloud] = useState(() => ({ docId: docStore.get().currentId, files: cloudImports(decodeShareLink(window.location.hash)?.imports) }));
   const linkCloudFiles = linkCloud.docId === current.id ? linkCloud.files : {};
   const source = current.source;
+  useFeedbackDiagram(source);
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
   /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
@@ -252,6 +263,7 @@ export default function Playground() {
   const [shortening, setShortening] = useState(false);
   const [showImport, setShowImport] = useState(false);
   const [showVersions, setShowVersions] = useState(false);
+  const [showShareLink, setShowShareLink] = useState(false);
   /** A saved version open read-only, or two compared, over the editor. */
   const [versionView, setVersionView] = useState<{ mode: VersionMode; versions: VersionInfo[] } | null>(null);
   /** The code and diagram panes' sizes, as last set with the splitter. */
@@ -444,7 +456,7 @@ export default function Playground() {
       });
     });
   }, []);
-  const layoutSettled = useAutoLayout(shown, showLaidOut);
+  const { settled: layoutSettled, busy: layoutBusy } = useAutoLayout(shown, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -532,6 +544,32 @@ export default function Playground() {
   };
 
   const signedIn = account.state.status === 'signed-in';
+  const features = useFeatures(account.state);
+  const shareLinks = features('share_links');
+
+  // Design partner (src/partner): on builds with accounts, beside the panes or as a sheet on phones.
+  const hasPartner = account.state.status !== 'off';
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const phone = useIsPhone();
+  const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
+  const closePartner = useCallback(() => setPartnerOpen(false), []);
+  usePartnerShortcut(togglePartner, hasPartner);
+  const sourceNow = useRef(source);
+  const importsNow = useRef(imports);
+  useEffect(() => {
+    sourceNow.current = source;
+    importsNow.current = imports;
+  });
+  const partnerSource = useCallback(() => sourceNow.current, []);
+  const partnerFiles = useCallback(() => Object.entries(importsNow.current ?? {}).map(([name, text]) => ({ name, source: text })), []);
+  const applyPartner = useCallback(
+    (next: string) => {
+      if (editorRef.current) editorRef.current.replace(next);
+      else setSource(next);
+    },
+    [setSource],
+  );
+  const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -760,6 +798,19 @@ export default function Playground() {
     if (state.kind === 'offline') return { message: 'Offline: versions are in your account, so they need a connection.', actions: [] };
     return null;
   })();
+  /** Why this diagram cannot have a live share link yet (it is not in the account), with what to do; null when it can. */
+  const shareHint = ((): { message: string; actions: { label: string; run: () => void }[] } | null => {
+    if (cloud.state.kind === 'off' || !cloud.enabled) return { message: 'A share link shows the diagram kept in your account, and cloud sync is off in this browser.', actions: [{ label: 'Turn on cloud sync', run: () => cloud.setEnabled(true) }] };
+    if (cloud.local.has(current.id)) {
+      return {
+        message: 'This diagram stays in this browser only. Keep it in your account to share a link to it.',
+        actions: cloud.canKeep ? [{ label: 'Keep in cloud', run: () => cloud.keepInCloud(current.id) }] : [],
+      };
+    }
+    if (cloud.state.kind === 'loading') return { message: 'Connecting to your account…', actions: [] };
+    if (cloud.state.kind === 'offline') return { message: 'Offline: share links are made in your account, so they need a connection.', actions: [] };
+    return null;
+  })();
   const versionDraft = useMemo(() => ({ source, files: JSON.parse(importableKey) as Record<string, string> }), [source, importableKey]);
   /** "Restore into draft": the version's text replaces the draft's; the version stays as it is, and Undo puts the draft back. */
   const restoreVersion = (text: string, tag: string) => {
@@ -781,7 +832,7 @@ export default function Playground() {
   const canPlay = !!scenario && scenario.steps.length > 0;
   const problemCount = diagnostics.length;
 
-  return (
+  const page = (
     <div
       className="h-[100dvh] flex flex-col bg-paper text-ink"
       style={keyboard.style}
@@ -790,7 +841,7 @@ export default function Playground() {
     >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact siteNav={false} actions={<AccountMenu account={account} />}>
-        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-initial">
           <button
             type="button"
             aria-label="Diagrams"
@@ -888,6 +939,18 @@ export default function Playground() {
                 >
                   Versions…
                 </MenuItem>
+                {/* Pro only; others see it (with an upgrade hint) only when paid plans are on. */}
+                {(shareLinks.ok || showsUpgrade(shareLinks)) && (
+                  <MenuItem
+                    icon={<Link2 size={14} />}
+                    onSelect={() => {
+                      setShowShareLink(true);
+                      close();
+                    }}
+                  >
+                    Share link…
+                  </MenuItem>
+                )}
                 <div className="my-1 border-t border-ink/10" />
                 <MenuItem
                   icon={<ArchiveRestore size={14} />}
@@ -932,7 +995,7 @@ export default function Playground() {
           }}
         />
 
-        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
           <select
             aria-label="Use case"
             value={useCase?.id ?? ''}
@@ -982,6 +1045,8 @@ export default function Playground() {
             </button>
           )}
 
+          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
+
           <ZenButton zen={zen} className={iconButton} />
 
           <div data-tour="export">
@@ -998,12 +1063,13 @@ export default function Playground() {
           <div data-tour="share">
             <Menu
               label={copied ? 'Copied' : 'Share'}
+              title="Share: a link, a short link or an embed"
               align="right"
               buttonClassName={outlineButton}
               trigger={
                 <>
                   {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
-                  <span className="hidden sm:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
+                  <span className="hidden xl:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
                 </>
               }
             >
@@ -1168,7 +1234,14 @@ export default function Playground() {
                     analysis={simulation.analysis}
                     results={simulation.results}
                     onSelect={selectDiagnostic}
-                    review={<ReviewPanel source={source} input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results)} onSelect={selectDiagnostic} />}
+                    review={
+                      <ReviewPanel
+                        source={source}
+                        input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
+                        onSelect={selectDiagnostic}
+                        onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
+                      />
+                    }
                   />
                 ) : view === 'hld' && !playing ? (
                   <HldView
@@ -1220,6 +1293,7 @@ export default function Playground() {
                           onResetLayout={() => editSource(clearPositions)}
                           onDelete={deleteFromCanvas}
                           fitKey={`${mobilePane}:${layoutSettled}`}
+                          layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}
                           imageRequest={imageRequest}
                           onImageDone={() => setImageRequest(null)}
@@ -1252,6 +1326,23 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
+      {hasPartner && (
+        <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+          <Suspense fallback={<PaneLoading />}>
+            <PartnerPanel
+              storeKey={`editor:${current.id}`}
+              context={EDITOR_CONTEXT}
+              account={account}
+              source={source}
+              getSource={partnerSource}
+              getFiles={partnerFiles}
+              apply={applyPartner}
+              undo={undoPartner}
+              onClose={closePartner}
+            />
+          </Suspense>
+        </PartnerDock>
+      )}
       </div>
 
       {drawer && (
@@ -1291,6 +1382,12 @@ export default function Playground() {
               if (shortLinkRef.current?.id === id) shortLinkRef.current = null;
             }}
           />
+        </Suspense>
+      )}
+
+      {showShareLink && (
+        <Suspense fallback={<PaneLoading overlay />}>
+          <ShareLinkDialog docId={current.id} title={titleOf(source)} hint={shareHint} pushedVersion={cloud.pushedVersion} onClose={() => setShowShareLink(false)} />
         </Suspense>
       )}
 
@@ -1383,6 +1480,8 @@ export default function Playground() {
       )}
     </div>
   );
+  // The paid features (components/Feature.tsx) for everything below: the review panel, the share link dialog.
+  return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
 }
 
 function UseCaseOption({ useCase }: { useCase: DiagramUseCase }) {
@@ -1474,6 +1573,8 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
+  layoutBusy: boolean;
   /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
   glideKey: string;
   /** An image to export (the Export menu in the header), made once the nodes are drawn. */
@@ -1521,6 +1622,7 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  layoutBusy,
   glideKey,
   imageRequest,
   onImageDone,
@@ -1645,6 +1747,7 @@ function DiagramView({
     <div
       ref={wrapperRef}
       className="relative h-full"
+      data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
         e.preventDefault();

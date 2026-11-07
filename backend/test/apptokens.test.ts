@@ -30,6 +30,7 @@ function mockGitHub(profile: Record<string, unknown> = { id: 42, login: 'octocat
       return Response.json({ access_token: 'gh-token' });
     }
     if (url === 'https://api.github.com/user') return Response.json(profile);
+    if (url === 'https://api.github.com/user/emails') return Response.json([]);
     return real(input, init);
   });
 }

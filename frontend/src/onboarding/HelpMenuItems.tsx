@@ -1,16 +1,20 @@
-import { BookOpen, BookOpenText, Compass, ExternalLink, FileCode, Gauge } from 'lucide-react';
+import { BookOpen, BookOpenText, Compass, ExternalLink, FileCode, Gauge, MessageSquare } from 'lucide-react';
 import { MenuItem } from '../components/Playground/Menu';
+import { openFeedback } from '../feedback/open';
+import { apiEnabled } from '../services/api';
 import { DOCS_URL, LANGUAGE_URL, MODEL_URL } from './links';
 
 interface HelpMenuItemsProps {
   tourLabel: string;
   onTour: () => void;
   onCheatSheet: () => void;
+  /** Closes the menu before the feedback dialog opens. */
+  onFeedback?: () => void;
 }
 
 const linkClass = 'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm text-ink/85 hover:bg-ink/10';
 
-export default function HelpMenuItems({ tourLabel, onTour, onCheatSheet }: HelpMenuItemsProps) {
+export default function HelpMenuItems({ tourLabel, onTour, onCheatSheet, onFeedback }: HelpMenuItemsProps) {
   return (
     <>
       <MenuItem icon={<Compass size={14} />} onSelect={onTour}>
@@ -33,6 +37,20 @@ export default function HelpMenuItems({ tourLabel, onTour, onCheatSheet }: HelpM
         <BookOpen size={14} />
         All docs
       </a>
+      {apiEnabled && (
+        <>
+          <div className="my-1 border-t border-ink/10" />
+          <MenuItem
+            icon={<MessageSquare size={14} />}
+            onSelect={() => {
+              onFeedback?.();
+              void openFeedback();
+            }}
+          >
+            Send feedback
+          </MenuItem>
+        </>
+      )}
     </>
   );
 }

@@ -11,10 +11,46 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
 const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   // Signed out (build with accounts), GET /api/me answers 401 and the page reads that as signed out; Chromium logs every non-2xx load.
   /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\) \(http:\/\/127\.0\.0\.1:\d+\/api\/me:0\)$/,
+  // The sign-in page's forms (signin.accounts.e2e.ts): a wrong password answers 401 and a used link 400, which the page shows as a message.
+  /^Failed to load resource: the server responded with a status of 40[01] \([^)]+\) \(http:\/\/127\.0\.0\.1:\d+\/auth\/email\/(login|confirm|reset):0\)$/,
+  // The admin's email preview is a sandboxed srcdoc iframe without scripts: the tests' own init scripts (addInitScript) are refused in it, as intended.
+  /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.( \(about:srcdoc:0\))?$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */
 export const ONBOARDING_KEY = 'proschi.onboarding';
+
+/** The key src/practice/hub/goal.ts keeps what the visitor is on the practice page for in. */
+export const GOAL_KEY = 'proschi.practice.goal';
+
+/**
+ * Answers the practice home's "What are you here for?" before every load of
+ * `page`: a daily habit shows the streak and today's review, challenge and
+ * Arcade run; interview prep the roadmap's next step and the mock interview.
+ */
+export async function setPracticeGoal(page: Page, goals: ('solve' | 'interview' | 'habit')[]): Promise<void> {
+  await page.addInitScript(([key, value]) => window.localStorage.setItem(key, value), [GOAL_KEY, JSON.stringify({ goals, asked: true })] as const);
+}
+
+/** The menu of the practice hub's bar (src/practice/hub/tabs.ts HUB_GROUPS) holding each section; Problems and Progress are links on the bar itself. */
+const SECTION_MENU: Record<string, RegExp> = {
+  Roadmap: /^Interview/,
+  'Mock interview': /^Interview/,
+  'Review cards': /^More/,
+  'Daily challenge': /^More/,
+  Arcade: /^More/,
+};
+
+/** The practice hub's link to `section`, its menu opened first when it sits in one (on a phone the menus are named "Interview" and "More"). */
+export async function sectionLink(page: Page, section: string): Promise<Locator> {
+  const nav = page.getByRole('navigation', { name: 'Practice sections' });
+  const menu = SECTION_MENU[section];
+  if (menu) {
+    const button = nav.getByRole('button', { name: menu });
+    if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click();
+  }
+  return nav.getByRole('link', { name: section, exact: true });
+}
 
 /** The key src/practice/progress.ts keeps the lessons read in. */
 export const LESSONS_KEY = 'proschi.lessons';

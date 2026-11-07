@@ -11,7 +11,8 @@ import type { DailyGoal, DayActivity, Streak, WeeklyRecap } from '../learn/strea
 
 export const apiEnabled = import.meta.env.VITE_ACCOUNTS === 'true';
 
-export type ProviderId = 'github' | 'google';
+/** 'email': email and password, on the sign-in page (/signin/, src/auth/), which /auth/email/start opens. */
+export type ProviderId = 'github' | 'google' | 'email';
 
 export class ApiError extends Error {
   readonly status: number;
@@ -59,6 +60,8 @@ export interface User {
   providers?: ProviderId[];
   /** Unix seconds: when the account was made (GET /api/me). */
   createdAt?: number;
+  /** The account's plan (`users.plan`): 'free' or 'pro'; absent from an older Worker. */
+  plan?: string;
 }
 
 /** A problem's progress as the server keeps it. */

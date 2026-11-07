@@ -22,6 +22,7 @@ import { nextBadges, profileBadge, type ProfileBadge } from '../profile/profile'
 import SkillRadar, { type RadarPoint } from './SkillRadar';
 import type { Achievements } from './useAchievements';
 import { useChallengeSummary } from './useChallengeSummary';
+import InterviewHistory, { InterviewVerdictPage } from '../history/InterviewHistory';
 
 /**
  * The progress page (`#/progress`), the one place for progress, read top to
@@ -32,7 +33,8 @@ import { useChallengeSummary } from './useChallengeSummary';
  * (each topic's mastery as a radar, with a table for screen readers, and the
  * "interview ready" score with the weakest topics to train), the roadmap's
  * progress, the next badges to earn with every badge behind "All badges"
- * (BadgeGrid), and the problems solved. Signed out, a locked preview with a
+ * (BadgeGrid), the AI interview history (history/InterviewHistory.tsx, each
+ * verdict at `#/progress/interview/<id>`), and the problems solved. Signed out, a locked preview with a
  * sign-in invitation. A tab of the practice hub; the account's settings are
  * on `#/me`.
  *
@@ -46,13 +48,19 @@ const preview: ProfileBadge[] = ACHIEVEMENTS.map((a) => ({ ...a, earned: false }
 
 export default function ProgressRoute({
   account,
+  showStreak = false,
   achievements,
   roadmap,
   stages,
   activity,
   progress,
+  verdictId,
 }: {
   account: Account;
+  /** `#/progress/interview/<id>`: show that AI interview's verdict instead. */
+  verdictId?: string;
+  /** The streak section, for those who keep one (hub/goal.ts). */
+  showStreak?: boolean;
   achievements: Achievements;
   activity: Activity;
   /** This browser's progress (merged with the account's when signed in): the problems solved. */
@@ -64,11 +72,13 @@ export default function ProgressRoute({
   const { state, refresh } = achievements;
   const challenge = useChallengeSummary(account);
   useEffect(() => {
-    document.title = 'Your progress · Proschi practice';
-  }, []);
+    // A verdict page names itself.
+    if (!verdictId) document.title = 'Your progress · Proschi practice';
+  }, [verdictId]);
   // Opening the page checks for anything new.
   useEffect(() => refresh(), [refresh]);
 
+  if (verdictId) return <InterviewVerdictPage id={verdictId} />;
   if (state.status === 'loading') return <PaneLoading label="Loading your progress…" />;
 
   const answer: AchievementsAnswer | undefined = state.status === 'ready' ? state.answer : undefined;
@@ -151,13 +161,13 @@ export default function ProgressRoute({
         </div>
       </section>
 
-      {(streak || challenge) && (
+      {((showStreak && streak) || challenge) && (
         <section aria-labelledby="streak-title" className="mt-10">
           <h2 id="streak-title" className="font-display text-2xl font-extrabold text-ink">
-            Streak
+            {showStreak ? 'Streak' : 'Daily challenge'}
           </h2>
-          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label="Streak">
-            {streak && (
+          <dl className="mt-3 grid grid-cols-2 gap-3 sm:grid-cols-4" aria-label={showStreak ? 'Streak' : 'Daily challenge'}>
+            {showStreak && streak && (
               <Tile
                 label="Current streak"
                 value={streak.current}
@@ -165,7 +175,7 @@ export default function ProgressRoute({
                 icon={<Flame size={16} aria-hidden="true" className={streak.current > 0 ? 'fill-pop-yellow text-ink' : 'text-muted'} />}
               />
             )}
-            {streak && <Tile label="Streak freezes" value={streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />}
+            {showStreak && streak && <Tile label="Streak freezes" value={streak.freezes} icon={<Snowflake size={16} aria-hidden="true" className="text-ink" />} />}
             {challenge && (
               <Tile
                 label="Challenge streak"
@@ -177,7 +187,7 @@ export default function ProgressRoute({
             )}
             {challenge && <Tile label="Best challenge" value={challenge.best} unit={`/ ${MAX_SCORE}`} testId="profile-challenge-best" />}
           </dl>
-          {ready && (
+          {showStreak && ready && (
             <div className="mt-4">
               <GoalPicker goal={ready.goal} onPick={(n) => void activity.setGoal(n)} />
             </div>
@@ -243,6 +253,8 @@ export default function ProgressRoute({
           </table>
         </section>
       </div>
+
+      {account.state.status === 'signed-in' && <InterviewHistory />}
 
       <RoadmapProgress roadmap={roadmap} stages={stages} />
 

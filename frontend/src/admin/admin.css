@@ -1,46 +1,215 @@
-/* The admin panel (src/admin/): plain layout on the design tokens
-   (src/design/tokens.css), with the shared buttons, cards, badges and tabs
-   from components.css. */
+/* The admin panel (src/admin/): the site's tokens (src/design/tokens.css),
+   fonts, buttons and badges, with quieter chrome than the marketing pages:
+   hairline card borders instead of the thick ink outline and hard shadow, so
+   the data is the loudest thing on the page. */
 
 .adm {
+  /* Hairlines and fills, one step off the surface. */
+  --adm-line: rgb(var(--c-ink) / 0.12);
+  --adm-line-strong: rgb(var(--c-ink) / 0.22);
+  --adm-wash: rgb(var(--c-ink) / 0.04);
+  /* Delta text: the good and the bad direction, legible as text on the surface. */
+  --adm-good: #00754f;
+  --adm-bad: #c4281c;
   min-height: 100vh;
   background: rgb(var(--c-paper));
   color: rgb(var(--c-ink));
   font-family: var(--font-sans);
+}
+:root[data-theme='dark'] .adm {
+  --adm-line: rgb(var(--c-ink) / 0.13);
+  --adm-good: #2ee6b6;
+  --adm-bad: #ff7b72;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .adm {
+    --adm-line: rgb(var(--c-ink) / 0.13);
+    --adm-good: #2ee6b6;
+    --adm-bad: #ff7b72;
+  }
+}
+
+/* The site's buttons, a notch lighter: a thinner outline and shadow. */
+.adm .ps-btn--sm {
+  --btn-sh: 2px;
+  min-height: 34px;
+  border-width: var(--bw-1);
+}
+.adm .ps-btn--sm:hover {
+  box-shadow: 4px 4px 0 rgb(var(--c-shadow));
 }
 
 .adm-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--adm-line);
   background: rgb(var(--c-surface));
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .adm-header__title {
+  padding-left: 12px;
+  border-left: 1px solid var(--adm-line-strong);
   font-family: var(--font-display);
-  font-size: var(--fs-20);
-  font-weight: 800;
+  font-size: var(--fs-16);
+  font-weight: 700;
+  color: rgb(var(--c-muted));
 }
 
 .adm-header__space {
   flex: 1;
 }
 
+/* The sidebar and the page beside it. */
+.adm-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - 56px);
+  /* The sidebar's edge, drawn on the shell so it runs the page's full height. */
+  background: linear-gradient(var(--adm-line), var(--adm-line)) 219px 0 / 1px 100% no-repeat;
+}
+
+.adm-nav {
+  position: sticky;
+  top: 56px;
+  align-self: start;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 20px 12px;
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.adm-nav ul {
+  display: grid;
+  gap: 2px;
+}
+
+.adm-nav__heading {
+  padding: 0 8px 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(var(--c-muted));
+}
+
+.adm-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: rgb(var(--c-ink) / 0.8);
+  font-size: var(--fs-14);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--d-1) linear;
+}
+
+.adm-nav__item svg {
+  flex: none;
+  color: rgb(var(--c-muted));
+}
+
+.adm-nav__item:hover {
+  background: var(--adm-wash);
+  color: rgb(var(--c-ink));
+}
+
+.adm-nav__item:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: -2px;
+}
+
+/* The current page: the brand yellow as a marker, the label at full ink. */
+.adm-nav__item[aria-current='page'] {
+  background: rgb(var(--c-yellow) / 0.22);
+  color: rgb(var(--c-ink));
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
+}
+
+.adm-nav__item[aria-current='page'] svg {
+  color: rgb(var(--c-ink));
+}
+
 .adm-main {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 16px 16px 64px;
+  width: 100%;
+  max-width: 1240px;
+  padding: 24px 32px 64px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
 }
 
-.adm-tabs {
-  overflow-x: auto;
-  margin-bottom: 16px;
+/* Under 900px the sidebar becomes one row of links above the page, scrolling sideways. */
+@media (max-width: 899px) {
+  .adm-shell {
+    grid-template-columns: minmax(0, 1fr);
+    background: none;
+  }
+  .adm-nav {
+    z-index: 4;
+    height: auto;
+    display: flex;
+    gap: 2px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    border-bottom: 1px solid var(--adm-line);
+    background: rgb(var(--c-paper));
+  }
+  .adm-nav ul {
+    display: flex;
+  }
+  .adm-nav__heading {
+    display: none;
+  }
+  .adm-nav__item[aria-current='page'] {
+    box-shadow: inset 0 -3px 0 rgb(var(--c-yellow));
+  }
+  .adm-main {
+    padding: 16px 16px 48px;
+  }
 }
 
-.adm-panel:focus-visible {
-  outline: none;
+.adm-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-bottom: 8px;
+}
+
+.adm-page-head h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  letter-spacing: var(--ls-display);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.adm-page-head__text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.adm-page-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .adm-gate {
@@ -63,14 +232,13 @@
 }
 
 .adm-section {
-  margin-bottom: 24px;
-  padding: 16px;
+  padding: 20px;
   background: rgb(var(--c-surface));
-  border: var(--bw-2) solid rgb(var(--c-ink));
+  border: 1px solid var(--adm-line);
   border-radius: var(--r-md);
-  box-shadow: var(--sh-sm);
   display: grid;
-  gap: 12px;
+  gap: 16px;
+  align-content: start;
   min-width: 0;
 }
 
@@ -84,38 +252,36 @@
 
 .adm-section__head h2 {
   font-family: var(--font-display);
-  font-size: var(--fs-20);
-  font-weight: 800;
+  font-size: var(--fs-18);
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .adm-stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 
 .adm-stat {
   display: grid;
-  gap: 2px;
-  padding: 10px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.2);
-  border-radius: var(--r-md);
-  background: rgb(var(--c-paper));
+  align-content: start;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--adm-wash);
 }
 
 .adm-stat__label {
   font-size: var(--fs-12);
+  font-weight: 500;
   color: rgb(var(--c-muted));
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .adm-stat__value {
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-20);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .adm-stat__note {
@@ -124,15 +290,15 @@
 }
 
 .adm-stat--pass {
-  border-left: 4px solid rgb(var(--c-pass));
+  box-shadow: inset 3px 0 0 rgb(var(--c-pass));
 }
 
 .adm-stat--fail {
-  border-left: 4px solid rgb(var(--c-fail));
+  box-shadow: inset 3px 0 0 rgb(var(--c-fail));
 }
 
 .adm-stat--warn {
-  border-left: 4px solid rgb(var(--c-yellow));
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
 }
 
 .adm-muted {
@@ -148,14 +314,14 @@
 
 .adm-error {
   padding: 8px 12px;
-  border: var(--bw-2) solid rgb(var(--c-fail));
+  border: 1px solid rgb(var(--c-fail));
   border-radius: var(--r-md);
   background: rgb(var(--c-fail) / 0.08);
 }
 
 .adm-notice {
   padding: 8px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.3);
+  border: 1px solid var(--adm-line-strong);
   border-radius: var(--r-md);
   background: rgb(var(--c-yellow) / 0.25);
 }
@@ -175,20 +341,24 @@
   gap: 8px;
 }
 
+.adm-pager {
+  margin-top: 16px;
+}
+
 .adm-toolbar .adm-input[type='search'] {
   flex: 1 1 260px;
 }
 
 .adm-danger-zone {
   padding-top: 12px;
-  border-top: var(--bw-1) dashed rgb(var(--c-ink) / 0.3);
+  border-top: 1px dashed var(--adm-line-strong);
 }
 
 .adm-input {
-  min-height: 36px;
+  min-height: 34px;
   padding: 6px 10px;
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-md);
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 6px;
   background: rgb(var(--c-surface));
   color: rgb(var(--c-ink));
   font: inherit;
@@ -226,17 +396,186 @@
 .adm-table th {
   text-align: left;
   font-size: var(--fs-12);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: rgb(var(--c-muted));
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .adm-table th,
 .adm-table td {
-  padding: 8px 10px;
-  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.12);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--adm-line);
   vertical-align: top;
+}
+
+.adm-table th:first-child,
+.adm-table td:first-child {
+  padding-left: 0;
+}
+
+.adm-table th:last-child,
+.adm-table td:last-child {
+  padding-right: 0;
+}
+
+.adm-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.adm-nowrap {
+  white-space: nowrap;
+}
+
+/* A sortable column's header: the label and an arrow for the direction. */
+.adm-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-num .adm-sort {
+  flex-direction: row-reverse;
+}
+
+.adm-sort svg {
+  opacity: 0.45;
+}
+
+.adm-sort.is-active {
+  color: rgb(var(--c-ink));
+}
+
+.adm-sort.is-active svg {
+  opacity: 1;
+}
+
+.adm-sort:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Loading and empty states. */
+.adm-skeleton {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.adm-skeleton__row {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--adm-wash), rgb(var(--c-ink) / 0.09), var(--adm-wash));
+  background-size: 200% 100%;
+  animation: adm-shimmer 1.4s linear infinite;
+}
+
+@keyframes adm-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-skeleton__row {
+    animation: none;
+  }
+}
+
+.adm-empty {
+  padding: 24px 16px;
+  border: 1px dashed var(--adm-line-strong);
+  border-radius: 8px;
+  text-align: center;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+}
+
+/* While a list loads again, the old rows stay, dimmed: no jump, no flash. */
+.adm-refetching {
+  opacity: 0.55;
+  transition: opacity var(--d-2) linear;
+}
+
+.adm-footnote {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+/* Filter chips with counts, one row above a list (the webhook log). */
+.adm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.adm-filters__note {
+  margin-left: 4px;
+  font-size: var(--fs-12);
+}
+
+.adm-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: var(--r-pill);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  font: 500 var(--fs-14) / 1 var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-filter:hover {
+  background: var(--adm-wash);
+}
+
+.adm-filter[aria-pressed='true'] {
+  border-color: rgb(var(--c-ink));
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+}
+
+.adm-filter:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+}
+
+.adm-filter__n {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.adm-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--c-ink) / 0.35);
+}
+
+.adm-dot--pass {
+  background: rgb(var(--c-pass));
+}
+
+.adm-dot--fail {
+  background: rgb(var(--c-fail));
+}
+
+.adm-dot--yellow {
+  background: rgb(var(--c-yellow));
 }
 
 .adm-table--compact th,
@@ -330,9 +669,9 @@
 .adm-event {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.15);
-  border-radius: var(--r-md);
+  padding: 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
 }
 
 .adm-event__head {
@@ -369,75 +708,771 @@
   white-space: nowrap;
 }
 
-/* Bar charts (BarChart.tsx): one series, thin bars on a quiet baseline. */
+/* Charts (Chart.tsx, Sparkline.tsx): one system for every chart in the
+   panel. Thin marks, a hairline grid on three clean ticks, recessive axis
+   text, a crosshair and tooltip on hover. The series colours are the
+   reference categorical slots 1–4 (blue, orange, aqua, yellow), validated
+   adjacent-pair CVD-safe on the light surface and, stepped for it, on the
+   dark one (dataviz validate_palette.js). Aqua and yellow sit below 3:1 on
+   white, so lines are named at their ends and every chart has its table. */
+.adm {
+  --adm-series-1: #2a78d6;
+  --adm-series-2: #eb6834;
+  --adm-series-3: #1baf7a;
+  --adm-series-4: #eda100;
+}
+:root[data-theme='dark'] .adm {
+  --adm-series-1: #3987e5;
+  --adm-series-2: #d95926;
+  --adm-series-3: #199e70;
+  --adm-series-4: #c98500;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .adm {
+    --adm-series-1: #3987e5;
+    --adm-series-2: #d95926;
+    --adm-series-3: #199e70;
+    --adm-series-4: #c98500;
+  }
+}
+.adm-series-1 {
+  --series: var(--adm-series-1);
+}
+.adm-series-2 {
+  --series: var(--adm-series-2);
+}
+.adm-series-3 {
+  --series: var(--adm-series-3);
+}
+.adm-series-4 {
+  --series: var(--adm-series-4);
+}
+
 .adm-chart {
   display: grid;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
+  transition: opacity var(--d-2) linear;
 }
 
 .adm-chart__head {
   display: flex;
   flex-wrap: wrap;
+  align-items: baseline;
   justify-content: space-between;
-  gap: 8px;
+  gap: 4px 12px;
   font-size: var(--fs-14);
 }
 
 .adm-chart__title {
+  font-weight: 600;
+}
+
+.adm-chart__summary {
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-12);
+}
+
+.adm-chart__summary strong {
+  color: rgb(var(--c-ink));
+  font-size: var(--fs-14);
   font-weight: 700;
 }
 
-.adm-chart__readout {
+.adm-legend {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+  font-size: var(--fs-14);
+}
+
+.adm-legend__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
+}
+
+.adm-legend__item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.adm-legend__when {
+  margin-left: auto;
+  font-size: var(--fs-12);
+}
+
+/* The key mirrors the mark: a stroke for lines, a block for bars. */
+.adm-legend__key {
+  flex: none;
+  width: 14px;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--series);
+}
+
+.adm-legend__key--bar {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
+.adm-legend__value {
+  font-weight: 700;
+}
+
+/* The y ticks, the plot and (for lines with two or more series) their end labels. */
+.adm-plot {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.adm-plot--labelled {
+  grid-template-columns: 44px minmax(0, 1fr) 76px;
+}
+
+.adm-plot__ticks,
+.adm-plot__labels {
+  position: relative;
+  font-size: var(--fs-12);
   color: rgb(var(--c-muted));
   font-variant-numeric: tabular-nums;
 }
 
-.adm-chart__plot {
-  position: relative;
-  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.4);
-}
-
-.adm-chart__slot {
+.adm-plot__ticks span {
   position: absolute;
-  bottom: 0;
+  right: 8px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.adm-plot__labels span {
+  position: absolute;
+  left: 8px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.adm-plot__area {
+  position: relative;
+}
+
+.adm-plot__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--adm-line);
+}
+
+.adm-plot__grid.is-base {
+  background: var(--adm-line-strong);
+}
+
+.adm-plot__hit {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+  touch-action: pan-y;
+}
+
+.adm-plot__hit:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+.adm-plot__crosshair {
+  position: absolute;
   top: 0;
-  display: flex;
-  align-items: flex-end;
-  padding: 0;
-  background: none;
-  border: 0;
-  cursor: default;
+  bottom: 0;
+  width: 1px;
+  background: rgb(var(--c-ink) / 0.45);
+  pointer-events: none;
 }
 
-.adm-chart__slot:focus-visible {
-  outline: 2px solid rgb(var(--c-ink));
-  outline-offset: 1px;
+/* 8px, with a 2px ring in the surface colour where lines cross. */
+.adm-plot__dot {
+  position: absolute;
+  width: 12px;
+  height: 12px;
+  margin: -6px 0 0 -6px;
+  border-radius: 50%;
+  background: var(--series);
+  border: 2px solid rgb(var(--c-surface));
+  pointer-events: none;
 }
 
-.adm-chart__bar {
-  flex: 1;
-  background: rgb(var(--c-blue));
-  border-radius: 4px 4px 0 0;
+.adm-plot__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  pointer-events: none;
 }
 
-.adm-chart__slot.is-active .adm-chart__bar {
-  background: rgb(var(--c-pink));
-}
-
-.adm-chart__axis {
-  display: flex;
-  justify-content: space-between;
+.adm-plot__axis {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  margin-left: 44px;
   font-size: var(--fs-12);
   color: rgb(var(--c-muted));
 }
 
+.adm-plot__axis.adm-plot--labelled {
+  margin-right: 76px;
+}
+
+.adm-plot__axis span:last-child {
+  text-align: right;
+}
+
+/* Bars: equal slots, each bar at most 24px with a 2px gap, a 4px rounded end, square on the baseline. */
+.adm-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.adm-bars__slot {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 1px;
+}
+
+.adm-bars__bar {
+  width: 100%;
+  max-width: 24px;
+  background: var(--series);
+  border-radius: 4px 4px 0 0;
+}
+
+.adm-bars__slot.is-active .adm-bars__bar {
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 2px rgb(var(--c-surface)), 0 0 0 3px rgb(var(--c-ink) / 0.5);
+}
+
+.adm-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.adm-lines__line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The tooltip: the day, then each value (strong) and its series. */
+.adm-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  min-width: 96px;
+  padding: 6px 10px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 6px;
+  background: rgb(var(--c-surface));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.adm-tip.is-start {
+  transform: translateX(-12px);
+}
+
+.adm-tip.is-end {
+  transform: translateX(calc(-100% + 12px));
+}
+
+.adm-tip__day {
+  color: rgb(var(--c-muted));
+}
+
+.adm-tip__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.adm-tip__row strong {
+  font-size: var(--fs-14);
+  font-variant-numeric: tabular-nums;
+}
+
 .adm-chart__table summary {
+  width: max-content;
   cursor: pointer;
   font-size: var(--fs-12);
   color: rgb(var(--c-muted));
 }
 
-.adm-chart__table table {
-  margin-top: 6px;
-  max-width: 320px;
+.adm-chart__scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 8px;
+  max-width: 420px;
+}
+
+/* A stat tile's sparkline: the period before in grey, this one in the accent. */
+.adm-spark {
+  display: block;
+  width: 100%;
+  height: 32px;
+  overflow: visible;
+}
+
+.adm-spark polyline {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.adm-spark__before {
+  stroke: rgb(var(--c-ink) / 0.25);
+}
+
+.adm-spark__now {
+  stroke: var(--adm-series-1);
+  stroke-width: 2;
+}
+
+/* The billing tab's two side-by-side cards. */
+.adm-columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 420px), 1fr));
+  gap: 0 24px;
+  align-items: start;
+}
+
+.adm-dl {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 4px 16px;
+  font-size: var(--fs-14);
+}
+
+.adm-dl dt {
+  color: rgb(var(--c-muted));
+}
+
+.adm-plus {
+  color: rgb(var(--c-pass));
+  font-weight: 700;
+}
+
+.adm-cut {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.adm-dialog {
+  margin: auto;
+  width: min(460px, calc(100vw - 32px));
+  padding: 20px;
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  border: var(--bw-1) solid rgb(var(--c-ink));
+  border-radius: var(--r-md);
+  box-shadow: var(--sh-sm);
+}
+
+.adm-dialog::backdrop {
+  background: rgb(var(--c-slab) / 0.55);
+}
+
+.adm-dialog__title {
+  font-family: var(--font-display);
+  font-size: var(--fs-20);
+  font-weight: 800;
+}
+
+.adm-dialog__actions {
+  justify-content: flex-end;
+}
+
+.adm-radios {
+  display: flex;
+  gap: 16px;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+
+.adm-radios label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-weight: 600;
+}
+
+/* Cards side by side, two to a row on a wide screen (the overview and AI charts), one under 900px. */
+.adm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1099px) {
+  .adm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* The overview (OverviewTab.tsx). */
+
+/* The time range: three buttons, the chosen one in ink. */
+.adm-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 8px;
+  background: rgb(var(--c-surface));
+}
+
+.adm-segmented button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: rgb(var(--c-ink) / 0.75);
+  font: 600 var(--fs-14) / 1 var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-segmented button:hover {
+  background: var(--adm-wash);
+}
+
+.adm-segmented button[aria-pressed='true'] {
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+}
+
+.adm-segmented button:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 1px;
+}
+
+/* KPI tiles: six across on a wide screen, three, then two. */
+.adm-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1299px) {
+  .adm-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .adm-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.adm-kpi {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  transition: opacity var(--d-2) linear;
+}
+
+.adm-kpi__label {
+  font-size: var(--fs-14);
+  font-weight: 500;
+  color: rgb(var(--c-muted));
+}
+
+.adm-kpi__value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.adm-delta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.adm-delta .adm-muted {
+  flex-basis: 100%;
+  font-size: var(--fs-12);
+  font-weight: 400;
+}
+
+.adm-delta--good {
+  color: var(--adm-good);
+}
+
+.adm-delta--bad {
+  color: var(--adm-bad);
+}
+
+.adm-delta--neutral {
+  color: rgb(var(--c-ink) / 0.75);
+}
+
+/* Needs attention: one row per check, its state, what it found, and a link to its page. */
+.adm-attention {
+  display: grid;
+}
+
+.adm-attention__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--adm-line);
+}
+
+.adm-attention__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.adm-attention__row:last-child {
+  padding-bottom: 0;
+}
+
+.adm-attention__icon {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  color: var(--adm-good);
+}
+
+.adm-attention__row.is-alert .adm-attention__icon {
+  color: var(--adm-bad);
+}
+
+.adm-attention__text {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-14);
+}
+
+.adm-attention__text .adm-chips {
+  margin-top: 2px;
+}
+
+.adm-attention__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+/* All-time totals: label over value, in a row that wraps. */
+.adm-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.adm-total {
+  display: grid;
+  gap: 2px;
+}
+
+.adm-total dt {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-total dd {
+  font-size: var(--fs-18);
+  font-weight: 700;
+}
+
+.adm-total dd .adm-muted {
+  font-size: var(--fs-12);
+  font-weight: 400;
+}
+
+/* The site's badges, quieter for tables full of them: a tint of the status
+   colour behind ink text instead of a solid fill in an ink outline. */
+.adm .ps-badge {
+  padding: 2px 8px;
+  border: 0;
+  background: rgb(var(--badge-tint, var(--c-ink)) / var(--badge-alpha, 0.08));
+  color: rgb(var(--c-ink));
+  font-weight: 600;
+  font-stretch: 100%;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.adm .ps-badge--pass {
+  --badge-tint: var(--c-pass);
+  --badge-alpha: 0.2;
+}
+.adm .ps-badge--fail {
+  --badge-tint: var(--c-fail);
+  --badge-alpha: 0.18;
+}
+.adm .ps-badge--yellow {
+  --badge-tint: var(--c-yellow);
+  --badge-alpha: 0.35;
+}
+.adm .ps-badge--blue {
+  --badge-tint: var(--c-blue);
+  --badge-alpha: 0.15;
+}
+
+/* Badges in a table cell: the cell stays a cell (a flex cell loses its row's border), the badges spaced inline. */
+.adm-table td.adm-badges {
+  display: table-cell;
+}
+
+.adm-table td.adm-badges > * + * {
+  margin-left: 4px;
+}
+
+/* The sidebar's count next to a page's label (the Inbox's unread messages). */
+.adm-nav__count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+  font-size: var(--fs-12);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Inbox (InboxTab.tsx): unread rows in bold with a yellow marker, the excerpt under the subject. */
+.adm-inbox tr.is-unread td:first-child {
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
+}
+
+.adm-inbox tr.is-unread .adm-link {
+  font-weight: 700;
+}
+
+.adm-inbox__message {
+  max-width: 440px;
+}
+
+.adm-inbox__excerpt {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: var(--fs-12);
+}
+
+.adm-inbox__attached {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: var(--fs-12);
+}
+
+.adm-inbox__attached > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.adm-inbox__text {
+  max-width: 72ch;
+  margin: 0 0 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.adm-inbox__diagram {
+  max-height: 320px;
+  margin: 0 0 12px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--r-md);
+  background: var(--adm-wash);
+  font: var(--fs-12) / 1.6 var(--font-mono);
+}
+
+.adm-inbox__shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-inbox__shots li {
+  display: grid;
+  gap: 4px;
+}
+
+.adm-inbox__shots img {
+  display: block;
+  width: 220px;
+  height: 140px;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: var(--r-md);
+  background: var(--adm-wash);
+}
+
+/* Links styled as buttons (Reply, Open read-only): the section's link colour and underline would fight the button. */
+.adm-inbox__actions a.ps-btn {
+  color: rgb(var(--c-ink));
+  text-decoration: none;
+}
+
+.adm-inbox__delete .adm-input {
+  flex: 1 1 260px;
+}
+
+.adm-inbox__note {
+  resize: vertical;
+  font-weight: 400;
 }

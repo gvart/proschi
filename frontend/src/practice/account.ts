@@ -21,7 +21,7 @@ export function takeLoginError(href: string): { error?: string; linked?: string;
   return { ...(error ? { error } : {}), ...(linked ? { linked } : {}), cleanUrl: url.toString() };
 }
 
-export const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google' };
+export const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google', email: 'Email' };
 
 /** What to tell the user about the sign-in or linking the API redirected back from. */
 export function loginMessage({ error, linked }: { error?: string; linked?: string }): string | undefined {
@@ -47,7 +47,7 @@ export function mergeServerProgress(local: Progress, server: Record<string, Serv
     const mine = out[id];
     const status = !mine || RANK.indexOf(remote.status) > RANK.indexOf(mine.status) ? remote.status : mine.status;
     const source = mine?.source ?? remote.source;
-    out[id] = { status, ...(source !== undefined ? { source } : {}) };
+    out[id] = { status, ...(source !== undefined ? { source } : {}), ...(mine?.assisted ? { assisted: true as const } : {}) };
   }
   return out;
 }

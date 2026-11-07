@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Enforced in builds; inert under `npm run dev` (see .env.production). Checkout and the billing portal are pages of
+         Polar's, reached by navigation, so connect-src stays 'self'. frame-ancestors cannot be set from a meta tag. -->
+    <meta
+      http-equiv="%VITE_CSP_HTTP_EQUIV%"
+      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:; img-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'self'; form-action 'none'"
+    />
+    <meta name="referrer" content="strict-origin-when-cross-origin" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#FFF8E7" />
+    <!-- Applies the saved or system theme before first paint. -->
+    <script src="../theme-init.js"></script>
+    <link rel="icon" href="/favicon.ico" sizes="32x32" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Pricing · Proschi</title>
+    <meta name="description" content="Proschi is free: the editor, the simulation and system design practice. Pro and Max add unlimited cloud diagrams and monthly credits for mock interviews and Design partner; top-ups on any plan." />
+    <link rel="canonical" href="https://proschi.app/pricing/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Proschi" />
+    <meta property="og:title" content="Proschi pricing: Free, Pro and Max" />
+    <meta property="og:description" content="Proschi is free: the editor, the simulation and system design practice. Pro and Max add unlimited cloud diagrams and monthly credits for mock interviews and Design partner; top-ups on any plan." />
+    <meta property="og:url" content="https://proschi.app/pricing/" />
+    <meta property="og:image" content="https://proschi.app/og.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+    <meta name="twitter:card" content="summary_large_image" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="../src/pricing/main.tsx"></script>
+  </body>
+</html>

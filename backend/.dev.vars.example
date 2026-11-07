@@ -1,9 +1,59 @@
-# Copy to .dev.vars for `npm run dev` (http://localhost:8787). OAuth test apps
-# need the callback URLs http://localhost:8787/auth/github/callback and
-# http://localhost:8787/auth/google/callback. A provider without credentials
-# is not offered, and none is without a SESSION_SECRET of 32 characters or more.
-SESSION_SECRET=change-me-to-a-long-random-string
+# Copy to .dev.vars for `npm run dev` / `npm run dev:paid` (http://localhost:8787).
+# Every variable the Worker reads (src/env.ts). Leave a line empty to keep its
+# feature off; README "Testing the paid features locally" says what needs what.
+# Tests never read this file.
+
+# --- Sessions and OAuth: required for signing in (and so for every paid feature) ---
+# Signs the OAuth state and sessions; sign-in is off unless it has 32+ characters.
+SESSION_SECRET=change-me-to-a-random-string-of-32-or-more-characters
+# A GitHub OAuth app with the callback http://localhost:8787/auth/github/callback.
 GITHUB_CLIENT_ID=
 GITHUB_CLIENT_SECRET=
+# A Google OAuth client with the redirect URI http://localhost:8787/auth/google/callback.
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
+# Optional: native app redirect URIs, comma-separated (README "Mobile apps"). Empty: app sign-in is off.
+APP_REDIRECT_URIS=
+
+# --- AI: required for the AI interviewer, AI review, history and Next for you (501 without the key) ---
+# An Anthropic API key (console.anthropic.com). Local testing spends real money.
+ANTHROPIC_API_KEY=
+# Optional: a Cloudflare AI Gateway Anthropic endpoint; unset calls the Claude API directly.
+AI_GATEWAY_URL=
+# Optional: an authenticated gateway's token (sent as cf-aig-authorization).
+AI_GATEWAY_TOKEN=
+# Optional: the USD-to-EUR rate credits are priced at (2x the model cost, €0.01 a credit); unset: 0.95.
+CREDITS_USD_EUR=
+
+# --- Polar: required only for checkout, the customer portal and the webhook (501 without them) ---
+# Not needed to test paid features: `npm run local:pro`, `local:max` and `local:credits` set those up.
+# `sandbox` for sandbox-api.polar.sh; anything else (or unset) is production. Keep it sandbox locally.
+POLAR_SERVER=sandbox
+# An organization access token (checkouts:write, customer_sessions:write, subscriptions:write).
+POLAR_ACCESS_TOKEN=
+# The webhook endpoint's secret as Polar shows it (polar_whs_… or whsec_…).
+POLAR_WEBHOOK_SECRET=
+# Product ids of Pro monthly and yearly, Max monthly and yearly, and the 1000-credit top-up.
+POLAR_PRODUCT_PRO_MONTHLY=
+POLAR_PRODUCT_PRO_YEARLY=
+POLAR_PRODUCT_MAX_MONTHLY=
+POLAR_PRODUCT_MAX_YEARLY=
+POLAR_PRODUCT_CREDITS_1000=
+
+# --- Turnstile on email sign-in: optional (unset: skipped, with a log line) ---
+# Cloudflare's test secret 1x0000000000000000000000000000000AA always passes, 2x0000000000000000000000000000000AA always fails;
+# put the matching test site key 1x00000000000000000000AA in TURNSTILE_SITE_KEY here too (README "Email sign-in").
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+
+# --- Admin and metrics: optional ---
+# Registers the admin panel's first passkey (/admin/), 16+ characters; works only while none exists.
+ADMIN_SETUP_TOKEN=
+# The X-Metrics-Token of GET /api/metrics/summary, 16+ characters; unset answers 404.
+METRICS_TOKEN=
+# Admin campaigns: where "Send a test to me" goes (unset: no test sends), and the campaign emails a UTC day (unset: 500).
+ADMIN_EMAIL=
+CAMPAIGN_DAILY_CAP=
+
+# --- Set in wrangler.jsonc `vars`, not here ---
+# ENVIRONMENT (production or staging; only labels /api/health and the admin's health page).

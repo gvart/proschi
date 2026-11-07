@@ -1,6 +1,31 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import { getActivity } from './activity';
-import { blockUser, deleteAdminShare, deleteUser, deleteUserEmail, getHealth, getOverview, getUser, listAdminShares, listAudit, listEvents, listUsers, patchUser, signOutUser, unblockUser } from './admin';
+import {
+  adjustCredits,
+  adminRevokeDocumentShare,
+  blockUser,
+  compUser,
+  deleteAdminShare,
+  deleteUser,
+  deleteUserEmail,
+  endComp,
+  getAi,
+  getBilling,
+  getHealth,
+  getOverview,
+  getTrends,
+  getUser,
+  listAdminShares,
+  listAudit,
+  listDocumentShares,
+  listEvents,
+  listUserCredits,
+  listUsers,
+  listWebhooks,
+  patchUser,
+  signOutUser,
+  unblockUser,
+} from './admin';
 import { addPasskey, addPasskeyOptions, adminLogout, adminStatus, deletePasskey, listPasskeys, login as adminLogin, loginOptions, revokeAdminSessions, setup as adminSetup, setupOptions } from './adminAuth';
 import { getAchievements, markAchievementsSeen } from './achievements';
 import { revoke, token } from './apptokens';
@@ -8,23 +33,51 @@ import { getCardState, postCardReviews } from './cards';
 import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun, postGameSubmit, postGameSync } from './game';
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
+import { confirm as confirmEmailLogin, emailSignInAvailable, emailStatus, login as emailLogin, resend as resendConfirmation, reset as resetPassword, resetRequest, signup as emailSignup, startEmailLogin } from './emailAuth';
+import { turnstileSiteKey } from './turnstile';
+import { getSignups, getUserSignIn } from './adminSignups';
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
+import {
+  campaignAudience,
+  cancelCampaign,
+  createCampaign,
+  getAnnouncement,
+  getCampaign,
+  getNews,
+  listCampaigns,
+  markAnnouncement,
+  newsUnsubscribe,
+  newsUnsubscribePage,
+  previewCampaign,
+  putNews,
+  resumeCampaign,
+  sendCampaign,
+  testCampaign,
+  updateCampaign,
+} from './campaigns';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
+import { createDocumentShare, getDocumentShare, getSharedDocument, revokeDocumentShare, shareViewPage } from './documentShares';
 import { recordThrottled, routeOf } from './events';
+import type { FeatureRoute, OpenRoute } from './features';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
 import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
-import { reviewDesign } from './review';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
+import { changePlan, createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
+import { getEstimates, getUsage } from './meter';
+import { finishInterview, getInterview, interviewHistory, interviewReport, interviewTurn, listInterviews, startInterview } from './interviews';
+import { createPartnerSession, decidePartnerChange, getPartnerSession, postPartnerTurn } from './partner';
+import { getRoadmapNext } from './roadmap';
+import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedback, postFeedback } from './feedback';
 
 /**
  * proschi.app: the site (frontend/dist, served as static assets without
@@ -38,6 +91,8 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   POST   /auth/token {grant_type, code, code_verifier | refresh_token}   an app's bearer tokens
  *   POST   /auth/revoke {token}             ends an app's sign-in
  *   POST   /auth/logout
+ *   GET    /auth/email/start?return=[&link=1]  → /signin/, the email sign-in page (src/emailAuth.ts)
+ *   POST   /auth/email/signup | confirm | login | resend | reset-request | reset;  GET /auth/email/status
  *   GET    /api/health                      the Worker and D1 answer
  *   GET    /api/me                          account and progress
  *   PATCH  /api/me {displayName?, publicProfile?, dailyGoal?}
@@ -50,6 +105,9 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   DELETE /api/me/email                    removes the address
  *   GET    /api/email/confirm?token=        the confirmation link's page; POST confirms
  *   GET    /api/email/unsubscribe?token=    the unsubscribe link's page; POST unsubscribes (one-click, RFC 8058, no session)
+ *   GET    /api/me/news, PUT {on}           product news on or off (src/campaigns.ts)
+ *   GET    /api/me/announcement             the admin's newest announcement to show; POST …/<id>/dismiss | click
+ *   GET    /api/news/unsubscribe?token=     the "Stop product news" link's page; POST stops it (one-click, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
@@ -63,7 +121,18 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   GET    /api/me/documents/<id>/versions/<tag|latest>   one, with its content
  *   DELETE /api/me/documents/<id>/versions/<tag>   deletes one (its tag stays taken)
  *   GET    /api/me/versions/resolve?name=&tag=   a cloud reference by diagram name and tag (409 ambiguous_name)
+ *   GET    /api/me/documents/<id>/share     its live share link, or null (src/documentShares.ts)
+ *   POST   /api/me/documents/<id>/share     makes one, Pro only (402 plan_required)
+ *   DELETE /api/me/documents/<id>/share     revokes it
+ *   GET    /api/share/<token>               a live share link's diagram (no sign-in, no owner named)
  *   GET    /api/me/limits                   the account's plan, its limits and what it uses
+ *   GET    /api/me/plan                     plan, subscription (status, renewal), limits, credits and features
+ *   POST   /api/billing/checkout {product: pro_monthly|pro_yearly|max_monthly|max_yearly|credits_1000}   a Polar checkout: {url} (409 has_subscription; 501 without Polar set up)
+ *   POST   /api/billing/change-plan {product}   switches the active subscription's product (Pro↔Max, monthly↔yearly): {ok, plan, effective}
+ *   GET    /api/credits/estimates           what each paid action usually costs, in credits
+ *   GET    /api/credits/usage?limit=50      the account's charges, newest first
+ *   POST   /api/billing/portal              Polar's customer portal for the user: {url}
+ *   POST   /api/billing/webhook             Polar's signed events (Standard Webhooks; no session, no Origin)
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
@@ -90,18 +159,68 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
  *   DELETE /api/shares/<id>                 the owner deletes one
  *   GET    /api/me/shares                   the user's short links
  *   GET    /api/oembed?url=                 oEmbed for a short link
- *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review (a stub: 501)
+ *   POST   /api/interviews {problem, minutes, replace?, deep?}   starts an AI interview, holding its verdict's credits (402 no_credits, or plan_required for deep off Max; 409 active_session; 501 without the AI key)
+ *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
+ *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
+ *   GET    /api/interviews/<id>            one session with its transcript, to resume
+ *   GET    /api/interviews                 the user's sessions and the credits left
+ *   GET    /api/interviews/history         verdict summaries with skill scores, newest first: all on Pro, the latest only on free
+ *   GET    /api/interviews/<id>/report     a finished session's printable report, Max (402 plan_required)
+ *   POST   /api/partner/sessions {context, deep?}   a Design partner chat: {id} (409 interview_active; 501 without the AI key)
+ *   GET    /api/partner/sessions/<id>      the chat with its turns
+ *   POST   /api/partner/sessions/<id>/turns {intent, message, source, files?, changeId?}   one turn: {turn, credits} (402 no_credits, 409 turn_in_progress)
+ *   POST   /api/partner/sessions/<id>/changes/<changeId> {decision}   accepted or rejected: 204
+ *   GET    /api/roadmap/next[?interview=]  the AI roadmap's next 3 picks, Pro (402 plan_required, 501 without the AI key)
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
  *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
+ *   POST   /api/feedback                    a message to the operator (multipart, screenshots too; src/feedback.ts)
  *   …      /api/admin/*                     the admin panel: passkey sign-in (src/adminAuth.ts) and its data (src/admin.ts)
  *
  * and, outside the API, public profiles at addresses of their own (src/profilePage.ts):
  *
  *   GET    /u/<id>                          the practice page showing the profile, with its title and image in the meta tags
  *   GET    /u/<id>.png                      the profile's Open Graph card (1200×630)
+ *
+ * and the read-only page of a live share link (src/documentShares.ts):
+ *
+ *   GET    /share/<token>                   frontend/share/, noindex
  */
+
+/**
+ * Every route under the paid paths (isPaidPath): each a requireFeature route
+ * (src/features.ts), which names its feature, or an openRoute, which says
+ * why it is open. Matched in order; `*` parts are passed to the handler.
+ * test/paidRoutes.test.ts fails on a route here that is neither, and runs
+ * each one with a free and a Pro account under every kind of credential.
+ */
+export const PAID_ROUTES: readonly (readonly [method: string, path: string, route: FeatureRoute<string[]> | OpenRoute<string[]>])[] = [
+  ['POST', 'api/interviews', startInterview],
+  ['GET', 'api/interviews', listInterviews],
+  ['GET', 'api/interviews/history', interviewHistory],
+  ['GET', 'api/interviews/*', getInterview],
+  ['POST', 'api/interviews/*/turn', interviewTurn],
+  ['POST', 'api/interviews/*/finish', finishInterview],
+  ['GET', 'api/interviews/*/report', interviewReport],
+  ['GET', 'api/roadmap/next', getRoadmapNext],
+  ['GET', 'api/me/documents/*/share', getDocumentShare],
+  ['POST', 'api/me/documents/*/share', createDocumentShare],
+  ['DELETE', 'api/me/documents/*/share', revokeDocumentShare],
+  ['POST', 'api/partner/sessions', createPartnerSession],
+  ['GET', 'api/partner/sessions/*', getPartnerSession],
+  ['POST', 'api/partner/sessions/*/turns', postPartnerTurn],
+  ['POST', 'api/partner/sessions/*/changes/*', decidePartnerChange],
+] as const;
+
+/** /api/interviews*, /api/review* (retired, so 404), /api/roadmap*, /api/partner* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
+export function isPaidPath(parts: string[]): boolean {
+  if (parts[0] !== 'api') return false;
+  if (parts[1] === 'interviews' || parts[1] === 'review' || parts[1] === 'roadmap' || parts[1] === 'partner') return true;
+  return parts[1] === 'me' && parts[2] === 'documents' && parts[4] === 'share';
+}
+
+const wildcards = (path: string, parts: string[]): string[] => path.split('/').flatMap((p, i) => (p === '*' ? [parts[i]] : []));
 
 async function route(request: Request, ctx: Ctx, pathname: string): Promise<Response> {
   const { env } = ctx;
@@ -112,10 +231,29 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   // same-origin check: mail clients send one-click unsubscribes (RFC 8058) from their own servers, and the confirm
   // page's form arrives with `Origin: null` (its Referrer-Policy is no-referrer).
   if (is('POST', 'api', 'email', 'unsubscribe')) return unsubscribe(request, ctx);
+  if (is('POST', 'api', 'news', 'unsubscribe')) return newsUnsubscribe(request, ctx);
   if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   assertSameOrigin(request);
 
-  if (is('GET', 'auth', 'providers')) return json({ providers: configuredProviders(env) }, 200, { 'Cache-Control': 'public, max-age=300' });
+  // The paid paths go only to PAID_ROUTES: each route there says the feature it needs, or why it is open.
+  if (isPaidPath(parts)) {
+    const paid = PAID_ROUTES.find(([m, path]) => is(m, ...path.split('/')));
+    if (!paid) return errorResponse(404, 'Not found');
+    return paid[2](request, ctx, ...wildcards(paid[1], parts));
+  }
+  if (is('GET', 'auth', 'providers')) {
+    const providers = [...configuredProviders(env), ...(emailSignInAvailable(env) ? ['email'] : [])];
+    const siteKey = turnstileSiteKey(env);
+    return json({ providers, ...(siteKey ? { turnstileSiteKey: siteKey } : {}) }, 200, { 'Cache-Control': 'public, max-age=300' });
+  }
+  if (is('GET', 'auth', 'email', 'start')) return startEmailLogin(request);
+  if (is('POST', 'auth', 'email', 'signup')) return emailSignup(request, ctx);
+  if (is('POST', 'auth', 'email', 'confirm')) return confirmEmailLogin(request, ctx);
+  if (is('POST', 'auth', 'email', 'login')) return emailLogin(request, ctx);
+  if (is('POST', 'auth', 'email', 'resend')) return resendConfirmation(request, ctx);
+  if (is('POST', 'auth', 'email', 'reset-request')) return resetRequest(request, ctx);
+  if (is('POST', 'auth', 'email', 'reset')) return resetPassword(request, ctx);
+  if (is('GET', 'auth', 'email', 'status')) return emailStatus(request, ctx);
   if ((is('GET', 'auth', '*', 'start') || is('GET', 'auth', '*', 'callback')) && isProvider(parts[1])) {
     return parts[2] === 'start' ? startLogin(request, ctx, parts[1]) : finishLogin(request, ctx, parts[1]);
   }
@@ -134,6 +272,12 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('DELETE', 'api', 'me', 'email')) return deleteEmail(request, ctx);
   if (is('GET', 'api', 'email', 'confirm')) return confirmPage(request, ctx);
   if (is('GET', 'api', 'email', 'unsubscribe')) return unsubscribePage(request, ctx);
+  if (is('GET', 'api', 'news', 'unsubscribe')) return newsUnsubscribePage(request, ctx);
+  if (is('GET', 'api', 'me', 'news')) return getNews(request, ctx);
+  if (is('PUT', 'api', 'me', 'news')) return putNews(request, ctx);
+  if (is('GET', 'api', 'me', 'announcement')) return getAnnouncement(request, ctx);
+  if (is('POST', 'api', 'me', 'announcement', '*', 'dismiss')) return markAnnouncement(request, ctx, parts[3], 'dismiss');
+  if (is('POST', 'api', 'me', 'announcement', '*', 'click')) return markAnnouncement(request, ctx, parts[3], 'click');
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
@@ -141,11 +285,19 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);
   if (is('DELETE', 'api', 'me', 'documents')) return deleteAllDocuments(request, ctx);
   if (is('GET', 'api', 'me', 'limits')) return getLimits(request, ctx);
+  if (is('GET', 'api', 'me', 'plan')) return getPlan(request, ctx);
+  if (is('POST', 'api', 'billing', 'checkout')) return createCheckout(request, ctx);
+  if (is('POST', 'api', 'billing', 'change-plan')) return changePlan(request, ctx);
+  if (is('POST', 'api', 'billing', 'portal')) return createPortal(request, ctx);
+  if (is('GET', 'api', 'credits', 'estimates')) return getEstimates(request, ctx);
+  if (is('GET', 'api', 'credits', 'usage')) return getUsage(request, ctx);
+  if (is('POST', 'api', 'billing', 'webhook')) return billingWebhook(request, ctx);
   if (is('POST', 'api', 'me', 'documents', '*', 'versions')) return createVersion(request, ctx, parts[3]);
   if (is('GET', 'api', 'me', 'documents', '*', 'versions')) return listVersions(request, ctx, parts[3]);
   if (is('GET', 'api', 'me', 'documents', '*', 'versions', '*')) return getVersion(request, ctx, parts[3], parts[5]);
   if (is('DELETE', 'api', 'me', 'documents', '*', 'versions', '*')) return deleteVersion(request, ctx, parts[3], parts[5]);
   if (is('GET', 'api', 'me', 'versions', 'resolve')) return resolveVersion(request, ctx);
+  if (is('GET', 'api', 'share', '*')) return getSharedDocument(ctx, parts[2]);
   if (is('PUT', 'api', 'me', 'documents', '*')) return putDocument(request, ctx, parts[3]);
   if (is('DELETE', 'api', 'me', 'documents', '*')) return deleteDocument(request, ctx, parts[3]);
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
@@ -169,7 +321,6 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'game', 'equip')) return postGameEquip(request, ctx);
   if (is('POST', 'api', 'game', 'sync')) return postGameSync(request, ctx);
   if (is('GET', 'api', 'game', 'leaderboard')) return getGameLeaderboard(request, ctx);
-  if (is('POST', 'api', 'review')) return reviewDesign(request, ctx);
   if (is('POST', 'api', 'shares')) return createShare(request, ctx);
   if (is('GET', 'api', 'shares', '*')) return getShare(ctx, parts[2]);
   if (is('DELETE', 'api', 'shares', '*')) return deleteShare(request, ctx, parts[2]);
@@ -180,6 +331,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   }
   if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
   if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
+  if (is('POST', 'api', 'feedback')) return postFeedback(request, ctx);
   if (parts[0] === 'api' && parts[1] === 'admin') return adminRoute(request, ctx, is, parts);
   return errorResponse(404, 'Not found');
 }
@@ -199,9 +351,12 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('DELETE', 'api', 'admin', 'passkeys', '*')) return deletePasskey(request, ctx, id);
   if (is('POST', 'api', 'admin', 'sessions', 'revoke-all')) return revokeAdminSessions(request, ctx);
   if (is('GET', 'api', 'admin', 'overview')) return getOverview(request, ctx);
+  if (is('GET', 'api', 'admin', 'trends')) return getTrends(request, ctx);
   if (is('GET', 'api', 'admin', 'health')) return getHealth(request, ctx);
   if (is('GET', 'api', 'admin', 'users')) return listUsers(request, ctx);
   if (is('GET', 'api', 'admin', 'users', '*')) return getUser(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'users', '*', 'sign-in')) return getUserSignIn(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'signups')) return getSignups(request, ctx);
   if (is('PATCH', 'api', 'admin', 'users', '*')) return patchUser(request, ctx, id);
   if (is('DELETE', 'api', 'admin', 'users', '*')) return deleteUser(request, ctx, id);
   if (is('POST', 'api', 'admin', 'users', '*', 'block')) return blockUser(request, ctx, id);
@@ -212,6 +367,30 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('DELETE', 'api', 'admin', 'shares', '*')) return deleteAdminShare(request, ctx, id);
   if (is('GET', 'api', 'admin', 'events')) return listEvents(request, ctx);
   if (is('GET', 'api', 'admin', 'audit')) return listAudit(request, ctx);
+  if (is('GET', 'api', 'admin', 'users', '*', 'credits')) return listUserCredits(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'credits')) return adjustCredits(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'comp')) return compUser(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'comp', 'end')) return endComp(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'billing')) return getBilling(request, ctx);
+  if (is('GET', 'api', 'admin', 'ai')) return getAi(request, ctx);
+  if (is('GET', 'api', 'admin', 'webhooks')) return listWebhooks(request, ctx);
+  if (is('GET', 'api', 'admin', 'document-shares')) return listDocumentShares(request, ctx);
+  if (is('DELETE', 'api', 'admin', 'document-shares', '*')) return adminRevokeDocumentShare(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'feedback')) return listFeedback(request, ctx);
+  if (is('GET', 'api', 'admin', 'feedback', '*')) return getFeedback(request, ctx, id);
+  if (is('PATCH', 'api', 'admin', 'feedback', '*')) return patchFeedback(request, ctx, id);
+  if (is('DELETE', 'api', 'admin', 'feedback', '*')) return deleteFeedback(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'feedback', '*', 'files', '*')) return getFeedbackFile(request, ctx, id, parts[5]);
+  if (is('GET', 'api', 'admin', 'campaigns')) return listCampaigns(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns')) return createCampaign(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'audience')) return campaignAudience(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'preview')) return previewCampaign(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'test')) return testCampaign(request, ctx);
+  if (is('GET', 'api', 'admin', 'campaigns', '*')) return getCampaign(request, ctx, id);
+  if (is('PUT', 'api', 'admin', 'campaigns', '*')) return updateCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'send')) return sendCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'cancel')) return cancelCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'resume')) return resumeCampaign(request, ctx, id);
   return errorResponse(404, 'Not found');
 }
 
@@ -229,6 +408,8 @@ async function health(ctx: Ctx): Promise<Response> {
 export default {
   async fetch(request, env, exec): Promise<Response> {
     const { pathname } = new URL(request.url);
+    // A live share link: the share page, which loads the diagram with GET /api/share/<token>.
+    if ((request.method === 'GET' || request.method === 'HEAD') && /^\/share\/[A-Za-z0-9_-]{22}$/.test(pathname)) return shareViewPage(request, env.ASSETS);
     const page = pathname.startsWith('/u/');
     if (!page && !/^\/(api|auth|s)(\/|$)/.test(pathname)) return env.ASSETS.fetch(request);
     const started = Date.now();

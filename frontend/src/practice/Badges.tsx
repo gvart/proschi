@@ -16,6 +16,15 @@ export function StatusIcon({ status }: { status: Status }) {
   return <Circle size={16} className="shrink-0 text-ink/30" aria-label="To do" />;
 }
 
+/** Design partner showed the changes for this problem (progress.ts `assisted`). */
+export function AssistedTag() {
+  return (
+    <span className="inline-flex shrink-0 items-center rounded-sm border border-ink/40 px-1.5 py-px font-sans text-[11px] font-semibold tracking-normal text-muted" title="Solved with Design partner’s changes" data-testid="assisted-tag">
+      assisted
+    </span>
+  );
+}
+
 /** Whose published system the problem is based on (problem.md `company`); not a claim about that company's interviews. */
 function companyNote(company: string): string {
   return `Based on a system ${company} published`;

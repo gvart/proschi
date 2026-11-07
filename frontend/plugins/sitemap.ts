@@ -9,11 +9,12 @@ import { blogUrls, readPosts } from './blogSite'
  * The pages search engines should know about: the landing page, the editor,
  * practice, every problem's page, the roadmap's guides, the review cards'
  * pages (`cardPageUrls`, plugins/cardPages.ts), every docs page and the blog
- * (`blogPageUrls`, plugins/blogSite.ts).
+ * (`blogPageUrls`, plugins/blogSite.ts), and the pricing page in a build
+ * with paid plans (`pricing`, VITE_BILLING=true).
  */
-export function sitemapUrls(site: SiteConfig, problemIds: string[], guideIds: string[] = [], cardPageUrls: string[] = [], blogPageUrls: string[] = []): string[] {
+export function sitemapUrls(site: SiteConfig, problemIds: string[], guideIds: string[] = [], cardPageUrls: string[] = [], blogPageUrls: string[] = [], pricing = false): string[] {
   const docs = site.pages.map((p) => `${SITE_ORIGIN}docs/${p.slug ? `${p.slug}/` : ''}`)
-  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...problemIds.map(problemUrl), ...guideIds.map(guideUrl), ...cardPageUrls, ...docs, ...blogPageUrls]
+  return [SITE_ORIGIN, `${SITE_ORIGIN}app/`, `${SITE_ORIGIN}practice/`, ...problemIds.map(problemUrl), ...guideIds.map(guideUrl), ...cardPageUrls, ...docs, ...blogPageUrls, ...(pricing ? [`${SITE_ORIGIN}pricing/`] : [])]
 }
 
 export function sitemapXml(urls: string[]): string {
@@ -33,7 +34,7 @@ export function sitemap(docsDir: string, problemsDir: string): Plugin {
     apply: 'build',
     generateBundle() {
       const cards = cardUrls(readCardSite(join(problemsDir, '..', 'cards'), problemsDir))
-      const urls = sitemapUrls(readSite(docsDir), readProblems(problemsDir).map((p) => p.id), readGuides(join(problemsDir, '..', 'guide')).map((g) => g.id), cards, blogUrls(readPosts(join(docsDir, '..', 'blog'))))
+      const urls = sitemapUrls(readSite(docsDir), readProblems(problemsDir).map((p) => p.id), readGuides(join(problemsDir, '..', 'guide')).map((g) => g.id), cards, blogUrls(readPosts(join(docsDir, '..', 'blog'))), process.env.VITE_BILLING === 'true')
       this.emitFile({ type: 'asset', fileName: 'sitemap.xml', source: sitemapXml(urls) })
     },
   }
