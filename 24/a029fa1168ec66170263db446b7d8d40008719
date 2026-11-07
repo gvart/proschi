@@ -1,0 +1,37 @@
+frontend/src/services/credits.test.ts
+  s_e17b87e0a1b3ca::t_26eba5207e3ba8 29-35
+frontend/src/practice/modes/ai/AiInterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_a7b4a19b4738e0 1-2,16-17,103,381-382,384,389-390,394-410,412-413
+  s_e17b87e0a1b3ca::t_a4085b7268e98d 391,411
+frontend/src/practice/modes/ai/InterviewReport.test.tsx
+  s_e17b87e0a1b3ca::t_bbc9c702b4c51b 1-96
+frontend/src/services/credits.ts
+  s_e17b87e0a1b3ca::t_f8073cba501e50 24-25,36,89-98
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_68cfc78f5247b9 2,9,144-149,175,329-356
+frontend/src/practice/modes/ai/report.css
+  s_e17b87e0a1b3ca::t_e3bd3854bd340d 1-75
+frontend/src/practice/history/InterviewHistory.tsx
+  s_e17b87e0a1b3ca::t_a4085b7268e98d 156
+frontend/src/practice/modes/ai/api.ts
+  s_e17b87e0a1b3ca::t_b1db4865d5879a 3,52-53,71-73,75-80
+frontend/src/practice/modes/ai/InterviewReport.tsx
+  s_e17b87e0a1b3ca::t_c15c3c1aca5105 2-181,183-263,265
+  s_e17b87e0a1b3ca::t_653c6861e5cabe 1,182,264
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "24a029fa1168ec66170263db446b7d8d40008719",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
