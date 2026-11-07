@@ -336,6 +336,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     else setSource(next);
   }, []);
   const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const partnerDiagram = useCallback((s: string) => parseSolution(problem, s).diagram, [problem]);
   const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
 
   const inLesson = hasLesson && stage === 'lesson';
@@ -431,6 +432,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   );
 
   const partnerDock = hasPartner && (
+    <>
+    <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />
     <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
       <Suspense fallback={null}>
         <PartnerPanel
@@ -444,9 +447,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onClose={closePartner}
           offReason={partnerOff}
           onAssisted={markAssisted}
+          diagramOf={partnerDiagram}
         />
       </Suspense>
     </PartnerDock>
+    </>
   );
 
   const tests = (
@@ -547,7 +552,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               </button>
             </span>
             <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
-            {hasPartner && <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />}
             <ZenButton zen={zen} className={iconButton} />
           </>
         )}
