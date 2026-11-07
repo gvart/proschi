@@ -1,0 +1,265 @@
+import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { CircleCheck, CircleX, Printer, X } from 'lucide-react';
+import listings from 'virtual:practice-listings';
+import DiagramCanvas from '../../../components/Diagram/DiagramCanvas';
+import { useDiagramLayout } from '../../../components/Diagram/useDiagramLayout';
+import type { Diagram } from '../../../dsl';
+import { loadProblem } from '../../loadProblem';
+import { parseSolution } from '../../workspace';
+import { getReport, SKILL_LABEL, SKILLS, type InterviewReport as Report, type Skill } from './api';
+import './report.css';
+
+/**
+ * The printable report of a finished mock interview (feature
+ * `interview_report`, Max; docs/design/paid-plans.md P31): the problem, the
+ * date and length, pass or fail, the score and notes per skill, the last
+ * design sent with its test results, laid out as a sheet of paper. Print or
+ * "Save as PDF" is the browser's (window.print()); report.css hides the rest
+ * of the page in print, and `.ps-light` keeps the sheet light in both themes.
+ */
+
+const day = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
+const time = (ms: number) => new Date(ms).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
+const title = (id: string) => listings.find((p) => p.id === id)?.title ?? id;
+
+export default function InterviewReport({ id, onClose }: { id: string; onClose: () => void }) {
+  const [report, setReport] = useState<Report>();
+  const [failed, setFailed] = useState<string>();
+  const [diagram, setDiagram] = useState<Diagram>();
+
+  useEffect(() => {
+    let live = true;
+    getReport(id).then(
+      ({ report }) => {
+        if (!live) return;
+        setReport(report);
+        if (report.design) {
+          const source = report.design.source;
+          void loadProblem(report.problem).then((problem) => live && problem && setDiagram(parseSolution(problem, source).diagram));
+        }
+      },
+      (e: unknown) => live && setFailed(e instanceof Error ? e.message : String(e)),
+    );
+    return () => {
+      live = false;
+    };
+  }, [id]);
+
+  // Print shows only the report (report.css), and Escape closes it.
+  useEffect(() => {
+    document.body.classList.add('printing-report');
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    window.addEventListener('keydown', onKey);
+    return () => {
+      document.body.classList.remove('printing-report');
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
+
+  return createPortal(
+    <div role="dialog" aria-modal="true" aria-label="Interview report" className="interview-report ps-light fixed inset-0 z-[100] overflow-y-auto">
+      <div className="report-toolbar sticky top-0 z-10 flex items-center gap-2 border-b-bw-1 border-ink bg-surface px-4 py-2">
+        <p className="mr-auto text-sm font-semibold text-ink">Interview report</p>
+        <button type="button" onClick={() => window.print()} disabled={!report} className="inline-flex items-center gap-1.5 rounded-sm border-bw-1 border-ink bg-pop-yellow px-3 py-1.5 text-sm font-semibold text-on-accent shadow-brutal-sm disabled:opacity-50">
+          <Printer size={14} aria-hidden="true" />
+          Print or save as PDF
+        </button>
+        <button type="button" onClick={onClose} aria-label="Close the report" className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink/40 px-2 py-1.5 text-sm font-semibold text-ink hover:border-ink">
+          <X size={14} aria-hidden="true" />
+          <span className="hidden sm:inline">Close</span>
+        </button>
+      </div>
+      <article className="report-sheet mx-auto my-6 bg-white text-ink">
+        {failed ? (
+          <p role="alert" className="text-sm">
+            The report could not be loaded ({failed}).
+          </p>
+        ) : !report ? (
+          <p className="text-sm text-muted">Loading the report…</p>
+        ) : (
+          <Sheet report={report} diagram={diagram} />
+        )}
+      </article>
+    </div>,
+    document.body,
+  );
+}
+
+function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
+  const { verdict } = report;
+  const used = report.endedAt !== undefined ? Math.max(1, Math.round((report.endedAt - report.startedAt) / 60_000)) : undefined;
+  const grade = report.design?.grade;
+  return (
+    <>
+      <header className="report-head flex flex-wrap items-start gap-x-6 gap-y-3 border-b-bw-2 border-ink pb-4">
+        <div className="min-w-0 flex-1">
+          <p className="text-xs font-semibold uppercase tracking-wider text-muted">Proschi · Mock interview report</p>
+          <h1 className="mt-1 font-display text-2xl font-bold leading-tight">{title(report.problem)}</h1>
+          <dl className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-sm">
+            <div className="flex gap-1">
+              <dt className="text-muted">Date</dt>
+              <dd>
+                {day(report.startedAt)}, {time(report.startedAt)}
+              </dd>
+            </div>
+            <div className="flex gap-1">
+              <dt className="text-muted">Length</dt>
+              <dd>
+                {report.minutes} min planned{used !== undefined ? `, ${used} min used` : ''}
+              </dd>
+            </div>
+            {report.deep && (
+              <div className="flex gap-1">
+                <dt className="sr-only">Verdict</dt>
+                <dd data-testid="report-deep" className="font-semibold">
+                  Deep verdict
+                </dd>
+              </div>
+            )}
+          </dl>
+        </div>
+        <p data-testid="report-result" className={`inline-flex shrink-0 items-center gap-2 rounded-sm border-bw-2 border-ink px-3 py-1.5 text-lg font-bold ${verdict.passed ? 'bg-pass/25' : 'bg-fail/20'}`}>
+          {verdict.passed ? <CircleCheck size={20} aria-hidden="true" /> : <CircleX size={20} aria-hidden="true" />}
+          {verdict.passed ? 'Pass' : 'Not yet a pass'}
+        </p>
+      </header>
+
+      <section className="report-block mt-5">
+        <h2 className="report-h2">Scores per skill</h2>
+        <table className="mt-2 w-full text-sm">
+          <thead className="sr-only">
+            <tr>
+              <th>Skill</th>
+              <th>Score out of 5</th>
+              <th>Notes</th>
+            </tr>
+          </thead>
+          <tbody>
+            {SKILLS.map((s) => (
+              <tr key={s} className="border-b border-ink/15 align-top">
+                <th scope="row" className="w-32 py-2 pr-3 text-left font-semibold">
+                  {SKILL_LABEL[s]}
+                </th>
+                <td className="w-40 py-2 pr-3">
+                  <span className="flex items-center gap-2">
+                    <span className="flex flex-1 gap-0.5" aria-hidden="true">
+                      {[1, 2, 3, 4, 5].map((n) => (
+                        <span key={n} className={`h-2.5 flex-1 rounded-[2px] border border-ink/60 ${n <= verdict.scores[s] ? (verdict.scores[s] >= 3 ? 'bg-pass' : 'bg-fail') : ''}`} />
+                      ))}
+                    </span>
+                    <span className="w-8 text-right font-mono tabular-nums">{verdict.scores[s]}/5</span>
+                  </span>
+                </td>
+                <td className="py-2 text-ink/85">
+                  <SkillNotes skill={s} report={report} />
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </section>
+
+      <div className="report-block mt-5 grid gap-5 sm:grid-cols-2">
+        <Notes title="What went well" notes={verdict.wentWell} empty="Nothing stood out yet." />
+        <Notes title="What went wrong" notes={verdict.wentWrong} empty="Nothing went wrong." />
+      </div>
+
+      {verdict.nextSteps.length > 0 && (
+        <section className="report-block mt-5">
+          <h2 className="report-h2">Next steps</h2>
+          <ol className="mt-2 list-decimal space-y-1 pl-5 text-sm">
+            {verdict.nextSteps.map((s, i) => (
+              <li key={i}>{s}</li>
+            ))}
+          </ol>
+        </section>
+      )}
+
+      <section className="report-block report-design mt-6">
+        <h2 className="report-h2">Final design</h2>
+        {!report.design ? (
+          <p className="mt-2 text-sm text-muted">No design to show: none was sent, or the interview is past the 90 days its details are kept.</p>
+        ) : (
+          <>
+            <div data-testid="report-diagram" className="report-diagram mt-2 rounded-sm border-bw-1 border-ink/40">
+              {diagram ? <StaticDiagram diagram={diagram} /> : <p className="p-4 text-sm text-muted">Drawing the design…</p>}
+            </div>
+            {grade && (
+              <div className="mt-4">
+                <h3 className="text-sm font-semibold">
+                  Tests: <span className="tabular-nums">{grade.passed}</span> of <span className="tabular-nums">{grade.total}</span> passed
+                  {grade.solved ? ' (solved)' : ''}
+                </h3>
+                {grade.blocked === 'errors' && grade.errors.length > 0 && (
+                  <ul className="mt-1 space-y-0.5 font-mono text-xs text-ink/85">
+                    {grade.errors.map((e, i) => (
+                      <li key={i}>{e}</li>
+                    ))}
+                  </ul>
+                )}
+                {grade.results.length > 0 && (
+                  <ul data-testid="report-tests" className="mt-2 space-y-1 text-sm">
+                    {grade.results.map((r) => (
+                      <li key={r.id} className="flex items-start gap-2">
+                        {r.passed ? <CircleCheck size={15} className="mt-0.5 shrink-0 text-pass" aria-label="Passed" /> : <CircleX size={15} className="mt-0.5 shrink-0 text-fail" aria-label="Failed" />}
+                        <span>
+                          <span className="font-semibold">{r.name}</span> <span className="text-ink/75">{r.message}</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            )}
+          </>
+        )}
+      </section>
+
+      <footer className="mt-8 border-t border-ink/20 pt-2 text-xs text-muted">Written for you by proschi.app from your mock interview on {day(report.startedAt)}.</footer>
+    </>
+  );
+}
+
+function SkillNotes({ skill, report }: { skill: Skill; report: Report }) {
+  const notes = [...report.verdict.wentWell.filter((n) => n.skill === skill).map((n) => ({ ...n, good: true })), ...report.verdict.wentWrong.filter((n) => n.skill === skill).map((n) => ({ ...n, good: false }))];
+  if (!notes.length) return <span className="text-muted">No notes.</span>;
+  return (
+    <ul className="space-y-0.5">
+      {notes.map((n, i) => (
+        <li key={i}>
+          <span className="sr-only">{n.good ? 'Went well: ' : 'Went wrong: '}</span>
+          <span aria-hidden="true" className="mr-1 font-bold">
+            {n.good ? '+' : '–'}
+          </span>
+          {n.text}
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+function Notes({ title, notes, empty }: { title: string; notes: { skill: Skill; text: string }[]; empty: string }) {
+  return (
+    <section>
+      <h2 className="report-h2">{title}</h2>
+      {notes.length ? (
+        <ul className="mt-2 space-y-1.5 text-sm">
+          {notes.map((n, i) => (
+            <li key={i} className="rounded-sm border-bw-1 border-ink/25 px-3 py-1.5">
+              <span className="mr-1 text-xs font-semibold uppercase tracking-wider text-muted">{SKILL_LABEL[n.skill]}</span> {n.text}
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="mt-2 text-sm text-muted">{empty}</p>
+      )}
+    </section>
+  );
+}
+
+/** The design as the editor draws it, fitted and still: no controls, nothing to drag. */
+function StaticDiagram({ diagram }: { diagram: Diagram }) {
+  const { nodes, edges, settled } = useDiagramLayout(diagram);
+  return <DiagramCanvas nodes={nodes} edges={edges} fitKey={String(settled)} compact still legend={diagram.legend} />;
+}

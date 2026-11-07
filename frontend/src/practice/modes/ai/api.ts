@@ -1,5 +1,6 @@
 import { api, ApiError, apiEnabled } from '../../../services/api';
 import { noCredits } from '../../../services/credits';
+import type { ReviewTests } from '../../../review/contract';
 import { loadJson, saveJson } from '../../../services/storage';
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../session';
 
@@ -48,6 +49,8 @@ export interface AiInterview {
   status: AiStatus;
   startedAt: number;
   endedAt?: number;
+  /** Started Deep (Max): the verdict is written by a stronger model. Once finished, whether it was. */
+  deep?: boolean;
   verdict?: Verdict;
   phase?: Phase;
   turns?: number;
@@ -65,10 +68,16 @@ export async function listInterviews(): Promise<{ interviews: AiInterview[] } | 
   }
 }
 
-/** Starts one; `replace` ends the open one first (the credits it used are not returned). */
-export const startInterview = (problem: string, minutes: Duration, replace = false) =>
-  api<{ interview: AiInterview }>('/api/interviews', { method: 'POST', body: { problem, minutes, ...(replace ? { replace: true } : {}) } });
+/** Starts one; `replace` ends the open one first (the credits it used are not returned); `deep` asks for a Deep verdict (Max). */
+export const startInterview = (problem: string, minutes: Duration, replace = false, deep = false) =>
+  api<{ interview: AiInterview }>('/api/interviews', { method: 'POST', body: { problem, minutes, ...(replace ? { replace: true } : {}), ...(deep ? { deep: true } : {}) } });
 export const getInterview = (id: string) => api<{ interview: AiInterview }>(`/api/interviews/${encodeURIComponent(id)}`);
+/** A finished interview's printable report (GET /api/interviews/<id>/report, Max): the last design and its tests while the transcript is kept. */
+export interface InterviewReport extends AiInterview {
+  verdict: Verdict;
+  design?: { source: string; grade: ReviewTests & { errors: string[] } };
+}
+export const getReport = (id: string) => api<{ report: InterviewReport }>(`/api/interviews/${encodeURIComponent(id)}/report`);
 export const finishInterview = (id: string) => api<{ interview: AiInterview }>(`/api/interviews/${encodeURIComponent(id)}/finish`, { method: 'POST' });
 
 export interface SseEvent {

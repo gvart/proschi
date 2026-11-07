@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Bot, CircleAlert, CircleCheck, CreditCard, Flag, Pause, Play, ShieldCheck, Timer, X } from 'lucide-react';
+import { Bot, CircleAlert, CircleCheck, CreditCard, Flag, Pause, Play, ShieldCheck, Sparkles, Timer, X } from 'lucide-react';
 import Markdown from '../Markdown';
 import { useNow } from './useNow';
 import { formatFactor, formatNumber, hashText, parseNumber, seededRandom } from '../../learn/grade';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { redactedStatement, type EstimateQuestion, type Interview } from './interviewFile';
 import { apiEnabled } from '../../services/api';
-import { useFeature } from '../../components/featureState';
+import { showsUpgrade, useFeature } from '../../components/featureState';
 import UpgradeHint from '../../components/UpgradeHint';
 import AiInterviewPanel from './ai/AiInterviewPanel';
 import { giveConsent, hasConsent, listInterviews, loadActive, saveActive, startError, startInterview } from './ai/api';
@@ -141,7 +141,12 @@ function StartScreen({
   /** Whether the server has the interviewer; undefined until known. */
   const [available, setAvailable] = useState<boolean>();
   const { credits } = useCredits(ai);
-  const estimate = interviewEstimate(useEstimates(ai), duration);
+  /** Deep (Max, P31): a stronger model writes the verdict; the server checks the plan again. */
+  const deepFeature = useFeature('deep_mode');
+  const [deepChoice, setDeep] = useState(false);
+  const deep = deepFeature.ok && deepChoice;
+  const estimates = useEstimates(ai);
+  const estimate = interviewEstimate(estimates, duration, deep);
   /** A start the server refused for want of credits (402 no_credits). */
   const [short, setShort] = useState<{ needed: number; balance: number }>();
   const [consenting, setConsenting] = useState(false);
@@ -167,7 +172,7 @@ function StartScreen({
     setStarting(true);
     setError(undefined);
     try {
-      const { interview } = await startInterview(problemId, duration, replace);
+      const { interview } = await startInterview(problemId, duration, replace, deep);
       refreshCredits();
       onStartAi(interview.id);
     } catch (e) {
@@ -321,6 +326,34 @@ function StartScreen({
           </li>
         ))}
       </ol>
+      {chosen === 'ai' && deepFeature.ok && (
+        <label data-testid="interview-deep" className={`flex cursor-pointer items-start gap-2.5 rounded-sm border-bw-1 px-3 py-2 text-sm text-ink ${deep ? 'border-ink bg-pop-lilac/25' : 'border-ink/30 hover:border-ink'}`}>
+          <input
+            type="checkbox"
+            checked={deep}
+            onChange={(e) => {
+              setDeep(e.target.checked);
+              setShort(undefined);
+            }}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-ink"
+          />
+          <span>
+            <span className="flex items-center gap-1.5 font-semibold">
+              <Sparkles size={13} aria-hidden="true" />
+              Deep verdict
+            </span>
+            <span className="mt-0.5 block text-xs text-ink/80">
+              A stronger model takes longer over your verdict. The interview itself is the same; the verdict costs about {formatCredits(estimates.deepMultiplier)}× as much.
+            </span>
+          </span>
+        </label>
+      )}
+      {chosen === 'ai' && !deepFeature.ok && showsUpgrade(deepFeature) && (
+        <p data-testid="interview-deep-hint" className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
+          Want a more thorough verdict? Deep verdicts come with Max.
+          <UpgradeHint icon={false}>See Max</UpgradeHint>
+        </p>
+      )}
       {chosen === 'ai' && credits ? (
         <InterviewCost estimate={estimate} minutes={duration} balance={balance} short={short} notEnough={notEnough} />
       ) : (

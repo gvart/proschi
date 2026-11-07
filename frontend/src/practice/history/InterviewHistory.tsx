@@ -153,7 +153,7 @@ export function InterviewVerdictPage({ id }: { id: string }) {
             Mock interview · {formatDay(interview.startedAt)} · {interview.minutes} min
           </p>
           <div className={`mt-4 ${card}`}>
-            <VerdictView picksFor={interview.id} endedAt={interview.endedAt} verdict={interview.verdict} />
+            <VerdictView picksFor={interview.id} endedAt={interview.endedAt} deep={interview.deep} verdict={interview.verdict} />
           </div>
           <a href={`#/${interview.problem}`} className={`mt-4 ${outlineButton}`}>
             Open the problem
