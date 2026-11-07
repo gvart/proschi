@@ -1,4 +1,4 @@
-import { useEffect, useRef, type ReactNode } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Blocks, Cable, Settings2, Trash2, X } from 'lucide-react';
 import { MenuItem } from '../Playground/Menu';
 import { iconButton, toolButton } from '../Playground/ui';
@@ -39,10 +39,37 @@ interface PaletteDockProps {
   focus: boolean;
   /** The selection's settings (a docked Inspector): shown in the panel in place of the palette until closed. */
   settings?: ReactNode;
+  /** Told whether the panel floats over the canvas (a narrow pane) instead of sitting beside it. */
+  onFloatingChange?: (floating: boolean) => void;
 }
 
-/** The palette docked to the left of the canvas, or on a phone a bottom sheet where a tap adds. */
-export function PaletteDock({ open, phone, onAdd, onClose, focus, settings }: PaletteDockProps) {
+/** Below this width, a panel docked beside the canvas would leave too little of it, so the panel floats over the canvas instead. */
+const FLOAT_BELOW = 640;
+
+/** Whether the row the dock sits in (dock and canvas) is narrow, measured on the row itself rather than the window. */
+function useNarrowRow(open: boolean) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useLayoutEffect(() => {
+    const row = ref.current?.parentElement;
+    if (!open || !row || typeof ResizeObserver === 'undefined') return;
+    const update = () => setNarrow(row.clientWidth < FLOAT_BELOW);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    return () => observer.disconnect();
+  }, [open]);
+  return [ref, narrow] as const;
+}
+
+/**
+ * The palette docked to the left of the canvas; in a narrow pane (practice's
+ * diagram column) a panel floating over the canvas's right side, so the canvas
+ * keeps its width; on a phone a bottom sheet where a tap adds.
+ */
+export function PaletteDock({ open, phone, onAdd, onClose, focus, settings, onFloatingChange }: PaletteDockProps) {
+  const [ref, narrow] = useNarrowRow(open && !phone);
+  useEffect(() => onFloatingChange?.(narrow), [narrow, onFloatingChange]);
   if (!open) return null;
   if (phone) {
     return (
@@ -67,12 +94,23 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings }: Pa
     );
   }
   return (
-    // One panel beside the canvas, so neither covers the diagram: the selection's settings, else the palette
-    // (hidden, not unmounted, so it keeps its search and does not take the focus again).
-    <div className="w-60 shrink-0 border-r-bw-1 border-ink">
-      {settings}
-      <div className="h-full" hidden={!!settings}>
-        <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
+    // One panel, the selection's settings, else the palette (hidden, not unmounted, so it keeps its search and
+    // does not take the focus again). Beside the canvas, so neither covers the diagram; in a narrow pane over its
+    // right side, from a zero-width box placed after the canvas.
+    <div ref={ref} className={narrow ? 'relative order-last w-0 shrink-0' : 'w-60 shrink-0 border-r-bw-1 border-ink'}>
+      <div
+        data-testid="palette-dock"
+        data-floating={narrow || undefined}
+        className={
+          narrow
+            ? `absolute right-2 top-2 z-20 flex max-h-[calc(100%-1rem)] w-64 flex-col overflow-hidden rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md ${settings ? '' : 'h-[calc(100%-1rem)]'}`
+            : 'h-full'
+        }
+      >
+        {settings}
+        <div className="h-full" hidden={!!settings}>
+          <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
+        </div>
       </div>
     </div>
   );

@@ -246,4 +246,38 @@ test.describe('visual editing in practice', () => {
     await expect(page.getByRole('status').filter({ hasText: 'problem.proschi' })).toBeVisible();
     expect(await editorText(page)).toBe(before);
   });
+
+  test('in the narrow practice pane the palette floats over the canvas, and the diagram fits beside it unless zoomed by hand', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await page.emulateMedia({ colorScheme: 'dark' });
+    await page.goto('practice/#/url-shortener');
+    await expect(codeEditor(page)).toBeVisible();
+    // Drawn on first load in dark mode too.
+    await waitForCanvas(page, 2);
+    await expect(canvasNodes(page).first()).toBeInViewport();
+    const pane = page.locator('.pc-editable');
+    const width = (await pane.boundingBox())!.width;
+    const viewport = page.locator('.react-flow__viewport');
+    const transform = () => viewport.getAttribute('style');
+
+    await page.getByRole('button', { name: 'Add component' }).click();
+    const dock = page.getByTestId('palette-dock');
+    await expect(dock).toHaveAttribute('data-floating', 'true');
+    // The canvas keeps its width; the diagram glides clear of the panel.
+    expect((await pane.boundingBox())!.width).toBe(width);
+    const dockLeft = (await dock.boundingBox())!.x;
+    await expect.poll(async () => Math.max(...(await canvasNodes(page).evaluateAll((els) => els.map((e) => e.getBoundingClientRect().right))))).toBeLessThan(dockLeft);
+
+    // Zoomed by hand: closing and opening the palette leaves the view where the reader put it.
+    await page.getByRole('button', { name: 'Hide components' }).click();
+    // After the diagram glides back to its full-width fit.
+    await page.waitForTimeout(500);
+    await page.locator('.react-flow__controls-zoomin').click();
+    await page.waitForTimeout(500);
+    const zoomed = await transform();
+    await page.getByRole('button', { name: 'Add component' }).click();
+    await expect(dock).toBeVisible();
+    await page.waitForTimeout(500);
+    expect(await transform()).toBe(zoomed);
+  });
 });
