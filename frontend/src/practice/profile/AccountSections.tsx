@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
-import { CloudOff, Download, ExternalLink, Link, LogOut, MonitorX, Pencil, Trash2, Unlink } from 'lucide-react';
+import { CloudOff, Download, ExternalLink, Link, LogOut, MessageSquare, MonitorX, Pencil, Trash2, Unlink } from 'lucide-react';
 import ShareButton from '../../components/ShareButton';
+import { openFeedback } from '../../feedback/open';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { profileShareText } from '../../learn/share';
 import { deleteCloudCopies, removeSyncedFromBrowser, syncedInBrowser } from '../../playground/localDocs';
@@ -345,6 +346,16 @@ export function DataPrivacy({ account, user }: { account: Account; user: User })
           />
         )}
       </Row>
+      <Row
+        label="Contact us"
+        help="A bug, a question or an idea? Write to us from here or the help menu. We read every message."
+        control={
+          <button type="button" className={outlineButton} onClick={() => void openFeedback()}>
+            <MessageSquare size={14} aria-hidden="true" />
+            Contact us
+          </button>
+        }
+      />
     </Section>
   );
 }

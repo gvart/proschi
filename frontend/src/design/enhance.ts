@@ -4,6 +4,7 @@
 // static pages get the behaviour without loading React.
 
 import { bindAccount } from './account';
+import { bindFeedbackLinks } from '../feedback/links';
 import { bindMenu } from './menu';
 import { magnetic, observeReveal } from './motion';
 import { nextThemePref, readThemePref, setThemePref, subscribeTheme, systemTheme, themeToggleLabel } from './theme';
@@ -39,5 +40,7 @@ export function enhance(root: ParentNode = document): () => void {
   root.querySelectorAll<HTMLElement>('[data-magnetic]').forEach((el) => cleanups.push(magnetic(el)));
   root.querySelectorAll<HTMLElement>('[data-reveal]').forEach((el) => cleanups.push(observeReveal(el)));
   root.querySelectorAll<HTMLElement>('[data-account]').forEach((el) => cleanups.push(bindAccount(el)));
+  // The footer's Send feedback: one listener on the document, never removed (bindFeedbackLinks binds once).
+  if (root.querySelector('[data-feedback]')) bindFeedbackLinks();
   return () => cleanups.forEach((cleanup) => cleanup());
 }

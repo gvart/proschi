@@ -12,6 +12,8 @@ export interface SiteLink {
   page?: SitePage;
   /** Marked out in the header, for what the site wants found first. */
   accent?: boolean;
+  /** Opens the feedback dialog (src/feedback/links.ts); `href` is the fallback. */
+  feedback?: boolean;
 }
 
 export const GITHUB_URL = 'https://github.com/gvart/proschi';
@@ -45,6 +47,10 @@ export const ARCADE_HREF = 'practice/#/arcade';
  */
 export const PRICING_ON =
   import.meta.env?.VITE_BILLING === 'true' || (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_BILLING === 'true';
+
+/** Whether the build has accounts (VITE_ACCOUNTS=true), so feedback can be sent; read like PRICING_ON. */
+export const ACCOUNTS_ON =
+  import.meta.env?.VITE_ACCOUNTS === 'true' || (globalThis as { process?: { env?: Record<string, string | undefined> } }).process?.env?.VITE_ACCOUNTS === 'true';
 
 /** The pricing page (src/pricing/), linked only in builds that have it. */
 export const PRICING_LINK: SiteLink = { label: 'Pricing', href: 'pricing/', page: 'pricing' };
@@ -89,6 +95,8 @@ export const FOOTER_COLUMNS: { title: string; links: SiteLink[] }[] = [
       ...(PRICING_ON ? [PRICING_LINK] : []),
       { label: 'Contribute', href: CONTRIBUTING_URL },
       { label: 'Issues', href: `${GITHUB_URL}/issues` },
+      // Opens the dialog; without JavaScript, Settings, which has Contact us.
+      ...(ACCOUNTS_ON ? [{ label: 'Send feedback', href: 'practice/#/me', feedback: true }] : []),
       { label: 'Privacy', href: 'docs/privacy/' },
       { label: 'Terms', href: 'docs/terms/' },
       { label: 'MIT license', href: `${GITHUB_URL}/blob/main/LICENSE` },
