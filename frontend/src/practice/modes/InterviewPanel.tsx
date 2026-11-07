@@ -361,7 +361,7 @@ function UpgradeLink({ className = '' }: { className?: string }) {
   return (
     <UpgradeHint testId="ai-upgrade" icon={false} className={`inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink ${className}`}>
       <Sparkles size={12} aria-hidden="true" />
-      Get more with Pro or an interview pack
+      Get more with Pro or a mock interview pack
     </UpgradeHint>
   );
 }
