@@ -43,7 +43,7 @@ test.describe('import and the start gallery', () => {
     await dialog.getByRole('textbox').fill('openapi: 3.0.3\ninfo:\n  title: Pets API\npaths:\n  /pets:\n    get:\n      summary: List pets\n      responses:\n        "200": { description: OK }\n');
     await expect(dialog.getByLabel('Proschi preview')).toContainText('client -> api    : GET /pets');
     await dialog.getByRole('button', { name: 'Open as new diagram' }).click();
-    await expect(page.getByRole('combobox', { name: 'Use case' })).toHaveValue('list-pets');
+    await expect(page.getByRole('combobox', { name: 'Use case' })).toHaveAttribute('data-value', 'list-pets');
     await expect(canvasNodes(page)).toHaveCount(2);
   });
 

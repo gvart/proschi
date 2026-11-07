@@ -78,8 +78,8 @@ test('save a version, list it, view it read-only, compare it with the draft and 
   dialog = await openVersions(page);
   await dialog.getByRole('button', { name: `Compare ${today}` }).click();
   const compare = page.getByRole('dialog', { name: 'Compare versions' });
-  await expect(compare.getByLabel('Base')).toHaveValue(today);
-  await expect(compare.getByLabel('Target')).toHaveValue('');
+  await expect(compare.getByLabel('Base')).toHaveAttribute('data-value', today);
+  await expect(compare.getByLabel('Target')).toHaveAttribute('data-value', '');
   await expect(compare.locator('.react-flow__node.pc-diff-added')).toHaveText(/Orders Cache/);
   await expect(compare.getByTestId('diff-counts')).toContainText('2 added');
   const changes = compare.getByRole('complementary', { name: 'Changes' });

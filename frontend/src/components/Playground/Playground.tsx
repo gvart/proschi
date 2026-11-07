@@ -1042,7 +1042,7 @@ export default function Playground() {
         <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
           <Select
             aria-label="Use case"
-            title="Use case: the flow Play runs"
+            title={`Use case: the flow Play runs${useCase ? `. Now: ${useCase.name}` : ''}`}
             prefix={
               <>
                 <Route size={16} aria-hidden="true" className="shrink-0" />
@@ -1058,7 +1058,7 @@ export default function Playground() {
             options={useCaseOptions}
             placeholder="No use cases"
             disabled={shown.useCases.length === 0}
-            className="flex-1 min-w-0 sm:flex-none sm:w-[17rem]"
+            className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[17rem]"
           />
 
           {playing ? (

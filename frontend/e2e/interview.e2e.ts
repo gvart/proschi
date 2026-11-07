@@ -223,7 +223,7 @@ test.describe('the interview room on your own', () => {
     await step.getByRole('button', { name: 'Add step' }).click();
     await flows.getByRole('button', { name: 'Add a step' }).click();
     await chooseOption(step.getByLabel('Starts at'), 'ZooKeeper');
-    await chooseOption(step.getByLabel('Goes to'), 'ID generator');
+    await chooseOption(step.getByLabel('Goes to'), 'ID Generator');
     await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
     await step.getByRole('textbox', { name: 'Label' }).fill('worker id');
     await step.getByRole('button', { name: 'Add step' }).click();

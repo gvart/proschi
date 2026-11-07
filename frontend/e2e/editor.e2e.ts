@@ -95,7 +95,7 @@ test.describe('editor', () => {
   });
 
   test('Play runs a use case and steps through it', async ({ page }) => {
-    await expect(page.getByRole('combobox', { name: 'Use case' })).toHaveValue('create-order');
+    await expect(page.getByRole('combobox', { name: 'Use case' })).toHaveAttribute('data-value', 'create-order');
     await page.getByRole('button', { name: 'Play', exact: true }).click();
     await expect(stepLabel(page)).toHaveText(/^Step 1 of \d+$/);
     await expect(page.getByRole('button', { name: 'Back to diagram' })).toBeVisible();

@@ -31,7 +31,7 @@ export default function ProblemFilters({ query, onQuery, filters, onFilters, tag
   // Opening the panel moves focus to its first select.
   const wasOpen = useRef(open);
   useEffect(() => {
-    if (open && !wasOpen.current) panel.current?.querySelector<HTMLElement>('select')?.focus();
+    if (open && !wasOpen.current) panel.current?.querySelector<HTMLElement>('[role="combobox"]')?.focus();
     wasOpen.current = open;
   }, [open]);
 
