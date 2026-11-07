@@ -335,7 +335,8 @@ minutes) is its own.
 (€12/month), Pro yearly (€89/year) and Interview pack (5 interviews, €15,
 one-time); a webhook endpoint at `https://proschi.app/api/billing/webhook`
 with the events in the [production checklist](#production-checklist)
-(`subscription.*`, `order.paid` and the refund and dispute events); and an organization
+(`subscription.*`, `order.paid` and the refund and dispute events) and webhook
+API version 2026-10, which Polar pins per endpoint; and an organization
 access token with `checkouts:write`, `customer_sessions:write` and
 `subscriptions:write`. Then set the Worker's secrets `POLAR_ACCESS_TOKEN`,
 `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`
@@ -1152,7 +1153,8 @@ tokens.
 3. Expose the local Worker: `cloudflared tunnel --url http://localhost:8787`
    prints an `https://<random>.trycloudflare.com` address. In Polar add a
    webhook endpoint at `https://<random>.trycloudflare.com/api/billing/webhook`
-   with the checklist's events, and put its secret in `POLAR_WEBHOOK_SECRET`.
+   with the checklist's events and webhook API version 2026-10, and put its
+   secret in `POLAR_WEBHOOK_SECRET`.
    A quick tunnel's address changes on every run; update the endpoint with it.
 4. Restart `npm run dev:paid`, open http://localhost:8787/pricing/ (still on
    localhost: sign-in and the checkout's return are there) and buy. The
@@ -1188,7 +1190,11 @@ Before turning the paid features on at proschi.app:
     events `subscription.created`, `subscription.updated`,
     `subscription.active`, `subscription.canceled`, `subscription.uncanceled`,
     `subscription.revoked`, `order.paid`, `order.refunded`,
-    `refund.created`, `refund.updated` and the `dispute.*` events;
+    `refund.created`, `refund.updated` and the `dispute.*` events, and
+    webhook API version 2026-10 (Polar pins it per endpoint; src/billing.ts
+    reads that version's `data.modified_at`, `current_period_end`,
+    `cancel_at_period_end`, `product_id`, `customer.external_id` and
+    `metadata.user_id`);
   - an organization access token with `checkouts:write`,
     `customer_sessions:write` and `subscriptions:write`.
 - **An AI spend cap**: a monthly limit on the key in the Anthropic console
@@ -1201,3 +1207,17 @@ Before turning the paid features on at proschi.app:
   Add `VITE_BILLING: 'true'` next to it in `.github/workflows/site.yml` (the
   production build, and staging's) to show the pricing page and the upgrade
   buttons. Without it the API works, but nothing links to it.
+
+**Admin.** The admin panel (`/admin/`, "Admin panel" above) covers the paid
+product once it is on: the **Health** tab says whether `ANTHROPIC_API_KEY`,
+`AI_GATEWAY_URL` and the five Polar secrets are set (never their values) and
+whether `POLAR_SERVER` is sandbox or live; check it after setting the secrets.
+The **Billing** tab counts Pro accounts, monthly and yearly subscribers and
+pack orders (D1 stores no amounts: what was paid is in Polar), and logs every
+Polar webhook delivery with its outcome (`applied`, `duplicate`, `ignored`,
+`stale`, `bad_signature`, `error`) for 90 days, so a misconfigured webhook
+secret shows up as `bad_signature` rows. The **AI** tab has interviews,
+reviews, tokens and cost per day. On an account, the admin can grant or
+revoke pack credits and comp Pro until a date (`users.comp_until`, migration
+0023), each with a reason in the audit log; a comp never touches Polar, and
+refunds are made in Polar's dashboard, which the panel links to.
