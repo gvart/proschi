@@ -334,7 +334,8 @@ minutes) is its own.
 **Setup.** In Polar (sandbox first): create the products Pro monthly
 (€12/month), Pro yearly (€89/year) and Interview pack (5 interviews, €15,
 one-time); a webhook endpoint at `https://proschi.app/api/billing/webhook`
-with the `subscription.*` and `order.paid` events; and an organization
+with the events in the [production checklist](#production-checklist)
+(`subscription.*`, `order.paid` and the refund and dispute events); and an organization
 access token with `checkouts:write`, `customer_sessions:write` and
 `subscriptions:write`. Then set the Worker's secrets `POLAR_ACCESS_TOKEN`,
 `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`
@@ -1036,6 +1037,12 @@ npm run migrate:local
 npm run dev                      # the whole site with the API at http://localhost:8787
 ```
 
+Add `VITE_BILLING=true` to the build for the pricing page and the upgrade
+buttons, or run `npm run dev:paid`, which does all three steps with it
+([Testing the paid features locally](#testing-the-paid-features-locally)).
+The site is served from `frontend/dist`; `npm run build:accounts` writes to
+`dist-accounts` (for the e2e tests), which `wrangler dev` doesn't serve.
+
 `npm run dev` in `frontend/` (hot reload, port 5173) has no API, so the
 practice page there works signed out, as on GitHub Pages.
 
@@ -1055,3 +1062,142 @@ not inherit those from the top level. The rate limiters' namespaces are
 
 `src/problems.gen.ts` is generated from `frontend/src/practice/problems` by
 `npm run problems`, which runs before `dev`, `test`, `typecheck` and `deploy`.
+
+## Testing the paid features locally
+
+Everything Pro has (the AI interviewer, AI design reviews, the full
+interview history, Next for you and live share links) can be tried on
+http://localhost:8787 without Polar: the helpers in step 4 make an account
+Pro and give it credits in the local D1. Polar is needed only to test
+checkout and the webhook (step 6).
+
+**1. `.dev.vars`.** `cp .dev.vars.example .dev.vars`; the example lists every
+variable the Worker reads, with what it is for. The paid features need:
+
+- `SESSION_SECRET`: any random string of 32 characters or more
+  (`openssl rand -base64 33`). Without it there is no sign-in.
+- One sign-in provider: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (or
+  the Google pair). There is no dev login.
+- `ANTHROPIC_API_KEY` for the AI interviewer, AI review, history and Next
+  for you; their routes answer 501 without it. Live share links don't need it.
+- The `POLAR_*` variables, only for checkout (step 6).
+
+**2. A GitHub OAuth app for localhost.** GitHub → Settings → Developer
+settings → OAuth Apps → New OAuth App: homepage `http://localhost:8787`,
+callback `http://localhost:8787/auth/github/callback`. Generate a client
+secret and put both values in `.dev.vars`. A GitHub OAuth app has one
+callback, so this is an app of its own, not production's. (Google: add
+`http://localhost:8787/auth/google/callback` as a redirect URI of a Web
+application client.) Open the site as `localhost`, not `127.0.0.1`, or the
+callback won't match.
+
+**3. Run it.**
+
+```sh
+npm run dev:paid   # builds frontend/dist with VITE_ACCOUNTS=true VITE_BILLING=true, migrates the local D1, runs npm run dev
+```
+
+Open http://localhost:8787 and sign in. Wrangler reads `.dev.vars` when it
+starts, so restart it after a change.
+
+**4. Make yourself Pro and add credits.** Both helpers run `wrangler d1
+execute proschi --local` and nothing else: they take no flags, and refuse
+`--remote` or any other.
+
+```sh
+npm run local:pro -- <userId or GitHub/Google subject>       # users.plan = 'pro'
+npm run local:credits -- <userId or GitHub/Google subject> 5 # a pack grant of 5 interview credits
+```
+
+The subject is your numeric GitHub user id (`id` at
+`https://api.github.com/users/<login>`) or Google's `sub`. To list the local
+accounts:
+
+```sh
+npx wrangler d1 execute proschi --local --command "SELECT u.id, u.display_name, u.plan, i.provider, i.subject FROM users u JOIN identities i ON i.user_id = u.id"
+```
+
+Each `local:credits` adds one ledger row (`kind 'grant'`, `bucket 'pack'`,
+`item 'pack_5'`, `ref_id 'local-<uuid>'`). Pro also has its 4 interviews a
+month, and every account one for life. Reload the page afterwards.
+
+**5. Try each feature.**
+
+- **AI interviewer**: open a problem from `/practice/`, turn on **Interview
+  mode**, choose **AI interviewer** under Interviewer (it shows the credits
+  left), pick the time and start. The first one asks for consent. **Send my
+  design** sends the editor's diagram; **Finish and get the verdict** ends it.
+- **AI review**: on a problem, the **Review** tab next to **Tests** → **Review
+  my design** (in the editor at `/app/`, the Review section of the results).
+  Pro has 20 a UTC day.
+- **History**: the account menu → **Your progress** (`/practice/#/progress`):
+  every finished AI interview's verdict and the skill trends.
+- **Next for you**: on the roadmap (`/practice/#/roadmap`) and under a
+  verdict, a few seconds after a Pro interview's verdict or an AI review.
+- **Live share links**: in the editor (`/app/`), signed in with the diagram
+  synced, **File** → **Share link…**; open the link in a private window
+  (`/share/<token>`). Off Pro, creating one answers 402.
+- **Plans**: `/pricing/` and the account page (`/practice/#/me`).
+
+**6. Polar sandbox (checkout and the webhook).** The sandbox is a separate
+Polar at <https://sandbox.polar.sh>, with its own organization, products and
+tokens.
+
+1. Create the three products (as in the
+   [production checklist](#production-checklist)) and put their ids in
+   `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY` and
+   `POLAR_PRODUCT_PACK_5`.
+2. Create an organization access token with the checklist's scopes
+   (`POLAR_ACCESS_TOKEN`), and keep `POLAR_SERVER=sandbox`.
+3. Expose the local Worker: `cloudflared tunnel --url http://localhost:8787`
+   prints an `https://<random>.trycloudflare.com` address. In Polar add a
+   webhook endpoint at `https://<random>.trycloudflare.com/api/billing/webhook`
+   with the checklist's events, and put its secret in `POLAR_WEBHOOK_SECRET`.
+   A quick tunnel's address changes on every run; update the endpoint with it.
+4. Restart `npm run dev:paid`, open http://localhost:8787/pricing/ (still on
+   localhost: sign-in and the checkout's return are there) and buy. The
+   sandbox takes Stripe's test cards: `4242 4242 4242 4242`, any future
+   expiry date, any CVC. The webhook then sets the plan or adds the pack's
+   credits; Polar's webhook page and the wrangler log show each delivery.
+
+**What it costs.** The AI calls are real and billed to your Anthropic key:
+a 45-minute AI interview costs about $0.20–0.30, a review less. Give the key
+you use locally a low spend limit. The Polar sandbox charges nothing.
+
+**Tests never read `.dev.vars`.** `npm test` sets its own bindings
+(`vitest.config.ts`): fake OAuth and Polar values, an empty
+`ANTHROPIC_API_KEY` and a mocked `fetch`, so the suite never uses or bills
+a local key.
+
+### Production checklist
+
+Before turning the paid features on at proschi.app:
+
+- **Worker secrets** (`npx wrangler secret put <NAME>` or the dashboard):
+  `SESSION_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
+  `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`,
+  `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`,
+  `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_PACK_5`; optionally
+  `AI_GATEWAY_URL` and `AI_GATEWAY_TOKEN`, `METRICS_TOKEN`, and
+  `ADMIN_SETUP_TOKEN` (once). `POLAR_SERVER` must not be `sandbox` (leave
+  it unset).
+- **Polar (production, not the sandbox)**:
+  - products: Pro monthly (€12/month), Pro yearly (€89/year) and Interview
+    pack (5 interviews, €15, one-time);
+  - a webhook endpoint at `https://proschi.app/api/billing/webhook` with the
+    events `subscription.created`, `subscription.updated`,
+    `subscription.active`, `subscription.canceled`, `subscription.uncanceled`,
+    `subscription.revoked`, `order.paid`, `order.refunded`,
+    `refund.created`, `refund.updated` and the `dispute.*` events;
+  - an organization access token with `checkouts:write`,
+    `customer_sessions:write` and `subscriptions:write`.
+- **An AI spend cap**: a monthly limit on the key in the Anthropic console
+  (Settings → Limits), or a rate or spend limit on the Cloudflare AI Gateway
+  in front of it.
+- **Migrations**: `npm run deploy` (and so every push to `main`) applies the
+  pending ones, 0017 onwards, before it deploys the Worker; nothing to run by
+  hand.
+- **The UI**: the deploy builds the site with `VITE_ACCOUNTS: 'true'` only.
+  Add `VITE_BILLING: 'true'` next to it in `.github/workflows/site.yml` (the
+  production build, and staging's) to show the pricing page and the upgrade
+  buttons. Without it the API works, but nothing links to it.
