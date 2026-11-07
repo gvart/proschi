@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { codeEditor, expect, test, waitForCanvas } from './fixtures';
+import { codeEditor, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 /** The editor's focus themes (src/components/Playground/editorThemes.ts), as computed backgrounds. */
 const FOCUS_DARK = 'rgb(22, 23, 27)';
@@ -82,9 +82,7 @@ test.describe('editor focus', () => {
 async function solveUrlShortener(page: Page) {
   await page.goto('practice/#/url-shortener');
   await expect(codeEditor(page)).toBeVisible();
-  page.on('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Show reference solution' }).click();
-  await page.getByRole('button', { name: 'Load into the editor' }).click();
+  await loadReferenceSolution(page);
   await page.getByRole('button', { name: 'Run tests' }).click();
   await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
 }

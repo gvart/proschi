@@ -1,5 +1,6 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
+import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
@@ -307,8 +308,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     setTour('tour');
   };
 
-  const reset = () => {
-    if (window.confirm('Replace your design with the starter code? Your current code is lost.')) setSource(problem.starter);
+  const reset = async () => {
+    if (await confirm({ title: 'Replace your design with the starter code?', body: 'Your current code is lost.', confirmLabel: 'Replace', tone: 'danger' })) setSource(problem.starter);
   };
 
   const goTo = (loc: SourceLoc | Diagnostic) => {
@@ -336,6 +337,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     else setSource(next);
   }, []);
   const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const partnerDiagram = useCallback((s: string) => parseSolution(problem, s).diagram, [problem]);
   const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
 
   const inLesson = hasLesson && stage === 'lesson';
@@ -431,6 +433,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   );
 
   const partnerDock = hasPartner && (
+    <>
+    <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />
     <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
       <Suspense fallback={null}>
         <PartnerPanel
@@ -444,9 +448,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onClose={closePartner}
           offReason={partnerOff}
           onAssisted={markAssisted}
+          diagramOf={partnerDiagram}
         />
       </Suspense>
     </PartnerDock>
+    </>
   );
 
   const tests = (
@@ -547,7 +553,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               </button>
             </span>
             <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
-            {hasPartner && <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />}
             <ZenButton zen={zen} className={iconButton} />
           </>
         )}
@@ -689,8 +694,8 @@ function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem
   const [hints, setHints] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
 
-  const revealSolution = () => {
-    if (solved || window.confirm('Show the reference solution? Working it out yourself is where the learning happens.')) setShowSolution(true);
+  const revealSolution = async () => {
+    if (solved || (await confirm({ title: 'Show the reference solution?', body: 'Working it out yourself is where the learning happens.', confirmLabel: 'Show solution' }))) setShowSolution(true);
   };
 
   return (
@@ -736,7 +741,7 @@ function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem
             <div className="flex items-center gap-2 px-3 py-2 border-b-bw-1 border-ink text-sm font-semibold text-ink">
               Reference solution
               <button
-                onClick={() => window.confirm('Replace your code with the reference solution?') && onUseSolution()}
+                onClick={async () => (await confirm({ title: 'Replace your code with the reference solution?', confirmLabel: 'Replace', tone: 'danger' })) && onUseSolution()}
                 className="ml-auto text-xs font-semibold text-pop-blue underline-offset-2 hover:underline"
               >
                 Load into the editor

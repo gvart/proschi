@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Check, Copy, ExternalLink, Link2, Sparkles, Unlink, X } from 'lucide-react';
 import { ApiError } from '../../services/api';
+import { confirm, copyFallback } from '../../design/dialogs';
 import { createLiveShare, getLiveShare, revokeLiveShare, type LiveShare } from '../../services/documentShares';
 import { Feature } from '../Feature';
 import { useFeature } from '../featureState';
@@ -81,8 +82,8 @@ export default function ShareLinkDialog({ docId, title, hint, pushedVersion, onC
       setShare(await createLiveShare(docId));
     });
 
-  const revoke = () => {
-    if (!window.confirm(`Revoke the share link to "${title}"? It stops working at once for everyone who has it.`)) return;
+  const revoke = async () => {
+    if (!(await confirm({ title: `Revoke the share link to "${title}"?`, body: 'It stops working at once for everyone who has it.', confirmLabel: 'Revoke', tone: 'danger' }))) return;
     void run(async () => {
       await revokeLiveShare(docId);
       setShare(null);
@@ -95,7 +96,7 @@ export default function ShareLinkDialog({ docId, title, hint, pushedVersion, onC
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt('Copy this share link:', url);
+      await copyFallback(url, { title: 'Copy this share link' });
     }
   };
 

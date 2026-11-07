@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { mockInterviews } from './aiInterview';
-import { expect, test } from './fixtures';
+import { answerDialog, expect, test } from './fixtures';
 
 /**
  * Max's extras on the mock interview (docs/design/paid-plans.md P31; build
@@ -36,8 +36,8 @@ test('Max: a Deep verdict costs more, says so on the verdict, and the report pri
   await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
   await chat.getByRole('button', { name: 'Send my design' }).click();
   await expect(chat.getByText(/Why this cache\?/)).toBeVisible();
-  page.once('dialog', (d) => void d.accept());
   await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+  await answerDialog(page, 'Finish');
 
   const verdict = page.getByRole('region', { name: 'Interview verdict' });
   await expect(verdict.getByTestId('verdict-deep')).toHaveText('Deep verdict');
@@ -81,8 +81,8 @@ test('Pro: no Deep toggle (a quiet hint instead) and no report', async ({ page }
   await page.getByRole('button', { name: 'I agree, start the interview' }).click();
   expect(mock.starts).toEqual([{ replace: false, deep: false }]);
   const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
-  page.once('dialog', (d) => void d.accept());
   await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+  await answerDialog(page, 'Finish');
   const verdict = page.getByRole('region', { name: 'Interview verdict' });
   await expect(verdict.getByTestId('verdict-result')).toHaveText('Pass');
   await expect(verdict.getByTestId('verdict-deep')).toHaveCount(0);

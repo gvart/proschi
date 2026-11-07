@@ -10,3 +10,29 @@
     opacity: 0;
   }
 }
+
+/* A change's preview (ChangePreview.tsx): what it adds outlined, what it removes ghosted. */
+.ps-diff .react-flow__node.ps-diff-add {
+  outline: 3px solid rgb(var(--c-pass));
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.ps-diff .react-flow__node.ps-diff-remove {
+  opacity: 0.4;
+  outline: 1.5px dashed rgb(var(--c-ink) / 0.6);
+  outline-offset: 3px;
+  border-radius: 4px;
+}
+.ps-diff .react-flow__edge.ps-diff-add path {
+  stroke: rgb(var(--c-pass)) !important;
+  stroke-width: 2.5px !important;
+}
+.ps-diff .react-flow__edge.ps-diff-remove path {
+  opacity: 0.4;
+  stroke-dasharray: 4 4 !important;
+}
+.ps-diff .react-flow__node.ps-diff-change {
+  outline: 3px solid rgb(var(--c-blue));
+  outline-offset: 3px;
+  border-radius: 4px;
+}

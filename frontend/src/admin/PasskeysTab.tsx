@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { confirm } from '../design/dialogs';
 import { addPasskey, deletePasskey, getPasskeys, revokeAdminSessions } from './api';
 import { formatAgo, formatDate } from './format';
 import { useAction, useLoad } from './hooks';
@@ -49,8 +50,8 @@ export default function PasskeysTab({ onSignedOut }: { onSignedOut: () => void }
                           className="ps-btn ps-btn--danger ps-btn--sm"
                           disabled={action.busy || data.passkeys.length === 1}
                           title={data.passkeys.length === 1 ? "The last passkey can't be removed" : undefined}
-                          onClick={() =>
-                            window.confirm(`Remove the passkey "${p.name}"? It can't sign in any more.${p.current ? ' This session ends too.' : ''}`) &&
+                          onClick={async () =>
+                            (await confirm({ title: `Remove the passkey "${p.name}"?`, body: `It can't sign in any more.${p.current ? ' This session ends too.' : ''}`, confirmLabel: 'Remove', tone: 'danger' })) &&
                             void action.run(() => deletePasskey(p.id)).then((ok) => ok && p.current && onSignedOut())
                           }
                         >
@@ -87,7 +88,7 @@ export default function PasskeysTab({ onSignedOut }: { onSignedOut: () => void }
             type="button"
             className="ps-btn ps-btn--secondary ps-btn--sm"
             disabled={action.busy}
-            onClick={() => window.confirm('Sign out every admin session, this one too?') && void action.run(revokeAdminSessions).then((ok) => ok && onSignedOut())}
+            onClick={async () => (await confirm({ title: 'Sign out every admin session, this one too?', confirmLabel: 'Sign out everywhere' })) && void action.run(revokeAdminSessions).then((ok) => ok && onSignedOut())}
           >
             Sign out everywhere
           </button>

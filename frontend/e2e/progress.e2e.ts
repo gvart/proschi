@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, loadReferenceSolution, test } from './fixtures';
 
 /**
  * The progress page in a build without accounts: the skill map, the
@@ -82,9 +82,7 @@ test.describe('progress page', () => {
 
   test('solving a problem earns badges, celebrated back on the list', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
     // Never over the editor: the toast waits for the list.

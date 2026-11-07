@@ -1,6 +1,7 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
 import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Mic, MicOff, Printer, Send, Sparkles, Target, X } from 'lucide-react';
 import { refreshCredits, useCredits } from '../../../services/useCredits';
+import { confirm } from '../../../design/dialogs';
 import Markdown from '../../Markdown';
 import { useNow } from '../useNow';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../../components/Playground/ui';
@@ -150,7 +151,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
 
   const finish = async () => {
     if (busy) return;
-    if (!timeUp && !window.confirm('Finish the interview and get the verdict? You cannot continue it afterwards.')) return;
+    if (!timeUp && !(await confirm({ title: 'Finish the interview and get the verdict?', body: 'You cannot continue it afterwards.', confirmLabel: 'Finish' }))) return;
     dictation.stop();
     setBusy('finish');
     setError(undefined);
@@ -200,7 +201,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
           {left < 0 && <span className="text-xs font-semibold text-red-700 dark:text-red-300">over time</span>}
           <button
             type="button"
-            onClick={() => window.confirm('Leave interview mode? The interview stays open on the server until you start another one.') && onExit()}
+            onClick={async () => (await confirm({ title: 'Leave interview mode?', body: 'The interview stays open on the server until you start another one.', confirmLabel: 'Leave' })) && onExit()}
             className={`ml-auto ${toolButton}`}
             aria-label="Leave interview mode"
             title="Leave interview mode"

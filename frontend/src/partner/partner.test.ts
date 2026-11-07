@@ -2,6 +2,8 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { estimateFor, parseSession, parseTurnAnswer } from './contract';
 import { applyEdits, countLines, diffLines, editHunks } from './edits';
 import { loadStored, saveStored } from './store';
+import { changesDrawing, previewMarks } from './preview';
+import { parse } from '../dsl';
 import { createSession, decide, getSession, NoCreditsError, sendTurn, SignedOutError, TurnInProgressError } from './api';
 import { readProgress, withAssisted, withRun, withSource } from '../practice/progress';
 import type { Problem } from '../practice/types';
@@ -106,6 +108,28 @@ describe('store', () => {
     expect(loadStored('editor:d1')).toBeUndefined();
     localStorage.setItem('proschi.partner', '{"x":{"id":3}}');
     expect(loadStored('x')).toBeUndefined();
+  });
+
+  it('keeps which changes were sent back to be improved', () => {
+    saveStored('editor:d1', { id: 's1', decisions: {}, improved: ['c2'] });
+    expect(loadStored('editor:d1')).toEqual({ id: 's1', decisions: {}, improved: ['c2'] });
+    localStorage.setItem('proschi.partner', '{"x":{"id":"s","improved":["c1",4]}}');
+    expect(loadStored('x')?.improved).toEqual(['c1']);
+  });
+});
+
+describe('preview', () => {
+  const d = (source: string) => parse(source).diagram;
+
+  it('marks what a change adds, changes and removes in the drawing', () => {
+    const marks = previewMarks(d('api [REST API]\ndb [PostgreSQL]\nold [Redis]\napi -> db\napi -> old'), d('api [REST API] x4\ndb [PostgreSQL]\ncache [Redis]\napi -> db\napi -> cache'));
+    expect([...marks.addedNodes]).toEqual(['cache']);
+    expect([...marks.changedNodes]).toEqual(['api']);
+    expect([...marks.removedNodes]).toEqual(['old']);
+    expect([...marks.addedEdges]).toEqual(['api->cache']);
+    expect([...marks.removedEdges]).toEqual(['api->old']);
+    expect(changesDrawing(marks)).toBe(true);
+    expect(changesDrawing(previewMarks(d('a -> b'), d('a -> b\n# a comment')))).toBe(false);
   });
 });
 

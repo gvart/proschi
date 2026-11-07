@@ -58,6 +58,8 @@ function Modal({ entry, initialFocus, onCancel, title, children }: {
         onCancel();
       }}
       onMouseDown={(e) => e.target === ref.current && onCancel()}
+      // Escape closes only this dialog, not the page's own modal under it listening on document.
+      onKeyDown={(e) => e.key === 'Escape' && e.stopPropagation()}
     >
       <div className="ps-dialog__panel">
         <h2 id={titleId} className="ps-dialog__title">
@@ -275,7 +277,11 @@ function Toast({ toast }: { toast: ToastEntry }) {
       onMouseLeave={() => setPaused(false)}
       onFocus={() => setPaused(true)}
       onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setPaused(false)}
-      onKeyDown={(e) => e.key === 'Escape' && dismiss()}
+      onKeyDown={(e) => {
+        if (e.key !== 'Escape') return;
+        e.stopPropagation();
+        dismiss();
+      }}
     >
       <div className="ps-toast__text">
         <p className="ps-toast__title">{title}</p>

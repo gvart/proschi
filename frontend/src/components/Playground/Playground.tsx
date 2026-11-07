@@ -11,6 +11,7 @@ import ReactFlow, {
 } from 'reactflow';
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
+import { confirm, copyFallback, notify, prompt } from '../../design/dialogs';
 import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
@@ -470,8 +471,8 @@ export default function Playground() {
     setSelectedScenarioId(undefined);
   };
 
-  const deleteDoc = (id: string, title: string) => {
-    if (window.confirm(`Delete "${title}"? This cannot be undone.`)) openDoc((s) => removeDoc(s, id));
+  const deleteDoc = async (id: string, title: string) => {
+    if (await confirm({ title: `Delete "${title}"?`, body: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' })) openDoc((s) => removeDoc(s, id));
   };
 
   const toggleFiles = () => {
@@ -531,9 +532,9 @@ export default function Playground() {
       if (doc) deleteDoc(id, titleOf(doc.source));
     },
     renameFolder: (from, to) => changeFiles((s) => renameFolder(s, from, to)),
-    removeFolder: (folder) => {
+    removeFolder: async (folder) => {
       const n = docsInFolder(docStore.get().docs, folder).length;
-      if (window.confirm(`Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it? This cannot be undone.`)) openDoc((s) => removeFolder(s, folder));
+      if (await confirm({ title: `Delete the folder "${folder}" and the ${n} ${n === 1 ? 'diagram' : 'diagrams'} in it?`, body: 'This cannot be undone.', confirmLabel: 'Delete folder', tone: 'danger' })) openDoc((s) => removeFolder(s, folder));
     },
   };
 
@@ -570,6 +571,7 @@ export default function Playground() {
     [setSource],
   );
   const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const partnerDiagram = useCallback((s: string) => parse(s, { path: rootPath, resolve: filesResolver(importsNow.current ?? {}, rootPath) }).diagram, [rootPath]);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -577,7 +579,7 @@ export default function Playground() {
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
     } catch {
-      window.prompt(prompt, text);
+      void copyFallback(text, { title: prompt.replace(/:$/, '') });
     }
   };
 
@@ -649,12 +651,14 @@ export default function Playground() {
     try {
       const backup = readBackup(new Uint8Array(await file.arrayBuffer()));
       const plan = planMerge(docState, backup.docs);
-      let replaced = 0;
-      const next = applyMerge(docState, plan, ({ existing }) => {
-        const yes = window.confirm(`"${titleOf(existing.source)}" (${fileNameOf(existing)}) differs from the copy in the backup. Replace it with the backup's version?`);
-        if (yes) replaced++;
-        return yes;
-      });
+      const agreed = new Set<(typeof plan.conflicts)[number]>();
+      for (const conflict of plan.conflicts) {
+        const { existing } = conflict;
+        const yes = await confirm({ title: `Replace "${titleOf(existing.source)}" with the backup's version?`, body: `${fileNameOf(existing)} differs from the copy in the backup.`, confirmLabel: 'Replace' });
+        if (yes) agreed.add(conflict);
+      }
+      const replaced = agreed.size;
+      const next = applyMerge(docState, plan, (conflict) => agreed.has(conflict));
       openDoc(() => next);
       saveProgress(mergeProgress(loadProgress(), backup.progress));
       setBanner({ message: mergeSummary(plan, replaced, Object.keys(backup.progress).length) });
@@ -690,7 +694,7 @@ export default function Playground() {
     for (const id of nodeIds) {
       const result = removeNode(next, id);
       if (result.error !== undefined) {
-        window.alert(result.error);
+        setNotice(result.error);
         return;
       }
       next = result.source;
@@ -1045,8 +1049,6 @@ export default function Playground() {
             </button>
           )}
 
-          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
-
           <ZenButton zen={zen} className={iconButton} />
 
           <div data-tour="export">
@@ -1326,6 +1328,7 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
+      {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
       {hasPartner && (
         <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
           <Suspense fallback={<PaneLoading />}>
@@ -1339,6 +1342,7 @@ export default function Playground() {
               apply={applyPartner}
               undo={undoPartner}
               onClose={closePartner}
+              diagramOf={partnerDiagram}
             />
           </Suspense>
         </PartnerDock>
@@ -1664,10 +1668,10 @@ function DiagramView({
     });
   }, []);
 
-  const promptRename = (node: Node) => {
+  const promptRename = async (node: Node) => {
     // Ask the parent straight away, which explains why a node from an imported file cannot be renamed.
     if (importedNodes.has(node.id)) return onRenameNode(node.id, '');
-    const name = window.prompt('Display name', node.data?.name ?? node.id);
+    const name = await prompt({ title: 'Rename', label: 'Display name', defaultValue: node.data?.name ?? node.id, confirmLabel: 'Rename' });
     if (name !== null) onRenameNode(node.id, name);
   };
 
@@ -1701,7 +1705,7 @@ function DiagramView({
         await exportImage(imageRequest.format, drawn, viewport, fileNameFor(title, imageRequest.format), legend);
       } catch (error) {
         console.error('Export failed:', error);
-        window.alert('Sorry, the image could not be exported.');
+        notify({ title: 'Sorry, the image could not be exported.', tone: 'danger' });
       } finally {
         if (!cancelled) onImageDone();
       }

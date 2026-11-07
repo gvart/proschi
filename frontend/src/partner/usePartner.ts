@@ -26,6 +26,8 @@ export interface PartnerState {
   sending?: Intent;
   problem?: PartnerProblem;
   decisions: Record<string, Decision>;
+  /** Changes sent back with "Improve this" or "Ask again" (from the moment they are sent). */
+  improved: string[];
 }
 
 interface Options {
@@ -43,7 +45,7 @@ interface Options {
 const POLL_MS = 2500;
 const POLL_FOR_MS = 120_000;
 
-const EMPTY: PartnerState = { sessionDeep: false, turns: [], charges: {}, status: 'idle', decisions: {} };
+const EMPTY: PartnerState = { sessionDeep: false, turns: [], charges: {}, status: 'idle', decisions: {}, improved: [] };
 
 /** Design partner's conversation for one document or problem: resume, send, decide. */
 export function usePartner({ storeKey, context, enabled, getSource, getFiles, onAssisted }: Options) {
@@ -94,7 +96,7 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
       return;
     }
     let live = true;
-    setState({ ...EMPTY, sessionId: stored.id, decisions: stored.decisions ?? {}, status: 'resuming' });
+    setState({ ...EMPTY, sessionId: stored.id, decisions: stored.decisions ?? {}, improved: stored.improved ?? [], status: 'resuming' });
     getSession(stored.id).then(
       (session) => {
         if (!live) return;
@@ -124,8 +126,11 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
       if (inFlight.current || s.status !== 'idle') return false;
       inFlight.current = true;
       const local: Turn = { id: `local-${Date.now()}`, role: 'user', message, at: Date.now() };
-      setState((x) => ({ ...x, status: 'sending', sending: intent, problem: undefined, turns: [...x.turns, local] }));
-      const drop = (problem: PartnerProblem) => setState((x) => ({ ...x, status: 'idle', sending: undefined, problem, turns: x.turns.filter((t) => t.id !== local.id) }));
+      // The card sent back folds away at once; it comes back if the ask fails.
+      const improving = intent === 'improve' && opts.changeId && !s.improved.includes(opts.changeId) ? opts.changeId : undefined;
+      setState((x) => ({ ...x, status: 'sending', sending: intent, problem: undefined, turns: [...x.turns, local], improved: improving ? [...x.improved, improving] : x.improved }));
+      const drop = (problem: PartnerProblem) =>
+        setState((x) => ({ ...x, status: 'idle', sending: undefined, problem, turns: x.turns.filter((t) => t.id !== local.id), improved: x.improved.filter((c) => c !== improving) }));
       let id = s.sessionId;
       try {
         if (!id) {
@@ -148,6 +153,7 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
           charges: { ...x.charges, [answer.turn.id]: answer.credits.charged },
           balance: answer.credits.balance,
         }));
+        if (improving) saveStored(storeKey, { id, decisions: stateRef.current.decisions, improved: [...stateRef.current.improved.filter((c) => c !== improving), improving] });
         reportBalance(answer.credits.balance);
         if (answer.turn.assisted) onAssistedRef.current?.();
         return true;
@@ -174,7 +180,7 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
         const decisions = { ...x.decisions };
         if (decision) decisions[changeId] = decision;
         else delete decisions[changeId];
-        saveStored(storeKey, { id, decisions });
+        saveStored(storeKey, { id, decisions, improved: x.improved });
         return { ...x, decisions };
       });
       // Undoing an accepted change tells the server it was turned down after all.

@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { canvasNodes, codeEditor, editorText, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 const problemList = (page: Page) => page.getByRole('main').getByRole('list').first();
 
@@ -187,9 +187,7 @@ test.describe('practice', () => {
     await expect(page.getByText('Solved.')).toBeHidden();
 
     // Load the reference solution through the UI; both steps ask for confirmation.
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await expect(passedCount(page)).toContainText('edited since');
     await run.click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
@@ -263,9 +261,7 @@ test.describe('practice', () => {
     }
     await expect(page.getByRole('region', { name: 'Common mistake' })).toHaveCount(0);
 
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await run.click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
     await expect(passedCount(page)).toHaveText(/^6 \/ 6 passed$/);

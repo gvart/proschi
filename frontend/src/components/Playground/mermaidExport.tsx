@@ -1,5 +1,6 @@
 import type { Diagram } from '../../dsl';
 import { toMermaidArchitecture, toMermaidSequence } from '../../dsl/mermaid';
+import { copyFallback } from '../../design/dialogs';
 import { track } from '../../services/metrics';
 import { downloadText, fileNameFor } from './exportDiagram';
 import { MenuItem } from './Menu';
@@ -16,7 +17,7 @@ async function copy(text: string) {
   try {
     await navigator.clipboard.writeText(text);
   } catch {
-    window.prompt('Copy this Mermaid source:', text);
+    await copyFallback(text, { title: 'Copy this Mermaid source' });
   }
 }
 

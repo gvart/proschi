@@ -5,6 +5,9 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import tseslint from 'typescript-eslint'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
+const nativeDialogs = ['alert', 'confirm', 'prompt']
+const NATIVE_DIALOG = "Use the design system's dialogs from src/design/dialogs (confirm, prompt, notify, copyText), not the browser's."
+
 export default defineConfig([
   globalIgnores(['dist', 'dist-accounts', 'playwright-report', 'test-results']),
   {
@@ -19,6 +22,9 @@ export default defineConfig([
     rules: {
       'react-hooks/rules-of-hooks': 'error',
       'react-hooks/exhaustive-deps': 'warn',
+      // The browser's own dialogs: use confirm, prompt, notify and copyText from src/design/dialogs instead.
+      'no-restricted-globals': ['error', ...nativeDialogs.map((name) => ({ name, message: NATIVE_DIALOG }))],
+      'no-restricted-properties': ['error', ...['window', 'globalThis', 'self'].flatMap((object) => nativeDialogs.map((property) => ({ object, property, message: NATIVE_DIALOG })))],
     },
     languageOptions: {
       ecmaVersion: 2020,

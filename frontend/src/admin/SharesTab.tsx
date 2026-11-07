@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { confirm } from '../design/dialogs';
 import { deleteShare, listLiveShares, listShares, revokeLiveShare } from './api';
 import { formatBytes, formatDateTime } from './format';
 import { useAction, useLoad } from './hooks';
@@ -74,7 +75,7 @@ function ShortLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => v
                         type="button"
                         className="ps-btn ps-btn--danger ps-btn--sm"
                         disabled={action.busy}
-                        onClick={() => window.confirm(`Delete the short link "${s.title || s.id}"? Its address stops working.`) && void action.run(() => deleteShare(s.id))}
+                        onClick={async () => (await confirm({ title: `Delete the short link "${s.title || s.id}"?`, body: 'Its address stops working.', confirmLabel: 'Delete', tone: 'danger' })) && void action.run(() => deleteShare(s.id))}
                       >
                         Delete
                       </button>
@@ -157,7 +158,7 @@ function LiveLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => vo
                           type="button"
                           className="ps-btn ps-btn--danger ps-btn--sm"
                           disabled={action.busy}
-                          onClick={() => window.confirm(`Revoke the live link to "${l.document.name ?? l.document.id}"? Its address stops working at once.`) && void action.run(() => revokeLiveShare(l.token))}
+                          onClick={async () => (await confirm({ title: `Revoke the live link to "${l.document.name ?? l.document.id}"?`, body: 'Its address stops working at once.', confirmLabel: 'Revoke', tone: 'danger' })) && void action.run(() => revokeLiveShare(l.token))}
                         >
                           Revoke
                         </button>

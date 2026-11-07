@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
 import { ChevronRight, Cloud, Copy, FilePlus, FolderInput, FolderPlus, HardDrive, LogIn, MoreHorizontal, PanelLeftClose, Pencil, Search, Trash2, X } from 'lucide-react';
 import { fileNameOf, titleOf, type SavedDiagram } from '../../playground/documents';
+import { confirm } from '../../design/dialogs';
 import { allFolders, baseOf, buildTree, cleanFolder, folderOf, matchesQuery, type FolderNode } from '../../playground/folders';
 import { PROVIDER_LABEL } from '../../practice/account';
 import { loadJson, saveJson } from '../../services/storage';
@@ -185,9 +186,9 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
           ) : (
             <MenuItem
               icon={<HardDrive size={14} />}
-              onSelect={() => {
+              onSelect={async () => {
                 close();
-                if (window.confirm(`Move "${title}" to this browser only? It is removed from your account and your other devices, and stays here.`)) cloud.moveToBrowser(doc.id);
+                if (await confirm({ title: `Move "${title}" to this browser only?`, body: 'It is removed from your account and your other devices, and stays here.', confirmLabel: 'Move to this browser' })) cloud.moveToBrowser(doc.id);
               }}
             >
               Move to this browser only
