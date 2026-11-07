@@ -1,13 +1,17 @@
+import { diffDiagrams } from '../dsl/diff';
 import type { Diagram } from '../dsl/types';
 
 /**
- * What a change does to the diagram, for the change card's preview: the
- * nodes and connections it adds (highlighted in the After view) and removes
- * (ghosted in the Before view). Connections compare by their two ends. Pure.
+ * What a change does to the drawing, for the change card's preview: the
+ * nodes and connections it adds or changes (marked in the After view) and the
+ * ones it removes (ghosted in the Before view), from the structural diff of
+ * the two parsed diagrams (dsl/diff.ts). Connections compare by their two
+ * ends. Pure.
  */
 
-export interface DiagramDiff {
+export interface PreviewMarks {
   addedNodes: Set<string>;
+  changedNodes: Set<string>;
   removedNodes: Set<string>;
   /** `source->target` keys. */
   addedEdges: Set<string>;
@@ -16,19 +20,18 @@ export interface DiagramDiff {
 
 export const edgeKey = (e: { source: string; target: string }) => `${e.source}->${e.target}`;
 
-export function diffDiagrams(before: Diagram, after: Diagram): DiagramDiff {
-  const minus = (a: string[], b: string[]) => {
-    const other = new Set(b);
-    return new Set(a.filter((x) => !other.has(x)));
+export function previewMarks(before: Diagram, after: Diagram): PreviewMarks {
+  const d = diffDiagrams(before, after);
+  return {
+    addedNodes: new Set(d.nodes.added.map((n) => n.id)),
+    changedNodes: new Set(d.nodes.changed.map((c) => c.key)),
+    removedNodes: new Set(d.nodes.removed.map((n) => n.id)),
+    addedEdges: new Set(d.edges.added.map(edgeKey)),
+    removedEdges: new Set(d.edges.removed.map(edgeKey)),
   };
-  const bn = before.nodes.map((n) => n.id);
-  const an = after.nodes.map((n) => n.id);
-  const be = before.edges.map(edgeKey);
-  const ae = after.edges.map(edgeKey);
-  return { addedNodes: minus(an, bn), removedNodes: minus(bn, an), addedEdges: minus(ae, be), removedEdges: minus(be, ae) };
 }
 
-/** Whether the change touches the diagram at all (a config-only change has nothing to preview). */
-export function changesDiagram(d: DiagramDiff): boolean {
-  return d.addedNodes.size + d.removedNodes.size + d.addedEdges.size + d.removedEdges.size > 0;
+/** Whether the drawing changes at all (a change to traffic or requirements alone draws the same). */
+export function changesDrawing(m: PreviewMarks): boolean {
+  return m.addedNodes.size + m.changedNodes.size + m.removedNodes.size + m.addedEdges.size + m.removedEdges.size > 0;
 }

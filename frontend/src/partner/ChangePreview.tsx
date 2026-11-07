@@ -5,12 +5,12 @@ import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
 import { primaryButton, toolButton } from '../components/Playground/ui';
 import type { Diagram } from '../dsl/types';
-import { changesDiagram, diffDiagrams, edgeKey, type DiagramDiff } from './preview';
+import { changesDrawing, edgeKey, previewMarks, type PreviewMarks } from './preview';
 
 /**
  * A change card's picture of the proposed design (docs/design/paid-plans.md
  * P37): the diagram after the change, fitted and still, with what it adds
- * outlined; Before shows the design now with what it removes ghosted. A build
+ * outlined (and the components it changes marked); Before shows the design now with what it removes ghosted. A build
  * on an empty design shows the whole new diagram, without the toggle.
  * "Enlarge" opens the same picture over the page, with Accept.
  */
@@ -27,18 +27,25 @@ interface ChangePreviewProps {
 export default function ChangePreview({ before, after, onAccept }: ChangePreviewProps) {
   const [view, setView] = useState<View>('after');
   const [large, setLarge] = useState(false);
-  const diff = useMemo(() => diffDiagrams(before, after), [before, after]);
+  const diff = useMemo(() => previewMarks(before, after), [before, after]);
   const fresh = before.nodes.length === 0;
   const added = diff.addedNodes.size + diff.addedEdges.size;
+  const changed = diff.changedNodes.size;
   const removed = diff.removedNodes.size + diff.removedEdges.size;
 
   const toggle = !fresh && <ViewToggle view={view} onView={setView} />;
-  const legend = !fresh && changesDiagram(diff) && (
+  const legend = !fresh && changesDrawing(diff) && (
     <span className="flex items-center gap-2 text-[11px] text-muted tabular-nums">
       {added > 0 && (
         <span className="inline-flex items-center gap-1">
           <span className="h-2 w-2 rounded-[2px] border-[1.5px] border-pass" aria-hidden="true" />
           {added} added
+        </span>
+      )}
+      {changed > 0 && (
+        <span className="inline-flex items-center gap-1">
+          <span className="h-2 w-2 rounded-[2px] border-[1.5px] border-pop-blue" aria-hidden="true" />
+          {changed} changed
         </span>
       )}
       {removed > 0 && (
@@ -62,7 +69,7 @@ export default function ChangePreview({ before, after, onAccept }: ChangePreview
       <div className="ps-diff h-[200px] overflow-hidden rounded-sm border-bw-1 border-ink/15 bg-paper">
         {!large && <PreviewCanvas diagram={view === 'after' ? after : before} diff={diff} view={view} />}
       </div>
-      {!fresh && !changesDiagram(diff) && <p className="mt-1 text-[11px] text-muted">Same components and connections; the change is in their settings.</p>}
+      {!fresh && !changesDrawing(diff) && <p className="mt-1 text-[11px] text-muted">The drawing stays the same; the change is in traffic, requirements or tests.</p>}
       {large && (
         <LargePreview onClose={() => setLarge(false)} onAccept={onAccept} toggle={toggle} legend={legend}>
           <PreviewCanvas diagram={view === 'after' ? after : before} diff={diff} view={view} />
@@ -90,15 +97,20 @@ function ViewToggle({ view, onView }: { view: View; onView: (v: View) => void })
   );
 }
 
-function PreviewCanvas({ diagram, diff, view }: { diagram: Diagram; diff: DiagramDiff; view: View }) {
+function PreviewCanvas({ diagram, diff, view }: { diagram: Diagram; diff: PreviewMarks; view: View }) {
   const { nodes, edges, settled } = useDiagramLayout(diagram);
   const marked = useMemo(() => {
-    const nodeSet = view === 'after' ? diff.addedNodes : diff.removedNodes;
-    const edgeSet = view === 'after' ? diff.addedEdges : diff.removedEdges;
-    const cls = view === 'after' ? 'ps-diff-add' : 'ps-diff-remove';
+    const after = view === 'after';
+    const nodeClass = (id: string) =>
+      after ? (diff.addedNodes.has(id) ? 'ps-diff-add' : diff.changedNodes.has(id) ? 'ps-diff-change' : undefined) : diff.removedNodes.has(id) ? 'ps-diff-remove' : undefined;
+    const edgeSet = after ? diff.addedEdges : diff.removedEdges;
+    const edgeClass = after ? 'ps-diff-add' : 'ps-diff-remove';
     return {
-      nodes: nodes.map((n) => (nodeSet.has(n.id) ? { ...n, className: cls } : n)),
-      edges: edges.map((e) => (edgeSet.has(edgeKey(e)) ? { ...e, className: cls } : e)),
+      nodes: nodes.map((n) => {
+        const className = nodeClass(n.id);
+        return className ? { ...n, className } : n;
+      }),
+      edges: edges.map((e) => (edgeSet.has(edgeKey(e)) ? { ...e, className: edgeClass } : e)),
     };
   }, [nodes, edges, diff, view]);
   return <DiagramCanvas nodes={marked.nodes} edges={marked.edges} fitKey={`${view}:${settled}`} compact still legend={diagram.legend} />;

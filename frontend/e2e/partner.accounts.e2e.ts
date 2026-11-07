@@ -8,7 +8,7 @@ import { allowStatus, arrowLine, PartnerMock } from './partner';
  * the panel, a review with clarifying questions, change cards (accept is one
  * undo step, reject, improve, out of date), out of credits, practice
  * coaching versus "Show me the changes", Deep for Max, resume and the phone
- * sheet. With PARTNER_SHOTS=<dir>, the shots test saves screenshots there.
+ * sheet, the change preview and the edge tab. With PARTNER_SHOTS=<dir>, the shots test saves screenshots there.
  */
 
 const SHOTS = process.env.PARTNER_SHOTS;
@@ -23,15 +23,38 @@ async function openEditor(page: Page, plan?: string) {
 }
 
 const panel = (page: Page) => page.getByRole('region', { name: 'Design partner' });
+const chip = (page: Page, name: string) => panel(page).getByTestId('partner-starters').getByRole('button', { name });
+/** Picks a starter chip and sends what it put in the composer. */
+async function start(page: Page, name: string) {
+  await chip(page, name).click();
+  await expect(panel(page).getByRole('textbox', { name: 'Message Design partner' })).toBeFocused();
+  await page.keyboard.press('Enter');
+}
 
-test('the toolbar button and Ctrl+J open the panel, with starter actions and their estimates', async ({ page }) => {
+test('the edge tab and Ctrl+J open the panel; one composer, with starter chips that set what it sends and its estimate', async ({ page }) => {
   await openEditor(page);
-  await page.getByTestId('partner-button').click();
+  // On the workspace's right edge, not in the toolbar.
+  const tab = page.getByTestId('partner-button');
+  const box = (await tab.boundingBox())!;
+  expect(box.x + box.width).toBeGreaterThan((page.viewportSize()!.width) - 2);
+  await tab.click();
   await expect(panel(page)).toBeVisible();
+  await expect(tab).toHaveCount(0);
   await expect(panel(page).getByRole('heading', { name: 'Design partner' })).toBeVisible();
-  await expect(panel(page).getByRole('button', { name: /Review my design/ })).toContainText('about 5–15 credits');
-  await expect(panel(page).getByRole('button', { name: /Build a system from a description/ })).toContainText('about 10–40 credits');
-  await expect(panel(page).getByTestId('partner-footnote')).toContainText('A message: about 1–4 credits');
+  const footnote = panel(page).getByTestId('partner-footnote');
+  const composer = panel(page).getByRole('textbox', { name: 'Message Design partner' });
+  await expect(footnote).toContainText('A message: about 1–4 credits');
+  await expect(panel(page).getByRole('textbox')).toHaveCount(1);
+  await chip(page, 'Review my design').click();
+  await expect(chip(page, 'Review my design')).toHaveAttribute('aria-pressed', 'true');
+  await expect(composer).toHaveValue('Review my design.');
+  await expect(footnote).toContainText('A review: about 5–15 credits');
+  await chip(page, 'Build a system from a description').click();
+  await expect(composer).toHaveValue('');
+  await expect(composer).toHaveAttribute('placeholder', /Describe the system/);
+  await expect(footnote).toContainText('A build: about 10–40 credits');
+  await chip(page, 'Build a system from a description').click();
+  await expect(footnote).toContainText('A message: about 1–4 credits');
   // No Deep without Max.
   await expect(panel(page).getByTestId('partner-deep')).toHaveCount(0);
   await panel(page).getByRole('button', { name: 'Close Design partner' }).click();
@@ -43,7 +66,7 @@ test('the toolbar button and Ctrl+J open the panel, with starter actions and the
 test('a review answers in Markdown with its cost, and a clarifying question takes a tap', async ({ page }) => {
   const partner = await openEditor(page);
   await page.getByTestId('partner-button').click();
-  await panel(page).getByRole('button', { name: /Review my design/ }).click();
+  await start(page, 'Review my design');
   await expect(panel(page).getByRole('heading', { name: 'What to look at' })).toBeVisible();
   expect(partner.created).toEqual([{ context: { kind: 'editor' } }]);
   expect(partner.bodies[0]).toMatchObject({ intent: 'review', message: 'Review my design.' });
@@ -70,7 +93,24 @@ test('accepting a change edits the code as one undo step; Undo and Ctrl+Z take i
   await expect(card.getByTestId('change-metrics')).toContainText('4/7');
   await expect(card.locator('[data-trend="better"]')).toHaveCount(3);
   await expect(card.locator('[data-trend="worse"]')).toHaveCount(1);
-  await expect(card.getByTestId('change-diff').locator('[data-kind="add"]')).toContainText('# cached');
+  // The new design is drawn, its new node and connection outlined; Before shows the design now.
+  const preview = card.getByTestId('change-preview');
+  await expect(preview.locator('.react-flow__node.ps-diff-add')).toHaveCount(1);
+  await expect(preview.locator('.react-flow__node.ps-diff-add')).toContainText('hot_cache');
+  await expect(preview.locator('.react-flow__edge.ps-diff-add')).toHaveCount(1);
+  await preview.getByRole('button', { name: 'Before' }).click();
+  await expect(preview).toHaveAttribute('data-view', 'before');
+  await expect(preview.locator('.react-flow__node', { hasText: 'hot_cache' })).toHaveCount(0);
+  // Enlarged over the page, with Back to mine.
+  await preview.getByRole('button', { name: 'Enlarge the preview' }).click();
+  const large = page.getByRole('dialog', { name: 'Preview of the suggestion' });
+  await expect(large).toBeVisible();
+  await large.getByRole('button', { name: 'Back to mine' }).click();
+  await expect(large).toHaveCount(0);
+  // The code is folded under the picture.
+  await expect(card.getByTestId('change-diff')).toHaveCount(0);
+  await card.getByRole('button', { name: /Code/ }).click();
+  await expect(card.getByTestId('change-diff').locator('[data-kind="add"]').first()).toContainText('# cached');
 
   await card.getByRole('button', { name: 'Accept' }).click();
   await expect(card).toHaveAttribute('data-status', 'applied');
@@ -88,7 +128,7 @@ test('accepting a change edits the code as one undo step; Undo and Ctrl+Z take i
   await expect.poll(() => editorText(page)).toBe(before);
 });
 
-test('reject, improve this, and a card whose edits no longer apply', async ({ page }) => {
+test('reject, improve this (the old card folds away), and a card whose edits no longer apply', async ({ page }) => {
   const partner = await openEditor(page);
   await page.getByTestId('partner-button').click();
   const box = panel(page).getByRole('textbox', { name: 'Message Design partner' });
@@ -107,6 +147,11 @@ test('reject, improve this, and a card whose edits no longer apply', async ({ pa
   await second.getByRole('button', { name: 'Send' }).click();
   await expect.poll(() => partner.bodies.length).toBe(3);
   expect(partner.bodies[2]).toMatchObject({ intent: 'improve', message: 'Keep it under $400 a month', changeId: 'c2' });
+  await expect(second).toHaveAttribute('data-status', 'improved');
+  await expect(second).toContainText('Improved below');
+  await expect(second.getByRole('button', { name: 'Accept' })).toHaveCount(0);
+  await expect(second.getByRole('button', { name: 'Reject' })).toHaveCount(0);
+  await expect(panel(page).getByTestId('change-card')).toHaveCount(3);
 
   // The line every edit finds is gone: the newest card is out of date.
   const latest = panel(page).getByTestId('change-card').last();
@@ -129,9 +174,9 @@ test('building from a description shows how far along it is, then the design as 
     return p.answer(body);
   });
   await page.getByTestId('partner-button').click();
-  await panel(page).getByRole('button', { name: /Build a system from a description/ }).click();
-  await panel(page).getByRole('textbox', { name: 'Describe the system' }).fill('A URL shortener with 10k redirects a second');
-  await panel(page).getByRole('button', { name: 'Build it' }).click();
+  await chip(page, 'Build a system from a description').click();
+  await panel(page).getByRole('textbox', { name: 'Message Design partner' }).fill('A URL shortener with 10k redirects a second');
+  await page.keyboard.press('Enter');
   const thinking = panel(page).getByTestId('partner-thinking');
   await expect(thinking).toContainText('Reading your description…');
   await expect(thinking).toContainText(/[1-9] s/);
@@ -143,6 +188,8 @@ test('building from a description shows how far along it is, then the design as 
   await expect(panel(page).getByTestId('change-card')).toBeVisible();
   await expect(thinking).toHaveCount(0);
   expect(partner.bodies[0]).toMatchObject({ intent: 'build', message: 'A URL shortener with 10k redirects a second' });
+  // Sent: the composer is back to plain messages.
+  await expect(chip(page, 'Build a system from a description')).toHaveAttribute('aria-pressed', 'false');
   await expect(box).toHaveValue('Next question');
 });
 
@@ -164,7 +211,7 @@ test('out of credits: the message stays and the panel links to top-ups and plans
 test('a reload resumes the conversation of the document', async ({ page }) => {
   const partner = await openEditor(page);
   await page.getByTestId('partner-button').click();
-  await panel(page).getByRole('button', { name: /Review my design/ }).click();
+  await start(page, 'Review my design');
   await expect(panel(page).getByRole('heading', { name: 'What holds up' })).toBeVisible();
   await page.reload();
   await page.getByTestId('partner-button').click();
@@ -180,8 +227,9 @@ test('Max gets Deep, with its higher estimate, and it starts the conversation de
   await expect(deep).toContainText('×2');
   await deep.click();
   await expect(deep).toHaveAttribute('aria-pressed', 'true');
-  await expect(panel(page).getByRole('button', { name: /Review my design/ })).toContainText('about 10–30 credits');
-  await panel(page).getByRole('button', { name: /Review my design/ }).click();
+  await chip(page, 'Review my design').click();
+  await expect(panel(page).getByTestId('partner-footnote')).toContainText('A review: about 10–30 credits');
+  await page.keyboard.press('Enter');
   await expect.poll(() => partner.created).toEqual([{ context: { kind: 'editor' }, deep: true }]);
 });
 
@@ -199,7 +247,11 @@ test.describe('practice', () => {
     const partner = await openProblem(page);
     await page.getByTestId('partner-button').click();
     await expect(panel(page).getByText('Coach', { exact: true })).toBeVisible();
-    await panel(page).getByRole('button', { name: /Review my design/ }).click();
+    // Out of the page header: the tab sits on the workspace's right edge.
+    await expect(page.getByRole('banner').getByTestId('partner-button')).toHaveCount(0);
+    await expect(chip(page, 'Give me a hint')).toBeVisible();
+    await expect(chip(page, 'Build a system from a description')).toHaveCount(0);
+    await start(page, 'Review my design');
     await expect(panel(page).getByRole('heading', { name: 'What to look at' })).toBeVisible();
     expect(partner.created[0]).toEqual({ context: { kind: 'practice', problemId: 'url-shortener' } });
     await expect(panel(page).getByTestId('change-card')).toHaveCount(0);
@@ -237,15 +289,12 @@ test('on a phone the panel is a full-height sheet', async ({ page }) => {
   await expect(sheet).toBeHidden();
 });
 
-test('shots', async ({ page, errors }) => {
+test('shots', async ({ page }) => {
   test.skip(!SHOTS, 'PARTNER_SHOTS=<dir> saves screenshots');
-  test.setTimeout(120_000);
-  await page.setViewportSize({ width: 1280, height: 800 });
-  const partner = await openEditor(page, 'max');
-  await page.getByTestId('partner-button').click();
+  test.setTimeout(240_000);
   const take = async (name: string) => {
-    // Let the sheet's slide and the smooth scroll settle.
-    await page.waitForTimeout(500);
+    // Let the sheet's slide, the smooth scroll and the preview's layout settle.
+    await page.waitForTimeout(700);
     for (const scheme of ['light', 'dark'] as const) {
       await page.emulateMedia({ colorScheme: scheme });
       await page.mouse.move(0, 0);
@@ -253,42 +302,42 @@ test('shots', async ({ page, errors }) => {
     }
     await page.emulateMedia({ colorScheme: 'light' });
   };
-  await expect(panel(page).getByRole('button', { name: /Review my design/ })).toBeVisible();
-  await take('editor-empty-desktop');
-  await panel(page).getByRole('button', { name: /Review my design/ }).click();
-  await expect(panel(page).getByRole('heading', { name: 'What to look at' })).toBeVisible();
-  let release!: () => void;
-  const answered = new Promise<void>((r) => (release = r));
-  partner.queue.push(async (body, p) => {
-    await answered;
-    return p.answer(body);
-  });
-  await panel(page).getByRole('textbox', { name: 'Message Design partner' }).fill('Take the reads off the database');
-  await page.keyboard.press('Enter');
-  await expect(panel(page).getByTestId('partner-thinking')).toContainText('Thinking it through…', { timeout: 8000 });
-  await take('editor-thinking-desktop');
-  release();
-  await expect(panel(page).getByTestId('change-card')).toBeVisible();
-  await take('editor-change-desktop');
-  partner.queue.push(() => ({ status: 402, json: { error: 'no_credits', needed: 6, balance: 2.5 } }));
-  await panel(page).getByRole('textbox', { name: 'Message Design partner' }).fill('And sharding?');
-  await page.keyboard.press('Enter');
-  await expect(panel(page).getByTestId('partner-no-credits')).toBeVisible();
-  await take('editor-credits-desktop');
-  await panel(page).getByRole('button', { name: 'Dismiss' }).click();
-  await panel(page).getByTestId('change-card').getByRole('button', { name: 'Accept' }).click();
-  await take('editor-applied-desktop');
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await take('editor-applied-1440');
-
-  await page.setViewportSize({ width: 390, height: 844 });
-  await take('editor-change-phone');
-  await page.goto('practice/#/url-shortener');
-  await page.getByTestId('partner-button').click();
-  await take('practice-empty-phone');
-  await page.setViewportSize({ width: 1280, height: 800 });
-  await take('practice-empty-desktop');
-  await panel(page).getByTestId('partner-solve').click();
-  await take('practice-confirm-desktop');
-  allowStatus(errors, 402);
+  for (const [width, height] of [
+    [1440, 900],
+    [1280, 800],
+    [390, 844],
+  ] as const) {
+    await page.setViewportSize({ width, height });
+    const partner = await openEditor(page, 'max');
+    await page.evaluate(() => localStorage.removeItem('proschi.partner'));
+    await take(`${width}-editor-entry`);
+    await page.getByTestId('partner-button').click();
+    await chip(page, 'Build a system from a description').click();
+    await take(`${width}-composer-chips`);
+    await panel(page).getByRole('textbox', { name: 'Message Design partner' }).fill('Take the reads off the database');
+    await page.keyboard.press('Enter');
+    const card = panel(page).getByTestId('change-card').last();
+    await expect(card.getByTestId('change-preview').locator('.react-flow__node.ps-diff-add')).toHaveCount(1);
+    await card.getByTestId('change-preview').scrollIntoViewIfNeeded();
+    await take(`${width}-card-after`);
+    await card.getByRole('button', { name: 'Before' }).click();
+    await take(`${width}-card-before`);
+    await card.getByRole('button', { name: 'Improve this' }).click();
+    await card.getByRole('textbox', { name: 'How should this change be better?' }).fill('Keep it under $400 a month');
+    await card.getByRole('button', { name: 'Send' }).click();
+    await expect(panel(page).getByTestId('change-card').first()).toHaveAttribute('data-status', 'improved');
+    await panel(page).getByTestId('change-card').first().scrollIntoViewIfNeeded();
+    await take(`${width}-card-improved`);
+    if (width === 1440) {
+      await panel(page).getByTestId('change-card').last().getByRole('button', { name: 'Enlarge the preview' }).click();
+      await take(`${width}-preview-large`);
+      await page.keyboard.press('Escape');
+    }
+    expect(partner.bodies.length).toBe(2);
+    await page.goto('practice/#/url-shortener');
+    await expect(page.getByRole('heading', { level: 1 })).toContainText('URL Shortener');
+    await take(`${width}-practice-entry`);
+    await page.getByTestId('partner-button').click();
+    await take(`${width}-practice-chips`);
+  }
 });
