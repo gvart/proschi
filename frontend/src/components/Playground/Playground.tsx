@@ -1043,7 +1043,7 @@ export default function Playground() {
             </button>
           )}
 
-          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} labelClassName="hidden min-[1360px]:inline" />}
+          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
 
           <ZenButton zen={zen} className={iconButton} />
 
