@@ -162,3 +162,41 @@ id; don't rewrite old ones.
   screen: the interviewer is Claude, an AI model made by Anthropic, and the
   conversation is sent to Anthropic (EU AI Act transparency, P8). The
   privacy page and the terms still name the AI provider plainly.
+- **P26. Three plans, metered credits.** Free: 100 credits once at sign-up
+  (instead of the lifetime interview; the tombstones of P23 still stop a
+  second one). Pro: €12/month or €99/year, 800 credits a month. Max:
+  €29/month or €249/year, 2,200 credits a month. Monthly credits don't roll
+  over. Top-up: 1,000 credits for €12, never expires, any plan (replaces the
+  5-interview pack). 1 credit is €0.01 at retail; a call costs 2× what the
+  answering model cost us (USD→EUR at a fixed rate in config), so every
+  credit keeps a 100% margin. Credits are kept in thousandths (millicredits)
+  so each call is charged exactly. Spend order: monthly, sign-up, top-up.
+  The 20-a-day review cap is gone. No real subscribers exist yet: old pack
+  and trial credits convert at 1 interview = 50 credits.
+- **P27. Hold, then settle.** Before a model call the server holds an
+  estimate sized to its max tokens; after it, it charges the real usage of
+  the model that answered and releases the rest. Parallel calls can't
+  overdraw. A failed call and the automatic retry of a malformed answer are
+  not charged to the user. Every action shows an estimate first and its
+  real cost afterwards.
+- **P28. Mock interviews on credits.** Starting one needs enough credits for
+  a short session and holds the verdict's cost. At 0 credits the interview
+  moves to wrap-up and still gives its verdict. Anyone with credits can use
+  them; the plan only sets how many come each month.
+- **P29. Design partner.** One chat panel in the editor and on practice
+  problems replaces the AI design review (feature `design_partner`, anyone
+  signed in with credits). It reviews, answers, asks clarifying questions,
+  builds a whole system from a description, and proposes changes. A change
+  is a list of find-and-replace edits on the source the page sent; the
+  server checks they apply, re-parses, re-simulates and re-tests, and
+  attaches the before and after numbers. The page shows each change as a
+  card (why, diff, numbers) with Accept, Reject and "Improve this"; Accept
+  is one undo step. Design text is data, never instructions. The free
+  rule-based review stays. Design partner is off during a mock interview.
+- **P30. Design partner on practice problems coaches first.** It reviews,
+  asks and hints, and keeps the problem's hidden facts back (as P20's
+  `<not_asked>`). It proposes full changes only when the user asks for
+  them; the problem's progress is then marked "assisted".
+- **P31. Max extras.** A "Deep" toggle (`deep_mode`, Max) runs the verdict
+  and Design partner on Opus, charged at Opus's price. Each verdict has a
+  printable report (`interview_report`, Max) saved as PDF by the browser.
