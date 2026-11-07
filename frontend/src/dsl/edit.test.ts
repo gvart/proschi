@@ -151,6 +151,13 @@ describe('addNode', () => {
     expect(uniqueId('', '')).toBe('node');
     expect(addNode('', { name: 'db', tech: 'PostgreSQL' }).source).toBe('db [PostgreSQL]\n');
   });
+
+  it('avoids ids taken outside the text, such as imported nodes', () => {
+    expect(uniqueId('import "problem.proschi"\n', 'Cache', ['cache', 'api'])).toBe('cache2');
+    const { source, id } = addNode('import "problem.proschi"\n\napi -> db\n', { name: 'Cache', tech: 'Redis' }, ['cache']);
+    expect(id).toBe('cache2');
+    expect(source).toBe('import "problem.proschi"\n\napi -> db\ncache2 "Cache" [Redis]\n');
+  });
 });
 
 describe('node properties', () => {

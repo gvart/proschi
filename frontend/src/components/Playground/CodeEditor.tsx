@@ -2,7 +2,7 @@ import { useEffect, useImperativeHandle, useMemo, useRef, type Ref } from 'react
 import { basicSetup } from 'codemirror';
 import { EditorView, keymap } from '@codemirror/view';
 import { Compartment, EditorState, type Extension } from '@codemirror/state';
-import { isolateHistory, undo as undoCommand } from '@codemirror/commands';
+import { isolateHistory, redo as redoCommand, undo as undoCommand } from '@codemirror/commands';
 import { autocompletion } from '@codemirror/autocomplete';
 import { lintGutter, setDiagnostics } from '@codemirror/lint';
 import type { Diagnostic } from '../../dsl';
@@ -22,6 +22,8 @@ export interface CodeEditorHandle {
   replace: (next: string) => void;
   /** Undoes the last step, as Ctrl+Z does; false when there was nothing to undo. */
   undo: () => boolean;
+  /** Redoes the last undone step, as Ctrl+Shift+Z does; false when there was nothing to redo. */
+  redo: () => boolean;
 }
 
 interface CodeEditorProps {
@@ -121,8 +123,9 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
     const view = viewRef.current;
     const current = view?.state.doc.toString();
     if (!view || current === undefined || current === value) return;
-    // Not the reader's edit: no change filter (a page's locked lines) may refuse it.
-    view.dispatch({ changes: middleChange(current, value), filter: false });
+    // Not the reader's edit: no change filter (a page's locked lines) may refuse it. Isolated, so a
+    // canvas edit is one undo step of its own and never joins the typing next to it.
+    view.dispatch({ changes: middleChange(current, value), filter: false, annotations: isolateHistory.of('full') });
   }, [value]);
 
   useEffect(() => {
@@ -174,6 +177,10 @@ export default function CodeEditor({ value, onChange, diagnostics, nodeIds, tech
     undo() {
       const view = viewRef.current;
       return view ? undoCommand(view) : false;
+    },
+    redo() {
+      const view = viewRef.current;
+      return view ? redoCommand(view) : false;
     },
   }));
 
