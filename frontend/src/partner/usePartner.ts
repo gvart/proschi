@@ -51,7 +51,9 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
   const stateRef = useRef(state);
   const onAssistedRef = useRef(onAssisted);
   const contextRef = useRef(context);
+  const keyRef = useRef(storeKey);
   useEffect(() => {
+    keyRef.current = storeKey;
     stateRef.current = state;
     onAssistedRef.current = onAssisted;
     contextRef.current = context;
@@ -134,6 +136,8 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
         const files = getFiles?.();
         const request: TurnRequest = { intent, message, source: getSource(), ...(files?.length ? { files } : {}), ...(opts.changeId ? { changeId: opts.changeId } : {}) };
         const answer = await sendTurn(id, request);
+        // Another document or problem opened meanwhile: the answer belongs to the conversation left behind.
+        if (keyRef.current !== storeKey) return true;
         setState((x) => ({
           ...x,
           status: 'idle',
