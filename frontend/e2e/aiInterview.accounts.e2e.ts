@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { mockInterviews } from './aiInterview';
-import { answerDialog, expect, test } from './fixtures';
+import { answerDialog, expect, test, toSetupStep } from './fixtures';
 
 /**
  * The mock interview with the interviewer (build with accounts, API mocked):
@@ -16,7 +16,11 @@ const chatOf = (page: Page) => page.getByRole('region', { name: 'Mock interview'
 /** From the set-up, on URL Shortener: Start, then the room's chat. */
 async function startInterview(page: Page, opts: { talk?: 'Voice' | 'Text' } = {}) {
   await page.goto('practice/#/interview?problem=url-shortener');
-  if (opts.talk) await page.getByRole('radiogroup', { name: 'How you talk' }).getByRole('radio', { name: new RegExp(`^${opts.talk}`) }).click();
+  if (opts.talk) {
+    await toSetupStep(page, 'talk');
+    await page.getByRole('radiogroup', { name: 'How you talk' }).getByRole('radio', { name: new RegExp(`^${opts.talk}`) }).click();
+  }
+  await toSetupStep(page);
   await page.getByRole('button', { name: 'Start the mock interview' }).click();
   const chat = chatOf(page);
   await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
@@ -120,13 +124,23 @@ test.describe('mock interview with the interviewer', () => {
       ],
     });
     await page.goto('practice/#/interview?problem=url-shortener');
-    // The interviewer is chosen when there is one; the estimate for the length, against the balance.
+    // The interviewer is chosen when there is one, on the wizard's first screen of five.
+    await expect(page.getByRole('heading', { level: 2, name: 'Who interviews you?' })).toBeVisible();
+    await expect(page.getByTestId('setup-progress')).toHaveText('Step 1 of 5');
     await expect(page.getByRole('radiogroup', { name: 'Interviewer' }).getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+    // The review: the estimate for the length, against the balance.
+    await toSetupStep(page);
+    await expect(page.getByRole('list', { name: 'Your interview' })).toContainText('URL Shortener');
     await expect(page.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min; you have 100.');
     await expect(page.getByTestId('ai-credits-cap')).toHaveText(', never more than 100 credits');
+    // A row of the review opens its screen, and Continue comes back to the review.
+    await page.getByRole('button', { name: 'Change the length' }).click();
     await page.getByRole('radio', { name: '30 min' }).click();
+    await page.getByRole('button', { name: /^Back to review/ }).click();
     await expect(page.getByTestId('ai-credits')).toContainText('about 30–40 credits for 30 min; you have 100.');
+    await page.getByRole('button', { name: 'Change the length' }).click();
     await page.getByRole('radio', { name: '45 min' }).click();
+    await page.getByRole('button', { name: /^Back to review/ }).click();
     // Starting is the agreement: the line names what goes to Anthropic.
     await expect(page.getByTestId('consent-line')).toContainText('Starting sends Anthropic');
     await expect(page.getByTestId('consent-line')).toContainText('90 days');
@@ -181,6 +195,7 @@ test.describe('mock interview with the interviewer', () => {
     await expect(verdict.getByText('Try the Pastebin problem next')).toBeVisible();
     await expect(result.getByRole('link', { name: 'Try this problem again' })).toHaveAttribute('href', '#/interview?problem=url-shortener&with=mock');
     await result.getByRole('link', { name: 'New interview' }).click();
+    await toSetupStep(page, 'problem');
     await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('radio', { name: 'Same as last time' })).toBeVisible();
   });
@@ -193,7 +208,10 @@ test.describe('mock interview with the interviewer', () => {
       if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') problems.push((r.postDataJSON() as { problem: string }).problem);
     });
     await page.goto('practice/#/interview');
+    await toSetupStep(page, 'problem');
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByRole('radiogroup', { name: 'Difficulty' }).getByRole('radio', { name: 'Easy' }).click();
+    await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the mock interview' }).click();
     await expect(chatOf(page)).toBeVisible();
     expect(mock.starts).toHaveLength(1);
@@ -207,8 +225,10 @@ test.describe('mock interview with the interviewer', () => {
       const mock = await mockInterviews(page, { replies: [] });
       await page.goto(`practice/#/url-shortener?interview=${param}`);
       await expect(page).toHaveURL(/#\/interview\?problem=url-shortener&with=mock$/);
-      await expect(page.getByTestId('chosen-problem')).toContainText('URL Shortener');
       await expect(page.getByRole('radiogroup', { name: 'Interviewer' }).getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+      await toSetupStep(page, 'problem');
+      await expect(page.getByTestId('chosen-problem')).toContainText('URL Shortener');
+      await toSetupStep(page);
       await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeVisible();
       expect(mock.starts).toEqual([]);
     });
@@ -221,6 +241,7 @@ test.describe('mock interview with the interviewer', () => {
       await page.goto('practice/#/interview?problem=pastebin');
       // The set-up says so before Start, too.
       await expect(page.getByTestId('open-interview')).toContainText('URL Shortener');
+      await toSetupStep(page);
       await page.getByRole('button', { name: 'Start the mock interview' }).click();
 
       const open = page.getByRole('region', { name: 'Mock interview in progress' });
@@ -248,6 +269,7 @@ test.describe('mock interview with the interviewer', () => {
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [], credits: 50, needed: 70 });
     await page.goto('practice/#/interview?problem=url-shortener');
+    await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the mock interview' }).click();
     await expect(page.getByTestId('ai-credits')).toContainText('You have 50 credits. A 45-minute mock interview takes at least 70.');
     await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeDisabled();
@@ -258,12 +280,19 @@ test.describe('mock interview with the interviewer', () => {
     await mockSignedIn(page);
     await mockInterviews(page, { replies: [], credits: 12 });
     await page.goto('practice/#/interview?problem=url-shortener');
+    await toSetupStep(page);
     await expect(page.getByTestId('ai-credits')).toContainText('You have 12 credits. A 45-minute mock interview takes about 45–60.');
     await expect(page.getByRole('button', { name: 'Buy 1,000 credits, €12' })).toBeVisible();
     await expect(page.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
     await expect(page.getByRole('button', { name: 'Start the mock interview' })).toBeDisabled();
     expect(errors).toEqual([]);
-    await page.getByRole('radio', { name: /On my own \(free, no interviewer\)/ }).click();
+    // On my own skips the credits, the consent and voice, and says it is free.
+    await page.getByRole('button', { name: 'Change the interviewer' }).click();
+    await page.getByRole('radio', { name: 'On my own' }).click();
+    await page.getByRole('button', { name: /^Back to review/ }).click();
+    await expect(page.getByTestId('solo-free')).toContainText('Free.');
+    await expect(page.getByTestId('consent-line')).toHaveCount(0);
+    await expect(page.getByTestId('ai-credits')).toHaveCount(0);
     await page.getByRole('button', { name: 'Start the interview' }).click();
     await expect(page.getByRole('region', { name: 'Interview on your own' }).getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
   });

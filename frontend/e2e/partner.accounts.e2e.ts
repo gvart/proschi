@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn, SIGNED_IN } from './accounts';
-import { codeEditor, editorText, expect, test } from './fixtures';
+import { codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
 import { allowStatus, arrowLine, PartnerMock } from './partner';
 
 /**
@@ -281,6 +281,7 @@ test.describe('practice', () => {
     await expect(page.getByTestId('partner-button')).toBeVisible();
     await page.getByRole('link', { name: 'Interview mode' }).click();
     await page.getByRole('radio', { name: /On my own/ }).click();
+    await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the interview' }).click();
     await expect(page.getByTestId('interview-room')).toBeVisible();
     await expect(page.getByTestId('partner-button')).toHaveCount(0);

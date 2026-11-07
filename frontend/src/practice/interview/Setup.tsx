@@ -1,34 +1,37 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Bot, CreditCard, Dices, Keyboard, Mic, RotateCcw, ShieldCheck, Sparkles, TextSearch, Timer, User, Volume2, VolumeX } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type ReactNode } from 'react';
+import { ArrowLeft, ArrowRight, Bot, Keyboard, Mic, Timer, User } from 'lucide-react';
 import listings from 'virtual:practice-listings';
-import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
+import { outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
 import { apiEnabled } from '../../services/api';
 import { showsUpgrade, useFeature } from '../../components/featureState';
-import UpgradeHint from '../../components/UpgradeHint';
-import { billingEnabled, checkout, PRICES } from '../../services/billing';
-import { formatCredits, formatRange, interviewEstimate, type Range } from '../../services/credits';
+import { billingEnabled } from '../../services/billing';
+import { interviewEstimate } from '../../services/credits';
 import { refreshCredits, useCredits, useEstimates } from '../../services/useCredits';
+import { useToastClearance } from '../../design/toastClearance';
 import { voiceSupported } from '../../voice/recognizer';
-import { DIFFICULTIES, type Problem } from '../types';
-import { DifficultyBadge } from '../Badges';
+import type { Problem } from '../types';
 import { DEFAULT_DURATION, DURATIONS, PHASES, PHASE_SHARE, startSession, type Duration } from '../modes/session';
 import { loadSession, saveSession } from '../modes/store';
 import { giveConsent, listInterviews, saveActive, startError, startInterview, type AiInterview } from '../modes/ai/api';
-import { interviewPool, pickProblem, poolTopics } from './pick';
+import { interviewPool, pickProblem } from './pick';
 import { loadDone, loadLast, recordStart, saveDesign, useSoundPref, useTalkPref, type Kind } from './prefs';
-import { playCue } from './sounds';
+import { currentStep, nextStep, prevStep, setupSteps, titleOf, type ProblemChoice, type StepId } from './setupSteps';
+import { RadioGroup, StepDots, Tag } from './wizard';
 import MicCheck from './MicCheck';
 import ProblemPicker from './ProblemPicker';
+import ProblemStep from './ProblemStep';
+import SetupReview, { DeepVerdict, DeepVerdictHint, InterviewCost, type ReviewRow } from './SetupReview';
+import './setup.css';
 
 /**
- * Step 1 of the mock interview (docs/design/paid-plans.md P45): who
- * interviews you (the interviewer, or on your own for free), the problem
- * ("Surprise me" by default: a random one not done yet, kept hidden until the
- * room), the length, voice or text with a mic check, sound, and what it
- * costs. Start opens the room.
+ * Step 1 of the mock interview (docs/design/paid-plans.md P45), as a wizard
+ * of one decision per screen, each with a default so Continue (or Enter)
+ * runs straight through: who interviews you (the interviewer, or on your own
+ * for free), the problem ("Surprise me" by default: a random one not done
+ * yet, kept hidden until the room), the length, voice or text with a mic
+ * check, then a review with what it costs, the consent line and Start.
+ * Browser Back steps back through the screens before it leaves the page.
  */
-
-type ProblemChoice = 'surprise' | 'choose' | 'last';
 
 interface SetupProps {
   /** `?problem=<id>`: the problem page's "Interview mode", or a deep link. */
@@ -39,7 +42,15 @@ interface SetupProps {
   onStarted: (problem: string) => void;
 }
 
-const titleOf = (id: string) => listings.find((p) => p.id === id)?.title ?? id;
+/** The screen's question and the line under it. */
+const QUESTIONS: Record<Exclude<StepId, 'review'>, [string, string]> = {
+  who: ['Who interviews you?', 'Practise with an interviewer who talks back, or run the same room on your own.'],
+  problem: ['Which problem?', 'In a real interview you don’t know the question in advance, so a surprise is the best practice.'],
+  length: ['How long?', 'The clock splits the time across four phases, as an interviewer would.'],
+  talk: ['How do you want to talk?', 'You can switch between voice and text in the room at any time.'],
+};
+
+const STEP_HEADING = 'setup-step-heading';
 
 export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   const aiFeature = useFeature('ai_interview');
@@ -54,8 +65,10 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
       live = false;
     };
   }, [ai]);
-  const { credits } = useCredits(ai);
+  const { credits, error: creditsError } = useCredits(ai);
   const canMock = ai && !!server && !!credits;
+  /** Still asking whether the interviewer is there. */
+  const checking = ai && (server === undefined || (billingEnabled && !!server &&!credits && !creditsError));
   const [kindChoice, setKind] = useState<Kind>(prefer ?? 'mock');
   const kind: Kind = canMock ? kindChoice : 'solo';
 
@@ -66,13 +79,13 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   const [picking, setPicking] = useState(false);
   const [difficulty, setDifficulty] = useState<Problem['difficulty']>();
   const [topic, setTopic] = useState('');
-  const topics = useMemo(() => poolTopics(listings), []);
   const pool = useMemo(() => interviewPool(listings, { difficulty, topic: topic || undefined }), [difficulty, topic]);
   const done = useMemo(() => [...new Set([...(server?.interviews.map((i) => i.problem) ?? []), ...loadDone()])], [server]);
 
   const [duration, setDuration] = useState<Duration>(last?.minutes ?? DEFAULT_DURATION);
-  const [talk, setTalk] = useTalkPref();
+  const [talkPref, setTalk] = useTalkPref();
   const voiceOk = useMemo(() => voiceSupported(true), []);
+  const talk = talkPref === 'voice' && voiceOk ? 'voice' : 'text';
   const [soundOn, setSound] = useSoundPref();
 
   const deepFeature = useFeature('deep_mode');
@@ -90,6 +103,38 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
   const [conflict, setConflict] = useState<{ id: string; problem: string; next: string }>();
   const open = server?.interviews.find((i) => i.status === 'active' || i.status === 'finishing');
   const soloOpen = useMemo(() => listings.map((p) => loadSession(p.id)).find((s) => s && s.finishedAt === undefined), []);
+
+  // The wizard: the screens, the one shown, and whether it was opened from the review (Continue goes back there).
+  const steps = setupSteps({ who: ai, kind: checking ? kindChoice : kind });
+  const [at, setAt] = useState<StepId>('who');
+  const [fromReview, setFromReview] = useState(false);
+  const current = currentStep(steps, at);
+  const index = steps.indexOf(current);
+  const heading = useRef<HTMLHeadingElement>(null);
+  const moved = useRef(false);
+  const go = (to: StepId, edit = false) => {
+    moved.current = true;
+    setAt(to);
+    setFromReview(edit);
+    setError(undefined);
+    history.pushState({ ...(history.state as object | null), psSetup: to }, '');
+  };
+  useEffect(() => {
+    const onPop = (e: PopStateEvent) => {
+      moved.current = true;
+      setAt((e.state as { psSetup?: StepId } | null)?.psSetup ?? 'who');
+      setFromReview(false);
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  // A new screen: its question takes the focus, so a screen reader reads it and Enter continues.
+  useEffect(() => {
+    if (!moved.current) return;
+    window.scrollTo({ top: 0 });
+    heading.current?.focus({ preventScroll: true });
+  }, [current]);
+  const bar = useToastClearance();
 
   const resume = (problem: string, id?: string) => {
     if (id) saveActive(problem, id);
@@ -139,16 +184,150 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
     void startMock(problem);
   };
 
+  const noProblem = current === 'problem' && choice === 'surprise' && pool.length === 0;
+  const waiting = current === 'who' && checking && kindChoice === 'mock';
+  const proceed = () => {
+    if (current === 'review') return start();
+    if (noProblem || waiting) return;
+    if (current === 'problem' && choice === 'choose' && !chosen) return setPicking(true);
+    go(fromReview ? 'review' : nextStep(steps, current));
+  };
+  /** Enter continues from the question or a chosen card; the review needs a click on Start. */
+  const onKeyDown = (e: KeyboardEvent) => {
+    if (e.key !== 'Enter' || e.defaultPrevented || current === 'review' || e.shiftKey || e.metaKey || e.ctrlKey || e.altKey) return;
+    const t = e.target as HTMLElement;
+    if (t !== heading.current && t.getAttribute('role') !== 'radio') return;
+    e.preventDefault();
+    proceed();
+  };
+
   const problemSummary = choice === 'surprise' ? 'A surprise, shown in the room' : choice === 'last' && last ? titleOf(last.problem) : chosen ? titleOf(chosen) : 'Not chosen yet';
+  const rows: ReviewRow[] = [
+    ...(ai ? [{ term: 'Interviewer', value: kind === 'mock' ? 'Mock interview' : 'On your own', step: 'who' as const, change: 'Change the interviewer' }] : []),
+    { term: 'Problem', value: problemSummary, step: 'problem', change: 'Change the problem' },
+    { term: 'Length', value: `${duration} min`, step: 'length', change: 'Change the length' },
+    ...(kind === 'mock' ? [{ term: 'You talk by', value: talk === 'voice' ? 'Voice' : 'Text', step: 'talk' as const, change: 'Change how you talk' }] : []),
+  ];
+
+  const body: Record<StepId, () => ReactNode> = {
+    who: () => (
+      <RadioGroup
+        label="Interviewer"
+        className="grid gap-3 sm:grid-cols-2"
+        value={checking ? kindChoice : kind}
+        onChange={setKind}
+        options={[
+          {
+            value: 'mock',
+            title: 'Mock interview',
+            icon: <Bot size={20} />,
+            disabled: !checking && !canMock,
+            description: checking ? 'Checking the interviewer…' : canMock ? 'A live interviewer who answers, follows up, coaches you and gives a verdict. Uses credits.' : 'The interviewer can’t be reached right now; on your own still works.',
+          },
+          { value: 'solo', title: 'On my own', icon: <User size={20} />, tag: <Tag>Free</Tag>, description: 'The same room and clock, no interviewer. Pick questions from a list and check your estimates.' },
+        ]}
+      />
+    ),
+    problem: () => (
+      <ProblemStep
+        choice={choice}
+        onChoice={(c) => {
+          setChoice(c);
+          if (c === 'choose' && !chosen) setPicking(true);
+        }}
+        chosen={chosen}
+        onPick={() => setPicking(true)}
+        last={last?.problem}
+        difficulty={difficulty}
+        onDifficulty={setDifficulty}
+        topic={topic}
+        onTopic={setTopic}
+        pool={pool}
+        done={done}
+      />
+    ),
+    length: () => (
+      <div className="space-y-6">
+        <RadioGroup
+          label="Interview length"
+          className="grid gap-3 sm:grid-cols-3"
+          value={duration}
+          onChange={(d) => {
+            setDuration(d);
+            setShort(undefined);
+          }}
+          options={DURATIONS.map((d) => ({
+            value: d,
+            title: `${d} min`,
+            description: d === 30 ? 'Brisk: just the essentials.' : d === 45 ? 'Typical: most real interviews.' : 'Room for a deep dive.',
+          }))}
+        />
+        <PhaseSplit minutes={duration} />
+      </div>
+    ),
+    talk: () => (
+      <div className="space-y-5">
+        <RadioGroup
+          label="How you talk"
+          className="grid gap-3 sm:grid-cols-2"
+          value={talk}
+          onChange={setTalk}
+          options={[
+            { value: 'voice', title: 'Voice', icon: <Mic size={20} />, disabled: !voiceOk, description: voiceOk ? 'Speak your answers hands-free; the interviewer answers out loud.' : 'This browser cannot listen; use text.' },
+            { value: 'text', title: 'Text', icon: <Keyboard size={20} />, description: 'Type your answers, as in a chat.' },
+          ]}
+        />
+        {talk === 'voice' && (
+          <div className="rounded-sm border-bw-1 border-ink/20 bg-paper/60 px-4 py-3">
+            <MicCheck />
+          </div>
+        )}
+      </div>
+    ),
+    review: () => (
+      <SetupReview
+        rows={rows}
+        onEdit={(s) => go(s, true)}
+        soundOn={soundOn}
+        onSound={setSound}
+        error={error}
+        checking={checking}
+        mock={
+          kind === 'mock'
+            ? {
+                cost: credits && <InterviewCost estimate={estimate} minutes={duration} balance={balance} short={short} notEnough={notEnough} />,
+                deep: deepFeature.ok ? (
+                  <DeepVerdict
+                    on={deep}
+                    onChange={(on) => {
+                      setDeep(on);
+                      setShort(undefined);
+                    }}
+                    multiplier={estimates.deepMultiplier}
+                  />
+                ) : showsUpgrade(deepFeature) ? (
+                  <DeepVerdictHint />
+                ) : undefined,
+              }
+            : undefined
+        }
+      />
+    ),
+  };
+
+  const [question, lead] =
+    current === 'review'
+      ? kind === 'mock'
+        ? ['Ready to start?', 'Check your set-up. The interviewer joins as soon as you start.']
+        : ['Ready when you are', 'Check your set-up. The clock starts as soon as you start.']
+      : QUESTIONS[current];
+  const back = prevStep(steps, current);
 
   return (
-    <main className="mx-auto w-full max-w-5xl px-4 pb-16 pt-6 sm:pt-10">
-      <StepTrail />
-      <div className="mt-4 flex flex-wrap items-end justify-between gap-3">
-        <div>
-          <h1 className="font-display text-3xl font-extrabold tracking-tight text-ink sm:text-4xl">Mock interview</h1>
-          <p className="mt-1 max-w-xl text-base text-ink/80">A system design interview on a whiteboard, with a clock and an interviewer to talk to. Set it up, then step into the room.</p>
-        </div>
+    <main className="mx-auto w-full max-w-3xl px-4 pb-28 pt-6 sm:pb-16 sm:pt-10">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <h1 className="font-display text-xl font-extrabold tracking-tight text-ink sm:text-2xl">Mock interview</h1>
+        <StepTrail />
       </div>
 
       {open && (
@@ -169,13 +348,13 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
       )}
 
       {conflict ? (
-        <section aria-label="Mock interview in progress" className="mt-6 max-w-xl space-y-3 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-sm">
-          <h2 className="flex items-center gap-2 font-display text-lg font-bold text-ink">
-            <Bot size={18} aria-hidden="true" />
+        <section aria-label="Mock interview in progress" className="mt-6 space-y-3 rounded-brutal border-bw-2 border-ink bg-surface p-5 shadow-brutal-md sm:p-8">
+          <h2 className="flex items-center gap-2 font-display text-2xl font-extrabold text-ink">
+            <Bot size={22} aria-hidden="true" />
             You have a mock interview in progress
           </h2>
-          <p className="text-sm text-ink">It is on {titleOf(conflict.problem)}. You can have one mock interview at a time.</p>
-          <div className="flex flex-wrap gap-2">
+          <p className="text-base text-ink">It is on {titleOf(conflict.problem)}. You can have one mock interview at a time.</p>
+          <div className="flex flex-wrap gap-2 pt-2">
             <button type="button" autoFocus onClick={() => resume(conflict.problem, conflict.id)} className={primaryButton}>
               Resume it
             </button>
@@ -197,224 +376,55 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
           </div>
           <p className="text-xs text-muted">The credits the old interview used are not returned, and it gets no verdict.</p>
         </section>
+      ) : apiEnabled && aiFeature.loading ? (
+        <p className="mt-10 text-sm text-muted" role="status">
+          Checking the interviewer…
+        </p>
       ) : (
-        <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
-          <section aria-label="Set up the interview" className="space-y-6">
-            {canMock && (
-              <Field legend="Interviewer">
-                <div role="radiogroup" aria-label="Interviewer" className="grid gap-2 sm:grid-cols-2">
-                  <Choice checked={kind === 'mock'} onSelect={() => setKind('mock')} icon={<Bot size={16} aria-hidden="true" />} title="Mock interview">
-                    A live interviewer who answers, follows up, coaches you and gives a verdict.
-                  </Choice>
-                  <Choice checked={kind === 'solo'} onSelect={() => setKind('solo')} icon={<User size={16} aria-hidden="true" />} title="On my own (free, no interviewer)">
-                    The same room and clock; pick questions from a list and check your estimates.
-                  </Choice>
-                </div>
-              </Field>
-            )}
-
-            <Field legend="Problem">
-              <div role="radiogroup" aria-label="Problem" className="flex flex-wrap gap-2">
-                <Pill checked={choice === 'surprise'} onSelect={() => setChoice('surprise')} icon={<Dices size={14} aria-hidden="true" />}>
-                  Surprise me
-                </Pill>
-                <Pill
-                  checked={choice === 'choose'}
-                  onSelect={() => {
-                    setChoice('choose');
-                    if (!chosen) setPicking(true);
-                  }}
-                  icon={<TextSearch size={14} aria-hidden="true" />}
-                >
-                  Choose a problem
-                </Pill>
-                {last && (
-                  <Pill checked={choice === 'last'} onSelect={() => setChoice('last')} icon={<RotateCcw size={14} aria-hidden="true" />}>
-                    Same as last time
-                  </Pill>
-                )}
-              </div>
-              {choice === 'surprise' && (
-                <div className="mt-3 space-y-3 rounded-sm border-bw-1 border-ink/25 bg-surface p-3">
-                  <p className="text-sm text-ink/80">A random problem you haven&rsquo;t done in an interview yet, revealed when the interview starts, as in a real one.</p>
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-                    <div role="radiogroup" aria-label="Difficulty" className="flex flex-wrap items-center gap-1">
-                      <span className={`${eyebrow} mr-1`}>Difficulty</span>
-                      {[undefined, ...DIFFICULTIES].map((d) => (
-                        <button
-                          key={d ?? 'any'}
-                          type="button"
-                          role="radio"
-                          aria-checked={difficulty === d}
-                          onClick={() => setDifficulty(d)}
-                          className={`rounded-sm border-bw-1 px-2 py-0.5 text-xs font-semibold capitalize ${difficulty === d ? 'border-ink bg-ink text-paper' : 'border-ink/30 text-ink hover:border-ink'}`}
-                        >
-                          {d ?? 'Any'}
-                        </button>
-                      ))}
-                    </div>
-                    <label className="flex items-center gap-2">
-                      <span className={eyebrow}>Topic</span>
-                      <select value={topic} onChange={(e) => setTopic(e.target.value)} className={`${field} !py-1`}>
-                        <option value="">Any</option>
-                        {topics.map((t) => (
-                          <option key={t} value={t}>
-                            {t}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
-                  </div>
-                  <p className="text-xs text-muted" data-testid="pool-size">
-                    {pool.length === 0 ? 'No problem matches these filters.' : `${pool.length} problem${pool.length === 1 ? '' : 's'} to draw from, ${pool.filter((p) => !done.includes(p.id)).length} not done yet.`}
-                  </p>
-                </div>
-              )}
-              {choice === 'choose' && chosen && (
-                <div className="mt-3 flex items-center gap-3 rounded-sm border-bw-1 border-ink bg-surface p-3" data-testid="chosen-problem">
-                  <span className="min-w-0 flex-1">
-                    <span className="block font-bold text-ink">{titleOf(chosen)}</span>
-                    <span className="block truncate text-xs text-muted">{listings.find((p) => p.id === chosen)?.summary}</span>
-                  </span>
-                  <DifficultyBadge difficulty={listings.find((p) => p.id === chosen)?.difficulty ?? 'easy'} />
-                  <button type="button" onClick={() => setPicking(true)} className={toolButton}>
-                    Change
-                  </button>
-                </div>
-              )}
-              {choice === 'last' && last && <p className="mt-2 text-sm text-ink/80">{titleOf(last.problem)} again.</p>}
-            </Field>
-
-            <Field legend="Length">
-              <div role="radiogroup" aria-label="Interview length" className="flex gap-2">
-                {DURATIONS.map((d) => (
-                  <button
-                    key={d}
-                    type="button"
-                    role="radio"
-                    aria-checked={duration === d}
-                    onClick={() => {
-                      setDuration(d);
-                      setShort(undefined);
-                    }}
-                    className={`rounded-sm border-bw-1 px-3 py-1.5 text-sm font-semibold ${duration === d ? 'border-ink bg-ink text-paper' : 'border-ink/40 text-ink hover:border-ink'}`}
-                  >
-                    {d} min
-                  </button>
-                ))}
-              </div>
-              <ol className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted" aria-label="Time per phase">
-                {PHASES.map((p, i) => (
-                  <li key={p.id}>
-                    <span className="font-semibold text-ink">
-                      {i + 1}. {p.label}
-                    </span>{' '}
-                    about {Math.round(duration * PHASE_SHARE[p.id])} min
-                  </li>
-                ))}
-              </ol>
-            </Field>
-
-            {kind === 'mock' && (
-              <Field legend="How you talk">
-                <div role="radiogroup" aria-label="How you talk" className="grid gap-2 sm:grid-cols-2">
-                  <Choice checked={talk === 'voice' && voiceOk} disabled={!voiceOk} onSelect={() => setTalk('voice')} icon={<Mic size={16} aria-hidden="true" />} title="Voice">
-                    {voiceOk ? 'Speak your answers hands-free; the interviewer answers out loud.' : 'This browser cannot listen; use text.'}
-                  </Choice>
-                  <Choice checked={talk === 'text' || !voiceOk} onSelect={() => setTalk('text')} icon={<Keyboard size={16} aria-hidden="true" />} title="Text">
-                    Type your answers, as in a chat. You can switch at any time.
-                  </Choice>
-                </div>
-                {talk === 'voice' && voiceOk && (
-                  <div className="mt-3 rounded-sm border-bw-1 border-ink/25 bg-surface p-3">
-                    <MicCheck />
-                  </div>
-                )}
-              </Field>
-            )}
-
-            <Field legend="Sound">
-              <label className="flex cursor-pointer items-center gap-3 text-sm text-ink">
-                <input type="checkbox" role="switch" checked={soundOn} onChange={(e) => setSound(e.target.checked)} className="h-4 w-4 accent-ink" data-testid="setup-sound" />
-                {soundOn ? <Volume2 size={15} aria-hidden="true" /> : <VolumeX size={15} aria-hidden="true" />}
-                <span>
-                  Sound effects <span className="text-muted">for a new phase, the last minutes, a hint and the end</span>
-                </span>
-              </label>
-              {soundOn && (
-                <button type="button" onClick={() => playCue('phase')} className={`${toolButton} mt-1 !px-1.5 !py-0.5 text-xs`}>
-                  Play a sample
-                </button>
-              )}
-            </Field>
-
-            {kind === 'mock' && deepFeature.ok && (
-              <label data-testid="interview-deep" className={`flex cursor-pointer items-start gap-2.5 rounded-sm border-bw-1 px-3 py-2 text-sm text-ink ${deep ? 'border-ink bg-pop-lilac/25' : 'border-ink/30 hover:border-ink'}`}>
-                <input
-                  type="checkbox"
-                  checked={deep}
-                  onChange={(e) => {
-                    setDeep(e.target.checked);
-                    setShort(undefined);
-                  }}
-                  className="mt-0.5 h-4 w-4 shrink-0 accent-ink"
-                />
-                <span>
-                  <span className="flex items-center gap-1.5 font-semibold">
-                    <Sparkles size={13} aria-hidden="true" />
-                    Deep verdict
-                  </span>
-                  <span className="mt-0.5 block text-xs text-ink/80">
-                    A stronger model takes longer over your verdict. The interview itself is the same; the verdict costs about {formatCredits(estimates.deepMultiplier)}× as much.
-                  </span>
-                </span>
-              </label>
-            )}
-            {kind === 'mock' && !deepFeature.ok && showsUpgrade(deepFeature) && (
-              <p data-testid="interview-deep-hint" className="flex flex-wrap items-center gap-x-1.5 text-xs text-muted">
-                Want a more thorough verdict? Deep verdicts come with Max.
-                <UpgradeHint icon={false}>See Max</UpgradeHint>
+        <section aria-labelledby={STEP_HEADING} className="mt-6 sm:rounded-brutal sm:border-bw-2 sm:border-ink sm:bg-surface sm:shadow-brutal-md" onKeyDown={onKeyDown} data-testid="interview-setup" data-step={current}>
+          <div key={current} className="ps-setup-step pt-2 sm:px-10 sm:pb-8 sm:pt-8">
+            <StepDots at={index} of={steps.length} />
+            <h2 id={STEP_HEADING} ref={heading} tabIndex={-1} className="mt-3 font-display text-3xl font-extrabold leading-tight tracking-tight text-ink outline-none sm:text-4xl">
+              {question}
+            </h2>
+            <p className="mt-2 max-w-xl text-base text-ink/75">{lead}</p>
+            <div className="mt-6 sm:mt-8">{body[current]()}</div>
+            {noProblem && (
+              <p role="alert" className="mt-4 text-sm text-red-700 dark:text-red-300">
+                No problem matches these filters; clear one of them.
               </p>
             )}
-          </section>
-
-          <aside aria-label="Your interview" className="lg:sticky lg:top-6 lg:self-start">
-            <div className="space-y-4 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-              <dl className="space-y-2 text-sm">
-                <Row term="Interviewer">{kind === 'mock' ? 'Mock interview' : 'On your own'}</Row>
-                <Row term="Problem">{problemSummary}</Row>
-                <Row term="Length">{duration} min</Row>
-                {kind === 'mock' && <Row term="You talk by">{talk === 'voice' && voiceOk ? 'Voice' : 'Text'}</Row>}
-              </dl>
-              {kind === 'mock' && credits ? (
-                <InterviewCost estimate={estimate} minutes={duration} balance={balance} short={short} notEnough={notEnough} />
-              ) : (
-                <p className="text-xs text-muted">Free. Your time per phase, answers and summary stay in this browser.</p>
-              )}
-              {kind === 'mock' && (
-                <p className="flex items-start gap-1.5 text-xs text-muted" data-testid="consent-line">
-                  <ShieldCheck size={13} className="mt-px shrink-0" aria-hidden="true" />
-                  <span>
-                    Your interviewer is Claude, an AI model made by Anthropic. Starting sends Anthropic what you type or say, the design you send and the problem; Proschi keeps the transcript 90 days.{' '}
-                    <a href="../docs/privacy/" target="_blank" rel="noopener" className="font-semibold underline underline-offset-2">
-                      Privacy
-                    </a>
-                  </span>
-                </p>
-              )}
-              {error && (
-                <p role="alert" className="text-sm text-red-700 dark:text-red-300">
-                  {error}
-                </p>
-              )}
-              <button type="button" onClick={start} disabled={starting || notEnough || (kind === 'mock' && !credits)} className={`${primaryButton} w-full justify-center !py-2.5 text-base disabled:opacity-50`}>
-                {kind === 'mock' ? <Bot size={16} aria-hidden="true" /> : <Timer size={16} aria-hidden="true" />}
+          </div>
+          <div
+            ref={bar}
+            className="fixed inset-x-0 bottom-0 z-30 flex items-center justify-between gap-3 border-t-bw-2 border-ink bg-paper px-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] pt-3 sm:sticky sm:rounded-b-brutal sm:border-t-bw-1 sm:border-ink/15 sm:bg-surface sm:px-10 sm:py-4"
+          >
+            {back ? (
+              <button type="button" onClick={() => go(back)} className={`${toolButton} !py-2.5`}>
+                <ArrowLeft size={16} aria-hidden="true" />
+                Back
+              </button>
+            ) : (
+              <span />
+            )}
+            {current === 'review' ? (
+              <button type="button" onClick={start} disabled={starting || notEnough || (kind === 'mock' && !credits)} className={`${primaryButton} !px-5 !py-2.5 text-base disabled:opacity-50`}>
+                {kind === 'mock' ? <Bot size={17} aria-hidden="true" /> : <Timer size={17} aria-hidden="true" />}
                 {starting ? 'Starting…' : kind === 'mock' ? 'Start the mock interview' : 'Start the interview'}
               </button>
-              {ai && server === undefined && <p className="text-xs text-muted">Checking the interviewer…</p>}
-            </div>
-          </aside>
-        </div>
+            ) : (
+              <span className="flex items-center gap-3">
+                <span className="hidden text-xs text-muted sm:inline" aria-hidden="true">
+                  or press Enter
+                </span>
+                <button type="button" onClick={proceed} disabled={noProblem || waiting} className={`${primaryButton} !px-5 !py-2.5 text-base disabled:opacity-50`}>
+                  {waiting ? 'Checking…' : fromReview ? 'Back to review' : 'Continue'}
+                  <ArrowRight size={17} aria-hidden="true" />
+                </button>
+              </span>
+            )}
+          </div>
+        </section>
       )}
       {picking && (
         <ProblemPicker
@@ -433,6 +443,23 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
         />
       )}
     </main>
+  );
+}
+
+/** How the length splits across the phases: a quiet bar under the length cards. */
+function PhaseSplit({ minutes }: { minutes: number }) {
+  return (
+    <div>
+      <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-muted">How {minutes} minutes split</p>
+      <ol aria-label="Time per phase" className="flex overflow-hidden rounded-sm border-bw-1 border-ink/30">
+        {PHASES.map((p, i) => (
+          <li key={p.id} style={{ flexGrow: PHASE_SHARE[p.id] }} className={`min-w-[4.75rem] basis-0 px-2 py-1.5 text-xs ${i > 0 ? 'border-l-bw-1 border-ink/30' : ''} ${i % 2 ? 'bg-paper/60' : 'bg-surface'}`}>
+            <span className="block truncate font-semibold text-ink">{p.label}</span>
+            <span className="block text-muted">{Math.round(minutes * PHASE_SHARE[p.id])} min</span>
+          </li>
+        ))}
+      </ol>
+    </div>
   );
 }
 
@@ -459,110 +486,3 @@ function Banner({ icon, testId, children }: { icon: ReactNode; testId: string; c
     </div>
   );
 }
-
-function Field({ legend, children }: { legend: string; children: ReactNode }) {
-  return (
-    <fieldset className="min-w-0">
-      <legend className="mb-2 font-display text-base font-bold text-ink">{legend}</legend>
-      {children}
-    </fieldset>
-  );
-}
-
-function Row({ term, children }: { term: string; children: ReactNode }) {
-  return (
-    <div className="flex justify-between gap-3">
-      <dt className="text-muted">{term}</dt>
-      <dd className="text-right font-semibold text-ink">{children}</dd>
-    </div>
-  );
-}
-
-function Choice({ checked, disabled, onSelect, title, icon, children }: { checked: boolean; disabled?: boolean; onSelect: () => void; title: string; icon: ReactNode; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={checked}
-      disabled={disabled}
-      onClick={onSelect}
-      className={`rounded-sm border-bw-1 px-3 py-2.5 text-left text-sm disabled:cursor-not-allowed disabled:opacity-50 ${checked ? 'border-ink bg-pop-yellow/30 shadow-brutal-sm' : 'border-ink/40 bg-surface hover:border-ink'}`}
-    >
-      <span className="flex items-center gap-1.5 font-semibold text-ink">
-        {icon}
-        {title}
-      </span>
-      <span className="mt-0.5 block text-xs text-ink/80">{children}</span>
-    </button>
-  );
-}
-
-function Pill({ checked, onSelect, icon, children }: { checked: boolean; onSelect: () => void; icon: ReactNode; children: ReactNode }) {
-  return (
-    <button
-      type="button"
-      role="radio"
-      aria-checked={checked}
-      onClick={onSelect}
-      className={`inline-flex items-center gap-1.5 rounded-sm border-bw-1 px-3 py-1.5 text-sm font-semibold ${checked ? 'border-ink bg-ink text-paper' : 'border-ink/40 bg-surface text-ink hover:border-ink'}`}
-    >
-      {icon}
-      {children}
-    </button>
-  );
-}
-
-/** What a mock interview of this length is likely to cost against the balance; without enough, the ways to get more. */
-function InterviewCost({ estimate, minutes, balance, short, notEnough }: { estimate: Range; minutes: number; balance: number; short?: { needed: number; balance: number }; notEnough: boolean }) {
-  const [buying, setBuying] = useState(false);
-  const [failed, setFailed] = useState<string>();
-  const have = formatCredits(short?.balance ?? balance, { floor: true });
-  if (!notEnough) {
-    return (
-      <div data-testid="ai-credits" className="rounded-sm border-bw-1 border-ink/30 bg-paper px-3 py-2 text-sm text-ink">
-        <p>
-          <strong className="tabular-nums">{formatRange(estimate)} credits</strong> for {minutes} min; you have <strong className="tabular-nums">{have}</strong>.
-        </p>
-        <p className="mt-0.5 text-xs text-muted">
-          You pay for what the interview uses
-          {estimate.worst !== undefined && <span data-testid="ai-credits-cap">, never more than {formatCredits(Math.min(estimate.worst, short?.balance ?? balance), { floor: true })} credits</span>}. If you run out, the
-          interviewer moves to the wrap-up and still gives you the verdict.
-        </p>
-      </div>
-    );
-  }
-  const buy = () => {
-    setBuying(true);
-    setFailed(undefined);
-    checkout('credits_1000').catch((e: unknown) => {
-      setBuying(false);
-      setFailed(e instanceof Error ? e.message : String(e));
-    });
-  };
-  return (
-    <div data-testid="ai-credits" data-enough="false" role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/15 px-3 py-2 text-sm text-ink">
-      <p>
-        You have <strong className="tabular-nums">{have} credits</strong>. A {minutes}-minute mock interview takes{' '}
-        <strong className="tabular-nums">{short?.needed ? `at least ${formatCredits(short.needed)}` : formatRange(estimate)}</strong>.
-      </p>
-      <p className="mt-0.5 text-xs text-muted">Top-up credits never expire. A plan adds credits every month.</p>
-      {failed && (
-        <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-300">
-          {failed}
-        </p>
-      )}
-      {billingEnabled && (
-        <div className="mt-2 flex flex-wrap gap-2">
-          <button type="button" onClick={buy} disabled={buying} className={`${primaryButton} disabled:opacity-50`}>
-            <CreditCard size={14} aria-hidden="true" />
-            {buying ? 'Opening…' : `Buy ${formatCredits(PRICES.topupCredits)} credits, €${PRICES.topup}`}
-          </button>
-          <UpgradeHint testId="ai-upgrade" className={outlineButton}>
-            See plans
-          </UpgradeHint>
-        </div>
-      )}
-    </div>
-  );
-}
-

@@ -215,6 +215,24 @@ export async function answerDialog(page: Page, name: string): Promise<void> {
   await page.locator('.ps-dialog').getByRole('button', { name, exact: true }).click();
 }
 
+/**
+ * The mock interview's set-up wizard (practice/interview/Setup.tsx): Continue
+ * until the screen `step` shows ('who', 'problem', 'length', 'talk' or
+ * 'review', the last one with Start). The screens before it keep their defaults.
+ */
+export async function toSetupStep(page: Page, step: 'who' | 'problem' | 'length' | 'talk' | 'review' = 'review'): Promise<Locator> {
+  const setup = page.getByTestId('interview-setup');
+  await expect(setup).toBeVisible();
+  for (let i = 0; i < 5; i++) {
+    const at = await setup.getAttribute('data-step');
+    if (at === step) break;
+    await setup.getByRole('button', { name: /^(Continue|Back to review)/ }).click();
+    await expect(setup).not.toHaveAttribute('data-step', at ?? '');
+  }
+  await expect(setup).toHaveAttribute('data-step', step);
+  return setup;
+}
+
 /** Loads the open problem's reference solution into the editor, saying yes to both confirms. */
 export async function loadReferenceSolution(page: Page): Promise<void> {
   await page.getByRole('button', { name: 'Show reference solution' }).click();
