@@ -3,6 +3,7 @@ import type { Ctx } from './context';
 import { identityHash, priorTrialStatement } from './credits';
 import { decodeJson, encodeJson, randomToken, sha256, sign, unsign } from './crypto';
 import { now, secretOk, type Env } from './env';
+import { insufficientScope, parseScopes, PUBLIC } from './scopes';
 import { bearerToken, errorResponse, HttpError, rateLimit, readCookie, SESSION_COOKIE } from './http';
 import { recordEvent } from './events';
 import { errorText, log } from './log';
@@ -462,7 +463,8 @@ function markSeen(ctx: Ctx, row: UserRow): void {
  * The signed-in user, or undefined without valid credentials. A blocked
  * account's sessions do not count (blocking deletes them too). A request
  * with `Authorization: Bearer` is an app's: only its access token counts,
- * never the cookie. Otherwise the session cookie: sessions slide, one used in
+ * never the cookie, and only on a route its scopes reach (403 otherwise,
+ * src/scopes.ts). Otherwise the session cookie: sessions slide, one used in
  * the second half of its 30 days gets 30 more, and the response carries the
  * renewed cookie.
  */
@@ -472,12 +474,17 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
     if (!bearer) return undefined;
     // Access tokens only: a refresh token or a cookie's token is refused here.
     const row = await ctx.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at, s.scopes FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ? AND u.blocked_at IS NULL`,
     )
       .bind(await sha256(bearer), now())
-      .first<UserRow>();
+      .first<UserRow & { scopes: string | null }>();
     if (!row) return undefined;
+    // The route's scope (src/scopes.ts, set by src/index.ts route); a token never reaches a route that set none.
+    const scope = ctx.tokenScope;
+    if (scope !== PUBLIC && !(scope && parseScopes(row.scopes).includes(scope))) {
+      throw insufficientScope(scope);
+    }
     ctx.userId = row.id;
     markSeen(ctx, row);
     return toUser(row);

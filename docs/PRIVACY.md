@@ -137,7 +137,10 @@ above are about events, not about you).
   (an access token that lasts an hour and a refresh token that lasts 60
   days), with whether it is the site's cookie or which app token it is, when
   it was issued, when it expires and, for a refresh token, when it was
-  exchanged for new ones. Rotated refresh tokens are kept until they expire,
+  exchanged for new ones, and what the tokens may be used for (their
+  scopes: for the command line tool, reading your name and your synced
+  diagrams; never billing, credits, the AI features or account changes).
+  Settings lists these sign-ins with their scopes. Rotated refresh tokens are kept until they expire,
   to notice a stolen copy being used. During sign-in a hash of a one-time
   code, which the app exchanges for its tokens within 60 seconds, is kept
   with the app's address to return to (for the command line tool, the

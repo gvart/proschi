@@ -5,15 +5,16 @@ import { grantSignupCredits } from '../src/credits';
 import { sha256 } from '../src/crypto';
 import { FEATURES } from '../src/features';
 import { isPaidPath, PAID_ROUTES } from '../src/index';
+import { TOKEN_SCOPES } from '../src/scopes';
 import { call, resetDatabase, signedInUser } from './helpers';
 import { messageResponse, sseResponse, streamEvents } from './ai/mockClaude';
 
 /**
  * The paid routes (src/index.ts PAID_ROUTES): every one declares its feature
- * or why it is open, and each is run with a free and a Pro account under
- * every kind of user credential: the session cookie, and an app's or the
- * CLI's bearer access token (both `app_access` sessions, src/apptokens.ts).
- * The plan is read from D1 on every request (src/auth.ts authenticate), so a
+ * or why it is open, and each is run with a free and a Pro account on the
+ * session cookie. An app's or the CLI's bearer access token (an `app_access`
+ * session, src/apptokens.ts) reaches none of them, whatever its scopes
+ * (src/scopes.ts, test/scopes.test.ts). The plan is read from D1 on every request (src/auth.ts authenticate), so a
  * downgrade counts from the next request.
  */
 
@@ -67,7 +68,9 @@ async function account(plan: 'free' | 'pro' | 'comp' | 'expired', credential: Cr
   if (plan === 'expired') await env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(nowS - 3600, id).run();
   if (credential === 'cookie') return { id, as: { token } };
   const bearer = `bearer-${++bearers}-${id}`;
-  await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_access', ?)").bind(await sha256(bearer), id, `f-${id}`).run();
+  await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id, scopes) VALUES (?, ?, 4000000000, 0, 'app_access', ?, ?)")
+    .bind(await sha256(bearer), id, `f-${id}`, TOKEN_SCOPES.join(' '))
+    .run();
   return { id, as: { bearer } };
 }
 
@@ -303,20 +306,31 @@ describe('paid routes', () => {
     }
   });
 
-  for (const credential of ['cookie', 'bearer'] as const) {
-    for (const [method, path] of PAID_ROUTES) {
-      it(`${method} ${path}, ${credential}: free, then Pro`, async () => {
-        await CASES[`${method} ${path}`].free(await account('free', credential));
-        await CASES[`${method} ${path}`].pro(await account('pro', credential));
-      });
-    }
+  for (const [method, path] of PAID_ROUTES) {
+    it(`${method} ${path}: free, then Pro`, async () => {
+      await CASES[`${method} ${path}`].free(await account('free', 'cookie'));
+      await CASES[`${method} ${path}`].pro(await account('pro', 'cookie'));
+    });
   }
+
+  it('an app or CLI token, with every scope, gets 403 insufficient_scope on every route, on any plan', async () => {
+    for (const plan of ['free', 'pro'] as const) {
+      const who = await account(plan, 'bearer');
+      for (const [method, path] of PAID_ROUTES) {
+        const res = await send(who, method, `/${path.replace(/\*/g, 'doc1')}`, method === 'POST' ? { problem: 'url-shortener', minutes: 45, message: 'hi', context: { kind: 'editor' } } : undefined);
+        expect(res.status, `${method} ${path}`).toBe(403);
+        expect(res.headers.get('WWW-Authenticate'), `${method} ${path}`).toContain('insufficient_scope');
+      }
+    }
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM ai_interviews').first<{ n: number }>())!.n).toBe(0);
+    expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM partner_sessions').first<{ n: number }>())!.n).toBe(0);
+  }, 30_000);
 
   // A comp (Pro given by the admin) is Pro on every route; one that has ended is free again.
   for (const [method, path] of PAID_ROUTES) {
     it(`${method} ${path}: an expired comp is free, a running comp is Pro`, async () => {
       await CASES[`${method} ${path}`].free(await account('expired', 'cookie'));
-      await CASES[`${method} ${path}`].pro(await account('comp', 'bearer'));
+      await CASES[`${method} ${path}`].pro(await account('comp', 'cookie'));
     });
   }
 
@@ -348,7 +362,8 @@ describe('paid routes', () => {
       env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_refresh', 'f1')").bind(await sha256(refresh), id),
       env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 1, 0, 'app_access', 'f2')").bind(await sha256(expired), id),
     ]);
-    for (const bearer of [refresh, expired]) expect((await call('/api/roadmap/next', { bearer })).status).toBe(401);
+    // Refused before the token is even read: no bearer token reaches a paid route.
+    for (const bearer of [refresh, expired]) expect((await call('/api/roadmap/next', { bearer })).status).toBe(403);
     expect((await call('/api/roadmap/next', { headers: { Cookie: '__Host-proschi_admin=anything' } })).status).toBe(401);
   });
 
@@ -392,17 +407,15 @@ describe('a downgrade', () => {
     vi.restoreAllMocks();
   });
 
-  for (const credential of ['cookie', 'bearer'] as const) {
-    it(`counts from the next request (${credential})`, async () => {
-      const who = await account('free', credential);
-      expect((await deliver(subscription(who.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
-      expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
-      expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
-      await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
-      // Design partner is on every plan: what is left of the credits decides.
-      expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201);
-    });
-  }
+  it('counts from the next request', async () => {
+    const who = await account('free', 'cookie');
+    expect((await deliver(subscription(who.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
+    expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
+    expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
+    await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
+    // Design partner is on every plan: what is left of the credits decides.
+    expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201);
+  });
 
   it('a Polar cancel does not end a comp, and the comp keeps Pro after it', async () => {
     const who = await account('comp', 'cookie');

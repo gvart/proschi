@@ -249,3 +249,19 @@ id; don't rewrite old ones.
   dismissible announcement in the app. Sending needs a reason; a campaign
   never grants or emails anyone twice (a recipient row per account, an email
   marked before it goes out); at most `CAMPAIGN_DAILY_CAP` emails a day.
+- **P42. App and CLI tokens carry scopes.** A bearer token is no longer a
+  full-account credential. Each sign-in's scopes are fixed by its client when
+  the code is issued and kept on every refresh (`sessions.scopes`,
+  `app_auth_codes.scopes`, migration 0030): the `proschi` CLI, its language
+  server and the editor extensions get `profile:read documents:read` (all
+  they call: `GET /api/me`, the synced diagrams and their versions); a
+  native app also `documents:write` and `progress`. Enforced centrally:
+  `src/index.ts` looks the route up in `TOKEN_ROUTES` (`src/scopes.ts`)
+  before any handler or the PAID_ROUTES dispatch and answers 403
+  `insufficient_scope` for any route not listed, and `authenticate` refuses a
+  token without the route's scope. So no token, whatever its scopes, reaches
+  billing, credits, mock interviews, the Design partner, the roadmap's
+  picks, live share links, the admin panel, account changes, deletion or
+  export, email and sign-in changes, campaigns or feedback; a cookie session
+  has every right. Tokens issued before got the CLI's scopes. Settings lists
+  the running sign-ins with their scopes (`GET /api/me/apps`, site only).

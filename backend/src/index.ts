@@ -28,7 +28,8 @@ import {
 } from './admin';
 import { addPasskey, addPasskeyOptions, adminLogout, adminStatus, deletePasskey, listPasskeys, login as adminLogin, loginOptions, revokeAdminSessions, setup as adminSetup, setupOptions } from './adminAuth';
 import { getAchievements, markAchievementsSeen } from './achievements';
-import { revoke, token } from './apptokens';
+import { listAppSignIns, revoke, token } from './apptokens';
+import { insufficientScope, tokenRoute } from './scopes';
 import { getCardState, postCardReviews } from './cards';
 import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun, postGameSubmit, postGameSync } from './game';
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
@@ -62,7 +63,7 @@ import { recordThrottled, routeOf } from './events';
 import type { FeatureRoute, OpenRoute } from './features';
 import { getMetricsSummary, postMetrics } from './metrics';
 import type { Env } from './env';
-import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders } from './http';
+import { assertSameOrigin, bearerToken, errorResponse, HttpError, json, withSecurityHeaders } from './http';
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
@@ -133,6 +134,7 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   GET    /api/credits/usage?limit=50      the account's charges, newest first
  *   POST   /api/billing/portal              Polar's customer portal for the user: {url}
  *   POST   /api/billing/webhook             Polar's signed events (Standard Webhooks; no session, no Origin)
+ *   GET    /api/me/apps                     the app and CLI sign-ins, with their scopes (src/scopes.ts)
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
  *   DELETE /api/me/identities/<provider>    unlink a sign-in
  *   POST   /api/problems/<id>/runs {source, solved, imported?, day?}
@@ -234,6 +236,12 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'news', 'unsubscribe')) return newsUnsubscribe(request, ctx);
   if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   assertSameOrigin(request);
+  // An app's or the CLI's bearer token reaches only the routes its scopes name (src/scopes.ts), checked here before any route.
+  if (bearerToken(request) !== undefined) {
+    const scope = tokenRoute(method, parts);
+    if (scope === undefined) throw insufficientScope();
+    ctx.tokenScope = scope;
+  }
 
   // The paid paths go only to PAID_ROUTES: each route there says the feature it needs, or why it is open.
   if (isPaidPath(parts)) {
@@ -300,6 +308,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'share', '*')) return getSharedDocument(ctx, parts[2]);
   if (is('PUT', 'api', 'me', 'documents', '*')) return putDocument(request, ctx, parts[3]);
   if (is('DELETE', 'api', 'me', 'documents', '*')) return deleteDocument(request, ctx, parts[3]);
+  if (is('GET', 'api', 'me', 'apps')) return listAppSignIns(request, ctx);
   if (is('POST', 'api', 'me', 'sessions', 'revoke-all')) return revokeAllSessions(request, ctx);
   if (is('DELETE', 'api', 'me', 'identities', '*')) return unlinkIdentity(request, ctx, parts[3]);
   if (is('POST', 'api', 'problems', '*', 'runs')) return recordRun(request, ctx, parts[2]);

@@ -68,6 +68,9 @@ for a machine without one), takes the answer on a one-time
 `$XDG_CONFIG_HOME/proschi/credentials.json` (`~/.config/proschi/…`, or
 `%APPDATA%\proschi\…` on Windows), readable by you only. `proschi logout`
 ends the sign-in and deletes them; `proschi whoami` prints the account.
+The tokens can only read your name and your saved diagrams: never billing,
+credits, mock interviews or account settings. Settings on proschi.app lists
+the sign-in.
 
 `proschi versions list <name>` prints a diagram's saved versions, and
 `proschi versions diff <name> <base-tag> [<target-tag>|<file.proschi>]` what

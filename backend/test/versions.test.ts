@@ -293,7 +293,7 @@ describe('diagram versions', () => {
     await save(token, 'd', 'a');
     const bearer = 'bearer-token-for-versions';
     const { sha256 } = await import('../src/crypto');
-    await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_access', 'f')")
+    await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id, scopes) VALUES (?, ?, 4000000000, 0, 'app_access', 'f', 'profile:read documents:read documents:write')")
       .bind(await sha256(bearer), id)
       .run();
     expect((await call('/api/me/documents/d/versions', { method: 'POST', bearer, body: { tag: 'v1', documentVersion: 1 } })).status).toBe(201);

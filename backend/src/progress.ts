@@ -25,6 +25,7 @@ import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 import { exportPartnerSessions } from './partner';
 import { deleteFeedbackFiles, exportFeedback } from './feedback';
+import { parseScopes } from './scopes';
 
 /** The signed-in user's account and practice progress. */
 
@@ -156,7 +157,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
     DB.prepare('SELECT created_at, daily_goal, last_seen_day, plan, comp_until FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
-    DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
+    DB.prepare('SELECT kind, created_at, expires_at, used_at, scopes FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
       `SELECT problem_id, runs, source, first_run_at, updated_at, solved_at, solved_day, runs_to_solve, best_cost_usd, best_p99_ms, best_cost_at, best_p99_at, sim_version, problem_version
        FROM progress WHERE user_id = ? ORDER BY problem_id`,
@@ -183,11 +184,12 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       compUntil: (account.results[0] as Row).comp_until,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
-    // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).
+    // kind: web (the site's cookie), app_access or app_refresh (an app's tokens, with their scopes; rotatedAt once a refresh token was used).
     sessions: (sessions.results as Row[]).map((r) => ({
       kind: r.kind,
       createdAt: r.created_at,
       expiresAt: r.expires_at,
+      ...(r.kind === 'web' ? {} : { scopes: parseScopes(r.scopes as string | null) }),
       ...(r.kind === 'app_refresh' ? { rotatedAt: r.used_at } : {}),
     })),
     progress: (progress.results as Row[]).map((r) => ({
