@@ -1,0 +1,30 @@
+frontend/src/components/Diagram/useFitOnChange.ts
+  s_e17b87e0a1b3ca::t_785f399f67c96f 91
+  s_e17b87e0a1b3ca::t_f443f4364d44de 27-28,32-33,46-47,55,57,61-62,74,77-80,82-85
+  s_e17b87e0a1b3ca::t_b408d48516d809 24,86-88,92-97
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_e17b87e0a1b3ca::t_db1138fabf42c2 104-108
+  s_e17b87e0a1b3ca::t_57a1d1325e7997 1,46-69,71,97-103,109-113
+  s_e17b87e0a1b3ca::t_87542eaf33a876 42-43,70,72
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_e17b87e0a1b3ca::t_87542eaf33a876 53-56,68-69,131-134,168
+frontend/e2e/visual-editing.e2e.ts
+  s_e17b87e0a1b3ca::t_adb3178d71ed43 249-272,275-282
+  s_e17b87e0a1b3ca::t_596f4133f4fb40 273-274
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "75669bce35ba5f1e78f6723c1f2c60f781b959eb",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
