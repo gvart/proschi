@@ -3,7 +3,7 @@
 Short version: signed out, the editor never sends your diagrams anywhere
 unless you make a short link; signed in, it keeps them in your account
 (private, and you can turn that off). Payments for Pro go through Polar,
-and AI interviews and AI design reviews are sent to an AI provider only when you start one. There are no analytics or tracking
+and mock interviews and in-depth reviews are sent to an AI provider (Anthropic) only when you start one. There are no analytics or tracking
 scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
@@ -28,8 +28,8 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
 | `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
-| `proschi.aiInterview.<problem>` | Signed in: the id of the AI interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
-| `proschi.aiInterview.consent` | That you agreed once to what an AI interview sends to the AI provider |
+| `proschi.aiInterview.<problem>` | Signed in: the id of the mock interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
+| `proschi.aiInterview.consent` | That you agreed once to what a mock interview sends to the AI provider |
 | `proschi.achievements` | Badges earned on a copy of the site without accounts: which, when, and when the page showed them to you |
 | `proschi.cards` | Daily review, on a copy of the site without accounts: every card review (which card, your rating, when, how long it took and your local date) |
 | `proschi.cards.outbox` | Daily review, signed in: reviews not yet sent to the server, kept until it answers |
@@ -127,7 +127,7 @@ above are about events, not about you).
   display name (your GitHub login or Google first name, which you can
   change), whether you chose to appear on the leaderboard, when the
   account was created, and its plan (free or Pro; it sets how much the
-  account may keep and how many AI interviews it gets).
+  account may keep and how many mock interviews it gets).
 - Sessions: a hash of each session's cookie, with when it started and when
   it expires. A session lasts 30 days and renews while you use it; expired
   ones are deleted daily.
@@ -302,7 +302,7 @@ the right account) and which product you chose. Nothing else is sent.
   (active, canceled and so on), which plan (Pro monthly or yearly), when the
   paid period ends, whether it is canceled at that date, and when this was
   last updated;
-- your AI interview credits, as a ledger: each pack bought (5 credits, with
+- your mock interview credits, as a ledger: each pack bought (5 credits, with
   Polar's order id), each interview started (1 credit, with the
   interview's id) and each credit given back for an interview that failed
   early, with the time of each;
@@ -316,7 +316,7 @@ the right account) and which product you chose. Nothing else is sent.
   those credits in the ledger; the reason is kept in the operator's audit log.
 
 **What it is used for**: only to know your plan, renewal date and how many
-AI interviews you have left. It is shown in **Plan & billing** on your
+mock interviews you have left. It is shown in **Plan & billing** on your
 account page.
 
 **How long**: as long as the account. Deleting the account cancels a
@@ -335,9 +335,9 @@ nothing about who opens it is kept. A revoked link stays as that row so its
 token is never reused. The links are in **Download my data**, and are
 deleted with the diagram or the account.
 
-## AI interviews
+## Mock interviews
 
-An AI interview (one a lifetime on the free plan, 4 a month on Pro, more
+A mock interview (one a lifetime on the free plan, 4 a month on Pro, more
 with packs) is started only by you, knowing it is sent to an AI provider:
 the problem, your diagram and everything you write or dictate in the
 interview are sent to Anthropic's Claude, through Cloudflare's AI Gateway,
@@ -349,29 +349,29 @@ deleted, and its verdict summary (pass or fail, and what went well and
 wrong per skill), kept for your interview history. Both are private, part
 of **Download my data**, and deleted with your account. A daily job deletes
 each transcript, and the design sent with it, once the interview is 90 days
-old; the verdict stays. On Pro, the AI roadmap's next steps are picked after
+old; the verdict stays. On Pro, your next steps are picked after
 each verdict (below). Dictation, where
 your browser offers it, is done by the browser; Proschi receives only the
 text.
 
-## AI design review
+## In-depth review
 
 On Pro, **Review my design** sends the design you review (its source and,
 for a practice problem, the problem's id) to the server, which runs the
 simulation and the tests on it and sends the design, those results and the
 problem to Anthropic's Claude to write the review. The provider uses them
 only to answer, not to train its models. On the free plan, signed out, and
-on Pro once the day's AI reviews are used up, the review is written by the
+on Pro once the day's in-depth reviews are used up, the review is written by the
 page itself and nothing is sent.
 
-**What is stored**: not the design or the review, only how many AI reviews
+**What is stored**: not the design or the review, only how many in-depth reviews
 you asked for each day (UTC), for the limit of 20 a day. The counts are part
 of **Download my data** and deleted with your account.
 
-## AI roadmap (Pro)
+## Your next steps (Pro)
 
-On Pro, after an AI interview's verdict, and at most once a day after an AI
-design review, Proschi asks Anthropic's Claude to pick your next 3 steps. It
+On Pro, after a mock interview's verdict, and at most once a day after an
+in-depth review, Proschi asks Anthropic's Claude to pick your next 3 steps. It
 sends the verdict (or the review's summary and issues), your weakest card
 topics, which roadmap problems you have solved and your mastery of each card
 topic. The provider uses them only to answer, not to train its models.
@@ -460,7 +460,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, AI reviews a day and AI interviews with the AI roadmap's picks, every session with its kind (the site or an
+  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, in-depth reviews a day and mock interviews with the picks for your next steps, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
@@ -472,7 +472,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
   synced diagrams and their versions and live share links, the email reminders' address, the
-  billing data, interview credits, AI interviews and AI roadmap picks from the server at once (a Pro
+  billing data, interview credits, mock interviews and the picks for your next steps from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
   Only a one-way keyed hash of each sign-in identity (GitHub or Google and

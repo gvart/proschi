@@ -10,7 +10,7 @@ Pro plan and interview packs. What is stored about you is on the
 
 You can use the editor and practice without an account. With one, the
 account keeps 5 diagrams, 20 versions each, up to 64 KiB a diagram, and one
-AI interview for life. The service is offered as is, without a warranty:
+mock interview for life. The service is offered as is, without a warranty:
 keep a copy of diagrams you can't lose (the editor's export, or the files in
 your repository).
 
@@ -22,10 +22,10 @@ gives:
 - no practical limit on diagrams and versions in your account (a fair-use
   cap of 1000 of each, far beyond what anyone draws by hand), up to 512 KiB
   a diagram;
-- 4 AI interviews a month, counted per calendar month (UTC); unused ones
+- 4 mock interviews a month, counted per calendar month (UTC); unused ones
   don't carry over;
-- AI design review, interview history, an AI roadmap and private share
-  links.
+- the in-depth review, interview history, your next steps and private
+  share links.
 
 **Payment.** [Polar](https://polar.sh) is the merchant of record: you buy
 from Polar, which charges your card, handles VAT and sends the invoices.
@@ -43,21 +43,21 @@ subscribe again. Pack credits stay yours.
 consumer law of the country you buy from. Ask through the billing portal or
 [GitHub issues](https://github.com/gvart/proschi/issues).
 
-## Interview packs
+## Mock interview packs
 
-A pack is 5 AI interviews for €15, on any plan. Pack credits never expire
+A pack is 5 mock interviews for €15, on any plan. Pack credits never expire
 while the account exists. Pro's monthly interviews are used first, then the
 free one, then pack credits. Interviews already used from a pack aren't
 refundable: a refunded pack takes back only its unused credits.
 
-## AI interviews
+## Mock interviews
 
 One credit is used when an interview starts. If an interview fails on our
 side within its first 5 minutes, the credit is given back. An interview
 lasts at most 60 minutes. The interviewer is an AI model: its questions,
 hints and verdict are practice feedback, not an assessment of you by a
 person, and can be wrong. What is sent to the AI provider and how long the
-transcript is kept is on the [Privacy](PRIVACY.md#ai-interviews) page.
+transcript is kept is on the [Privacy](PRIVACY.md#mock-interviews) page.
 
 ## Fair use
 

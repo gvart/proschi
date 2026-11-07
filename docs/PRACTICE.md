@@ -221,14 +221,16 @@ normal editor and tests, the clock still running) and **Wrap-up** (a
 self-review checklist and a summary). The session, time per phase and the
 summaries stay in the browser; nothing is sent to the server.
 
-### The AI interviewer
+### Mock interviews
 
 Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
-offers a choice: **Scripted (free)**, the mode above, or the **AI
-interviewer**, with the AI interviews left (and, with billing on, a link to
-Pro and the packs). Starting one spends a credit (the free plan has one for
-life); the first start asks once for consent and names what is sent to the
-AI provider. The interviewer is Claude (backend `src/ai/`, routes in
+offers a choice: **On your own (free)**, the mode above, or a **Mock
+interview** with an interviewer, with the mock interviews left (and, with
+billing on, a link to Pro and the packs). `practice/#/<problem>?interview=mock`
+opens the start screen with the mock interview chosen (`?interview=ai` still
+works). Starting one spends a credit (the free plan has one for
+life); the first start asks once for consent and names what is sent to
+Anthropic. The interviewer is Claude by Anthropic (backend `src/ai/`, routes in
 `src/interviews.ts`), and the session lives on the server, so a reload picks
 it up again.
 
@@ -253,15 +255,15 @@ it up again.
   communication, what went well and what went wrong per skill, and up to five
   next steps.
 
-On Pro, the verdict also links **Practise them here**: the AI roadmap's 3
-picks made after it (below, "Next for you").
+On Pro, the verdict also links **Practise them here**: the 3
+picks made after it (below, "Your next steps").
 
 If the interviewer fails on the first turn or in the first 5 minutes, the
 credit is given back and the session ends. Transcripts are kept 90 days, the
-verdicts for history ([Privacy](PRIVACY.md#ai-interviews)).
+verdicts for history ([Privacy](PRIVACY.md#mock-interviews)).
 
 **Interview history**, on the progress page (`practice/#/progress`, signed
-in, when the server has the AI): each finished AI interview with its problem,
+in, when the server has an Anthropic key): each finished mock interview with its problem,
 date and pass or fail, linking to its verdict (`practice/#/progress/interview/<id>`).
 Pro also sees every past session and the score of each skill over time, as
 five small charts on the same 1 to 5 scale (with a table for screen
@@ -563,9 +565,9 @@ target (`requiredStages`). The rule is `roadmapAccess` in `roadmap.ts`. A build 
 accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.
 
-**Next for you** is the roadmap's paid part (Pro), gated next to it by
-`aiRoadmapAccess`. After a Pro user's AI interview verdict, and at most once
-a day after an AI design review, one Claude Haiku call picks the next 3
+**Your next steps** is the roadmap's paid part (Pro), gated next to it by
+`aiRoadmapAccess`. After a Pro user's mock interview verdict, and at most once
+a day after an in-depth review, one Claude Haiku call picks the next 3
 steps, each with a one-sentence reason. It gets the verdict (or the review),
 the weakest card topics, and every roadmap problem (solved or not) and card
 topic (with your mastery) by id; it only picks from those, and the server
@@ -576,7 +578,7 @@ says quietly if none came. A failed pick never fails the verdict. The card under
 its roadmap step (`practice/#/roadmap/<id>`) or its card deck
 (`practice/#/review/<topic>`); the verdict links the same picks. Signed in
 without Pro, with billing on, the card shows the way to Pro instead. Without
-the AI on the server (`GET /api/roadmap/next` answers 501), or with no picks
+an Anthropic key on the server (`GET /api/roadmap/next` answers 501), or with no picks
 yet, the roadmap keeps its own order (backend `src/roadmap.ts`,
 `src/ai/roadmap.ts`).
 
