@@ -1,0 +1,46 @@
+frontend/e2e/admin.ts
+  s_e17b87e0a1b3ca::t_9831b62c74f826 395
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 410,415,425
+backend/src/cfUsage.ts
+  s_e17b87e0a1b3ca::t_9831b62c74f826 105-107,215
+  s_e17b87e0a1b3ca::t_e708262486c48b 20-23,28,34,53-54,66,118-122,181-182,184,205-206,230-244,274-277,334-336,403,426
+backend/test/cfUsage.test.ts
+  s_e17b87e0a1b3ca::t_7e8ebf6f098a92 276
+  s_e17b87e0a1b3ca::t_33d4abaf495428 9,110-132,153-154,208-209,277,279,282,322,337
+frontend/src/admin/CloudflareTab.tsx
+  s_e17b87e0a1b3ca::t_4470cab1f18139 162
+  s_e17b87e0a1b3ca::t_9831b62c74f826 155,158-161,163-165
+  s_e17b87e0a1b3ca::t_f99d2a3fdad298 3
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 8
+frontend/e2e/cfUsage.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_4470cab1f18139 26,28
+  s_e17b87e0a1b3ca::t_9831b62c74f826 27
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 22-25
+frontend/src/admin/cfVerdict.ts
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 92
+  s_e17b87e0a1b3ca::t_4470cab1f18139 32-33
+  s_e17b87e0a1b3ca::t_1242e1baf27f7d 34
+backend/README.md
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 853,970,977-978,983-987
+frontend/src/admin/api.ts
+  s_e17b87e0a1b3ca::t_c4f2def23f5e9f 143,145
+  s_e17b87e0a1b3ca::t_9831b62c74f826 149-151
+frontend/src/admin/cfVerdict.test.ts
+  s_e17b87e0a1b3ca::t_4470cab1f18139 3,135-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bac804816ecc05422cce86c6c88956fb11775dc9",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
