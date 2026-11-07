@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test, waitForCanvas } from './fixtures';
+import { expect, sectionLink, test, waitForCanvas } from './fixtures';
 
 /** A stage of the roadmap, by its title. */
 const stage = (page: Page, title: string) => page.getByRole('listitem', { name: new RegExp(`^Stage \\d+: ${title}$`) });
@@ -10,7 +10,7 @@ const challenges = (scope: Locator) => scope.getByRole('link', { name: /^(?!Read
 test.describe('interview prep roadmap', () => {
   test('opens one problem at a time and unlocks the next after a solve', async ({ page }) => {
     await page.goto('practice/');
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
+    await (await sectionLink(page, 'Roadmap')).click();
     await expect(page).toHaveURL(/#\/roadmap$/);
     await expect(page).toHaveTitle('Interview prep roadmap · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Interview prep roadmap' })).toBeVisible();

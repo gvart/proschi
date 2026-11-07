@@ -96,6 +96,17 @@ describe('Claude client', () => {
     expect((await caught(createClient(env, { fetch }).create(req()))).kind).toBe('truncated');
   });
 
+  it('marks what the model answered as charged (P34), and an infrastructure failure as free', async () => {
+    let { fetch } = mockFetch(() => messageResponse('half', { stop: 'max_tokens', model: 'claude-opus-5-5', usage: { output_tokens: 100 } }));
+    expect((await caught(createClient(env, { fetch }).create(req()))).charge).toEqual([{ model: 'claude-opus-5-5', input_tokens: 100, output_tokens: 100, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }]);
+    ({ fetch } = mockFetch(() => sseResponse(streamEvents('a long answer', { stop: 'max_tokens' }))));
+    expect((await caught(collect(createClient(env, { fetch }).stream(req())))).charge).toEqual([expect.objectContaining({ model: SONNET, input_tokens: 100, output_tokens: 50 })]);
+    ({ fetch } = mockFetch(() => Response.json({ error: { message: 'bad' } }, { status: 400 })));
+    expect((await caught(createClient(env, { fetch }).create(req()))).charge).toEqual([]);
+    ({ fetch } = mockFetch(() => sseResponse([streamEvents('hi')[0], { type: 'error', error: { type: 'overloaded_error', message: 'Overloaded' } }])));
+    expect((await caught(collect(createClient(env, { fetch }).stream(req())))).charge).toEqual([]);
+  });
+
   it('streams text across chunk boundaries and totals the usage', async () => {
     const { fetch, calls } = mockFetch(() => sseResponse(streamEvents('What is the read to write ratio?', { usage: { cache_read_input_tokens: 5000, output_tokens: 12 } }), 3));
     const pieces: string[] = [];

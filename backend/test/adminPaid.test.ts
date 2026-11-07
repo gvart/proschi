@@ -365,7 +365,8 @@ describe('admin: the paid product', () => {
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM billing_webhooks').first<{ n: number }>())!.n).toBe(4);
     const health = (await (await adminCall('/api/admin/health', admin)).json()) as { cron: { runs: { job: string; detail: Record<string, number> }[] }; database: { tables: Record<string, number> } };
     expect(health.cron.runs.find((r) => r.job === 'billing_webhooks')!.detail.deleted).toBe(1);
-    expect(health.database.tables).toMatchObject({ billing_webhooks: 4, billing: 1, billing_events: 3, credits: 0, ai_interviews: 0, document_shares: 0, refunded_orders: 0, credit_holds: 0, credit_charges: 0, signup_identities: 0 });
+    // credits: 1, the month's Pro allowance, written by the later subscription event before it could change the plan (P35).
+    expect(health.database.tables).toMatchObject({ billing_webhooks: 4, billing: 1, billing_events: 3, credits: 1, ai_interviews: 0, document_shares: 0, refunded_orders: 0, credit_holds: 0, credit_charges: 0, signup_identities: 0 });
 
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
     expect(await env.DB.prepare('SELECT COUNT(*) AS n, COUNT(user_id) AS users FROM billing_webhooks').first()).toEqual({ n: 4, users: 0 });

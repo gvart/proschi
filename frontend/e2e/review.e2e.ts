@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, sectionLink, test } from './fixtures';
 
 /**
  * Daily review in a build without accounts: every card, scheduled, with the
@@ -21,10 +21,9 @@ async function expectType(c: Locator, type: string, text: RegExp | string): Prom
 
 test.describe('daily review', () => {
   test('a session with every card type, kept in the browser', async ({ page }) => {
-    // Practice links to interview prep, whose tabs lead to daily review.
+    // The practice page's More practice menu leads to daily review.
     await page.goto('practice/');
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
-    await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Review', exact: true }).click();
+    await (await sectionLink(page, 'Review cards')).click();
     await expect(page).toHaveURL(/#\/review$/);
     await expect(page).toHaveTitle('Daily review · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Daily review' })).toBeVisible();
@@ -170,6 +169,8 @@ test.describe('daily review', () => {
         .toBe(true);
 
     test('the next card takes focus and shows its top below the header', async ({ page }) => {
+      // A short phone screen, so the first card's answer ends below the fold and the page has to scroll.
+      await page.setViewportSize({ width: 390, height: 560 });
       await page.goto('practice/#/review');
       await today(page).getByRole('button', { name: 'Start review · 10 cards' }).click();
 

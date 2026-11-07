@@ -2,7 +2,7 @@ import { auditStatement } from './adminAuth';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { timingSafeEqual } from './crypto';
-import { creditsView, refundedOrderStatement, revokeStatement, topupStatement } from './credits';
+import { creditsView, monthlyGrantStatement, planOf, refundedOrderStatement, revokeStatement, topupStatement, upgradeGrantStatement, upgradeRevokeStatement } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
@@ -256,6 +256,8 @@ interface PolarObject {
   created_at?: string;
   /** A refund's or dispute's order. */
   order_id?: string;
+  /** An order's reason: purchase, subscription_create, subscription_cycle or subscription_update (a plan change's proration invoice). */
+  billing_reason?: string;
 }
 
 const msOf = (iso: string | null | undefined): number | null => {
@@ -287,6 +289,11 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  *   (Pro↔Max) moves the plan with it. A downgrade keeps every diagram; those
  *   past the free limit turn read-only (src/documents.ts).
  * - `order.paid` for credits_1000: 1,000 credits, once per order.
+ * - `order.paid` of a plan change to Max (`billing_reason`
+ *   `subscription_update`, the proration invoice): the month's credits get
+ *   Max's allowance less the month's base, prorated to what is left of the
+ *   month, once per order (P35). A subscription event that leaves the
+ *   account off Max takes back what is unspent of it.
  * - `order.refunded`, a succeeded `refund.created|updated`, or a lost
  *   `dispute.*` (a chargeback) of a top-up order: its credits are taken back,
  *   what is left of them (the balance never goes below 0), once per order.
@@ -380,6 +387,8 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
   delivery.userId = userId ?? null;
   const product = productOf(env, data.product_id);
   if (userId && type.startsWith('subscription.') && isSubscription(product)) {
+    // The month's base grant is the plan before this event, so a plan change can't turn it into the new plan's (P35).
+    statements.push(monthlyGrantStatement(DB, userId, (await planOf(DB, userId)) ?? 'free', t));
     effect = statements.length;
     const modified = msOf(data.modified_at) ?? msOf(data.created_at) ?? t;
     const pro = PRO_STATUSES.map((s) => `'${s}'`).join(', ');
@@ -408,7 +417,13 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
            THEN (CASE WHEN (SELECT product FROM billing WHERE user_id = ?1) IN ('max_monthly', 'max_yearly') THEN 'max' ELSE 'pro' END) ELSE 'free' END
          WHERE id = ?1 AND plan IN ('free', 'pro', 'max')`,
       ).bind(userId),
+      // Off Max now: what this month's upgrades gave goes back, as far as it is unspent (P35).
+      upgradeRevokeStatement(DB, userId, eventId, t),
     );
+  } else if (userId && type === 'order.paid' && data.billing_reason === 'subscription_update' && (product === 'max_monthly' || product === 'max_yearly') && data.id) {
+    // An upgrade's proration invoice, paid (P35): the month's base is the plan before it, then the prorated difference.
+    effect = statements.length + 1;
+    statements.push(monthlyGrantStatement(DB, userId, (await planOf(DB, userId)) ?? 'free', t), upgradeGrantStatement(DB, userId, 'max', data.id, t));
   } else if (userId && type === 'order.paid' && product === 'credits_1000' && data.id) {
     effect = statements.length + 1;
     statements.push(

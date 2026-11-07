@@ -1,6 +1,6 @@
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../frontend/src/practice/modes/session';
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
-import { AiError, collect, HAIKU, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type TextBlock, type Usage } from './client';
+import { AiError, collect, HAIKU, malformed, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type ModelUsage, type TextBlock } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
 import { fence, HINT_PROMPT, INTERVIEWER_PROMPT, VERDICT_PROMPT } from './prompts';
 
@@ -200,6 +200,8 @@ export interface TurnResult {
   /** The server's run of the design sent with this turn. */
   grade?: DesignGrade;
   elapsedMs: number;
+  /** What the user pays for this turn (P34): the reply, and the hint whenever the model answered it (one that did not validate too). */
+  billed: ModelUsage[];
 }
 
 /** Refuses a turn the limits do not allow; returns the elapsed time. */
@@ -254,17 +256,20 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
     transcript: [...next.transcript, { role: 'interviewer', text: reply, phase, at: elapsed }],
   };
 
+  const billed: ModelUsage[] = [{ model: result.model, ...result.usage }];
   let hint: Hint | undefined;
   try {
     const coached = await coach(client, context, next, elapsed);
     next = { ...next, usage: addUsage(next.usage, HAIKU, coached.usage), covered: [...new Set([...next.covered, ...coached.covered])] };
+    billed.push({ model: HAIKU, ...coached.usage });
     hint = coached.hint;
   } catch (e) {
-    // The hint is a nicety: the turn stands without it, but its tokens still count.
+    // The hint is a nicety: the turn stands without it, but its tokens still count, and what the model answered is charged.
     if (!(e instanceof AiError)) throw e;
     next = { ...next, usage: addUsage(next.usage, HAIKU, e.usage) };
+    billed.push(...e.charge);
   }
-  return { reply, state: next, ...(hint ? { hint } : {}), ...(design ? { grade: design.grade } : {}), elapsedMs: elapsed };
+  return { reply, state: next, ...(hint ? { hint } : {}), ...(design ? { grade: design.grade } : {}), elapsedMs: elapsed, billed };
 }
 
 /** The hint kind the clock asks for: wrap-up in the last quarter of a phase (at least the last minute), else the model picks. */
@@ -306,7 +311,7 @@ async function coach(client: ClaudeClient, context: ProblemContext, state: Inter
     output_config: { effort: 'low', format: { type: 'json_schema', schema: HINT_SCHEMA } },
   });
   const parsed = parseHint(result.text, new Set(context.topics.map((t) => t.id)));
-  if (!parsed) throw new AiError('malformed', 'The hint is not valid JSON', { usage: result.usage });
+  if (!parsed) throw malformed('The hint is not valid JSON', result);
   // Only the clock asks for a wrap-up hint; one the model picks on its own is a focus hint.
   const kind = forced ?? (parsed.kind === 'wrapup' ? 'focus' : parsed.kind);
   return { hint: { kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
@@ -417,11 +422,17 @@ function sessionReport(context: ProblemContext, state: InterviewState, now: numb
 /**
  * The verdict, Sonnet with adaptive thinking and a JSON schema; with `deep`
  * (Deep mode, Max, P31) Opus. A response that does not validate is asked for
- * once more, then is an AiError ('malformed'). Returns the state, finished
- * and with the tokens counted, `billable`, the call that validated: what the
- * user pays for (P27), and the `model` that wrote it.
+ * once more when `more()` (topping up the credit hold) allows it, then is an
+ * AiError ('malformed'). Returns the state, finished and with the tokens
+ * counted, `billed`, every answer the model gave (a malformed first one
+ * too), priced at the model asked for: what the user pays (P34), and that
+ * `model`. A failure's `charge` carries the answers given before it.
  */
-export async function verdict(deps: Deps, state: InterviewState, opts: { deep?: boolean } = {}): Promise<{ verdict: InterviewVerdict; state: InterviewState; billable: Usage; model: typeof SONNET | typeof OPUS }> {
+export async function verdict(
+  deps: Deps,
+  state: InterviewState,
+  opts: { deep?: boolean; more?: () => Promise<boolean> } = {},
+): Promise<{ verdict: InterviewVerdict; state: InterviewState; billed: ModelUsage[]; model: typeof SONNET | typeof OPUS }> {
   const model = opts.deep ? OPUS : SONNET;
   const { client, context, now } = deps;
   if (context.problem.id !== state.problemId) throw new InterviewLimitError('problem', 'The context is of another problem');
@@ -437,18 +448,21 @@ export async function verdict(deps: Deps, state: InterviewState, opts: { deep?: 
     output_config: { effort: 'high', format: { type: 'json_schema', schema: VERDICT_SCHEMA } },
   };
   let spent = emptyUsage();
+  const billed: ModelUsage[] = [];
   for (let attempt = 0; ; attempt++) {
     let result;
     try {
       result = await client.create(request);
     } catch (e) {
-      // A failed second attempt still bills the first one's tokens.
-      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: addUsage(spent, model, e.usage)[model] });
+      // A failed second attempt still bills the first one's tokens, and charges its answer.
+      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: addUsage(spent, model, e.usage)[model], charge: [...billed, ...e.charge.map((u) => ({ ...u, model }))] });
       throw e;
     }
     spent = addUsage(spent, model, result.usage);
+    billed.push({ model, ...result.usage });
     const parsed = parseVerdict(result.text);
-    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, model, spent[model]), finished: true }, billable: result.usage, model };
-    if (attempt >= 1) throw new AiError('malformed', 'The verdict did not validate twice', { usage: spent[model] });
+    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, model, spent[model]), finished: true }, billed, model };
+    // Asked again only once, and only when held.
+    if (attempt >= 1 || (opts.more && !(await opts.more()))) throw new AiError('malformed', 'The verdict did not validate', { usage: spent[model], charge: billed });
   }
 }

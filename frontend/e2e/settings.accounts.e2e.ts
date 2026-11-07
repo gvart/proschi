@@ -81,7 +81,17 @@ test('profile and learning: the public profile switch, what is visible, and the 
   await expect(toggle).not.toBeChecked();
   await expect(profile.getByRole('link', { name: 'See your public profile' })).toHaveCount(0);
 
+  // What you're here for, kept in this browser: a daily habit switches the streak on, and with it the daily goal.
   const learning = page.getByRole('region', { name: 'Learning' });
+  const focus = learning.getByRole('group', { name: 'What you’re here for' });
+  const streak = learning.getByRole('switch', { name: 'Daily streak' });
+  await expect(streak).not.toBeChecked();
+  await expect(learning.getByRole('radiogroup', { name: 'Daily goal' })).toHaveCount(0);
+  await focus.getByRole('button', { name: 'Prepare for an interview' }).click();
+  await expect(focus.getByRole('button', { name: 'Prepare for an interview' })).toHaveAttribute('aria-pressed', 'true');
+  await focus.getByRole('button', { name: 'Build a daily habit' }).click();
+  await expect(streak).toBeChecked();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.practice.goal') ?? 'null'))).toEqual({ goals: ['interview', 'habit'], asked: true });
   const goal = learning.getByRole('radiogroup', { name: 'Daily goal' });
   await expect(goal.getByRole('radio', { name: '10 cards a day' })).toHaveAttribute('aria-checked', 'true');
   await goal.getByRole('radio', { name: '20 cards a day' }).click();

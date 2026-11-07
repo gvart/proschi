@@ -13,7 +13,9 @@ import { effectivePlan, limitsFor, MC, planName, SIGNUP_CREDITS } from './plans'
  * 1. `monthly`: its plan's `monthlyCredits` (Pro 800, Max 2,200) for the
  *    current UTC month. The month's grant is written the first time the
  *    balance is read in it (monthlyGrantStatement); it doesn't roll over. An
- *    upgrade mid-month adds the difference to the new plan's allowance.
+ *    upgrade mid-month adds the difference only once its proration invoice
+ *    is paid, prorated to what is left of the month (upgradeGrantStatement);
+ *    a downgrade takes back what is unspent of it (upgradeRevokeStatement).
  * 2. `signup`: 100 credits once per account and identity (grantSignupCredits),
  *    on any plan, once the sign-up's checks pass.
  * 3. `topup`: bought credits (src/billing.ts grants 1,000 per order), which
@@ -59,22 +61,70 @@ export async function planOf(DB: D1Database, userId: string): Promise<string | u
   return row ? planName(effectivePlan(row.plan, row.comp_until)) : undefined;
 }
 
+/** This month's base grant (refs 'monthly:…'); the upgrades' grants and take-backs are 'monthly_grant' rows with other refs (P35). */
+const BASE_GRANT = "kind = 'monthly_grant' AND period = ?2 AND ref_id LIKE 'monthly:%'";
+const UPGRADE_ROWS = "kind = 'monthly_grant' AND period = ?2 AND ref_id NOT LIKE 'monthly:%'";
+
 /**
- * The statement that grants this month's allowance of `plan`, if not granted
- * yet: the allowance less what this month's grants already gave (an upgrade
- * adds the difference, a downgrade takes nothing back). Once per month and
- * plan (its ref).
+ * The statement that grants this month's allowance of `plan`, once a month:
+ * only while the month has no base grant yet. A plan change later in the
+ * month adds nothing by itself: an upgrade's difference comes with its paid
+ * order (upgradeGrantStatement), and a downgrade keeps the base (P32, P35).
  */
 export function monthlyGrantStatement(DB: D1Database, userId: string, plan: string, at: number): D1PreparedStatement {
   const period = periodOf(at);
   const allowance = limitsFor(plan).monthlyCredits * MC;
   return DB.prepare(
     `INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at)
-     SELECT ?1, 'monthly_grant', 'monthly', ?2, ?3 - granted, ?4, 'monthly:' || ?1 || ':' || ?2 || ':' || ?4, ?5
-     FROM (SELECT COALESCE(SUM(delta_mc), 0) AS granted FROM credits WHERE user_id = ?1 AND kind = 'monthly_grant' AND period = ?2)
-     WHERE ?3 - granted > 0
+     SELECT ?1, 'monthly_grant', 'monthly', ?2, ?3, ?4, 'monthly:' || ?1 || ':' || ?2 || ':' || ?4, ?5
+     WHERE ?3 > 0 AND NOT EXISTS (SELECT 1 FROM credits WHERE user_id = ?1 AND ${BASE_GRANT})
      ON CONFLICT (kind, ref_id) DO NOTHING`,
   ).bind(userId, period, allowance, plan, at);
+}
+
+/** What is left of the UTC month of `at`, as a fraction of it (0 to 1). */
+export function monthLeft(at: number): number {
+  const d = new Date(at);
+  const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const end = nextPeriodAt(at);
+  return (end - at) / (end - start);
+}
+
+/**
+ * A paid upgrade (P35, the proration invoice's `order.paid`): the month gets
+ * `plan`'s allowance less its base grant, prorated to what is left of the
+ * month, less what earlier upgrades still give this month. Once per order
+ * (ref 'upgrade:<order>'); nothing when the month has no base grant (the
+ * month's first read then grants the new plan in full).
+ */
+export function upgradeGrantStatement(DB: D1Database, userId: string, plan: string, orderId: string, at: number): D1PreparedStatement {
+  const allowance = limitsFor(plan).monthlyCredits * MC;
+  return DB.prepare(
+    `INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at)
+     SELECT ?1, 'monthly_grant', 'monthly', ?2, amount, 'upgrade:' || ?6, 'upgrade:' || ?4, ?5 FROM (
+       SELECT CAST((?3 - base) * ?7 AS INTEGER) - upgrades AS amount, base FROM (
+         SELECT (SELECT COALESCE(SUM(delta_mc), 0) FROM credits WHERE user_id = ?1 AND ${BASE_GRANT}) AS base,
+                (SELECT COALESCE(SUM(delta_mc), 0) FROM credits WHERE user_id = ?1 AND ${UPGRADE_ROWS}) AS upgrades))
+     WHERE base > 0 AND amount > 0
+     ON CONFLICT (kind, ref_id) DO NOTHING`,
+  ).bind(userId, periodOf(at), allowance, orderId, at, plan, monthLeft(at));
+}
+
+/**
+ * A downgrade (P35): takes back what this month's upgrades gave, as far as
+ * the month's credits are unspent (never below 0), while the account's
+ * stored plan is no longer `max`. Once per event (ref 'upgrade_revoke:<event>').
+ */
+export function upgradeRevokeStatement(DB: D1Database, userId: string, eventId: string, at: number): D1PreparedStatement {
+  return DB.prepare(
+    `INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at)
+     SELECT ?1, 'monthly_grant', 'monthly', ?2, -amount, 'upgrade_revoke', 'upgrade_revoke:' || ?3, ?4 FROM (
+       SELECT MIN(
+         (SELECT COALESCE(SUM(delta_mc), 0) FROM credits WHERE user_id = ?1 AND ${UPGRADE_ROWS}),
+         MAX(0, (SELECT COALESCE(SUM(delta_mc), 0) FROM credits WHERE user_id = ?1 AND bucket = 'monthly' AND period = ?2))) AS amount)
+     WHERE amount > 0 AND COALESCE((SELECT plan FROM users WHERE id = ?1), '') <> 'max'
+     ON CONFLICT (kind, ref_id) DO NOTHING`,
+  ).bind(userId, periodOf(at), eventId, at);
 }
 
 /** SQL over `credits` for the user ?1 at month ?2: the sum of every bucket that counts (another month's monthly rows don't). */

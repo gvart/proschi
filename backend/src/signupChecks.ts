@@ -16,8 +16,8 @@ import { signupLedger } from './signupCredits';
  *     the normalized address (normalizeEmail), as the same HMACs as
  *     `account_tombstones`, kept in `signup_claims` even after the account is
  *     deleted;
- *  4. its sign-up IP (an HMAC of it) got credits for at most 2 other
- *     accounts in the last 7 days.
+ *  4. its sign-up IP (an HMAC of it; of its /64 for IPv6) got credits for at
+ *     most 2 other accounts in the last 7 days.
  *
  * An account that fails one still exists and can buy credits; the decision
  * and why is in `signup_checks` for the page and the admin panel.
@@ -59,9 +59,29 @@ export function isDisposable(domain: string): boolean {
   return false;
 }
 
-/** The HMAC of an IP the checks store: never the IP itself. */
+/**
+ * What the IP limit counts: an IPv4 address as it is, an IPv6 address by its
+ * /64 (one customer's network gets a whole /64, so its addresses rotate
+ * freely); an IPv4-mapped IPv6 address is its IPv4 one.
+ */
+export function ipKey(ip: string): string {
+  const v6 = ip.trim().toLowerCase();
+  if (!v6.includes(':')) return ip;
+  const mapped = /^[0:]*:ffff:(\d{1,3}(?:\.\d{1,3}){3})$/.exec(v6);
+  if (mapped) return mapped[1];
+  const [head, tail] = v6.split('%')[0].split('::');
+  const left = head ? head.split(':') : [];
+  const right = tail === undefined ? [] : tail ? tail.split(':') : [];
+  const groups = tail === undefined ? left : [...left, ...Array<string>(Math.max(0, 8 - left.length - right.length)).fill('0'), ...right];
+  return `${groups
+    .slice(0, 4)
+    .map((g) => (parseInt(g, 16) || 0).toString(16))
+    .join(':')}::/64`;
+}
+
+/** The HMAC of an IP the checks store (of its /64 for IPv6, ipKey): never the IP itself. */
 export function ipHash(env: Env & { SESSION_SECRET: string }, ip: string): Promise<string> {
-  return hmacSha256(ip, `${env.SESSION_SECRET}/signup-ip`);
+  return hmacSha256(ipKey(ip), `${env.SESSION_SECRET}/signup-ip`);
 }
 
 /** The claim of an address: the tombstone HMAC of ('email', the normalized address), like an identity's. */

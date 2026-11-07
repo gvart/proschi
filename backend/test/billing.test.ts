@@ -96,23 +96,97 @@ describe('billing', () => {
     expect(await (await call('/api/me/limits', { token })).json()).toMatchObject({ plan: 'pro', limits: { documents: 1000 } });
   });
 
-  it('moves between Pro and Max with the product, and tops the month up to the new allowance', async () => {
+  it('moves between Pro and Max with the product; the month gets the upgrade only when it is paid', async () => {
     const { id, token } = await signedInUser();
     await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
     expect((await (await call('/api/me/plan', { token })).json()) as object).toMatchObject({ plan: 'pro', credits: { balance: 800 } });
     await deliver(subscription(id, 'active', '2026-11-07T10:00:00Z', { product_id: 'prod-max-yearly' }));
     expect(await planOf(id)).toBe('max');
     const max = (await (await call('/api/me/plan', { token })).json()) as { plan: string; subscription: { product: string }; credits: unknown; features: Record<string, { ok: boolean }> };
-    expect(max).toMatchObject({ plan: 'max', subscription: { product: 'max_yearly' }, credits: { balance: 2200, monthly: { allowance: 2200, left: 2200 } } });
+    // The plan moves at once; the credits wait for the proration invoice's order.paid.
+    expect(max).toMatchObject({ plan: 'max', subscription: { product: 'max_yearly' }, credits: { balance: 800 } });
     expect(max.features.deep_mode).toEqual({ ok: true });
     expect(max.features.interview_report).toEqual({ ok: true });
     expect(max.features.share_links).toEqual({ ok: true });
-    // Back to Pro: the month's credits stay; the plan follows.
+    // Back to Pro: the plan follows.
     await deliver(subscription(id, 'active', '2026-11-08T10:00:00Z'));
     expect(await planOf(id)).toBe('pro');
-    expect((await (await call('/api/me/plan', { token })).json()) as object).toMatchObject({ plan: 'pro', credits: { balance: 2200 }, features: { deep_mode: { ok: false, reason: 'needs_pro' } } });
+    expect((await (await call('/api/me/plan', { token })).json()) as object).toMatchObject({ plan: 'pro', credits: { balance: 800 }, features: { deep_mode: { ok: false, reason: 'needs_pro' } } });
     await deliver(subscription(id, 'canceled', '2026-11-09T10:00:00Z', { status: 'canceled' }));
     expect(await planOf(id)).toBe('free');
+  });
+
+  describe('the upgrade’s credits (P35)', () => {
+    const upgradeOrder = (userId: string, order: string, extra: Record<string, unknown> = {}) => ({
+      type: 'order.paid',
+      data: { id: order, status: 'paid', billing_reason: 'subscription_update', product_id: 'prod-max-monthly', subscription_id: 'sub-1', customer_id: 'cus-1', customer: { id: 'cus-1', external_id: userId }, ...extra },
+    });
+    /** The rest of this UTC month, as a fraction of it. */
+    const left = () => {
+      const t = Date.now();
+      const d = new Date(t);
+      const start = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+      const end = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+      return (end - t) / (end - start);
+    };
+    const balance = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { credits: { balance: number } }).credits.balance;
+
+    async function onMax(): Promise<{ id: string; token: string }> {
+      const u = await signedInUser();
+      await deliver(subscription(u.id, 'active', '2026-11-06T10:00:00Z'));
+      expect(await balance(u.token)).toBe(800);
+      await deliver(subscription(u.id, 'active', '2026-11-07T10:00:00Z', { product_id: 'prod-max-monthly' }));
+      return u;
+    }
+
+    it('grants the difference once the upgrade is paid, prorated to what is left of the month, once per order', async () => {
+      const { id, token } = await onMax();
+      const before = left();
+      expect((await deliver(upgradeOrder(id, 'ord-up-1'))).status).toBe(200);
+      const after = left();
+      const got = (await balance(token)) - 800;
+      expect(got).toBeGreaterThanOrEqual(Math.floor(1_400_000 * after) / 1000 - 0.001);
+      expect(got).toBeLessThanOrEqual(Math.ceil(1_400_000 * before) / 1000);
+      // The same order again (a redelivery under another id) grants nothing more.
+      await deliver(upgradeOrder(id, 'ord-up-1'));
+      expect((await balance(token)) - 800).toBe(got);
+    });
+
+    it('grants nothing for a plan change that was not paid, or an order that is not an upgrade', async () => {
+      const { id, token } = await onMax();
+      await deliver(upgradeOrder(id, 'ord-new', { billing_reason: 'subscription_create' }));
+      await deliver(upgradeOrder(id, 'ord-cycle', { billing_reason: 'subscription_cycle' }));
+      await deliver(upgradeOrder(id, 'ord-pro', { product_id: 'prod-pro-monthly' }));
+      expect(await balance(token)).toBe(800);
+    });
+
+    it('takes back the upgrade’s unspent credits on a downgrade, never below 0, so Max a minute for Pro money gains nothing', async () => {
+      const { id, token } = await onMax();
+      await deliver(upgradeOrder(id, 'ord-up-2'));
+      expect(await balance(token)).toBeGreaterThan(800);
+      // Straight back to Pro.
+      await deliver(subscription(id, 'active', '2026-11-07T10:01:00Z'));
+      expect(await planOf(id)).toBe('pro');
+      expect(await balance(token)).toBe(800);
+
+      // Upgraded again and most of it spent: only what is left of the month's credits goes.
+      await deliver(subscription(id, 'active', '2026-11-07T10:02:00Z', { product_id: 'prod-max-monthly' }));
+      await deliver(upgradeOrder(id, 'ord-up-3'));
+      const period = new Date().toISOString().slice(0, 7);
+      await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at) VALUES (?, 'settle', 'monthly', ?, -1000000, 'design_partner', 'spent:monthly', 0)").bind(id, period).run();
+      await deliver(subscription(id, 'active', '2026-11-07T10:03:00Z'));
+      expect(await balance(token)).toBe(0);
+      const monthly = await env.DB.prepare("SELECT SUM(delta_mc) AS mc FROM credits WHERE user_id = ? AND bucket = 'monthly' AND period = ?").bind(id, period).first<{ mc: number }>();
+      expect(monthly!.mc).toBe(0);
+    });
+
+    it('locks the old plan’s allowance in before the upgrade, even when the month’s balance was never read', async () => {
+      const { id, token } = await signedInUser();
+      await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
+      // No balance read since: the upgrade can't turn the month's grant into Max's.
+      await deliver(subscription(id, 'active', '2026-11-07T10:00:00Z', { product_id: 'prod-max-monthly' }));
+      expect(await balance(token)).toBe(800);
+    });
   });
 
   it('switches the active subscription’s product at Polar, never opening a second one', async () => {

@@ -208,7 +208,7 @@ describe('AI interviews', () => {
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds WHERE ref = ?').bind(id).first<{ n: number }>()).toEqual({ n: 0 });
   });
 
-  it('charges only the verdict that validated, not the malformed one asked for again', async () => {
+  it('charges both verdicts when a malformed one is asked for again, topping the hold up first (P34)', async () => {
     let n = 0;
     claude({
       verdict: () =>
@@ -216,13 +216,47 @@ describe('AI interviews', () => {
           ? messageResponse('not json', { usage: { input_tokens: 20_000, output_tokens: 8_000 } })
           : messageResponse(JSON.stringify(verdictJson), { usage: { input_tokens: 1_000, output_tokens: 500 } }),
     });
-    const { id: userId, token } = await user();
+    const { id: userId, token } = await user(100);
     const id = await started(token);
     expect((await call(`/api/interviews/${id}/finish`, { method: 'POST', token })).status).toBe(200);
     expect(n).toBe(2);
     const [charge] = await charges(userId);
-    expect(charge).toEqual({ action: 'verdict', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 1_000, output_tokens: 500 }, e) });
-    expect(await balanceMc(e, userId)).toBe(100_000 - charge.charged_mc);
+    expect(charge).toEqual({ action: 'verdict', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 21_000, output_tokens: 8_500 }, e) });
+    expect(await balanceMc(e, userId)).toBe(200_000 - charge.charged_mc);
+  });
+
+  it('does not ask for a malformed verdict again when the hold cannot be topped up, and charges the one answered', async () => {
+    let n = 0;
+    claude({ verdict: () => (++n, messageResponse('not json', { usage: { input_tokens: 2_000, output_tokens: 1_000 } })) });
+    // 100 credits: the verdict is held, but a second verdict's worst case is not there.
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    const res = await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
+    expect(res.status).toBe(502);
+    expect(n).toBe(1);
+    expect(await charges(userId)).toEqual([{ action: 'verdict', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 2_000, output_tokens: 1_000 }, e) }]);
+  });
+
+  it('charges a turn cut off at max_tokens although its text was streamed (P34)', async () => {
+    claude({ reply: () => sseResponse(streamEvents('The longest answer I can write, '.repeat(5), { stop: 'max_tokens', usage: { input_tokens: 4_000, output_tokens: 1_024 } })) });
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    const res = await turnOf(token, id, { message: 'Write the longest answer you can' });
+    expect(res.status).toBe(200);
+    const list = await events(res);
+    expect(list.some((x) => x.event === 'text')).toBe(true);
+    expect(list.at(-1)).toEqual({ event: 'error', data: { error: 'ai_failed' } });
+    expect(await charges(userId)).toEqual([{ action: 'mock_interview', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 4_000, output_tokens: 1_024 }, e) }]);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_holds WHERE user_id = ? AND ref = ? AND amount_mc = ?").bind(userId, id, interviewTurnHoldMc(e)).first<{ n: number }>()).toEqual({ n: 0 });
+  });
+
+  it('charges a turn refused before its first text for its real usage', async () => {
+    claude({ reply: () => sseResponse(streamEvents('', { stop: 'refusal', usage: { input_tokens: 4_000, output_tokens: 3 } })) });
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    const res = await turnOf(token, id, { message: 'Something it declines' });
+    expect(res.status).toBe(502);
+    expect(await charges(userId)).toEqual([{ action: 'mock_interview', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 4_000, output_tokens: 3 }, e) }]);
   });
 
   it('takes one turn at a time: parallel turns call the model once and the others answer 409 turn_in_progress', async () => {
@@ -290,7 +324,7 @@ describe('AI interviews', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('counts a failed verdict’s tokens, charges nothing and keeps the session open with its hold', async () => {
+  it('charges a refused verdict for its real usage and lets its hold go, so a retry holds again (P34)', async () => {
     claude({ verdict: () => messageResponse('', { stop: 'refusal', usage: { input_tokens: 5000 } }) });
     const { id: userId, token } = await user();
     const id = await started(token);
@@ -298,8 +332,21 @@ describe('AI interviews', () => {
     expect(res.status).toBe(502);
     expect(await res.json()).toEqual({ error: 'ai_failed', retryable: false });
     expect(await row(id)).toMatchObject({ status: 'active', tokens: 5050 });
+    const charged = costMc({ model: 'claude-sonnet-5-5', input_tokens: 5000, output_tokens: 50 }, e);
+    expect(await charges(userId)).toEqual([{ action: 'verdict', charged_mc: charged }]);
+    expect(await credits(token)).toBe((100_000 - charged) / 1000);
+    expect(await env.DB.prepare('SELECT verdict_hold FROM ai_interviews WHERE id = ?').bind(id).first()).toEqual({ verdict_hold: null });
+    // Each try is charged: retrying until the cap is no longer free.
+    await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
+    expect(await charges(userId)).toHaveLength(2);
+  });
+
+  it('keeps the verdict’s hold, charging nothing, when the verdict failed on the infrastructure’s side', async () => {
+    claude({ verdict: () => Response.json({ type: 'error', error: { type: 'invalid_request_error', message: 'bad' } }, { status: 400 }) });
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    expect((await call(`/api/interviews/${id}/finish`, { method: 'POST', token })).status).toBe(502);
     expect(await charges(userId)).toEqual([]);
-    // The verdict's hold stays for the next try.
     expect(await credits(token)).toBe((100_000 - verdictHoldMc(e)) / 1000);
   });
 
