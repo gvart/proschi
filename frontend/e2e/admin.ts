@@ -392,7 +392,7 @@ export function cfUsage(plan: 'free' | 'paid' = 'paid') {
     const passesAt = q.kind === 'flow' && used < q.included && projected > q.included ? iso(start + q.included / rate) : null;
     const overageUsd = plan === 'paid' && q.per ? Math.round((Math.max(0, projected - q.included) / q.per) * q.price! * 100) / 100 : null;
     const status = used >= q.included ? 'over' : projected >= 0.8 * q.included ? 'watch' : 'ok';
-    return { id: q.id, product: q.product, label: q.label, unit: q.unit, kind: q.kind, period: q.period, included: q.included, used, percent: used / q.included, periodStart: iso(start), periodEnd: iso(end), projected, passesAt, overageUsd, status, series };
+    return { id: q.id, product: q.product, label: q.label, unit: q.unit, kind: q.kind, period: q.period, included: q.included, ...(plan === 'paid' && q.per ? { per: q.per, priceUsd: q.price } : {}), used, percent: used / q.included, periodStart: iso(start), periodEnd: iso(end), projected, passesAt, overageUsd, status, series };
   };
   const wavy = (base: number, amp: number) => (i: number) => base + amp * Math.sin(i / 2.2) + base * 0.04 * (i % 4);
   // D1 rows read: paced to end the month at about 125% of 25B, whatever day this runs.
@@ -407,10 +407,12 @@ export function cfUsage(plan: 'free' | 'paid' = 'paid') {
     { id: 'r2.classB', product: 'R2', label: 'R2 class B operations', unit: 'operations', kind: 'flow', period: 'month', included: 10e6, per: 1e6, price: 0.36, daily: wavy(900, 300) },
     { id: 'r2.storage', product: 'R2', label: 'R2 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 10e9, per: 1e9, price: 0.015, daily: (i) => 38e6 + i * 0.4e6 },
     { id: 'email.sent', product: 'Email', label: 'Emails sent', unit: 'emails', kind: 'flow', period: 'month', included: 3000, per: 1000, price: 0.35, daily: wavy(48, 20) },
+    { id: 'ai.neurons', product: 'Workers AI', label: 'Workers AI neurons', unit: 'neurons', kind: 'flow', period: 'day', included: 10_000, per: 1000, price: 0.011, daily: wavy(3400, 1500) },
   ];
   const freeRequests = (i: number) => (i >= 26 && i < 29 ? 128_000 - (i - 26) * 9000 : wavy(70_000, 14_000)(i));
   const free: Spec[] = [
     { id: 'workers.requests', product: 'Workers', label: 'Workers requests', unit: 'requests', kind: 'flow', period: 'day', included: 100_000, daily: freeRequests },
+    { id: 'ai.neurons', product: 'Workers AI', label: 'Workers AI neurons', unit: 'neurons', kind: 'flow', period: 'day', included: 10_000, daily: wavy(3400, 1500) },
     { id: 'd1.rowsRead', product: 'D1', label: 'D1 rows read', unit: 'rows', kind: 'flow', period: 'day', included: 5e6, daily: wavy(2.1e6, 0.6e6) },
     { id: 'd1.rowsWritten', product: 'D1', label: 'D1 rows written', unit: 'rows', kind: 'flow', period: 'day', included: 100_000, daily: wavy(21_000, 6000) },
     { id: 'd1.storage', product: 'D1', label: 'D1 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 5e9, daily: (i) => 410e6 + i * 2.5e6 },
@@ -420,7 +422,7 @@ export function cfUsage(plan: 'free' | 'paid' = 'paid') {
   ];
   const metrics = (plan === 'paid' ? paid : free).map(build);
   // Free's daily limits against the same days.
-  const freeTier = ['workers.requests', 'd1.rowsRead', 'd1.rowsWritten']
+  const freeTier = ['workers.requests', 'ai.neurons', 'd1.rowsRead', 'd1.rowsWritten']
     .map((id) => [metrics.find((m) => m.id === id)!, free.find((f) => f.id === id)!] as const)
     .map(([m, q]) => {
       const values = m.series.map((p) => p.value);

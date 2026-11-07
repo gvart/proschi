@@ -850,7 +850,7 @@ changes goes to the audit log in the same batch as the change.
 | Events | App events (`app_events`, kept 30 days): server errors with their stack, rate limits hit, failed and blocked sign-ins, failed reminder emails, cron runs, admin sign-ins. Never a user id, an IP or a query: paths have their ids replaced by `:id`. Server errors and rate limits are recorded at most once a minute per route and Worker instance, so a flood cannot become as many writes |
 | Audit log | Every admin action (`admin_audit`, kept 400 days): when, what, the target's id and the passkey's name |
 | Passkeys | Add, list and remove passkeys; sign every admin session out |
-| Cloudflare usage | The account's Workers, D1, R2 and Email usage against the plan's included quotas, when each resets, a projection to the period's end and its overage cost, and whether Free would do ([Cloudflare usage](#cloudflare-usage)) |
+| Cloudflare usage | The account's Workers, Workers AI, D1, R2 and Email usage against the plan's included quotas, when each resets, a projection to the period's end and its overage cost, and whether Free would do ([Cloudflare usage](#cloudflare-usage)) |
 
 | Endpoint | |
 |---|---|
@@ -967,19 +967,24 @@ passed. A `watch` or `over` quota shows in the Overview's "Needs attention".
 | R2 class A / class B | 1M / 10M, then $4.50 / $0.36 a million | the same, a month |
 | R2 storage | 10 GB-month, then $0.015 / GB-month | the same |
 | Emails sent (Email Service) | 3,000, then $0.35 / 1,000 | not available |
+| Workers AI neurons | 10,000 a day, then $0.011 / 1,000 (billed per day) | 10,000 a day |
 
 Cloudflare's pricing pages, read 2026-11-07; change `QUOTAS` in
 `src/cfUsage.ts` when they change. Free's daily limits reset at 00:00 UTC,
 Paid's monthly ones at the subscription's renewal. The numbers come from the
 GraphQL Analytics API (`workersInvocationsAdaptive`,
 `d1AnalyticsAdaptiveGroups`, `d1StorageAdaptiveGroups`,
-`r2OperationsAdaptiveGroups`, `r2StorageAdaptiveGroups` and the zone's
+`r2OperationsAdaptiveGroups`, `r2StorageAdaptiveGroups`,
+`aiInferenceAdaptiveGroups` (`sum.totalNeurons`, all models) and the zone's
 `emailSendingAdaptiveGroups`), for the whole account; the plan and its
 billing period from `GET /accounts/<id>/subscriptions` (the `workers_paid`
 rate plan). An answer is cached for 10 minutes (the Cache API; a minute when
 part of it failed). A dataset Cloudflare refuses is named on the page and the
-rest still shows. Workers AI is not used (no `ai` binding); Turnstile, cron
-triggers and rate limiting have no quota to watch.
+rest still shows. Workers AI's neurons (voice's Whisper, through the `AI`
+binding) are daily on both plans, reset at 00:00 UTC: on Paid the overage is
+the period's days past 10,000 so far, today as projected, carried on to the
+period's end. Turnstile, cron triggers and rate limiting have no quota to
+watch.
 
 **Setting it up.** In the dashboard, My Profile → API Tokens → Create Token →
 Custom token, with these permissions (read-only; the token can change

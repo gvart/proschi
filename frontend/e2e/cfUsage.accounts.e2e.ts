@@ -19,8 +19,13 @@ test.describe('admin: Cloudflare usage', () => {
 
     const verdict = page.getByRole('region', { name: 'Verdict' });
     await expect(verdict).toContainText(/D1 rows read will pass the included 25B around \w+ \d+ — about \$\d+\.\d\d extra\./);
-    for (const product of ['Workers', 'D1', 'R2', 'Email']) await expect(page.getByRole('heading', { level: 2, name: product, exact: true })).toBeVisible();
-    await expect(page.locator('.adm-cf__meter')).toHaveCount(9);
+    for (const product of ['Workers', 'Workers AI', 'D1', 'R2', 'Email']) await expect(page.getByRole('heading', { level: 2, name: product, exact: true })).toBeVisible();
+    await expect(page.locator('.adm-cf__meter')).toHaveCount(10);
+    // Workers AI: the daily free allocation, its reset and Paid's price past it.
+    const neurons = page.locator('.adm-cf__meter', { has: page.getByRole('heading', { name: 'Workers AI neurons' }) });
+    await expect(neurons.getByRole('img')).toHaveAttribute('aria-label', /Workers AI neurons: .* of 10K used .*, projected .*\. Resets at 00:00 UTC\./);
+    await expect(neurons).toContainText('Free daily');
+    await expect(neurons).toContainText('$0.011 / 1K');
     const rows = page.locator('.adm-cf__meter', { has: page.getByRole('heading', { name: 'D1 rows read' }) });
     await expect(rows.getByText('Watch')).toBeVisible();
     await expect(rows.getByRole('img')).toHaveAttribute('aria-label', /D1 rows read: .* of 25B used .*, projected .*\. Resets \w+ \d+\./);

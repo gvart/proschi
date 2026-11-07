@@ -29,6 +29,9 @@ export function formatQuantity(unit: CfMetric['unit'], n: number): string {
   return `${compact.format(n)}${unit === 'ms' ? ' ms' : ''}`;
 }
 
+/** A unit price as Cloudflare writes it: "$0.30", "$0.011". */
+export const formatPrice = (usd: number): string => `$${Number(usd.toFixed(2)) === usd ? usd.toFixed(2) : String(usd)}`;
+
 const trim = (n: number) => (n >= 10 ? Math.round(n).toString() : n.toFixed(1).replace(/\.0$/, ''));
 
 /** "Nov 24": a date of the period, in UTC (Cloudflare's days are UTC). */
@@ -86,7 +89,7 @@ export function verdict(usage: CfUsage): { tone: Tone; text: string } {
 
 const times = (n: number) => (n === 1 ? 'once' : n === 2 ? 'twice' : `${n} times`);
 const pct = (share: number) => `${Math.round(share * 100)}%`;
-const unitOf = (id: string): CfMetric['unit'] => (id.startsWith('workers') ? 'requests' : id.startsWith('d1.rows') ? 'rows' : 'operations');
+const unitOf = (id: string): CfMetric['unit'] => (id.startsWith('workers') ? 'requests' : id.startsWith('ai.') ? 'neurons' : id.startsWith('d1.rows') ? 'rows' : 'operations');
 
 export interface PlanOption {
   plan: 'free' | 'paid';

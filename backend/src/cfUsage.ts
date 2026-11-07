@@ -17,19 +17,21 @@ import { errorText, log } from './log';
  *
  * Quotas and prices: Cloudflare's pricing pages, read on 2026-11-07
  * (developers.cloudflare.com/workers/platform/pricing, d1/platform/pricing,
- * r2/pricing, email-service/platform/pricing). Free plan daily limits reset at
- * 00:00 UTC; Paid's monthly included usage at the subscription's renewal.
+ * r2/pricing, email-service/platform/pricing, workers-ai/platform/pricing).
+ * Free plan daily limits reset at 00:00 UTC; Paid's monthly included usage at
+ * the subscription's renewal. Workers AI's 10,000 free neurons are daily on
+ * both plans (00:00 UTC); Paid bills each day's neurons past them.
  */
 
 export type Plan = 'free' | 'paid';
 export type Status = 'ok' | 'watch' | 'over';
-type Product = 'Workers' | 'D1' | 'R2' | 'Email';
+type Product = 'Workers' | 'Workers AI' | 'D1' | 'R2' | 'Email';
 
 export interface Quota {
   id: string;
   product: Product;
   label: string;
-  unit: 'requests' | 'ms' | 'rows' | 'bytes' | 'operations' | 'emails';
+  unit: 'requests' | 'ms' | 'neurons' | 'rows' | 'bytes' | 'operations' | 'emails';
   /** A flow adds up over the period (requests); a stock is a level (storage), billed as it stands. */
   kind: 'flow' | 'stock';
   period: 'day' | 'month';
@@ -48,6 +50,8 @@ export const QUOTAS: Record<Plan, Quota[]> = {
   paid: [
     { id: 'workers.requests', product: 'Workers', label: 'Workers requests', unit: 'requests', kind: 'flow', period: 'month', included: 10e6, per: 1e6, priceUsd: 0.3 },
     { id: 'workers.cpu', product: 'Workers', label: 'Workers CPU time', unit: 'ms', kind: 'flow', period: 'month', included: 30e6, per: 1e6, priceUsd: 0.02 },
+    // Daily, not monthly: each day's neurons past 10,000 are billed (voice's Whisper uses the AI binding).
+    { id: 'ai.neurons', product: 'Workers AI', label: 'Workers AI neurons', unit: 'neurons', kind: 'flow', period: 'day', included: 10_000, per: 1000, priceUsd: 0.011 },
     { id: 'd1.rowsRead', product: 'D1', label: 'D1 rows read', unit: 'rows', kind: 'flow', period: 'month', included: 25e9, per: 1e6, priceUsd: 0.001 },
     { id: 'd1.rowsWritten', product: 'D1', label: 'D1 rows written', unit: 'rows', kind: 'flow', period: 'month', included: 50e6, per: 1e6, priceUsd: 1 },
     { id: 'd1.storage', product: 'D1', label: 'D1 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 5 * GB, per: GB, priceUsd: 0.75 },
@@ -59,6 +63,7 @@ export const QUOTAS: Record<Plan, Quota[]> = {
   // Free: hard limits, no overage. CPU is capped per request (10 ms), not metered; Email sending is not available.
   free: [
     { id: 'workers.requests', product: 'Workers', label: 'Workers requests', unit: 'requests', kind: 'flow', period: 'day', included: 100_000 },
+    { id: 'ai.neurons', product: 'Workers AI', label: 'Workers AI neurons', unit: 'neurons', kind: 'flow', period: 'day', included: 10_000 },
     { id: 'd1.rowsRead', product: 'D1', label: 'D1 rows read', unit: 'rows', kind: 'flow', period: 'day', included: 5e6 },
     { id: 'd1.rowsWritten', product: 'D1', label: 'D1 rows written', unit: 'rows', kind: 'flow', period: 'day', included: 100_000 },
     { id: 'd1.storage', product: 'D1', label: 'D1 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 5 * GB },
@@ -97,6 +102,9 @@ export interface Metric {
   kind: Quota['kind'];
   period: Quota['period'];
   included: number;
+  /** Paid's price past `included`: `priceUsd` for every `per` units. */
+  per?: number;
+  priceUsd?: number;
   used: number;
   /** used / included, 0..∞. */
   percent: number;
@@ -107,7 +115,11 @@ export interface Metric {
   projected: number;
   /** When the line passes the quota, if it does this period and hasn't yet. */
   passesAt: string | null;
-  /** Paid: what the projection costs past the included quota (null on Free, which has none). */
+  /**
+   * Paid: what the projection costs past the included quota (null on Free,
+   * which has none). A daily quota on Paid: the billing period's days past
+   * it so far (today as projected), carried on to the period's end.
+   */
   overageUsd: number | null;
   status: Status;
   /** The last 30 UTC days: a flow's total each day, a stock's level. */
@@ -166,9 +178,10 @@ export function statusOf(used: number, projected: number, included: number): Sta
  * One quota from its points (any bucket size; a stock's are daily levels).
  * A flow's projection is a straight line from the period's start through
  * now, with at least an hour elapsed so a period's first minutes don't
- * project wildly.
+ * project wildly. `billing` is the plan's period, for a daily quota's
+ * overage on Paid.
  */
-export function buildMetric(quota: Quota, points: Point[], period: Period, now: number, plan: Plan): Metric {
+export function buildMetric(quota: Quota, points: Point[], period: Period, now: number, plan: Plan, billing: Period = period): Metric {
   const days = Array.from({ length: SERIES_DAYS }, (_, i) => dayOf(startOfDay(now) - (SERIES_DAYS - 1 - i) * DAY));
   const byDay = new Map<string, number>(days.map((d) => [d, 0]));
   let used = 0;
@@ -189,8 +202,8 @@ export function buildMetric(quota: Quota, points: Point[], period: Period, now: 
   const projected = quota.kind === 'flow' ? (used * length) / elapsed : used;
   const rate = used / elapsed;
   const passesAt = quota.kind === 'flow' && used < quota.included && projected > quota.included && rate > 0 ? iso(period.start + quota.included / rate) : null;
-  const overageUsd =
-    plan === 'paid' && quota.per && quota.priceUsd !== undefined ? round2((Math.max(0, projected - quota.included) / quota.per) * quota.priceUsd) : null;
+  const excess = quota.kind === 'flow' && quota.period === 'day' ? dailyExcess(quota, points, projected, billing, now) : Math.max(0, projected - quota.included);
+  const overageUsd = plan === 'paid' && quota.per && quota.priceUsd !== undefined ? round2((excess / quota.per) * quota.priceUsd) : null;
   return {
     id: quota.id,
     product: quota.product,
@@ -199,6 +212,7 @@ export function buildMetric(quota: Quota, points: Point[], period: Period, now: 
     kind: quota.kind,
     period: quota.period,
     included: quota.included,
+    ...(plan === 'paid' && quota.per && quota.priceUsd !== undefined ? { per: quota.per, priceUsd: quota.priceUsd } : {}),
     used,
     percent: quota.included ? used / quota.included : 0,
     periodStart: iso(period.start),
@@ -212,6 +226,21 @@ export function buildMetric(quota: Quota, points: Point[], period: Period, now: 
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/** A daily quota over the billing period: each day's units past it, today's as projected, at that pace to the period's end. */
+function dailyExcess(quota: Quota, points: Point[], today: number, billing: Period, now: number): number {
+  const day = startOfDay(now);
+  const byDay = new Map<number, number>();
+  for (const p of points) {
+    const d = startOfDay(p.t);
+    if (p.t >= billing.start && d < day) byDay.set(d, (byDay.get(d) ?? 0) + p.value);
+  }
+  byDay.set(day, today);
+  const excess = [...byDay.values()].reduce((s, v) => s + Math.max(0, v - quota.included), 0);
+  const days = Math.max(1, Math.round((billing.end - billing.start) / DAY));
+  const elapsed = Math.min(days, Math.max(1, Math.floor((day - startOfDay(billing.start)) / DAY) + 1));
+  return (excess * days) / elapsed;
+}
 
 /** Free's daily limits against the daily series: how often they would have been hit. */
 export function freeChecks(series: Map<string, Metric['series']>): FreeCheck[] {
@@ -240,6 +269,10 @@ export function parseWorkers(rows: { sum: { requests: number; cpuTimeUs: number 
     'workers.requests': rows.map((r) => ({ t: rowTime(r.dimensions), value: r.sum.requests })),
     'workers.cpu': rows.map((r) => ({ t: rowTime(r.dimensions), value: r.sum.cpuTimeUs / 1000 })),
   };
+}
+
+export function parseAi(rows: { sum: { totalNeurons: number }; dimensions: { date: string } }[]): Record<string, Point[]> {
+  return { 'ai.neurons': rows.map((r) => ({ t: rowTime(r.dimensions), value: r.sum.totalNeurons })) };
 }
 
 export function parseD1(rows: { sum: { rowsRead: number; rowsWritten: number }; dimensions: { date: string } }[]): Record<string, Point[]> {
@@ -298,6 +331,9 @@ export function paidSubscription(subscriptions: Subscription[]): Period | null {
 
 const WORKERS = `query ($account: string!, $since: Time!, $until: Time!) { viewer { accounts(filter: {accountTag: $account}) {
   rows: workersInvocationsAdaptive(limit: 10000, filter: {datetime_geq: $since, datetime_leq: $until}) { sum { requests cpuTimeUs } dimensions { datetimeHour } } } } }`;
+// Workers AI inference, all models (voice's Whisper among them): neurons by UTC day.
+const AI = `query ($account: string!, $sinceDate: Date!, $untilDate: Date!) { viewer { accounts(filter: {accountTag: $account}) {
+  rows: aiInferenceAdaptiveGroups(limit: 10000, filter: {date_geq: $sinceDate, date_leq: $untilDate}) { sum { totalNeurons } dimensions { date } } } } }`;
 const D1 = `query ($account: string!, $sinceDate: Date!, $untilDate: Date!) { viewer { accounts(filter: {accountTag: $account}) {
   rows: d1AnalyticsAdaptiveGroups(limit: 10000, filter: {date_geq: $sinceDate, date_leq: $untilDate}) { sum { rowsRead rowsWritten } dimensions { date } } } } }`;
 const D1_STORAGE = `query ($account: string!, $sinceDate: Date!, $untilDate: Date!) { viewer { accounts(filter: {accountTag: $account}) {
@@ -364,6 +400,7 @@ export async function collect(env: Env, now: number): Promise<CfUsage> {
   const zone = env.CF_ZONE_ID;
   const sources: [string, Promise<Record<string, Point[]>>][] = [
     ['Workers', graphql<Parameters<typeof parseWorkers>[0][number]>(env, WORKERS, vars).then(parseWorkers)],
+    ['Workers AI', graphql<Parameters<typeof parseAi>[0][number]>(env, AI, vars).then(parseAi)],
     ['D1', graphql<Parameters<typeof parseD1>[0][number]>(env, D1, vars).then(parseD1)],
     ['D1 storage', graphql<Parameters<typeof parseD1Storage>[0][number]>(env, D1_STORAGE, vars).then(parseD1Storage)],
     ['R2', graphql<Parameters<typeof parseR2>[0][number]>(env, R2, vars).then(parseR2)],
@@ -386,7 +423,7 @@ export async function collect(env: Env, now: number): Promise<CfUsage> {
   });
 
   const day = utcDay(now);
-  const metrics = QUOTAS[plan].filter((q) => points[q.id]).map((q) => buildMetric(q, points[q.id], q.period === 'day' ? day : month, now, plan));
+  const metrics = QUOTAS[plan].filter((q) => points[q.id]).map((q) => buildMetric(q, points[q.id], q.period === 'day' ? day : month, now, plan, month));
   // Free's daily limits, from the same days, whichever plan this is.
   const series = new Map(
     QUOTAS.free.filter((q) => points[q.id]).map((q) => [q.id, buildMetric(q, points[q.id], day, now, 'free').series] as const),
