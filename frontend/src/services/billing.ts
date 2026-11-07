@@ -1,4 +1,5 @@
 import { api, apiEnabled } from './api';
+import { confirm } from '../design/dialogs';
 import type { FeatureAccess, FeatureId } from './featureContract';
 
 /**
@@ -111,7 +112,7 @@ export async function buyPlan(product: Product, plan: PlanInfo | undefined, base
   const now = plan.subscription?.product;
   const up = !now || monthlyPrice(product) > monthlyPrice(now);
   const note = up ? 'Polar charges the difference for the rest of this period.' : 'Polar settles the difference for the rest of this period.';
-  if (!window.confirm(`Switch to ${name}, ${priceText(product)}? ${note}`)) return false;
+  if (!(await confirm({ title: `Switch to ${name}, ${priceText(product)}?`, body: note, confirmLabel: 'Switch plan' }))) return false;
   await changePlan(product, base);
   return true;
 }

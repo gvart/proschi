@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 import { Bot, CircleAlert, CircleCheck, CreditCard, Flag, Pause, Play, ShieldCheck, Sparkles, Timer, X } from 'lucide-react';
 import Markdown from '../Markdown';
+import { confirm } from '../../design/dialogs';
 import { useNow } from './useNow';
 import { formatFactor, formatNumber, hashText, parseNumber, seededRandom } from '../../learn/grade';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../components/Playground/ui';
@@ -476,7 +477,7 @@ function PhaseBar({ session, dispatch, onExit }: { session: InterviewSession; di
         )}
         <button
           type="button"
-          onClick={() => (finished || window.confirm('Leave interview mode? This interview is discarded.')) && onExit()}
+          onClick={async () => (finished || (await confirm({ title: 'Leave interview mode?', body: 'This interview is discarded.', confirmLabel: 'Leave', tone: 'danger' }))) && onExit()}
           className={`ml-auto ${toolButton}`}
           aria-label="Leave interview mode"
           title="Leave interview mode"

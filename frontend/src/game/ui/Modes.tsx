@@ -1,5 +1,6 @@
 import { CheckCircle2, GitBranch, Search, Undo2, XCircle, Zap } from 'lucide-react';
 import { useState } from 'react';
+import { confirm } from '../../design/dialogs';
 import Markdown from '../../practice/Markdown';
 import { eyebrow, outlineButton } from '../../components/Playground/ui';
 import type { Forecast, Game } from '../engine/run';
@@ -109,8 +110,8 @@ export function ChangesPanel({ game, planning, onMigrate, onSunset }: { game: Ga
                     type="button"
                     className={`${outlineButton} text-fail`}
                     disabled={stepped}
-                    onClick={() => {
-                      if (window.confirm(`Do ${m.name} in one go? It rewrites every ${m.entity} row while holding the table's write lock, and drops the old shape at once.`)) onMigrate(m.id, 'big-bang');
+                    onClick={async () => {
+                      if (await confirm({ title: `Do ${m.name} in one go?`, body: `It rewrites every ${m.entity} row while holding the table's write lock, and drops the old shape at once.`, confirmLabel: 'All at once', tone: 'danger' })) onMigrate(m.id, 'big-bang');
                     }}
                   >
                     <Zap size={14} aria-hidden="true" /> All at once
@@ -140,8 +141,8 @@ export function ChangesPanel({ game, planning, onMigrate, onSunset }: { game: Ga
                     <button
                       type="button"
                       className={outlineButton}
-                      onClick={() => {
-                        if (left === 0 || window.confirm(`${rps(left)} rps still call "${uc.name}". Sunset it anyway? Those clients get 410 Gone.`)) onSunset(k);
+                      onClick={async () => {
+                        if (left === 0 || (await confirm({ title: `Sunset "${uc.name}" anyway?`, body: `${rps(left)} rps still call it. Those clients get 410 Gone.`, confirmLabel: 'Sunset', tone: 'danger' }))) onSunset(k);
                       }}
                     >
                       Sunset

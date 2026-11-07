@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Copy, ExternalLink, Trash2, X } from 'lucide-react';
 import { deleteShare, listShares, type ShareListing } from '../../services/shares';
+import { confirm, copyText } from '../../design/dialogs';
 
 interface ShortLinksDialogProps {
   onClose: () => void;
@@ -33,7 +34,7 @@ export default function ShortLinksDialog({ onClose, onDeleted }: ShortLinksDialo
   }, [onClose]);
 
   const remove = async (id: string, title: string) => {
-    if (!window.confirm(`Delete the short link to "${title}"? It stops working for everyone who has it.`)) return;
+    if (!(await confirm({ title: `Delete the short link to "${title}"?`, body: 'It stops working for everyone who has it.', confirmLabel: 'Delete', tone: 'danger' }))) return;
     try {
       await deleteShare(id);
       onDeleted(id);
@@ -78,7 +79,7 @@ export default function ShortLinksDialog({ onClose, onDeleted }: ShortLinksDialo
                     type="button"
                     aria-label={`Copy the link to ${share.title}`}
                     className="p-1.5 rounded-md hover:bg-ink/10"
-                    onClick={() => void navigator.clipboard.writeText(share.url).catch(() => window.prompt('Copy this short link:', share.url))}
+                    onClick={() => void copyText(share.url, { title: 'Copy this short link' })}
                   >
                     <Copy size={16} />
                   </button>
