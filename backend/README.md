@@ -890,8 +890,8 @@ audit log, like every change to it, a test, a cancel and a resume).
 - **In the app**: the newest announcement not dismissed (and, with credits,
   only once they are granted) shows on the practice hub for 30 days.
 - **Sending** runs in the background, 50 recipients at a time: right after
-  the send (`waitUntil`, up to 20 seconds) and in every hourly cron run until
-  done. At most `CAMPAIGN_DAILY_CAP` emails a UTC day (default 500); the rest
+  the send or resume (`waitUntil`, up to 20 seconds, that campaign before any
+  older one still sending) and in every hourly cron run until done. At most `CAMPAIGN_DAILY_CAP` emails a UTC day (default 500); the rest
   wait for the next day. **Send a test to me** emails the draft, marked
   `[Test]`, to `ADMIN_EMAIL` (a secret) and grants nothing.
 

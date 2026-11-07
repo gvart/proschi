@@ -299,6 +299,21 @@ describe('admin campaigns', () => {
     expect(new Set(m.sent.map((s) => s.to)).size).toBe(3);
   });
 
+  it('starts sending right away on Send now, before an older campaign still sending, without the cron', async () => {
+    await user('a', { email: 'a@example.com' });
+    const m = fakeMail();
+    // An older campaign stuck at today's cap: still sending, its email pending.
+    const older = await create(m, admin, { credits: 0, subject: 'Older', body: 'Hi' });
+    await callWith({ ...m.env, CAMPAIGN_DAILY_CAP: '0' } as Env, `/api/admin/campaigns/${older}/send`, { method: 'POST', admin, body: { reason: 'News' } });
+    expect(m.sent).toHaveLength(0);
+    // Room for one email today: the campaign just sent gets it, in the send's own background work.
+    const id = await create(m, admin, { credits: 0, subject: 'Newer', body: 'Hi' });
+    await callWith({ ...m.env, CAMPAIGN_DAILY_CAP: '1' } as Env, `/api/admin/campaigns/${id}/send`, { method: 'POST', admin, body: { reason: 'News' } });
+    expect(m.sent.map((s) => s.subject)).toEqual(['Newer']);
+    expect(await env.DB.prepare('SELECT status FROM campaigns WHERE id = ?').bind(id).first('status')).toBe('done');
+    expect(await env.DB.prepare('SELECT status FROM campaigns WHERE id = ?').bind(older).first('status')).toBe('sending');
+  });
+
   it('a credits-only campaign emails nobody; an email-only one grants nothing', async () => {
     await user('a', { email: 'a@example.com' });
     const m = fakeMail();
