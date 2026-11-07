@@ -1,0 +1,37 @@
+frontend/src/admin/feedbackApi.ts
+  s_e17b87e0a1b3ca::t_77f82d362b306e 1-66
+frontend/src/admin/Nav.tsx
+  s_e17b87e0a1b3ca::t_87c96c8045a52c 1,7,19,34-39
+frontend/src/admin/InboxTab.tsx
+  s_e17b87e0a1b3ca::t_94fe7d54b17ff4 284
+  s_e17b87e0a1b3ca::t_e944618adf868c 277,279
+  s_e17b87e0a1b3ca::t_1509683e108e64 1-276,278,280-283,285-310
+frontend/src/admin/OverviewTab.tsx
+  s_e17b87e0a1b3ca::t_bb6b0cfdbdea08 5
+  s_e17b87e0a1b3ca::t_53b878fc6ca934 72
+  s_e17b87e0a1b3ca::t_a4468f73854a0b 113-122
+  s_e17b87e0a1b3ca::t_5e4ee029e2a6b4 112
+frontend/src/admin/admin.css
+  s_e17b87e0a1b3ca::t_094a769a0e4370 1370-1468
+frontend/src/admin/AdminApp.tsx
+  s_e17b87e0a1b3ca::t_27bdaa0dbe9fe6 13-14,107-109,130
+  s_e17b87e0a1b3ca::t_b2536219b0c05d 89-92
+frontend/src/admin/route.ts
+  s_e17b87e0a1b3ca::t_6d33ae4f1f1551 5
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c16d3f22132239cd30dc8cd23e99561ac80d9e24",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
