@@ -4,6 +4,7 @@ import { TOKEN_CAP, VERDICT_RESERVE } from './ai/budget';
 import { auditStatement, requireAdmin, MIN_SETUP_TOKEN } from './adminAuth';
 import { cleanName, configuredProviders } from './auth';
 import { billingConfigured } from './billing';
+import { cfPlanVar } from './cfUsage';
 import type { Ctx } from './context';
 import { now, secretOk, type Env } from './env';
 import { credits as creditsOf, creditsView } from './credits';
@@ -21,6 +22,7 @@ import { effectivePlan, effectivePlanSql } from './plans';
  *   GET    /api/admin/overview                   users, sign-ups, activity, content and usage counts
  *   GET    /api/admin/trends?days=7|30|90       the overview's daily series for the range and the one before
  *   GET    /api/admin/health                     database, cron jobs, configuration, errors
+ *   GET    /api/admin/cf-usage                   Cloudflare usage against the plan's quotas (src/cfUsage.ts)
  *   GET    /api/admin/users?q=&filter=&sort=&offset=   accounts, 50 at a time
  *   GET    /api/admin/users/<id>                 one account in detail
  *   PATCH  /api/admin/users/<id> {displayName?, publicProfile?}
@@ -261,6 +263,8 @@ export async function getHealth(request: Request, ctx: Ctx): Promise<Response> {
         },
         polarServer: polarServer(env),
         billing: billingConfigured(env),
+        // The Cloudflare usage page (src/cfUsage.ts): whether each is set, never its value.
+        cloudflare: { apiToken: Boolean(env.CF_API_TOKEN), accountId: Boolean(env.CF_ACCOUNT_ID), zoneId: Boolean(env.CF_ZONE_ID), plan: cfPlanVar(env) },
       },
     },
     200,

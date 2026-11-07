@@ -842,6 +842,7 @@ changes goes to the audit log in the same batch as the change.
 | Events | App events (`app_events`, kept 30 days): server errors with their stack, rate limits hit, failed and blocked sign-ins, failed reminder emails, cron runs, admin sign-ins. Never a user id, an IP or a query: paths have their ids replaced by `:id`. Server errors and rate limits are recorded at most once a minute per route and Worker instance, so a flood cannot become as many writes |
 | Audit log | Every admin action (`admin_audit`, kept 400 days): when, what, the target's id and the passkey's name |
 | Passkeys | Add, list and remove passkeys; sign every admin session out |
+| Cloudflare usage | The account's Workers, D1, R2 and Email usage against the plan's included quotas, when each resets, a projection to the period's end and its overage cost, and whether Free would do ([Cloudflare usage](#cloudflare-usage)) |
 
 | Endpoint | |
 |---|---|
@@ -851,6 +852,7 @@ changes goes to the audit log in the same batch as the change.
 | `POST /api/admin/logout` | Ends this admin session |
 | `GET /api/admin/passkeys`, `POST /api/admin/passkeys/options`, `POST /api/admin/passkeys {name, response}`, `DELETE /api/admin/passkeys/<id>`, `POST /api/admin/sessions/revoke-all` | Passkeys and sessions (409 for the last passkey) |
 | `GET /api/admin/overview`, `GET /api/admin/health` | The overview and health pages |
+| `GET /api/admin/cf-usage` | Cloudflare usage against the plan (501 without `CF_API_TOKEN` and `CF_ACCOUNT_ID`) |
 | `GET /api/admin/users?q=&filter=all\|active\|blocked\|public\|email&sort=created\|seen\|name\|solved&offset=` | 50 at a time, with `total` |
 | `GET /api/admin/users/<id>`, `PATCH /api/admin/users/<id> {displayName?, publicProfile?}`, `DELETE /api/admin/users/<id>` | One account |
 | `POST /api/admin/users/<id>/block {reason?}`, `/unblock`, `/sign-out`; `DELETE /api/admin/users/<id>/email` | Moderation (409 when already blocked or not blocked) |
@@ -937,6 +939,56 @@ a test to me**, then **Review and send…**: the dialog says what happens
 | `GET /api/me/announcement`, `POST /api/me/announcement/<id>/dismiss \| click` | The user's announcement (marks it shown) |
 | `GET /api/me/news`, `PUT /api/me/news {on}` | Product news on or off, and the address it goes to |
 | `GET /api/news/unsubscribe?token=` / `POST` | The unsubscribe link: the GET page shows a button; the POST (one-click, no session or Origin check) records the opt-out; 400 for a forged or expired token |
+
+### Cloudflare usage
+
+The admin's **Cloudflare usage** page (`src/cfUsage.ts`, `GET
+/api/admin/cf-usage`) answers "do I need to upgrade?": each quota used so far
+this period, what is included, when it resets, a straight-line projection to
+the period's end, the overage that projection costs on Workers Paid, and a
+status (`ok`, `watch` when projected past 80%, `over`), with the last 30 UTC
+days per quota. It also counts the days Free's daily limits would have been
+passed. A `watch` or `over` quota shows in the Overview's "Needs attention".
+
+| Quota | Workers Paid (a month, $5 base) | Workers Free |
+|---|---|---|
+| Workers requests | 10M, then $0.30 / million | 100k a day |
+| Workers CPU time | 30M ms, then $0.02 / million ms | 10 ms a request (not metered) |
+| D1 rows read / written | 25B / 50M, then $0.001 / $1.00 a million | 5M / 100k a day |
+| D1 storage | 5 GB, then $0.75 / GB-month | 5 GB |
+| R2 class A / class B | 1M / 10M, then $4.50 / $0.36 a million | the same, a month |
+| R2 storage | 10 GB-month, then $0.015 / GB-month | the same |
+| Emails sent (Email Service) | 3,000, then $0.35 / 1,000 | not available |
+
+Cloudflare's pricing pages, read 2026-11-07; change `QUOTAS` in
+`src/cfUsage.ts` when they change. Free's daily limits reset at 00:00 UTC,
+Paid's monthly ones at the subscription's renewal. The numbers come from the
+GraphQL Analytics API (`workersInvocationsAdaptive`,
+`d1AnalyticsAdaptiveGroups`, `d1StorageAdaptiveGroups`,
+`r2OperationsAdaptiveGroups`, `r2StorageAdaptiveGroups` and the zone's
+`emailSendingAdaptiveGroups`), for the whole account; the plan and its
+billing period from `GET /accounts/<id>/subscriptions` (the `workers_paid`
+rate plan). An answer is cached for 10 minutes (the Cache API; a minute when
+part of it failed). A dataset Cloudflare refuses is named on the page and the
+rest still shows. Workers AI is not used (no `ai` binding); Turnstile, cron
+triggers and rate limiting have no quota to watch.
+
+**Setting it up.** In the dashboard, My Profile → API Tokens → Create Token →
+Custom token, with these permissions (read-only; the token can change
+nothing):
+
+- **Account → Account Analytics → Read** (required).
+- **Account → Billing → Read** (optional): the plan and the exact renewal
+  date. Without it the plan is `CF_PLAN` (`free` or `paid`, default `paid`)
+  and the period the UTC calendar month.
+- **Zone → Analytics → Read** for `proschi.app` (optional, with `CF_ZONE_ID`):
+  emails sent. Without it they aren't counted.
+
+Account resources: the proschi account only. Then `npx wrangler secret put
+CF_API_TOKEN`, `CF_ACCOUNT_ID` (the dashboard's account home, or `npx
+wrangler whoami`) and, optionally, `CF_ZONE_ID` (the zone's Overview page)
+and `CF_PLAN`. The token is sent only to api.cloudflare.com, never logged or
+returned; Health shows whether each is set.
 
 ## Mobile apps
 
@@ -1377,6 +1429,8 @@ needs only the ones before it):
    | `ADMIN_EMAIL` | Optional: where campaigns' **Send a test to me** goes (501 without it) |
    | `CAMPAIGN_DAILY_CAP` | Optional: campaign emails a UTC day (unset: 500) |
    | `METRICS_TOKEN`, `ADMIN_SETUP_TOKEN` | Optional: the usage summary; the admin's first passkey (once, then delete it) |
+   | `CF_API_TOKEN`, `CF_ACCOUNT_ID` | The admin's Cloudflare usage page (501 without them): a custom token with Account Analytics Read, plus Billing Read for the plan and renewal date ([Cloudflare usage](#cloudflare-usage)) |
+   | `CF_ZONE_ID`, `CF_PLAN` | Optional: the proschi.app zone, to count emails sent (the token also needs Zone Analytics Read); `free` or `paid` when the token can't read the plan (unset: `paid`) |
 
    `POLAR_SERVER` must not be `sandbox` in production: leave it unset.
 5. **Vars** (`wrangler.jsonc`, public, in git): add

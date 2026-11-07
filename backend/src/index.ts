@@ -36,6 +36,7 @@ import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions
 import { confirm as confirmEmailLogin, emailSignInAvailable, emailStatus, login as emailLogin, resend as resendConfirmation, reset as resetPassword, resetRequest, signup as emailSignup, startEmailLogin } from './emailAuth';
 import { turnstileSiteKey } from './turnstile';
 import { getSignups, getUserSignIn } from './adminSignups';
+import { getCfUsage } from './cfUsage';
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
 import {
@@ -353,6 +354,7 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('GET', 'api', 'admin', 'overview')) return getOverview(request, ctx);
   if (is('GET', 'api', 'admin', 'trends')) return getTrends(request, ctx);
   if (is('GET', 'api', 'admin', 'health')) return getHealth(request, ctx);
+  if (is('GET', 'api', 'admin', 'cf-usage')) return getCfUsage(request, ctx);
   if (is('GET', 'api', 'admin', 'users')) return listUsers(request, ctx);
   if (is('GET', 'api', 'admin', 'users', '*')) return getUser(request, ctx, id);
   if (is('GET', 'api', 'admin', 'users', '*', 'sign-in')) return getUserSignIn(request, ctx, id);

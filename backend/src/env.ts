@@ -116,6 +116,17 @@ export interface Env {
    */
   CAMPAIGN_DAILY_CAP?: string;
   ADMIN_EMAIL?: string;
+  /**
+   * The admin's Cloudflare usage page (src/cfUsage.ts): a read-only API token
+   * (Account Analytics Read; Billing Read optional) and the account id.
+   * Without both, GET /api/admin/cf-usage answers 501.
+   */
+  CF_API_TOKEN?: string;
+  CF_ACCOUNT_ID?: string;
+  /** Optional: the proschi.app zone id, to count emails sent (Email Service analytics are per zone). */
+  CF_ZONE_ID?: string;
+  /** `free` or `paid` (default): the Workers plan, when the token can't read the subscriptions. */
+  CF_PLAN?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */
