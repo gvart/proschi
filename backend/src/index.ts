@@ -52,7 +52,8 @@ import { servePublicProfile } from './profilePage';
 import { createShare, deleteShare, getShare, listShares, oembed, shareImage, sharePage } from './shares';
 import { getLeaderboard, getProblemLeaderboard, getProblemStats, getStats } from './stats';
 import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion } from './versions';
-import { createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
+import { changePlan, createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
+import { getEstimates, getUsage } from './meter';
 import { finishInterview, getInterview, interviewHistory, interviewTurn, listInterviews, startInterview } from './interviews';
 import { getRoadmapNext } from './roadmap';
 
@@ -98,8 +99,11 @@ import { getRoadmapNext } from './roadmap';
  *   DELETE /api/me/documents/<id>/share     revokes it
  *   GET    /api/share/<token>               a live share link's diagram (no sign-in, no owner named)
  *   GET    /api/me/limits                   the account's plan, its limits and what it uses
- *   GET    /api/me/plan                     plan, subscription (status, renewal), limits and AI interview credits
- *   POST   /api/billing/checkout {product: pro_monthly|pro_yearly|pack_5}   a Polar checkout: {url} (501 without Polar set up)
+ *   GET    /api/me/plan                     plan, subscription (status, renewal), limits, credits and features
+ *   POST   /api/billing/checkout {product: pro_monthly|pro_yearly|max_monthly|max_yearly|credits_1000}   a Polar checkout: {url} (409 has_subscription; 501 without Polar set up)
+ *   POST   /api/billing/change-plan {product}   switches the active subscription's product (Pro↔Max, monthly↔yearly): {ok, plan, effective}
+ *   GET    /api/credits/estimates           what each paid action usually costs, in credits
+ *   GET    /api/credits/usage?limit=50      the account's charges, newest first
  *   POST   /api/billing/portal              Polar's customer portal for the user: {url}
  *   POST   /api/billing/webhook             Polar's signed events (Standard Webhooks; no session, no Origin)
  *   POST   /api/me/sessions/revoke-all      sign out everywhere
@@ -128,9 +132,9 @@ import { getRoadmapNext } from './roadmap';
  *   DELETE /api/shares/<id>                 the owner deletes one
  *   GET    /api/me/shares                   the user's short links
  *   GET    /api/oembed?url=                 oEmbed for a short link
- *   POST   /api/review {source, model, problem?, tests?, metrics?}   AI design review: Pro, 20 a day (402 plan_required, 429 daily_limit, 501 without the key)
- *   GET    /api/review/usage                Pro's AI reviews today: {limit, used, remaining, resetAt}
- *   POST   /api/interviews {problem, minutes, replace?}   starts an AI interview, spending a credit (402 no_credits; 409 active_session; 501 without the AI key)
+ *   POST   /api/review {source, model, problem?, tests?, metrics?}   in-depth review, paid in credits (402 no_credits, 501 without the key)
+ *   GET    /api/review/usage                reviews the balance covers: {limit, used, remaining, resetAt}
+ *   POST   /api/interviews {problem, minutes, replace?}   starts an AI interview, holding its verdict's credits (402 no_credits; 409 active_session; 501 without the AI key)
  *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
  *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
  *   GET    /api/interviews/<id>            one session with its transcript, to resume
@@ -230,7 +234,10 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('GET', 'api', 'me', 'limits')) return getLimits(request, ctx);
   if (is('GET', 'api', 'me', 'plan')) return getPlan(request, ctx);
   if (is('POST', 'api', 'billing', 'checkout')) return createCheckout(request, ctx);
+  if (is('POST', 'api', 'billing', 'change-plan')) return changePlan(request, ctx);
   if (is('POST', 'api', 'billing', 'portal')) return createPortal(request, ctx);
+  if (is('GET', 'api', 'credits', 'estimates')) return getEstimates(request, ctx);
+  if (is('GET', 'api', 'credits', 'usage')) return getUsage(request, ctx);
   if (is('POST', 'api', 'billing', 'webhook')) return billingWebhook(request, ctx);
   if (is('POST', 'api', 'me', 'documents', '*', 'versions')) return createVersion(request, ctx, parts[3]);
   if (is('GET', 'api', 'me', 'documents', '*', 'versions')) return listVersions(request, ctx, parts[3]);

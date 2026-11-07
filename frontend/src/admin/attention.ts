@@ -10,7 +10,9 @@ export function missingSecrets(config: Health['config']): string[] {
     [config.polar.webhookSecret, 'POLAR_WEBHOOK_SECRET'],
     [config.polar.productProMonthly, 'POLAR_PRODUCT_PRO_MONTHLY'],
     [config.polar.productProYearly, 'POLAR_PRODUCT_PRO_YEARLY'],
-    [config.polar.productPack5, 'POLAR_PRODUCT_PACK_5'],
+    [config.polar.productMaxMonthly, 'POLAR_PRODUCT_MAX_MONTHLY'],
+    [config.polar.productMaxYearly, 'POLAR_PRODUCT_MAX_YEARLY'],
+    [config.polar.productCredits1000, 'POLAR_PRODUCT_CREDITS_1000'],
   ];
   return [...missing.filter(([ok]) => !ok).map(([, name]) => name), ...(config.setupToken ? ['ADMIN_SETUP_TOKEN (still set: remove it)'] : [])];
 }

@@ -8,10 +8,17 @@ const INTERVIEW_SERIES = [
   { id: 'started', label: 'Started' },
   { id: 'finished', label: 'Finished' },
   { id: 'failed', label: 'Failed' },
-  { id: 'refunded', label: 'Refunded' },
 ];
 
-/** AI interviews and reviews over 30 days: how many, what they cost, who uses them most, and how often the token cap is hit. */
+const MARGIN_SERIES = [
+  { id: 'charged', label: 'Charged (€)' },
+  { id: 'cost', label: 'Cost (USD)' },
+];
+
+/** Two decimals, for a chart that mixes euros and dollars. */
+const formatMoney = (n: number) => n.toFixed(2);
+
+/** AI interviews and reviews over 30 days: how many, what they cost, the credits charged for them, who uses them most, and how often the token cap is hit. */
 export default function AiTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
   const ai = useLoad(getAi, [], onSignedOut);
   const data = ai.data;
@@ -55,7 +62,8 @@ function AiUsageView({ data, onOpenUser }: { data: AiUsage; onOpenUser: (id: str
             tone={totals.cappedShare && totals.cappedShare > 0.1 ? 'warn' : undefined}
           />
           <Stat label="Tokens" value={formatCompact(totals.tokens)} note="input-equivalent" />
-          <Stat label="AI reviews" value={formatNumber(totals.reviews)} note="their cost isn't stored" />
+          <Stat label="In-depth reviews" value={formatNumber(totals.reviews)} note="charged in credits" />
+          <Stat label="Credits charged" value={formatNumber(totals.credits)} note={`€${totals.chargedEur.toFixed(2)} for calls that cost ${formatUsd(totals.chargedCostUsd)}`} />
         </div>
       </Section>
 
@@ -64,7 +72,7 @@ function AiUsageView({ data, onOpenUser }: { data: AiUsage; onOpenUser: (id: str
           kind="line"
           title="AI interviews, by the UTC day they started"
           series={INTERVIEW_SERIES}
-          points={days.map((d) => ({ day: d.day, values: { started: d.started, finished: d.finished, failed: d.failed, refunded: d.refunded } }))}
+          points={days.map((d) => ({ day: d.day, values: { started: d.started, finished: d.finished, failed: d.failed } }))}
           summary="total"
           empty="No AI interviews in 30 days."
         />
@@ -95,7 +103,18 @@ function AiUsageView({ data, onOpenUser }: { data: AiUsage; onOpenUser: (id: str
           />
         </Section>
         <Section label="Reviews">
-          <Chart kind="bar" title="AI design reviews" series={[{ id: 'n', label: 'Reviews' }]} points={perDay('reviews')} empty="No AI reviews in 30 days." />
+          <Chart kind="bar" title="In-depth reviews" series={[{ id: 'n', label: 'Reviews' }]} points={perDay('reviews')} empty="No in-depth reviews in 30 days." />
+        </Section>
+        <Section label="Credits">
+          <Chart
+            kind="line"
+            title="Credits charged (€) against what the calls cost (USD)"
+            series={MARGIN_SERIES}
+            points={days.map((d) => ({ day: d.day, values: { charged: d.chargedEur, cost: d.chargedCostUsd } }))}
+            format={formatMoney}
+            empty="No credits charged in 30 days."
+          />
+          <p className="adm-footnote">By the day each call was charged: twice the model cost, at €0.01 a credit (src/meter.ts).</p>
         </Section>
 
         <Section title="Top accounts by cost">

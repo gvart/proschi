@@ -18,7 +18,7 @@ import { exportEmailPrefs } from './reminders';
 import { BOARD_METRICS, cacheKey } from './stats';
 import { exportBilling, exportBillingWebhooks, revokeOnDelete } from './billing';
 import { exportCredits, tombstoneStatements } from './credits';
-import { exportReviewUsage } from './review';
+import { exportCharges } from './meter';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 
@@ -252,10 +252,10 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     billing: await exportBilling(DB, user.id),
     // Polar's webhook deliveries about this account in the last 90 days: when, the event type and what was done (no payload).
     billingWebhooks: await exportBillingWebhooks(DB, user.id),
-    // AI interview credits: each grant, spend and refund, and the admin's grants and revokes.
+    // The credit ledger: each grant, top-up, charge and revoke, and the admin's grants and revokes.
     credits: await exportCredits(DB, user.id),
-    // AI design reviews asked for, per UTC day (Pro).
-    reviewUsage: await exportReviewUsage(DB, user.id),
+    // What each paid action was charged, in credits.
+    creditCharges: await exportCharges(DB, user.id),
     // AI interviews: each session with its verdict and, for 90 days, its transcript.
     aiInterviews: await exportInterviews(DB, user.id),
     // The AI roadmap's picks (Pro): the next steps picked after an interview or a review, each with its reason.

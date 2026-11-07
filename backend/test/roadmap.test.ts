@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HAIKU } from '../src/ai/client';
 import { parsePicks, ROADMAP_PROMPT, type Candidates } from '../src/ai/roadmap';
+import { grantSignupCredits } from '../src/credits';
 import { REVIEW_REFRESH_MS } from '../src/roadmap';
 import { call, resetDatabase, signedInUser } from './helpers';
 import { messageResponse, sseResponse, streamEvents, type Recorded } from './ai/mockClaude';
@@ -46,11 +47,12 @@ function claude(opts: { picks?: Reply; other?: Reply } = {}): Recorded[] {
 
 const setPlan = (id: string, plan: string) => env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(plan, id).run();
 
-/** Starts an interview (the trial credit) and moves the account to `plan`; returns the session id. */
+/** Moves the account to `plan` (free: with its sign-up credits) and starts an interview; returns the session id. */
 async function interview(token: string, userId: string, plan = 'pro'): Promise<string> {
+  if (plan === 'free') await grantSignupCredits(env, userId, `test\n${userId}`);
+  else await setPlan(userId, plan);
   const res = await call('/api/interviews', { method: 'POST', token, body: { problem: 'url-shortener', minutes: 45 } });
   expect(res.status).toBe(201);
-  await setPlan(userId, plan);
   return ((await res.json()) as { interview: { id: string } }).interview.id;
 }
 
@@ -149,6 +151,8 @@ describe('the AI roadmap: routes', () => {
     expect(((await (await next(token, '?interview=other')).json()) as { next: unknown }).next).toBeNull();
     // Haiku's tokens count with the session: 150 for the verdict, 150 for the picks (mockClaude usage()).
     await vi.waitFor(async () => expect((await env.DB.prepare('SELECT tokens FROM ai_interviews WHERE id = ?').bind(id).first<{ tokens: number }>())!.tokens).toBe(300));
+    // The picks are paid in credits, after the verdict.
+    await vi.waitFor(async () => expect((await env.DB.prepare('SELECT action FROM credit_charges WHERE user_id = ? ORDER BY created_at, rowid').bind(userId).all()).results).toEqual([{ action: 'verdict' }, { action: 'next_steps' }]));
   });
 
   it('keeps the verdict when the pick fails: an API error, or no known id', async () => {
@@ -167,6 +171,9 @@ describe('the AI roadmap: routes', () => {
       expect(await recCount(userId)).toBe(0);
       expect(((await (await next(token)).json()) as { next: unknown }).next).toBeNull();
       expect(await env.DB.prepare('SELECT status FROM ai_interviews WHERE id = ?').bind(id).first()).toEqual({ status: 'finished' });
+      // A failed pick is charged nothing, and holds nothing.
+      expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_charges WHERE action = 'next_steps'").first()).toEqual({ n: 0 });
+      expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds').first()).toEqual({ n: 0 });
     }
   });
 

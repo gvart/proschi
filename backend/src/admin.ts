@@ -6,7 +6,8 @@ import { cleanName, configuredProviders } from './auth';
 import { billingConfigured } from './billing';
 import type { Ctx } from './context';
 import { now, secretOk, type Env } from './env';
-import { balance } from './credits';
+import { credits as creditsOf, creditsView } from './credits';
+import { MC } from './plans';
 import { HttpError, json, readJson } from './http';
 import { errorText } from './log';
 import { effectivePlan, effectivePlanSql } from './plans';
@@ -28,11 +29,11 @@ import { effectivePlan, effectivePlanSql } from './plans';
  *   DELETE /api/admin/users/<id>/email           removes its email reminders' address
  *   DELETE /api/admin/users/<id>                 deletes the account and everything in it
  *   GET    /api/admin/users/<id>/credits?offset= its credit ledger, newest first, 50 at a time
- *   POST   /api/admin/users/<id>/credits {kind: grant|revoke, credits, ref, reason}   pack credits, once per ref
+ *   POST   /api/admin/users/<id>/credits {kind: grant|revoke, credits, ref, reason}   top-up credits (up to 3 decimals), once per ref
  *   POST   /api/admin/users/<id>/comp {until, reason}   Pro until `until` (Unix seconds), whatever Polar says
  *   POST   /api/admin/users/<id>/comp/end {reason}      ends a comp early
- *   GET    /api/admin/billing?offset=            Pro accounts, subscriber and order counts, recent orders and refunds
- *   GET    /api/admin/ai                         AI interviews and reviews per day, tokens and cost, top users
+ *   GET    /api/admin/billing?offset=            Pro and Max accounts, subscriber and order counts, recent orders and refunds
+ *   GET    /api/admin/ai                         AI interviews and reviews per day, tokens and cost, credits charged against cost, top users
  *   GET    /api/admin/webhooks?outcome=&before=  Polar's webhook deliveries, newest first
  *   GET    /api/admin/document-shares?q=&state=live|all&offset=   live share links, newest first
  *   DELETE /api/admin/document-shares/<token>    revokes one
@@ -169,11 +170,13 @@ const TABLES = [
   'billing_events',
   'billing_webhooks',
   'credits',
+  'credit_holds',
+  'credit_charges',
+  'signup_identities',
   'refunded_orders',
   'account_tombstones',
   'ai_interviews',
   'ai_interview_messages',
-  'review_usage',
   'roadmap_recs',
   'email_prefs',
   'daily_counts',
@@ -182,7 +185,7 @@ const TABLES = [
 ] as const;
 
 /** The daily and hourly jobs (src/cron.ts) that record a `cron` event when they run. */
-export const CRON_JOBS = ['reminders', 'sessions', 'game_runs', 'tombstones', 'usage_counts', 'app_events', 'interview_transcripts', 'review_usage', 'billing_webhooks'] as const;
+export const CRON_JOBS = ['reminders', 'sessions', 'game_runs', 'tombstones', 'usage_counts', 'app_events', 'interview_transcripts', 'credit_holds', 'billing_webhooks'] as const;
 
 /** GET /api/admin/health */
 export async function getHealth(request: Request, ctx: Ctx): Promise<Response> {
@@ -249,7 +252,9 @@ export async function getHealth(request: Request, ctx: Ctx): Promise<Response> {
           webhookSecret: Boolean(env.POLAR_WEBHOOK_SECRET),
           productProMonthly: Boolean(env.POLAR_PRODUCT_PRO_MONTHLY),
           productProYearly: Boolean(env.POLAR_PRODUCT_PRO_YEARLY),
-          productPack5: Boolean(env.POLAR_PRODUCT_PACK_5),
+          productMaxMonthly: Boolean(env.POLAR_PRODUCT_MAX_MONTHLY),
+          productMaxYearly: Boolean(env.POLAR_PRODUCT_MAX_YEARLY),
+          productCredits1000: Boolean(env.POLAR_PRODUCT_CREDITS_1000),
         },
         polarServer: polarServer(env),
         billing: billingConfigured(env),
@@ -374,7 +379,7 @@ export async function getUser(request: Request, ctx: Ctx, id: string): Promise<R
     DB.prepare('SELECT id, at, action, detail FROM admin_audit WHERE target = ? ORDER BY id DESC LIMIT 20').bind(id),
     DB.prepare('SELECT polar_customer_id, polar_subscription_id, status, product, current_period_end, cancel_at_period_end, updated_at FROM billing WHERE user_id = ?').bind(id),
   ]);
-  const credits = await balance(ctx.env, id);
+  const credits = await creditsView(ctx.env, id);
   type Row = Record<string, string | number | null>;
   const first = (r: D1Result) => (r.results[0] ?? {}) as Row;
   const e = email.results[0] as Row | undefined;
@@ -678,7 +683,7 @@ export async function listUserCredits(request: Request, ctx: Ctx, id: string): P
   const offset = offsetOf(new URL(request.url));
   const { DB } = ctx.env;
   const [rows, total] = await DB.batch([
-    DB.prepare(`SELECT id, kind, bucket, period, delta, item, ref_id, created_at FROM credits WHERE user_id = ? ORDER BY id DESC LIMIT ${PAGE} OFFSET ${offset}`).bind(id),
+    DB.prepare(`SELECT id, kind, bucket, period, delta_mc, item, ref_id, created_at FROM credits WHERE user_id = ? ORDER BY id DESC LIMIT ${PAGE} OFFSET ${offset}`).bind(id),
     DB.prepare('SELECT COUNT(*) AS n FROM credits WHERE user_id = ?').bind(id),
   ]);
   return json(
@@ -691,7 +696,7 @@ export async function listUserCredits(request: Request, ctx: Ctx, id: string): P
         kind: r.kind,
         bucket: r.bucket,
         period: r.period || null,
-        delta: r.delta,
+        credits: creditsOf(r.delta_mc as number),
         item: r.item,
         refId: r.ref_id,
         createdAt: seconds(r.created_at as number),
@@ -702,15 +707,16 @@ export async function listUserCredits(request: Request, ctx: Ctx, id: string): P
   );
 }
 
-const MAX_ADMIN_CREDITS = 100;
+const MAX_ADMIN_CREDITS = 10_000;
 const REF = /^[A-Za-z0-9-]{8,64}$/;
 
 /**
  * POST /api/admin/users/<id>/credits {kind: grant|revoke, credits, ref, reason}:
- * pack credits (they never expire) given or taken back, as a ledger row of
- * kind admin_grant or admin_revoke. `ref` is the panel's id of this one
+ * top-up credits (they never expire) given or taken back, as a ledger row of
+ * kind admin_grant or admin_revoke; `credits` is a number of credits with up
+ * to 3 decimals (stored in millicredits). `ref` is the panel's id of this one
  * action: sent again, it changes nothing and answers {duplicate: true}. A
- * revoke takes at most what the pack balance has left, never below 0, and
+ * revoke takes at most what the top-up balance has left, never below 0, and
  * answers 409 when it has none.
  */
 export async function adjustCredits(request: Request, ctx: Ctx, id: string): Promise<Response> {
@@ -720,8 +726,9 @@ export async function adjustCredits(request: Request, ctx: Ctx, id: string): Pro
   const kind = body.kind;
   if (kind !== 'grant' && kind !== 'revoke') throw new HttpError(400, 'kind must be grant or revoke');
   const credits = body.credits;
-  if (typeof credits !== 'number' || !Number.isInteger(credits) || credits < 1 || credits > MAX_ADMIN_CREDITS) {
-    throw new HttpError(400, `credits must be a whole number from 1 to ${MAX_ADMIN_CREDITS}`);
+  const mc = typeof credits === 'number' ? Math.round(credits * MC) : NaN;
+  if (typeof credits !== 'number' || !Number.isFinite(credits) || Math.abs(credits * MC - mc) > 1e-6 || mc < 1 || mc > MAX_ADMIN_CREDITS * MC) {
+    throw new HttpError(400, `credits must be from 0.001 to ${MAX_ADMIN_CREDITS}, with at most 3 decimals`);
   }
   if (typeof body.ref !== 'string' || !REF.test(body.ref)) throw new HttpError(400, 'ref must be 8 to 64 letters, digits or dashes');
   const reason = reasonOf(body);
@@ -732,28 +739,28 @@ export async function adjustCredits(request: Request, ctx: Ctx, id: string): Pro
   const row =
     kind === 'grant'
       ? await DB.prepare(
-          `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at) VALUES (?1, 'admin_grant', 'pack', '', ?2, 'admin', ?3, ?4)
-           ON CONFLICT (kind, ref_id) DO NOTHING RETURNING delta`,
+          `INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at) VALUES (?1, 'admin_grant', 'topup', '', ?2, 'admin', ?3, ?4)
+           ON CONFLICT (kind, ref_id) DO NOTHING RETURNING delta_mc`,
         )
-          .bind(id, credits, ref, at)
-          .first<{ delta: number }>()
-      : // One statement, so a revoke can't race a spend below a zero pack balance.
+          .bind(id, mc, ref, at)
+          .first<{ delta_mc: number }>()
+      : // One statement, so a revoke can't race a charge below a zero top-up balance.
         await DB.prepare(
-          `INSERT INTO credits (user_id, kind, bucket, period, delta, item, ref_id, created_at)
-           SELECT ?1, 'admin_revoke', 'pack', '', -MIN(?2, pack), 'admin', ?3, ?4
-           FROM (SELECT COALESCE(SUM(delta), 0) AS pack FROM credits WHERE user_id = ?1 AND bucket = 'pack') WHERE pack > 0
-           ON CONFLICT (kind, ref_id) DO NOTHING RETURNING delta`,
+          `INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at)
+           SELECT ?1, 'admin_revoke', 'topup', '', -MIN(?2, topup), 'admin', ?3, ?4
+           FROM (SELECT COALESCE(SUM(delta_mc), 0) AS topup FROM credits WHERE user_id = ?1 AND bucket = 'topup') WHERE topup > 0
+           ON CONFLICT (kind, ref_id) DO NOTHING RETURNING delta_mc`,
         )
-          .bind(id, credits, ref, at)
-          .first<{ delta: number }>();
+          .bind(id, mc, ref, at)
+          .first<{ delta_mc: number }>();
   if (!row) {
-    const earlier = await DB.prepare('SELECT user_id, delta FROM credits WHERE kind = ? AND ref_id = ?').bind(ledgerKind, ref).first<{ user_id: string; delta: number }>();
-    if (earlier?.user_id === id) return json({ duplicate: true, delta: earlier.delta, credits: await balance(ctx.env, id) }, 200, NO_STORE);
+    const earlier = await DB.prepare('SELECT user_id, delta_mc FROM credits WHERE kind = ? AND ref_id = ?').bind(ledgerKind, ref).first<{ user_id: string; delta_mc: number }>();
+    if (earlier?.user_id === id) return json({ duplicate: true, delta: creditsOf(earlier.delta_mc), credits: await creditsView(ctx.env, id) }, 200, NO_STORE);
     if (earlier) throw new HttpError(409, 'That ref was used for another account');
-    throw new HttpError(409, 'No pack credits to revoke');
+    throw new HttpError(409, 'No top-up credits to revoke');
   }
-  await DB.batch([auditStatement(ctx.env, admin, kind === 'grant' ? 'user.credits.grant' : 'user.credits.revoke', id, { credits: Math.abs(row.delta), reason, ref: body.ref })]);
-  return json({ delta: row.delta, credits: await balance(ctx.env, id) }, 200, NO_STORE);
+  await DB.batch([auditStatement(ctx.env, admin, kind === 'grant' ? 'user.credits.grant' : 'user.credits.revoke', id, { credits: creditsOf(Math.abs(row.delta_mc)), reason, ref: body.ref })]);
+  return json({ delta: creditsOf(row.delta_mc), credits: await creditsView(ctx.env, id) }, 200, NO_STORE);
 }
 
 const MAX_COMP_DAYS = 5 * 366;
@@ -793,11 +800,12 @@ export async function endComp(request: Request, ctx: Ctx, id: string): Promise<R
 }
 
 /**
- * GET /api/admin/billing?offset=: the counts (Pro accounts, monthly and
- * yearly subscribers, comps, pack orders this month), the Pro accounts 50 at
- * a time, and the latest pack orders, credit adjustments and refunded
- * orders. No amounts: D1 stores none (the webhook keeps no payload), so the
- * panel shows counts, and prices only as the pricing page lists them.
+ * GET /api/admin/billing?offset=: the counts (Pro and Max accounts, monthly
+ * and yearly subscribers of each, comps, top-up orders this month), the paid
+ * accounts 50 at a time, and the latest top-up orders, credit adjustments and
+ * refunded orders. No amounts of money: D1 stores none (the webhook keeps no
+ * payload), so the panel shows counts, and prices only as the pricing page
+ * lists them. Credits are in credits (3 decimals).
  */
 export async function getBilling(request: Request, ctx: Ctx): Promise<Response> {
   await requireAdmin(request, ctx);
@@ -805,36 +813,39 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
   const { DB } = ctx.env;
   const t = now();
   const monthStart = Date.parse(`${new Date(t * 1000).toISOString().slice(0, 7)}-01T00:00:00Z`);
-  const pro = `${effectivePlanSql('u', '?1')} = 'pro'`;
+  const pro = `${effectivePlanSql('u', '?1')} IN ('pro', 'max')`;
   const [counts, list, orders, adjustments, refunded] = await DB.batch([
     DB.prepare(
       `SELECT
-         (SELECT COUNT(*) FROM users u WHERE ${pro}) AS pro,
+         (SELECT COUNT(*) FROM users u WHERE ${effectivePlanSql('u', '?1')} = 'pro') AS pro,
+         (SELECT COUNT(*) FROM users u WHERE ${effectivePlanSql('u', '?1')} = 'max') AS max,
          (SELECT COUNT(*) FROM billing WHERE status IN ${PRO_STATUSES_SQL} AND product = 'pro_monthly') AS monthly,
          (SELECT COUNT(*) FROM billing WHERE status IN ${PRO_STATUSES_SQL} AND product = 'pro_yearly') AS yearly,
+         (SELECT COUNT(*) FROM billing WHERE status IN ${PRO_STATUSES_SQL} AND product = 'max_monthly') AS max_monthly,
+         (SELECT COUNT(*) FROM billing WHERE status IN ${PRO_STATUSES_SQL} AND product = 'max_yearly') AS max_yearly,
          (SELECT COUNT(*) FROM billing WHERE status = 'past_due') AS past_due,
          (SELECT COUNT(*) FROM billing WHERE status IN ${PRO_STATUSES_SQL} AND cancel_at_period_end = 1) AS canceling,
          (SELECT COUNT(*) FROM users WHERE comp_until > ?1) AS comped,
-         (SELECT COUNT(*) FROM credits WHERE kind = 'grant' AND created_at >= ?2) AS packs_month,
-         (SELECT COUNT(*) FROM credits WHERE kind = 'grant') AS packs,
+         (SELECT COUNT(*) FROM credits WHERE kind = 'topup' AND created_at >= ?2) AS topups_month,
+         (SELECT COUNT(*) FROM credits WHERE kind = 'topup') AS topups,
          (SELECT COUNT(*) FROM refunded_orders WHERE refunded_at >= ?2) AS refunded_month,
          (SELECT COUNT(*) FROM refunded_orders) AS refunded`,
     ).bind(t, monthStart),
     DB.prepare(
-      `SELECT u.id, u.display_name, u.comp_until, b.polar_customer_id, b.status, b.product, b.current_period_end, b.cancel_at_period_end
+      `SELECT u.id, u.display_name, u.plan, u.comp_until, b.polar_customer_id, b.status, b.product, b.current_period_end, b.cancel_at_period_end
        FROM users u LEFT JOIN billing b ON b.user_id = u.id WHERE ${pro} ORDER BY u.display_name COLLATE NOCASE, u.id LIMIT ${PAGE} OFFSET ${offset}`,
     ).bind(t),
     DB.prepare(
-      `SELECT c.ref_id, c.delta, c.created_at, c.user_id, u.display_name, EXISTS (SELECT 1 FROM refunded_orders r WHERE r.order_id = c.ref_id) AS refunded
-       FROM credits c JOIN users u ON u.id = c.user_id WHERE c.kind = 'grant' ORDER BY c.id DESC LIMIT 20`,
+      `SELECT c.ref_id, c.delta_mc, c.created_at, c.user_id, u.display_name, EXISTS (SELECT 1 FROM refunded_orders r WHERE r.order_id = c.ref_id) AS refunded
+       FROM credits c JOIN users u ON u.id = c.user_id WHERE c.kind = 'topup' ORDER BY c.id DESC LIMIT 20`,
     ),
     DB.prepare(
-      `SELECT c.kind, c.ref_id, c.delta, c.created_at, c.user_id, u.display_name FROM credits c JOIN users u ON u.id = c.user_id
-       WHERE c.kind IN ('revoke', 'admin_revoke', 'admin_grant') ORDER BY c.id DESC LIMIT 20`,
+      `SELECT c.kind, c.ref_id, c.delta_mc, c.created_at, c.user_id, u.display_name FROM credits c JOIN users u ON u.id = c.user_id
+       WHERE c.kind IN ('topup_revoke', 'admin_revoke', 'admin_grant') ORDER BY c.id DESC LIMIT 20`,
     ),
     DB.prepare(
       `SELECT r.order_id, r.refunded_at, g.user_id, u.display_name FROM refunded_orders r
-       LEFT JOIN credits g ON g.kind = 'grant' AND g.ref_id = r.order_id LEFT JOIN users u ON u.id = g.user_id ORDER BY r.refunded_at DESC LIMIT 20`,
+       LEFT JOIN credits g ON g.kind = 'topup' AND g.ref_id = r.order_id LEFT JOIN users u ON u.id = g.user_id ORDER BY r.refunded_at DESC LIMIT 20`,
     ),
   ]);
   const c = counts.results[0] as Record<string, number>;
@@ -843,17 +854,20 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
     {
       counts: {
         pro: c.pro,
+        max: c.max,
         monthly: c.monthly,
         yearly: c.yearly,
+        maxMonthly: c.max_monthly,
+        maxYearly: c.max_yearly,
         pastDue: c.past_due,
         canceling: c.canceling,
         comped: c.comped,
-        packOrdersThisMonth: c.packs_month,
-        packOrders: c.packs,
+        topupOrdersThisMonth: c.topups_month,
+        topupOrders: c.topups,
         refundedThisMonth: c.refunded_month,
         refunded: c.refunded,
       },
-      total: c.pro,
+      total: c.pro + c.max,
       offset,
       pageSize: PAGE,
       pro: (list.results as Row[]).map((r) => {
@@ -861,7 +875,8 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
         return {
           id: r.id,
           displayName: r.display_name,
-          // What keeps the account on Pro: a subscription, a comp, or a plan set by hand.
+          plan: effectivePlan(r.plan as string, r.comp_until as number | null),
+          // What keeps the account on its plan: a subscription, a comp, or a plan set by hand.
           source: PRO_STATUSES.includes(String(r.status)) ? 'subscription' : comped ? 'comp' : 'plan',
           compUntil: comped ? r.comp_until : null,
           polarCustomerId: r.polar_customer_id,
@@ -871,8 +886,8 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
           cancelAtPeriodEnd: r.cancel_at_period_end === 1,
         };
       }),
-      orders: (orders.results as Row[]).map((r) => ({ orderId: r.ref_id, credits: r.delta, createdAt: seconds(r.created_at as number), refunded: r.refunded === 1, user: owner(r) })),
-      adjustments: (adjustments.results as Row[]).map((r) => ({ kind: r.kind, refId: r.ref_id, delta: r.delta, createdAt: seconds(r.created_at as number), user: owner(r) })),
+      orders: (orders.results as Row[]).map((r) => ({ orderId: r.ref_id, credits: creditsOf(r.delta_mc as number), createdAt: seconds(r.created_at as number), refunded: r.refunded === 1, user: owner(r) })),
+      adjustments: (adjustments.results as Row[]).map((r) => ({ kind: r.kind, refId: r.ref_id, delta: creditsOf(r.delta_mc as number), createdAt: seconds(r.created_at as number), user: owner(r) })),
       refundedOrders: (refunded.results as Row[]).map((r) => ({ orderId: r.order_id, refundedAt: seconds(r.refunded_at as number), user: owner(r) })),
       polarDashboard: polarDashboard(ctx.env),
       billing: billingConfigured(ctx.env),
@@ -884,11 +899,12 @@ export async function getBilling(request: Request, ctx: Ctx): Promise<Response> 
 
 /**
  * GET /api/admin/ai: the last 30 UTC days of AI interviews (started,
- * finished, failed, refunded, tokens and cost, by the day a session started)
- * and AI reviews (counts: a review's cost isn't stored), the top accounts by
- * cost, the average cost of a finished interview and the share of sessions
- * that reached the token cap (TOKEN_CAP less the verdict's reserve: no more
- * turns fit).
+ * finished, failed, tokens and cost, by the day a session started), reviews,
+ * and the credits charged per day against what those calls cost us
+ * (`credit_charges`: `credits`, `chargedEur` at €0.01 a credit, and
+ * `chargedCostUsd`), so the margin shows; the top accounts by cost, the
+ * average cost of a finished interview and the share of sessions that reached
+ * the token cap (TOKEN_CAP less the verdict's reserve: no more turns fit).
  */
 export async function getAi(request: Request, ctx: Ctx): Promise<Response> {
   await requireAdmin(request, ctx);
@@ -897,14 +913,17 @@ export async function getAi(request: Request, ctx: Ctx): Promise<Response> {
   const dayAgo = (n: number) => utcDay(t - n * DAY);
   const since = Date.parse(`${dayAgo(29)}T00:00:00Z`);
   const cappedAt = TOKEN_CAP - VERDICT_RESERVE;
-  const [perDay, refunds, reviews, top, totals] = await DB.batch([
+  const [perDay, charges, top, totals] = await DB.batch([
     DB.prepare(
       `SELECT date(started_at / 1000, 'unixepoch') AS day, COUNT(*) AS started, COALESCE(SUM(status = 'finished'), 0) AS finished,
          COALESCE(SUM(status = 'failed'), 0) AS failed, COALESCE(SUM(tokens), 0) AS tokens, COALESCE(SUM(cost_usd), 0) AS cost
        FROM ai_interviews WHERE started_at >= ? GROUP BY day`,
     ).bind(since),
-    DB.prepare(`SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM credits WHERE kind = 'refund' AND item = 'interview' AND created_at >= ? GROUP BY day`).bind(since),
-    DB.prepare('SELECT day, SUM(count) AS n FROM review_usage WHERE day >= ? GROUP BY day').bind(dayAgo(29)),
+    DB.prepare(
+      `SELECT date(created_at / 1000, 'unixepoch') AS day, COALESCE(SUM(charged_mc), 0) AS mc, COALESCE(SUM(cost_usd), 0) AS cost,
+         COALESCE(SUM(ref LIKE 'review:%'), 0) AS reviews
+       FROM credit_charges WHERE created_at >= ? GROUP BY day`,
+    ).bind(since),
     DB.prepare(
       `SELECT i.user_id, u.display_name, COUNT(*) AS sessions, SUM(i.tokens) AS tokens, SUM(i.cost_usd) AS cost
        FROM ai_interviews i JOIN users u ON u.id = i.user_id WHERE i.started_at >= ? GROUP BY i.user_id ORDER BY cost DESC, i.user_id LIMIT 10`,
@@ -916,20 +935,22 @@ export async function getAi(request: Request, ctx: Ctx): Promise<Response> {
     ).bind(since, cappedAt),
   ]);
   const byDay = new Map((perDay.results as Row[]).map((r) => [r.day as string, r as Record<string, number>]));
-  const refundsByDay = new Map((refunds.results as { day: string; n: number }[]).map((r) => [r.day, r.n]));
-  const reviewsByDay = new Map((reviews.results as { day: string; n: number }[]).map((r) => [r.day, r.n]));
+  const chargesByDay = new Map((charges.results as { day: string; mc: number; cost: number; reviews: number }[]).map((r) => [r.day, r]));
   const days = Array.from({ length: 30 }, (_, i) => {
     const day = dayAgo(29 - i);
     const r = byDay.get(day);
+    const ch = chargesByDay.get(day);
     return {
       day,
       started: r?.started ?? 0,
       finished: r?.finished ?? 0,
       failed: r?.failed ?? 0,
-      refunded: refundsByDay.get(day) ?? 0,
-      reviews: reviewsByDay.get(day) ?? 0,
+      reviews: ch?.reviews ?? 0,
       tokens: r?.tokens ?? 0,
       costUsd: r?.cost ?? 0,
+      credits: creditsOf(ch?.mc ?? 0),
+      chargedEur: (ch?.mc ?? 0) / MC / 100,
+      chargedCostUsd: ch?.cost ?? 0,
     };
   });
   const s = totals.results[0] as Record<string, number | null>;
@@ -946,6 +967,9 @@ export async function getAi(request: Request, ctx: Ctx): Promise<Response> {
         capped: s.capped ?? 0,
         cappedShare: sessions ? (s.capped ?? 0) / sessions : null,
         reviews: days.reduce((sum, d) => sum + d.reviews, 0),
+        credits: creditsOf(days.reduce((sum, d) => sum + Math.round(d.credits * MC), 0)),
+        chargedEur: days.reduce((sum, d) => sum + d.chargedEur, 0),
+        chargedCostUsd: days.reduce((sum, d) => sum + d.chargedCostUsd, 0),
       },
       tokenCap: TOKEN_CAP,
       cappedAt,
@@ -1053,7 +1077,7 @@ export const TREND_RANGES = [7, 30, 90] as const;
  *   visits that left nothing behind; today's value matches `last_seen_day`;
  * - `interviewsStarted`, `aiCostUsd` by the day an AI interview started,
  *   `interviewsFinished` by the day it finished;
- * - `packOrders`: interview packs paid (`credits` grants);
+ * - `topupOrders`: credit top-ups paid (`credits` rows of kind topup);
  * - `webhookFailures`: Polar deliveries refused (`bad_signature`) or failed (`error`);
  * - `proSubscribers`: subscriptions that keep Pro, counted back from today's
  *   with the applied `subscription.active` (one more) and
@@ -1100,7 +1124,8 @@ export async function getTrends(request: Request, ctx: Ctx): Promise<Response> {
     ).bind(JSON.stringify(Array.from({ length: span }, (_, i) => dayAgo(span - 1 - i))), actFrom, actFromS),
     DB.prepare(`SELECT date(started_at / 1000, 'unixepoch') AS day, COUNT(*) AS n, COALESCE(SUM(cost_usd), 0) AS cost FROM ai_interviews WHERE started_at >= ? GROUP BY day`).bind(fromMs),
     DB.prepare(`SELECT date(ended_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM ai_interviews WHERE status = 'finished' AND ended_at >= ? GROUP BY day`).bind(fromMs),
-    DB.prepare(`SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM credits WHERE kind = 'grant' AND created_at >= ? GROUP BY day`).bind(fromMs),
+    DB.prepare(`SELECT date(created_at / 1000, 'unixepoch') AS day, COUNT(*) AS n FROM credits WHERE kind = 'topup' AND created_at >= ? GROUP BY day`).bind(fromMs),
+
     DB.prepare(
       `SELECT date(received_at / 1000, 'unixepoch') AS day,
          COALESCE(SUM(outcome IN ('bad_signature', 'error')), 0) AS failures,
@@ -1133,7 +1158,7 @@ export async function getTrends(request: Request, ctx: Ctx): Promise<Response> {
       interviewsStarted: n(st.get(day), 'n'),
       interviewsFinished: n(fi.get(day), 'n'),
       aiCostUsd: n(st.get(day), 'cost'),
-      packOrders: n(pk.get(day), 'n'),
+      topupOrders: n(pk.get(day), 'n'),
       webhookFailures: n(wh.get(day), 'failures'),
       proSubscribers: 0,
     };

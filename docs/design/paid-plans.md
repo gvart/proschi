@@ -200,3 +200,13 @@ id; don't rewrite old ones.
 - **P31. Max extras.** A "Deep" toggle (`deep_mode`, Max) runs the verdict
   and Design partner on Opus, charged at Opus's price. Each verdict has a
   printable report (`interview_report`, Max) saved as PDF by the browser.
+- **P32. The month's credits follow the plan up, never down.** An upgrade
+  mid-month (Pro to Max, or a new subscription) tops the month up to the
+  new allowance at once; a downgrade keeps what was granted until the month
+  ends. A comp gives Pro, but never lowers an account that is on Max.
+- **P33. Sign-up credits once per identity.** The 100 sign-up credits are
+  not given when an account is created: the sign-up flow grants them after
+  its own checks (`grantSignupCredits`), once per account and once per
+  sign-in identity (provider and subject, or the email). A keyed hash of the
+  identity is kept after the account is deleted, so deleting and signing up
+  again gives nothing more.

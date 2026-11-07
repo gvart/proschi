@@ -53,7 +53,7 @@ export function trends(days: number) {
       interviewsStarted: started,
       interviewsFinished: Math.max(0, started - (i % 5 === 0 ? 1 : 0)),
       aiCostUsd: Math.round(started * (0.38 + 0.08 * Math.sin(i)) * 100) / 100,
-      packOrders: (i * 7) % 11 < 3 ? 1 + (i % 2) : 0,
+      topupOrders: (i * 7) % 11 < 3 ? 1 + (i % 2) : 0,
       webhookFailures: i % 23 === 4 ? 2 : i % 17 === 9 ? 1 : 0,
       proSubscribers: Math.round(18 + 34 * g + (i % 9 === 0 ? -1 : 0)),
     };
@@ -78,13 +78,13 @@ export const USERS = {
 };
 
 const LEDGER = [
-  { id: 9, kind: 'admin_grant', bucket: 'pack', period: null, delta: 2, item: 'admin', refId: 'admin:7c1e2a40-0b8f-4c3e-9a51-1d2e3f4a5b6c', createdAt: now - 2 * DAY },
-  { id: 8, kind: 'spend', bucket: 'pack', period: null, delta: -1, item: 'interview', refId: '5b0a…-session', createdAt: now - 3 * DAY },
-  { id: 7, kind: 'refund', bucket: 'monthly', period: today.slice(0, 7), delta: 1, item: 'interview', refId: 'a91f…-session', createdAt: now - 4 * DAY },
-  { id: 6, kind: 'spend', bucket: 'monthly', period: today.slice(0, 7), delta: -1, item: 'interview', refId: 'a91f…-session', createdAt: now - 4 * DAY },
-  { id: 5, kind: 'spend', bucket: 'monthly', period: today.slice(0, 7), delta: -1, item: 'interview', refId: '3c2d…-session', createdAt: now - 6 * DAY },
-  { id: 4, kind: 'grant', bucket: 'pack', period: null, delta: 5, item: 'pack_5', refId: 'ord_01JAZ4X9Q2', createdAt: now - 9 * DAY },
-  { id: 3, kind: 'spend', bucket: 'trial', period: null, delta: -1, item: 'interview', refId: '0e7f…-session', createdAt: now - 20 * DAY },
+  { id: 9, kind: 'admin_grant', bucket: 'topup', period: null, credits: 25, item: 'admin', refId: 'admin:7c1e2a40-0b8f-4c3e-9a51-1d2e3f4a5b6c', createdAt: now - 2 * DAY },
+  { id: 8, kind: 'settle', bucket: 'topup', period: null, credits: -12.348, item: 'mock_interview', refId: '5b0a…-hold:topup', createdAt: now - 3 * DAY },
+  { id: 7, kind: 'settle', bucket: 'monthly', period: today.slice(0, 7), credits: -37.652, item: 'mock_interview', refId: '5b0a…-hold:monthly', createdAt: now - 3 * DAY },
+  { id: 6, kind: 'settle', bucket: 'monthly', period: today.slice(0, 7), credits: -41.2, item: 'verdict', refId: 'a91f…-hold:monthly', createdAt: now - 4 * DAY },
+  { id: 5, kind: 'monthly_grant', bucket: 'monthly', period: today.slice(0, 7), credits: 800, item: 'pro', refId: 'monthly:…', createdAt: now - 6 * DAY },
+  { id: 4, kind: 'topup', bucket: 'topup', period: null, credits: 1000, item: 'credits_1000', refId: 'ord_01JAZ4X9Q2', createdAt: now - 9 * DAY },
+  { id: 3, kind: 'signup_grant', bucket: 'signup', period: null, credits: 100, item: 'signup', refId: 'signup:…', createdAt: now - 20 * DAY },
 ];
 
 export function userDetail(id: string, state: { blocked?: boolean; compUntil?: number | null } = {}) {
@@ -107,7 +107,9 @@ export function userDetail(id: string, state: { blocked?: boolean; compUntil?: n
     billing: pro
       ? { polarCustomerId: 'cus_01JAZ2K7M3', polarSubscriptionId: 'sub_01JAZ2K9P0', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false, pastDue: false, updatedAt: now - 12 * DAY }
       : null,
-    credits: pro ? { total: 9, monthly: 3, trial: 0, pack: 6, period: today.slice(0, 7) } : { total: 1, monthly: 0, trial: 1, pack: 0, period: today.slice(0, 7) },
+    credits: pro
+      ? { balance: 1733.8, monthly: { allowance: 800, left: 721.148, resetsAt: now + 20 * DAY }, signup: 0, topup: 1012.652 }
+      : { balance: 100, monthly: null, signup: 100, topup: 0 },
     polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
     identities: [{ provider: pro ? 'github' : 'google', subject: pro ? 'gh-1815' : 'g-77' }],
     sessions: state.blocked ? [] : [{ kind: 'web', count: 1, lastCreatedAt: 1_800_000_000 }],
@@ -129,24 +131,25 @@ export const ledger = (id: string) => ({ total: id === PRO_USER ? LEDGER.length 
 const owner = (id: string, displayName: string) => ({ id, displayName });
 
 export const BILLING = {
-  counts: { pro: 4, monthly: 2, yearly: 1, pastDue: 1, canceling: 1, comped: 1, packOrdersThisMonth: 3, packOrders: 7, refundedThisMonth: 1, refunded: 2 },
-  total: 4,
+  counts: { pro: 4, max: 1, monthly: 2, yearly: 1, maxMonthly: 1, maxYearly: 0, pastDue: 1, canceling: 1, comped: 1, topupOrdersThisMonth: 3, topupOrders: 7, refundedThisMonth: 1, refunded: 2 },
+  total: 5,
   offset: 0,
   pageSize: 50,
   pro: [
-    { id: PRO_USER, displayName: 'Ada Lovelace', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JAZ2K7M3', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false },
-    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB0Q4T1R', status: 'past_due', product: 'pro_yearly', currentPeriodEnd: now + 2 * DAY, cancelAtPeriodEnd: false },
-    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB1C8W5D', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 9 * DAY, cancelAtPeriodEnd: true },
-    { id: '66666666-6666-4666-8666-666666666666', displayName: 'Linus Speaker', source: 'comp', compUntil: now + 45 * DAY, polarCustomerId: null, status: null, product: null, currentPeriodEnd: null, cancelAtPeriodEnd: false },
+    { id: PRO_USER, displayName: 'Ada Lovelace', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JAZ2K7M3', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 18 * DAY, cancelAtPeriodEnd: false },
+    { id: '44444444-4444-4444-8444-444444444444', displayName: 'Grace Hopper', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB0Q4T1R', status: 'past_due', product: 'pro_yearly', currentPeriodEnd: now + 2 * DAY, cancelAtPeriodEnd: false },
+    { id: '55555555-5555-4555-8555-555555555555', displayName: 'Katherine Johnson', plan: 'pro', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB1C8W5D', status: 'active', product: 'pro_monthly', currentPeriodEnd: now + 9 * DAY, cancelAtPeriodEnd: true },
+    { id: '77777777-7777-4777-8777-777777777777', displayName: 'Margaret Hamilton', plan: 'max', source: 'subscription', compUntil: null, polarCustomerId: 'cus_01JB2M3X6E', status: 'active', product: 'max_monthly', currentPeriodEnd: now + 24 * DAY, cancelAtPeriodEnd: false },
+    { id: '66666666-6666-4666-8666-666666666666', displayName: 'Linus Speaker', plan: 'pro', source: 'comp', compUntil: now + 45 * DAY, polarCustomerId: null, status: null, product: null, currentPeriodEnd: null, cancelAtPeriodEnd: false },
   ],
   orders: [
-    { orderId: 'ord_01JC7N2V8F', credits: 5, createdAt: now - 1 * DAY, refunded: false, user: owner(PRO_USER, 'Ada Lovelace') },
-    { orderId: 'ord_01JC5H6Y3A', credits: 5, createdAt: now - 3 * DAY, refunded: true, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
-    { orderId: 'ord_01JBZ0T4K9', credits: 5, createdAt: now - 6 * DAY, refunded: false, user: owner('55555555-5555-4555-8555-555555555555', 'Katherine Johnson') },
+    { orderId: 'ord_01JC7N2V8F', credits: 1000, createdAt: now - 1 * DAY, refunded: false, user: owner(PRO_USER, 'Ada Lovelace') },
+    { orderId: 'ord_01JC5H6Y3A', credits: 1000, createdAt: now - 3 * DAY, refunded: true, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { orderId: 'ord_01JBZ0T4K9', credits: 1000, createdAt: now - 6 * DAY, refunded: false, user: owner('55555555-5555-4555-8555-555555555555', 'Katherine Johnson') },
   ],
   adjustments: [
-    { kind: 'admin_grant', refId: 'admin:7c1e2a40', delta: 2, createdAt: now - 2 * DAY, user: owner(PRO_USER, 'Ada Lovelace') },
-    { kind: 'revoke', refId: 'ord_01JC5H6Y3A', delta: -5, createdAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
+    { kind: 'admin_grant', refId: 'admin:7c1e2a40', delta: 25, createdAt: now - 2 * DAY, user: owner(PRO_USER, 'Ada Lovelace') },
+    { kind: 'topup_revoke', refId: 'ord_01JC5H6Y3A', delta: -1000, createdAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
   ],
   refundedOrders: [{ orderId: 'ord_01JC5H6Y3A', refundedAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') }],
   polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
@@ -158,7 +161,10 @@ const aiDays = days.map((day, i) => {
   const failed = i % 6 === 2 ? 1 : 0;
   const finished = Math.max(0, started - failed - (i % 4 === 0 ? 1 : 0));
   const tokens = started * 210_000 + (i % 3) * 40_000;
-  return { day, started, finished, failed, refunded: i % 12 === 2 ? 0 : failed, reviews: wave(i, 11, 5, 1), tokens, costUsd: (tokens / 1_000_000) * 1.9 };
+  const costUsd = (tokens / 1_000_000) * 1.9;
+  const chargedCostUsd = costUsd * 0.97;
+  const credits = Math.round(chargedCostUsd * 2 * 0.95 * 100 * 1000) / 1000;
+  return { day, started, finished, failed, reviews: wave(i, 11, 5, 1), tokens, costUsd, credits, chargedEur: credits / 100, chargedCostUsd };
 });
 
 export const AI = {
@@ -172,6 +178,9 @@ export const AI = {
     capped: 4,
     cappedShare: 4 / aiDays.reduce((s, d) => s + d.started, 0),
     reviews: aiDays.reduce((s, d) => s + d.reviews, 0),
+    credits: aiDays.reduce((s, d) => s + d.credits, 0),
+    chargedEur: aiDays.reduce((s, d) => s + d.chargedEur, 0),
+    chargedCostUsd: aiDays.reduce((s, d) => s + d.chargedCostUsd, 0),
   },
   tokenCap: 600_000,
   cappedAt: 540_000,
@@ -241,7 +250,7 @@ export const HEALTH = {
     setupToken: false,
     anthropicKey: true,
     aiGateway: false,
-    polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productPack5: false },
+    polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productMaxMonthly: true, productMaxYearly: true, productCredits1000: false },
     polarServer: 'sandbox',
     billing: false,
   },

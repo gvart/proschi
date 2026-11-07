@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { adjustCredits, compUser, endComp, listUserCredits, type UserDetail } from './api';
-import { formatDate, formatDateTime, humanize } from './format';
+import { formatDate, formatDateTime, formatNumber, humanize } from './format';
 import { useAction, useLoad } from './hooks';
 import { Dialog, ErrorNote, Pager, Section, Skeleton, Stat } from './ui';
 
@@ -45,7 +45,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
             label="Effective plan"
             value={humanize(user.effectivePlan)}
             note={comped ? `comped until ${formatDate(user.compUntil)}` : user.plan !== user.effectivePlan ? `stored plan ${user.plan}` : 'from the subscription'}
-            tone={user.effectivePlan === 'pro' ? 'pass' : undefined}
+            tone={user.effectivePlan !== 'free' ? 'pass' : undefined}
           />
           <Stat
             label="Subscription"
@@ -58,7 +58,11 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
             value={billing?.currentPeriodEnd ? formatDate(billing.currentPeriodEnd) : '—'}
             note={billing?.cancelAtPeriodEnd ? 'canceled at period end' : undefined}
           />
-          <Stat label="Interview credits" value={credits.total} note={`${credits.monthly} monthly · ${credits.trial} trial · ${credits.pack} pack`} />
+          <Stat
+            label="Credits"
+            value={formatNumber(credits.balance)}
+            note={`${credits.monthly ? `${formatNumber(credits.monthly.left)} of ${formatNumber(credits.monthly.allowance)} monthly · ` : ''}${formatNumber(credits.signup)} sign-up · ${formatNumber(credits.topup)} top-up`}
+          />
         </div>
         {billing && (
           <dl className="adm-dl">
@@ -117,10 +121,10 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
                         {e.bucket}
                         {e.period && <span className="adm-muted"> {e.period}</span>}
                       </td>
-                      <td className={`adm-num ${e.delta > 0 ? 'adm-plus' : 'adm-minus'}`}>{e.delta > 0 ? `+${e.delta}` : e.delta}</td>
+                      <td className={`adm-num ${e.credits > 0 ? 'adm-plus' : 'adm-minus'}`}>{e.credits > 0 ? `+${formatNumber(e.credits)}` : formatNumber(e.credits)}</td>
                       <td>{humanize(e.item)}</td>
                       <td className="adm-mono adm-cut" title={e.refId}>
-                        {e.kind === 'grant' || e.kind === 'revoke' ? (
+                        {e.kind === 'topup' || e.kind === 'topup_revoke' ? (
                           <a href={`${polarDashboard.orders}/${encodeURIComponent(e.refId)}`} target="_blank" rel="noreferrer">
                             {e.refId}
                           </a>
@@ -138,14 +142,14 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
         )}
       </Section>
 
-      {dialog === 'credits' && <CreditsDialog id={id} name={user.displayName} pack={credits.pack} onClose={() => setDialog(undefined)} onDone={done} />}
+      {dialog === 'credits' && <CreditsDialog id={id} name={user.displayName} topup={credits.topup} onClose={() => setDialog(undefined)} onDone={done} />}
       {dialog === 'comp' && <CompDialog id={id} name={user.displayName} until={comped ? user.compUntil : null} onClose={() => setDialog(undefined)} onDone={done} />}
       {dialog === 'end' && <EndCompDialog id={id} name={user.displayName} onClose={() => setDialog(undefined)} onDone={done} />}
     </>
   );
 }
 
-function CreditsDialog({ id, name, pack, onClose, onDone }: { id: string; name: string; pack: number; onClose: () => void; onDone: (message: string) => void }) {
+function CreditsDialog({ id, name, topup, onClose, onDone }: { id: string; name: string; topup: number; onClose: () => void; onDone: (message: string) => void }) {
   const [kind, setKind] = useState<'grant' | 'revoke'>('grant');
   const [credits, setCredits] = useState('1');
   const [reason, setReason] = useState('');
@@ -158,14 +162,14 @@ function CreditsDialog({ id, name, pack, onClose, onDone }: { id: string; name: 
       title={`Credits for ${name}`}
       open
       onClose={onClose}
-      submitLabel={kind === 'grant' ? `Grant ${n || ''} credit${n === 1 ? '' : 's'}` : `Revoke ${n || ''} credit${n === 1 ? '' : 's'}`}
+      submitLabel={`${kind === 'grant' ? 'Grant' : 'Revoke'} ${n ? formatNumber(n) : ''} credit${n === 1 ? '' : 's'}`}
       danger={kind === 'revoke'}
       busy={action.busy}
       error={action.error}
       onSubmit={() =>
         void action.run(async () => {
           const result = await adjustCredits(id, { kind, credits: n, ref, reason });
-          onDone(result.duplicate ? 'Already done: nothing changed.' : `${kind === 'grant' ? 'Granted' : 'Revoked'} ${Math.abs(result.delta)} pack credit${Math.abs(result.delta) === 1 ? '' : 's'}.`);
+          onDone(result.duplicate ? 'Already done: nothing changed.' : `${kind === 'grant' ? 'Granted' : 'Revoked'} ${formatNumber(Math.abs(result.delta))} top-up credit${Math.abs(result.delta) === 1 ? '' : 's'}.`);
         })
       }
     >
@@ -179,11 +183,13 @@ function CreditsDialog({ id, name, pack, onClose, onDone }: { id: string; name: 
         </label>
       </fieldset>
       <label>
-        Pack credits
-        <input className="adm-input" type="number" min={1} max={100} step={1} required value={credits} onChange={(e) => setCredits(e.target.value)} />
+        Credits (up to 3 decimals)
+        <input className="adm-input" type="number" min={0.001} max={10000} step={0.001} required value={credits} onChange={(e) => setCredits(e.target.value)} />
       </label>
       <p className="adm-muted">
-        {kind === 'grant' ? 'Pack credits never expire and are spent after the monthly and trial ones.' : `Takes at most what is left: ${pack} pack credit${pack === 1 ? '' : 's'} now. The balance never goes below 0.`}
+        {kind === 'grant'
+          ? 'Top-up credits never expire and are spent after the monthly and sign-up ones. A mock interview costs about 50 to 70.'
+          : `Takes at most what is left: ${formatNumber(topup)} top-up credit${topup === 1 ? '' : 's'} now. The balance never goes below 0.`}
       </p>
       <label>
         Reason (in the audit log)

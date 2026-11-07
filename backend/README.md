@@ -109,10 +109,11 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
   immutable, tagged snapshots of a synced diagram, which cloud references
   resolve to, in the signed-in account only.
 - **Plans and limits** ([below](#plans-and-limits), `src/plans.ts`): what an
-  account may keep, on the free or the Pro plan.
+  account may keep, on the free, Pro or Max plan.
 - **Billing and credits** ([below](#billing-and-credits), `src/billing.ts`,
-  `src/credits.ts`): Pro and interview packs through Polar, and the ledger of
-  AI interview credits. Off without the Polar secrets.
+  `src/credits.ts`, `src/meter.ts`): Pro, Max and credit top-ups through
+  Polar, and the ledger of the credits the AI features are paid in. Off
+  without the Polar secrets.
 - **Short links and embeds** ([below](#short-links-and-embeds)): a
   signed-in user stores a diagram at `/s/<id>` with a preview image; anyone
   with the link opens it in the editor or the embed page.
@@ -158,9 +159,12 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /api/me/documents/<id>/versions/<tag>` | `{version: {tag, seq, note, createdAt, size, sha256, documentId, name, source, imports}}`; `<tag>` may be `latest`. 404 for a tag it does not have (or deleted) |
 | `DELETE /api/me/documents/<id>/versions/<tag>` | Deletes the version's content at once; its tag stays taken. 204 (also for a tag it does not have), 400 for `latest`, 404 for a diagram the account does not have |
 | `GET /api/me/versions/resolve?name=<name>&tag=<tag or latest>` | A cloud reference: `{documentId, name, tag, seq, sha256, source, imports}`. 404 when no live diagram has the name or it has no such version; 409 `{error: 'ambiguous_name', message, documentIds}` when several do; 400 for a missing name or `bad_tag` |
-| `GET /api/me/limits` | `{plan, limits: {documents, versionsPerDocument, documentBytes, interviewsPerMonth, interviewsLifetime}, usage: {documents}}` ([Plans and limits](#plans-and-limits)) |
-| `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, limits, credits: {total, monthly, trial, pack, period}}` ([Billing and credits](#billing-and-credits)); `limits.documents` and `versionsPerDocument` are null where unlimited |
-| `POST /api/billing/checkout {product}` | `product`: `pro_monthly`, `pro_yearly` or `pack_5`. `{url}` of a Polar checkout to send the browser to. 409 `already_pro` for a second subscription; 501 without Polar set up |
+| `GET /api/me/limits` | `{plan, limits: {documents, versionsPerDocument, documentBytes, monthlyCredits}, usage: {documents}}` ([Plans and limits](#plans-and-limits)) |
+| `GET /api/me/plan` | `{plan, billing, subscription: {status, product, currentPeriodEnd, cancelAtPeriodEnd} \| null, customer, limits, features, credits: {balance, monthly: {allowance, left, resetsAt} \| null, signup, topup}}` ([Billing and credits](#billing-and-credits)), credits with up to 3 decimals; `limits.documents` and `versionsPerDocument` are null where unlimited |
+| `POST /api/billing/checkout {product}` | `product`: `pro_monthly`, `pro_yearly`, `max_monthly`, `max_yearly` or `credits_1000`. `{url}` of a Polar checkout to send the browser to. 409 `has_subscription` for a plan while a subscription is running (switch it instead); a top-up is always allowed; 501 without Polar set up |
+| `POST /api/billing/change-plan {product}` | Switches the running subscription to another plan product at Polar (one subscription, never a second): `{ok: true, plan, effective: 'now'}`; the webhook then sets the plan. 409 `no_subscription`, `canceling` (set to end) or `same_plan`; 400 for `credits_1000`; 502 when Polar refuses |
+| `GET /api/credits/estimates` | Public: `{mock_interview, partner_review, partner_build, partner_turn: {min, max}, deepMultiplier}`, what each costs in credits ([Credits](#credits)) |
+| `GET /api/credits/usage?limit=` | Signed in: `{items: [{at, action, ref, credits, deep}]}`, the newest charges first (at most 200) |
 | `POST /api/billing/portal` | `{url}` of Polar's customer portal (invoices, payment method, cancel). 404 before a first purchase; 501 without Polar set up |
 | `POST /api/billing/webhook` | Polar's signed events (no session). 403 on a bad signature; a replay answers `{ok: true, duplicate: true}`; 501 without Polar set up |
 | `GET /api/me/email` | Email reminders ([below](#email-reminders)): `{email, confirmed, timeZone, streak, cards, recap, paused}`, or `{email: null}` |
@@ -268,18 +272,17 @@ tagged.
 
 ### Plans and limits
 
-`users.plan` (`'free'` or `'pro'`, set by the [Polar webhook](#billing-and-credits);
+`users.plan` (`'free'`, `'pro'` or `'max'`, set by the [Polar webhook](#billing-and-credits);
 any other value only by SQL) picks the account's limits in `src/plans.ts`,
 the one place the numbers live. An unknown plan gets, and reports, the free
 limits.
 
-| Limit | `limitsFor(plan)` | Free | Pro |
-|---|---|---|---|
-| Live synced diagrams | `documents` | 5 | 1000 (shown as unlimited) |
-| Live versions per diagram | `versionsPerDocument` | 20 | 1000 (shown as unlimited) |
-| A diagram's source plus imports (as JSON), in characters | `documentBytes` | 65536 (64 KiB) | 524288 (512 KiB) |
-| AI interviews a UTC month | `interviewsPerMonth` | 0 | 4 |
-| AI interviews for life | `interviewsLifetime` | 1 | 1 |
+| Limit | `limitsFor(plan)` | Free | Pro | Max |
+|---|---|---|---|---|
+| Live synced diagrams | `documents` | 5 | 1000 (shown as unlimited) | as Pro |
+| Live versions per diagram | `versionsPerDocument` | 20 | 1000 (shown as unlimited) | as Pro |
+| A diagram's source plus imports (as JSON), in characters | `documentBytes` | 65536 (64 KiB) | 524288 (512 KiB) | as Pro |
+| Credits a UTC calendar month | `monthlyCredits` | 0 (100 once at sign-up) | 800 | 2200 |
 
 Pro's "unlimited" is a fair-use cap of 1000 (`UNLIMITED`) that hand-made
 diagrams never reach; 512 KiB keeps a diagram with its imports under D1's
@@ -294,7 +297,7 @@ deleted. An account past the free plan's 5 diagrams can still save its 5
 most recently saved ones; saving any other gets 409
 `{error: 'document_limit', readOnly: true}`, and the editor keeps those edits
 in the browser, as it does for diagrams past the limit. Deleting diagrams (or
-subscribing again) makes the rest writable. Pack credits never expire, on
+subscribing again) makes the rest writable. Top-up credits never expire, on
 any plan.
 
 ### Billing and credits
@@ -313,34 +316,69 @@ renewal date (`billing`, migration 0017), and never any card data.
   `whsec_` secret's base64 part), and applies each `webhook-id` once, in one
   D1 batch with the event's row, so a replay changes nothing.
   `subscription.*` events store the subscription unless an event with a
-  later `modified_at` is stored already, and set the plan from it: `pro`
-  while `active`, `trialing` or `past_due`, else `free`. `order.paid` for
-  the pack grants 5 credits, once per order id.
+  later `modified_at` is stored already, and set the plan from it: `max`
+  for a `max_*` product and `pro` for a `pro_*` one while `active`,
+  `trialing` or `past_due`, else `free`. `order.paid` for `credits_1000`
+  grants 1000 top-up credits, once per order id; a refund or a lost dispute
+  takes back what is left of them, never below 0.
+- `POST /api/billing/change-plan` PATCHes the running subscription's
+  `product_id` at Polar (`proration_behavior: 'invoice'`) and writes
+  `billing.change_plan` to the audit log; the webhook that follows sets the
+  plan, as for any other change.
 - Deleting the account revokes a subscription still billing at Polar first
   (the deletion fails with 502 if Polar can't be reached), then the billing
   row and the ledger go with the account. Both are in Download my data.
 
-**Credits** (`src/credits.ts`, table `credits`): an append-only ledger of
-grants (+5, a pack), spends (-1, an interview started) and refunds (+1, the
-same interview failed early). A balance is summed, never stored. Spends draw
-on, in order, the plan's monthly allowance (Pro: 4 for the UTC month, no
-roll-over), the lifetime interview every account gets, then pack credits.
-`spend(env, userId, kind, refId)` is one conditional INSERT per bucket, so
-concurrent spends never take more than there is, and `UNIQUE (kind, ref_id)`
-makes each spend and each refund happen once. The AI interview calls
-`balance`, `spend` and `refund`; the refund rule (failed in the first 5
-minutes) is its own.
+#### Credits
+
+The AI features (mock interviews, the in-depth review, your next steps and
+the design partner) are paid in credits (docs/design/paid-plans.md P26 to
+P31, docs/impl/design-partner.md "Credits").
+
+- **Price.** A call is charged twice what it cost us: the model's price per
+  token (`PRICES` in `src/meter.ts`, with cache reads and writes), times 2,
+  in euros at `CREDITS_USD_EUR` (unset: 0.95), at €0.01 a credit, rounded up
+  to a millicredit. Failed calls and the retry of a malformed answer are
+  charged nothing.
+- **Ledger** (`src/credits.ts`, table `credits`, migration 0024): an
+  append-only list of rows in millicredits (`delta_mc`), in one of three
+  buckets. A balance is summed, never stored. `monthly`: Pro's 800 or Max's
+  2200, granted when the balance is first read in a UTC calendar month and
+  gone at its end (an upgrade mid-month adds the difference). `signup`: 100
+  once, given by `grantSignupCredits(env, userId, identityKey)` after the
+  sign-up's own checks, once per account and per identity (a keyed hash in
+  `signup_identities` outlives a deleted account). `topup`: bought or
+  granted by the admin, never expire. Charges take from monthly, then
+  signup, then topup. `UNIQUE (kind, ref_id)` makes each grant and charge
+  happen once.
+- **Holds** (`src/meter.ts`, table `credit_holds`). Before a call, `hold`
+  reserves its worst case (`estimateMc`: all input at the cache-write price
+  and the full `max_tokens`) with one conditional INSERT that succeeds only
+  if the balance less the unexpired holds covers it, so parallel calls can't
+  overdraw. After it, `settle` charges the real cost, never more than the
+  hold, in one batch with the hold's deletion (a row in `credit_charges`
+  keeps what each call charged and cost). `release` frees a hold. Holds
+  expire after 5 minutes (a mock interview's verdict hold lasts its wall
+  clock plus 30 minutes); the daily cron prunes old ones (`credit_holds`).
+  Too few credits answers `402 {error: 'no_credits', needed, balance}`, in
+  credits.
+- **Mock interviews** (P28). Starting needs the verdict's hold and one
+  turn's; the verdict's is held for the whole session. Each turn holds,
+  then settles. At 0 credits the turn answers the 402 with `wrapUp: true`,
+  the session moves to wrap-up, and the verdict still runs from its hold.
+  The token cap and the lease stay as they were.
 
 **Setup.** In Polar (sandbox first): create the products Pro monthly
-(€12/month), Pro yearly (€89/year) and Interview pack (5 interviews, €15,
-one-time); a webhook endpoint at `https://proschi.app/api/billing/webhook`
+(€12/month), Pro yearly (€99/year), Max monthly (€29/month), Max yearly
+(€249/year) and 1000 credits (€12, one-time); a webhook endpoint at `https://proschi.app/api/billing/webhook`
 with the events in the [production checklist](#production-checklist)
 (`subscription.*`, `order.paid` and the refund and dispute events) and webhook
 API version 2026-10, which Polar pins per endpoint; and an organization
 access token with `checkouts:write`, `customer_sessions:write` and
 `subscriptions:write`. Then set the Worker's secrets `POLAR_ACCESS_TOKEN`,
-`POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`
-and `POLAR_PRODUCT_PACK_5` (and `POLAR_SERVER=sandbox` against the sandbox).
+`POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`,
+`POLAR_PRODUCT_MAX_MONTHLY`, `POLAR_PRODUCT_MAX_YEARLY` and
+`POLAR_PRODUCT_CREDITS_1000` (and `POLAR_SERVER=sandbox` against the sandbox).
 Build the site with `VITE_BILLING=true` as well as `VITE_ACCOUNTS=true` to
 show the pricing page and the upgrade buttons.
 
@@ -473,18 +511,18 @@ views) and a per-day table. Without the secret the summary answers 404.
 
 ### Design review (`POST /api/review`)
 
-An AI review of a design, for Pro (docs/design/paid-plans.md, P17): Claude
-Sonnet reads the design, the server's own run of its tests and the
-simulation's numbers, and answers with a `DesignReview`. Everyone else, and
-Pro when the reviewer is off, busy or used up for the day, gets the page's
+An in-depth review of a design (docs/design/paid-plans.md, P17), behind the
+`design_partner` feature, so on every plan, paid in [credits](#credits):
+Claude Sonnet reads the design, the server's own run of its tests and the
+simulation's numbers, and answers with a `DesignReview`. Without the key or
+credits, or when the reviewer is busy, the page uses its
 rule reviewer (`frontend/src/review/rules.ts`), which answers with the same
 `DesignReview` from the same request. The contract is one file,
 `frontend/src/review/contract.ts`: the page builds the request from it
 (`src/review/request.ts`) and the Worker validates with it (`src/review.ts`),
 so the two cannot drift.
 
-- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, signed in
-  on Pro:
+- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, signed in:
   - `source`: the design as written (at most 64 KiB; for a practice problem,
     the solver's file, which starts with `import "problem.proschi"`);
   - `model`: the parsed design, summarised: `nodes` (`id`, `name`, `tech`,
@@ -524,34 +562,32 @@ so the two cannot drift.
   given, as in `src/verify.ts`, and any `imports` sent with it are ignored;
   an editor diagram's imports resolve only against the files sent, parsed as
   data like the source, and nothing is fetched.
-- **Answers**: 200 with a `DesignReview` and the usage after it: `{summary,
+- **Answers**: 200 with a `DesignReview` and the credits after it: `{summary,
   strengths: string[], issues: [{severity: "info" | "minor" | "major" |
-  "critical", title, detail, nodeId?}], suggestions: string[], usage: {limit,
-  used, remaining, resetAt}}` (`resetAt`: the next UTC midnight, in Unix
-  milliseconds). `nodeId` is a node of the server's parse (others are
+  "critical", title, detail, nodeId?}], suggestions: string[], credits:
+  {charged, balance}}`. `nodeId` is a node of the server's parse (others are
   dropped); the page links it to the node's line. Otherwise 400 `{error}`
   naming what is wrong with the body, 413 for a source or body that is too
-  long, 401 signed out, 402 `{error: "plan_required"}` off Pro, 404 for an
-  unknown problem, 429 past the per-IP or per-user limit (`Retry-After`),
-  429 `{error: "daily_limit", usage}` past 20 reviews today (with
-  `Retry-After` to midnight UTC), 503 `{error: "ai_unavailable"}` when the
+  long, 401 signed out, 402 `{error: "no_credits", needed, balance}` when
+  the balance can't hold the review's worst case, 404 for an unknown
+  problem, 429 past the per-IP or per-user limit (`Retry-After`), 503 `{error: "ai_unavailable"}` when the
   model is busy or unreachable, 502 `{error: "review_failed"}` when it
   failed or its answer did not validate twice, and 501 `{error:
   "not_implemented"}` without `ANTHROPIC_API_KEY` (P10). The page reads 501,
   402, 404, 503 and no answer as "no AI reviewer here" and shows the rule
   review, saying why.
-- **`GET /api/review/usage`**: `{limit, used, remaining, resetAt}` for a Pro
-  user, for the count next to the button; 402 off Pro, 501 without the key.
+- **`GET /api/review/usage`**: `{limit, used, remaining, resetAt}`, kept for
+  the page: `remaining` (and `limit`) is how many reviews of a typical
+  diagram the balance holds now, `used` 0, `resetAt` the next monthly
+  allowance. 501 without the key.
 
 How it works (`src/review.ts`, `src/ai/reviewer.ts`):
 
-- The day's count is `review_usage` (migration 0020), one row per user and
-  UTC day. A review is counted before the model is called, with one
-  statement that increments only under the cap (`INSERT … ON CONFLICT DO
-  UPDATE … WHERE count < 20 RETURNING`), so concurrent reviews cannot pass
-  it, and given back when the call fails. Rows older than 7 days are pruned
-  (`pruneReviewUsage`, the daily cron's `review_usage` job). The counts are in Download my
-  data and deleted with the account.
+- A review holds its worst case (Sonnet's 16,000 output tokens and its input
+  guessed from the characters sent) before the model is called, and settles
+  what the answer that validated cost; a failed review releases the hold.
+  There is no daily cap. The charges are in Download my data
+  (`creditCharges`) and deleted with the account.
 - One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)
   through `src/ai/client.ts`, so `AI_GATEWAY_URL` applies as for interviews,
   with a JSON schema for the answer. The answer is checked with
@@ -563,7 +599,7 @@ How it works (`src/review.ts`, `src/ai/reviewer.ts`):
   that could open or close a tag escaped, and the prompt says that text is
   data, never instructions. The source is never logged.
 - Limits: `REVIEW_LIMITER` per IP (10 a minute) and `AI_REVIEW_LIMITER` per
-  user (5 a minute), besides the daily cap.
+  user (5 a minute).
 
 The page asks the API only in builds with paid plans (`VITE_BILLING=true`,
 which needs `VITE_ACCOUNTS=true`) and only for a Pro account; there it shows
@@ -1101,13 +1137,14 @@ npm run dev:paid   # builds frontend/dist with VITE_ACCOUNTS=true VITE_BILLING=t
 Open http://localhost:8787 and sign in. Wrangler reads `.dev.vars` when it
 starts, so restart it after a change.
 
-**4. Make yourself Pro and add credits.** Both helpers run `wrangler d1
+**4. Make yourself Pro or Max and add credits.** The helpers run `wrangler d1
 execute proschi --local` and nothing else: they take no flags, and refuse
 `--remote` or any other.
 
 ```sh
-npm run local:pro -- <userId or GitHub/Google subject>       # users.plan = 'pro'
-npm run local:credits -- <userId or GitHub/Google subject> 5 # a pack grant of 5 interview credits
+npm run local:pro -- <userId or GitHub/Google subject>         # users.plan = 'pro' (800 credits a month)
+npm run local:max -- <userId or GitHub/Google subject>         # users.plan = 'max' (2200 credits a month)
+npm run local:credits -- <userId or GitHub/Google subject> 500 # 500 top-up credits (up to 3 decimals)
 ```
 
 The subject is your numeric GitHub user id (`id` at
@@ -1118,9 +1155,10 @@ accounts:
 npx wrangler d1 execute proschi --local --command "SELECT u.id, u.display_name, u.plan, i.provider, i.subject FROM users u JOIN identities i ON i.user_id = u.id"
 ```
 
-Each `local:credits` adds one ledger row (`kind 'grant'`, `bucket 'pack'`,
-`item 'pack_5'`, `ref_id 'local-<uuid>'`). Pro also has its 4 interviews a
-month, and every account one for life. Reload the page afterwards.
+Each `local:credits` adds one ledger row (`kind 'topup'`, `bucket 'topup'`,
+in millicredits, `ref_id 'local-<uuid>'`). Pro and Max also get their
+monthly credits. A new local account has no sign-up credits until the
+sign-up flow grants them. Reload the page afterwards.
 
 **5. Try each feature.**
 
@@ -1130,7 +1168,7 @@ month, and every account one for life. Reload the page afterwards.
   design** sends the editor's diagram; **Finish and get the verdict** ends it.
 - **AI review**: on a problem, the **Review** tab next to **Tests** → **Review
   my design** (in the editor at `/app/`, the Review section of the results).
-  Pro has 20 a UTC day.
+  Each one is charged in credits.
 - **History**: the account menu → **Your progress** (`/practice/#/progress`):
   every finished AI interview's verdict and the skill trends.
 - **Next for you**: on the roadmap (`/practice/#/roadmap`) and under a
@@ -1144,10 +1182,11 @@ month, and every account one for life. Reload the page afterwards.
 Polar at <https://sandbox.polar.sh>, with its own organization, products and
 tokens.
 
-1. Create the three products (as in the
+1. Create the five products (as in the
    [production checklist](#production-checklist)) and put their ids in
-   `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY` and
-   `POLAR_PRODUCT_PACK_5`.
+   `POLAR_PRODUCT_PRO_MONTHLY`, `POLAR_PRODUCT_PRO_YEARLY`,
+   `POLAR_PRODUCT_MAX_MONTHLY`, `POLAR_PRODUCT_MAX_YEARLY` and
+   `POLAR_PRODUCT_CREDITS_1000`.
 2. Create an organization access token with the checklist's scopes
    (`POLAR_ACCESS_TOKEN`), and keep `POLAR_SERVER=sandbox`.
 3. Expose the local Worker: `cloudflared tunnel --url http://localhost:8787`
@@ -1159,8 +1198,8 @@ tokens.
 4. Restart `npm run dev:paid`, open http://localhost:8787/pricing/ (still on
    localhost: sign-in and the checkout's return are there) and buy. The
    sandbox takes Stripe's test cards: `4242 4242 4242 4242`, any future
-   expiry date, any CVC. The webhook then sets the plan or adds the pack's
-   credits; Polar's webhook page and the wrangler log show each delivery.
+   expiry date, any CVC. The webhook then sets the plan or adds the
+   top-up's credits; Polar's webhook page and the wrangler log show each delivery.
 
 **What it costs.** The AI calls are real and billed to your Anthropic key:
 a 45-minute AI interview costs about $0.20–0.30, a review less. Give the key
@@ -1179,13 +1218,16 @@ Before turning the paid features on at proschi.app:
   `SESSION_SECRET`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`,
   `GOOGLE_CLIENT_ID`, `GOOGLE_CLIENT_SECRET`, `ANTHROPIC_API_KEY`,
   `POLAR_ACCESS_TOKEN`, `POLAR_WEBHOOK_SECRET`, `POLAR_PRODUCT_PRO_MONTHLY`,
-  `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_PACK_5`; optionally
-  `AI_GATEWAY_URL` and `AI_GATEWAY_TOKEN`, `METRICS_TOKEN`, and
+  `POLAR_PRODUCT_PRO_YEARLY`, `POLAR_PRODUCT_MAX_MONTHLY`,
+  `POLAR_PRODUCT_MAX_YEARLY`, `POLAR_PRODUCT_CREDITS_1000`; optionally
+  `AI_GATEWAY_URL` and `AI_GATEWAY_TOKEN`, `METRICS_TOKEN`,
+  `CREDITS_USD_EUR` (the dollar-to-euro rate credits are priced at;
+  unset: 0.95), and
   `ADMIN_SETUP_TOKEN` (once). `POLAR_SERVER` must not be `sandbox` (leave
   it unset).
 - **Polar (production, not the sandbox)**:
-  - products: Pro monthly (€12/month), Pro yearly (€89/year) and Interview
-    pack (5 interviews, €15, one-time);
+  - products: Pro monthly (€12/month), Pro yearly (€99/year), Max monthly
+    (€29/month), Max yearly (€249/year) and 1000 credits (€12, one-time);
   - a webhook endpoint at `https://proschi.app/api/billing/webhook` with the
     events `subscription.created`, `subscription.updated`,
     `subscription.active`, `subscription.canceled`, `subscription.uncanceled`,
@@ -1210,14 +1252,16 @@ Before turning the paid features on at proschi.app:
 
 **Admin.** The admin panel (`/admin/`, "Admin panel" above) covers the paid
 product once it is on: the **Health** tab says whether `ANTHROPIC_API_KEY`,
-`AI_GATEWAY_URL` and the five Polar secrets are set (never their values) and
+`AI_GATEWAY_URL` and the seven Polar secrets are set (never their values) and
 whether `POLAR_SERVER` is sandbox or live; check it after setting the secrets.
-The **Billing** tab counts Pro accounts, monthly and yearly subscribers and
-pack orders (D1 stores no amounts: what was paid is in Polar), and logs every
+The **Billing** tab counts Pro and Max accounts, monthly and yearly
+subscribers of each and top-up orders (D1 stores no amounts: what was paid
+is in Polar), and logs every
 Polar webhook delivery with its outcome (`applied`, `duplicate`, `ignored`,
 `stale`, `bad_signature`, `error`) for 90 days, so a misconfigured webhook
 secret shows up as `bad_signature` rows. The **AI** tab has interviews,
-reviews, tokens and cost per day. On an account, the admin can grant or
-revoke pack credits and comp Pro until a date (`users.comp_until`, migration
+reviews, tokens and cost per day, and the credits charged per day against
+what those calls cost. On an account, the admin can grant or revoke top-up
+credits (in credits, up to 3 decimals) and comp Pro until a date (`users.comp_until`, migration
 0023), each with a reason in the audit log; a comp never touches Polar, and
 refunds are made in Polar's dashboard, which the panel links to.

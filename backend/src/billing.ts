@@ -1,37 +1,43 @@
+import { auditStatement } from './adminAuth';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { timingSafeEqual } from './crypto';
-import { balance, grantStatement, refundedOrderStatement, revokeStatement } from './credits';
+import { creditsView, refundedOrderStatement, revokeStatement, topupStatement } from './credits';
 import type { Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { log } from './log';
 import { featureMap } from './features';
-import { limitsFor, planName, UNLIMITED } from './plans';
+import { limitsFor, MC, planName, UNLIMITED } from './plans';
 
 /**
- * The Pro plan and interview packs through Polar, the merchant of record
- * (docs/design/paid-plans.md P1–P3, P10; backend/README.md "Billing and
+ * Pro, Max and credit top-ups through Polar, the merchant of record
+ * (docs/design/paid-plans.md P1–P3, P10, P26; backend/README.md "Billing and
  * credits"). Polar hosts the checkout and the customer portal; its signed
- * webhook is the only thing that changes `users.plan` or adds pack credits.
+ * webhook is the only thing that changes `users.plan` or adds top-up credits.
  * Proschi never sees card data. Without the Polar secrets every billing
  * route but GET /api/me/plan answers 501.
  */
 
-export type Product = 'pro_monthly' | 'pro_yearly' | 'pack_5';
-const PRODUCTS: readonly Product[] = ['pro_monthly', 'pro_yearly', 'pack_5'];
-/** Interview credits in one pack. */
-export const PACK_CREDITS = 5;
+export type Product = 'pro_monthly' | 'pro_yearly' | 'max_monthly' | 'max_yearly' | 'credits_1000';
+const PRODUCTS: readonly Product[] = ['pro_monthly', 'pro_yearly', 'max_monthly', 'max_yearly', 'credits_1000'];
+/** The subscription products, and the plan each gives. */
+const SUBSCRIPTIONS: Readonly<Partial<Record<Product, 'pro' | 'max'>>> = { pro_monthly: 'pro', pro_yearly: 'pro', max_monthly: 'max', max_yearly: 'max' };
+const isSubscription = (p: Product | undefined): p is Product => p !== undefined && SUBSCRIPTIONS[p] !== undefined;
+/** Credits in one top-up order. */
+export const TOPUP_CREDITS = 1000;
 /** Subscription statuses that keep Pro: past_due too, while Polar retries the payment. */
 const PRO_STATUSES = ['active', 'trialing', 'past_due'];
 /** A webhook whose timestamp is further than this from now is refused (Standard Webhooks). */
 const WEBHOOK_TOLERANCE_S = 5 * 60;
 const NO_STORE = { 'Cache-Control': 'no-store' };
 
-type Configured = Env & Required<Pick<Env, 'POLAR_ACCESS_TOKEN' | 'POLAR_WEBHOOK_SECRET' | 'POLAR_PRODUCT_PRO_MONTHLY' | 'POLAR_PRODUCT_PRO_YEARLY' | 'POLAR_PRODUCT_PACK_5'>>;
+const PRODUCT_ENV = ['POLAR_PRODUCT_PRO_MONTHLY', 'POLAR_PRODUCT_PRO_YEARLY', 'POLAR_PRODUCT_MAX_MONTHLY', 'POLAR_PRODUCT_MAX_YEARLY', 'POLAR_PRODUCT_CREDITS_1000'] as const;
 
-/** Whether every Polar secret is set (P10: billing is off otherwise). */
+type Configured = Env & Required<Pick<Env, 'POLAR_ACCESS_TOKEN' | 'POLAR_WEBHOOK_SECRET' | (typeof PRODUCT_ENV)[number]>>;
+
+/** Whether every Polar secret and product id is set (P10: billing is off otherwise). */
 export function billingConfigured(env: Env): env is Configured {
-  return !!(env.POLAR_ACCESS_TOKEN && env.POLAR_WEBHOOK_SECRET && env.POLAR_PRODUCT_PRO_MONTHLY && env.POLAR_PRODUCT_PRO_YEARLY && env.POLAR_PRODUCT_PACK_5);
+  return !!(env.POLAR_ACCESS_TOKEN && env.POLAR_WEBHOOK_SECRET && PRODUCT_ENV.every((k) => env[k]));
 }
 
 function configured(env: Env): Configured {
@@ -42,7 +48,9 @@ function configured(env: Env): Configured {
 const productIds = (env: Configured): Record<Product, string> => ({
   pro_monthly: env.POLAR_PRODUCT_PRO_MONTHLY,
   pro_yearly: env.POLAR_PRODUCT_PRO_YEARLY,
-  pack_5: env.POLAR_PRODUCT_PACK_5,
+  max_monthly: env.POLAR_PRODUCT_MAX_MONTHLY,
+  max_yearly: env.POLAR_PRODUCT_MAX_YEARLY,
+  credits_1000: env.POLAR_PRODUCT_CREDITS_1000,
 });
 
 function productOf(env: Configured, polarId: unknown): Product | undefined {
@@ -81,9 +89,10 @@ async function billingRow(DB: D1Database, userId: string): Promise<BillingRow | 
 }
 
 /**
- * POST /api/billing/checkout {product: pro_monthly|pro_yearly|pack_5}: a
- * Polar checkout for the signed-in user, {url} to send the browser to.
- * 409 already_pro for a second subscription (the portal changes plans).
+ * POST /api/billing/checkout {product}: a Polar checkout for the signed-in
+ * user, {url} to send the browser to. A subscription product with an active
+ * subscription answers 409 has_subscription (POST /api/billing/change-plan
+ * switches it); credits_1000 always goes through checkout.
  */
 export async function createCheckout(request: Request, ctx: Ctx): Promise<Response> {
   const env = configured(ctx.env);
@@ -94,8 +103,8 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
   if (typeof product !== 'string' || !PRODUCTS.includes(product as Product)) throw new HttpError(400, `product must be one of ${PRODUCTS.join(', ')}`);
   const row = await billingRow(env.DB, user.id);
   // A second subscription is refused; Pro from the admin's comp alone (src/plans.ts effectivePlan) can still subscribe.
-  if (product !== 'pack_5' && PRO_STATUSES.includes(row?.status ?? '')) {
-    return json({ error: 'already_pro', message: 'You are on Pro already; change or cancel it in the billing portal' }, 409, NO_STORE);
+  if (isSubscription(product as Product) && PRO_STATUSES.includes(row?.status ?? '')) {
+    return json({ error: 'has_subscription', message: 'You have a subscription already; switch plans instead of buying a second one' }, 409, NO_STORE);
   }
   const origin = new URL(request.url).origin;
   const checkout = await polar<{ url: string }>(env, '/v1/checkouts/', {
@@ -107,6 +116,34 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
     return_url: `${origin}/pricing/`,
   });
   return json({ url: checkout.url }, 200, NO_STORE);
+}
+
+/**
+ * POST /api/billing/change-plan {product}: switches the account's current
+ * Polar subscription to another subscription product (Pro↔Max,
+ * monthly↔yearly), at once; Polar invoices the prorated difference
+ * (`proration_behavior: invoice`). Never opens a second subscription: 409
+ * no_subscription without an active one, 409 canceling while it is set to
+ * end (Polar refuses changes then), 409 same_plan for the product it has.
+ * The webhook that follows sets `users.plan`, as for every subscription
+ * change. Audited (`billing.change_plan`).
+ */
+export async function changePlan(request: Request, ctx: Ctx): Promise<Response> {
+  const env = configured(ctx.env);
+  const user = await requireUser(request, ctx);
+  await rateLimit(env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
+  const body = await readJson(request, 1024);
+  const product = body.product as Product;
+  if (typeof body.product !== 'string' || !PRODUCTS.includes(product) || !isSubscription(product)) {
+    throw new HttpError(400, `product must be one of ${PRODUCTS.filter((p) => isSubscription(p)).join(', ')}`);
+  }
+  const row = await billingRow(env.DB, user.id);
+  if (!row?.polar_subscription_id || !PRO_STATUSES.includes(row.status ?? '')) return json({ error: 'no_subscription', message: 'There is no active subscription to change' }, 409, NO_STORE);
+  if (row.cancel_at_period_end === 1) return json({ error: 'canceling', message: 'The subscription is set to end; resume it in the billing portal first' }, 409, NO_STORE);
+  if (row.product === product) return json({ error: 'same_plan', message: 'You are on that plan already' }, 409, NO_STORE);
+  await polar(env, `/v1/subscriptions/${encodeURIComponent(row.polar_subscription_id)}`, { product_id: productIds(env)[product], proration_behavior: 'invoice' }, 'PATCH');
+  await env.DB.batch([auditStatement(env, undefined, 'billing.change_plan', user.id, { from: row.product, to: product })]);
+  return json({ ok: true, plan: SUBSCRIPTIONS[product], effective: 'now' }, 200, NO_STORE);
 }
 
 /** POST /api/billing/portal: {url} of Polar's customer portal (invoices, payment method, cancel). 404 before a first purchase. */
@@ -125,17 +162,17 @@ export async function createPortal(request: Request, ctx: Ctx): Promise<Response
 
 /**
  * GET /api/me/plan: the plan, the subscription's state and renewal, the
- * plan's limits (null where unlimited), the interview credits and every
- * paid feature's answer (src/features.ts can: {ok, reason?}). Works
- * without billing set up (everyone is on free), so the AI interview can
- * read credits; `billing` says whether checkout is on.
+ * plan's limits (null where unlimited), the credits (src/credits.ts
+ * creditsView) and every paid feature's answer (src/features.ts can:
+ * {ok, reason?}). Works without billing set up (everyone is on free), so the
+ * paid features can read credits; `billing` says whether checkout is on.
  */
 export async function getPlan(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   const plan = planName(user.plan);
   const limits = limitsFor(user.plan);
   const row = await billingRow(ctx.env.DB, user.id);
-  const credits = await balance(ctx.env, user.id);
+  const credits = await creditsView(ctx.env, user.id);
   const cap = (n: number) => (n >= UNLIMITED ? null : n);
   return json(
     {
@@ -145,7 +182,7 @@ export async function getPlan(request: Request, ctx: Ctx): Promise<Response> {
         ? { status: row.status, product: row.product, currentPeriodEnd: row.current_period_end, cancelAtPeriodEnd: row.cancel_at_period_end === 1 }
         : null,
       customer: !!row?.polar_customer_id,
-      limits: { documents: cap(limits.documents), versionsPerDocument: cap(limits.versionsPerDocument), documentBytes: limits.documentBytes, interviewsPerMonth: limits.interviewsPerMonth },
+      limits: { documents: cap(limits.documents), versionsPerDocument: cap(limits.versionsPerDocument), documentBytes: limits.documentBytes },
       credits,
       features: featureMap(user, ctx.env),
     },
@@ -245,12 +282,13 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  * - `subscription.created|updated|active|canceled|uncanceled|revoked`: the
  *   subscription's state is stored (a late event older than what is stored
  *   is not applied, nor a cancel or revoke of a subscription other than the
- *   current active one), and `users.plan` follows it: pro while active, trialing
- *   or past_due, else free. A downgrade keeps every diagram; those past the
- *   free limit turn read-only (src/documents.ts).
- * - `order.paid` for the pack: 5 credits, once per order.
+ *   current active one), and `users.plan` follows it: pro or max (by the
+ *   product) while active, trialing or past_due, else free. A product change
+ *   (Pro↔Max) moves the plan with it. A downgrade keeps every diagram; those
+ *   past the free limit turn read-only (src/documents.ts).
+ * - `order.paid` for credits_1000: 1,000 credits, once per order.
  * - `order.refunded`, a succeeded `refund.created|updated`, or a lost
- *   `dispute.*` (a chargeback) of a pack order: its credits are taken back,
+ *   `dispute.*` (a chargeback) of a top-up order: its credits are taken back,
  *   what is left of them (the balance never goes below 0), once per order.
  *   A refund that arrives before the order's `order.paid` keeps it from granting.
  *
@@ -341,7 +379,7 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
   const customerId = data.customer_id ?? data.customer?.id ?? null;
   delivery.userId = userId ?? null;
   const product = productOf(env, data.product_id);
-  if (userId && type.startsWith('subscription.') && (product === 'pro_monthly' || product === 'pro_yearly')) {
+  if (userId && type.startsWith('subscription.') && isSubscription(product)) {
     effect = statements.length;
     const modified = msOf(data.modified_at) ?? msOf(data.created_at) ?? t;
     const pro = PRO_STATUSES.map((s) => `'${s}'`).join(', ');
@@ -364,24 +402,25 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
            ELSE excluded.status IN (${pro}) AND (${newer})
          END`,
       ).bind(userId, customerId, data.id ?? null, data.status ?? null, product, msOf(data.current_period_end), data.cancel_at_period_end ? 1 : 0, modified, t),
-      // The plan follows what is stored, so a late, older event can't flip it back. A plan set by hand (not free or pro) stays.
+      // The plan follows what is stored, so a late, older event can't flip it back. A plan set by hand (not free, pro or max) stays.
       DB.prepare(
-        `UPDATE users SET plan = CASE WHEN (SELECT status FROM billing WHERE user_id = ?1) IN (${PRO_STATUSES.map((s) => `'${s}'`).join(', ')}) THEN 'pro' ELSE 'free' END
-         WHERE id = ?1 AND plan IN ('free', 'pro')`,
+        `UPDATE users SET plan = CASE WHEN (SELECT status FROM billing WHERE user_id = ?1) IN (${pro})
+           THEN (CASE WHEN (SELECT product FROM billing WHERE user_id = ?1) IN ('max_monthly', 'max_yearly') THEN 'max' ELSE 'pro' END) ELSE 'free' END
+         WHERE id = ?1 AND plan IN ('free', 'pro', 'max')`,
       ).bind(userId),
     );
-  } else if (userId && type === 'order.paid' && product === 'pack_5' && data.id) {
+  } else if (userId && type === 'order.paid' && product === 'credits_1000' && data.id) {
     effect = statements.length + 1;
     statements.push(
       DB.prepare(
         `INSERT INTO billing (user_id, polar_customer_id, updated_at) VALUES (?1, ?2, ?3)
          ON CONFLICT (user_id) DO UPDATE SET polar_customer_id = COALESCE(billing.polar_customer_id, excluded.polar_customer_id), updated_at = excluded.updated_at`,
       ).bind(userId, customerId, t),
-      grantStatement(DB, userId, PACK_CREDITS, 'pack_5', data.id, t),
+      topupStatement(DB, userId, TOPUP_CREDITS * MC, 'credits_1000', data.id, t),
     );
   }
 
-  // A pack's money back: order.refunded (the order), refund.created|updated (a succeeded refund of it) or a chargeback (a dispute lost).
+  // A top-up's money back: order.refunded (the order), refund.created|updated (a succeeded refund of it) or a chargeback (a dispute lost).
   const refundedOrder =
     type === 'order.refunded'
       ? data.id
@@ -394,7 +433,7 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
   if (refundedOrder) {
     effect = statements.length;
     statements.push(refundedOrderStatement(DB, refundedOrder, t), revokeStatement(DB, refundedOrder, t));
-    delivery.userId = (await DB.prepare("SELECT user_id FROM credits WHERE kind = 'grant' AND ref_id = ?").bind(refundedOrder).first<{ user_id: string }>())?.user_id ?? null;
+    delivery.userId = (await DB.prepare("SELECT user_id FROM credits WHERE kind = 'topup' AND ref_id = ?").bind(refundedOrder).first<{ user_id: string }>())?.user_id ?? null;
   }
 
   let results: D1Result[];
@@ -409,7 +448,7 @@ async function applyWebhook(request: Request, env: Configured, delivery: Deliver
     throw e;
   }
   // A subscription event older than what is stored (or another subscription's that may not replace it) changes nothing: stale.
-  // A pack's grant that adds nothing (a refund came first) or an event nothing handles: ignored.
+  // A top-up's grant that adds nothing (a refund came first) or an event nothing handles: ignored.
   if (effect === undefined) delivery.outcome = 'ignored';
   else if (results[effect].meta.changes > 0 || refundedOrder) delivery.outcome = 'applied';
   else delivery.outcome = type.startsWith('subscription.') ? 'stale' : 'ignored';

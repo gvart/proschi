@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SESSION_COOKIE } from '../src/auth';
+import { grantSignupCredits } from '../src/credits';
 import { call, ORIGIN, resetDatabase } from './helpers';
 
 const RETURN = '/practice/?a=1#/url-shortener';
@@ -111,29 +112,31 @@ describe('sign-in', () => {
     expect(results).toEqual([{ event: 'sign_in', count: 2 }]);
   });
 
-  it('gives no new trial interview to an identity whose deleted account used it, and keeps only a hash of it', async () => {
+  it('gives sign-in no credits, and an identity its sign-up credits once, even after its account is deleted; keeps only hashes', async () => {
     mockProviders();
-    const trialOf = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { credits: { trial: number } }).credits.trial;
+    const balanceOf = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { credits: { balance: number } }).credits.balance;
+    const userId = async () => (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!.id;
     const first = await signIn();
-    expect(await trialOf(first.token)).toBe(1);
-    const { id } = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!;
-    // Deleted before the trial was used: signing up again gets it.
-    expect((await call('/api/me', { method: 'DELETE', token: first.token })).status).toBe(204);
-    const second = await signIn();
-    expect(await trialOf(second.token)).toBe(1);
+    // Signing in grants nothing: the caller grants after its own checks.
+    expect(await balanceOf(first.token)).toBe(0);
+    expect(await grantSignupCredits(env, await userId(), 'github\n42')).toBe('granted');
+    expect(await grantSignupCredits(env, await userId(), 'github\n42')).toBe('already');
+    expect(await balanceOf(first.token)).toBe(100);
 
-    const { id: secondId } = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!;
-    expect(secondId).not.toBe(id);
-    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'trial', -1, 'interview', 'session-1', 0)").bind(secondId).run();
-    expect((await call('/api/me', { method: 'DELETE', token: second.token })).status).toBe(204);
+    expect((await call('/api/me', { method: 'DELETE', token: first.token })).status).toBe(204);
     const tombstones = (await env.DB.prepare('SELECT * FROM account_tombstones').all()).results;
     expect(tombstones).toEqual([{ identity_hash: expect.stringMatching(/^[\w-]{43}$/), trial_used: 1 }]);
-    expect(JSON.stringify(tombstones)).not.toMatch(/42|octocat|github/);
+    const identities = (await env.DB.prepare('SELECT identity_hash FROM signup_identities').all()).results;
+    expect(identities).toEqual([{ identity_hash: tombstones[0].identity_hash }]);
+    expect(JSON.stringify([tombstones, identities])).not.toMatch(/42|octocat|github/);
 
-    const third = await signIn();
-    expect(await trialOf(third.token)).toBe(0);
+    // The same identity, on a new account: nothing.
+    const second = await signIn();
+    expect(await grantSignupCredits(env, await userId(), 'github\n42')).toBe('already');
+    expect(await balanceOf(second.token)).toBe(0);
     // Another identity is not affected.
-    expect(await trialOf((await signIn('google')).token)).toBe(1);
+    expect(await grantSignupCredits(env, await userId(), 'someone@example.com')).toBe('granted');
+    expect(await balanceOf(second.token)).toBe(100);
   });
 
   it('signs in with Google', async () => {

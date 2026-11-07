@@ -82,7 +82,8 @@ export interface TrendPoint {
   interviewsStarted: number;
   interviewsFinished: number;
   aiCostUsd: number;
-  packOrders: number;
+  /** Credit top-ups paid. */
+  topupOrders: number;
   webhookFailures: number;
   /** Counted back from today's with the webhook log (90 days). */
   proSubscribers: number;
@@ -123,7 +124,7 @@ export interface Health {
     /** The paid features' configuration: whether each is set, never its value. */
     anthropicKey: boolean;
     aiGateway: boolean;
-    polar: { accessToken: boolean; webhookSecret: boolean; productProMonthly: boolean; productProYearly: boolean; productPack5: boolean };
+    polar: { accessToken: boolean; webhookSecret: boolean; productProMonthly: boolean; productProYearly: boolean; productMaxMonthly: boolean; productMaxYearly: boolean; productCredits1000: boolean };
     polarServer: 'sandbox' | 'live';
     billing: boolean;
   };
@@ -173,11 +174,12 @@ export interface UserDetail {
     plan: string;
     /** Pro given by the admin until then; null without. */
     compUntil: number | null;
-    /** What the account gets now: Pro while subscribed or comped. */
+    /** What the account gets now: its plan while subscribed, Pro while comped (a comp never lowers Max). */
     effectivePlan: string;
   };
   billing: Subscription | null;
-  credits: { total: number; monthly: number; trial: number; pack: number; period: string };
+  /** In credits, 3 decimals: the monthly allowance left (null on free), the sign-up and the top-up credits. */
+  credits: UserCredits;
   polarDashboard: PolarDashboard;
   identities: { provider: string; subject: string }[];
   sessions: { kind: string; count: number; lastCreatedAt: number }[];
@@ -211,12 +213,20 @@ export interface Subscription {
   updatedAt: number | null;
 }
 
+export interface UserCredits {
+  balance: number;
+  monthly: { allowance: number; left: number; resetsAt: number } | null;
+  signup: number;
+  topup: number;
+}
+
 export interface LedgerEntry {
   id: number;
-  kind: 'grant' | 'spend' | 'refund' | 'revoke' | 'admin_grant' | 'admin_revoke';
-  bucket: 'monthly' | 'trial' | 'pack';
+  kind: 'signup_grant' | 'monthly_grant' | 'topup' | 'topup_revoke' | 'settle' | 'admin_grant' | 'admin_revoke' | 'migrated';
+  bucket: 'monthly' | 'signup' | 'topup';
   period: string | null;
-  delta: number;
+  /** In credits, 3 decimals. */
+  credits: number;
   item: string;
   refId: string;
   createdAt: number;
@@ -247,13 +257,16 @@ interface Owner {
 export interface Billing {
   counts: {
     pro: number;
+    max: number;
     monthly: number;
     yearly: number;
+    maxMonthly: number;
+    maxYearly: number;
     pastDue: number;
     canceling: number;
     comped: number;
-    packOrdersThisMonth: number;
-    packOrders: number;
+    topupOrdersThisMonth: number;
+    topupOrders: number;
     refundedThisMonth: number;
     refunded: number;
   };
@@ -263,6 +276,7 @@ export interface Billing {
   pro: {
     id: string;
     displayName: string;
+    plan: 'pro' | 'max';
     source: 'subscription' | 'comp' | 'plan';
     compUntil: number | null;
     polarCustomerId: string | null;
@@ -285,15 +299,19 @@ export interface AiDay {
   started: number;
   finished: number;
   failed: number;
-  refunded: number;
   reviews: number;
   tokens: number;
   costUsd: number;
+  /** Credits charged that day (credit_charges), and what they are in euros at €0.01 a credit. */
+  credits: number;
+  chargedEur: number;
+  /** What the charged calls cost us, in USD. */
+  chargedCostUsd: number;
 }
 
 export interface AiUsage {
   days: AiDay[];
-  totals: { sessions: number; finished: number; tokens: number; costUsd: number; avgCostPerFinished: number | null; capped: number; cappedShare: number | null; reviews: number };
+  totals: { sessions: number; finished: number; tokens: number; costUsd: number; avgCostPerFinished: number | null; capped: number; cappedShare: number | null; reviews: number; credits: number; chargedEur: number; chargedCostUsd: number };
   tokenCap: number;
   cappedAt: number;
   topUsers: { id: string; displayName: string; sessions: number; tokens: number; costUsd: number }[];

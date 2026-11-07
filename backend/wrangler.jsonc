@@ -81,7 +81,8 @@
   // GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET, METRICS_TOKEN (GET /api/metrics/summary; unset: 404),
   // ADMIN_SETUP_TOKEN (registers the admin panel's first passkey; at least 16 characters)
   // POLAR_ACCESS_TOKEN, POLAR_WEBHOOK_SECRET, POLAR_PRODUCT_PRO_MONTHLY, POLAR_PRODUCT_PRO_YEARLY,
-  // POLAR_PRODUCT_PACK_5 and, against Polar's sandbox, POLAR_SERVER=sandbox (billing, src/billing.ts; unset: 501)
+  // POLAR_PRODUCT_MAX_MONTHLY, POLAR_PRODUCT_MAX_YEARLY, POLAR_PRODUCT_CREDITS_1000, optionally
+  // CREDITS_USD_EUR (src/meter.ts; unset: 0.95) and, against Polar's sandbox, POLAR_SERVER=sandbox (billing, src/billing.ts; unset: 501)
   // ANTHROPIC_API_KEY (the AI interviewer, src/interviews.ts; unset: 501), and through Cloudflare AI Gateway
   // AI_GATEWAY_URL and, for an authenticated gateway, AI_GATEWAY_TOKEN
 

@@ -31,6 +31,7 @@
     "migrate:local": "wrangler d1 migrations apply proschi --local",
     "dev:paid": "(cd ../frontend && VITE_ACCOUNTS=true VITE_BILLING=true npm run build) && npm run migrate:local && npm run dev",
     "local:pro": "node scripts/local.mjs pro",
+    "local:max": "node scripts/local.mjs max",
     "local:credits": "node scripts/local.mjs credits"
   },
   "dependencies": {

@@ -43,7 +43,7 @@ const CHARTS: { key: Key; title: string; kind: 'bar' | 'line'; empty: string; fo
   ],
   [
     { key: 'proSubscribers', title: 'Pro subscribers', kind: 'line', empty: 'No Pro subscribers in this range.' },
-    { key: 'packOrders', title: 'Interview pack orders', kind: 'bar', empty: 'No pack orders in this range.' },
+    { key: 'topupOrders', title: 'Credit top-up orders', kind: 'bar', empty: 'No top-up orders in this range.' },
   ],
 ];
 

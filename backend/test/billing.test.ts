@@ -52,7 +52,7 @@ describe('billing', () => {
   it('is off without the Polar secrets', () => {
     expect(billingConfigured({} as Env)).toBe(false);
     expect(billingConfigured(env)).toBe(true);
-    expect(billingConfigured({ ...env, POLAR_PRODUCT_PACK_5: '' } as Env)).toBe(false);
+    expect(billingConfigured({ ...env, POLAR_PRODUCT_CREDITS_1000: '' } as Env)).toBe(false);
   });
 
   it('verifies Standard Webhooks signatures', async () => {
@@ -83,22 +83,75 @@ describe('billing', () => {
 
   it('upgrades on an active subscription and reports the plan', async () => {
     const { id, token } = await signedInUser();
-    expect(await (await call('/api/me/plan', { token })).json()).toMatchObject({ plan: 'free', billing: true, subscription: null, credits: { total: 1, trial: 1 } });
+    expect(await (await call('/api/me/plan', { token })).json()).toMatchObject({ plan: 'free', billing: true, subscription: null, credits: { balance: 0, monthly: null, signup: 0, topup: 0 } });
     expect((await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
     expect(await planOf(id)).toBe('pro');
     expect(await (await call('/api/me/plan', { token })).json()).toMatchObject({
       plan: 'pro',
       subscription: { status: 'active', product: 'pro_monthly', currentPeriodEnd: Date.parse('2026-12-06T00:00:00Z'), cancelAtPeriodEnd: false },
       customer: true,
-      limits: { documents: null, versionsPerDocument: null, interviewsPerMonth: 4 },
-      credits: { monthly: 4, trial: 1 },
+      limits: { documents: null, versionsPerDocument: null },
+      credits: { balance: 800, monthly: { allowance: 800, left: 800 }, signup: 0, topup: 0 },
     });
     expect(await (await call('/api/me/limits', { token })).json()).toMatchObject({ plan: 'pro', limits: { documents: 1000 } });
   });
 
+  it('moves between Pro and Max with the product, and tops the month up to the new allowance', async () => {
+    const { id, token } = await signedInUser();
+    await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
+    expect((await (await call('/api/me/plan', { token })).json()) as object).toMatchObject({ plan: 'pro', credits: { balance: 800 } });
+    await deliver(subscription(id, 'active', '2026-11-07T10:00:00Z', { product_id: 'prod-max-yearly' }));
+    expect(await planOf(id)).toBe('max');
+    const max = (await (await call('/api/me/plan', { token })).json()) as { plan: string; subscription: { product: string }; credits: unknown; features: Record<string, { ok: boolean }> };
+    expect(max).toMatchObject({ plan: 'max', subscription: { product: 'max_yearly' }, credits: { balance: 2200, monthly: { allowance: 2200, left: 2200 } } });
+    expect(max.features.deep_mode).toEqual({ ok: true });
+    expect(max.features.interview_report).toEqual({ ok: true });
+    expect(max.features.share_links).toEqual({ ok: true });
+    // Back to Pro: the month's credits stay; the plan follows.
+    await deliver(subscription(id, 'active', '2026-11-08T10:00:00Z'));
+    expect(await planOf(id)).toBe('pro');
+    expect((await (await call('/api/me/plan', { token })).json()) as object).toMatchObject({ plan: 'pro', credits: { balance: 2200 }, features: { deep_mode: { ok: false, reason: 'needs_pro' } } });
+    await deliver(subscription(id, 'canceled', '2026-11-09T10:00:00Z', { status: 'canceled' }));
+    expect(await planOf(id)).toBe('free');
+  });
+
+  it('switches the active subscription’s product at Polar, never opening a second one', async () => {
+    const { id, token } = await signedInUser();
+    const sent: { method: string; url: string; body: Record<string, unknown> }[] = [];
+    const real = globalThis.fetch;
+    vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
+      const url = String(input instanceof Request ? input.url : input);
+      if (!url.startsWith('https://sandbox-api.polar.sh/')) return real(input, init);
+      sent.push({ method: String(init?.method), url, body: JSON.parse(String(init?.body ?? '{}')) as Record<string, unknown> });
+      return Response.json({ id: 'sub-1', status: 'active' });
+    });
+    const change = (product: unknown) => call('/api/billing/change-plan', { method: 'POST', token, body: { product } });
+    expect((await call('/api/billing/change-plan', { method: 'POST', body: { product: 'max_monthly' } })).status).toBe(401);
+    expect((await change('credits_1000')).status).toBe(400);
+    expect(await (await change('max_monthly')).json()).toMatchObject({ error: 'no_subscription' });
+    await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
+    expect(await (await change('pro_monthly')).json()).toMatchObject({ error: 'same_plan' });
+    // A checkout for another subscription is refused with one active; a top-up still goes through.
+    const second = await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'max_monthly' } });
+    expect(second.status).toBe(409);
+    expect(await second.json()).toMatchObject({ error: 'has_subscription' });
+    const switched = await change('max_monthly');
+    expect(switched.status).toBe(200);
+    expect(await switched.json()).toEqual({ ok: true, plan: 'max', effective: 'now' });
+    expect(sent).toEqual([{ method: 'PATCH', url: 'https://sandbox-api.polar.sh/v1/subscriptions/sub-1', body: { product_id: 'prod-max-monthly', proration_behavior: 'invoice' } }]);
+    // The webhook sets the plan, not the switch.
+    expect(await planOf(id)).toBe('pro');
+    const audit = await env.DB.prepare("SELECT target, detail FROM admin_audit WHERE action = 'billing.change_plan'").first<{ target: string; detail: string }>();
+    expect(audit).toEqual({ target: id, detail: JSON.stringify({ from: 'pro_monthly', to: 'max_monthly' }) });
+    // A subscription set to end can't be changed.
+    await deliver(subscription(id, 'active', '2026-11-07T10:00:00Z', { cancel_at_period_end: true }));
+    expect(await (await change('max_yearly')).json()).toMatchObject({ error: 'canceling' });
+    expect(sent).toHaveLength(1);
+  });
+
   it('applies a replayed delivery once', async () => {
     const { id } = await signedInUser();
-    const order = { type: 'order.paid', data: { id: 'ord-1', product_id: 'prod-pack-5', customer_id: 'cus-9', customer: { id: 'cus-9', external_id: id } } };
+    const order = { type: 'order.paid', data: { id: 'ord-1', product_id: 'prod-credits-1000', customer_id: 'cus-9', customer: { id: 'cus-9', external_id: id } } };
     const first = await deliver(order, { id: 'evt-replay' });
     expect(await first.json()).toEqual({ ok: true });
     const again = await deliver(order, { id: 'evt-replay' });
@@ -106,53 +159,53 @@ describe('billing', () => {
     expect(await again.json()).toEqual({ ok: true, duplicate: true });
     // A second delivery of the same order under a new event id doesn't grant twice either.
     await deliver(order);
-    const sum = await env.DB.prepare('SELECT SUM(delta) AS s FROM credits WHERE user_id = ?').bind(id).first<{ s: number }>();
-    expect(sum?.s).toBe(5);
+    const sum = await env.DB.prepare('SELECT SUM(delta_mc) AS s FROM credits WHERE user_id = ?').bind(id).first<{ s: number }>();
+    expect(sum?.s).toBe(1_000_000);
   });
 
-  it('takes back a refunded or charged-back pack, once', async () => {
+  it('takes back a refunded or charged-back top-up, once', async () => {
     const { id, token } = await signedInUser();
-    const paid = (order: string) => deliver({ type: 'order.paid', data: { id: order, product_id: 'prod-pack-5', customer: { id: 'cus-r', external_id: id } } });
+    const paid = (order: string) => deliver({ type: 'order.paid', data: { id: order, product_id: 'prod-credits-1000', customer: { id: 'cus-r', external_id: id } } });
     await paid('ord-r1');
     await paid('ord-r2');
     await paid('ord-r3');
-    const pack = async () => ((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack;
-    expect(await pack()).toBe(15);
-    await deliver({ type: 'order.refunded', data: { id: 'ord-r1', product_id: 'prod-pack-5', status: 'refunded', customer: { id: 'cus-r', external_id: id } } });
+    const topup = async () => ((await (await call('/api/me/plan', { token })).json()) as { credits: { topup: number } }).credits.topup;
+    expect(await topup()).toBe(3000);
+    await deliver({ type: 'order.refunded', data: { id: 'ord-r1', product_id: 'prod-credits-1000', status: 'refunded', customer: { id: 'cus-r', external_id: id } } });
     // The same refund, told again as refund.updated: nothing more.
     await deliver({ type: 'refund.updated', data: { id: 'ref-1', order_id: 'ord-r1', status: 'succeeded' } });
-    expect(await pack()).toBe(10);
+    expect(await topup()).toBe(2000);
     // A pending refund takes nothing; a succeeded one does.
     await deliver({ type: 'refund.created', data: { id: 'ref-2', order_id: 'ord-r2', status: 'pending' } });
-    expect(await pack()).toBe(10);
+    expect(await topup()).toBe(2000);
     await deliver({ type: 'refund.updated', data: { id: 'ref-2', order_id: 'ord-r2', status: 'succeeded' } });
-    expect(await pack()).toBe(5);
+    expect(await topup()).toBe(1000);
     // A chargeback lost.
     await deliver({ type: 'dispute.updated', data: { id: 'dis-1', order_id: 'ord-r3', status: 'lost' } });
-    expect(await pack()).toBe(0);
+    expect(await topup()).toBe(0);
   });
 
-  it('grants nothing for a pack whose refund arrived before its order.paid', async () => {
+  it('grants nothing for a top-up whose refund arrived before its order.paid', async () => {
     const { id, token } = await signedInUser();
     await deliver({ type: 'refund.updated', data: { id: 'ref-e', order_id: 'ord-early', status: 'succeeded' } });
-    await deliver({ type: 'order.paid', data: { id: 'ord-early', product_id: 'prod-pack-5', customer: { id: 'cus-e', external_id: id } } });
-    const credits = (await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } };
-    expect(credits.credits.pack).toBe(0);
+    await deliver({ type: 'order.paid', data: { id: 'ord-early', product_id: 'prod-credits-1000', customer: { id: 'cus-e', external_id: id } } });
+    const credits = (await (await call('/api/me/plan', { token })).json()) as { credits: { topup: number } };
+    expect(credits.credits.topup).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credits WHERE ref_id = 'ord-early'").first<{ n: number }>()).toEqual({ n: 0 });
     // Another order still grants.
-    await deliver({ type: 'order.paid', data: { id: 'ord-other', product_id: 'prod-pack-5', customer: { id: 'cus-e', external_id: id } } });
-    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack).toBe(5);
+    await deliver({ type: 'order.paid', data: { id: 'ord-other', product_id: 'prod-credits-1000', customer: { id: 'cus-e', external_id: id } } });
+    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { topup: number } }).credits.topup).toBe(1000);
   });
 
-  it('keeps a pack’s used credits after its refund: the balance never goes below 0', async () => {
+  it('keeps a top-up’s used credits after its refund: the balance never goes below 0', async () => {
     const { id, token } = await signedInUser();
-    await deliver({ type: 'order.paid', data: { id: 'ord-u', product_id: 'prod-pack-5', customer: { id: 'cus-u', external_id: id } } });
-    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'pack', -1, 'interview', ?, 0)").bind(id, 's1').run();
-    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'spend', 'pack', -1, 'interview', ?, 0)").bind(id, 's2').run();
-    await deliver({ type: 'order.refunded', data: { id: 'ord-u', product_id: 'prod-pack-5', status: 'refunded' } });
-    const pack = await env.DB.prepare("SELECT SUM(delta) AS n FROM credits WHERE user_id = ? AND bucket = 'pack'").bind(id).first<{ n: number }>();
-    expect(pack).toEqual({ n: 0 });
-    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { pack: number } }).credits.pack).toBe(0);
+    await deliver({ type: 'order.paid', data: { id: 'ord-u', product_id: 'prod-credits-1000', customer: { id: 'cus-u', external_id: id } } });
+    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta_mc, item, ref_id, created_at) VALUES (?, 'settle', 'topup', -600000, 'design_partner', ?, 0)").bind(id, 's1:topup').run();
+    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta_mc, item, ref_id, created_at) VALUES (?, 'settle', 'topup', -300000, 'design_partner', ?, 0)").bind(id, 's2:topup').run();
+    await deliver({ type: 'order.refunded', data: { id: 'ord-u', product_id: 'prod-credits-1000', status: 'refunded' } });
+    const left = await env.DB.prepare("SELECT SUM(delta_mc) AS n FROM credits WHERE user_id = ? AND bucket = 'topup'").bind(id).first<{ n: number }>();
+    expect(left).toEqual({ n: 0 });
+    expect(((await (await call('/api/me/plan', { token })).json()) as { credits: { topup: number } }).credits.topup).toBe(0);
   });
 
   it('does not downgrade on a late cancel of an old subscription after a new active one', async () => {
@@ -238,10 +291,10 @@ describe('billing', () => {
 
     expect((await call('/api/billing/portal', { method: 'POST', token })).status).toBe(404);
     await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
-    expect(await (await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'pro_monthly' } })).json()).toMatchObject({ error: 'already_pro' });
-    // Packs can be bought on Pro, by the known customer.
-    expect((await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'pack_5' } })).status).toBe(200);
-    expect(sent[1].body).toMatchObject({ products: ['prod-pack-5'], customer_id: 'cus-1' });
+    expect(await (await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'pro_monthly' } })).json()).toMatchObject({ error: 'has_subscription' });
+    // Top-ups can be bought on Pro, by the known customer.
+    expect((await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'credits_1000' } })).status).toBe(200);
+    expect(sent[1].body).toMatchObject({ products: ['prod-credits-1000'], customer_id: 'cus-1' });
     const portal = await call('/api/billing/portal', { method: 'POST', token });
     expect(await portal.json()).toEqual({ url: 'https://sandbox.polar.sh/portal/xyz' });
     expect(sent[2].body).toEqual({ customer_id: 'cus-1', return_url: 'https://proschi.test/practice/#/me' });
@@ -250,10 +303,11 @@ describe('billing', () => {
   it('exports billing data, and revokes the subscription and deletes it with the account', async () => {
     const { id, token } = await signedInUser();
     await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));
-    await deliver({ type: 'order.paid', data: { id: 'ord-2', product_id: 'prod-pack-5', customer: { id: 'cus-1', external_id: id } } });
+    await deliver({ type: 'order.paid', data: { id: 'ord-2', product_id: 'prod-credits-1000', customer: { id: 'cus-1', external_id: id } } });
     const data = (await (await call('/api/me/export', { token })).json()) as { billing: unknown; credits: unknown[] };
     expect(data.billing).toMatchObject({ polarCustomerId: 'cus-1', polarSubscriptionId: 'sub-1', status: 'active', product: 'pro_monthly' });
-    expect(data.credits).toMatchObject([{ kind: 'grant', bucket: 'pack', delta: 5, refId: 'ord-2' }]);
+    expect(data.credits).toMatchObject([{ kind: 'topup', bucket: 'topup', credits: 1000, refId: 'ord-2' }]);
+
 
     const revoked: string[] = [];
     const real = globalThis.fetch;
