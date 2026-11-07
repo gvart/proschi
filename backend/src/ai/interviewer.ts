@@ -2,6 +2,7 @@ import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../fronten
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
 import { AiError, collect, HAIKU, malformed, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type ModelUsage, type TextBlock } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
+import { knownFactsBlock, knownTopics, revealedIn } from './facts';
 import { fence, HINT_PROMPT, INTERVIEWER_PROMPT, VERDICT_PROMPT } from './prompts';
 
 /**
@@ -54,6 +55,12 @@ export interface InterviewState {
   transcript: Entry[];
   /** Topic ids (ProblemContext.topics) the candidate has covered. */
   covered: string[];
+  /**
+   * Clarify topic ids whose fact the interviewer's replies stated (P38),
+   * asked for or not: with `covered`, what the candidate knows. Absent in a
+   * session stored before it.
+   */
+  revealed?: string[];
   turns: number;
   usage: SessionUsage;
   /** The last design sent and the server's run of it. */
@@ -161,13 +168,16 @@ function testResultsText(grade: DesignGrade): string {
 /** The candidate's turn as the model sees it. Rendered once and stored, so the history never changes. */
 function renderTurn(context: ProblemContext, state: InterviewState, phase: Phase, elapsed: number, message: string, design?: { source: string; grade: DesignGrade }): string {
   const ends = phaseEnds(state.durationMin);
-  const notAsked = context.topics.filter((t) => t.kind === 'clarify' && !state.covered.includes(t.id));
+  const known = new Set(knownTopics(context, state).map((t) => t.id));
+  const notAsked = context.topics.filter((t) => t.kind === 'clarify' && !known.has(t.id));
   const attrs = `phase="${phase}" elapsed="${minutes(elapsed)}" phase_left="${minutes(Math.max(0, ends[phase] - elapsed))}" total_left="${minutes(Math.max(0, state.durationMin * 60_000 - elapsed))}"`;
   const parts = [
     ...(phase !== state.phase ? [`The phase changed from ${state.phase} to ${phase}.`] : []),
     fence('candidate_message', message),
+    // What the candidate knows (P38): never asked for again, by the interviewer or the hint.
+    knownFactsBlock(context, state),
     // Server text, not the candidate's: the facts behind these stay hidden until asked (the coverage is the hint's, up to the last turn).
-    ...(notAsked.length ? [`<not_asked>\nNot asked before this turn. Answer one if this message asks it (or something close); otherwise keep its facts hidden, also out of your own questions:\n${notAsked.map((t) => `- [${t.id}] ${t.label}`).join('\n')}\n</not_asked>`] : []),
+    ...(notAsked.length ? [`<not_asked>\nNeither asked nor revealed before this turn. Answer one if this message asks it (or something close); otherwise keep its facts hidden, also out of your own questions:\n${notAsked.map((t) => `- [${t.id}] ${t.label}`).join('\n')}\n</not_asked>`] : []),
     ...(design ? [fence('candidate_design', design.source), fence('test_results', testResultsText(design.grade))] : []),
   ];
   return `<turn ${attrs}>\n${parts.join('\n')}\n</turn>`;
@@ -254,13 +264,15 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
     ...next,
     usage: addUsage(next.usage, SONNET, result.usage),
     transcript: [...next.transcript, { role: 'interviewer', text: reply, phase, at: elapsed }],
+    // The facts the reply stated, by their numbers: kept even when the hint below fails (P38).
+    revealed: union(next.revealed, revealedIn(context.topics, reply)),
   };
 
   const billed: ModelUsage[] = [{ model: result.model, ...result.usage }];
   let hint: Hint | undefined;
   try {
     const coached = await coach(client, context, next, elapsed);
-    next = { ...next, usage: addUsage(next.usage, HAIKU, coached.usage), covered: [...new Set([...next.covered, ...coached.covered])] };
+    next = { ...next, usage: addUsage(next.usage, HAIKU, coached.usage), covered: union(next.covered, coached.covered), revealed: union(next.revealed, coached.revealed) };
     billed.push({ model: HAIKU, ...coached.usage });
     hint = coached.hint;
   } catch (e) {
@@ -271,6 +283,8 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
   }
   return { reply, state: next, ...(hint ? { hint } : {}), ...(design ? { grade: design.grade } : {}), elapsedMs: elapsed, billed };
 }
+
+const union = (a: readonly string[] | undefined, b: readonly string[]): string[] => [...new Set([...(a ?? []), ...b])];
 
 /** The hint kind the clock asks for: wrap-up in the last quarter of a phase (at least the last minute), else the model picks. */
 export function forcedHintKind(state: InterviewState, elapsed: number): HintKind | undefined {
@@ -286,19 +300,23 @@ const HINT_SCHEMA = {
     kind: { type: 'string', enum: ['focus', 'improve', 'wrapup'] },
     text: { type: 'string' },
     covered: { type: 'array', items: { type: 'string' } },
+    revealed: { type: 'array', items: { type: 'string' } },
   },
-  required: ['kind', 'text', 'covered'],
+  required: ['kind', 'text', 'covered', 'revealed'],
   additionalProperties: false,
 } as const;
 
 async function coach(client: ClaudeClient, context: ProblemContext, state: InterviewState, elapsed: number) {
   const forced = forcedHintKind(state, elapsed);
-  const open = context.topics.filter((t) => !state.covered.includes(t.id));
+  const known = new Set(knownTopics(context, state).map((t) => t.id));
+  const open = context.topics.filter((t) => !state.covered.includes(t.id) && !known.has(t.id));
   const recent = state.transcript.slice(-HINT_WINDOW).map((e) => (e.role === 'interviewer' ? `Interviewer: ${e.text}` : `Candidate: ${e.said ?? ''}`));
   const user = [
     `Phase: ${state.phase}. Time left in the phase: ${minutes(Math.max(0, phaseEnds(state.durationMin)[state.phase] - elapsed))}.`,
+    `What a hint is about in this phase: ${PHASE_FOCUS[state.phase]}`,
     `Hint kind: ${forced ?? 'focus or improve, whichever helps more now'}.`,
-    `Topics not covered yet:\n${open.map((t) => `- [${t.id}] (${t.kind}) ${t.label}`).join('\n') || '- none'}`,
+    knownFactsBlock(context, state),
+    `Topics not covered yet (none of them known):\n${open.map((t) => `- [${t.id}] (${t.kind}) ${t.label}`).join('\n') || '- none'}`,
     ...(state.design ? [fence('test_results', testResultsText(state.design.grade))] : []),
     fence('transcript', recent.join('\n\n')),
   ].join('\n\n');
@@ -314,20 +332,30 @@ async function coach(client: ClaudeClient, context: ProblemContext, state: Inter
   if (!parsed) throw malformed('The hint is not valid JSON', result);
   // Only the clock asks for a wrap-up hint; one the model picks on its own is a focus hint.
   const kind = forced ?? (parsed.kind === 'wrapup' ? 'focus' : parsed.kind);
-  return { hint: { kind, text: parsed.text }, covered: parsed.covered, usage: result.usage };
+  const clarify = new Set(context.topics.filter((t) => t.kind === 'clarify').map((t) => t.id));
+  return { hint: { kind, text: parsed.text }, covered: parsed.covered, revealed: parsed.revealed.filter((id) => clarify.has(id)), usage: result.usage };
 }
 
+/** What the hint is about in each phase, so it follows the interview (P38). */
+const PHASE_FOCUS: Record<Phase, string> = {
+  clarify: 'the requirement or scale area to ask about next, among the topics not covered yet.',
+  estimate: 'the next number to work out from the known facts, or how to check the last one; not more clarifying questions about facts already known.',
+  design: 'the design and its test results: the weakest path or a failing use case, or a follow-up topic.',
+  wrapup: 'closing well: the bottleneck, a failure mode, a trade-off, what to change with more time.',
+};
+
 /** Haiku's JSON, checked; topic ids it made up are dropped. */
-export function parseHint(text: string, topicIds: ReadonlySet<string>): (Hint & { covered: string[] }) | undefined {
+export function parseHint(text: string, topicIds: ReadonlySet<string>): (Hint & { covered: string[]; revealed: string[] }) | undefined {
   let raw: unknown;
   try {
     raw = JSON.parse(text);
   } catch {
     return undefined;
   }
-  const h = raw as { kind?: unknown; text?: unknown; covered?: unknown };
+  const h = raw as { kind?: unknown; text?: unknown; covered?: unknown; revealed?: unknown };
   if (!h || typeof h !== 'object' || !['focus', 'improve', 'wrapup'].includes(h.kind as string) || typeof h.text !== 'string' || !h.text.trim() || !Array.isArray(h.covered)) return undefined;
-  return { kind: h.kind as HintKind, text: h.text.trim().slice(0, 300), covered: h.covered.filter((id): id is string => typeof id === 'string' && topicIds.has(id)) };
+  const ids = (x: unknown) => (Array.isArray(x) ? x.filter((id): id is string => typeof id === 'string' && topicIds.has(id)) : []);
+  return { kind: h.kind as HintKind, text: h.text.trim().slice(0, 300), covered: ids(h.covered), revealed: ids(h.revealed) };
 }
 
 export interface SkillNote {
@@ -408,11 +436,13 @@ function sessionReport(context: ProblemContext, state: InterviewState, now: numb
   });
   const covered = context.topics.filter((t) => state.covered.includes(t.id));
   const missed = context.topics.filter((t) => !state.covered.includes(t.id));
+  const given = context.topics.filter((t) => (state.revealed ?? []).includes(t.id) && !state.covered.includes(t.id));
   const transcript = state.transcript.map((e) => `[${e.phase} ${minutes(e.at)}] ${e.role === 'interviewer' ? 'Interviewer' : 'Candidate'}: ${e.role === 'interviewer' ? e.text : e.said ?? ''}`);
   return [
     `Session: ${state.durationMin} minutes planned, ${minutes(elapsed)} used, ${state.turns} candidate turns. Time per phase: ${phaseTimes.join(', ')}.`,
     `Topics covered:\n${covered.map((t) => `- [${t.id}] ${t.label}`).join('\n') || '- none'}`,
     `Topics not covered:\n${missed.map((t) => `- [${t.id}] ${t.label}`).join('\n') || '- none'}`,
+    ...(given.length ? [`Facts the interviewer gave without the candidate asking (they count as missed):\n${given.map((t) => `- [${t.id}] ${t.label}`).join('\n')}`] : []),
     state.design ? `${fence('candidate_design', state.design.source)}\n${fence('test_results', testResultsText(state.design.grade))}` : 'The candidate never sent a design.',
     fence('transcript', transcript.join('\n\n')),
     'Write the verdict.',

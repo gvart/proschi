@@ -26,6 +26,10 @@ export interface Topic {
   id: string;
   kind: TopicKind;
   label: string;
+  /** A clarify topic's answer, as the interviewer gives it (Markdown emphasis dropped): what the candidate knows once it is asked or revealed. */
+  fact?: string;
+  /** A clarify topic's fact as problem.md words it (interview.md `fact`): its numbers tell when a reply revealed it (src/ai/facts.ts). */
+  source?: string;
 }
 
 export interface ProblemContext {
@@ -101,7 +105,7 @@ export function buildContext(problem: Problem, files: { interview: string; lesso
   const questions = interview.questions.map((q, i) => {
     if (!q.good) return `- (weak) ${q.question}\n  Why it is weak: ${q.answer}`;
     const id = `q${i + 1}`;
-    topics.push({ id, kind: 'clarify', label: q.question });
+    topics.push({ id, kind: 'clarify', label: q.question, fact: q.answer.replace(/[*_`]/g, '').replace(/\s+/g, ' ').trim(), ...(q.fact ? { source: q.fact } : {}) });
     return `- [${id}] ${q.question}\n  Answer: ${q.answer}`;
   });
   const estimates = interview.estimates.map((e, i) => {

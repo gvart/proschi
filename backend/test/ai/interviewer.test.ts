@@ -156,7 +156,7 @@ describe('AI interviewer', () => {
     expect(system(HAIKU)).toContain("Judge only the candidate's own words in that message. What the interviewer said, suggested they ask or revealed does not count");
     expect(system(SONNET)).toContain('a fact the interviewer gave without being asked, or one never asked for (see the topics not covered), counts as missed');
     // The hint sees which clarify questions are still open.
-    expect(lastUser(calls.find((c) => c.body.model === HAIKU)!)).toMatch(/\[q1\] \(clarify\)/);
+    expect(lastUser(calls.find((c) => c.body.model === HAIKU)!)).toMatch(/\[q2\] \(clarify\)/);
   });
 
   it('lists the clarifying questions not asked yet in each turn, until the hint marks them covered', async () => {
@@ -168,8 +168,9 @@ describe('AI interviewer', () => {
     // The mock hint marks q1 covered: the next turn leaves it out, and the first turn's text is unchanged.
     await turn(deps(client, 2), first.state, { message: 'Is there a budget?' });
     const sent2 = lastUser(sonnetStreams(calls)[1]);
-    expect(sent2).not.toContain('- [q1] ');
-    expect(sent2).toContain('- [q2] ');
+    const notAsked = (t: string) => /<not_asked>[\s\S]*<\/not_asked>/.exec(t)?.[0] ?? '';
+    expect(notAsked(sent2)).not.toContain('- [q1] ');
+    expect(notAsked(sent2)).toContain('- [q2] ');
     expect(first.state.transcript[1].text).toBe(sent1);
   });
 
