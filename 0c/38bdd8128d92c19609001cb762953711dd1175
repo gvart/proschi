@@ -1,0 +1,40 @@
+frontend/src/practice/modes/ai/AiInterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 81,160,163,179,184
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 24-26,28,31,36,75-76,94,104-105,107-108,111,133-136
+  s_e17b87e0a1b3ca::t_448cf96cf884e0 77-92
+frontend/src/practice/profile/CheckoutStatus.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 122,124
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 94
+frontend/src/practice/history/InterviewHistory.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 77,153
+frontend/src/practice/profile/PlanBilling.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 117,129,146-147
+frontend/src/pricing/checkoutReturn.ts
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 95-96,101
+frontend/e2e/billing.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 75,100,105,144-145,157,185,189,197
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 79,123,125-126
+frontend/src/pricing/checkoutReturn.test.ts
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 69,85,90
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_bd395d83ae3201 66,169,192,195,197,214,224,227,229,278,281,284,320,331
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "0c38bdd8128d92c19609001cb762953711dd1175",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
