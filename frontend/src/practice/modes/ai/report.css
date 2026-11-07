@@ -42,8 +42,10 @@
   body.printing-report > *:not(.interview-report) {
     display: none !important;
   }
+  html:has(body.printing-report),
   body.printing-report {
     background: #fff !important;
+    color-scheme: light;
   }
   .interview-report {
     position: static !important;

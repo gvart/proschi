@@ -8,7 +8,7 @@ that finishes the work.
 - [ ] partner-api (backend): sessions, turns, change validation, practice coaching
 - [ ] partner-ui (frontend): panel, change cards, accept/reject/improve
 - [x] plans-ui (frontend): pricing, credits chip, usage, estimates, out-of-credits
-- [ ] max-extras: Deep toggle, printable report
+- [x] max-extras: Deep toggle, printable report
 - [ ] hardening: security + billing review, full checks
 
 ## Contract (both sides build against this; change it only by editing here)

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { CircleCheck, CircleX, Printer, X } from 'lucide-react';
+import { CircleCheck, CircleX, Printer, Sparkles, X } from 'lucide-react';
 import listings from 'virtual:practice-listings';
 import DiagramCanvas from '../../../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../../../components/Diagram/useDiagramLayout';
@@ -112,7 +112,8 @@ function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
             {report.deep && (
               <div className="flex gap-1">
                 <dt className="sr-only">Verdict</dt>
-                <dd data-testid="report-deep" className="font-semibold">
+                <dd data-testid="report-deep" className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink px-1.5 text-xs font-semibold">
+                  <Sparkles size={11} aria-hidden="true" />
                   Deep verdict
                 </dd>
               </div>
@@ -126,22 +127,15 @@ function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
       </header>
 
       <section className="report-block mt-5">
-        <h2 className="report-h2">Scores per skill</h2>
+        <h2 className="report-h2">Scores per skill, out of 5</h2>
         <table className="mt-2 w-full text-sm">
-          <thead className="sr-only">
-            <tr>
-              <th>Skill</th>
-              <th>Score out of 5</th>
-              <th>Notes</th>
-            </tr>
-          </thead>
           <tbody>
             {SKILLS.map((s) => (
               <tr key={s} className="border-b border-ink/15 align-top">
                 <th scope="row" className="w-32 py-2 pr-3 text-left font-semibold">
                   {SKILL_LABEL[s]}
                 </th>
-                <td className="w-40 py-2 pr-3">
+                <td className="py-2">
                   <span className="flex items-center gap-2">
                     <span className="flex flex-1 gap-0.5" aria-hidden="true">
                       {[1, 2, 3, 4, 5].map((n) => (
@@ -150,9 +144,6 @@ function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
                     </span>
                     <span className="w-8 text-right font-mono tabular-nums">{verdict.scores[s]}/5</span>
                   </span>
-                </td>
-                <td className="py-2 text-ink/85">
-                  <SkillNotes skill={s} report={report} />
                 </td>
               </tr>
             ))}
@@ -218,24 +209,6 @@ function Sheet({ report, diagram }: { report: Report; diagram?: Diagram }) {
 
       <footer className="mt-8 border-t border-ink/20 pt-2 text-xs text-muted">Written for you by proschi.app from your mock interview on {day(report.startedAt)}.</footer>
     </>
-  );
-}
-
-function SkillNotes({ skill, report }: { skill: Skill; report: Report }) {
-  const notes = [...report.verdict.wentWell.filter((n) => n.skill === skill).map((n) => ({ ...n, good: true })), ...report.verdict.wentWrong.filter((n) => n.skill === skill).map((n) => ({ ...n, good: false }))];
-  if (!notes.length) return <span className="text-muted">No notes.</span>;
-  return (
-    <ul className="space-y-0.5">
-      {notes.map((n, i) => (
-        <li key={i}>
-          <span className="sr-only">{n.good ? 'Went well: ' : 'Went wrong: '}</span>
-          <span aria-hidden="true" className="mr-1 font-bold">
-            {n.good ? '+' : '–'}
-          </span>
-          {n.text}
-        </li>
-      ))}
-    </ul>
   );
 }
 

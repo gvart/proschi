@@ -36,23 +36,33 @@ export const FAIL_VERDICT = {
   nextSteps: ['Ask about scale and latency first', 'Do the estimate cards for this week'],
 };
 
+/** The test results in the mock's report: the server's run of the last design sent. */
+const REPORT_TESTS = [
+  { id: 't1', name: 'Redirects stay fast', category: 'latency', passed: true, message: 'p99 of Redirect is 38 ms (limit 50 ms)' },
+  { id: 't2', name: 'Survives a lost node', category: 'availability', passed: true, message: 'Availability is 99.95% (target 99.9%)' },
+  { id: 't3', name: 'Fits the budget', category: 'cost', passed: false, message: 'Costs $2,140 a month (budget $1,500)' },
+];
+
 export interface InterviewMock {
   turns: { message: string; design?: string; advance?: boolean }[];
-  starts: { replace: boolean }[];
+  starts: { replace: boolean; deep: boolean }[];
 }
 
 /**
  * `open`: a session already in progress on the server (started in another tab or browser), with its first message.
  * `credits`: the balance (100 by default, the sign-up credits); a start needs 30 and each turn costs 4.
  * `runsOutAfter`: the balance drops to 0 after that many turns, and the interview moves to the wrap-up (P28).
+ * `plan`: the account's (free by default); on Max a start may ask for a Deep verdict, and the finished session's report answers.
  */
 export async function mockInterviews(
   page: Page,
-  opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string; runsOutAfter?: number; needed?: number },
+  opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string; runsOutAfter?: number; needed?: number; plan?: 'free' | 'pro' | 'max' },
 ): Promise<InterviewMock> {
   const mock: InterviewMock = { turns: [], starts: [] };
   let left = opts.credits ?? 100;
-  await page.route(/\/api\/me\/plan$/, (route) => route.fulfill({ json: planAnswer('free', { balance: left, monthly: null, signup: left, topup: 0 }) }));
+  const plan = opts.plan ?? 'free';
+  await page.route(/\/api\/me\/plan$/, (route) => route.fulfill({ json: planAnswer(plan, { balance: left, monthly: null, signup: left, topup: 0 }) }));
+  let design: string | undefined;
   let session: Record<string, unknown> | undefined = opts.open
     ? { id: 'iv-0', problem: 'url-shortener', minutes: 45, status: 'active', startedAt: Date.now() - 5 * 60_000, deadline: Date.now() + 55 * 60_000 }
     : undefined;
@@ -65,8 +75,11 @@ export async function mockInterviews(
       const parts = new URL(req.url()).pathname.split('/').filter(Boolean);
       if (req.method() === 'GET' && parts.length === 2) return route.fulfill({ json: { interviews: session ? [session] : [] } });
       if (req.method() === 'POST' && parts.length === 2) {
-        const replace = (req.postDataJSON() as { replace?: boolean }).replace === true;
-        mock.starts.push({ replace });
+        const body = req.postDataJSON() as { replace?: boolean; deep?: boolean };
+        const replace = body.replace === true;
+        const deep = body.deep === true;
+        mock.starts.push({ replace, deep });
+        if (deep && plan !== 'max') return route.fulfill({ status: 402, json: { error: 'plan_required', feature: 'deep_mode' } });
         if (session?.status === 'active' && !replace) return route.fulfill({ status: 409, json: { error: 'active_session', id: session.id, problem: session.problem } });
         if (left < (opts.needed ?? 30)) return route.fulfill({ status: 402, json: { error: 'no_credits', needed: opts.needed ?? 30, balance: left } });
         const startedAt = opts.startedAt ?? Date.now();
@@ -76,14 +89,20 @@ export async function mockInterviews(
           text: "Hi, I'll be your interviewer. Today we'll design URL Shortener. We have 45 minutes. Start by asking me what you need to know.",
           at: startedAt,
         });
-        session = { id: 'iv-1', problem: 'url-shortener', minutes: 45, status: 'active', startedAt, deadline: startedAt + 60 * 60_000 };
+        session = { id: 'iv-1', problem: 'url-shortener', minutes: 45, status: 'active', startedAt, deadline: startedAt + 60 * 60_000, deep };
         return route.fulfill({ status: 201, json: { interview: { ...session, phase, turns: 0, messages } } });
       }
       if (!session) return route.fulfill({ status: 404, json: { error: 'Not found' } });
+      if (req.method() === 'GET' && parts[3] === 'report') {
+        if (plan !== 'max') return route.fulfill({ status: 402, json: { error: 'plan_required', feature: 'interview_report' } });
+        const grade = { passed: 2, total: 3, solved: false, errors: [], results: REPORT_TESTS };
+        return route.fulfill({ json: { report: { ...session, ...(design !== undefined ? { design: { source: design, grade } } : {}) } } });
+      }
       if (req.method() === 'GET') return route.fulfill({ json: { interview: { ...session, phase, turns: mock.turns.length, messages } } });
       if (parts[3] === 'turn') {
         const body = req.postDataJSON() as InterviewMock['turns'][number];
         mock.turns.push(body);
+        if (body.design !== undefined) design = body.design;
         const reply = opts.replies[mock.turns.length - 1] ?? { text: 'Go on.' };
         if (reply.phase) phase = reply.phase;
         left = Math.max(0, left - 4);
