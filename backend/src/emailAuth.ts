@@ -4,7 +4,7 @@ import { hmacSha256, randomToken, sha256 } from './crypto';
 import { emailConfigured, sendEmail } from './email';
 import { alreadyRegisteredEmail, passwordResetEmail, signupConfirmEmail, type RenderedEmail } from './emails';
 import { now, secretOk, type Env } from './env';
-import { errorResponse, HttpError, json, rateLimit, readJson } from './http';
+import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
 import { hashPassword, passwordProblem, verifyPassword } from './password';
 import { siteOrigin } from './reminders';
@@ -355,13 +355,17 @@ export async function reset(request: Request, ctx: Ctx): Promise<Response> {
   return json({ reset: true, signupCredits: await signupCreditsBody(env.DB, login.user_id) });
 }
 
-/** GET /auth/email/status: the signed-in account's address, whether it is confirmed, and its sign-up credits' decision. */
+/**
+ * GET /auth/email/status: the signed-in account's address, whether it is
+ * confirmed, and its sign-up credits' decision; `{signedIn: false}` signed
+ * out (200, so the sign-in page's first look isn't an error).
+ */
 export async function emailStatus(request: Request, ctx: Ctx): Promise<Response> {
   const user = await authenticate(request, ctx);
-  if (!user) return errorResponse(401, 'Sign in first');
+  if (!user) return json({ signedIn: false }, 200, { 'Cache-Control': 'no-store' });
   const login = await loginOf(ctx.env.DB, user.id);
   return json(
-    { email: login?.email ?? null, confirmed: login ? login.confirmed_at !== null : true, signupCredits: await signupCreditsBody(ctx.env.DB, user.id) },
+    { signedIn: true, email: login?.email ?? null, confirmed: login ? login.confirmed_at !== null : true, signupCredits: await signupCreditsBody(ctx.env.DB, user.id) },
     200,
     { 'Cache-Control': 'no-store' },
   );

@@ -70,7 +70,7 @@ function lastLink(kind: 'confirm' | 'reset'): string {
 const signup = (email: string, password = PASSWORD, ip?: string) => req('/auth/email/signup', { body: { email, password }, ip });
 const login = (email: string, password = PASSWORD, ip?: string) => req('/auth/email/login', { body: { email, password }, ip });
 const confirm = (token: string) => req('/auth/email/confirm', { body: { token } });
-const status = async (token: string) => (await req('/auth/email/status', { token })).json() as Promise<{ email: string | null; confirmed: boolean; signupCredits: { outcome: string; reason: string } | null }>;
+const status = async (token: string) => (await req('/auth/email/status', { token })).json() as Promise<{ signedIn: boolean; email?: string | null; confirmed?: boolean; signupCredits: { outcome: string; reason: string } | null }>;
 
 /** Signs up and confirms; returns the session token and the confirm answer. */
 async function confirmedAccount(email: string, ip?: string) {
@@ -135,6 +135,7 @@ describe('addresses', () => {
 
 describe('email sign-up, confirmation and sign-in', () => {
   it('lists email among the providers, and the start link opens the sign-in page', async () => {
+    expect(await (await req('/auth/email/status')).json()).toEqual({ signedIn: false });
     expect(await (await req('/auth/providers')).json()).toEqual({ providers: ['github', 'google', 'email'] });
     const start = await req('/auth/email/start?return=/practice/%23/me&link=1');
     expect(start.status).toBe(302);
@@ -152,7 +153,7 @@ describe('email sign-up, confirmation and sign-in', () => {
     const early = await login('ada@example.com');
     expect(early.status).toBe(200);
     expect(await early.json()).toEqual({ confirmed: false });
-    expect(await status(sessionOf(early)!)).toEqual({ email: 'ada@example.com', confirmed: false, signupCredits: { outcome: 'pending', reason: 'unconfirmed' } });
+    expect(await status(sessionOf(early)!)).toEqual({ signedIn: true, email: 'ada@example.com', confirmed: false, signupCredits: { outcome: 'pending', reason: 'unconfirmed' } });
     expect(granted).not.toHaveBeenCalled();
 
     const token = lastLink('confirm');
@@ -403,7 +404,7 @@ describe('sign-up credits of GitHub and Google accounts', () => {
   it('grants a new GitHub account at once, with its identity as the claim, and only once', async () => {
     mockProviders({ id: 42, login: 'octocat' });
     const token = await oauth('github');
-    expect(await status(token)).toEqual({ email: null, confirmed: true, signupCredits: { outcome: 'granted', reason: 'granted' } });
+    expect(await status(token)).toEqual({ signedIn: true, email: null, confirmed: true, signupCredits: { outcome: 'granted', reason: 'granted' } });
     expect(granted).toHaveBeenCalledWith(expect.anything(), expect.any(String), await identityHash(SECRET, 'github', '42'));
     await oauth('github');
     expect(granted).toHaveBeenCalledTimes(1);
