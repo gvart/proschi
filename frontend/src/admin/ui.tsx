@@ -1,5 +1,6 @@
 import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
 import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { formatNumber } from './format';
 import type { SortDir } from './hooks';
 import { pageOf, type PageId } from './route';
 
@@ -93,11 +94,11 @@ export function Section({ title, label, actions, children }: { title?: string; l
 
 /** "Showing 1–50 of 230", with previous and next buttons. */
 export function Pager({ offset, pageSize, total, onChange }: { offset: number; pageSize: number; total: number; onChange: (offset: number) => void }) {
-  if (total <= pageSize && offset === 0) return <p className="adm-muted">{total === 1 ? '1 result' : `${total} results`}</p>;
+  if (total <= pageSize && offset === 0) return <p className="adm-muted">{total === 1 ? '1 result' : `${formatNumber(total)} results`}</p>;
   return (
     <div className="adm-pager">
       <span className="adm-muted">
-        {total ? `${offset + 1}–${Math.min(offset + pageSize, total)} of ${total}` : 'No results'}
+        {total ? `${formatNumber(offset + 1)}–${formatNumber(Math.min(offset + pageSize, total))} of ${formatNumber(total)}` : 'No results'}
       </span>
       <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" disabled={offset === 0} onClick={() => onChange(Math.max(0, offset - pageSize))}>
         Previous

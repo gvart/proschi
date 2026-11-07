@@ -1,9 +1,9 @@
 import { useState } from 'react';
 import { PRICES } from '../services/billing';
-import { getBilling, type PolarDashboard } from './api';
+import { getBilling, type Billing, type PolarDashboard } from './api';
 import { formatDate, formatDateTime, formatNumber, humanize } from './format';
-import { useLoad } from './hooks';
-import { ErrorNote, Loading, PageHeader, Pager, Section, Stat, UserLink } from './ui';
+import { useLoad, useSort } from './hooks';
+import { Empty, ErrorNote, PageHeader, Pager, Section, Skeleton, SortHeader, Stat, UserLink } from './ui';
 
 function OrderLink({ dashboard, orderId }: { dashboard: PolarDashboard; orderId: string }) {
   return (
@@ -18,7 +18,13 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
   const [offset, setOffset] = useState(0);
   const billing = useLoad(() => getBilling(offset), [offset], onSignedOut);
   const data = billing.data;
-  if (!data) return billing.error ? <ErrorNote>{billing.error}</ErrorNote> : <Loading what="billing" />;
+  if (!data)
+    return (
+      <>
+        <PageHeader page="billing" />
+        <Section label="Billing">{billing.error ? <ErrorNote>{billing.error}</ErrorNote> : <Skeleton rows={6} what="billing" />}</Section>
+      </>
+    );
   const { counts, polarDashboard: dashboard } = data;
   const atList = counts.monthly * PRICES.proMonthly + (counts.yearly * PRICES.proYearly) / 12;
   return (
@@ -52,47 +58,10 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
 
       <Section title={`Pro accounts (${formatNumber(data.total)})`}>
         {data.pro.length === 0 ? (
-          <p className="adm-muted">Nobody is on Pro yet.</p>
+          <Empty>Nobody is on Pro yet.</Empty>
         ) : (
           <>
-            <div className="adm-scroll">
-              <table className="adm-table">
-                <thead>
-                  <tr>
-                    <th scope="col">Name</th>
-                    <th scope="col">Pro through</th>
-                    <th scope="col">Status</th>
-                    <th scope="col">Renews or ends</th>
-                    <th scope="col">Polar</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {data.pro.map((p) => (
-                    <tr key={p.id}>
-                      <td>
-                        <UserLink user={p} onOpenUser={onOpenUser} />
-                      </td>
-                      <td>{p.source === 'subscription' ? humanize(p.product ?? 'subscription') : p.source === 'comp' ? `Comp until ${formatDate(p.compUntil)}` : 'Plan set by hand'}</td>
-                      <td className="adm-badges">
-                        {p.status && <span className={`ps-badge ps-badge--${p.status === 'past_due' ? 'yellow' : p.source === 'subscription' ? 'pass' : 'neutral'}`}>{humanize(p.status)}</span>}
-                        {p.cancelAtPeriodEnd && <span className="ps-badge ps-badge--neutral">canceling</span>}
-                        {p.source === 'comp' && <span className="ps-badge ps-badge--yellow">comp</span>}
-                      </td>
-                      <td>{formatDate(p.currentPeriodEnd)}</td>
-                      <td>
-                        {p.polarCustomerId ? (
-                          <a href={`${dashboard.customers}/${encodeURIComponent(p.polarCustomerId)}`} target="_blank" rel="noreferrer">
-                            Customer ↗
-                          </a>
-                        ) : (
-                          <span className="adm-muted">—</span>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
+            <ProTable rows={data.pro} dashboard={dashboard} onOpenUser={onOpenUser} />
             <Pager offset={data.offset} pageSize={data.pageSize} total={data.total} onChange={setOffset} />
           </>
         )}
@@ -101,7 +70,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
       <div className="adm-columns">
         <Section title="Recent pack orders">
           {data.orders.length === 0 ? (
-            <p className="adm-muted">None yet.</p>
+            <Empty>None yet.</Empty>
           ) : (
             <table className="adm-table adm-table--compact">
               <thead>
@@ -131,7 +100,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
 
         <Section title="Refunds and revokes">
           {data.refundedOrders.length === 0 && data.adjustments.length === 0 ? (
-            <p className="adm-muted">None yet.</p>
+            <Empty>None yet.</Empty>
           ) : (
             <table className="adm-table adm-table--compact">
               <thead>
@@ -163,10 +132,64 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
               </tbody>
             </table>
           )}
-          <p className="adm-muted">Refunds are made in Polar; its webhook takes back what is left of a pack.</p>
+          <p className="adm-footnote">Refunds are made in Polar; its webhook takes back what is left of a pack.</p>
         </Section>
       </div>
 
     </>
+  );
+}
+
+/** The page of Pro accounts, sortable by each column. */
+function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashboard: PolarDashboard; onOpenUser: (id: string) => void }) {
+  const table = useSort(
+    rows,
+    {
+      name: (p) => p.displayName,
+      through: (p) => (p.source === 'subscription' ? (p.product ?? '') : p.source),
+      status: (p) => p.status,
+      ends: (p) => p.currentPeriodEnd ?? p.compUntil,
+    },
+    { key: 'name', dir: 'asc' },
+  );
+  return (
+    <div className="adm-scroll">
+      <table className="adm-table">
+        <thead>
+          <tr>
+            <SortHeader label="Name" {...table.by('name')} />
+            <SortHeader label="Pro through" {...table.by('through')} />
+            <SortHeader label="Status" {...table.by('status')} />
+            <SortHeader label="Renews or ends" {...table.by('ends')} />
+            <th scope="col">Polar</th>
+          </tr>
+        </thead>
+        <tbody>
+          {table.rows.map((p) => (
+            <tr key={p.id}>
+              <td>
+                <UserLink user={p} onOpenUser={onOpenUser} />
+              </td>
+              <td>{p.source === 'subscription' ? humanize(p.product ?? 'subscription') : p.source === 'comp' ? `Comp until ${formatDate(p.compUntil)}` : 'Plan set by hand'}</td>
+              <td className="adm-badges">
+                {p.status && <span className={`ps-badge ps-badge--${p.status === 'past_due' ? 'yellow' : p.source === 'subscription' ? 'pass' : 'neutral'}`}>{humanize(p.status)}</span>}
+                {p.cancelAtPeriodEnd && <span className="ps-badge ps-badge--neutral">canceling</span>}
+                {p.source === 'comp' && <span className="ps-badge ps-badge--yellow">comp</span>}
+              </td>
+              <td>{formatDate(p.currentPeriodEnd)}</td>
+              <td>
+                {p.polarCustomerId ? (
+                  <a href={`${dashboard.customers}/${encodeURIComponent(p.polarCustomerId)}`} target="_blank" rel="noreferrer">
+                    Customer ↗
+                  </a>
+                ) : (
+                  <span className="adm-muted">—</span>
+                )}
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
   );
 }

@@ -1324,3 +1324,41 @@
   font-size: var(--fs-12);
   font-weight: 400;
 }
+
+/* The site's badges, quieter for tables full of them: a tint of the status
+   colour behind ink text instead of a solid fill in an ink outline. */
+.adm .ps-badge {
+  padding: 2px 8px;
+  border: 0;
+  background: rgb(var(--badge-tint, var(--c-ink)) / var(--badge-alpha, 0.08));
+  color: rgb(var(--c-ink));
+  font-weight: 600;
+  font-stretch: 100%;
+  letter-spacing: 0;
+  text-transform: none;
+}
+.adm .ps-badge--pass {
+  --badge-tint: var(--c-pass);
+  --badge-alpha: 0.2;
+}
+.adm .ps-badge--fail {
+  --badge-tint: var(--c-fail);
+  --badge-alpha: 0.18;
+}
+.adm .ps-badge--yellow {
+  --badge-tint: var(--c-yellow);
+  --badge-alpha: 0.35;
+}
+.adm .ps-badge--blue {
+  --badge-tint: var(--c-blue);
+  --badge-alpha: 0.15;
+}
+
+/* Badges in a table cell: the cell stays a cell (a flex cell loses its row's border), the badges spaced inline. */
+.adm-table td.adm-badges {
+  display: table-cell;
+}
+
+.adm-table td.adm-badges > * + * {
+  margin-left: 4px;
+}

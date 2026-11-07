@@ -1,9 +1,9 @@
 import { useCallback, useState } from 'react';
 import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, signOutUser, unblockUser, type UserFilter, type UserSort } from './api';
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
-import { useAction, useLoad } from './hooks';
+import { useAction, useLoad, type SortDir } from './hooks';
 import UserBilling from './UserBilling';
-import { ErrorNote, Loading, PageHeader, Pager, SearchBox, Section, Stat } from './ui';
+import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton, SortHeader, Stat } from './ui';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -13,12 +13,8 @@ const FILTERS: { id: UserFilter; label: string }[] = [
   { id: 'email', label: 'Email reminders' },
 ];
 
-const SORTS: { id: UserSort; label: string }[] = [
-  { id: 'created', label: 'Newest' },
-  { id: 'seen', label: 'Last seen' },
-  { id: 'solved', label: 'Most solved' },
-  { id: 'name', label: 'Name' },
-];
+/** The orders the server sorts accounts in: names A to Z, the rest newest or most first. */
+const SORT_DIR: Record<UserSort, SortDir> = { name: 'asc', created: 'desc', seen: 'desc', solved: 'desc' };
 
 /** The accounts, searchable; one opens in detail (`userId`, in the address as #/users/<id>). */
 export default function UsersTab({ userId, onOpen, onSignedOut }: { userId?: string; onOpen: (id?: string) => void; onSignedOut: () => void }) {
@@ -36,10 +32,18 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
     setQ(value);
     setOffset(0);
   }, []);
+  const sortBy = (key: UserSort) => ({
+    active: sort === key,
+    dir: SORT_DIR[key],
+    onSort: () => {
+      setSort(key);
+      setOffset(0);
+    },
+  });
   return (
     <>
       <PageHeader page="users" />
-      <Section title="Accounts">
+      <Section title={users.data ? `Accounts (${formatNumber(users.data.total)})` : 'Accounts'}>
         <div className="adm-toolbar">
           <SearchBox value={q} onChange={search} label="Search accounts" placeholder="Name, account id or GitHub/Google user id" />
           <select className="adm-input" aria-label="Show" value={filter} onChange={(e) => (setFilter(e.target.value as UserFilter), setOffset(0))}>
@@ -49,30 +53,23 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
               </option>
             ))}
           </select>
-          <select className="adm-input" aria-label="Sort by" value={sort} onChange={(e) => (setSort(e.target.value as UserSort), setOffset(0))}>
-            {SORTS.map((s) => (
-              <option key={s.id} value={s.id}>
-                {s.label}
-              </option>
-            ))}
-          </select>
         </div>
         <ErrorNote>{users.error}</ErrorNote>
         {!users.data ? (
-          !users.error && <Loading what="accounts" />
+          !users.error && <Skeleton rows={8} what="accounts" />
+        ) : users.data.users.length === 0 ? (
+          <Empty>{q || filter !== 'all' ? 'No accounts match. Try another search or filter.' : 'No accounts yet.'}</Empty>
         ) : (
-          <>
+          <div className={users.loading ? 'adm-refetching' : undefined}>
             <div className="adm-scroll">
               <table className="adm-table">
                 <thead>
                   <tr>
-                    <th scope="col">Name</th>
+                    <SortHeader label="Name" {...sortBy('name')} />
                     <th scope="col">Sign-in</th>
-                    <th scope="col">Joined</th>
-                    <th scope="col">Last seen</th>
-                    <th scope="col" className="adm-num">
-                      Solved
-                    </th>
+                    <SortHeader label="Joined" {...sortBy('created')} />
+                    <SortHeader label="Last seen" {...sortBy('seen')} />
+                    <SortHeader label="Solved" numeric {...sortBy('solved')} />
                     <th scope="col">Status</th>
                   </tr>
                 </thead>
@@ -85,8 +82,8 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
                         </button>
                       </td>
                       <td>{u.providers.join(', ')}</td>
-                      <td>{formatDate(u.createdAt)}</td>
-                      <td>{formatDayAgo(u.lastSeenDay)}</td>
+                      <td className="adm-nowrap">{formatDate(u.createdAt)}</td>
+                      <td className="adm-nowrap">{formatDayAgo(u.lastSeenDay)}</td>
                       <td className="adm-num">{formatNumber(u.solved)}</td>
                       <td className="adm-badges">
                         {u.blockedAt && <span className="ps-badge ps-badge--fail">blocked</span>}
@@ -99,7 +96,7 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
               </table>
             </div>
             <Pager offset={users.data.offset} pageSize={users.data.pageSize} total={users.data.total} onChange={setOffset} />
-          </>
+          </div>
         )}
       </Section>
     </>
@@ -120,9 +117,10 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
   const data = detail.data;
   if (!data) {
     return (
-      <Section title="Account" actions={back}>
-        {detail.error ? <ErrorNote>{detail.error}</ErrorNote> : <Loading what="the account" />}
-      </Section>
+      <>
+        <PageHeader page="users" title="Account" description={<span className="adm-mono">{id}</span>} actions={back} />
+        <Section label="Account">{detail.error ? <ErrorNote>{detail.error}</ErrorNote> : <Skeleton rows={4} what="the account" />}</Section>
+      </>
     );
   }
   const { user } = data;
@@ -137,8 +135,8 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
 
   return (
     <>
-      <Section title={user.displayName} actions={back}>
-        <p className="adm-muted adm-mono">{user.id}</p>
+      <PageHeader page="users" title={user.displayName} description={<span className="adm-mono">{user.id}</span>} actions={back} />
+      <Section title="Profile">
         <div className="adm-badges">
           {blocked && <span className="ps-badge ps-badge--fail">blocked {formatDate(user.blockedAt)}</span>}
           <span className={`ps-badge ps-badge--${user.effectivePlan === 'pro' ? 'blue' : 'neutral'}`}>{user.effectivePlan} plan</span>
@@ -232,101 +230,105 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
         </div>
       </Section>
 
-      <Section title="Sessions and email">
-        {data.sessions.length ? (
-          <ul className="adm-list">
-            {data.sessions.map((s) => (
-              <li key={s.kind}>
-                {s.count} {s.kind === 'web' ? 'site session' : humanize(s.kind.replace('app_', 'app '))}
-                {s.count === 1 ? '' : 's'}, latest started {formatDateTime(s.lastCreatedAt)}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="adm-muted">No active sessions.</p>
-        )}
-        {data.email ? (
-          <div className="adm-inline">
-            <span>
-              {data.email.address} · {data.email.confirmed ? 'confirmed' : 'not confirmed'}
-              {data.email.paused && ' · paused'} ·{' '}
-              {Object.entries(data.email.reminders)
-                .filter(([, on]) => on)
-                .map(([k]) => k)
-                .join(', ') || 'no reminders'}{' '}
-              · {data.email.timeZone}
-            </span>
-            <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" disabled={action.busy} onClick={() => confirmThen('Remove the email address? Reminders stop.', () => deleteUserEmail(id))}>
-              Remove address
-            </button>
-          </div>
-        ) : (
-          <p className="adm-muted">No email reminders.</p>
-        )}
-      </Section>
+      <div className="adm-grid">
+        <Section title="Sessions and email">
+          {data.sessions.length ? (
+            <ul className="adm-list">
+              {data.sessions.map((s) => (
+                <li key={s.kind}>
+                  {s.count} {s.kind === 'web' ? 'site session' : humanize(s.kind.replace('app_', 'app '))}
+                  {s.count === 1 ? '' : 's'}, latest started {formatDateTime(s.lastCreatedAt)}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="adm-muted">No active sessions.</p>
+          )}
+          {data.email ? (
+            <div className="adm-inline">
+              <span>
+                {data.email.address} · {data.email.confirmed ? 'confirmed' : 'not confirmed'}
+                {data.email.paused && ' · paused'} ·{' '}
+                {Object.entries(data.email.reminders)
+                  .filter(([, on]) => on)
+                  .map(([k]) => k)
+                  .join(', ') || 'no reminders'}{' '}
+                · {data.email.timeZone}
+              </span>
+              <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" disabled={action.busy} onClick={() => confirmThen('Remove the email address? Reminders stop.', () => deleteUserEmail(id))}>
+                Remove address
+              </button>
+            </div>
+          ) : (
+            <p className="adm-muted">No email reminders.</p>
+          )}
+        </Section>
 
-      <Section title={`Short links (${data.shares.length})`}>
-        {data.shares.length ? (
-          <ul className="adm-list">
-            {data.shares.map((s) => (
-              <li key={s.id}>
-                <a href={`/s/${s.id}`} target="_blank" rel="noreferrer">
-                  {s.title || s.id}
-                </a>{' '}
-                <span className="adm-muted">{formatDate(s.createdAt)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="adm-muted">None.</p>
-        )}
-      </Section>
+        <Section title={`Short links (${data.shares.length})`}>
+          {data.shares.length ? (
+            <ul className="adm-list">
+              {data.shares.map((s) => (
+                <li key={s.id}>
+                  <a href={`/s/${s.id}`} target="_blank" rel="noreferrer">
+                    {s.title || s.id}
+                  </a>{' '}
+                  <span className="adm-muted">{formatDate(s.createdAt)}</span>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="adm-muted">None.</p>
+          )}
+        </Section>
+      </div>
 
-      <Section title="Problems">
-        {data.progress.length ? (
-          <div className="adm-scroll">
-            <table className="adm-table adm-table--compact">
-              <thead>
-                <tr>
-                  <th scope="col">Problem</th>
-                  <th scope="col" className="adm-num">
-                    Runs
-                  </th>
-                  <th scope="col">Solved</th>
-                  <th scope="col">Last run</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.progress.map((p) => (
-                  <tr key={p.problemId}>
-                    <td>{p.problemId}</td>
-                    <td className="adm-num">{p.runs}</td>
-                    <td>{p.solvedAt ? `${formatDate(p.solvedAt)}${p.runsToSolve ? ` (${p.runsToSolve} runs)` : ''}` : '—'}</td>
-                    <td>{formatDate(p.updatedAt)}</td>
+      <div className="adm-grid">
+        <Section title="Problems">
+          {data.progress.length ? (
+            <div className="adm-scroll">
+              <table className="adm-table adm-table--compact">
+                <thead>
+                  <tr>
+                    <th scope="col">Problem</th>
+                    <th scope="col" className="adm-num">
+                      Runs
+                    </th>
+                    <th scope="col">Solved</th>
+                    <th scope="col">Last run</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        ) : (
-          <p className="adm-muted">No problems tried yet.</p>
-        )}
-      </Section>
+                </thead>
+                <tbody>
+                  {data.progress.map((p) => (
+                    <tr key={p.problemId}>
+                      <td>{p.problemId}</td>
+                      <td className="adm-num">{p.runs}</td>
+                      <td>{p.solvedAt ? `${formatDate(p.solvedAt)}${p.runsToSolve ? ` (${p.runsToSolve} runs)` : ''}` : '—'}</td>
+                      <td>{formatDate(p.updatedAt)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="adm-muted">No problems tried yet.</p>
+          )}
+        </Section>
 
-      <Section title="Admin actions on this account">
-        {data.audit.length ? (
-          <ul className="adm-list">
-            {data.audit.map((a) => (
-              <li key={a.id}>
-                {formatDateTime(a.at)}: {humanize(a.action)}
-                {a.detail && <span className="adm-muted"> {JSON.stringify(a.detail)}</span>}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="adm-muted">None.</p>
-        )}
-      </Section>
+        <Section title="Admin actions on this account">
+          {data.audit.length ? (
+            <ul className="adm-list">
+              {data.audit.map((a) => (
+                <li key={a.id}>
+                  {formatDateTime(a.at)}: {humanize(a.action)}
+                  {a.detail && <span className="adm-muted"> {JSON.stringify(a.detail)}</span>}
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <p className="adm-muted">None.</p>
+          )}
+        </Section>
+      </div>
     </>
   );
 }

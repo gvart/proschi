@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { adjustCredits, compUser, endComp, listUserCredits, type UserDetail } from './api';
 import { formatDate, formatDateTime, humanize } from './format';
 import { useAction, useLoad } from './hooks';
-import { Dialog, ErrorNote, Loading, Pager, Section, Stat } from './ui';
+import { Dialog, ErrorNote, Pager, Section, Skeleton, Stat } from './ui';
 
 /** "pro_yearly" → "Pro yearly". */
 const productName = (product: string | null) => (product ? humanize(product) : '—');
@@ -89,7 +89,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
       <Section title={`Credit ledger (${ledger.data?.total ?? '…'})`}>
         <ErrorNote>{ledger.error}</ErrorNote>
         {!ledger.data ? (
-          !ledger.error && <Loading what="the ledger" />
+          !ledger.error && <Skeleton what="the ledger" />
         ) : ledger.data.entries.length === 0 ? (
           <p className="adm-muted">No credits used or added yet.</p>
         ) : (

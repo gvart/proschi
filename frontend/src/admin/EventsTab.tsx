@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { listAudit, listEvents, type AppEvent, type AuditEntry } from './api';
 import { formatDateTime, humanize } from './format';
 import { useLoad } from './hooks';
-import { ErrorNote, LevelBadge, Loading, PageHeader, Section } from './ui';
+import { Empty, ErrorNote, LevelBadge, PageHeader, SearchBox, Section, Skeleton } from './ui';
 
 /** App events (errors, cron runs, sign-in failures, rate limits), newest first, filtered by kind and level. */
 export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind: (kind: string) => void; onSignedOut: () => void }) {
@@ -42,9 +42,9 @@ export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind:
         </div>
         <ErrorNote>{events.error}</ErrorNote>
         {!events.data ? (
-          !events.error && <Loading what="events" />
+          !events.error && <Skeleton what="events" />
         ) : events.data.events.length === 0 ? (
-          <p className="adm-muted">No events. They are kept for 30 days.</p>
+          <Empty>{kind || level ? 'No events of this kind or level.' : 'No events.'} They are kept for 30 days.</Empty>
         ) : (
           <>
             <ol className="adm-events">
@@ -112,15 +112,26 @@ export function AuditTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string)
   const [before, setBefore] = useState<number[]>([]);
   const cursor = before.at(-1);
   const audit = useLoad(() => listAudit(cursor), [cursor], onSignedOut);
+  const [filter, setFilter] = useState('');
+  const needle = filter.toLowerCase();
+  // Filters the page that is loaded: the action, its target and detail, and the passkey.
+  const entries = (audit.data?.entries ?? []).filter(
+    (a) => !needle || [a.action, humanize(a.action), a.target ?? '', a.passkey ?? '', a.detail ? JSON.stringify(a.detail) : ''].some((text) => text.toLowerCase().includes(needle)),
+  );
   return (
     <>
       <PageHeader page="audit" />
       <Section title="Entries">
+        <div className="adm-toolbar">
+          <SearchBox value={filter} onChange={setFilter} label="Filter the audit log" placeholder="Action, account id, reason or passkey" />
+        </div>
         <ErrorNote>{audit.error}</ErrorNote>
         {!audit.data ? (
-          !audit.error && <Loading what="the audit log" />
+          !audit.error && <Skeleton what="the audit log" />
         ) : audit.data.entries.length === 0 ? (
-          <p className="adm-muted">Nothing yet.</p>
+          <Empty>No admin actions yet.</Empty>
+        ) : entries.length === 0 ? (
+          <Empty>Nothing on this page matches “{filter}”.</Empty>
         ) : (
           <>
             <div className="adm-scroll">
@@ -134,7 +145,7 @@ export function AuditTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string)
                   </tr>
                 </thead>
                 <tbody>
-                  {audit.data.entries.map((a) => (
+                  {entries.map((a) => (
                     <AuditRow key={a.id} entry={a} onOpenUser={onOpenUser} />
                   ))}
                 </tbody>
