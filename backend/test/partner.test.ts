@@ -272,6 +272,33 @@ describe('Design partner: a turn', () => {
     expect(m.settle.mock.calls[0][2]).toHaveLength(2);
   });
 
+  it('tops the hold up to the repair’s worst case, its input including the first answer, before the repair call', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const long = 'x'.repeat(30_000);
+    const calls = mockClaude((_r, n) => (n === 0 ? answer({ message: long, changes: [MISSING] }) : answer({ message: 'Fixed.', changes: [REPLICA] })));
+    const m = meter();
+    expect((await turn(token, id, {})).status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(m.topUp).toHaveBeenCalledOnce();
+    expect(m.topUp.mock.invocationCallOrder[0]).toBeLessThan(m.settle.mock.invocationCallOrder[0]);
+    // Sized by the repair's input: the turn's, the first answer and the repair message.
+    const [first, repair] = m.estimate.mock.calls.map((c) => c[2]);
+    expect(repair).toBeGreaterThan(first + 7_000);
+  });
+
+  it('returns the first answer’s failed change without repairing when the hold can’t be topped up, charging the first call', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const calls = mockClaude(() => answer({ changes: [MISSING] }));
+    const m = meter();
+    m.topUp.mockResolvedValue(false);
+    const body = (await (await turn(token, id, {})).json()) as TurnJson;
+    expect(calls).toHaveLength(1);
+    expect(body.turn.changes!.map((c) => c.result.ok)).toEqual([false]);
+    expect(m.settle.mock.calls[0][2]).toHaveLength(1);
+  });
+
   it('sends what still fails after the repair as {ok: false, reason}', async () => {
     const { token } = await signedInUser();
     const id = await session(token);

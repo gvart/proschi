@@ -254,8 +254,10 @@ const approxInput = (r: MessageRequest): number => approxTokens(JSON.stringify(r
  * Asks the model for the turn, and checks its answer: one more call when it
  * does not validate, and one repair call when a change does not apply. Each
  * change is checked against `source` (measured as `before`). Before either
- * second call the lease is extended and the hold topped up (`more`, sized
- * by the call's input); a hold that can't be topped up skips the call. A
+ * second call the hold is topped up (`more`, sized by that call's input, the
+ * repair's with the first answer in it) and the lease extended; a hold that
+ * can't be topped up skips the call (a skipped repair leaves the first
+ * answer with its failed changes). A
  * failure is an AiError whose `charge` holds every answer the model gave.
  */
 async function answer(
@@ -295,13 +297,15 @@ async function answer(
   let kept = first.answer;
   let changes = checked(kept);
   const failed = changes.flatMap((c) => (c.result.ok ? [] : [{ title: c.title, reason: c.result.reason }]));
-  if (failed.length) {
+  const repairRequest: MessageRequest = {
+    ...request,
+    messages: [...request.messages, { role: 'assistant', content: first.result.text }, { role: 'user', content: repairMessage(failed) }],
+  };
+  // The repair is held at its own worst case (its input holds the first answer); without the credits, the first answer stands.
+  if (failed.length && (await more(approxInput(repairRequest)))) {
     await extend();
     try {
-      const repair = await client.create({
-        ...request,
-        messages: [...request.messages, { role: 'assistant', content: first.result.text }, { role: 'user', content: repairMessage(failed) }],
-      });
+      const repair = await client.create(repairRequest);
       billed.push(meterUsage(repair));
       const repaired = parsePartnerAnswer(repair.text);
       if (repaired) {
