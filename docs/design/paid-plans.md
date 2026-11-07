@@ -249,3 +249,18 @@ id; don't rewrite old ones.
   dismissible announcement in the app. Sending needs a reason; a campaign
   never grants or emails anyone twice (a recipient row per account, an email
   marked before it goes out); at most `CAMPAIGN_DAILY_CAP` emails a day.
+- **P37. Design partner: where it lives and how a change shows.** The entry
+  is a tab on the right edge of the workspace (over the diagram's edge,
+  where the panel opens), the same in the editor and on practice, not in the
+  page header; on phones it is an icon tab on the screen's right edge.
+  Ctrl/Cmd+J still toggles it. A change card draws the proposed design
+  (read-only, fitted) with After/Before: what it adds outlined, what it
+  changes marked, what it removes ghosted (from `dsl/diff.ts`); a build on
+  an empty design draws the whole new diagram. The code diff stays,
+  folded. "Enlarge" shows the preview over the page with Accept and "Back
+  to mine"; the source changes only on Accept. Once "Improve this" or "Ask
+  again" is sent, the old card folds to "Improved below" without Accept or
+  Reject (kept per conversation in this browser). One composer takes every
+  ask: starter chips (Review, Build on the editor, Hint on practice) pick
+  the intent and its prefill or hint, and the estimate under the composer
+  follows the pick.

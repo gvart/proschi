@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUp, ClipboardCheck, Hammer, Lightbulb, LogIn, MessagesSquare, Sparkles, SquarePen, TriangleAlert, X } from 'lucide-react';
 import Markdown from '../practice/Markdown';
-import { confirm } from '../design/dialogs';
-import { field, primaryButton, toolButton } from '../components/Playground/ui';
+import { primaryButton, toolButton } from '../components/Playground/ui';
 import { useFeature } from '../components/featureState';
 import UpgradeHint from '../components/UpgradeHint';
 import { billingEnabled, pricingHref } from '../services/billing';
@@ -10,7 +9,9 @@ import type { Account } from '../practice/useAccount';
 import { useEstimates } from '../services/useCredits';
 import { formatCredits, formatRange } from '../services/credits';
 import ChangeCard from './ChangeCard';
+import type { Diagram } from '../dsl/types';
 import { estimateFor, type Intent, type PartnerContext, type Question, type Turn } from './contract';
+import { confirm } from '../design/dialogs';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
 
@@ -18,7 +19,9 @@ import { usePartner, type PartnerProblem } from './usePartner';
  * Design partner (docs/design/paid-plans.md P29, P30): one conversation per
  * document or practice problem. It reviews, answers, asks clarifying
  * questions (tappable options), builds a system from a description and
- * proposes changes as cards (./ChangeCard.tsx). Each ask shows its estimate
+ * proposes changes as cards (./ChangeCard.tsx). One composer takes every ask:
+ * the starter chips above it pick what it sends (a review, a build, a hint),
+ * and the estimate under it follows the pick. Each ask shows its estimate
  * first and its real cost after. On a practice problem it coaches: changes
  * come only from "Show me the changes", which marks the problem assisted.
  */
@@ -44,6 +47,8 @@ export interface PartnerPanelProps {
   offReason?: string;
   /** A turn came with changes on a practice problem. */
   onAssisted?: () => void;
+  /** The diagram of a source (with this page's imports), for the change cards' previews. */
+  diagramOf?: (source: string) => Diagram;
 }
 
 const MAX_MESSAGE = 4000;
@@ -133,12 +138,14 @@ function PanelHeader({ practice, onClose, children }: { practice: boolean; onClo
   );
 }
 
-function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
+function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
   const practice = context.kind === 'practice';
   const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, onAssisted });
   const estimates = useEstimates(account.state.status === 'signed-in');
   const [deepChoice, setDeepChoice] = useState(false);
   const [draft, setDraft] = useState('');
+  /** What the composer sends: picked with a starter chip, back to a plain message once sent. */
+  const [starter, setStarter] = useState<Starter>('chat');
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
   const deep = deepAllowed && (state.sessionId ? state.sessionDeep : deepChoice);
@@ -172,8 +179,26 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     e?.preventDefault();
     const text = draft.trim();
     if (!text || busy) return;
+    const picked = starter;
     setDraft('');
-    if (!(await ask('chat', text))) setDraft((d) => d || text);
+    setStarter('chat');
+    if (!(await ask(STARTERS[picked].intent, text))) {
+      setDraft((d) => d || text);
+      setStarter(picked);
+    }
+  };
+
+  const pick = (next: Starter) => {
+    const was = STARTERS[starter].prefill;
+    const off = next === starter;
+    setStarter(off ? 'chat' : next);
+    // A prefill the user didn't edit follows the pick; their own words stay.
+    if (!draft.trim() || draft === was) setDraft(off ? '' : STARTERS[next].prefill);
+    requestAnimationFrame(() => {
+      const el = input.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
   };
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -187,7 +212,8 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
   };
 
   const newConversation = async () => {
-    if (await confirm({ title: 'Start a new conversation?', body: 'This one is closed.', confirmLabel: 'New conversation' })) reset();
+    if (!(await confirm({ title: 'Start a new conversation?', body: 'This one is closed.', confirmLabel: 'Start new' }))) return;
+    reset();
   };
 
   // Only the newest partner turn's questions take answers.
@@ -201,7 +227,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
         {deepAllowed && (
           <button
             type="button"
-            onClick={toggleDeep}
+            onClick={() => void toggleDeep()}
             aria-pressed={deep}
             disabled={busy}
             title={`Deep: a stronger model that thinks longer, about ${formatCredits(estimates.deepMultiplier)}× the credits`}
@@ -214,7 +240,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
           </button>
         )}
         {state.turns.length > 0 && (
-          <button type="button" onClick={newConversation} disabled={busy} aria-label="New conversation" title="New conversation" className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink disabled:opacity-50">
+          <button type="button" onClick={() => void newConversation()} disabled={busy} aria-label="New conversation" title="New conversation" className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink disabled:opacity-50">
             <SquarePen size={15} aria-hidden="true" />
           </button>
         )}
@@ -226,7 +252,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
             <Skeleton label="Loading your conversation…" />
           </div>
         ) : empty ? (
-          <EmptyState practice={practice} busy={busy} estimate={estimate} onAsk={ask} />
+          <EmptyState practice={practice} />
         ) : (
           <ol aria-label="Conversation" aria-live="polite" className="space-y-5 px-4 py-4">
             {state.turns.map((turn) =>
@@ -257,6 +283,8 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
                         decide(c.id, undefined);
                       }}
                       onImprove={(message) => ask('improve', message, c.id)}
+                      improved={state.improved.includes(c.id)}
+                      diagramOf={diagramOf}
                     />
                   ))}
                 </PartnerMessage>
@@ -269,7 +297,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 
       <form onSubmit={(e) => void submit(e)} className="shrink-0 border-t-bw-1 border-ink bg-surface px-3 pb-3 pt-2.5">
         {state.problem && <ProblemLine problem={state.problem} base={base} onDismiss={dismiss} />}
-        {!empty && state.status !== 'resuming' && <QuickActions practice={practice} busy={busy} estimate={estimate} onAsk={ask} />}
+        {state.status !== 'resuming' && <StarterChips practice={practice} busy={busy} starter={starter} onPick={pick} estimate={estimate} onAsk={ask} />}
         <div className="flex items-end gap-1.5 rounded-sm border-bw-1 border-ink bg-paper p-1 transition-shadow duration-d1 focus-within:shadow-brutal-sm">
           <label htmlFor={`partner-message-${storeKey}`} className="sr-only">
             Message Design partner
@@ -281,15 +309,16 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
             onChange={(e) => setDraft(e.target.value.slice(0, MAX_MESSAGE))}
             onKeyDown={onKey}
             rows={1}
-            placeholder={openQuestions?.length ? 'Answer in your own words, or pick an option' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
+            placeholder={starter !== 'chat' ? STARTERS[starter].placeholder : openQuestions?.length ? 'Answer in your own words, or pick an option' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
             className="max-h-[148px] min-h-[36px] flex-1 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none"
           />
+          {/* Slot for the shared MicButton (src/voice): <MicButton onText={(t) => setDraft((d) => (d ? `${d} ${t}` : t))} /> */}
           <button type="submit" disabled={busy || !draft.trim()} aria-label="Send" title="Send (Enter)" className={`${primaryButton} !h-9 !w-9 !justify-center !p-0 disabled:opacity-40`}>
             <ArrowUp size={16} aria-hidden="true" />
           </button>
         </div>
         <p className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-muted tabular-nums" data-testid="partner-footnote">
-          <span>{estimate('chat') ? `A message: ${estimate('chat')}` : 'Enter to send, Shift+Enter for a new line'}</span>
+          <span>{estimate(STARTERS[starter].intent) ? `${STARTERS[starter].cost}: ${estimate(STARTERS[starter].intent)}` : 'Enter to send, Shift+Enter for a new line'}</span>
           {state.balance !== undefined && <span data-testid="partner-balance">{formatCredits(state.balance, { floor: true })} credits left</span>}
         </p>
       </form>
@@ -299,95 +328,64 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 
 type Ask = (intent: Intent, message: string, changeId?: string) => Promise<boolean>;
 
-const MESSAGES = {
-  review: 'Review my design.',
-  hint: 'Give me a hint for the next step.',
-  solve: 'Show me the changes that solve this problem.',
-} as const;
+const SOLVE_MESSAGE = 'Show me the changes that solve this problem.';
 
-function EmptyState({ practice, busy, estimate, onAsk }: { practice: boolean; busy: boolean; estimate: (i: Intent) => string | undefined; onAsk: Ask }) {
-  const [describing, setDescribing] = useState(false);
-  const [description, setDescription] = useState('');
+type Starter = 'chat' | 'review' | 'build' | 'hint';
 
-  const build = async (e: FormEvent) => {
-    e.preventDefault();
-    const text = description.trim();
-    if (text && (await onAsk('build', text))) setDescription('');
-  };
+/** What each starter chip sends: its intent, the words it puts in the composer, the composer's hint and the estimate's label. */
+const STARTERS: Record<Starter, { intent: Intent; label: string; prefill: string; placeholder: string; cost: string }> = {
+  chat: { intent: 'chat', label: '', prefill: '', placeholder: '', cost: 'A message' },
+  review: { intent: 'review', label: 'Review my design', prefill: 'Review my design.', placeholder: 'Anything to focus on? e.g. the read path, the cost', cost: 'A review' },
+  build: {
+    intent: 'build',
+    label: 'Build a system from a description',
+    prefill: '',
+    placeholder: 'Describe the system: what it does and how big it gets, e.g. a URL shortener, 100M new links a month, redirects under 50 ms',
+    cost: 'A build',
+  },
+  hint: { intent: 'chat', label: 'Give me a hint', prefill: 'Give me a hint for the next step.', placeholder: 'What are you stuck on?', cost: 'A hint' },
+};
 
+function EmptyState({ practice }: { practice: boolean }) {
   return (
     <div className="px-4 py-5">
       <p className="text-sm leading-relaxed text-ink/80">
         {practice
           ? 'Your coach for this problem: it reviews your design, answers questions and gives hints, and keeps the answer back until you ask for it.'
-          : 'Get a review, ask a question, or describe a system to build. Changes come as cards: you see the code and the numbers before anything touches your design.'}
+          : 'Get a review, ask a question, or describe a system to build. Changes come as cards: you see the new design and the numbers before anything touches yours.'}
       </p>
-      <div className="mt-4 space-y-2.5">
-        <StarterAction icon={<ClipboardCheck size={16} />} title="Review my design" detail={practice ? 'What works, what fails and where to look next.' : 'Trade-offs, risks and what to change, from the tests and the simulation.'} estimate={estimate('review')} disabled={busy} onClick={() => void onAsk('review', MESSAGES.review)} />
-        {practice ? (
-          <StarterAction icon={<Lightbulb size={16} />} title="Give me a hint" detail="A nudge for the next step, not the answer." estimate={estimate('chat')} disabled={busy} onClick={() => void onAsk('chat', MESSAGES.hint)} />
-        ) : (
-          <div className={`rounded-sm border-bw-1 border-ink bg-surface ${describing ? 'shadow-brutal-sm' : ''}`}>
-            <StarterAction
-              flush
-              icon={<Hammer size={16} />}
-              title="Build a system from a description"
-              detail="Say what it does and how big it gets; you get the design as a change to accept."
-              estimate={estimate('build')}
-              disabled={busy}
-              expanded={describing}
-              onClick={() => setDescribing((d) => !d)}
-            />
-            {describing && (
-              <form onSubmit={(e) => void build(e)} className="space-y-2 border-t-bw-1 border-ink/15 p-3">
-                <label htmlFor="partner-describe" className="sr-only">
-                  Describe the system
-                </label>
-                <textarea
-                  id="partner-describe"
-                  autoFocus
-                  rows={4}
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value.slice(0, MAX_MESSAGE))}
-                  placeholder="e.g. A URL shortener: 100M new links a month, 10:1 reads to writes, redirects under 50 ms."
-                  className={`block w-full resize-y ${field}`}
-                />
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] text-muted tabular-nums">{estimate('build')}</span>
-                  <button type="submit" disabled={busy || !description.trim()} className={`${primaryButton} disabled:opacity-40`}>
-                    <Hammer size={14} aria-hidden="true" />
-                    Build it
-                  </button>
-                </div>
-              </form>
-            )}
-          </div>
-        )}
-      </div>
-      {practice && <SolveAction busy={busy} estimate={estimate('solve')} onAsk={onAsk} className="mt-5" />}
-      <p className="mt-5 text-xs text-muted">Or ask anything below. Design partner can be wrong; the tests are the verdict.</p>
+      <p className="mt-3 text-xs text-muted">Pick a starting point below or just ask. Design partner can be wrong; the tests are the verdict.</p>
     </div>
   );
 }
 
-function StarterAction({ icon, title, detail, estimate, disabled, onClick, flush, expanded }: { icon: ReactNode; title: string; detail: string; estimate?: string; disabled: boolean; onClick: () => void; flush?: boolean; expanded?: boolean }) {
+const STARTER_ICONS: Record<Exclude<Starter, 'chat'>, ReactNode> = {
+  review: <ClipboardCheck size={13} aria-hidden="true" />,
+  build: <Hammer size={13} aria-hidden="true" />,
+  hint: <Lightbulb size={13} aria-hidden="true" />,
+};
+
+/** The chips that pick what the one composer sends; on practice also "Show me the changes". */
+function StarterChips({ practice, busy, starter, onPick, estimate, onAsk }: { practice: boolean; busy: boolean; starter: Starter; onPick: (s: Starter) => void; estimate: (i: Intent) => string | undefined; onAsk: Ask }) {
+  const chips: Exclude<Starter, 'chat'>[] = practice ? ['review', 'hint'] : ['review', 'build'];
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-expanded={expanded}
-      className={`group flex w-full items-start gap-3 p-3 text-left disabled:opacity-50 ${flush ? 'rounded-sm hover:bg-pop-yellow/15' : 'rounded-sm border-bw-1 border-ink bg-surface transition-[translate,box-shadow] duration-d1 hover:-translate-x-px hover:-translate-y-px hover:shadow-brutal-sm active:translate-x-0 active:translate-y-0 active:shadow-none'}`}
-    >
-      <span className="mt-0.5 grid h-8 w-8 shrink-0 place-items-center rounded-sm border-bw-1 border-ink bg-paper text-ink group-hover:bg-pop-yellow group-hover:text-on-accent" aria-hidden="true">
-        {icon}
-      </span>
-      <span className="min-w-0 flex-1">
-        <span className="block text-sm font-semibold text-ink">{title}</span>
-        <span className="mt-0.5 block text-xs leading-relaxed text-muted">{detail}</span>
-        {estimate && <span className="mt-1 block font-mono text-[11px] text-muted tabular-nums">{estimate}</span>}
-      </span>
-    </button>
+    <div className="mb-2 flex flex-wrap items-center gap-1" role="group" aria-label="Start with" data-testid="partner-starters">
+      {chips.map((c) => (
+        <button
+          key={c}
+          type="button"
+          aria-pressed={starter === c}
+          disabled={busy}
+          onClick={() => onPick(c)}
+          title={estimate(STARTERS[c].intent)}
+          className="inline-flex items-center gap-1 rounded-full border-bw-1 border-ink/30 bg-surface px-2.5 py-1 text-xs font-semibold text-ink transition-colors duration-d1 hover:border-ink hover:bg-pop-yellow/30 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent disabled:opacity-50"
+        >
+          {STARTER_ICONS[c]}
+          {STARTERS[c].label}
+        </button>
+      ))}
+      {practice && <SolveAction busy={busy} estimate={estimate('solve')} onAsk={onAsk} compact className="basis-full sm:basis-auto" />}
+    </div>
   );
 }
 
@@ -406,7 +404,7 @@ function SolveAction({ busy, estimate, onAsk, className = '', compact = false }:
             disabled={busy}
             onClick={() => {
               setConfirming(false);
-              void onAsk('solve', MESSAGES.solve);
+              void onAsk('solve', SOLVE_MESSAGE);
             }}
             className={`${primaryButton} !py-1 !text-xs`}
           >
@@ -424,26 +422,6 @@ function SolveAction({ busy, estimate, onAsk, className = '', compact = false }:
       <Sparkles size={13} aria-hidden="true" />
       Show me the changes
     </button>
-  );
-}
-
-function QuickActions({ practice, busy, estimate, onAsk }: { practice: boolean; busy: boolean; estimate: (i: Intent) => string | undefined; onAsk: Ask }) {
-  return (
-    <div className="mb-2 flex flex-wrap items-center gap-1">
-      <button type="button" disabled={busy} onClick={() => void onAsk('review', MESSAGES.review)} title={estimate('review')} className={`${toolButton} !px-2 !py-1 !text-xs`}>
-        <ClipboardCheck size={13} aria-hidden="true" />
-        Review again
-      </button>
-      {practice && (
-        <>
-          <button type="button" disabled={busy} onClick={() => void onAsk('chat', MESSAGES.hint)} title={estimate('chat')} className={`${toolButton} !px-2 !py-1 !text-xs`}>
-            <Lightbulb size={13} aria-hidden="true" />
-            Hint
-          </button>
-          <SolveAction busy={busy} estimate={estimate('solve')} onAsk={onAsk} compact className="basis-full sm:basis-auto" />
-        </>
-      )}
-    </div>
   );
 }
 

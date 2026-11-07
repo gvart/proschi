@@ -571,6 +571,7 @@ export default function Playground() {
     [setSource],
   );
   const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const partnerDiagram = useCallback((s: string) => parse(s, { path: rootPath, resolve: filesResolver(importsNow.current ?? {}, rootPath) }).diagram, [rootPath]);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -1048,8 +1049,6 @@ export default function Playground() {
             </button>
           )}
 
-          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
-
           <ZenButton zen={zen} className={iconButton} />
 
           <div data-tour="export">
@@ -1329,6 +1328,7 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
+      {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
       {hasPartner && (
         <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
           <Suspense fallback={<PaneLoading />}>
@@ -1342,6 +1342,7 @@ export default function Playground() {
               apply={applyPartner}
               undo={undoPartner}
               onClose={closePartner}
+              diagramOf={partnerDiagram}
             />
           </Suspense>
         </PartnerDock>

@@ -44,10 +44,11 @@ export class PartnerMock {
   private n = 0;
   private changes = 0;
 
-  /** A change adding a cache line after the first arrow, checked: before and after numbers. */
+  /** A change adding a cache, a comment and a connection to a new node after the first arrow, checked: before and after numbers. */
   change(source: string, title = 'Put a cache in front of the database'): Record<string, unknown> {
     const find = arrowLine(source);
-    const replace = `${find}\n  # cached: redis in front of the reads`;
+    const from = find.trim().split(/\s/)[0];
+    const replace = `${find}\n  # cached: redis in front of the reads\n${from} -> hot_cache`;
     return {
       id: `c${++this.changes}`,
       title,

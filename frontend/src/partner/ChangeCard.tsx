@@ -1,7 +1,9 @@
 import { useMemo, useState, type FormEvent } from 'react';
-import { ArrowRight, Check, ChevronRight, CircleSlash, RefreshCw, Undo2, WandSparkles, X } from 'lucide-react';
+import { ArrowDown, ArrowRight, Check, ChevronRight, CircleSlash, RefreshCw, Undo2, WandSparkles, X } from 'lucide-react';
 import { formatAvailability, formatMs, formatUsd } from '../sim/format';
 import { field, primaryButton, toolButton } from '../components/Playground/ui';
+import type { Diagram } from '../dsl/types';
+import ChangePreview from './ChangePreview';
 import type { Change, Metrics } from './contract';
 import { applyEdits, countLines, editHunks, type Hunk } from './edits';
 import type { Decision } from './store';
@@ -9,9 +11,11 @@ import type { Decision } from './store';
 /**
  * One proposed change (docs/design/paid-plans.md P29): what and why, the
  * numbers before and after (the server ran the tests and the simulation on
- * it), the lines it changes, and Accept, Reject or "Improve this". The card
+ * it), a picture of the design it proposes (./ChangePreview.tsx), the lines
+ * it changes (folded), and Accept, Reject or "Improve this". The card
  * re-checks its edits against the source as it is now: when they no longer
- * apply it says so instead of offering Accept.
+ * apply it says so instead of offering Accept. Once "Improve this" (or "Ask
+ * again") is sent, the card folds to a line pointing at the newer one below.
  */
 
 interface ChangeCardProps {
@@ -28,11 +32,15 @@ interface ChangeCardProps {
   onImprove: (message: string) => Promise<boolean>;
   /** A turn is being answered: no new asks meanwhile. */
   busy: boolean;
+  /** "Improve this" or "Ask again" was sent for it: a newer card below replaces it. */
+  improved?: boolean;
+  /** The diagram of a source, for the preview; without it the card shows no picture. */
+  diagramOf?: (source: string) => Diagram;
 }
 
-type CardStatus = 'ready' | 'applied' | 'rejected' | 'stale' | 'present';
+type CardStatus = 'ready' | 'applied' | 'rejected' | 'stale' | 'present' | 'improved';
 
-export default function ChangeCard({ change, source, decision, onAccept, onReject, onUndo, onImprove, busy }: ChangeCardProps) {
+export default function ChangeCard({ change, source, decision, onAccept, onReject, onUndo, onImprove, busy, improved, diagramOf }: ChangeCardProps) {
   // What Accept wrote, and what it replaced, so Undo can tell whether the code is still as Accept left it.
   const [accepted, setAccepted] = useState<{ before: string; after: string }>();
   const [improving, setImproving] = useState(false);
@@ -40,6 +48,21 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
   const result = change.result;
   const next = useMemo(() => applyEdits(source, change.edits), [source, change.edits]);
   const hunks = useMemo(() => editHunks(next === null ? undefined : source, change.edits), [source, next, change.edits]);
+  const status: CardStatus | 'failed' = !result.ok
+    ? 'failed'
+    : decision === 'accepted'
+      ? 'applied'
+      : decision === 'rejected'
+        ? 'rejected'
+        : improved
+          ? 'improved'
+          : source === result.source
+            ? 'present'
+            : next === null
+              ? 'stale'
+              : 'ready';
+  // Only an open proposal gets the picture: parsed again as the code changes.
+  const preview = useMemo(() => (status === 'ready' && diagramOf && next !== null ? { before: diagramOf(source), after: diagramOf(next) } : undefined), [status, diagramOf, source, next]);
 
   if (!result.ok) {
     return (
@@ -53,8 +76,18 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
     );
   }
 
-  const status: CardStatus =
-    decision === 'accepted' ? 'applied' : decision === 'rejected' ? 'rejected' : source === result.source ? 'present' : next === null ? 'stale' : 'ready';
+  if (status === 'improved') {
+    return (
+      <article aria-label={`Change: ${change.title}`} data-testid="change-card" data-status="improved" className="flex items-center gap-2 rounded-sm border-bw-1 border-ink/25 px-3 py-2 text-sm">
+        <span className="min-w-0 flex-1 truncate text-muted">{change.title}</span>
+        <button type="button" onClick={(e) => scrollToNewer(e.currentTarget)} className="inline-flex shrink-0 items-center gap-1 text-xs font-semibold text-ink/80 hover:text-ink">
+          Improved below
+          <ArrowDown size={13} aria-hidden="true" />
+        </button>
+      </article>
+    );
+  }
+
   const canUndo = status === 'applied' && accepted !== undefined && source === accepted.after;
   const sameAsChecked = next === result.source;
 
@@ -87,13 +120,15 @@ export default function ChangeCard({ change, source, decision, onAccept, onRejec
         )}
       </header>
 
-      {status !== 'rejected' && (
+      {status !== 'rejected' && status !== 'stale' && (
         <>
           {change.why && <p className="px-3 pt-2 text-sm leading-relaxed text-ink/80">{change.why}</p>}
           <MetricsDelta before={result.before} after={result.after} />
-          <SourceDiff hunks={hunks} />
+          {preview && preview.after.nodes.length > 0 && <ChangePreview before={preview.before} after={preview.after} onAccept={accept} />}
+          <SourceDiff hunks={hunks} folded={!!preview} />
         </>
       )}
+      {status === 'stale' && <div className="h-2" />}
 
       <footer className="flex flex-wrap items-center gap-1.5 border-t-bw-1 border-ink/15 px-3 py-2">
         {status === 'ready' && (
@@ -241,11 +276,18 @@ export function MetricsDelta({ before, after }: { before: Metrics; after: Metric
   );
 }
 
-/** The edits as added and removed lines; folded when long. */
-export function SourceDiff({ hunks }: { hunks: Hunk[] }) {
+/** The newest partner turn with a change card after the one holding `from`: where an improved change went. */
+function scrollToNewer(from: HTMLElement) {
+  let turn = from.closest('[data-turn]')?.nextElementSibling;
+  while (turn && !turn.querySelector('[data-testid="change-card"]')) turn = turn.nextElementSibling;
+  turn?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/** The edits as added and removed lines; folded when long, or when a picture of the change shows above. */
+export function SourceDiff({ hunks, folded = false }: { hunks: Hunk[]; folded?: boolean }) {
   const { added, removed } = countLines(hunks);
   const lines = hunks.reduce((n, h) => n + h.lines.length, 0);
-  const [open, setOpen] = useState(lines <= 14);
+  const [open, setOpen] = useState(!folded && lines <= 14);
   if (!lines) return null;
   return (
     <div className="mx-3 mt-3 mb-3">
