@@ -28,7 +28,10 @@
     "backup": "node scripts/backup.mjs proschi",
     "smoke": "node scripts/smoke.mjs",
     "metrics": "node scripts/metrics.mjs",
-    "migrate:local": "wrangler d1 migrations apply proschi --local"
+    "migrate:local": "wrangler d1 migrations apply proschi --local",
+    "dev:paid": "(cd ../frontend && VITE_ACCOUNTS=true VITE_BILLING=true npm run build) && npm run migrate:local && npm run dev",
+    "local:pro": "node scripts/local.mjs pro",
+    "local:credits": "node scripts/local.mjs credits"
   },
   "dependencies": {
     "@fontsource/archivo": "^5.3.0",
