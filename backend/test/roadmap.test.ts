@@ -210,9 +210,36 @@ describe('the AI roadmap: routes', () => {
     expect(calls.filter(isPicker)).toHaveLength(1);
     // A day later, a review refreshes them again.
     await env.DB.prepare('UPDATE roadmap_recs SET created_at = created_at - ?').bind(REVIEW_REFRESH_MS + 1).run();
+    await env.DB.prepare('UPDATE roadmap_refresh SET tried_at = tried_at - ?').bind(REVIEW_REFRESH_MS + 1).run();
     expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
     await vi.waitFor(async () => expect(await recCount(userId)).toBe(2));
     expect(((await (await next(token)).json()) as { next: { source: string } }).next.source).toBe('review');
+    // Each refresh is held and charged as next_steps, like the picks after a verdict.
+    await vi.waitFor(async () =>
+      expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_charges WHERE user_id = ? AND action = 'next_steps'").bind(userId).first<{ n: number }>())!.n).toBe(2),
+    );
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_holds WHERE user_id = ? AND ref LIKE 'next_steps:%'").bind(userId).first()).toEqual({ n: 0 });
+  });
+
+  it('tries a refresh after a review at most once a day, also when it fails', async () => {
+    const calls = claude({ picks: () => Response.json({ type: 'error', error: { type: 'api_error', message: 'down' } }, { status: 500 }), other: () => messageResponse(JSON.stringify(GOOD_REVIEW)) });
+    const { id: userId, token } = await signedInUser();
+    await setPlan(userId, 'pro');
+    const body = { source: 'title "x"\n', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] } };
+    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
+    await vi.waitFor(() => expect(calls.filter(isPicker).length).toBeGreaterThan(0));
+    await new Promise((r) => setTimeout(r, 1500));
+    const tried = calls.filter(isPicker).length;
+    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
+    await new Promise((r) => setTimeout(r, 300));
+    // The failure is not tried again the same day, and charged nothing (it failed on the API's side).
+    expect(calls.filter(isPicker)).toHaveLength(tried);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_charges WHERE action = 'next_steps'").first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds').first()).toEqual({ n: 0 });
+    // A day later it may try again.
+    await env.DB.prepare('UPDATE roadmap_refresh SET tried_at = tried_at - ?').bind(REVIEW_REFRESH_MS + 1).run();
+    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
+    await vi.waitFor(() => expect(calls.filter(isPicker).length).toBeGreaterThan(tried));
   });
 
   it('is in Download my data, and deleted with the account', async () => {

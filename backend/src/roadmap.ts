@@ -10,6 +10,7 @@ import { now, type Env } from './env';
 import { can, requireFeature } from './features';
 import { json, rateLimit } from './http';
 import { errorText, log } from './log';
+import { CALLS, hold, release, settle, worstMc } from './meter';
 import { findProblem } from './verify';
 
 /**
@@ -117,18 +118,35 @@ export async function recommendAfterInterview(env: Env, user: User, interviewId:
   return recommend(env, user, 'interview', interviewId, verdictReport(problemId, verdict), requestId);
 }
 
-/** After an AI design review (src/review.ts): Pro only, and only when the newest picks are a day old or there are none. */
+/**
+ * After an AI design review (src/review.ts): Pro only, and only when the
+ * newest picks are a day old or there are none, and no review tried in the
+ * last day (`roadmap_refresh`, claimed in one statement, so a failed try or
+ * parallel reviews call once). Held and charged as `next_steps` (P34): the
+ * picks, or what the model answered when they failed; nothing without the
+ * credits for the hold.
+ */
 export async function refreshAfterReview(env: Env, user: User, problemId: string | undefined, review: { summary: string; issues: { title: string; detail: string }[] }, requestId?: string): Promise<void> {
   if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return;
+  const t = Date.now();
   const last = await env.DB.prepare('SELECT MAX(created_at) AS at FROM roadmap_recs WHERE user_id = ?').bind(user.id).first<{ at: number | null }>();
-  if (last?.at && Date.now() - last.at < REVIEW_REFRESH_MS) return;
+  if (last?.at && t - last.at < REVIEW_REFRESH_MS) return;
+  const claimed = await env.DB.prepare(
+    'INSERT INTO roadmap_refresh (user_id, tried_at) VALUES (?1, ?2) ON CONFLICT (user_id) DO UPDATE SET tried_at = excluded.tried_at WHERE roadmap_refresh.tried_at <= ?3 RETURNING user_id',
+  )
+    .bind(user.id, t, t - REVIEW_REFRESH_MS)
+    .first();
+  if (!claimed) return;
+  const held = await hold(env, user.id, worstMc(CALLS.nextSteps, env), `next_steps:review:${user.id}`);
+  if (!held.ok) return;
   const title = problemId ? (findProblem(problemId)?.title ?? problemId) : undefined;
   const report = [
     `AI design review of ${title ? `a solution to "${title}" (${problemId})` : 'a diagram in the editor'}.`,
     `Summary: ${review.summary}`,
     `Issues:\n${review.issues.map((i) => `- ${i.title}: ${i.detail}`).join('\n') || '- none'}`,
   ].join('\n');
-  await recommend(env, user, 'review', problemId, report, requestId);
+  const { charge } = await recommend(env, user, 'review', problemId, report, requestId);
+  await (charge.length ? settle(env, held.holdId, charge, 'next_steps', false) : release(env, held.holdId));
 }
 
 /** A stored row as the API answers it; picks whose problem or topic is gone are left out. */

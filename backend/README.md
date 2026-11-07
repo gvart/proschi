@@ -672,7 +672,10 @@ How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
   and 10 s. A failure (the model, the check, the database) is logged and
   never fails the verdict.
 - An AI design review refreshes the picks after its answer is sent, when
-  the newest are a day old or missing.
+  the newest are a day old or missing and no review tried in the last day
+  (`roadmap_refresh`, migration 0028, so a failed try isn't repeated by the
+  next review). Held and charged as `next_steps`, like the picks after a
+  verdict (P34).
 - Picks are in Download my data and deleted with the account.
 
 ### Open Graph images

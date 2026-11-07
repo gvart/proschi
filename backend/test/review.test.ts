@@ -356,8 +356,9 @@ describe('POST /api/review: the AI review', () => {
     mockClaude(() => messageResponse(JSON.stringify(GOOD)));
     const { id, token } = await proUser();
     expect((await review({ source: EDITOR_SOURCE, model: valid.model }, { token })).status).toBe(200);
-    const data = (await (await call('/api/me/export', { token })).json()) as { creditCharges: unknown };
-    expect(data.creditCharges).toMatchObject([{ action: 'design_partner', credits: priced({ input_tokens: 100, output_tokens: 50 }) }]);
+    const data = (await (await call('/api/me/export', { token })).json()) as { creditCharges: { action: string }[] };
+    // The review; the next steps it refreshed (Pro) are charged as next_steps alongside.
+    expect(data.creditCharges.filter((c) => c.action === 'design_partner')).toMatchObject([{ action: 'design_partner', credits: priced({ input_tokens: 100, output_tokens: 50 }) }]);
     expect((await call('/api/me', { method: 'DELETE', token })).status).toBe(204);
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_charges WHERE user_id = ?').bind(id).first<{ n: number }>()).toEqual({ n: 0 });
   });
