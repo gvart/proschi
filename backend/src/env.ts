@@ -89,6 +89,14 @@ export interface Env {
   AI_GATEWAY_URL?: string;
   /** An authenticated gateway's token, sent as `cf-aig-authorization`. */
   AI_GATEWAY_TOKEN?: string;
+  /**
+   * Cloudflare Turnstile on email sign-up, sign-in and password reset
+   * (src/turnstile.ts): the widget's public site key (wrangler.jsonc `vars`)
+   * and the secret Siteverify checks tokens with. Without the secret the
+   * check is skipped (local development, tests).
+   */
+  TURNSTILE_SITE_KEY?: string;
+  TURNSTILE_SECRET_KEY?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

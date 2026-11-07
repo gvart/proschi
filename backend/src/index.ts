@@ -33,6 +33,8 @@ import { getCardState, postCardReviews } from './cards';
 import { getGameLeaderboard, getGameMe, postGameBuy, postGameEquip, postGameRun, postGameSubmit, postGameSync } from './game';
 import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postChallengeStart } from './challenge';
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
+import { confirm as confirmEmailLogin, emailSignInAvailable, emailStatus, login as emailLogin, resend as resendConfirmation, reset as resetPassword, resetRequest, signup as emailSignup, startEmailLogin } from './emailAuth';
+import { turnstileSiteKey } from './turnstile';
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
@@ -68,6 +70,8 @@ import { getRoadmapNext } from './roadmap';
  *   POST   /auth/token {grant_type, code, code_verifier | refresh_token}   an app's bearer tokens
  *   POST   /auth/revoke {token}             ends an app's sign-in
  *   POST   /auth/logout
+ *   GET    /auth/email/start?return=[&link=1]  → /signin/, the email sign-in page (src/emailAuth.ts)
+ *   POST   /auth/email/signup | confirm | login | resend | reset-request | reset;  GET /auth/email/status
  *   GET    /api/health                      the Worker and D1 answer
  *   GET    /api/me                          account and progress
  *   PATCH  /api/me {displayName?, publicProfile?, dailyGoal?}
@@ -202,7 +206,19 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
     if (!paid) return errorResponse(404, 'Not found');
     return paid[2](request, ctx, ...wildcards(paid[1], parts));
   }
-  if (is('GET', 'auth', 'providers')) return json({ providers: configuredProviders(env) }, 200, { 'Cache-Control': 'public, max-age=300' });
+  if (is('GET', 'auth', 'providers')) {
+    const providers = [...configuredProviders(env), ...(emailSignInAvailable(env) ? ['email'] : [])];
+    const siteKey = turnstileSiteKey(env);
+    return json({ providers, ...(siteKey ? { turnstileSiteKey: siteKey } : {}) }, 200, { 'Cache-Control': 'public, max-age=300' });
+  }
+  if (is('GET', 'auth', 'email', 'start')) return startEmailLogin(request);
+  if (is('POST', 'auth', 'email', 'signup')) return emailSignup(request, ctx);
+  if (is('POST', 'auth', 'email', 'confirm')) return confirmEmailLogin(request, ctx);
+  if (is('POST', 'auth', 'email', 'login')) return emailLogin(request, ctx);
+  if (is('POST', 'auth', 'email', 'resend')) return resendConfirmation(request, ctx);
+  if (is('POST', 'auth', 'email', 'reset-request')) return resetRequest(request, ctx);
+  if (is('POST', 'auth', 'email', 'reset')) return resetPassword(request, ctx);
+  if (is('GET', 'auth', 'email', 'status')) return emailStatus(request, ctx);
   if ((is('GET', 'auth', '*', 'start') || is('GET', 'auth', '*', 'callback')) && isProvider(parts[1])) {
     return parts[2] === 'start' ? startLogin(request, ctx, parts[1]) : finishLogin(request, ctx, parts[1]);
   }

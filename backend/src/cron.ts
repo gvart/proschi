@@ -1,4 +1,6 @@
 import { pruneAudit } from './admin';
+import { pruneEmailAuth } from './emailAuth';
+import { pruneSignupIpGrants } from './signupChecks';
 import { purgeAdminSessions } from './adminAuth';
 import { pruneBillingWebhooks } from './billing';
 import { TOMBSTONE_TTL_MS } from './documents';
@@ -55,6 +57,7 @@ export async function dailyCron(env: Env): Promise<void> {
   await runJob(env, 'sessions', async () => ({ deleted: await purgeExpiredSessions(env), admin: await purgeAdminSessions(env) }));
   await runJob(env, 'game_runs', async () => ({ deleted: await pruneAbandonedGameRuns(env) }));
   await runJob(env, 'tombstones', async () => ({ deleted: await pruneDocumentTombstones(env) }));
+  await runJob(env, 'email_sign_in', async () => ({ deleted: await pruneEmailAuth(env), ipGrants: await pruneSignupIpGrants(env) }));
   await runJob(env, 'usage_counts', async () => {
     const deleted = await pruneDailyCounts(env);
     log('info', 'Pruned old usage counts', { deleted });
