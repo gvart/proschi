@@ -15,6 +15,7 @@ import { exportVersions } from './versions';
 import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
+import { exportNews } from './campaigns';
 import { exportEmailSignIn } from './emailAuth';
 import { BOARD_METRICS, cacheKey } from './stats';
 import { exportBilling, exportBillingWebhooks, revokeOnDelete } from './billing';
@@ -254,6 +255,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     // Email reminders: the address and its settings; null without one.
     emailReminders: await exportEmailPrefs(DB, user.id),
     emailSignIn: await exportEmailSignIn(DB, user.id),
+    // Product news (on or off), the GitHub or Google contact address, and the admin campaigns that reached the account.
+    news: await exportNews(DB, user.id),
     // The Polar customer and subscription (no card data is ever stored); null before a purchase.
     billing: await exportBilling(DB, user.id),
     // Polar's webhook deliveries about this account in the last 90 days: when, the event type and what was done (no payload).

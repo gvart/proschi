@@ -212,6 +212,16 @@ describe('the admin inbox', () => {
     expect(after.counts.unread).toBe(1);
   });
 
+  it("shows the address GitHub or Google gave when there is no email sign-in, and none without either", async () => {
+    const admin = await setUpAdmin();
+    const withContact = await message();
+    await env.DB.prepare("INSERT INTO contact_emails (user_id, email, provider, updated_at) VALUES (?, 'gh@example.com', 'github', 1)").bind(withContact.id).run();
+    const without = await message();
+    const email = async (id: string) => ((await (await adminCall(`/api/admin/feedback/${id}`, admin)).json()) as { sender: { email: string | null } }).sender.email;
+    expect(await email(withContact.messageId)).toBe('gh@example.com');
+    expect(await email(without.messageId)).toBeNull();
+  });
+
   it('keeps the text as written, for plain-text rendering', async () => {
     const admin = await setUpAdmin();
     const html = '<img src=x onerror=alert(1)><script>alert(2)</script>';

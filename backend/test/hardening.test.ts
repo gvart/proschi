@@ -269,6 +269,7 @@ describe('data export', () => {
       documentShares: [],
       emailReminders: null,
       emailSignIn: { login: null, signupCredits: null },
+      news: { productNews: { on: true, optedOutAt: null, via: null }, contactEmail: null, campaigns: [] },
       billing: null,
       billingWebhooks: [],
       credits: [],

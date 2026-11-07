@@ -1,10 +1,11 @@
-import { Activity, ClipboardList, CreditCard, Inbox, KeyRound, LayoutDashboard, Link2, ScrollText, Sparkles, Users, Webhook, type LucideIcon } from 'lucide-react';
+import { Activity, ClipboardList, CreditCard, Inbox, KeyRound, LayoutDashboard, Link2, Megaphone, ScrollText, Sparkles, Users, Webhook, type LucideIcon } from 'lucide-react';
 import { GROUPS, routeHash, type PageId } from './route';
 
 const ICONS: Record<PageId, LucideIcon> = {
   overview: LayoutDashboard,
   users: Users,
   inbox: Inbox,
+  campaigns: Megaphone,
   billing: CreditCard,
   ai: Sparkles,
   links: Link2,

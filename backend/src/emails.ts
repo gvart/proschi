@@ -1,4 +1,5 @@
 import type { DailyGoal, Streak, WeeklyRecap } from '../../frontend/src/learn/streak';
+import { fill, renderMarkdown, type Values } from './campaignMarkdown';
 import { renderEmail, type EmailSpec } from './emailLayout';
 
 /**
@@ -240,5 +241,40 @@ export function passwordResetEmail(link: string): RenderedEmail {
     after: ['The link works for one hour and only once. If you did not ask for it, ignore this email: your password stays the same.'],
     kernel: 'Kernel rotated the keys and shredded the old ones. Pick something it cannot guess, which is most things.',
     footer: { why: ACCOUNT_WHY, links: [] },
+  });
+}
+
+// --- Product news (src/campaigns.ts) ----------------------------------------
+
+/**
+ * A campaign's email: `subject` (also the headline) and the Markdown `body`
+ * with their placeholders filled in from `values`, the campaign's button,
+ * and the "Stop product news" link in the footer.
+ */
+export function newsEmail(
+  subject: string,
+  body: string,
+  values: Values,
+  opts: { origin: string; unsubscribeUrl: string; link?: { label: string; url: string } },
+): RenderedEmail {
+  const rich = renderMarkdown(body, values);
+  const filled = fill(subject, values).replace(/[\r\n]+/g, ' ');
+  return render({
+    subject: filled,
+    accent: 'yellow',
+    preheader: rich.text.replace(/\s+/g, ' ').slice(0, 140),
+    badge: '📣 Product news',
+    headline: filled,
+    paragraphs: [],
+    rich,
+    cta: opts.link ?? { label: 'Open Proschi', url: `${opts.origin}/practice/` },
+    kernel: 'Kernel read the release notes twice and approved the change. It would like a treat for the review.',
+    footer: {
+      why: 'You got this because you have a Proschi account and product news is on. We send it rarely.',
+      links: [
+        { label: 'Email settings', url: `${opts.origin}/practice/#/me` },
+        { label: 'Stop product news', url: opts.unsubscribeUrl },
+      ],
+    },
   });
 }

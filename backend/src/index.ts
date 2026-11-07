@@ -38,6 +38,24 @@ import { turnstileSiteKey } from './turnstile';
 import { getSignups, getUserSignIn } from './adminSignups';
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
+import {
+  campaignAudience,
+  cancelCampaign,
+  createCampaign,
+  getAnnouncement,
+  getCampaign,
+  getNews,
+  listCampaigns,
+  markAnnouncement,
+  newsUnsubscribe,
+  newsUnsubscribePage,
+  previewCampaign,
+  putNews,
+  resumeCampaign,
+  sendCampaign,
+  testCampaign,
+  updateCampaign,
+} from './campaigns';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
 import { createDocumentShare, getDocumentShare, getSharedDocument, revokeDocumentShare, shareViewPage } from './documentShares';
 import { recordThrottled, routeOf } from './events';
@@ -87,6 +105,9 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   DELETE /api/me/email                    removes the address
  *   GET    /api/email/confirm?token=        the confirmation link's page; POST confirms
  *   GET    /api/email/unsubscribe?token=    the unsubscribe link's page; POST unsubscribes (one-click, RFC 8058, no session)
+ *   GET    /api/me/news, PUT {on}           product news on or off (src/campaigns.ts)
+ *   GET    /api/me/announcement             the admin's newest announcement to show; POST …/<id>/dismiss | click
+ *   GET    /api/news/unsubscribe?token=     the "Stop product news" link's page; POST stops it (one-click, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
@@ -210,6 +231,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   // same-origin check: mail clients send one-click unsubscribes (RFC 8058) from their own servers, and the confirm
   // page's form arrives with `Origin: null` (its Referrer-Policy is no-referrer).
   if (is('POST', 'api', 'email', 'unsubscribe')) return unsubscribe(request, ctx);
+  if (is('POST', 'api', 'news', 'unsubscribe')) return newsUnsubscribe(request, ctx);
   if (is('POST', 'api', 'email', 'confirm')) return confirmEmail(request, ctx);
   assertSameOrigin(request);
 
@@ -250,6 +272,12 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('DELETE', 'api', 'me', 'email')) return deleteEmail(request, ctx);
   if (is('GET', 'api', 'email', 'confirm')) return confirmPage(request, ctx);
   if (is('GET', 'api', 'email', 'unsubscribe')) return unsubscribePage(request, ctx);
+  if (is('GET', 'api', 'news', 'unsubscribe')) return newsUnsubscribePage(request, ctx);
+  if (is('GET', 'api', 'me', 'news')) return getNews(request, ctx);
+  if (is('PUT', 'api', 'me', 'news')) return putNews(request, ctx);
+  if (is('GET', 'api', 'me', 'announcement')) return getAnnouncement(request, ctx);
+  if (is('POST', 'api', 'me', 'announcement', '*', 'dismiss')) return markAnnouncement(request, ctx, parts[3], 'dismiss');
+  if (is('POST', 'api', 'me', 'announcement', '*', 'click')) return markAnnouncement(request, ctx, parts[3], 'click');
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
@@ -353,6 +381,16 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('PATCH', 'api', 'admin', 'feedback', '*')) return patchFeedback(request, ctx, id);
   if (is('DELETE', 'api', 'admin', 'feedback', '*')) return deleteFeedback(request, ctx, id);
   if (is('GET', 'api', 'admin', 'feedback', '*', 'files', '*')) return getFeedbackFile(request, ctx, id, parts[5]);
+  if (is('GET', 'api', 'admin', 'campaigns')) return listCampaigns(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns')) return createCampaign(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'audience')) return campaignAudience(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'preview')) return previewCampaign(request, ctx);
+  if (is('POST', 'api', 'admin', 'campaigns', 'test')) return testCampaign(request, ctx);
+  if (is('GET', 'api', 'admin', 'campaigns', '*')) return getCampaign(request, ctx, id);
+  if (is('PUT', 'api', 'admin', 'campaigns', '*')) return updateCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'send')) return sendCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'cancel')) return cancelCampaign(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'campaigns', '*', 'resume')) return resumeCampaign(request, ctx, id);
   return errorResponse(404, 'Not found');
 }
 

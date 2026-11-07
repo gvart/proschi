@@ -1,4 +1,5 @@
 import { pruneAudit } from './admin';
+import { runCampaigns } from './campaigns';
 import { pruneEmailAuth } from './emailAuth';
 import { pruneSignupIpGrants } from './signupChecks';
 import { purgeAdminSessions } from './adminAuth';
@@ -21,7 +22,8 @@ export const DAILY_HOUR = 3;
 
 /**
  * The hourly cron (wrangler.jsonc `triggers`, at minute 17): the email
- * reminders every hour (src/reminders.ts), the daily jobs once a day, in
+ * reminders and the admin campaigns still sending every hour
+ * (src/reminders.ts, src/campaigns.ts), the daily jobs once a day, in
  * the DAILY_HOUR UTC hour. One failing does not stop the other.
  */
 export async function hourlyCron(env: Env, scheduledTime: number): Promise<void> {
@@ -32,6 +34,7 @@ export async function hourlyCron(env: Env, scheduledTime: number): Promise<void>
     if (sent) log('info', 'Sent reminders', { sent });
     return { sent };
   });
+  await runJob(env, 'campaigns', () => runCampaigns(env));
 }
 
 /**

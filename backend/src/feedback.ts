@@ -270,10 +270,11 @@ export async function getFeedback(request: Request, ctx: Ctx, id: string): Promi
   const row = await findMessage(ctx, id);
   const { DB } = ctx.env;
   const [sender, files] = await DB.batch([
-    // A confirmed sign-in address first, else a confirmed reminders address: the one the user can be answered at.
+    // A confirmed sign-in address first, then the one GitHub or Google verified, then a confirmed reminders address: where the user can be answered.
     DB.prepare(
       `SELECT u.display_name, u.blocked_at,
          COALESCE((SELECT email FROM email_logins WHERE user_id = u.id AND confirmed_at IS NOT NULL),
+                  (SELECT email FROM contact_emails WHERE user_id = u.id),
                   (SELECT email FROM email_prefs WHERE user_id = u.id AND confirmed_at IS NOT NULL)) AS email
        FROM users u WHERE u.id = ?`,
     ).bind(row.user_id),

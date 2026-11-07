@@ -90,6 +90,8 @@
   // AI_GATEWAY_URL and, for an authenticated gateway, AI_GATEWAY_TOKEN
   // TURNSTILE_SECRET_KEY (email sign-in's human check, src/turnstile.ts; unset: skipped); its public site key
   // is TURNSTILE_SITE_KEY, a var (dashboard → Turnstile; README "Email sign-in")
+  // ADMIN_EMAIL (where the admin's campaign tests go, src/campaigns.ts; unset: no tests) and
+  // optionally CAMPAIGN_DAILY_CAP (campaign emails a UTC day; unset: 500; README "Campaigns")
 
   "env": {
     // staging.proschi.app: every deploy goes here first (`npm run deploy:staging`).
