@@ -8,7 +8,8 @@ import { getVersion, type VersionContent, type VersionInfo } from '../../playgro
 import DiagramCanvas from '../Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../Diagram/useDiagramLayout';
 import CodeEditor from './CodeEditor';
-import { eyebrow, field, outlineButton, primaryButton, subBar } from './ui';
+import { eyebrow, outlineButton, primaryButton, subBar } from './ui';
+import Select from '../../design/Select';
 
 /** A side of a comparison: a version's tag, or DRAFT for the diagram being edited. */
 const DRAFT = '';
@@ -165,15 +166,14 @@ export default function VersionViewer({ docId, fileName, versions, mode, onMode,
   const phone = window.matchMedia('(max-width: 767px)').matches;
   const label = (tag: string) => (tag === DRAFT ? 'Current draft' : tag);
   const sidePicker = (value: string, aria: string, onPick: (tag: string) => void) => (
-    <select aria-label={aria} value={value} onChange={(e) => onPick(e.target.value)} className={`${field} min-w-0 max-sm:flex-1 sm:max-w-[11rem]`}>
-      <option value={DRAFT}>Current draft</option>
-      {versions.map((v, i) => (
-        <option key={v.tag} value={v.tag}>
-          {v.tag}
-          {i === 0 ? ' (latest)' : ''}
-        </option>
-      ))}
-    </select>
+    <Select
+      size="sm"
+      aria-label={aria}
+      value={value}
+      onChange={onPick}
+      options={[{ value: DRAFT, label: 'Current draft' }, ...versions.map((v, i) => ({ value: v.tag, label: `${v.tag}${i === 0 ? ' (latest)' : ''}` }))]}
+      className="min-w-0 max-sm:flex-1 sm:max-w-[11rem]"
+    />
   );
 
   const canvas = (

@@ -4,6 +4,7 @@ import { listAudit, listEvents, type AppEvent, type AuditEntry } from './api';
 import { formatDateTime, humanize } from './format';
 import { useLoad } from './hooks';
 import { Empty, ErrorNote, LevelBadge, PageHeader, SearchBox, Section, Skeleton } from './ui';
+import Select from '../design/Select';
 
 /** App events (errors, cron runs, sign-in failures, rate limits), newest first, filtered by kind and level. */
 export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind: (kind: string) => void; onSignedOut: () => void }) {
@@ -24,21 +25,29 @@ export function EventsTab({ kind, onKind, onSignedOut }: { kind: string; onKind:
       />
       <Section title="App events">
         <div className="adm-toolbar">
-          <select className="adm-input" aria-label="Kind" value={kind} onChange={(e) => (onKind(e.target.value), reset())}>
-            <option value="">All kinds</option>
-            {(events.data?.kinds ?? []).map((k) => (
-              <option key={k.kind} value={k.kind}>
-                {humanize(k.kind)} ({k.n})
-              </option>
-            ))}
-            {kind && !events.data?.kinds.some((k) => k.kind === kind) && <option value={kind}>{humanize(kind)} (0)</option>}
-          </select>
-          <select className="adm-input" aria-label="Level" value={level} onChange={(e) => (setLevel(e.target.value), reset())}>
-            <option value="">All levels</option>
-            <option value="error">Errors</option>
-            <option value="warn">Warnings</option>
-            <option value="info">Info</option>
-          </select>
+          <Select
+            size="sm"
+            aria-label="Kind"
+            value={kind}
+            onChange={(v) => (onKind(v), reset())}
+            options={[
+              { value: '', label: 'All kinds' },
+              ...(events.data?.kinds ?? []).map((k) => ({ value: k.kind, label: `${humanize(k.kind)} (${k.n})` })),
+              ...(kind && !events.data?.kinds.some((k) => k.kind === kind) ? [{ value: kind, label: `${humanize(kind)} (0)` }] : []),
+            ]}
+          />
+          <Select
+            size="sm"
+            aria-label="Level"
+            value={level}
+            onChange={(v) => (setLevel(v), reset())}
+            options={[
+              { value: '', label: 'All levels' },
+              { value: 'error', label: 'Errors' },
+              { value: 'warn', label: 'Warnings' },
+              { value: 'info', label: 'Info' },
+            ]}
+          />
         </div>
         <ErrorNote>{events.error}</ErrorNote>
         {!events.data ? (

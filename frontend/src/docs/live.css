@@ -72,17 +72,6 @@
   letter-spacing: 0;
   font-size: var(--fs-14);
 }
-.live__pick select {
-  min-width: 0;
-  max-width: 100%;
-  min-height: 38px;
-  padding: 0 10px;
-  background: rgb(var(--c-surface));
-  color: rgb(var(--c-ink));
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-sm);
-  font: 600 var(--fs-14) / 1 var(--font-sans);
-}
 .live__spacer {
   flex: 1;
 }

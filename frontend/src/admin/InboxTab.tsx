@@ -6,6 +6,7 @@ import { deleteFeedback, feedbackFileUrl, getFeedback, KIND_LABEL, listFeedback,
 import { formatAgo, formatBytes, formatDateTime, formatNumber } from './format';
 import { useAction, useLoad } from './hooks';
 import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton, UserLink } from './ui';
+import Select from '../design/Select';
 
 const STATUS_TONE: Record<FeedbackStatus, string> = { new: 'yellow', in_progress: 'blue', done: 'neutral' };
 const KIND_TONE: Record<FeedbackKind, string> = { bug: 'fail', question: 'blue', proposal: 'lilac', other: 'neutral' };
@@ -61,14 +62,13 @@ function MessageList({ onOpen, onOpenUser, onSignedOut }: { onOpen: (id: string)
         </div>
         <div className="adm-toolbar">
           <SearchBox value={filter.q} onChange={search} label="Search messages" placeholder="Words in the subject or message, or the sender's account id" />
-          <select className="adm-input" aria-label="Type" value={filter.kind} onChange={(e) => setFilter((f) => ({ ...f, kind: e.target.value as FeedbackKind | '', offset: 0 }))}>
-            <option value="">Every type</option>
-            {(Object.keys(KIND_LABEL) as FeedbackKind[]).map((k) => (
-              <option key={k} value={k}>
-                {KIND_LABEL[k]}
-              </option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            aria-label="Type"
+            value={filter.kind}
+            onChange={(v) => setFilter((f) => ({ ...f, kind: v as FeedbackKind | '', offset: 0 }))}
+            options={[{ value: '', label: 'Every type' }, ...(Object.keys(KIND_LABEL) as FeedbackKind[]).map((k) => ({ value: k, label: KIND_LABEL[k] }))]}
+          />
         </div>
         <ErrorNote>{list.error}</ErrorNote>
         {!list.data ? (

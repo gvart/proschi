@@ -4,6 +4,7 @@ import { eyebrow, field, outlineButton } from '../components/Playground/ui';
 import { DIFFICULTIES } from './types';
 import type { Status } from './progress';
 import { activeFilters, capitalize, NO_FILTERS, STATUS_LABEL, type Filters } from './listFilters';
+import Select from '../design/Select';
 
 interface ProblemFiltersProps {
   query: string;
@@ -84,60 +85,41 @@ export default function ProblemFilters({ query, onQuery, filters, onFilters, tag
           <fieldset className="min-w-0">
             <legend className={eyebrow}>Problem</legend>
             <div className="mt-1.5 grid grid-cols-1 gap-2 min-[420px]:grid-cols-2 sm:grid-cols-3">
-              <select
+              <Select
                 aria-label="Difficulty"
                 value={filters.difficulty}
-                onChange={(e) => set('difficulty', e.target.value as Filters['difficulty'])}
-                className={`w-full ${field}`}
-              >
-                <option value="">All difficulties</option>
-                {DIFFICULTIES.map((d) => (
-                  <option key={d} value={d}>
-                    {capitalize(d)}
-                  </option>
-                ))}
-              </select>
-              <select aria-label="Tag" value={filters.tag} onChange={(e) => set('tag', e.target.value)} className={`w-full ${field}`}>
-                <option value="">All tags</option>
-                {tags.map((t) => (
-                  <option key={t} value={t}>
-                    {t}
-                  </option>
-                ))}
-              </select>
+                onChange={(v) => set('difficulty', v as Filters['difficulty'])}
+                options={[{ value: '', label: 'All difficulties' }, ...DIFFICULTIES.map((d) => ({ value: d, label: capitalize(d) }))]}
+                className="w-full"
+              />
+              <Select
+                aria-label="Tag"
+                value={filters.tag}
+                onChange={(v) => set('tag', v)}
+                options={[{ value: '', label: 'All tags' }, ...tags.map((t) => ({ value: t, label: t }))]}
+                className="w-full"
+              />
               {companies.length > 0 && (
-                <select
+                <Select
                   aria-label="Company"
                   value={filters.company}
-                  onChange={(e) => set('company', e.target.value)}
-                  className={`w-full ${field}`}
+                  onChange={(v) => set('company', v)}
                   title="The company whose published system a problem is based on"
-                >
-                  <option value="">All companies</option>
-                  {companies.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
+                  options={[{ value: '', label: 'All companies' }, ...companies.map((c) => ({ value: c, label: c }))]}
+                  className="w-full"
+                />
               )}
             </div>
           </fieldset>
           <fieldset className="min-w-0">
             <legend className={eyebrow}>Your progress</legend>
-            <select
+            <Select
               aria-label="Status"
               value={filters.status}
-              onChange={(e) => set('status', e.target.value as Filters['status'])}
-              className={`mt-1.5 w-full ${field}`}
-            >
-              <option value="">Any status</option>
-              {(Object.keys(STATUS_LABEL) as Status[]).map((s) => (
-                <option key={s} value={s}>
-                  {STATUS_LABEL[s]}
-                </option>
-              ))}
-            </select>
+              onChange={(v) => set('status', v as Filters['status'])}
+              options={[{ value: '', label: 'Any status' }, ...(Object.keys(STATUS_LABEL) as Status[]).map((s) => ({ value: s, label: STATUS_LABEL[s] }))]}
+              className="mt-1.5 w-full"
+            />
           </fieldset>
         </div>
       </div>

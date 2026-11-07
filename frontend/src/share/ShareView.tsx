@@ -10,7 +10,7 @@ import AccountMenu from '../practice/AccountMenu';
 import Header from '../design/Header';
 import Tabs from '../design/Tabs';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
-import { field, outlineButton, primaryButton, subBar } from '../components/Playground/ui';
+import { outlineButton, primaryButton, subBar } from '../components/Playground/ui';
 import DiagramCanvas from '../components/Diagram/DiagramCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
 import { UseCasePlayback } from '../components/UseCases/UseCasePlayback';
@@ -19,6 +19,7 @@ import ViewTabs from '../components/Analysis/ViewTabs';
 import type { View } from '../components/Analysis/view';
 import { useSimulation } from '../components/Analysis/useSimulation';
 import PaneLoading from '../components/PaneLoading';
+import Select from '../design/Select';
 
 const ResultsPanel = lazy(() => import('../components/Analysis/ResultsPanel'));
 const HldView = lazy(() => import('../components/Hld/HldView'));
@@ -163,21 +164,17 @@ function Shared({ doc }: { doc: SharedDocument }) {
           {view === 'diagram' && current && (
             <div className={`${subBar} flex items-center gap-2 px-3 py-1.5`}>
               {scenarios.length > 1 ? (
-                <select
+                <Select
+                  size="sm"
                   aria-label="Scenario"
-                  value={selected}
-                  onChange={(e) => {
-                    setSelected(Number(e.target.value));
+                  value={String(selected)}
+                  onChange={(v) => {
+                    setSelected(Number(v));
                     if (run > 0) setRun((n) => n + 1);
                   }}
-                  className={`${field} min-w-0 flex-1 sm:max-w-xs`}
-                >
-                  {scenarios.map((s, i) => (
-                    <option key={s.key} value={i}>
-                      {s.label}
-                    </option>
-                  ))}
-                </select>
+                  options={scenarios.map((s, i) => ({ value: String(i), label: s.label }))}
+                  className="min-w-0 flex-1 sm:max-w-xs"
+                />
               ) : (
                 <span className="min-w-0 flex-1 truncate text-sm font-semibold">{current.label}</span>
               )}

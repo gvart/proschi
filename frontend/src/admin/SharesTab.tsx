@@ -4,6 +4,7 @@ import { deleteShare, listLiveShares, listShares, revokeLiveShare } from './api'
 import { formatBytes, formatDateTime } from './format';
 import { useAction, useLoad } from './hooks';
 import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton } from './ui';
+import Select from '../design/Select';
 
 /** Every short link and live share link, newest first: the only user content other people see. */
 export default function SharesTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
@@ -107,10 +108,16 @@ function LiveLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => vo
     <Section title="Live share links">
       <div className="adm-toolbar">
         <SearchBox value={q} onChange={search} label="Search live share links" placeholder="Diagram name, token or owner's account id" />
-        <select className="adm-input" aria-label="Show" value={state} onChange={(e) => (setState(e.target.value as 'live' | 'all'), setOffset(0))}>
-          <option value="live">Live</option>
-          <option value="all">Live and revoked</option>
-        </select>
+        <Select
+          size="sm"
+          aria-label="Show"
+          value={state}
+          onChange={(v) => (setState(v as 'live' | 'all'), setOffset(0))}
+          options={[
+            { value: 'live', label: 'Live' },
+            { value: 'all', label: 'Live and revoked' },
+          ]}
+        />
       </div>
       <ErrorNote>{links.error ?? action.error}</ErrorNote>
       {!links.data ? (
