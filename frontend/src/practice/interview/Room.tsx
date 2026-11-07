@@ -61,7 +61,7 @@ export default function Room({ problem, board, phone, phase, pulse, clock, talk,
       <EditableCanvas
         source={source}
         diagram={parsed.diagram}
-        onChange={(next) => (editor.current ? editor.current.replace(next) : setSource(next))}
+        onChange={board.edit}
         onUndo={() => void editor.current?.undo()}
         onRedo={() => void editor.current?.redo()}
         nodes={layout.nodes}
@@ -321,9 +321,9 @@ function TopBar({ problem, phone, phase, pulse, clock, talk, sound, code, onChec
         >
           {sound.on ? <Volume2 size={16} /> : <VolumeX size={16} />}
         </button>
-        <button type="button" aria-pressed={code.shown} onClick={() => code.onChange(!code.shown)} className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
+        <button type="button" aria-label="Show code" aria-pressed={code.shown} onClick={() => code.onChange(!code.shown)} className={`${toolButton} aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
           <Code2 size={15} aria-hidden="true" />
-          <span className="max-2xl:sr-only">Show code</span>
+          <span className="max-[1279px]:sr-only">Code</span>
         </button>
         <button type="button" onClick={onCheck} className={outlineButton} title="Run the problem's tests on the whiteboard">
           <FlaskConical size={15} aria-hidden="true" />

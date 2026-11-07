@@ -386,7 +386,7 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
       onCheck={check}
       finish={{ label: 'Finish and get the verdict', busy: busy === 'finish', loud: timeUp || outOfCredits, disabled: !!busy || !active, onClick: () => void finish() }}
       onExit={() => void exit()}
-      rail={{ title: 'Interview', content: rail, folded, onFold: setFolded, unread }}
+      rail={{ title: 'Chat', content: rail, folded, onFold: setFolded, unread }}
       checks={
         board.run && (
           <ChecksSheet run={board.run.result} stale={board.run.source !== board.source} onClose={board.closeRun}>

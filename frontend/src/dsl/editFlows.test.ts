@@ -156,6 +156,17 @@ describe('a practice problem solved with the visual edits alone', () => {
     expect(run.solved).toBe(true);
   });
 
+  it('snowflake-ids from its starter, as the e2e test of the interview room does', () => {
+    const problem = findProblem('snowflake-ids')!;
+    let src = setReplicas(problem.starter, 'idgen', 15);
+    src = addUseCase(src, 'Start generator');
+    src = ok(addStep(src, 'Start generator', req('idgen', 'zk', 'CREATE worker id')));
+    src = ok(addStep(src, 'Start generator', res('zk', 'idgen', 'worker id')));
+    const run = runTests(parseSolution(problem, src), defaultEngine);
+    expect(run.results.filter((r) => !r.passed).map((r) => r.name)).toEqual([]);
+    expect(run.solved).toBe(true);
+  });
+
   it('url-shortener, with its scenarios', () => {
     const problem = findProblem('url-shortener')!;
     let src = 'import "problem.proschi"\n';

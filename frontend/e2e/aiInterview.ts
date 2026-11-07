@@ -75,7 +75,7 @@ export async function mockInterviews(
       const parts = new URL(req.url()).pathname.split('/').filter(Boolean);
       if (req.method() === 'GET' && parts.length === 2) return route.fulfill({ json: { interviews: session ? [session] : [] } });
       if (req.method() === 'POST' && parts.length === 2) {
-        const body = req.postDataJSON() as { replace?: boolean; deep?: boolean };
+        const body = req.postDataJSON() as { problem?: string; replace?: boolean; deep?: boolean };
         const replace = body.replace === true;
         const deep = body.deep === true;
         mock.starts.push({ replace, deep });
@@ -89,7 +89,7 @@ export async function mockInterviews(
           text: "Hi, I'll be your interviewer. Today we'll design URL Shortener. We have 45 minutes. Start by asking me what you need to know.",
           at: startedAt,
         });
-        session = { id: 'iv-1', problem: 'url-shortener', minutes: 45, status: 'active', startedAt, deadline: startedAt + 60 * 60_000, deep };
+        session = { id: 'iv-1', problem: body.problem ?? 'url-shortener', minutes: 45, status: 'active', startedAt, deadline: startedAt + 60 * 60_000, deep };
         return route.fulfill({ status: 201, json: { interview: { ...session, phase, turns: 0, messages } } });
       }
       if (!session) return route.fulfill({ status: 404, json: { error: 'Not found' } });

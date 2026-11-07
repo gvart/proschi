@@ -198,7 +198,7 @@ export default function Setup({ preselect, prefer, onStarted }: SetupProps) {
           <p className="text-xs text-muted">The credits the old interview used are not returned, and it gets no verdict.</p>
         </section>
       ) : (
-        <div className="mt-6 grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="mt-6 grid grid-cols-[minmax(0,1fr)] gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
           <section aria-label="Set up the interview" className="space-y-6">
             {canMock && (
               <Field legend="Interviewer">
@@ -462,7 +462,7 @@ function Banner({ icon, testId, children }: { icon: ReactNode; testId: string; c
 
 function Field({ legend, children }: { legend: string; children: ReactNode }) {
   return (
-    <fieldset>
+    <fieldset className="min-w-0">
       <legend className="mb-2 font-display text-base font-bold text-ink">{legend}</legend>
       {children}
     </fieldset>

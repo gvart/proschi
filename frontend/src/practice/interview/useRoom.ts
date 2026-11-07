@@ -41,7 +41,13 @@ export function useWhiteboard(problem: Problem, engine: Engine) {
     setRun({ result, source: now });
     return result;
   }, [problem, engine]);
-  return { source, setSource, parsed, layout, editor, getSource, run, check, closeRun: () => setRun(undefined) };
+  /** A canvas edit: through the editor when it is open (one undo step), and parsed at once, so quick clicks build on each other. */
+  const edit = useCallback((next: string) => {
+    if (editor.current) editor.current.replace(next);
+    else setSource(next);
+    setParsedSource(next);
+  }, []);
+  return { source, setSource, edit, parsed, layout, editor, getSource, run, check, closeRun: () => setRun(undefined) };
 }
 
 export type Whiteboard = ReturnType<typeof useWhiteboard>;
