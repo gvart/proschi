@@ -12,7 +12,9 @@ import type { Account } from './useAccount';
  * button from design/account.ts). Signed out, sign in to sync progress and
  * appear in the stats; signed in, progress, settings (`#/me`, with the rest of
  * the account's actions: AccountSettings) and sign out, with a Pro badge on
- * Pro (the account's plan, or a purchase that just landed). Absent without an API.
+ * Pro (the account's plan, or a purchase that just landed). With paid plans
+ * on, the menu says the credits left, linking to Settings › Plan & billing;
+ * the header itself shows no balance. Absent without an API.
  * `base` is the way back to the site root.
  */
 export default function AccountMenu({ account, base = '../' }: { account: Account; base?: string }) {
@@ -60,8 +62,6 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
     window.location.href = `${base}${path}`;
   };
   return (
-    <>
-    {credits && <CreditsChip credits={credits} href={`${base}practice/#/me`} />}
     <Menu
       label="Account"
       align="right"
@@ -91,6 +91,7 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
           <MenuItem onSelect={() => go(close, 'practice/#/progress')} icon={<ChartNoAxesColumn size={14} />}>
             Your progress
           </MenuItem>
+          {credits && <CreditsItem credits={credits} onSelect={() => go(close, 'practice/#/me')} />}
           <MenuItem onSelect={() => go(close, 'practice/#/me')} icon={<Settings size={14} />}>
             Settings
           </MenuItem>
@@ -106,28 +107,22 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
         </>
       )}
     </Menu>
-    </>
   );
 }
 
-/** The credits left, a link to Settings › Plan & billing; orange under about 10% of the allowance. */
-function CreditsChip({ credits, href }: { credits: CreditBalance; href: string }) {
+/** "760 credits · Plan & billing" in the menu, a link to Settings; says so when running low (under about 10% of the allowance). */
+function CreditsItem({ credits, onSelect }: { credits: CreditBalance; onSelect: () => void }) {
   const low = isLow(credits);
-  const left = formatCredits(credits.balance, { floor: true });
   return (
-    <a
-      href={href}
-      data-testid="credits-chip"
-      data-credits-chip=""
-      data-low={low || undefined}
-      aria-label={`${left} credits left${low ? ', running low' : ''}. Plan and billing`}
-      title={low ? 'Running low on credits' : 'Credits left'}
-      className="ps-credits"
-    >
-      <Coins size={15} aria-hidden="true" />
-      {left}
-      <span className="ps-credits__word ps-hide-sm">credits</span>
-    </a>
+    <MenuItem onSelect={onSelect} icon={<Coins size={14} />}>
+      <span data-testid="account-credits" data-low={low || undefined} className="flex min-w-0 flex-1 flex-wrap items-baseline justify-between gap-x-3">
+        <span>
+          <span className="tabular-nums">{formatCredits(credits.balance, { floor: true })}</span> credits
+          {low && <span className="ml-1.5 text-xs font-semibold text-orange-700 dark:text-orange-300">running low</span>}
+        </span>
+        <span className="text-xs font-normal opacity-75">Plan &amp; billing</span>
+      </span>
+    </MenuItem>
   );
 }
 

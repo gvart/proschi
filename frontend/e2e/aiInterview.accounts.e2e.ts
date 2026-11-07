@@ -159,7 +159,9 @@ test.describe('AI interviewer', () => {
     await chat.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(chat.getByTestId('out-of-credits')).toHaveText(/out of credits, so the interviewer is wrapping up\. Your verdict is already paid for/);
     await expect(chat.locator('[aria-current="step"]')).toHaveText('4. Wrap-up');
-    await expect(page.getByTestId('credits-chip')).toHaveAttribute('data-low', 'true');
+    await page.getByRole('button', { name: 'Account' }).click();
+    await expect(page.getByTestId('account-credits')).toHaveAttribute('data-low', 'true');
+    await page.keyboard.press('Escape');
     page.once('dialog', (d) => void d.accept());
     await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
     await expect(page.getByRole('region', { name: 'Interview verdict' }).getByTestId('verdict-result')).toHaveText('Pass');
