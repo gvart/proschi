@@ -1,0 +1,52 @@
+frontend/e2e/visual-editing.e2e.ts
+  s_e17b87e0a1b3ca::t_d2f91abf127c31 2,178,232
+  s_e17b87e0a1b3ca::t_ace23fb8c0beeb 20
+  s_e17b87e0a1b3ca::t_638de7175f4aa1 158-162,164-177,179-231,233-247
+  s_e17b87e0a1b3ca::t_33f2eb59213fbd 163
+frontend/e2e/systems.e2e.ts
+  s_e17b87e0a1b3ca::t_3138fc3eb438c4 4
+  s_e17b87e0a1b3ca::t_ace23fb8c0beeb 317
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_ea78cff41b6f2b 1958-1959
+  s_e17b87e0a1b3ca::t_fdbeda93c70362 1686-1687,1714-1717,1720
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_3aeecdcf1fbab6 235-237,239-253
+  s_e17b87e0a1b3ca::t_d2f91abf127c31 238
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_e17b87e0a1b3ca::t_fdbeda93c70362 61,92-93,96,156,173
+  s_e17b87e0a1b3ca::t_ea78cff41b6f2b 215,217,219
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_e17b87e0a1b3ca::t_fdbeda93c70362 156
+  s_e17b87e0a1b3ca::t_562d7933b10127 70-77
+frontend/e2e/editor.e2e.ts
+  s_e17b87e0a1b3ca::t_d2f5775f64b227 3
+  s_e17b87e0a1b3ca::t_ace23fb8c0beeb 72
+frontend/src/components/Diagram/canvasEditState.ts
+  s_e17b87e0a1b3ca::t_fdbeda93c70362 6-11
+docs/STYLING.md
+  s_e17b87e0a1b3ca::t_b63056a134e83a 120-121
+  s_e17b87e0a1b3ca::t_1ee5e39fb1684d 124-125
+  s_e17b87e0a1b3ca::t_0f2e609319bc6c 132-135
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_ef93a2308b38be 252-258
+frontend/e2e/filesRail.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_28d0828f70fb91 1-25
+frontend/e2e/files.e2e.ts
+  s_e17b87e0a1b3ca::t_774c053c13ebfa 95,98-138
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7160f9f1b797934233a81b77509c851cd68d8582",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
