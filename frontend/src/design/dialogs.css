@@ -108,7 +108,8 @@
 .ps-toasts {
   position: fixed;
   right: 16px;
-  bottom: 16px;
+  /* Above any bar pinned to the bottom of the page (toastClearance.ts). */
+  bottom: calc(16px + var(--ps-toast-bottom, 0px));
   z-index: 1000;
   display: flex;
   flex-direction: column;
@@ -188,7 +189,7 @@
   .ps-toasts {
     right: 12px;
     left: 12px;
-    bottom: calc(12px + env(safe-area-inset-bottom));
+    bottom: calc(12px + max(var(--ps-toast-bottom, 0px), env(safe-area-inset-bottom)));
     width: auto;
   }
 }

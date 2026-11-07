@@ -2,6 +2,7 @@ import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEven
 import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Printer, Send, Sparkles, Target, Volume2, VolumeX, X } from 'lucide-react';
 import { refreshCredits, useCredits } from '../../../services/useCredits';
 import { confirm, notify } from '../../../design/dialogs';
+import { useToastClearance } from '../../../design/toastClearance';
 import MicButton, { type MicButtonHandle } from '../../../voice/MicButton';
 import type { MicState } from '../../../voice/recognizer';
 import { useSpeaker } from '../../../voice/speaker';
@@ -63,6 +64,8 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   const [busy, setBusy] = useState<'turn' | 'finish'>();
   const [error, setError] = useState<string>();
   const [draft, setDraft] = useState('');
+  // The coaching toasts land above the composer, not on Send.
+  const clearToasts = useToastClearance();
   /** A turn was refused for want of credits; the server has moved the interview to its wrap-up. */
   const [refused, setOutOfCredits] = useState(false);
   const [listening, setListening] = useState(false);
@@ -325,7 +328,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
         </ol>
       </div>
 
-      <form onSubmit={submit} className="border-t-bw-1 border-ink bg-surface px-3 py-2 space-y-2">
+      <form ref={clearToasts} onSubmit={submit} className="border-t-bw-1 border-ink bg-surface px-3 py-2 space-y-2">
         {error && (
           <p role="alert" className="text-xs text-red-700 dark:text-red-300">
             {error}
