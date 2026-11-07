@@ -227,18 +227,22 @@ above are about events, not about you).
 - Only if you sign in with an email address: that address, a hash of your
   password, and when you confirmed the address ([Email sign-in](#email-sign-in),
   below).
+- If you sign in with GitHub or Google: the verified email address they give,
+  as a contact address for account and product news email only
+  ([Product news](#product-news), below).
 - The last day (UTC date only, no time) you used your account, for counting
   how many people are active ([The site's operator](#the-sites-operator),
   below).
 
-**What is not stored**: your email address (unless you sign in with it or
-opt in to email reminders), your avatar, and the access
+**What is not stored**: your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
 read your user id, name and verified email address, and dropped). Proschi
 asks GitHub for your public profile and read-only access to your email
-addresses (`user:email`), and Google for `openid profile email`. The address
-is only used, once, for the [free sign-up credits' checks](#free-sign-up-credits):
-it is not stored, only a one-way keyed hash of it.
+addresses (`user:email`), and Google for `openid profile email`. The
+verified address is used for the [free sign-up credits' checks](#free-sign-up-credits)
+(only a one-way keyed hash of it is kept for those) and, since November
+2026, kept as your contact address ([Product news](#product-news)). It is
+never a way to sign in or to find your account.
 
 **Cookies**: `__Host-proschi_session` keeps you signed in (HttpOnly, sent
 only to proschi.app). `proschi_oauth` lives for ten minutes during sign-in to
@@ -511,6 +515,40 @@ your account page and deleting your account. Changing the address replaces
 the old one, which then needs confirming again. Log lines of the hourly
 reminder run hold your user id, never the address, when a send fails.
 
+## Product news
+
+Now and then (a few times a year) Proschi emails account holders about new
+features, and may show the same news once on the practice page, sometimes
+with a gift of credits. The operator writes and sends these from the admin
+panel; every send is in its audit log with a reason.
+
+**Who gets the email**: accounts with a confirmed email sign-in address, or
+the verified address GitHub or Google gave at your latest sign-in with them,
+unless you turned product news off. The address you gave for
+[email reminders](#email-reminders) is never used for it. Emails about your
+account (confirmations, password resets, receipts) are not product news and
+are not affected.
+
+**What is stored**:
+
+- the contact address from GitHub or Google (one per account, replaced at
+  each sign-in with them, with which provider gave it and when);
+- whether you turned product news off, when, and how (in Settings, or with
+  the link in an email);
+- per campaign that reached your account: whether its credits were given,
+  whether the email was sent, failed or skipped (and why: turned off, or no
+  confirmed address), and when the announcement was shown, dismissed or its
+  button clicked.
+
+**How to stop it**: switch off **Product news** in Settings › Notifications,
+or use **Stop product news** at the bottom of any of these emails (also
+offered by your mail app as a one-click "Unsubscribe"; it works signed out).
+Once off, no product news email is sent to you. The announcement on the
+practice page goes away when you dismiss it. All of it is part of
+**Download my data** and is deleted with your account. The emails are sent
+through Cloudflare Email Service and carry no tracking pixels or tracked
+links.
+
 ## Your controls
 
 In Settings on the practice page (`#/me`, from the account menu):
@@ -519,8 +557,9 @@ In Settings on the practice page (`#/me`, from the account menu):
   synced diagrams and their versions included, your live share links, your
   plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, mock interviews with the picks for your next steps, Design partner chats, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
-  the address of each preview, and email reminders with their address and
-  settings (the unsubscribe secret stays out).
+  the address of each preview, email reminders with their address and
+  settings (the unsubscribe secret stays out), and product news: whether it is
+  on, the contact address, and the campaigns that reached you.
 - **Delete my cloud copies**, in Settings or in the editor's File menu once
   cloud sync is off, removes every diagram from your account, their versions
   with them, and turns cloud sync off in that browser; those in your browser
@@ -529,6 +568,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
   synced diagrams and their versions and live share links, the email reminders' address, the
+  contact address and product news settings, the
   billing data, interview credits, mock interviews and the picks for your next steps from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
