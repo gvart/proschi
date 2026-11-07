@@ -1,6 +1,6 @@
 import type { APIRequestContext, Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
-import { expect, test } from './fixtures';
+import { expect, sectionLink, test } from './fixtures';
 import { PROFILE } from './profile';
 
 /**
@@ -49,8 +49,6 @@ async function mockChallenge(page: Page, request: APIRequestContext): Promise<vo
   await page.route(`**/api/users/${CHALLENGER.id}/profile`, (route) => route.fulfill({ json: CHALLENGER, headers: { 'Cache-Control': 'no-store' } }));
 }
 
-const prepNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
-
 async function expectNoSideways(page: Page, where: string): Promise<void> {
   const { scrollWidth, width } = await page.evaluate(() => ({ scrollWidth: document.documentElement.scrollWidth, width: document.documentElement.clientWidth }));
   expect(scrollWidth, `${where}: the page scrolls sideways`).toBeLessThanOrEqual(width);
@@ -61,10 +59,10 @@ test('the challenge is the hub’s Challenge tab, and its leaderboard links to p
   // Not on the problem list: the list links to interview prep only.
   await page.goto('practice/');
   await expect(page.getByRole('main').getByRole('link', { name: 'Play today’s challenge' })).toHaveCount(0);
-  await page.getByRole('navigation', { name: 'Practice sections' }).getByRole('link', { name: 'Roadmap' }).click();
-  await prepNav(page).getByRole('link', { name: 'Challenge' }).click();
+  await (await sectionLink(page, 'Daily challenge')).click();
   await expect(page).toHaveURL(/#\/challenge$/);
-  await expect(prepNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
+  await expect(await sectionLink(page, 'Daily challenge')).toHaveAttribute('aria-current', 'page');
+  await page.keyboard.press('Escape');
   await expect(page.getByRole('heading', { level: 1, name: 'Daily challenge' })).toBeVisible();
 
   const board = page.getByRole('region', { name: 'Today’s leaderboard' });
@@ -101,15 +99,13 @@ for (const width of [320, 360]) {
         if (path.includes('#/u/') || path.endsWith('#/progress')) await expect(page.getByTestId('profile-challenge-best')).toBeVisible();
         await expectNoSideways(page, path);
       }
-      // Every tab of the hub can be reached in its strip (it scrolls sideways inside itself, never the page).
+      // Every section of the hub can be reached from its bar, in view, without the page scrolling sideways.
       await page.goto('practice/#/progress');
-      const tabs = prepNav(page).getByRole('link');
-      await expect(tabs).toHaveText(['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']);
-      for (const tab of await tabs.all()) {
-        await tab.scrollIntoViewIfNeeded();
-        await expect(tab).toBeInViewport();
+      for (const name of ['Problems', 'Roadmap', 'Mock interview', 'Review cards', 'Daily challenge', 'Arcade', 'Progress']) {
+        await expect(await sectionLink(page, name)).toBeInViewport({ ratio: 1 });
       }
-      await expectNoSideways(page, 'the hub’s tabs');
+      await page.keyboard.press('Escape');
+      await expectNoSideways(page, 'the hub’s bar');
     });
   });
 }

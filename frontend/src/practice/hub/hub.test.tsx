@@ -3,18 +3,24 @@ import { describe, expect, it } from 'vitest';
 import LeaderboardPanel from '../LeaderboardPanel';
 import { roadmapState, type RoadmapStage } from '../roadmap';
 import { continueTarget } from './continue';
-import { HUB_TABS, hubTabOf } from './tabs';
+import { parseGoal, wantsInterview, wantsStreak } from './goal';
+import { HUB_GROUPS, HUB_TABS, hubTabOf, mockInterviewHref } from './tabs';
 
 describe('practice hub', () => {
-  it('has the problems, the roadmap, review, the challenge, the Arcade and progress as tabs, in that order', () => {
+  it('has the problems first, the rest grouped as interview prep and more practice, and progress last', () => {
     expect(HUB_TABS.map((t) => [t.label, t.href])).toEqual([
       ['Problems', '#/'],
       ['Roadmap', '#/roadmap'],
-      ['Review', '#/review'],
-      ['Challenge', '#/challenge'],
+      ['Review cards', '#/review'],
+      ['Daily challenge', '#/challenge'],
       ['Arcade', '#/arcade'],
       ['Progress', '#/progress'],
     ]);
+    expect(HUB_GROUPS.map((g) => [g.label, g.tabs])).toEqual([
+      ['Interview prep', ['roadmap']],
+      ['More practice', ['review', 'challenge', 'arcade']],
+    ]);
+    expect(mockInterviewHref()).toBe('#/url-shortener?interview=mock');
   });
 
   it('marks the tab of every address that opens inside it', () => {
@@ -54,9 +60,32 @@ describe('continue', () => {
     expect(continueTarget({ last: { id: 'gone', roadmap: false }, progress, known, roadmap, access: 'sign-in' })).toEqual({ kind: 'roadmap', id: 'c', href: '#/roadmap' });
   });
 
+  it('leaves the roadmap out unless asked for (interview prep): only an unsolved last problem continues', () => {
+    const progress = { a: { status: 'solved' as const }, x: { status: 'attempted' as const } };
+    const roadmap = roadmapState(stages, progress);
+    expect(continueTarget({ progress, known, roadmap, access: 'open', roadmapStep: false })).toBeUndefined();
+    expect(continueTarget({ last: { id: 'x', roadmap: false }, progress, known, roadmap, access: 'open', roadmapStep: false })?.id).toBe('x');
+  });
+
   it('has nothing to continue once the roadmap is done', () => {
     const progress = { a: { status: 'solved' as const }, b: { status: 'solved' as const }, c: { status: 'solved' as const } };
     expect(continueTarget({ progress, known, roadmap: roadmapState(stages, progress), access: 'open' })).toBeUndefined();
+  });
+});
+
+describe('goal', () => {
+  it('reads only the known goals, in their own order, and drops the rest', () => {
+    expect(parseGoal(undefined)).toEqual({ goals: [], asked: false });
+    expect(parseGoal({ goals: ['habit', 'nope', 'interview'], asked: true })).toEqual({ goals: ['interview', 'habit'], asked: true });
+    expect(parseGoal({ goals: 'solve', asked: 'yes', streak: 1 })).toEqual({ goals: [], asked: false });
+  });
+
+  it('shows the streak for a daily habit unless switched off, and when switched on without one', () => {
+    expect(wantsStreak(parseGoal({ goals: ['habit'] }))).toBe(true);
+    expect(wantsStreak(parseGoal({ goals: ['habit'], streak: false }))).toBe(false);
+    expect(wantsStreak(parseGoal({ goals: ['solve'], streak: true }))).toBe(true);
+    expect(wantsStreak(parseGoal({}))).toBe(false);
+    expect(wantsInterview(parseGoal({ goals: ['interview'] }))).toBe(true);
   });
 });
 

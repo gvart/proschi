@@ -1,25 +1,26 @@
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, sectionLink, setPracticeGoal, test } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
 /**
- * The practice hub: one page whose home (`#/`) is the Today panel (the
- * streak and goal, one "Your next step" card, and chips for the cards due,
- * today's challenge and daily run) above the problem list, and one bar of tabs for the problems,
- * the roadmap, daily review, the daily challenge, the Arcade and progress,
- * with the header's Practice link marked on every one. Then the progress page
- * (this browser's data in a build without accounts), the settings page
- * (`#/me`) and a public
- * profile (`#/u/<id>`), whose API answer is mocked here: this build has no API.
+ * The practice hub: one page whose home (`#/`) is the problem list, with a
+ * one-time "What are you here for?" and, depending on the answer, one
+ * Continue line (interview prep: the roadmap's next step and the mock
+ * interview) or the daily streak with today's review, challenge and Arcade
+ * run. One slim bar of sections: Problems, the Interview prep and More
+ * practice menus, and Progress, with the header's Practice link marked on
+ * every one. Then the progress page (this browser's data in a build without
+ * accounts), the settings page (`#/me`) and a public profile (`#/u/<id>`),
+ * whose API answer is mocked here: this build has no API.
  */
 
 const hubNav = (page: Page) => page.getByRole('navigation', { name: 'Practice sections' });
 /** The header's "Practice" link (the desktop nav's). */
 const headerPractice = (page: Page) => page.locator('.ps-nav__link', { hasText: 'Practice' });
-const today = (page: Page) => page.getByRole('region', { name: 'Today', exact: true });
+const goalQuestion = (page: Page) => page.getByRole('region', { name: 'What are you here for?' });
 
 test.describe('practice hub', () => {
-  test('the home is the Today panel over the problem list, each part linking to its tab', async ({ page }) => {
+  test('the home is the problem list; the goal question once, and what each goal adds above the list', async ({ page }) => {
     await page.addInitScript(() => {
       if (sessionStorage.getItem('seeded')) return;
       sessionStorage.setItem('seeded', '1');
@@ -29,78 +30,110 @@ test.describe('practice hub', () => {
     await page.goto('practice/');
     await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
     await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
-    await expect(hubNav(page).getByRole('link')).toHaveText(['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']);
+    await expect(hubNav(page).getByRole('link')).toHaveText(['Problems', 'Progress']);
+    await expect(hubNav(page).getByRole('button')).toHaveText([/Interview prep/, /More practice/]);
     await expect(hubNav(page).getByRole('link', { name: 'Problems' })).toHaveAttribute('aria-current', 'page');
+    // No streak, no nudges, nothing to continue: the question, then the list.
+    await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Continue' })).toHaveCount(0);
+    await expect(page.getByPlaceholder('Search problems')).toBeInViewport();
 
-    const panel = today(page);
-    await expect(panel.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
-    // One primary next step; review, the challenge and the daily run are compact chips.
-    const chips = panel.getByRole('navigation', { name: 'Also today' });
+    // Skipped: gone for good, with a quiet way back.
+    await goalQuestion(page).getByRole('button', { name: 'Skip', exact: true }).click();
+    await expect(goalQuestion(page)).toHaveCount(0);
+    await page.reload();
+    await expect(page.getByRole('heading', { level: 1, name: 'System design practice' })).toBeVisible();
+    await expect(goalQuestion(page)).toHaveCount(0);
+    await page.getByRole('button', { name: 'Personalize this page' }).click();
+
+    // Interview prep: the roadmap's next step, the roadmap and the mock interview.
+    await goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ }).click();
+    await expect(goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ })).toHaveAttribute('aria-pressed', 'true');
+    const next = page.getByRole('region', { name: 'Continue' });
+    await expect(next).toContainText('Next on the roadmap');
+    await expect(next.getByRole('link', { name: /Continue/ })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
+    await expect(next.getByRole('link', { name: 'See the roadmap' })).toHaveAttribute('href', '#/roadmap');
+    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/url-shortener?interview=mock');
+
+    // A daily habit too: the streak and today's review, challenge and Arcade run.
+    await goalQuestion(page).getByRole('button', { name: /Build a daily habit/ }).click();
+    await goalQuestion(page).getByRole('button', { name: 'Done' }).click();
+    await expect(goalQuestion(page)).toHaveCount(0);
+    await expect(page.getByText('Your focus: Interview prep, Daily habit')).toBeVisible();
+    const today = page.getByRole('region', { name: 'Today' });
+    await expect(today.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
+    const chips = today.getByRole('navigation', { name: 'Also today' });
     await expect(chips.getByRole('link')).toHaveCount(3);
     await expect(chips.getByTestId('today-due')).toHaveText(/^\d+ due$/);
     await expect(chips.getByRole('link', { name: /^Challenge/ })).not.toContainText('·');
     await expect(chips.getByRole('link', { name: /^Arcade run/ })).toContainText('4,321');
     await expect(chips.getByRole('link', { name: /^Arcade run/ })).toHaveAttribute('href', '#/arcade/daily');
-    // Nothing opened yet: Continue leads to the roadmap's first step.
-    await expect(panel.getByRole('region', { name: 'Your next step' })).toContainText('Next on the roadmap');
-    await expect(panel.getByRole('link', { name: 'Continue' })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
-
     await chips.getByRole('link', { name: /^Challenge/ }).click();
     await expect(page).toHaveURL(/#\/challenge$/);
-    await expect(hubNav(page).getByRole('link', { name: 'Challenge' })).toHaveAttribute('aria-current', 'page');
-    await expect(today(page)).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Today' })).toHaveCount(0);
 
-    await hubNav(page).getByRole('link', { name: 'Problems' }).click();
-    await today(page).getByRole('link', { name: /^Review/ }).click();
-    await expect(page).toHaveURL(/#\/review$/);
-
-    // A problem opened and left unsolved is what Continue picks up.
+    // A problem opened and left unsolved is what Continue picks up, for any goal.
     await page.goto('practice/#/pastebin');
     await expect(page.getByRole('link', { name: 'Problems' }).first()).toBeVisible();
     await page.goto('practice/');
-    await expect(today(page).getByRole('region', { name: 'Your next step' })).toContainText('Pick up where you left off');
-    await expect(today(page).getByRole('region', { name: 'Your next step' })).toContainText('Pastebin');
-    await expect(today(page).getByRole('link', { name: 'Continue' })).toHaveAttribute('href', '#/pastebin');
+    await page.getByRole('button', { name: 'Change' }).click();
+    await goalQuestion(page).getByRole('button', { name: /Prepare for an interview/ }).click();
+    await goalQuestion(page).getByRole('button', { name: /Build a daily habit/ }).click();
+    await goalQuestion(page).getByRole('button', { name: /Solve problems/ }).click();
+    await goalQuestion(page).getByRole('button', { name: 'Done' }).click();
+    await expect(page.getByRole('region', { name: 'Today' })).toHaveCount(0);
+    await expect(next).toContainText('Pick up where you left off');
+    await expect(next).toContainText('Pastebin');
+    await expect(next.getByRole('link', { name: /Continue/ })).toHaveAttribute('href', '#/pastebin');
+    await expect(next.getByRole('link', { name: 'Start a mock interview' })).toHaveCount(0);
   });
 
-  test('the hub’s tabs, the streak on each, and the header marking Practice on every address', async ({ page }) => {
+  test('the hub’s sections, grouped in two menus, and the header marking Practice on every address', async ({ page }) => {
+    await setPracticeGoal(page, ['habit']);
     await page.goto('practice/#/roadmap');
     await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
-    await expect(hubNav(page).getByRole('link', { name: 'Roadmap' })).toHaveAttribute('aria-current', 'page');
+    await expect(hubNav(page).getByRole('button', { name: 'Interview prep' })).toHaveClass(/after:bg-ink/);
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('No streak yet');
     await expect(page.getByRole('group', { name: 'Daily streak' })).toContainText('0 of 10 cards today');
 
     const tabs: [string, RegExp, string][] = [
-      ['Review', /#\/review$/, 'Daily review'],
-      ['Challenge', /#\/challenge$/, 'Daily challenge'],
+      ['Review cards', /#\/review$/, 'Daily review'],
+      ['Daily challenge', /#\/challenge$/, 'Daily challenge'],
       ['Arcade', /#\/arcade$/, 'Scale or Fail'],
       ['Progress', /#\/progress$/, 'Your progress'],
       ['Roadmap', /#\/roadmap$/, 'Interview prep roadmap'],
       ['Problems', /#\/$/, 'System design practice'],
     ];
-    // The bar of sections stays in the same place on every section, the home (with its Today panel) too.
+    // The bar stays in the same place on every section, the home too.
     const barTop = async () => (await hubNav(page).boundingBox())?.y;
     const top = await barTop();
     for (const [tab, url, heading] of tabs) {
-      await hubNav(page).getByRole('link', { name: tab, exact: true }).click();
+      await (await sectionLink(page, tab)).click();
       await expect(page).toHaveURL(url);
       await expect(page.getByRole('heading', { level: 1, name: heading })).toBeVisible();
       expect(await barTop()).toBe(top);
-      await expect(hubNav(page).getByRole('link', { name: tab, exact: true })).toHaveAttribute('aria-current', 'page');
-      await expect(hubNav(page).locator('[aria-current="page"]')).toHaveCount(1);
+      // The menu closed on the pick; its section is marked inside it.
+      await expect(hubNav(page).getByRole('button', { expanded: true })).toHaveCount(0);
+      await expect(await sectionLink(page, tab)).toHaveAttribute('aria-current', 'page');
+      await page.keyboard.press('Escape');
       await expect(page.getByRole('group', { name: 'Daily streak' })).toHaveCount(1);
       await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
 
-    // Older addresses open inside the hub, on their tab.
+    // The mock interview: interview mode on a problem, with the mock interview chosen.
+    await (await sectionLink(page, 'Mock interview')).click();
+    await expect(page).toHaveURL(/#\/url-shortener\?interview=mock$/);
+
+    // Older addresses open inside the hub, on their section.
     const inside: [string, string][] = [
-      ['practice/#/review/caching', 'Review'],
+      ['practice/#/review/caching', 'Review cards'],
       ['practice/#/roadmap/approach', 'Roadmap'],
       ['practice/#/arcade/daily', 'Arcade'],
     ];
     for (const [path, tab] of inside) {
       await page.goto(path);
-      await expect(hubNav(page).getByRole('link', { name: tab, exact: true })).toHaveAttribute('aria-current', 'page');
+      await expect(await sectionLink(page, tab)).toHaveAttribute('aria-current', 'page');
+      await page.keyboard.press('Escape');
       await expect(headerPractice(page)).toHaveAttribute('aria-current', 'page');
     }
   });
@@ -122,6 +155,7 @@ test.describe('practice hub', () => {
   });
 
   test('the progress tab reads as one system: the level first, then skills, the roadmap and badges', async ({ page }) => {
+    await setPracticeGoal(page, ['habit']);
     await page.addInitScript(() => {
       if (sessionStorage.getItem('seeded')) return;
       sessionStorage.setItem('seeded', '1');
@@ -138,7 +172,8 @@ test.describe('practice hub', () => {
     await expect(page.getByRole('region', { name: 'Roadmap' }).getByRole('progressbar', { name: 'Roadmap progress' })).toHaveAttribute('aria-valuenow', '1');
   });
 
-  test('the progress page holds the streak, badges and problems solved; the account page only settings', async ({ page }) => {
+  test('the progress page holds the streak (for a daily habit), badges and problems solved; the account page only settings', async ({ page }) => {
+    await setPracticeGoal(page, ['habit']);
     await page.addInitScript(() => {
       if (sessionStorage.getItem('seeded')) return;
       sessionStorage.setItem('seeded', '1');

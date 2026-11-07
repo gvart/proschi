@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, test } from './fixtures';
+import { expect, sectionLink, setPracticeGoal, test } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
 /**
@@ -126,6 +126,7 @@ test.describe('no sideways scrolling on a phone', () => {
   });
 
   test('daily streak: the review home with the recap, a session summary and a solve celebration', async ({ page }) => {
+    await setPracticeGoal(page, ['habit']);
     // Two weeks of reviews, so the streak holds freezes and last week has a recap.
     await page.addInitScript(() => {
       if (sessionStorage.getItem('seeded')) return;
@@ -188,23 +189,30 @@ test.describe('no sideways scrolling on a phone', () => {
     await expectNoHorizontalOverflow(page, 'progress with a badge earned');
   });
 
-  test('practice hub: every tab, the Today panel or the streak on top', async ({ page }) => {
+  test('practice hub: the bar of sections on every section', async ({ page }) => {
     for (const path of ['practice/', 'practice/#/roadmap', 'practice/#/review', 'practice/#/challenge', 'practice/#/arcade', 'practice/#/progress', 'practice/#/roadmap/approach']) {
       await visit(page, path);
       await expect(page.getByRole('navigation', { name: 'Practice sections' })).toBeVisible();
     }
   });
 
-  test('practice hub on the narrowest phone: every section shows at once, the page does not scroll sideways', async ({ page }) => {
+  test('practice hub on the narrowest phone: the bar fits one row, its menus open inside the screen, the page does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 640 });
     for (const path of ['practice/', 'practice/#/progress']) {
       await visit(page, path);
       const bar = page.getByRole('navigation', { name: 'Practice sections' });
       await expect(bar).toBeVisible();
-      // A grid of three by two, all in view without scrolling.
-      for (const name of ['Problems', 'Roadmap', 'Review', 'Challenge', 'Arcade', 'Progress']) {
-        await expect(bar.getByRole('link', { name, exact: true })).toBeInViewport({ ratio: 1 });
+      // Problems, the two menus and Progress, all in view in one row.
+      for (const item of [bar.getByRole('link', { name: 'Problems', exact: true }), bar.getByRole('button', { name: /^Interview/ }), bar.getByRole('button', { name: /^More/ }), bar.getByRole('link', { name: 'Progress', exact: true })]) {
+        await expect(item).toBeInViewport({ ratio: 1 });
       }
+      const tops = await bar.locator(':scope > a, :scope > div > button').evaluateAll((els) => els.map((e) => Math.round(e.getBoundingClientRect().top)));
+      expect(new Set(tops).size, `${path}: the bar wraps`).toBe(1);
+      // Every section in a menu is reachable, in view.
+      for (const name of ['Roadmap', 'Mock interview', 'Review cards', 'Daily challenge', 'Arcade']) {
+        await expect(await sectionLink(page, name)).toBeInViewport({ ratio: 1 });
+      }
+      await page.keyboard.press('Escape');
       await expectNoHorizontalOverflow(page, `${path} at 320px`);
     }
   });
