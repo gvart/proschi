@@ -2,6 +2,7 @@ import { ArrowDownRight, ArrowUpRight, ChevronRight, CircleCheck, Minus, Triangl
 import { useState, type ReactNode } from 'react';
 import { getHealth, getOverview, getTrends, listWebhooks, RANGES, type Range, type TrendPoint } from './api';
 import { failedDeliveries, missingSecrets } from './attention';
+import { listFeedback } from './feedbackApi';
 import Chart from './Chart';
 import { change, periods, sum } from './chartScale';
 import { formatNumber, formatUsd, humanize } from './format';
@@ -68,6 +69,7 @@ export default function OverviewTab({
   const health = useLoad(getHealth, [], onSignedOut);
   const webhooks = useLoad(() => listWebhooks(''), [], onSignedOut);
   const signups = useLoad(getSignups, [], onSignedOut);
+  const inbox = useLoad(() => listFeedback({ status: 'open', kind: '', q: '', offset: 0 }), [], onSignedOut);
   const [event, setEvent] = useState('editor_open');
   const data = trends.data;
   // While another range loads, the last one stays on screen, dimmed.
@@ -105,6 +107,17 @@ export default function OverviewTab({
               return n
                 ? `${formatNumber(n)} ${n === 1 ? 'delivery' : 'deliveries'} refused or failed in the last 7 days`
                 : 'No refused or failed deliveries in the last 7 days';
+            })()}
+          />
+          <Attention
+            loading={!inbox.data}
+            ok={!inbox.data?.counts.open}
+            href={routeHash({ page: 'inbox' })}
+            title="Open messages"
+            detail={(() => {
+              const c = inbox.data?.counts;
+              if (!c?.open) return 'Every message from Send feedback is done';
+              return `${formatNumber(c.open)} open${c.unread ? `, ${formatNumber(c.unread)} unread` : ''}`;
             })()}
           />
           <Attention

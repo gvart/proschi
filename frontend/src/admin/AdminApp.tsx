@@ -10,6 +10,8 @@ import { AuditTab, EventsTab } from './EventsTab';
 import Nav from './Nav';
 import Gate from './Gate';
 import HealthTab from './HealthTab';
+import InboxTab from './InboxTab';
+import { listFeedback } from './feedbackApi';
 import OverviewTab from './OverviewTab';
 import PasskeysTab from './PasskeysTab';
 import SharesTab from './SharesTab';
@@ -84,6 +86,10 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
   const [route, go] = useRoute();
   const openUser = (id?: string) => go({ page: 'users', param: id });
   const openEvents = (kind: string) => go({ page: 'events', param: kind || undefined });
+  // The Inbox's unread count for the sidebar, again after each page change and each change in the Inbox.
+  const [inboxNonce, setInboxNonce] = useState(0);
+  const refreshInbox = useCallback(() => setInboxNonce((n) => n + 1), []);
+  const inbox = useLoad(() => listFeedback({ status: 'open', kind: '', q: '', offset: 0 }), [route.page, inboxNonce]);
   let content;
   switch (route.page) {
     case 'health':
@@ -97,6 +103,9 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
       break;
     case 'ai':
       content = <AiTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
+      break;
+    case 'inbox':
+      content = <InboxTab key={route.param ?? ''} messageId={route.param} onOpen={(id) => go({ page: 'inbox', param: id })} onOpenUser={openUser} onChanged={refreshInbox} onSignedOut={onSignedOut} />;
       break;
     case 'links':
       content = <SharesTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
@@ -118,7 +127,7 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
   }
   return (
     <div className="adm-shell">
-      <Nav current={route.page} />
+      <Nav current={route.page} counts={{ inbox: inbox.data?.counts.unread }} />
       <main className="adm-main" key={route.page}>
         {content}
       </main>

@@ -1367,3 +1367,102 @@
 .adm-table td.adm-badges > * + * {
   margin-left: 4px;
 }
+
+/* The sidebar's count next to a page's label (the Inbox's unread messages). */
+.adm-nav__count {
+  margin-left: auto;
+  min-width: 20px;
+  padding: 0 6px;
+  border-radius: var(--r-pill);
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+  font-size: var(--fs-12);
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+/* The Inbox (InboxTab.tsx): unread rows in bold with a yellow marker, the excerpt under the subject. */
+.adm-inbox tr.is-unread td:first-child {
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
+}
+
+.adm-inbox tr.is-unread .adm-link {
+  font-weight: 700;
+}
+
+.adm-inbox__message {
+  max-width: 440px;
+}
+
+.adm-inbox__excerpt {
+  display: -webkit-box;
+  margin-top: 2px;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 1;
+  font-size: var(--fs-12);
+}
+
+.adm-inbox__attached {
+  display: flex;
+  gap: 8px;
+  margin-top: 4px;
+  font-size: var(--fs-12);
+}
+
+.adm-inbox__attached > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.adm-inbox__text {
+  max-width: 72ch;
+  margin: 0 0 16px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.6;
+}
+
+.adm-inbox__diagram {
+  max-height: 320px;
+  margin: 0 0 12px;
+  padding: 12px;
+  overflow: auto;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--r-md);
+  background: var(--adm-wash);
+  font: var(--fs-12) / 1.6 var(--font-mono);
+}
+
+.adm-inbox__shots {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.adm-inbox__shots li {
+  display: grid;
+  gap: 4px;
+}
+
+.adm-inbox__shots img {
+  display: block;
+  width: 220px;
+  height: 140px;
+  object-fit: cover;
+  object-position: top;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: var(--r-md);
+  background: var(--adm-wash);
+}
+
+.adm-inbox__note {
+  resize: vertical;
+  font-weight: 400;
+}
