@@ -50,6 +50,10 @@ interface EditableCanvasProps {
 
 type Selected = { kind: 'node' | 'edge'; id: string } | null;
 
+/** How much of the canvas's right side a floating panel covers, with its margin: the palette (w-64), the settings (w-72). */
+const FLOATING_PALETTE = 256 + 8;
+const FLOATING_SETTINGS = 288 + 8;
+
 function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKey, problemCapacity, paletteKey, phone }: EditableCanvasProps) {
   const [selected, setSelected] = useState<Selected>(null);
   const [settingsClosed, setSettingsClosed] = useState(false);
@@ -61,8 +65,8 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const paletteOpen = phone ? sheet : docked;
-  // Showing or hiding the palette changes the canvas's width: fit the diagram to it again.
-  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}#${paletteOpen}`);
+  /** Whether the palette floats over the canvas (a narrow pane) rather than sitting beside it. */
+  const [floating, setFloating] = useState(false);
   /** A component just added, selected once the layout draws it. */
   const [pending, setPending] = useState<string | null>(null);
 
@@ -124,6 +128,10 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
 
   // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
   const dockSettings = !!current && !settingsClosed && paletteOpen && !phone;
+  // Showing or hiding a panel glides the diagram to a new fit (unless the reader zoomed or panned): a docked one
+  // changes the canvas's width, a floating one (the palette in a narrow pane, the settings) covers its right side.
+  const cover = paletteOpen && !phone && floating ? FLOATING_PALETTE : current && !settingsClosed && !dockSettings && !phone ? FLOATING_SETTINGS : 0;
+  useFitOnChange(`${nodes.map((n) => n.id).join('|')}#${fitKey}`, { glide: `${paletteOpen}`, right: cover });
   const inspector = current && !settingsClosed && (
     <Inspector
       key={current.id}
@@ -157,6 +165,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         onAdd={(tech) => add(tech, phone)}
         onClose={() => (phone ? setSheet(false) : setDocked(false))}
         settings={dockSettings ? inspector : undefined}
+        onFloatingChange={setFloating}
       />
       <div
         tabIndex={-1}
