@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn, planAnswer } from './accounts';
-import { codeEditor, expect, test } from './fixtures';
+import { answerDialog, codeEditor, expect, test } from './fixtures';
 
 /**
  * Plans and credits (backend/src/billing.ts, docs/design/paid-plans.md P26)
@@ -95,16 +95,13 @@ test('pricing: on Pro, Max is a switch of the subscription, after a confirm', as
   const pro = page.getByRole('region', { name: 'Pro' });
   await expect(pro).toContainText('You are on Pro.');
   await expect(pro.getByRole('button', { name: 'Manage in Polar' })).toBeVisible();
-  let asked = '';
-  page.once('dialog', (d) => {
-    asked = d.message();
-    void d.dismiss();
-  });
   await page.getByRole('region', { name: 'Max' }).getByRole('button', { name: 'Upgrade to Max, €249 a year' }).click();
-  expect(asked).toBe('Switch to Max yearly, €249 a year? Polar charges the difference for the rest of this period.');
+  const asked = page.getByRole('dialog', { name: 'Switch to Max yearly, €249 a year?' });
+  await expect(asked).toContainText('Polar charges the difference for the rest of this period.');
+  await answerDialog(page, 'Cancel');
   expect(posts).toEqual([]);
-  page.once('dialog', (d) => void d.accept());
   await page.getByRole('region', { name: 'Max' }).getByRole('button', { name: 'Upgrade to Max, €249 a year' }).click();
+  await answerDialog(page, 'Switch plan');
   // Back on Settings as from a checkout, waiting for the webhook.
   await expect(page).toHaveURL(/practice\/\?checkout=done&product=max_yearly#\/me$/);
   expect(posts).toEqual([{ path: '/api/billing/change-plan', body: { product: 'max_yearly' } }]);

@@ -1,6 +1,7 @@
 import { Camera, Copy, ExternalLink, FileCode, Mail } from 'lucide-react';
 import { useCallback, useState } from 'react';
 import { encodeShareHash } from '../playground/share';
+import { confirm } from '../design/dialogs';
 import { deleteFeedback, feedbackFileUrl, getFeedback, KIND_LABEL, listFeedback, patchFeedback, STATUS_LABEL, type FeedbackFilter, type FeedbackKind, type FeedbackStatus } from './feedbackApi';
 import { formatAgo, formatBytes, formatDateTime, formatNumber } from './format';
 import { useAction, useLoad } from './hooks';
@@ -296,7 +297,7 @@ function Handling({ id, status: saved, note: savedNote, onSaved, onDeleted }: { 
         className="adm-inline adm-danger-zone adm-inbox__delete"
         onSubmit={(e) => {
           e.preventDefault();
-          if (window.confirm('Delete this message and its screenshots? This cannot be undone.')) void remove.run(() => deleteFeedback(id, reason));
+          void confirm({ title: 'Delete this message and its screenshots?', body: 'This cannot be undone.', confirmLabel: 'Delete', tone: 'danger' }).then((yes) => yes && remove.run(() => deleteFeedback(id, reason)));
         }}
       >
         <input className="adm-input" aria-label="Reason for deleting" placeholder="Reason (for the audit log)" required maxLength={500} value={reason} onChange={(e) => setReason(e.target.value)} />

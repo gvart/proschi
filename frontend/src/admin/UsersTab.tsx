@@ -1,4 +1,5 @@
 import { useCallback, useState } from 'react';
+import { confirm, prompt } from '../design/dialogs';
 import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, signOutUser, unblockUser, type UserFilter, type UserSort } from './api';
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
 import { useAction, useLoad, type SortDir } from './hooks';
@@ -128,8 +129,8 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
   const blocked = user.blockedAt !== null;
   const solved = data.progress.filter((p) => p.solvedAt).length;
 
-  const confirmThen = (question: string, run: () => Promise<unknown>, done?: string) => {
-    if (!window.confirm(question)) return;
+  const confirmThen = async (question: string, run: () => Promise<unknown>, done?: string) => {
+    if (!(await confirm({ title: question }))) return;
     setNotice(undefined);
     void action.run(run).then((ok) => ok && done && setNotice(done));
   };
@@ -223,8 +224,9 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
             type="button"
             className="ps-btn ps-btn--danger ps-btn--sm"
             disabled={action.busy}
-            onClick={() => {
-              if (window.prompt(`Delete ${user.displayName}'s account and everything in it? This can't be undone. Type DELETE to confirm.`) !== 'DELETE') return;
+            onClick={async () => {
+              const typed = await prompt({ title: `Delete ${user.displayName}'s account?`, label: "Everything in it goes too, and this can't be undone.", confirmText: 'DELETE', confirmLabel: 'Delete account', tone: 'danger' });
+              if (typed !== 'DELETE') return;
               void action.run(() => deleteUser(id)).then((ok) => ok && onBack());
             }}
           >

@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { answerDialog, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
 
 /**
  * Editing with the mouse: whatever is done on the canvas has to show up in the
@@ -110,8 +110,9 @@ test.describe('visual editing', () => {
 
   test('renaming a component rewrites its display name', async ({ page }) => {
     await addComponent(page, 'redis', 'Redis');
-    page.once('dialog', (dialog) => dialog.accept('Session cache'));
     await node(page, 'Redis').dblclick();
+    await page.locator('.ps-dialog').getByRole('textbox', { name: 'Display name' }).fill('Session cache');
+    await answerDialog(page, 'Rename');
     await expect(node(page, 'Session cache')).toBeVisible();
     expect(await editorText(page)).toContain('"Session cache" [Redis]');
   });

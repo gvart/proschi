@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { FEEDBACK_BUG, mockAdmin, PNG_1PX } from './admin';
-import { expect, test } from './fixtures';
+import { answerDialog, expect, test } from './fixtures';
 
 /**
  * Send feedback (src/feedback/) in the build with accounts, API mocked: a bug
@@ -119,8 +119,8 @@ test.describe('admin inbox', () => {
 
     await expect(page.getByRole('button', { name: 'Delete message' })).toBeDisabled();
     await page.getByLabel('Reason for deleting').fill('Duplicate');
-    page.once('dialog', (d) => void d.accept());
     await page.getByRole('button', { name: 'Delete message' }).click();
+    await answerDialog(page, 'Delete');
     await expect.poll(() => posts.find((p) => p.method === 'DELETE')).toMatchObject({ path: `/api/admin/feedback/${FEEDBACK_BUG}`, body: { reason: 'Duplicate' } });
     await expect(page).toHaveURL(/#\/inbox$/);
   });

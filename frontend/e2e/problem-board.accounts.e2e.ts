@@ -1,5 +1,5 @@
 import { mockSignedIn, SIGNED_IN } from './accounts';
-import { codeEditor, expect, test, waitForCanvas } from './fixtures';
+import { codeEditor, expect, loadReferenceSolution, test, waitForCanvas } from './fixtures';
 
 /**
  * A problem's leaderboards signed in (API mocked): after a run, under how
@@ -98,9 +98,7 @@ test('a first solve offers the leaderboard and email reminders right there', asy
 
   await page.goto('practice/#/url-shortener');
   await expect(codeEditor(page)).toBeVisible();
-  page.on('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Show reference solution' }).click();
-  await page.getByRole('button', { name: 'Load into the editor' }).click();
+  await loadReferenceSolution(page);
   await page.getByRole('button', { name: 'Run tests' }).click();
 
   const celebration = page.getByRole('region', { name: 'First solve' });

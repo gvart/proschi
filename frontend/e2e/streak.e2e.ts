@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { expect, sectionLink, setPracticeGoal, test } from './fixtures';
+import { expect, loadReferenceSolution, sectionLink, setPracticeGoal, test } from './fixtures';
 
 /**
  * The daily goal, streak and celebrations in a build without accounts, where
@@ -138,9 +138,7 @@ test.describe('solve celebration', () => {
 
   /** Loads the reference solution of the open problem and runs the tests. */
   async function solveWithReference(page: Page): Promise<void> {
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
   }
 

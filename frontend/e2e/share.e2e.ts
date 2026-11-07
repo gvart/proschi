@@ -1,4 +1,4 @@
-import { codeEditor, copiedText, expect, mockClipboard, test, waitForCanvas } from './fixtures';
+import { codeEditor, copiedText, expect, loadReferenceSolution, mockClipboard, test, waitForCanvas } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
 /**
@@ -13,9 +13,7 @@ test('a first solve can be shared with its cost and p99, linking the problem’s
   await page.goto('practice/#/url-shortener');
   await expect(codeEditor(page)).toBeVisible();
   await waitForCanvas(page);
-  page.on('dialog', (dialog) => dialog.accept());
-  await page.getByRole('button', { name: 'Show reference solution' }).click();
-  await page.getByRole('button', { name: 'Load into the editor' }).click();
+  await loadReferenceSolution(page);
   await page.getByRole('button', { name: 'Run tests' }).click();
   const share = page.getByRole('button', { name: 'Share your solve' });
   await expect(share).toBeVisible();

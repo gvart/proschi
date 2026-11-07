@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockAdmin, PRO_USER, USER } from './admin';
-import { expect, test } from './fixtures';
+import { answerDialog, expect, test } from './fixtures';
 
 /**
  * The admin panel (/admin/) in the build with accounts, API mocked with
@@ -66,8 +66,8 @@ test.describe('admin panel', () => {
     await expect(page.getByText('free plan')).toBeVisible();
 
     await page.getByLabel('Reason for blocking').fill('spam');
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Block', exact: true }).click();
+    await answerDialog(page, 'OK');
     await expect(page.getByText('Blocked and signed out.')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Unblock' })).toBeVisible();
     expect(posts).toEqual([{ method: 'POST', path: `/api/admin/users/${USER}/block`, body: { reason: 'spam' } }]);
@@ -210,8 +210,8 @@ test.describe('admin panel', () => {
 
     await nav(page).getByRole('link', { name: 'Links' }).click();
     await expect(page.getByRole('heading', { name: 'Live share links' })).toBeVisible();
-    page.once('dialog', (dialog) => void dialog.accept());
     await page.getByRole('button', { name: 'Revoke' }).click();
+    await answerDialog(page, 'Revoke');
     await expect.poll(() => posts).toEqual([{ method: 'DELETE', path: '/api/admin/document-shares/AbCdEfGhIjKlMnOpQrStUv', body: null }]);
   });
 });

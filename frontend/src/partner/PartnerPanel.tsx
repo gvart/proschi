@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from 'react';
 import { ArrowUp, ClipboardCheck, Hammer, Lightbulb, LogIn, MessagesSquare, Sparkles, SquarePen, TriangleAlert, X } from 'lucide-react';
 import Markdown from '../practice/Markdown';
+import { confirm } from '../design/dialogs';
 import { field, primaryButton, toolButton } from '../components/Playground/ui';
 import { useFeature } from '../components/featureState';
 import UpgradeHint from '../components/UpgradeHint';
@@ -179,14 +180,14 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) void submit(e);
   };
 
-  const toggleDeep = () => {
-    if (state.turns.length > 0 && !window.confirm(deep ? 'Turn Deep off? That starts a new conversation.' : 'Turn on Deep? That starts a new conversation.')) return;
+  const toggleDeep = async () => {
+    if (state.turns.length > 0 && !(await confirm({ title: deep ? 'Turn Deep off?' : 'Turn on Deep?', body: 'That starts a new conversation.', confirmLabel: deep ? 'Turn off' : 'Turn on' }))) return;
     if (state.sessionId) reset();
     setDeepChoice(!deep);
   };
 
-  const newConversation = () => {
-    if (window.confirm('Start a new conversation? This one is closed.')) reset();
+  const newConversation = async () => {
+    if (await confirm({ title: 'Start a new conversation?', body: 'This one is closed.', confirmLabel: 'New conversation' })) reset();
   };
 
   // Only the newest partner turn's questions take answers.

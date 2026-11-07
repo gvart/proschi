@@ -1,4 +1,5 @@
 import { Cloud, CloudOff, LogIn, LogOut, RefreshCw, Trash2, Upload } from 'lucide-react';
+import { confirm } from '../../design/dialogs';
 import { MenuItem } from './Menu';
 import UpgradeHint from './UpgradeHint';
 import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
@@ -65,9 +66,9 @@ export default function CloudSection({ cloud, close }: { cloud: CloudSync; close
               </MenuItem>
               <MenuItem
                 icon={<Trash2 size={14} />}
-                onSelect={() => {
+                onSelect={async () => {
                   close();
-                  if (window.confirm('Delete every diagram saved in your account? The diagrams in this browser stay, and cloud sync stays off.')) void cloud.deleteCloudCopies();
+                  if (await confirm({ title: 'Delete every diagram saved in your account?', body: 'The diagrams in this browser stay, and cloud sync stays off.', confirmLabel: 'Delete cloud copies', tone: 'danger' })) void cloud.deleteCloudCopies();
                 }}
               >
                 Delete my cloud copies

@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn, SIGNED_IN } from './accounts';
-import { canvasNodes, codeEditor, copiedText, editorText, expect, mockClipboard, test, waitForCanvas } from './fixtures';
+import { answerDialog, canvasNodes, codeEditor, copiedText, editorText, expect, mockClipboard, test, waitForCanvas } from './fixtures';
 import { Account, ORDERS, seed } from './versions';
 
 /**
@@ -150,8 +150,8 @@ test('on Pro, File → Share link… makes a link, copies it and revokes it', as
   await dialog.getByRole('button', { name: 'Copy' }).click();
   expect(await copiedText(page)).toBe(`https://proschi.app/share/${TOKEN}`);
 
-  page.once('dialog', (confirm) => void confirm.accept());
   await dialog.getByRole('button', { name: 'Revoke link' }).click();
+  await answerDialog(page, 'Revoke');
   await expect(dialog.getByRole('button', { name: 'Create share link' })).toBeVisible();
   expect(calls).toEqual(['GET', 'POST', 'DELETE']);
 });

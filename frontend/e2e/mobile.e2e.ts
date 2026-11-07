@@ -1,6 +1,6 @@
 import { readFileSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { expect, sectionLink, setPracticeGoal, test } from './fixtures';
+import { expect, loadReferenceSolution, sectionLink, setPracticeGoal, test } from './fixtures';
 import { mockProfile, PROFILE } from './profile';
 
 /**
@@ -163,9 +163,7 @@ test.describe('no sideways scrolling on a phone', () => {
     await expectNoHorizontalOverflow(page, 'session summary');
 
     await visit(page, 'practice/#/url-shortener');
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('tab', { name: 'Tests' }).click();
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(page.getByRole('region', { name: 'First solve' })).toBeVisible();

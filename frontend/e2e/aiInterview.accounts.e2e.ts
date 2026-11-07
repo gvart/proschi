@@ -1,6 +1,6 @@
 import { mockSignedIn } from './accounts';
 import { mockInterviews } from './aiInterview';
-import { expect, test } from './fixtures';
+import { answerDialog, expect, test } from './fixtures';
 
 /**
  * The AI interviewer in interview mode (build with accounts, API mocked):
@@ -65,8 +65,8 @@ test.describe('AI interviewer', () => {
     await expect(chat.getByTestId('coaching-card')).toContainText('Explain the cache miss path');
     await expect(chat.locator('[aria-current="step"]')).toHaveText('3. Design');
 
-    page.once('dialog', (d) => void d.accept());
     await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+    await answerDialog(page, 'Finish');
     const verdict = page.getByRole('region', { name: 'Interview verdict' });
     await expect(verdict.getByTestId('verdict-result')).toHaveText('Pass');
     await expect(verdict.getByRole('row', { name: /Communication 5\/5/ })).toBeVisible();
@@ -162,8 +162,8 @@ test.describe('AI interviewer', () => {
     await page.getByRole('button', { name: 'Account' }).click();
     await expect(page.getByTestId('account-credits')).toHaveAttribute('data-low', 'true');
     await page.keyboard.press('Escape');
-    page.once('dialog', (d) => void d.accept());
     await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+    await answerDialog(page, 'Finish');
     await expect(page.getByRole('region', { name: 'Interview verdict' }).getByTestId('verdict-result')).toHaveText('Pass');
   });
 

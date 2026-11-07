@@ -90,9 +90,6 @@ test.describe('team systems in the editor', () => {
 
   test('double-click opens a team design, and the breadcrumb goes back', async ({ page }) => {
     const before = await editorText(page);
-    page.on('dialog', (dialog) => {
-      throw new Error(`Unexpected dialog: ${dialog.message()}`);
-    });
     await box(page, 'Order Processing').dblclick();
     await expect(breadcrumb(page)).toContainText('Drone startup');
     await expect(breadcrumb(page).locator('[aria-current="page"]')).toHaveText('Order Processing');
