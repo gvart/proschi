@@ -3,7 +3,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HAIKU } from '../src/ai/client';
 import { parsePicks, ROADMAP_PROMPT, type Candidates } from '../src/ai/roadmap';
 import { grantSignupCredits } from '../src/credits';
-import { REVIEW_REFRESH_MS } from '../src/roadmap';
 import { call, resetDatabase, signedInUser } from './helpers';
 import { messageResponse, sseResponse, streamEvents, type Recorded } from './ai/mockClaude';
 
@@ -24,7 +23,6 @@ const PICKS = {
   ],
 };
 
-const GOOD_REVIEW = { summary: 'A small, sound design.', strengths: ['Two API replicas.'], issues: [{ severity: 'major', title: 'One database', detail: 'No replica.', nodeId: 'db' }], suggestions: ['Add a replica.'] };
 
 type Reply = (req: Recorded) => Response | Promise<Response>;
 const isPicker = (req: Recorded) => req.body.model === HAIKU && req.body.system[0]?.text === ROADMAP_PROMPT;
@@ -190,25 +188,6 @@ describe('the AI roadmap: routes', () => {
     expect((await next()).status).toBe(401);
     delete env.ANTHROPIC_API_KEY;
     expect((await next(token)).status).toBe(501);
-  });
-
-  it('refreshes after an AI review at most once a day', async () => {
-    const calls = claude({ other: () => messageResponse(JSON.stringify(GOOD_REVIEW)) });
-    const { id: userId, token } = await signedInUser();
-    await setPlan(userId, 'pro');
-    const body = { source: 'title "x"\n', model: { nodes: [], edges: [], useCases: [], decisions: [], diagnostics: [] } };
-    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
-    await vi.waitFor(async () => expect(await recCount(userId)).toBe(1));
-    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
-    // Give a second refresh time to happen, were it to.
-    await new Promise((r) => setTimeout(r, 50));
-    expect(await recCount(userId)).toBe(1);
-    expect(calls.filter(isPicker)).toHaveLength(1);
-    // A day later, a review refreshes them again.
-    await env.DB.prepare('UPDATE roadmap_recs SET created_at = created_at - ?').bind(REVIEW_REFRESH_MS + 1).run();
-    expect((await call('/api/review', { method: 'POST', token, body })).status).toBe(200);
-    await vi.waitFor(async () => expect(await recCount(userId)).toBe(2));
-    expect(((await (await next(token)).json()) as { next: { source: string } }).next.source).toBe('review');
   });
 
   it('is in Download my data, and deleted with the account', async () => {

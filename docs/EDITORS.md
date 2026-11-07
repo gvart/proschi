@@ -428,9 +428,8 @@ single points of failure. `--format json` prints the whole analysis.
 
 In the web editor, the **Results** tab lists failing checks first, each with
 its hint, then the analysis and **Review my design**. The review is
-automatic, written from the simulation and the tests; on Pro, the in-depth review (by Claude)
-replaces it (20 reviews a day, the count shown next to the button),
-from the server's own run of your design. Links with
+automatic, written from the simulation and the tests. For a deeper read,
+ask **Design partner** (Ctrl/Cmd+J), paid in credits. Links with
 `?view=results` open on that tab, and `?view=hld` on the HLD. In the
 language server, failing requirements and tests are warnings on their
 lines, and hovering a node shows its load and cost.

@@ -197,7 +197,6 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `POST /api/game/sync {events}` | What was done signed out, in order: `{t: 'run', setup, actions}`, `{t: 'buy', id}`, `{t: 'equip', perks}`, up to 3 runs a request. Each run must have been allowed by the progress at that point and counts once. Answers `{meta, applied, error?}` |
 | `GET /api/game/leaderboard?scenario=<id>&ascension=<n>` or `?day=YYYY-MM-DD` | `{board, title, players, entries: [{rank, id, displayName, score, waves}]}`: each player's best run, the top 20 who opted in, ranked among everyone; signed in, also `you: {score, rank, players}` or null. Cached for a minute |
 | `GET /api/challenge/leaderboard?day=YYYY-MM-DD` | `{day, players, maxScore, entries: [{rank, id, displayName, score, correct}]}`: the day's (default today, UTC) top 20 who opted in (`id` is the user's public id, for their profile), ranked among everyone who played; signed in, also `you: {rank, score, correct, players}` or null |
-| `POST /api/review {source, model, problem?, tests?, metrics?}` | AI design review; a stub that answers 501 (below) |
 | `POST /api/shares {source, imports?, image?}` | Signed in: stores a short link, `201 {id, url, title, hasImage, createdAt}`. `imports` maps paths to sources; the source and imports together at most 64 KiB (413). `image` is a base64 PNG (a `data:` URL is fine) of at most 300 KB and 2400×2400 pixels; anything but a complete PNG is a 400. 409 past 100 short links |
 | `GET /api/shares/<id>` | `{id, title, source, imports?, hasImage, createdAt}`, no sign-in needed; 404 for an unknown or deleted id. Cached for 5 minutes |
 | `DELETE /api/shares/<id>` | The owner's only (404 otherwise) |
@@ -332,8 +331,7 @@ renewal date (`billing`, migration 0017), and never any card data.
 
 #### Credits
 
-The AI features (mock interviews, the in-depth review, your next steps and
-the design partner) are paid in credits (docs/design/paid-plans.md P26 to
+The AI features (mock interviews, your next steps and the design partner) are paid in credits (docs/design/paid-plans.md P26 to
 P31, docs/impl/design-partner.md "Credits").
 
 - **Price.** A call is charged twice what it cost us: the model's price per
@@ -408,7 +406,7 @@ interviews) stays a number in `src/plans.ts`.
    out, 402 `{error: 'plan_required', feature}` off a plan with it.
    `before` runs first, for what must answer before sign-in (a 501 without
    the AI key, the body's 400). If it sits under a paid path
-   (`/api/interviews*`, `/api/review*`, `/api/roadmap*`,
+   (`/api/interviews*`, `/api/roadmap*`, `/api/partner*`,
    `/api/me/documents/<id>/share`), add it to `PAID_ROUTES` in
    `src/index.ts`. Those paths reach only that table, and only
    `requireFeature` or `openRoute(why, handler)` routes. Then give it a case in
@@ -520,104 +518,17 @@ METRICS_TOKEN=<secret> npm run metrics -- https://proschi.app 30
 which prints the funnel (each step's total and its share of landing page
 views) and a per-day table. Without the secret the summary answers 404.
 
-### Design review (`POST /api/review`)
+### Design review
 
-An in-depth review of a design (docs/design/paid-plans.md, P17), behind the
-`design_partner` feature, so on every plan, paid in [credits](#credits):
-Claude Sonnet reads the design, the server's own run of its tests and the
-simulation's numbers, and answers with a `DesignReview`. Without the key or
-credits, or when the reviewer is busy, the page uses its
-rule reviewer (`frontend/src/review/rules.ts`), which answers with the same
-`DesignReview` from the same request. The contract is one file,
-`frontend/src/review/contract.ts`: the page builds the request from it
-(`src/review/request.ts`) and the Worker validates with it (`src/review.ts`),
-so the two cannot drift.
-
-- **Request**: a JSON `DesignReviewRequest` of at most 192 KiB, signed in:
-  - `source`: the design as written (at most 64 KiB; for a practice problem,
-    the solver's file, which starts with `import "problem.proschi"`);
-  - `model`: the parsed design, summarised: `nodes` (`id`, `name`, `tech`,
-    `kind?`, `replicas?`, `given?` for the problem's own read-only nodes),
-    `edges` (`source`, `target`, `label?`), `useCases`, `decisions` (titles)
-    and the parser's `diagnostics` (`severity`, `message`, `line?`);
-  - `problem?`: `{id, version, title}` of the practice problem;
-  - `tests?`: `{passed, total, solved, blocked?, results: [{id, name,
-    category, passed, message, hint?}]}` of this source (`hint`: how to fix
-    a failed one);
-  - `metrics?`: the simulation's `costUsd` (monthly), `worstP99Ms`,
-    `minAvailability`, per use case `{name, rps, p99Ms, availability}`,
-    `singlePointsOfFailure`, `saturated` node ids and `warnings`. Optional
-    details say why: `costLimit` `{maxUsd, testId?}`; `nodes` (`id`, `kind`,
-    `replicas`, `shards`, `loadRps`, `utilization`, `writeBound?`,
-    `bandwidthBound?`, `latencyMs`, `availability`, `costUsd`,
-    `instanceCostUsd`, `durable`, `loadBy` `[{useCase, rps}]`, `usedBy`); and
-    per use case `latency` `[{percentile, ms, limitMs, tailScenario?,
-    testId?}]`, `availabilityLimit` `{min, testId?}`, `durableTestId`,
-    `entryWrite`, `dependencies` `[{nodeId, fallback, availability}]`,
-    `writes` `[{nodeId, timing: "sync" | "async" | "after"}]` and `scenarios`
-    `[{name, share, success, path: [{from, to, ms, transferMs?, async?,
-    failed?}]}]` (the synchronous critical path). `testId` is the
-    `tests.results` id of the same requirement.
-
-  Lists hold at most 500 items. Unknown fields are refused.
-  - `path?` and `imports?`: for an editor diagram, its file name and the
-    files its imports read (path → source: other diagrams, `cloud:`
-    versions), at most 50, each at most 64 KiB, all of them inside the
-    192 KiB body.
-
-  The server checks the whole body, but uses only `source`, `problem.id`
-  and, without a problem, `path` and `imports` (P6): it parses the source
-  itself, runs the simulation and the tests, and gives the model those
-  results, never the page's `model`, `tests` or `metrics`. A practice
-  solution's `import "problem.proschi"` resolves to the bundled problem's
-  given, as in `src/verify.ts`, and any `imports` sent with it are ignored;
-  an editor diagram's imports resolve only against the files sent, parsed as
-  data like the source, and nothing is fetched.
-- **Answers**: 200 with a `DesignReview` and the credits after it: `{summary,
-  strengths: string[], issues: [{severity: "info" | "minor" | "major" |
-  "critical", title, detail, nodeId?}], suggestions: string[], credits:
-  {charged, balance}}`. `nodeId` is a node of the server's parse (others are
-  dropped); the page links it to the node's line. Otherwise 400 `{error}`
-  naming what is wrong with the body, 413 for a source or body that is too
-  long, 401 signed out, 402 `{error: "no_credits", needed, balance}` when
-  the balance can't hold the review's worst case, 404 for an unknown
-  problem, 429 past the per-IP or per-user limit (`Retry-After`), 503 `{error: "ai_unavailable"}` when the
-  model is busy or unreachable, 502 `{error: "review_failed"}` when it
-  failed or its answer did not validate twice, and 501 `{error:
-  "not_implemented"}` without `ANTHROPIC_API_KEY` (P10). The page reads 501,
-  402, 404, 503 and no answer as "no AI reviewer here" and shows the rule
-  review, saying why.
-- **`GET /api/review/usage`**: `{limit, used, remaining, resetAt}`, kept for
-  the page: `remaining` (and `limit`) is how many reviews of a typical
-  diagram the balance holds now, `used` 0, `resetAt` the next monthly
-  allowance. 501 without the key.
-
-How it works (`src/review.ts`, `src/ai/reviewer.ts`):
-
-- A review holds its worst case (Sonnet's 16,000 output tokens and its input
-  guessed from the characters sent) before the model is called, and settles
-  what the answer that validated cost; a failed review releases the hold.
-  There is no daily cap. The charges are in Download my data
-  (`creditCharges`) and deleted with the account.
-- One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)
-  through `src/ai/client.ts`, so `AI_GATEWAY_URL` applies as for interviews,
-  with a JSON schema for the answer. The answer is checked with
-  `parseDesignReview` and for sizes and empty text; one that does not hold
-  is asked for once more. For a problem, its context
-  (`src/ai/context.ts`) is a cached system block.
-- The design's source, its parse, the test results and the simulation reach
-  the model only inside data tags (`<design_source>`, …), with every `<`
-  that could open or close a tag escaped, and the prompt says that text is
-  data, never instructions. The source is never logged.
-- Limits: `REVIEW_LIMITER` per IP (10 a minute) and `AI_REVIEW_LIMITER` per
-  user (5 a minute).
-
-The page asks the API only in builds with paid plans (`VITE_BILLING=true`,
-which needs `VITE_ACCOUNTS=true`) and only for a Pro account; there it shows
-the reviews left today. Elsewhere it uses the rule reviewer
-(`frontend/src/review/reviewer.ts`), with a hint that AI review is part of
-Pro where paid plans are on. The old `VITE_AI_REVIEW` flag is gone: AI
-review is a Pro feature, so billing decides.
+The in-depth review (`POST /api/review`, `GET /api/review/usage`) is
+retired: Design partner (`/api/partner/*`, docs/design/paid-plans.md P29)
+replaces it, and the retired paths answer 404. The free review is the page's
+own rule reviewer (`frontend/src/review/rules.ts`), written from the
+simulation and the tests. Its request and answer are one file,
+`frontend/src/review/contract.ts`, which the Worker also reads to build
+Design partner's view of a design (`src/ai/reviewer.ts`): the server parses,
+simulates and tests the source itself and never uses the page's numbers
+(P6).
 
 The server refuses POST, PATCH and DELETE requests whose `Origin` is another
 site, unless they carry `Authorization: Bearer` and no session cookie (an
@@ -1204,7 +1115,7 @@ variable the Worker reads, with what it is for. The paid features need:
   (`openssl rand -base64 33`). Without it there is no sign-in.
 - One sign-in provider: `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (or
   the Google pair). There is no dev login.
-- `ANTHROPIC_API_KEY` for the AI interviewer, AI review, history and Next
+- `ANTHROPIC_API_KEY` for the AI interviewer, Design partner, history and Next
   for you; their routes answer 501 without it. Live share links don't need it.
 - The `POLAR_*` variables, only for checkout (step 6).
 
@@ -1255,13 +1166,12 @@ sign-up flow grants them. Reload the page afterwards.
   mode**, choose **AI interviewer** under Interviewer (it shows the credits
   left), pick the time and start. The first one asks for consent. **Send my
   design** sends the editor's diagram; **Finish and get the verdict** ends it.
-- **AI review**: on a problem, the **Review** tab next to **Tests** → **Review
-  my design** (in the editor at `/app/`, the Review section of the results).
-  Each one is charged in credits.
+- **Design partner**: the **Design partner** button in the editor (`/app/`)
+  or on a problem (Ctrl/Cmd+J). Each turn is charged in credits.
 - **History**: the account menu → **Your progress** (`/practice/#/progress`):
   every finished AI interview's verdict and the skill trends.
 - **Next for you**: on the roadmap (`/practice/#/roadmap`) and under a
-  verdict, a few seconds after a Pro interview's verdict or an AI review.
+  verdict, a few seconds after a Pro interview's verdict.
 - **Live share links**: in the editor (`/app/`), signed in with the diagram
   synced, **File** → **Share link…**; open the link in a private window
   (`/share/<token>`). Off Pro, creating one answers 402.

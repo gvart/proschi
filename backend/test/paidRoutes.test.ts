@@ -27,17 +27,9 @@ const VERDICT = {
   wentWrong: [{ skill: 'estimation', text: 'Skipped the storage estimate.' }],
   nextSteps: ['Practise storage estimates'],
 };
-const REVIEW = { summary: 'A small, sound design.', strengths: ['Two API replicas.'], issues: [], suggestions: ['Add a replica.'] };
-const REVIEW_BODY = {
-  problem: { id: 'url-shortener', version: 1, title: 'URL Shortener' },
-  source: 'import "problem.proschi"\n',
-  model: { nodes: [{ id: 'user', name: 'User', tech: 'Actor', kind: 'client', given: true }], edges: [], useCases: [], decisions: [], diagnostics: [] },
-  tests: { passed: 0, total: 0, solved: false, results: [] },
-  metrics: { costUsd: 0, worstP99Ms: 0, minAvailability: 1, useCases: [], singlePointsOfFailure: [], saturated: [], warnings: [] },
-};
 const SOURCE = 'title "Checkout"\n\napi "API" [Go]\ndb "Orders" [Postgres]\napi -> db\n';
 
-/** The Claude API: streamed replies, hints and picks from Haiku, the verdict and the review as JSON. */
+/** The Claude API: streamed replies, hints and picks from Haiku, the verdict as JSON. */
 function claude(): void {
   const real = globalThis.fetch;
   vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
@@ -48,7 +40,7 @@ function claude(): void {
     if (text.includes('You are the Design partner')) return messageResponse(JSON.stringify({ message: 'Looks sound.', questions: [], changes: [] }));
     if (body.model === HAIKU) return messageResponse(text.includes('"picks"') ? JSON.stringify({ picks: [] }) : JSON.stringify({ kind: 'focus', text: 'Ask about writes.', covered: [] }), { model: HAIKU });
     if (body.stream) return sseResponse(streamEvents('About 100M new links a month.'));
-    return messageResponse(JSON.stringify(text.includes('wentWell') ? VERDICT : REVIEW));
+    return messageResponse(JSON.stringify(VERDICT));
   });
 }
 
@@ -205,15 +197,6 @@ const CASES: Record<string, Case> = {
     free: async (who) => planRequired(await send(who, 'GET', `/api/interviews/${await finishedInterview(who)}/report`), 'interview_report'),
     pro: async (who) => planRequired(await send(who, 'GET', `/api/interviews/${await finishedInterview(who)}/report`), 'interview_report'),
   },
-  // design_partner is on every plan, paid in credits.
-  'POST api/review': {
-    free: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
-    pro: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
-  },
-  'GET api/review/usage': {
-    free: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
-    pro: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
-  },
   // design_partner is for anyone signed in; the credits decide how much.
   'POST api/partner/sessions': {
     free: async (who) => expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201),
@@ -289,8 +272,9 @@ describe('paid routes', () => {
   it('a paid path not in the table answers 404, whatever the credential', async () => {
     const who = await account('pro', 'cookie');
     for (const [method, path] of [
-      ['GET', '/api/review'],
-      ['POST', '/api/review/usage'],
+      // The retired in-depth review (P29: Design partner replaces it).
+      ['POST', '/api/review'],
+      ['GET', '/api/review/usage'],
       ['GET', '/api/roadmap'],
       ['POST', '/api/roadmap/next'],
       ['PUT', '/api/me/documents/doc1/share'],
@@ -303,7 +287,7 @@ describe('paid routes', () => {
   it('signed out, every route answers 401', async () => {
     for (const [method, path] of PAID_ROUTES) {
       const url = `/${path.replace(/\*/g, 'doc1')}`;
-      const res = await call(url, { method, body: method === 'POST' ? (path === 'api/review' ? REVIEW_BODY : { problem: 'url-shortener', minutes: 45, message: 'hi' }) : undefined });
+      const res = await call(url, { method, body: method === 'POST' ? { problem: 'url-shortener', minutes: 45, message: 'hi' } : undefined });
       expect(res.status, `${method} ${path}`).toBe(401);
     }
   });
@@ -402,11 +386,10 @@ describe('a downgrade', () => {
       const who = await account('free', credential);
       expect((await deliver(subscription(who.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
       expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
-      expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
       expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
       await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
-      // The in-depth review is on every plan: what is left of the credits decides.
-      expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
+      // Design partner is on every plan: what is left of the credits decides.
+      expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201);
     });
   }
 
@@ -418,7 +401,6 @@ describe('a downgrade', () => {
     expect(row!.plan).toBe('free');
     expect(row!.comp_until).toBeGreaterThan(Date.now() / 1000);
     expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
-    expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
   });
 
   it('nothing a client sends sets the plan: only the signed webhook does', async () => {

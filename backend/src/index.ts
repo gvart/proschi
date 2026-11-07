@@ -48,7 +48,6 @@ import { assertSameOrigin, errorResponse, HttpError, json, withSecurityHeaders }
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
-import { getReviewUsage, reviewDesign } from './review';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
@@ -138,8 +137,6 @@ import { getRoadmapNext } from './roadmap';
  *   DELETE /api/shares/<id>                 the owner deletes one
  *   GET    /api/me/shares                   the user's short links
  *   GET    /api/oembed?url=                 oEmbed for a short link
- *   POST   /api/review {source, model, problem?, tests?, metrics?}   in-depth review, paid in credits (402 no_credits, 501 without the key)
- *   GET    /api/review/usage                reviews the balance covers: {limit, used, remaining, resetAt}
  *   POST   /api/interviews {problem, minutes, replace?, deep?}   starts an AI interview, holding its verdict's credits (402 no_credits, or plan_required for deep off Max; 409 active_session; 501 without the AI key)
  *   POST   /api/interviews/<id>/turn {message, design?, advance?}   the interviewer's reply as Server-Sent Events, then the hint and grade
  *   POST   /api/interviews/<id>/finish     the verdict: pass or fail, scores per skill, what went well and wrong, next steps
@@ -183,8 +180,6 @@ export const PAID_ROUTES: readonly (readonly [method: string, path: string, rout
   ['POST', 'api/interviews/*/turn', interviewTurn],
   ['POST', 'api/interviews/*/finish', finishInterview],
   ['GET', 'api/interviews/*/report', interviewReport],
-  ['POST', 'api/review', reviewDesign],
-  ['GET', 'api/review/usage', getReviewUsage],
   ['GET', 'api/roadmap/next', getRoadmapNext],
   ['GET', 'api/me/documents/*/share', getDocumentShare],
   ['POST', 'api/me/documents/*/share', createDocumentShare],
@@ -195,7 +190,7 @@ export const PAID_ROUTES: readonly (readonly [method: string, path: string, rout
   ['POST', 'api/partner/sessions/*/changes/*', decidePartnerChange],
 ] as const;
 
-/** /api/interviews*, /api/review*, /api/roadmap*, /api/partner* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
+/** /api/interviews*, /api/review* (retired, so 404), /api/roadmap*, /api/partner* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
 export function isPaidPath(parts: string[]): boolean {
   if (parts[0] !== 'api') return false;
   if (parts[1] === 'interviews' || parts[1] === 'review' || parts[1] === 'roadmap' || parts[1] === 'partner') return true;

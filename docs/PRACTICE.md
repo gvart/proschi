@@ -569,9 +569,9 @@ accounts (`VITE_ACCOUNTS` unset, as in local development and the e2e build) has
 nothing to sign in to, so the roadmap is open there.
 
 **Your next steps** is the roadmap's paid part (Pro), gated next to it by
-`aiRoadmapAccess`. After a Pro user's mock interview verdict, and at most once
-a day after an in-depth review, one Claude Haiku call picks the next 3
-steps, each with a one-sentence reason. It gets the verdict (or the review),
+`aiRoadmapAccess`. After a Pro user's mock interview verdict, one Claude
+Haiku call picks the next 3 steps, each with a one-sentence reason. It gets
+the verdict,
 the weakest card topics, and every roadmap problem (solved or not) and card
 topic (with your mastery) by id; it only picks from those, and the server
 drops any pick whose id is not a real problem or topic. The verdict never
