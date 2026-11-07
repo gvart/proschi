@@ -305,3 +305,10 @@ id; don't rewrite old ones.
   stands. `watch` from 80% projected, `over` once used. Free never "holds"
   this Worker whatever its traffic (`limits.cpu_ms` 1000, Email sending),
   which the page says rather than hides.
+- **P41. Visual editing: the code stays the source of truth.** Every canvas
+  edit (palette drop, connect, settings form, delete) is a `dsl/edit.ts`
+  source-to-source edit of the document, the only writer, which keeps
+  comments and formatting; the canvas never holds a model of its own. Each
+  edit reaches the code editor as one isolated undo step, so Ctrl/Cmd+Z
+  undoes it from the canvas or the code. In practice the canvas writes only
+  the solution file: the problem's imported nodes are read-only there.

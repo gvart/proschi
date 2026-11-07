@@ -118,13 +118,16 @@ export function clearPositions(source: string): string {
 /** Words that start statements, so a new node never takes them as its id. */
 const RESERVED = new Set(['title', 'summary', 'group', 'usecase', 'par', 'alt', 'import', 'traffic', 'requirements', 'capacity', 'entity', 'decision', 'test', 'pos', 'direction', 'layout', 'rank']);
 
-/** An id based on `base` (a name or a tech) that no node uses yet: `redis`, `redis2`, … */
-export function uniqueId(source: string, base: string): string {
+/**
+ * An id based on `base` (a name or a tech) that no node uses yet: `redis`, `redis2`, …
+ * `taken` adds ids the text alone does not show, such as the nodes of an imported file.
+ */
+export function uniqueId(source: string, base: string, taken: Iterable<string> = []): string {
   const words = base.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim().split(' ').filter(Boolean);
   let stem = words.join('_').slice(0, 24).replace(/_+$/, '') || 'node';
   if (!/^[a-z_]/.test(stem)) stem = `n${stem}`;
-  const taken = new Set(parse(source).diagram.nodes.map((n) => n.id));
-  const free = (id: string) => !taken.has(id) && !RESERVED.has(id) && !/^x\d+$/.test(id);
+  const used = new Set([...parse(source).diagram.nodes.map((n) => n.id), ...taken]);
+  const free = (id: string) => !used.has(id) && !RESERVED.has(id) && !/^x\d+$/.test(id);
   if (free(stem)) return stem;
   for (let n = 2; ; n++) if (free(`${stem}${n}`)) return `${stem}${n}`;
 }
@@ -138,9 +141,9 @@ export interface NewNode {
   position?: { x: number; y: number };
 }
 
-/** Declares a new node before the first use case and returns it with its id. */
-export function addNode(source: string, node: NewNode): { source: string; id: string } {
-  const id = node.id ?? uniqueId(source, node.name || node.tech || 'node');
+/** Declares a new node before the first use case and returns it with its id, which avoids `taken` too (see uniqueId). */
+export function addNode(source: string, node: NewNode, taken?: Iterable<string>): { source: string; id: string } {
+  const id = node.id ?? uniqueId(source, node.name || node.tech || 'node', taken);
   const parts = [id];
   const name = cleanText(node.name);
   if (name && name !== id) parts.push(quote(name));

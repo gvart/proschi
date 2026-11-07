@@ -133,6 +133,21 @@
   border: 2px solid rgb(var(--c-ink)) !important;
   background: rgb(var(--c-surface)) !important;
 }
+/* On a canvas that edits (.pc-editable), a node's dots grow and fill on hover: they are where a connection starts. */
+.pc-editable .pc-handle {
+  cursor: crosshair;
+  transition: scale 120ms ease-out, background-color 120ms ease-out;
+}
+.pc-editable .react-flow__node:hover .pc-handle,
+.pc-editable .pc-handle.connectingto {
+  scale: 1.45;
+  background: rgb(var(--c-yellow)) !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pc-editable .pc-handle {
+    transition: none;
+  }
+}
 /* A group's handles only let React Flow draw its edges (they follow their route, not the handle), so they stay out of sight. */
 .pc-handle--hidden {
   opacity: 0;

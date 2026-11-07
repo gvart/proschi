@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent, type ReactNode } from 'react';
-import { ChevronRight, Cloud, Copy, FilePlus, FolderInput, FolderPlus, HardDrive, LogIn, MoreHorizontal, PanelLeftClose, Pencil, Search, Trash2, X } from 'lucide-react';
+import { ChevronRight, Cloud, Copy, FilePlus, FolderInput, FolderPlus, HardDrive, LogIn, MoreHorizontal, PanelLeftClose, Pencil, Pin, Search, Trash2, X } from 'lucide-react';
 import { fileNameOf, titleOf, type SavedDiagram } from '../../playground/documents';
 import { confirm } from '../../design/dialogs';
 import { allFolders, baseOf, buildTree, cleanFolder, folderOf, matchesQuery, type FolderNode } from '../../playground/folders';
@@ -37,6 +37,8 @@ interface FileSidebarProps {
   onClose?: () => void;
   /** Wide screens: folds the sidebar into a rail. */
   onCollapse?: () => void;
+  /** Wide screens, opened over the panes from the rail: keeps it open beside them. */
+  onPin?: () => void;
 }
 
 type Editing = { kind: 'file'; id: string } | { kind: 'folder'; path: string } | { kind: 'new-folder'; parent: string } | null;
@@ -51,7 +53,7 @@ const rowBase = 'group flex items-center gap-1 rounded-sm pr-1 text-sm';
 const actionButton = 'p-1 rounded-sm text-muted hover:text-ink hover:bg-ink/10 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 focus-visible:opacity-100 max-md:opacity-100';
 
 /** The editor's diagrams as a folder tree: open, add, rename, move (drag or "Move to"), duplicate and delete them. */
-export default function FileSidebar({ docs, currentId, actions, cloud, onClose, onCollapse }: FileSidebarProps) {
+export default function FileSidebar({ docs, currentId, actions, cloud, onClose, onCollapse, onPin }: FileSidebarProps) {
   const [query, setQuery] = useState('');
   const [collapsed, setCollapsed] = useState<ReadonlySet<string>>(() => new Set(loadJson<string[]>(COLLAPSED_KEY, [])));
   const [editing, setEditing] = useState<Editing>(null);
@@ -397,6 +399,11 @@ export default function FileSidebar({ docs, currentId, actions, cloud, onClose, 
         >
           <FolderPlus size={15} />
         </button>
+        {onPin && (
+          <button type="button" aria-label="Pin sidebar" title="Keep the sidebar open beside the code" onClick={onPin} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
+            <Pin size={15} />
+          </button>
+        )}
         {onCollapse && (
           <button type="button" aria-label="Hide sidebar" title="Hide sidebar" onClick={onCollapse} className="p-1.5 rounded-sm text-muted hover:text-ink hover:bg-ink/10">
             <PanelLeftClose size={15} />

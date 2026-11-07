@@ -247,3 +247,22 @@ export async function expectDiagramFitted(page: Page, bottomLimit = Infinity): P
     )
     .toBe('fitted');
 }
+
+/**
+ * The component palette beside the canvas (a bottom sheet on phones), opened if it is not shown:
+ * it starts hidden, and a selection's settings take its place until the toggle brings it back.
+ */
+export async function componentPalette(page: Page): Promise<Locator> {
+  const toggle = page.getByRole('button', { name: 'Add component' });
+  if ((await toggle.getAttribute('aria-expanded')) !== 'true') await toggle.click();
+  const palette = page.getByRole('region', { name: 'Components' });
+  await expect(palette).toBeVisible();
+  return palette;
+}
+
+/** Adds a component from the palette by searching for it; `name` is the palette entry. */
+export async function addFromPalette(page: Page, search: string, name: string): Promise<void> {
+  const palette = await componentPalette(page);
+  await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
+  await palette.getByRole('button', { name, exact: true }).click();
+}

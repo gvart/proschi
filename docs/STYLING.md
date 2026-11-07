@@ -117,15 +117,21 @@ changing only their part of the line, so comments and alignment survive.
 | Drag a node or group | `pos x,y` is added or updated. Positions inside a group are relative to the group. |
 | Double-click a node | Its display name changes. |
 | Drag from one node's dot to another's | A connection is added. |
-| **Add component**, then pick one | A declaration is added above the first use case. |
+| **Add component** shows the components, grouped by what they do; click one | A declaration is added above the first use case. |
+| Drag a component from that list onto the canvas | The declaration gets the `pos x,y` it was dropped at, and its settings open. |
 | Select a node, then change its settings | Name, tech stack, replicas, owner and description change its declaration. Capacity, latency, availability, cost and shards change its [capacity](HLD.md#capacity) line, which is added when there is none. |
 | Select a connection, then change its label | The label changes, unless it has a JSON or XML payload. |
-| Select, then **Delete** | The node and its connections, or the connection, are removed. |
+| Select, then **Delete** (or right-click, **Delete**) | The node and its connections, or the connection, are removed. |
+| **Ctrl+Z** (**⌘Z** on a Mac) on the canvas | The last edit is undone, as in the code: each canvas edit is one undo step. |
 | **Auto-layout** | Every position is removed. |
 
 Editing a node that was only referenced, never declared, adds its
 declaration above the first use case. A node with `pos x,y` keeps its
 place.
+
+A practice problem's canvas edits your solution file the same way. The
+problem's own nodes stay as they are, and its layout is automatic, so
+nodes are not dragged there.
 
 With traffic in the document, **Overlay: load** colors each node by how busy
 it is and shows its replicas, shards and utilization. Dots flow along the

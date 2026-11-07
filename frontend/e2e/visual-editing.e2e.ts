@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, canvasNodes, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
+import { addFromPalette, answerDialog, canvasNodes, componentPalette, codeEditor, editorText, expect, test, waitForCanvas } from './fixtures';
 
 /**
  * Editing with the mouse: whatever is done on the canvas has to show up in the
@@ -17,14 +17,7 @@ async function newEmptyDiagram(page: Page) {
   await expect(canvasNodes(page)).toHaveCount(0);
 }
 
-/** Adds a component from the palette; `name` is the palette entry. */
-async function addComponent(page: Page, search: string, name: string) {
-  await page.getByRole('button', { name: 'Add component' }).click();
-  const palette = page.getByRole('dialog', { name: 'Add a component' });
-  await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
-  await palette.getByRole('button', { name, exact: true }).click();
-  await expect(palette).toBeHidden();
-}
+const addComponent = addFromPalette;
 
 const node = (page: Page, name: string) => canvasNodes(page).filter({ hasText: name });
 
@@ -162,5 +155,95 @@ test.describe('visual editing', () => {
     await connect(page, 'Redis', 'PostgreSQL');
     await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
     await expect(page.getByText('No problems')).toBeVisible();
+  });
+
+  test('a component dragged onto the canvas is written, selected, and one Ctrl+Z takes it back', async ({ page }) => {
+    const palette = await componentPalette(page);
+    const pane = page.locator('.react-flow__pane');
+    const box = (await pane.boundingBox())!;
+    await palette.getByRole('button', { name: 'Database', exact: true }).dragTo(pane, { targetPosition: { x: box.width - 60, y: box.height - 60 } });
+    await expect.poll(() => editorText(page)).toMatch(/^database "Database" \[Database\] pos -?\d+,-?\d+$/m);
+    await expect(canvasNodes(page)).toHaveCount(1);
+    // Selected: its settings take the palette's place.
+    await expect(page.getByRole('region', { name: 'Database settings' })).toBeVisible();
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect.poll(() => editorText(page)).not.toContain('Database');
+    await expect(canvasNodes(page)).toHaveCount(0);
+    await page.keyboard.press('ControlOrMeta+Shift+z');
+    await expect.poll(() => editorText(page)).toContain('[Database]');
+  });
+
+  test('replicas set in the settings form are written to the code', async ({ page }) => {
+    await addComponent(page, 'postgres', 'PostgreSQL');
+    await node(page, 'PostgreSQL').click();
+    const settings = page.getByRole('region', { name: 'PostgreSQL settings' });
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await expect.poll(() => editorText(page)).toContain('postgresql "PostgreSQL" [PostgreSQL] x3');
+    await settings.getByLabel('Name').fill('Orders DB');
+    await settings.getByLabel('Name').press('Enter');
+    await expect.poll(() => editorText(page)).toContain('postgresql "Orders DB" [PostgreSQL] x3');
+  });
+
+  test('the connect hint shows for two unconnected components, until the first connection', async ({ page }) => {
+    await addComponent(page, 'redis', 'Redis');
+    await expect(page.getByRole('note').filter({ hasText: 'Connect two components' })).toHaveCount(0);
+    await addComponent(page, 'postgres', 'PostgreSQL');
+    const hint = page.getByRole('note').filter({ hasText: 'Connect two components' });
+    await expect(hint).toBeVisible();
+    await connect(page, 'Redis', 'PostgreSQL');
+    await expect(hint).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole('note').filter({ hasText: 'Connect two components' })).toHaveCount(0);
+  });
+
+  test('right-click opens a menu that deletes the component', async ({ page }) => {
+    await addComponent(page, 'redis', 'Redis');
+    await addComponent(page, 'postgres', 'PostgreSQL');
+    await layoutSettled(page);
+    await node(page, 'Redis').click({ button: 'right' });
+    const menu = page.getByRole('menu', { name: 'Redis actions' });
+    await menu.getByRole('menuitem', { name: /Delete/ }).click();
+    await expect(canvasNodes(page)).toHaveCount(1);
+    await expect.poll(() => editorText(page)).not.toContain('[Redis]');
+  });
+
+  test('the palette is grouped by what components do, and hides and shows from the toolbar', async ({ page }) => {
+    const palette = await componentPalette(page);
+    for (const group of ['Clients', 'Edge & CDN', 'Compute & APIs', 'Data stores', 'Caches', 'Queues & streams', 'External']) {
+      await expect(palette.getByRole('region', { name: group })).toBeVisible();
+    }
+    await palette.getByRole('button', { name: 'Hide components' }).click();
+    await expect(palette).toBeHidden();
+    await page.reload();
+    await expect(page.getByRole('region', { name: 'Components' })).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Add component' })).toHaveAttribute('aria-expanded', 'false');
+  });
+});
+
+test.describe('visual editing in practice', () => {
+  test('a cache from the palette goes into the solution; the problem’s own nodes stay', async ({ page }) => {
+    await page.goto('practice/#/url-shortener');
+    await expect(codeEditor(page)).toBeVisible();
+    await waitForCanvas(page, 2);
+    await addFromPalette(page, 'cache', 'Cache');
+    await expect.poll(() => editorText(page)).toMatch(/^cache "Cache" \[Cache\]$/m);
+    expect(await editorText(page)).toMatch(/^import "problem.proschi"/);
+    await canvasNodes(page).filter({ hasText: 'Cache' }).click();
+    const settings = page.getByRole('region', { name: 'Cache settings' });
+    await expect(settings).toBeVisible();
+    // Capacity is the problem's: no rps or latency fields here.
+    await expect(settings.getByLabel('Latency')).toHaveCount(0);
+    await settings.getByRole('button', { name: 'More replicas' }).click();
+    await expect.poll(() => editorText(page)).toMatch(/^cache "Cache" \[Cache\] x2$/m);
+
+    // The visitor is declared in problem.proschi: read-only, and Delete leaves it.
+    const before = await editorText(page);
+    await canvasNodes(page).filter({ hasText: 'Visitor' }).click();
+    await expect(page.getByRole('region', { name: 'Visitor settings' }).getByText('Declared in problem.proschi')).toBeVisible();
+    await page.keyboard.press('Delete');
+    await expect(page.getByRole('status').filter({ hasText: 'problem.proschi' })).toBeVisible();
+    expect(await editorText(page)).toBe(before);
   });
 });

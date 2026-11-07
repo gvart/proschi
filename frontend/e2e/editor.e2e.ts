@@ -1,6 +1,6 @@
 import { readFile } from 'node:fs/promises';
 import type { Page } from '@playwright/test';
-import { appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
+import { addFromPalette, appendCode, canvasNodes, codeEditor, editorText, expect, expectDiagramFitted, test, waitForCanvas } from './fixtures';
 
 /** The e-commerce example has six components and a group. */
 const DEFAULT_NODES = 6;
@@ -69,11 +69,7 @@ test.describe('editor', () => {
 
   test('a component added from the palette is edited in its settings', async ({ page }) => {
     const before = await canvasNodes(page).count();
-    await page.getByRole('button', { name: 'Add component' }).click();
-    const palette = page.getByRole('dialog', { name: 'Add a component' });
-    await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
-    await palette.getByRole('button', { name: 'Redis', exact: true }).click();
-    await expect(palette).toBeHidden();
+    await addFromPalette(page, 'redis', 'Redis');
     await expect(canvasNodes(page)).toHaveCount(before + 1);
     expect(await editorText(page)).toContain('redis "Redis" [Redis]');
 
