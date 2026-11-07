@@ -14,13 +14,15 @@
 
 export const SONNET = 'claude-sonnet-5-5';
 export const HAIKU = 'claude-haiku-5-5';
-export type Model = typeof SONNET | typeof HAIKU;
+/** Deep mode (docs/design/paid-plans.md P31): Design partner on Opus. */
+export const OPUS = 'claude-opus-5-5';
+export type Model = typeof SONNET | typeof HAIKU | typeof OPUS;
 
 export const API_VERSION = '2026-10-21';
 export const DEFAULT_BASE_URL = 'https://api.anthropic.com';
 /** A whole request, retries excluded. Interview turns are short; the verdict thinks. */
 export const DEFAULT_TIMEOUT_MS = 90_000;
-/** Server-side refusal fallback (Claude API only; Sonnet only, Haiku has none). */
+/** Server-side refusal fallback (Claude API only; Sonnet and Opus, Haiku has none). */
 const FALLBACK_BETA = 'server-side-fallback-2026-07-01';
 
 /** The secrets the client needs (P10: without the key the AI routes answer 501). */
@@ -149,8 +151,8 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
   const url = `${(env.AI_GATEWAY_URL || DEFAULT_BASE_URL).replace(/\/+$/, '')}/v1/messages`;
 
   function body(req: MessageRequest, stream: boolean): string {
-    // Sonnet: on a policy decline the API re-runs the request on a fallback model in the same call.
-    return JSON.stringify({ ...req, ...(req.model === SONNET ? { fallbacks: 'default' } : {}), ...(stream ? { stream: true } : {}) });
+    // Sonnet and Opus: on a policy decline the API re-runs the request on a fallback model in the same call.
+    return JSON.stringify({ ...req, ...(req.model !== HAIKU ? { fallbacks: 'default' } : {}), ...(stream ? { stream: true } : {}) });
   }
 
   /** Sends until a 2xx or a final error; the returned response's body is unread. The timer covers the body too: call `done` after reading it. */
@@ -160,7 +162,7 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
       'content-type': 'application/json',
       'x-api-key': env.ANTHROPIC_API_KEY,
       'anthropic-version': API_VERSION,
-      ...(req.model === SONNET ? { 'anthropic-beta': FALLBACK_BETA } : {}),
+      ...(req.model !== HAIKU ? { 'anthropic-beta': FALLBACK_BETA } : {}),
       ...(env.AI_GATEWAY_URL && env.AI_GATEWAY_TOKEN ? { 'cf-aig-authorization': `Bearer ${env.AI_GATEWAY_TOKEN}` } : {}),
     };
     for (let attempt = 0; ; attempt++) {

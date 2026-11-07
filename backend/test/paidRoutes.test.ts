@@ -45,6 +45,7 @@ function claude(): void {
     if (!url.startsWith('https://api.anthropic.com/')) return real(input, init);
     const text = String(init?.body);
     const body = JSON.parse(text) as { model: string; stream?: boolean };
+    if (text.includes('You are the Design partner')) return messageResponse(JSON.stringify({ message: 'Looks sound.', questions: [], changes: [] }));
     if (body.model === HAIKU) return messageResponse(text.includes('"picks"') ? JSON.stringify({ picks: [] }) : JSON.stringify({ kind: 'focus', text: 'Ask about writes.', covered: [] }), { model: HAIKU });
     if (body.stream) return sseResponse(streamEvents('About 100M new links a month.'));
     return messageResponse(JSON.stringify(text.includes('wentWell') ? VERDICT : REVIEW));
@@ -96,6 +97,12 @@ async function startedInterview(who: Who): Promise<string> {
   const res = await send(who, 'POST', '/api/interviews', { problem: 'url-shortener', minutes: 45 });
   expect(res.status).toBe(201);
   return ((await res.json()) as { interview: { id: string } }).interview.id;
+}
+
+async function partnerSession(who: Who): Promise<string> {
+  const res = await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } });
+  expect(res.status).toBe(201);
+  return ((await res.json()) as { id: string }).id;
 }
 
 async function syncedDocument(who: Who, id = 'doc1'): Promise<void> {
@@ -201,6 +208,24 @@ const CASES: Record<string, Case> = {
   'GET api/review/usage': {
     free: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
     pro: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
+  },
+  // design_partner is for anyone signed in; the credits decide how much.
+  'POST api/partner/sessions': {
+    free: async (who) => expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201),
+    pro: async (who) => expect((await send(who, 'POST', '/api/partner/sessions', { context: { kind: 'editor' } })).status).toBe(201),
+  },
+  'GET api/partner/sessions/*': {
+    free: async (who) => expect((await send(who, 'GET', `/api/partner/sessions/${await partnerSession(who)}`)).status).toBe(200),
+    pro: async (who) => expect((await send(who, 'GET', `/api/partner/sessions/${await partnerSession(who)}`)).status).toBe(200),
+  },
+  'POST api/partner/sessions/*/turns': {
+    free: async (who) => expect((await send(who, 'POST', `/api/partner/sessions/${await partnerSession(who)}/turns`, { intent: 'review', message: '', source: SOURCE })).status).toBe(200),
+    pro: async (who) => expect((await send(who, 'POST', `/api/partner/sessions/${await partnerSession(who)}/turns`, { intent: 'review', message: '', source: SOURCE })).status).toBe(200),
+  },
+  'POST api/partner/sessions/*/changes/*': {
+    // An unknown change of the user's own chat: past the feature check, 404.
+    free: async (who) => expect((await send(who, 'POST', `/api/partner/sessions/${await partnerSession(who)}/changes/nope`, { decision: 'accepted' })).status).toBe(404),
+    pro: async (who) => expect((await send(who, 'POST', `/api/partner/sessions/${await partnerSession(who)}/changes/nope`, { decision: 'accepted' })).status).toBe(404),
   },
   'GET api/roadmap/next': {
     free: async (who) => planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap'),

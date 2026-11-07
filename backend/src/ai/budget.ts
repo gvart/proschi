@@ -1,4 +1,4 @@
-import { HAIKU, NO_USAGE, SONNET, type Model, type Usage } from './client';
+import { HAIKU, NO_USAGE, OPUS, SONNET, type Model, type Usage } from './client';
 
 /**
  * The limits of one AI interview (docs/design/paid-plans.md, P3): a hard
@@ -48,6 +48,7 @@ export function billedTokens(total: SessionUsage): number {
 const PRICES: Record<Model, { input: number; output: number; cacheWrite: number; cacheRead: number }> = {
   [SONNET]: { input: 2, output: 10, cacheWrite: 4, cacheRead: 0.2 },
   [HAIKU]: { input: 0.1, output: 0.5, cacheWrite: 0.2, cacheRead: 0.01 },
+  [OPUS]: { input: 4, output: 20, cacheWrite: 8, cacheRead: 0.2 },
 };
 
 /** What a session cost, for metering and the admin's numbers. */

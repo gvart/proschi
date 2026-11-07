@@ -7,6 +7,7 @@ import { pruneEvents, recordEvent } from './events';
 import { pruneInterviewTranscripts } from './interviews';
 import { errorText, log } from './log';
 import { pruneDailyCounts } from './metrics';
+import { prunePartnerSessions } from './partner';
 import { sendReminders } from './reminders';
 import { pruneHolds } from './meter';
 
@@ -63,6 +64,7 @@ export async function dailyCron(env: Env): Promise<void> {
   await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
   await runJob(env, 'interview_transcripts', async () => ({ cleared: await pruneInterviewTranscripts(env) }));
   await runJob(env, 'credit_holds', async () => ({ deleted: await pruneHolds(env) }));
+  await runJob(env, 'partner_transcripts', async () => ({ deleted: await prunePartnerSessions(env) }));
   await runJob(env, 'billing_webhooks', async () => ({ deleted: await pruneBillingWebhooks(env) }));
 }
 

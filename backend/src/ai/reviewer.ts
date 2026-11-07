@@ -24,7 +24,7 @@ import { fence } from './prompts';
  * source), never fetching anything; the root document resolves too, so a
  * cycle back to it is reported (as the editor's filesResolver does).
  */
-function sentFilesResolver(files: Record<string, string>, rootPath: string | undefined): ImportResolver {
+export function sentFilesResolver(files: Record<string, string>, rootPath: string | undefined): ImportResolver {
   const resolve = mapResolver(files);
   return (importPath, fromPath) => {
     if (rootPath !== undefined && joinImportPath(fromPath, importPath) === rootPath) return { path: rootPath, source: '' };
@@ -131,7 +131,7 @@ export function parseModelReview(text: string, nodeIds: ReadonlySet<string>): De
 
 const json = (v: unknown) => JSON.stringify(v, null, 1);
 
-function testsText(req: DesignReviewRequest): string {
+export function testsText(req: DesignReviewRequest): string {
   const t = req.tests;
   if (!t) return 'The design has no tests (no requirements block).';
   if (t.blocked === 'errors') return 'The design has parse errors, so no test ran (see diagnostics in <design_summary>).';

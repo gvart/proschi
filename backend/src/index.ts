@@ -55,6 +55,7 @@ import { createVersion, deleteVersion, getVersion, listVersions, resolveVersion 
 import { changePlan, createCheckout, createPortal, getPlan, webhook as billingWebhook } from './billing';
 import { getEstimates, getUsage } from './meter';
 import { finishInterview, getInterview, interviewHistory, interviewTurn, listInterviews, startInterview } from './interviews';
+import { createPartnerSession, decidePartnerChange, getPartnerSession, postPartnerTurn } from './partner';
 import { getRoadmapNext } from './roadmap';
 
 /**
@@ -140,6 +141,10 @@ import { getRoadmapNext } from './roadmap';
  *   GET    /api/interviews/<id>            one session with its transcript, to resume
  *   GET    /api/interviews                 the user's sessions and the credits left
  *   GET    /api/interviews/history         verdict summaries with skill scores, newest first: all on Pro, the latest only on free
+ *   POST   /api/partner/sessions {context, deep?}   a Design partner chat: {id} (409 interview_active; 501 without the AI key)
+ *   GET    /api/partner/sessions/<id>      the chat with its turns
+ *   POST   /api/partner/sessions/<id>/turns {intent, message, source, files?, changeId?}   one turn: {turn, credits} (402 no_credits, 409 turn_in_progress)
+ *   POST   /api/partner/sessions/<id>/changes/<changeId> {decision}   accepted or rejected: 204
  *   GET    /api/roadmap/next[?interview=]  the AI roadmap's next 3 picks, Pro (402 plan_required, 501 without the AI key)
  *   GET    /s/<id>                          a short link: preview meta tags, then the editor
  *   GET    /s/<id>.png                      its preview image (→ /og.png without one)
@@ -177,12 +182,16 @@ export const PAID_ROUTES: readonly (readonly [method: string, path: string, rout
   ['GET', 'api/me/documents/*/share', getDocumentShare],
   ['POST', 'api/me/documents/*/share', createDocumentShare],
   ['DELETE', 'api/me/documents/*/share', revokeDocumentShare],
+  ['POST', 'api/partner/sessions', createPartnerSession],
+  ['GET', 'api/partner/sessions/*', getPartnerSession],
+  ['POST', 'api/partner/sessions/*/turns', postPartnerTurn],
+  ['POST', 'api/partner/sessions/*/changes/*', decidePartnerChange],
 ] as const;
 
-/** /api/interviews*, /api/review*, /api/roadmap* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
+/** /api/interviews*, /api/review*, /api/roadmap*, /api/partner* and /api/me/documents/<id>/share: dispatched only through PAID_ROUTES. */
 export function isPaidPath(parts: string[]): boolean {
   if (parts[0] !== 'api') return false;
-  if (parts[1] === 'interviews' || parts[1] === 'review' || parts[1] === 'roadmap') return true;
+  if (parts[1] === 'interviews' || parts[1] === 'review' || parts[1] === 'roadmap' || parts[1] === 'partner') return true;
   return parts[1] === 'me' && parts[2] === 'documents' && parts[4] === 'share';
 }
 
