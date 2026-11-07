@@ -29,13 +29,14 @@ const answer = (a: { message?: string; questions?: unknown[]; changes?: unknown[
 const REPLICA = { title: 'Replicate the database', why: 'One Orders database is a single point of failure.', edits: [{ find: 'db   "Orders"   [PostgreSQL]', replace: 'db   "Orders"   [PostgreSQL] x2' }] };
 const MISSING = { title: 'Add a cache', why: 'Reads.', edits: [{ find: 'cache "Nope"', replace: 'x' }] };
 
-/** The meter, mocked: holds pass with `hold-1`, a settle charges 1.5 credits of 10. */
+/** The meter, mocked: holds (and top-ups) pass with `hold-1`, a settle charges 1.5 credits of 10. */
 function meter(holdOk = true) {
   return {
     estimate: vi.spyOn(partnerBilling, 'estimateMc').mockReturnValue(2_000),
     hold: vi.spyOn(partnerBilling, 'hold').mockResolvedValue(holdOk ? { ok: true, holdId: 'hold-1' } : { ok: false, neededMc: 2_000, balanceMc: 500 }),
     settle: vi.spyOn(partnerBilling, 'settle').mockResolvedValue({ chargedMc: 1_500, balanceMc: 8_500 }),
     release: vi.spyOn(partnerBilling, 'release').mockResolvedValue(undefined),
+    topUp: vi.spyOn(partnerBilling, 'topUp').mockResolvedValue(true),
   };
 }
 
@@ -199,24 +200,62 @@ describe('Design partner: a turn', () => {
     expect(((await (await get(token, id)).json()) as { turns: unknown[] }).turns).toEqual([]);
   });
 
-  it('asks again once for an answer that does not validate, and charges only the answer kept', async () => {
+  it('asks again once for an answer that does not validate, topping up the hold first, and charges both answers (P34)', async () => {
     const { token } = await signedInUser();
     const id = await session(token);
     const calls = mockClaude((_r, n) => (n === 0 ? messageResponse('{"nope": true}', { usage: { output_tokens: 999 } }) : answer()));
     const m = meter();
     expect((await turn(token, id, {})).status).toBe(200);
     expect(calls).toHaveLength(2);
-    expect(m.settle.mock.calls[0][2]).toEqual([expect.objectContaining({ output_tokens: 50 })]);
+    expect(m.topUp).toHaveBeenCalledOnce();
+    expect(m.topUp.mock.calls[0][1]).toBe('hold-1');
+    expect(m.topUp.mock.invocationCallOrder[0]).toBeLessThan(m.settle.mock.invocationCallOrder[0]);
+    expect(m.settle.mock.calls[0][2]).toEqual([expect.objectContaining({ output_tokens: 999 }), expect.objectContaining({ output_tokens: 50 })]);
   });
 
-  it('releases the hold after two answers that do not validate', async () => {
+  it('does not ask again when the hold cannot be topped up, and charges the answer that did not validate', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const calls = mockClaude(() => messageResponse('not json', { usage: { output_tokens: 700 } }));
+    const m = meter();
+    m.topUp.mockResolvedValue(false);
+    const res = await turn(token, id, {});
+    expect(res.status).toBe(502);
+    expect(calls).toHaveLength(1);
+    expect(m.settle.mock.calls[0][2]).toEqual([expect.objectContaining({ model: SONNET, output_tokens: 700 })]);
+    expect(m.release).not.toHaveBeenCalled();
+  });
+
+  it('charges both answers when neither validates (P34)', async () => {
     const { token } = await signedInUser();
     const id = await session(token);
     mockClaude(() => messageResponse('not json'));
     const m = meter();
     expect((await turn(token, id, {})).status).toBe(502);
-    expect(m.release).toHaveBeenCalledOnce();
-    expect(m.settle).not.toHaveBeenCalled();
+    expect(m.release).not.toHaveBeenCalled();
+    expect(m.settle.mock.calls[0][2]).toHaveLength(2);
+  });
+
+  it('charges an answer cut off at max_tokens ("write the longest answer you can") for its real usage', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const calls = mockClaude(() => messageResponse('{"message": "an endless', { stop: 'max_tokens', usage: { input_tokens: 2000, output_tokens: 16_000 } }));
+    const m = meter();
+    const res = await turn(token, id, {});
+    expect(res.status).toBe(502);
+    expect(calls).toHaveLength(1);
+    expect(m.settle).toHaveBeenCalledWith(expect.anything(), 'hold-1', [expect.objectContaining({ model: SONNET, input_tokens: 2000, output_tokens: 16_000 })], false);
+    expect(m.release).not.toHaveBeenCalled();
+    expect(((await (await get(token, id)).json()) as { turns: unknown[] }).turns).toEqual([]);
+  });
+
+  it('charges a refusal for its real usage, at the model that answered', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    mockClaude(() => messageResponse('', { stop: 'refusal', model: 'claude-opus-5-5', usage: { input_tokens: 1500 } }));
+    const m = meter();
+    expect((await turn(token, id, {})).status).toBe(502);
+    expect(m.settle.mock.calls[0][2]).toEqual([expect.objectContaining({ model: 'claude-opus-5-5', input_tokens: 1500 })]);
   });
 
   it('gives a change that does not apply one repair call, charged at its real usage', async () => {
@@ -231,6 +270,33 @@ describe('Design partner: a turn', () => {
     expect(body.turn.message).toBe('Fixed.');
     expect(body.turn.changes!.map((c) => c.result.ok)).toEqual([true]);
     expect(m.settle.mock.calls[0][2]).toHaveLength(2);
+  });
+
+  it('tops the hold up to the repair’s worst case, its input including the first answer, before the repair call', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const long = 'x'.repeat(30_000);
+    const calls = mockClaude((_r, n) => (n === 0 ? answer({ message: long, changes: [MISSING] }) : answer({ message: 'Fixed.', changes: [REPLICA] })));
+    const m = meter();
+    expect((await turn(token, id, {})).status).toBe(200);
+    expect(calls).toHaveLength(2);
+    expect(m.topUp).toHaveBeenCalledOnce();
+    expect(m.topUp.mock.invocationCallOrder[0]).toBeLessThan(m.settle.mock.invocationCallOrder[0]);
+    // Sized by the repair's input: the turn's, the first answer and the repair message.
+    const [first, repair] = m.estimate.mock.calls.map((c) => c[2]);
+    expect(repair).toBeGreaterThan(first + 7_000);
+  });
+
+  it('returns the first answer’s failed change without repairing when the hold can’t be topped up, charging the first call', async () => {
+    const { token } = await signedInUser();
+    const id = await session(token);
+    const calls = mockClaude(() => answer({ changes: [MISSING] }));
+    const m = meter();
+    m.topUp.mockResolvedValue(false);
+    const body = (await (await turn(token, id, {})).json()) as TurnJson;
+    expect(calls).toHaveLength(1);
+    expect(body.turn.changes!.map((c) => c.result.ok)).toEqual([false]);
+    expect(m.settle.mock.calls[0][2]).toHaveLength(1);
   });
 
   it('sends what still fails after the repair as {ok: false, reason}', async () => {

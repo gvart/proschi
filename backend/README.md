@@ -337,13 +337,17 @@ P31, docs/impl/design-partner.md "Credits").
 - **Price.** A call is charged twice what it cost us: the model's price per
   token (`PRICES` in `src/meter.ts`, with cache reads and writes), times 2,
   in euros at `CREDITS_USD_EUR` (unset: 0.95), at €0.01 a credit, rounded up
-  to a millicredit. Failed calls and the retry of a malformed answer are
-  charged nothing.
+  to a millicredit. Every answer the model gave is charged, a refused, cut-off
+  or malformed one and its retry included (P34); a call that failed before
+  the model answered (network, timeout, rate limit, overloaded, 5xx) is
+  charged nothing (`AiError.charge` says which, `settleFailed` applies it).
 - **Ledger** (`src/credits.ts`, table `credits`, migration 0024): an
   append-only list of rows in millicredits (`delta_mc`), in one of three
   buckets. A balance is summed, never stored. `monthly`: Pro's 800 or Max's
   2200, granted when the balance is first read in a UTC calendar month and
-  gone at its end (an upgrade mid-month adds the difference). `signup`: 100
+  gone at its end (an upgrade mid-month adds Max's difference, prorated to
+  the rest of the month, once its proration invoice's `order.paid` arrives;
+  a downgrade takes back what is unspent of it, P35). `signup`: 100
   once, given by `grantSignupCredits(env, userId, identityKey)` after the
   sign-up's own checks, once per account and per identity (a keyed hash in
   `signup_identities` outlives a deleted account). `topup`: bought or
@@ -356,7 +360,9 @@ P31, docs/impl/design-partner.md "Credits").
   if the balance less the unexpired holds covers it, so parallel calls can't
   overdraw. After it, `settle` charges the real cost, never more than the
   hold, in one batch with the hold's deletion (a row in `credit_charges`
-  keeps what each call charged and cost). `release` frees a hold. Holds
+  keeps what each call charged and cost). `topUp` adds a second call's worst
+  case to a hold before it runs (a retry, a repair), or refuses and the call
+  is skipped. `release` frees a hold. Holds
   expire after 5 minutes (a mock interview's verdict hold lasts its wall
   clock plus 30 minutes); the daily cron prunes old ones (`credit_holds`).
   Too few credits answers `402 {error: 'no_credits', needed, balance}`, in
@@ -574,8 +580,6 @@ How it works (`src/roadmap.ts`, `src/ai/roadmap.ts`):
   `waitUntil`, so it never waits on them; the page asks again at about 2, 5
   and 10 s. A failure (the model, the check, the database) is logged and
   never fails the verdict.
-- An AI design review refreshes the picks after its answer is sent, when
-  the newest are a day old or missing.
 - Picks are in Download my data and deleted with the account.
 
 ### Open Graph images
@@ -625,7 +629,13 @@ Email and password, next to GitHub and Google (`src/emailAuth.ts`,
   address: lowercase; Gmail and Googlemail without dots and `+tag`; other
   domains without `+tag`), so one mailbox is one account, deleting it leaves
   the usual tombstone, and Settings can link or unlink it. `email_logins`
-  keeps the address as typed (lowercased) and the password hash.
+  keeps the address as typed (lowercased) and the password hash. A link
+  (`link: true`, signed in) gets its identity only when that account, signed
+  in, opens its confirmation link (else 400, the link kept): until then it
+  signs nothing in, gets no reset link and no password from a sign-up, and a
+  sign-up of the same address deletes it and its links and starts a fresh
+  account, so an inbox's owner can't be confirmed into an account that
+  linked their address.
 - **Passwords**: PBKDF2-SHA256 through WebCrypto, 100,000 iterations (the
   most Cloudflare's runtime allows), a random 16-byte salt each, stored as
   `pbkdf2$sha256$<iterations>$<salt>$<hash>`, compared in constant time. At
@@ -663,7 +673,7 @@ Email and password, next to GitHub and Google (`src/emailAuth.ts`,
   `node scripts/disposable.mjs` from the community list), none of the
   account's identities (provider and user id, the normalized address, the
   verified address GitHub or Google gives) is in `signup_claims` or
-  `account_tombstones`, and its sign-up IP's HMAC got credits for fewer than
+  `account_tombstones`, and its sign-up IP's HMAC (of the /64 for IPv6) got credits for fewer than
   3 accounts in 7 days (`signup_ip_grants`). The grant goes through
   `src/signupCredits.ts` to the ledger, keyed by the normalized verified
   address (`${provider}\n${subject}` for an OAuth account without one). The

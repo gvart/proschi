@@ -10,7 +10,7 @@ import type { Env } from './env';
 import { can, planRequired, requireFeature, type FeatureRoute } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
-import { balanceMc, CALLS, hold, HOLD_TTL_MS, interviewTurnHoldMc, noCredits, release, settle, verdictHoldMc, worstMc, type Usage as MeterUsage } from './meter';
+import { balanceMc, CALLS, hold, HOLD_TTL_MS, interviewTurnHoldMc, noCredits, release, settle, settleFailed, topUp, verdictHoldMc, worstMc } from './meter';
 import { recommendAfterInterview } from './roadmap';
 
 /**
@@ -40,12 +40,15 @@ import { recommendAfterInterview } from './roadmap';
  *
  * Credits (P26–P28, src/meter.ts): starting needs enough for the verdict and
  * one turn, and holds the verdict's worst case for the whole session. Each
- * turn holds its own worst case, then is charged what its calls really cost
- * (a failed hint isn't charged); a failed turn or verdict is charged nothing.
+ * turn holds its own worst case, then is charged what its calls really cost.
+ * Every answer the model gave is charged, a refused, cut-off or malformed one
+ * too (P34); a call that failed before the model answered (network, timeout,
+ * overloaded) is charged nothing.
  * When a turn can't be held (0 credits), it answers 402 no_credits with
  * `wrapUp: true` and the session moves to its wrap-up: the verdict still runs
- * from the hold it kept. Of a verdict asked for again after a malformed
- * answer, only the answer that validated is charged. Every call's tokens are
+ * from the hold it kept. A verdict that did not validate is asked for again
+ * only once the hold is topped up for it, and both are charged; a charged
+ * failed verdict uses up its hold, so the next try holds again. Every call's tokens are
  * added to the stored total, failed ones too, and the token cap is checked
  * against it. The limits (60-minute wall clock, token cap, turns, message
  * and design size) are the engine's; the routes add a body cap, one turn at a
@@ -209,11 +212,6 @@ export const startInterview = interviewRoute((env) => env.INTERVIEW_START_LIMITE
   return json({ interview: await view(ctx, row), credits: await creditsView(ctx.env, user.id) }, 201, NO_STORE);
 });
 
-/** A turn's usage as the meter charges it: each model's, the models with none left out. */
-function meterUsage(used: SessionUsage, models: readonly Model[] = [SONNET, HAIKU]): MeterUsage[] {
-  return models.filter((m) => used[m].input_tokens + used[m].output_tokens + used[m].cache_creation_input_tokens + used[m].cache_read_input_tokens > 0).map((m) => ({ model: m, ...used[m] }));
-}
-
 /**
  * At 0 credits (P28): the session moves to its wrap-up, so the candidate
  * asks for the verdict, which runs from the hold the session kept. The state
@@ -259,7 +257,7 @@ const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.str
  *   event: hint   {kind, text}           the coaching card (absent when it failed)
  *   event: grade  {passed, total, …}     the server's run of the design sent (only with one)
  *   event: done   {reply, phase, elapsedMs, turns}
- *   event: error  {error}                instead of done, when the turn failed midway (it is charged nothing)
+ *   event: error  {error}                instead of done, when the turn failed midway (charged for what the model answered, P34)
  *
  * 402 no_credits {needed, balance, wrapUp: true} when the turn can't be held:
  * the session is in its wrap-up then, and the verdict runs from its own hold.
@@ -321,8 +319,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
     void writer.abort();
     const used = early instanceof AiError ? failedUsage(early) : emptyUsage();
     await addTokens(DB, id, used, lease).run();
-    // Refused or failed before the reply: charged nothing (P27).
-    await release(ctx.env, held.holdId);
+    // Refused before the reply: charged what the model answered; failed before any answer: charged nothing (P34).
+    await settleFailed(ctx.env, held.holdId, early, 'mock_interview', false);
     if (early instanceof InterviewLimitError) return json({ error: early.reason, message: early.message }, limitStatus(early), NO_STORE);
     if (early instanceof AiError) {
       log('warn', 'AI interview turn failed', { requestId: ctx.requestId, kind: early.kind, status: early.status });
@@ -339,8 +337,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
       const result = await run;
       const s = result.state;
       used = usageSince(s.usage, state.usage);
-      // The reply, and the hint when it came (a failed hint isn't charged).
-      await settle(ctx.env, held.holdId, meterUsage(used, result.hint ? [SONNET, HAIKU] : [SONNET]), 'mock_interview', false);
+      // The reply, and the hint whenever the model answered it (P34).
+      await settle(ctx.env, held.holdId, result.billed, 'mock_interview', false);
       charged = true;
       const [, saved] = await DB.batch([
         addTokens(DB, id, used, lease),
@@ -364,8 +362,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
     } catch (e) {
       log('warn', 'AI interview turn failed midway', { requestId: ctx.requestId, error: errorText(e).split('\n')[0] });
       if (e instanceof AiError) used = failedUsage(e);
-      // A turn that failed is charged nothing (P27); one whose state lost to another was charged for its calls.
-      if (!charged) await release(ctx.env, held.holdId).catch((err: unknown) => log('error', 'AI interview hold not released', { requestId: ctx.requestId, error: errorText(err) }));
+      // A turn cut off or refused midway is charged what the model answered, one that failed on the infrastructure's side nothing (P34); one whose state lost to another was charged for its calls.
+      if (!charged) await settleFailed(ctx.env, held.holdId, e, 'mock_interview', false).catch((err: unknown) => log('error', 'AI interview hold not released', { requestId: ctx.requestId, error: errorText(err) }));
       await addTokens(DB, id, used, lease)
         .run()
         .catch((err: unknown) => log('error', 'AI interview usage not saved', { requestId: ctx.requestId, error: errorText(err) }));
@@ -418,12 +416,14 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
     await DB.prepare("UPDATE ai_interviews SET status = 'active' WHERE id = ? AND status = 'finishing'").bind(id).run();
     return noCredits(held.neededMc, held.balanceMc);
   }
+  // A malformed verdict is asked for again only once the hold covers a second one (P34).
+  const more = () => topUp(ctx.env, held.holdId, user.id, verdictHoldMc(ctx.env, deep));
   try {
-    const result = await verdict({ client: createClient(ctx.env), context, now, tokens: claimed.tokens }, state, { deep });
+    const result = await verdict({ client: createClient(ctx.env), context, now, tokens: claimed.tokens }, state, { deep, more });
     const s = result.state;
     const used = usageSince(s.usage, state.usage);
-    // Only the answer that validated is charged (P27), at the price of the model asked for.
-    await settle(ctx.env, held.holdId, [{ model: result.model, ...result.billable }], 'verdict', deep);
+    // Every answer the model gave is charged (P34), at the price of the model asked for.
+    await settle(ctx.env, held.holdId, result.billed, 'verdict', deep);
     await DB.prepare("UPDATE ai_interviews SET status = 'finished', state = ?, version = version + 1, ended_at = ?, tokens = tokens + ?, cost_usd = cost_usd + ?, verdict = ?, verdict_hold = NULL, deep = ? WHERE id = ?")
       .bind(JSON.stringify(s), Date.now(), billedTokens(used), sessionCostUsd(used), JSON.stringify(result.verdict), deep ? 1 : 0, id)
       .run();
@@ -431,11 +431,16 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
     ctx.exec.waitUntil(pickAfterVerdict(ctx, user, id, row.problem_id, result.verdict));
   } catch (e) {
     const used = e instanceof AiError ? failedUsage(e, deep ? OPUS : SONNET) : emptyUsage();
-    await DB.prepare("UPDATE ai_interviews SET tokens = tokens + ?, cost_usd = cost_usd + ?, status = CASE WHEN status = 'finishing' THEN 'active' ELSE status END WHERE id = ?")
+    // A verdict the model answered (refused, cut off, malformed) is charged from the hold, which is then gone: the next try holds again (P34).
+    const charge = e instanceof AiError ? e.charge : [];
+    if (charge.length) await settle(ctx.env, held.holdId, charge, 'verdict', deep);
+    await DB.prepare(
+      `UPDATE ai_interviews SET tokens = tokens + ?, cost_usd = cost_usd + ?, status = CASE WHEN status = 'finishing' THEN 'active' ELSE status END${charge.length ? ', verdict_hold = NULL' : ''} WHERE id = ?`,
+    )
       .bind(billedTokens(used), sessionCostUsd(used), id)
       .run();
-    // A failed verdict is charged nothing (P27); the session's own hold stays for the next try, a fresh one is let go.
-    if (!kept) await release(ctx.env, held.holdId);
+    // Failed before the model answered: charged nothing; the session's own hold stays for the next try, a fresh one is let go.
+    if (!charge.length && !kept) await release(ctx.env, held.holdId);
     if (e instanceof InterviewLimitError) return json({ error: e.reason, message: e.message }, limitStatus(e), NO_STORE);
     if (!(e instanceof AiError)) throw e;
     log('warn', 'AI interview verdict failed', { requestId: ctx.requestId, kind: e.kind, status: e.status });
@@ -446,16 +451,16 @@ export const finishInterview = interviewRoute((env) => env.INTERVIEW_FINISH_LIMI
 
 /**
  * The AI roadmap's picks after a verdict (Pro): held and charged as
- * `next_steps` (none without the credits for them), charged only when they
- * were stored; their tokens are added to the session's. Never throws.
+ * `next_steps` (none without the credits for them), charged when they were
+ * stored or the model answered uselessly (P34); their tokens are added to
+ * the session's. Never throws.
  */
 async function pickAfterVerdict(ctx: Ctx, user: User, id: string, problemId: string, v: InterviewVerdict): Promise<void> {
   if (!can(user, 'ai_roadmap', ctx.env).ok) return;
   const held = await hold(ctx.env, user.id, worstMc(CALLS.nextSteps, ctx.env), id).catch(() => undefined);
   if (!held?.ok) return;
-  const used = await recommendAfterInterview(ctx.env, user, id, problemId, v, ctx.requestId);
-  const picked = used && (await ctx.env.DB.prepare('SELECT 1 FROM roadmap_recs WHERE user_id = ? AND source_id = ?').bind(user.id, id).first());
-  await (picked ? settle(ctx.env, held.holdId, [{ model: HAIKU, ...used }], 'next_steps', false) : release(ctx.env, held.holdId)).catch((e: unknown) =>
+  const { used, charge } = await recommendAfterInterview(ctx.env, user, id, problemId, v, ctx.requestId);
+  await (charge.length ? settle(ctx.env, held.holdId, charge, 'next_steps', false) : release(ctx.env, held.holdId)).catch((e: unknown) =>
     log('warn', 'roadmap.charge_failed', { requestId: ctx.requestId, error: errorText(e) }),
   );
   if (!used) return;

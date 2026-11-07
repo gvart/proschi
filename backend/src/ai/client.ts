@@ -73,6 +73,9 @@ export interface Usage {
   cache_read_input_tokens: number;
 }
 
+/** One call's usage with the model that answered it: what the credit ledger prices. */
+export type ModelUsage = Usage & { model: string };
+
 export const NO_USAGE: Usage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
 
 export interface MessageResult {
@@ -96,12 +99,21 @@ export class AiError extends Error {
   readonly retryable: boolean;
   /** Tokens already spent on the failed call (a refusal or a truncated answer is billed). */
   readonly usage?: Usage;
-  constructor(kind: AiErrorKind, message: string, opts: { status?: number; usage?: Usage } = {}) {
+  /**
+   * The calls the user pays for although this one failed
+   * (docs/design/paid-plans.md P34): every answer the model gave (a refusal,
+   * one cut off at max_tokens, one that did not validate, and an earlier
+   * attempt's). Empty when the call failed on our side or the
+   * infrastructure's (network, timeout, rate limit, overloaded, 5xx).
+   */
+  readonly charge: ModelUsage[];
+  constructor(kind: AiErrorKind, message: string, opts: { status?: number; usage?: Usage; charge?: ModelUsage[] } = {}) {
     super(message);
     this.name = 'AiError';
     this.kind = kind;
     this.status = opts.status;
     this.usage = opts.usage;
+    this.charge = opts.charge ?? [];
     this.retryable = ['rate_limit', 'overloaded', 'server', 'timeout', 'network'].includes(kind);
   }
 }
@@ -136,11 +148,17 @@ function usageOf(raw: unknown): Usage {
   return { input_tokens: n(u.input_tokens), output_tokens: n(u.output_tokens), cache_creation_input_tokens: n(u.cache_creation_input_tokens), cache_read_input_tokens: n(u.cache_read_input_tokens) };
 }
 
-/** A refusal or a cut-off answer is an error: callers only see complete answers. */
+/** A refusal or a cut-off answer is an error: callers only see complete answers. The model answered, so it is charged (P34). */
 function finish(result: MessageResult): MessageResult {
-  if (result.stopReason === 'refusal') throw new AiError('refusal', 'The model declined to answer', { usage: result.usage });
-  if (result.stopReason === 'max_tokens') throw new AiError('truncated', 'The answer was cut off at max_tokens', { usage: result.usage });
+  const charge = [{ model: result.model, ...result.usage }];
+  if (result.stopReason === 'refusal') throw new AiError('refusal', 'The model declined to answer', { usage: result.usage, charge });
+  if (result.stopReason === 'max_tokens') throw new AiError('truncated', 'The answer was cut off at max_tokens', { usage: result.usage, charge });
   return result;
+}
+
+/** An answer that did not validate: an AiError ('malformed') that charges it, after the calls in `before` (P34). */
+export function malformed(message: string, result: MessageResult, before: ModelUsage[] = []): AiError {
+  return new AiError('malformed', message, { usage: result.usage, charge: [...before, { model: result.model, ...result.usage }] });
 }
 
 export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient {

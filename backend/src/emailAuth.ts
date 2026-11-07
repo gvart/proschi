@@ -29,6 +29,13 @@ import { verifyTurnstile } from './turnstile';
  * still costs a password hash. Sign-in failures back off per account and per
  * IP (login_failures). The account's identity is `identities` ('email',
  * normalized address), so deleting it leaves the tombstone every sign-in does.
+ *
+ * An email sign-in linked to a signed-in account (`link`) has no identity
+ * until that account, signed in, opens its confirmation link: until then no
+ * sign-in, reset or lookup finds it and it never gets a password from a
+ * sign-up, and a sign-up of the same address deletes it (and its links) and
+ * starts a fresh account. Otherwise a sign-up by the inbox's owner could
+ * confirm them into the account that linked their address.
  */
 
 const CONFIRM_TTL = 24 * 3600;
@@ -97,6 +104,29 @@ const loginOf = (DB: D1Database, userId: string) =>
     .first<Login>();
 
 /**
+ * The email sign-in a signed-in account linked and has not confirmed yet: it
+ * has no identity until its own link is opened by that account, so no
+ * sign-in, reset or lookup finds it, and a sign-up of the address replaces it.
+ */
+const pendingLinkOf = (DB: D1Database, userId: string) =>
+  DB.prepare(
+    `SELECT l.user_id, l.email, l.normalized, l.password_hash, l.confirmed_at, u.blocked_at FROM email_logins l
+     JOIN users u ON u.id = l.user_id
+     WHERE l.user_id = ? AND l.confirmed_at IS NULL AND NOT EXISTS (SELECT 1 FROM identities i WHERE i.provider = 'email' AND i.subject = l.normalized)`,
+  )
+    .bind(userId)
+    .first<Login>();
+
+/** Deletes the email sign-ins without an identity (unlinked, or a pending link) of `where`, with their unused confirmation links. */
+function dropUnlinked(DB: D1Database, where: 'normalized' | 'user_id', value: string): D1PreparedStatement[] {
+  const rows = `SELECT user_id FROM email_logins WHERE ${where} = ?1 AND NOT EXISTS (SELECT 1 FROM identities WHERE provider = 'email' AND subject = email_logins.normalized)`;
+  return [
+    DB.prepare(`DELETE FROM email_tokens WHERE purpose = 'confirm' AND used_at IS NULL AND user_id IN (${rows})`).bind(value),
+    DB.prepare(`DELETE FROM email_logins WHERE ${where} = ?1 AND NOT EXISTS (SELECT 1 FROM identities WHERE provider = 'email' AND subject = email_logins.normalized)`).bind(value),
+  ];
+}
+
+/**
  * A new link for the account, or undefined when it got one of the kind in the
  * last minute or SENDS_PER_DAY today (then nothing is sent, and the answer is
  * the same: the limit says nothing about the address either).
@@ -163,17 +193,17 @@ export async function signup(request: Request, ctx: Ctx): Promise<Response> {
     } else await sendAlreadyRegistered(request, ctx, existing);
     return json({ message: GENERIC_SIGNUP }, 202);
   }
-  // An address unlinked earlier leaves its row behind (findLogin ignores it); it goes now.
-  await env.DB.prepare("DELETE FROM email_logins WHERE normalized = ? AND NOT EXISTS (SELECT 1 FROM identities WHERE provider = 'email' AND subject = email_logins.normalized)")
-    .bind(address.normalized)
-    .run();
+  // An address unlinked earlier, or linked by some account and not confirmed, has a row without an identity (findLogin ignores it):
+  // it goes now with its links, so this sign-up starts fresh and no one else's pending link can be confirmed with this inbox.
+  await env.DB.batch(dropUnlinked(env.DB, 'normalized', address.normalized));
 
   let userId: string;
   try {
     if (linkTo) {
       userId = linkTo.id;
+      // A link gets no identity until the account confirms it from the inbox (confirm): until then it signs nothing in.
       await env.DB.batch([
-        env.DB.prepare("INSERT INTO identities (provider, subject, user_id) VALUES ('email', ?, ?)").bind(address.normalized, userId),
+        ...dropUnlinked(env.DB, 'user_id', userId),
         env.DB.prepare('INSERT INTO email_logins (user_id, email, normalized, password_hash, created_at) VALUES (?, ?, ?, ?, ?)').bind(userId, address.email, address.normalized, passwordHash, t),
       ]);
     } else {
@@ -216,15 +246,55 @@ const signupCreditsBody = async (DB: D1Database, userId: string) => {
   return status && { outcome: status.outcome, reason: status.reason };
 };
 
+/** The account of an unused, unexpired confirmation link, without using it. */
+async function peek(env: Env, token: unknown): Promise<string | undefined> {
+  if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{20,100}$/.test(token)) return undefined;
+  const row = await env.DB.prepare("SELECT user_id FROM email_tokens WHERE token_hash = ? AND purpose = 'confirm' AND used_at IS NULL AND expires_at > ?")
+    .bind(await sha256(token), now())
+    .first<{ user_id: string }>();
+  return row?.user_id;
+}
+
+const EXPIRED_CONFIRM = 'This link has expired or was already used. Sign in to get a new one.';
+
+/**
+ * Confirms an email sign-in linked to a signed-in account: only that
+ * account, signed in, can (else 400, the link kept), so an inbox's owner who
+ * opens a link someone else asked for is never signed in to their account.
+ * The address gets its identity now; a link never sets a password.
+ */
+async function confirmLink(request: Request, ctx: Ctx, env: Env & { SESSION_SECRET: string }, token: unknown, userId: string): Promise<Response> {
+  const pending = await pendingLinkOf(env.DB, userId);
+  if (!pending) throw new HttpError(400, EXPIRED_CONFIRM);
+  const viewer = await authenticate(request, ctx);
+  if (viewer?.id !== userId) throw new HttpError(400, 'Sign in to the account you are adding this address to, then open the link again.');
+  if (pending.blocked_at !== null) throw new HttpError(403, 'This account is blocked');
+  if (!(await consume(env, token, 'confirm'))) throw new HttpError(400, EXPIRED_CONFIRM);
+  try {
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO identities (provider, subject, user_id) VALUES ('email', ?, ?)").bind(pending.normalized, userId),
+      env.DB.prepare('UPDATE email_logins SET confirmed_at = ? WHERE user_id = ? AND confirmed_at IS NULL').bind(now(), userId),
+    ]);
+  } catch (e) {
+    log('info', 'Email link lost its address before it was confirmed', { requestId: ctx.requestId, error: errorText(e) });
+    throw new HttpError(400, EXPIRED_CONFIRM);
+  }
+  await decideFor(env, { ...pending, confirmed_at: now() });
+  await startWebSession(ctx, userId);
+  return json({ confirmed: true, signupCredits: await signupCreditsBody(env.DB, userId) });
+}
+
 /** POST /auth/email/confirm {token}: confirms the address and signs in. 400 for a used, expired or unknown link. */
 export async function confirm(request: Request, ctx: Ctx): Promise<Response> {
   const { env } = ctx;
   available(env);
   await rateLimit(env.AUTH_LIMITER, ctx.ip, 'Too many sign-in attempts; wait a minute');
   const body = await readJson(request, 4096);
+  const owner = await peek(env, body.token);
+  if (owner && !(await loginOf(env.DB, owner))) return confirmLink(request, ctx, env, body.token, owner);
   const used = await consume(env, body.token, 'confirm');
   const login = used && (await loginOf(env.DB, used.user_id));
-  if (!used || !login) throw new HttpError(400, 'This link has expired or was already used. Sign in to get a new one.');
+  if (!used || !login) throw new HttpError(400, EXPIRED_CONFIRM);
   if (login.blocked_at !== null) throw new HttpError(403, 'This account is blocked');
   const statements = [env.DB.prepare('UPDATE email_logins SET confirmed_at = COALESCE(confirmed_at, ?) WHERE user_id = ?').bind(now(), login.user_id)];
   if (used.password_hash) {
@@ -301,7 +371,7 @@ export async function resend(request: Request, ctx: Ctx): Promise<Response> {
   available(env);
   const user = await requireUser(request, ctx);
   await rateLimit(env.EMAIL_LIMITER, user.id, 'Too many confirmation emails; wait a minute');
-  const login = await loginOf(env.DB, user.id);
+  const login = (await loginOf(env.DB, user.id)) ?? (await pendingLinkOf(env.DB, user.id));
   if (!login) throw new HttpError(404, 'This account has no email sign-in');
   if (login.confirmed_at !== null) return json({ confirmed: true });
   const sent = await sendConfirmation(request, ctx, user.id, login.email);
@@ -363,7 +433,7 @@ export async function reset(request: Request, ctx: Ctx): Promise<Response> {
 export async function emailStatus(request: Request, ctx: Ctx): Promise<Response> {
   const user = await authenticate(request, ctx);
   if (!user) return json({ signedIn: false }, 200, { 'Cache-Control': 'no-store' });
-  const login = await loginOf(ctx.env.DB, user.id);
+  const login = (await loginOf(ctx.env.DB, user.id)) ?? (await pendingLinkOf(ctx.env.DB, user.id));
   return json(
     { signedIn: true, email: login?.email ?? null, confirmed: login ? login.confirmed_at !== null : true, signupCredits: await signupCreditsBody(ctx.env.DB, user.id) },
     200,
