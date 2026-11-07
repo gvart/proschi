@@ -865,6 +865,7 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, sou
             fitKey={fitKey}
             problemCapacity
             paletteKey="proschi.practice.palette"
+            flows
             phone={phone}
           />
         )}

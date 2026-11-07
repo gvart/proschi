@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { addConnection, addNode, addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, setReplicas, useCaseOutline, type EditResult, type NewStep } from './edit';
+import { addConnection, addNode, addScenario, addStep, addUseCase, removeScenario, removeStep, removeUseCase, setReplicas, outlineOf, type EditResult, type NewStep } from './edit';
 import { parse } from './parser';
 import { findProblem } from '../practice/catalog';
 import { parseSolution, runTests } from '../practice/workspace';
@@ -81,7 +81,7 @@ describe('use case edits', () => {
     const { diagram, diagnostics } = parse(src);
     expect(diagnostics).toEqual([]);
     expect(diagram.useCases[0].scenarios.map((s) => s.name)).toEqual(['Cache hit', 'Cache miss']);
-    const outline = useCaseOutline(src, 'Redirect')!;
+    const outline = outlineOf(src, 'Redirect')!;
     expect(outline.items.map((i) => i.kind)).toEqual(['step', 'step', 'scenarios', 'step']);
     const group = outline.items[2];
     expect(group.kind === 'scenarios' && group.branches.map((b) => [b.name, b.steps.length])).toEqual([
@@ -108,7 +108,7 @@ describe('use case edits', () => {
       '  }',
       '}',
     ].join('\n');
-    const outline = useCaseOutline(src, 'U')!;
+    const outline = outlineOf(src, 'U')!;
     expect(outline.endLine).toBe(15);
     expect(outline.items.map((i) => i.kind)).toEqual(['step', 'scenarios', 'other']);
     const group = outline.items[1];

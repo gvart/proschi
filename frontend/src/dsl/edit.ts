@@ -464,7 +464,7 @@ function blockEnd(lines: string[], index: number): number {
 }
 
 /** The outline of the use case called `name` in this document's own text, or undefined when it has none. */
-export function useCaseOutline(source: string, name: string): UseCaseOutline | undefined {
+export function outlineOf(source: string, name: string): UseCaseOutline | undefined {
   const useCase = parse(source).diagram.useCases.find((u) => u.name === name && u.loc.file === undefined);
   if (!useCase) return undefined;
   const lines = source.split('\n');
@@ -523,7 +523,7 @@ export function addUseCase(source: string, name: string): string {
 
 /** Removes a use case's whole block, and the blank line before it. */
 export function removeUseCase(source: string, name: string): string {
-  const outline = useCaseOutline(source, name);
+  const outline = outlineOf(source, name);
   if (!outline) return source;
   const lines = source.split('\n');
   let from = outline.line - 1;
@@ -555,7 +555,7 @@ function indentOf(line: string | undefined): string {
  * not connected yet connects them too, as the step needs.
  */
 export function addStep(source: string, useCase: string, step: NewStep, scenario?: string): EditResult {
-  const outline = useCaseOutline(source, useCase);
+  const outline = outlineOf(source, useCase);
   if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
   if (step.from === step.to) return { error: 'A step goes from one component to another.' };
   const lines = source.split('\n');
@@ -585,7 +585,7 @@ export function removeStep(source: string, line: number): string {
 export function addScenario(source: string, useCase: string, name: string): EditResult {
   const clean = cleanText(name);
   if (!clean) return { error: 'Name the scenario.' };
-  const outline = useCaseOutline(source, useCase);
+  const outline = outlineOf(source, useCase);
   if (!outline) return { error: `There is no use case "${useCase}" in this design.` };
   const branches = outline.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []));
   if (branches.some((b) => b.name === clean)) return { error: `"${useCase}" already has a scenario "${clean}".` };
@@ -599,7 +599,7 @@ export function addScenario(source: string, useCase: string, name: string): Edit
 
 /** Removes a scenario and its steps; one that opens on the line closing another (`} alt "B" {`) is left to the code. */
 export function removeScenario(source: string, useCase: string, name: string): EditResult {
-  const branch = useCaseOutline(source, useCase)
+  const branch = outlineOf(source, useCase)
     ?.items.flatMap((item) => (item.kind === 'scenarios' ? item.branches : []))
     .find((b) => b.name === name);
   if (!branch) return { source };
