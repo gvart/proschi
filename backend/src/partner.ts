@@ -390,7 +390,7 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
       ...(input.feedback.length ? [DB.prepare('UPDATE partner_changes SET fed = 1 WHERE session_id = ? AND decision IS NOT NULL').bind(id)] : []),
       DB.prepare('UPDATE partner_sessions SET updated_at = ?, turning_until = NULL WHERE id = ?').bind(at, id),
     ]);
-    log('info', 'partner.turn', { requestId: ctx.requestId, userId: user.id, intent: body.intent, deep, changes: changes.length, failed: changes.filter((c) => !c.result.ok).length, chargedMc: charged.chargedMc });
+    log('info', 'partner.turn', { requestId: ctx.requestId, userId: user.id, intent: body.intent, deep, changes: changes.length, failed: changes.filter((c) => !c.result.ok).length, chargedMc: charged.chargedMc, usage: result.billed });
     const turn: Turn = {
       id: partnerTurn.id,
       role: 'partner',
