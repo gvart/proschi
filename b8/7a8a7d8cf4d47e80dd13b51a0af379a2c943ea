@@ -1,0 +1,19 @@
+docs/PRIVACY.md
+  s_e17b87e0a1b3ca::t_935415fd10c758 6,362-379,383-384,389-391,519
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b87a8a7d8cf4d47e80dd13b51a0af379a2c943ea",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
