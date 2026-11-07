@@ -234,7 +234,7 @@ describe('billing', () => {
     const checkout = await call('/api/billing/checkout', { method: 'POST', token, body: { product: 'pro_yearly' } });
     expect(await checkout.json()).toEqual({ url: 'https://sandbox.polar.sh/checkout/abc' });
     expect(sent[0].body).toMatchObject({ products: ['prod-pro-yearly'], external_customer_id: id, metadata: { user_id: id, product: 'pro_yearly' } });
-    expect(sent[0].body.success_url).toBe('https://proschi.test/practice/?checkout=done#/me');
+    expect(sent[0].body.success_url).toBe('https://proschi.test/practice/?checkout=done&product=pro_yearly&checkout_id={CHECKOUT_ID}#/me');
 
     expect((await call('/api/billing/portal', { method: 'POST', token })).status).toBe(404);
     await deliver(subscription(id, 'active', '2026-11-06T10:00:00Z'));

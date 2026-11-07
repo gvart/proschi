@@ -1,31 +1,19 @@
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { CreditCard, Sparkles } from 'lucide-react';
 import { outlineButton, primaryButton } from '../../components/Playground/ui';
 import { usePlan } from '../../pricing/usePlan';
 import { billingEnabled, checkout, openPortal, PRICES, pricingHref, type PlanInfo } from '../../services/billing';
+import CheckoutStatus from './CheckoutStatus';
 
 /**
  * "Plan & billing" on the account page (`#/me`): the plan, the
  * subscription's renewal or end, the AI interviews left, and the ways to
  * upgrade, buy a pack or open Polar's billing portal. Hidden without
- * VITE_BILLING. Back from a checkout (`?checkout=done`), it thanks and asks
- * again for a few seconds, while Polar's webhook arrives.
+ * VITE_BILLING. Back from a checkout, CheckoutStatus says whether Polar's
+ * webhook has made the purchase show yet.
  */
 
 const card = 'mt-8 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md';
-
-/** Whether this page load came back from a checkout; read once (the page may mount this more than once) and taken off the address. */
-let checkoutDone: boolean | undefined;
-function takeCheckoutDone(): boolean {
-  if (checkoutDone !== undefined) return checkoutDone;
-  const url = new URL(window.location.href);
-  checkoutDone = url.searchParams.get('checkout') === 'done';
-  if (checkoutDone) {
-    url.searchParams.delete('checkout');
-    window.history.replaceState(window.history.state, '', url.toString());
-  }
-  return checkoutDone;
-}
 
 const dateOf = (ms: number) => new Date(ms).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' });
 
@@ -47,15 +35,9 @@ function creditParts({ credits, limits }: PlanInfo): string[] {
 }
 
 export default function PlanBilling() {
-  const [thanks] = useState(takeCheckoutDone);
-  const { plan, error, reload } = usePlan(billingEnabled);
+  const { plan, error } = usePlan(billingEnabled);
   const [busy, setBusy] = useState(false);
   const [failed, setFailed] = useState<string | null>(null);
-  useEffect(() => {
-    if (!thanks) return;
-    const timers = [2000, 5000, 10000].map((ms) => window.setTimeout(reload, ms));
-    return () => timers.forEach((t) => window.clearTimeout(t));
-  }, [thanks, reload]);
   if (!billingEnabled) return null;
 
   const go = (run: () => Promise<void>) => {
@@ -74,11 +56,7 @@ export default function PlanBilling() {
       <h2 id="plan-billing" className="font-display text-xl font-bold text-ink">
         Plan &amp; billing
       </h2>
-      {thanks && (
-        <p role="status" className="mt-2 rounded-sm border-bw-1 border-ink bg-pop-yellow/30 px-3 py-2 text-sm text-ink">
-          Thank you! Your purchase shows here as soon as Polar confirms it, usually within seconds.
-        </p>
-      )}
+      <CheckoutStatus />
       {!plan ? (
         <p className="mt-2 text-sm text-muted">{error ? `Could not load your plan: ${error}` : 'Loading your plan…'}</p>
       ) : (

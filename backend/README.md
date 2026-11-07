@@ -305,7 +305,7 @@ the Polar customer and subscription ids, the subscription's status and
 renewal date (`billing`, migration 0017), and never any card data.
 
 - `POST /api/billing/checkout` creates a Polar checkout with the user's id as
-  Polar's `external_customer_id`, and back to `/practice/?checkout=done#/me`.
+  Polar's `external_customer_id`, and back to `/practice/?checkout=done&product=…&checkout_id={CHECKOUT_ID}#/me`.
 - The webhook (`POST /api/billing/webhook`) is the only thing that changes
   `users.plan` or adds credits. It checks the Standard Webhooks signature
   (`webhook-id`, `webhook-timestamp` within 5 minutes, `webhook-signature`,
