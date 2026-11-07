@@ -1,0 +1,24 @@
+frontend/src/components/Playground/CodeEditor.tsx
+  s_e17b87e0a1b3ca::t_bc0698a0f71c9d 5,25-26,126-128,181-183
+  s_e17b87e0a1b3ca::t_c7379ceb806675 184
+frontend/src/dsl/edit.test.ts
+  s_e17b87e0a1b3ca::t_ce293341afd5fd 154-160
+frontend/src/dsl/edit.ts
+  s_e17b87e0a1b3ca::t_ce293341afd5fd 121-125,129-130,144-146
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4da98d26e4713ba8eff4f23223c8ade03ce0c4d5",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
