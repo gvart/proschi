@@ -183,7 +183,8 @@ above are about events, not about you).
   the editor's list of diagrams, and are never lost. **Move to this browser
   only**, in a diagram's actions there, takes it out of your account (and
   your other devices) to free a slot. Turning sync off keeps the copies in
-  your account until you choose **Delete my cloud copies** in the File menu.
+  your account until you choose **Delete my cloud copies** in the File menu
+  or in Settings.
 
   **Shared computers.** The browser remembers which account its diagrams
   were synced with. When a different account signs in, the diagrams synced
@@ -463,9 +464,10 @@ In Settings on the practice page (`#/me`, from the account menu):
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
-- **Delete my cloud copies**, in the editor's File menu once cloud sync
-  is off, removes every diagram from your account, their versions with
-  them; those in your browser stay. A single version can be deleted on its
+- **Delete my cloud copies**, in Settings or in the editor's File menu once
+  cloud sync is off, removes every diagram from your account, their versions
+  with them, and turns cloud sync off in that browser; those in your browser
+  stay. A single version can be deleted on its
   own.
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,

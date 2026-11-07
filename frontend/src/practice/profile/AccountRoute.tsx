@@ -1,20 +1,26 @@
-import { useEffect } from 'react';
-import { ArrowRight, ExternalLink, LogIn, UserRound } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
+import { ArrowRight, LogIn, UserRound } from 'lucide-react';
 import PaneLoading from '../../components/PaneLoading';
-import ShareButton from '../../components/ShareButton';
-import { profileShareText } from '../../learn/share';
 import { eyebrow, primaryButton } from '../../components/Playground/ui';
 import { PROVIDER_LABEL } from '../account';
-import AccountSettings from '../AccountSettings';
+import { billingEnabled } from '../../services/billing';
+import type { Activity } from '../activity';
 import type { Account } from '../useAccount';
+import { ConnectedAccounts, DangerZone, DataPrivacy, LearningSection, ProfileSection } from './AccountSections';
+import CheckoutStatus from './CheckoutStatus';
+import { checkoutReturned } from './checkoutReturned';
 import EmailReminders from './EmailReminders';
 import PlanBilling from './PlanBilling';
-import { PUBLIC_FIELDS } from './profile';
+import SettingsNav from './SettingsNav';
+import { SECTIONS } from './settingsSections';
 
 /**
- * The account and settings page (`#/me`): who is signed in, the public
- * profile and leaderboard setting, and email reminders, then the account's
- * own actions (linked accounts, data download, sign-out, deletion). Progress
+ * The account and settings page (`#/me`): who is signed in, then the
+ * sections in order (settingsSections.ts): Plan & billing, Profile,
+ * Learning, Notifications, Connected accounts, Data & privacy and the
+ * Danger zone, with a sticky list of them on the left from 900 px and a
+ * "Jump to" menu on phones (SettingsNav.tsx). Back from a checkout, its
+ * status and the welcome to Pro show at the top, above the sections. Progress
  * (level, skills, badges, streaks, problems solved) lives on `#/progress`.
  * Signed out, an invitation to sign in; in a build without accounts, a
  * pointer to the progress page.
@@ -22,8 +28,9 @@ import { PUBLIC_FIELDS } from './profile';
 
 const heading = 'mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink';
 
-export default function AccountRoute({ account }: { account: Account }) {
+export default function AccountRoute({ account, activity }: { account: Account; activity: Activity }) {
   const { state } = account;
+  const [returned] = useState(checkoutReturned);
   useEffect(() => {
     document.title = 'Settings · Proschi practice';
   }, []);
@@ -45,8 +52,9 @@ export default function AccountRoute({ account }: { account: Account }) {
   }
 
   const { user } = state;
+  const sections = SECTIONS.filter((s) => s.id !== 'plan' || billingEnabled);
   return (
-    <main className="max-w-4xl mx-auto px-4 py-8 sm:py-14">
+    <main className="max-w-5xl mx-auto px-4 py-8 sm:py-14">
       <p className={eyebrow}>Your account</p>
       <h1 className={heading}>Settings</h1>
       <p className="mt-2 text-sm text-muted">
@@ -56,39 +64,33 @@ export default function AccountRoute({ account }: { account: Account }) {
           See your progress
         </a>
       </p>
+      {state.message && <p className="mt-2 text-sm text-amber-800 dark:text-amber-200">{state.message}</p>}
+      {billingEnabled && returned && <CheckoutReturn />}
 
-      <section aria-labelledby="public-profile" className="mt-8 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-brutal-md">
-        <h2 id="public-profile" className="font-display text-xl font-bold text-ink">
-          Public profile
-        </h2>
-        <label className="mt-3 flex cursor-pointer items-start gap-3">
-          <input
-            type="checkbox"
-            role="switch"
-            checked={user.publicProfile}
-            onChange={(e) => void account.update({ publicProfile: e.target.checked })}
-            className="mt-0.5 h-5 w-5 shrink-0 accent-ink"
-          />
-          <span className="text-sm font-semibold text-ink">Show me on the leaderboard, with a public profile</span>
-        </label>
-        <p className="mt-2 max-w-2xl text-sm text-ink/80">
-          When on, anyone can see {PUBLIC_FIELDS}. Your designs, daily goal, review history, sign-ins and sessions always stay private. Turn it off to hide
-          your profile at once.
-        </p>
-        {user.publicProfile && (
-          <div className="mt-3 flex flex-wrap items-center gap-2">
-            <a href={`#/u/${user.id}`} className={primaryButton}>
-              <ExternalLink size={14} aria-hidden="true" />
-              See your public profile
-            </a>
-            <ShareButton label="Share your profile" text={profileShareText({ displayName: user.displayName, userId: user.id, own: true })} />
-          </div>
-        )}
-      </section>
-      <PlanBilling />
-      <EmailReminders />
-      <AccountSettings account={account} />
+      <div className="mt-8 min-[900px]:grid min-[900px]:grid-cols-[13rem_minmax(0,1fr)] min-[900px]:gap-12">
+        <SettingsNav sections={sections} />
+        <div className="mt-4 max-w-3xl space-y-12 min-[900px]:mt-0">
+          <PlanBilling />
+          <ProfileSection account={account} user={user} />
+          <LearningSection activity={activity} />
+          <EmailReminders />
+          <ConnectedAccounts account={account} state={state} />
+          <DataPrivacy account={account} user={user} />
+          <DangerZone account={account} />
+        </div>
+      </div>
     </main>
+  );
+}
+
+/** Back from a checkout: its status (and the welcome to Pro) above the sections, scrolled into view. */
+function CheckoutReturn() {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => ref.current?.scrollIntoView({ block: 'nearest' }), []);
+  return (
+    <div ref={ref} className="mt-6 max-w-3xl scroll-mt-24 min-[900px]:ml-[16rem]">
+      <CheckoutStatus />
+    </div>
   );
 }
 

@@ -10,11 +10,11 @@ import {
   SLOW_AFTER,
   startReturn,
   withoutCheckoutReturn,
-  type CheckoutReturn,
   type ReturnState,
 } from '../../pricing/checkoutReturn';
 import { announcePlanChanged, getPlan } from '../../services/billing';
 import { Celebration } from '../Streak';
+import { checkoutReturn } from './checkoutReturned';
 
 /**
  * Back from Polar's checkout (`?checkout=done&product=…`) on the account
@@ -25,13 +25,12 @@ import { Celebration } from '../Streak';
  * Nothing on a normal visit. Self-contained, so the page mounts it in one line.
  */
 
-/** The return, read once a page load, and its progress, kept across remounts. */
-let returned: CheckoutReturn | null | undefined;
+/** The return's progress, kept across remounts (the return itself is read once a page load, checkoutReturned.ts). */
 let kept: ReturnState | null = null;
 
 /** Asks on the schedule until the purchase shows; `again` asks now. */
 function useCheckoutReturn(): { state: ReturnState | null; checkoutId: string | null; again: () => void } {
-  const [ret] = useState(() => (returned ??= readCheckoutReturn(window.location.href)));
+  const [ret] = useState(checkoutReturn);
   const [state, setState] = useState<ReturnState | null>(() => (ret ? (kept ??= startReturn(ret, Date.now())) : null));
   const [tick, setTick] = useState(0);
   const update = useCallback((step: (s: ReturnState) => ReturnState) => setState((s) => (s ? (kept = step(s)) : s)), []);
@@ -120,9 +119,9 @@ function Banner({ state, checkoutId, again }: { state: ReturnState; checkoutId: 
   );
 }
 
-/** Where Pro starts: links on the practice page (`#/…`) and to the editor, whose Results tab has the AI review. */
+/** Where Pro starts: links on the practice page (`#/…`, a problem opened on interview mode with the AI interviewer) and to the editor, whose Results tab has the AI review. */
 const STARTS = [
-  { href: '#/url-shortener', label: 'Start an AI interview', Icon: MessagesSquare },
+  { href: '#/url-shortener?interview=ai', label: 'Start an AI interview', Icon: MessagesSquare },
   { href: '../app/', label: 'Review a design', Icon: ScanSearch },
   { href: '#/roadmap', label: 'See your roadmap', Icon: MapIcon },
 ] as const;

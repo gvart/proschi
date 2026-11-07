@@ -318,7 +318,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           </PracticeHub>
         ) : onMe ? (
           <Suspense fallback={<PageLoading label="Loading your settings…" />}>
-            <AccountRoute account={account} />
+            <AccountRoute account={account} activity={activity} />
           </Suspense>
         ) : (
           profileId !== undefined && (
