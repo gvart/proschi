@@ -28,7 +28,15 @@ millicredits). Plan is `'free' | 'pro' | 'max'`.
 - Not enough credits: `402 { error: 'no_credits', needed: number, balance: number }`.
 - Polar products: `pro_monthly`, `pro_yearly`, `max_monthly`, `max_yearly`,
   `credits_1000` (env `POLAR_PRODUCT_MAX_MONTHLY`, `POLAR_PRODUCT_MAX_YEARLY`,
-  `POLAR_PRODUCT_CREDITS_1000`). `POST /api/billing/checkout {product}` as today.
+  `POLAR_PRODUCT_CREDITS_1000`). `POST /api/billing/checkout {product}` as today,
+  but only for accounts without an active subscription (with one, a
+  subscription product answers `409 { error: 'has_subscription' }`;
+  `credits_1000` always goes through checkout).
+- Switching plans with an active subscription (Pro↔Max, monthly↔yearly):
+  `POST /api/billing/change-plan { product }` → `{ ok: true, plan, effective: 'now' }`;
+  the server updates the existing Polar subscription's product (Polar
+  prorates), never opens a second subscription. The webhook then confirms
+  the plan.
 
 ### Design partner
 - `POST /api/partner/sessions`
