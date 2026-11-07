@@ -8,7 +8,7 @@ scripts, no cookies for counting and nothing that follows you; the site only
 counts, per day, how often a few things happen (say, "the editor was opened
 412 times on 6 October"), with nothing about who. An account is optional (for
 practice, short links and keeping your diagrams across devices), and an email
-address is kept only if you ask for email reminders. The rest of this page
+address is kept only if you sign in with one or ask for email reminders. The rest of this page
 lists exactly what is kept, where, and for how long.
 
 ## In your browser
@@ -115,8 +115,8 @@ a local build) never send anything.
 
 ## With a practice account
 
-On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub or
-Google to keep practice progress and your diagrams across devices, see how
+On [proschi.app](https://proschi.app/practice/) you can sign in with GitHub,
+Google or an email address and password to keep practice progress and your diagrams across devices, see how
 others did and make short links to diagrams.
 Without signing in, nothing about you reaches the server (the usage counts
 above are about events, not about you).
@@ -223,15 +223,21 @@ above are about events, not about you).
   collected for them.
 - Only if you ask for email reminders: your email address and its settings
   ([Email reminders](#email-reminders), below).
+- Only if you sign in with an email address: that address, a hash of your
+  password, and when you confirmed the address ([Email sign-in](#email-sign-in),
+  below).
 - The last day (UTC date only, no time) you used your account, for counting
   how many people are active ([The site's operator](#the-sites-operator),
   below).
 
-**What is not stored**: your email address (unless you opt in to email
-reminders), your avatar, and the access
+**What is not stored**: your email address (unless you sign in with it or
+opt in to email reminders), your avatar, and the access
 tokens GitHub or Google hand over during sign-in (they are used once, to
-read your user id and name, and dropped). Proschi asks GitHub for no
-permissions beyond your public profile, and Google for `openid profile` only.
+read your user id, name and verified email address, and dropped). Proschi
+asks GitHub for your public profile and read-only access to your email
+addresses (`user:email`), and Google for `openid profile email`. The address
+is only used, once, for the [free sign-up credits' checks](#free-sign-up-credits):
+it is not stored, only a one-way keyed hash of it.
 
 **Cookies**: `__Host-proschi_session` keeps you signed in (HttpOnly, sent
 only to proschi.app). `proschi_oauth` lives for ten minutes during sign-in to
@@ -416,6 +422,52 @@ What the panel keeps of its own:
 - **The last active day** of each account (above): a date, written at most
   once a day, deleted with the account and part of **Download my data**.
 
+## Email sign-in
+
+You can sign up with an email address and a password instead of GitHub or
+Google. What is kept, besides the account above:
+
+- the address (lowercased), and a normalized form of it the checks below
+  compare (dots and `+tag` dropped for Gmail, `+tag` for other domains);
+- a hash of your password (PBKDF2-SHA256, 100,000 rounds, a random salt of
+  its own). The password itself is never stored or logged;
+- when you confirmed the address;
+- the confirmation and password reset links, as hashes, until a day or two
+  after they expire (a confirmation link works for 24 hours, a reset link
+  for an hour, each once). A reset signs you out everywhere else.
+- failed sign-ins, to slow down password guessing: a count per address and
+  per IP address, each stored as a one-way keyed hash (never the address
+  or the IP), forgotten after a day.
+
+The emails (the confirmation, the password reset, and a note when someone
+tries to sign up with an address that already has an account) come from
+`reminders@proschi.app` through Cloudflare Email Service. Sign-up, sign-in
+and password reset use [Cloudflare Turnstile](https://www.cloudflare.com/privacy/)
+to tell people from bots: it runs in your browser, and Proschi only checks
+its yes or no with Cloudflare.
+
+Unlinking the email sign-in in Settings (when the account has another
+sign-in) stops it working; deleting the account deletes all of it.
+
+## Free sign-up credits
+
+A new account gets free credits once it is confirmed (an email account
+after its confirmation link, a GitHub or Google account at once), at most
+once per person. So that throwaway accounts can't collect them, the server
+keeps:
+
+- for each sign-in identity it has checked (GitHub or Google and its user
+  id, and your normalized email address, also the verified one GitHub or
+  Google gives), a one-way keyed hash, which stays after the account is
+  deleted, so the same person doesn't get them twice;
+- a one-way keyed hash of the IP address an account signed up from, with
+  the time, for "at most 3 accounts a week from one IP"; deleted after 7
+  days. The IP itself is never stored;
+- for each account, whether it got the credits and why not (for example a
+  disposable email domain).
+
+An account that doesn't get them works as usual and can buy credits.
+
 ## Email reminders
 
 Signed in, you can ask for reminders by email on your account page
@@ -476,9 +528,10 @@ In Settings on the practice page (`#/me`, from the account menu):
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
   Only a one-way keyed hash of each sign-in identity (GitHub or Google and
-  its user id) stays, with whether the free trial interview was used, so a
-  new account with that identity doesn't get the trial again; nothing else
-  about the account is kept.
+  its user id, or your normalized email address) stays, with whether the free trial interview was used, so a
+  new account with that identity doesn't get the trial again, and the keyed
+  hashes the [free sign-up credits' checks](#free-sign-up-credits) keep;
+  nothing else about the account is kept.
   The database's point-in-time recovery history (Cloudflare D1 Time Travel)
   still holds them for up to 30 days, after which they are gone.
 - **Sign out everywhere** ends every session, on every device, signed-in
