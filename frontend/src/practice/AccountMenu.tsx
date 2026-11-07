@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react';
-import { ChartNoAxesColumn, LogIn, LogOut, Settings, UserRound } from 'lucide-react';
+import { ChartNoAxesColumn, Coins, LogIn, LogOut, Settings, UserRound } from 'lucide-react';
 import Menu, { MenuItem } from '../components/Playground/Menu';
-import { PLAN_CHANGED } from '../services/billing';
+import { PLAN_CHANGED, type CreditBalance } from '../services/billing';
+import { formatCredits, isLow } from '../services/credits';
+import { useCredits } from '../services/useCredits';
 import { PROVIDER_LABEL } from './account';
 import type { Account } from './useAccount';
 
@@ -15,7 +17,8 @@ import type { Account } from './useAccount';
  */
 export default function AccountMenu({ account, base = '../' }: { account: Account; base?: string }) {
   const { state } = account;
-  const plan = usePlanName(state.status === 'signed-in' ? state.user.plan : undefined);
+  const { credits, plan: planNow } = useCredits(state.status === 'signed-in');
+  const plan = usePlanName(planNow ?? (state.status === 'signed-in' ? state.user.plan : undefined));
   if (state.status === 'off' || state.status === 'loading') return null;
   const message = state.message && <p className="px-3 py-1.5 text-xs text-amber-800 dark:text-amber-200 bg-amber-50 dark:bg-amber-950/40 border-b border-amber-100 dark:border-amber-900">{state.message}</p>;
 
@@ -57,6 +60,8 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
     window.location.href = `${base}${path}`;
   };
   return (
+    <>
+    {credits && <CreditsChip credits={credits} href={`${base}practice/#/me`} />}
     <Menu
       label="Account"
       align="right"
@@ -65,9 +70,12 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
         <>
           <UserRound size={16} aria-hidden="true" />
           <span className="ps-account__name ps-hide-sm">{user.displayName}</span>
-          {plan === 'pro' && (
-            <span data-testid="pro-badge" className="rounded-sm border-bw-1 border-ink bg-pop-yellow px-1 text-[10px] font-bold uppercase leading-4 tracking-wide text-on-accent">
-              Pro
+          {(plan === 'pro' || plan === 'max') && (
+            <span
+              data-testid="plan-badge"
+              className={`rounded-sm border-bw-1 border-ink px-1 text-[10px] font-bold uppercase leading-4 tracking-wide text-on-accent ${plan === 'max' ? 'bg-pop-lilac' : 'bg-pop-yellow'}`}
+            >
+              {plan === 'max' ? 'Max' : 'Pro'}
             </span>
           )}
         </>
@@ -98,10 +106,33 @@ export default function AccountMenu({ account, base = '../' }: { account: Accoun
         </>
       )}
     </Menu>
+    </>
   );
 }
 
-/** The account's plan from GET /api/me, or the one PLAN_CHANGED announced since (a purchase landed). */
+/** The credits left, a link to Settings › Plan & billing; orange under about 10% of the allowance. */
+function CreditsChip({ credits, href }: { credits: CreditBalance; href: string }) {
+  const low = isLow(credits);
+  const left = formatCredits(credits.balance, { floor: true });
+  return (
+    <a
+      href={href}
+      data-testid="credits-chip"
+      data-low={low || undefined}
+      aria-label={`${left} credits left${low ? ', running low' : ''}. Plan and billing`}
+      title={low ? 'Running low on credits' : 'Credits left'}
+      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-sm border-bw-2 px-2.5 text-sm font-semibold tabular-nums ${
+        low ? 'border-orange-700 bg-orange-100 text-orange-950 dark:border-orange-300 dark:bg-orange-400/20 dark:text-orange-100' : 'border-ink bg-surface text-ink hover:bg-pop-yellow hover:text-on-accent'
+      }`}
+    >
+      <Coins size={15} aria-hidden="true" />
+      {left}
+      <span className="ps-hide-sm font-normal">credits</span>
+    </a>
+  );
+}
+
+/** The account's plan: GET /api/me/plan's once read, else GET /api/me's, or the one PLAN_CHANGED announced since (a purchase landed). */
 function usePlanName(fromAccount: string | undefined): string | undefined {
   const [announced, setAnnounced] = useState<string>();
   useEffect(() => {
