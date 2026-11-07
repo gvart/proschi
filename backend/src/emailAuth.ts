@@ -208,7 +208,7 @@ async function consume(env: Env, token: unknown, purpose: 'confirm' | 'reset'): 
 /** The sign-up credits' checks for an email account that has just proved its address. */
 async function decideFor(env: Env & { SESSION_SECRET: string }, login: Login) {
   const claim = await emailClaim(env, login.normalized);
-  return decideSignupCredits(env, { userId: login.user_id, primary: claim, claims: [claim], domain: login.normalized.split('@')[1] });
+  return decideSignupCredits(env, { userId: login.user_id, identityKey: login.normalized, claims: [claim], domain: login.normalized.split('@')[1] });
 }
 
 const signupCreditsBody = async (DB: D1Database, userId: string) => {
@@ -379,4 +379,18 @@ export async function pruneEmailAuth(env: Env): Promise<number> {
     env.DB.prepare('DELETE FROM login_failures WHERE updated_at <= ?').bind(t - FAILURE_MEMORY),
   ]);
   return tokens.meta.changes + failures.meta.changes;
+}
+
+/** "Download my data": the email sign-in (never the password hash) and the sign-up credits' decision. */
+export async function exportEmailSignIn(DB: D1Database, userId: string) {
+  const [login, check] = await DB.batch([
+    DB.prepare('SELECT email, normalized, confirmed_at, created_at FROM email_logins WHERE user_id = ?').bind(userId),
+    DB.prepare('SELECT outcome, reason, decided_at FROM signup_checks WHERE user_id = ?').bind(userId),
+  ]);
+  const l = login.results[0] as { email: string; normalized: string; confirmed_at: number | null; created_at: number } | undefined;
+  const c = check.results[0] as { outcome: string; reason: string; decided_at: number | null } | undefined;
+  return {
+    login: l ? { email: l.email, normalized: l.normalized, confirmedAt: l.confirmed_at, createdAt: l.created_at } : null,
+    signupCredits: c ? { outcome: c.outcome, reason: c.reason, decidedAt: c.decided_at } : null,
+  };
 }

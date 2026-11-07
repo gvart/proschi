@@ -164,12 +164,19 @@ describe('email sign-up, confirmation and sign-in', () => {
     expect((await req('/api/me', { token: session })).status).toBe(200);
     expect(granted).toHaveBeenCalledTimes(1);
     const user = await env.DB.prepare('SELECT user_id FROM email_logins').first<{ user_id: string }>();
-    expect(granted).toHaveBeenCalledWith(expect.anything(), user!.user_id, await identityHash(SECRET, 'email', 'ada@example.com'));
+    expect(granted).toHaveBeenCalledWith(expect.anything(), user!.user_id, 'ada@example.com');
 
     // Single use.
     expect((await confirm(token)).status).toBe(400);
     expect(granted).toHaveBeenCalledTimes(1);
     await expect((await req('/api/me', { token: session })).json()).resolves.toMatchObject({ user: { providers: ['email'] } });
+  });
+
+  it('puts the address and the credits decision in "Download my data", never the password hash', async () => {
+    const { token } = await confirmedAccount('Ada@Example.com');
+    const text = await (await req('/api/me/export', { token })).text();
+    expect(JSON.parse(text).emailSignIn).toMatchObject({ login: { email: 'ada@example.com', normalized: 'ada@example.com', confirmedAt: expect.any(Number) }, signupCredits: { outcome: 'granted', reason: 'granted' } });
+    expect(text).not.toContain('pbkdf2');
   });
 
   it('refuses bad addresses and weak passwords with a reason', async () => {
@@ -379,12 +386,13 @@ describe('sign-up credits', () => {
 });
 
 describe('sign-up credits of GitHub and Google accounts', () => {
-  function mockProviders(github: Record<string, unknown>, google: Record<string, unknown> = { sub: 'g-1', given_name: 'Grace' }) {
+  function mockProviders(github: Record<string, unknown>, google: Record<string, unknown> = { sub: 'g-1', given_name: 'Grace' }, githubEmails: unknown[] = []) {
     const real = globalThis.fetch;
     return vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
       const url = typeof input === 'string' ? input : input instanceof URL ? input.href : input.url;
       if (url === 'https://github.com/login/oauth/access_token') return Response.json({ access_token: 'gh-token' });
       if (url === 'https://api.github.com/user') return Response.json(github);
+      if (url === 'https://api.github.com/user/emails') return Response.json(githubEmails);
       if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'g-token' });
       if (url === 'https://openidconnect.googleapis.com/v1/userinfo') return Response.json(google);
       return real(input, init);
@@ -405,7 +413,7 @@ describe('sign-up credits of GitHub and Google accounts', () => {
     mockProviders({ id: 42, login: 'octocat' });
     const token = await oauth('github');
     expect(await status(token)).toEqual({ signedIn: true, email: null, confirmed: true, signupCredits: { outcome: 'granted', reason: 'granted' } });
-    expect(granted).toHaveBeenCalledWith(expect.anything(), expect.any(String), await identityHash(SECRET, 'github', '42'));
+    expect(granted).toHaveBeenCalledWith(expect.anything(), expect.any(String), 'github\n42');
     await oauth('github');
     expect(granted).toHaveBeenCalledTimes(1);
   });
@@ -420,9 +428,23 @@ describe('sign-up credits of GitHub and Google accounts', () => {
   });
 
   it('ignores an unverified Google address, and refuses a disposable GitHub one', async () => {
-    mockProviders({ id: 9, login: 'temp', email: 'x@mailinator.com' }, { sub: 'g-8', email: 'x@mailinator.com', email_verified: false });
+    mockProviders({ id: 9, login: 'temp' }, { sub: 'g-8', email: 'x@mailinator.com', email_verified: false }, [
+      { email: 'other@example.com', primary: false, verified: true },
+      { email: 'x@mailinator.com', primary: true, verified: true },
+    ]);
     expect((await status(await oauth('google'))).signupCredits?.outcome).toBe('granted');
     expect((await status(await oauth('github'))).signupCredits).toEqual({ outcome: 'refused', reason: 'disposable' });
+  });
+
+  it('keys the credits by the verified address, so one inbox gets them once across GitHub, Google and a password', async () => {
+    mockProviders({ id: 77, login: 'ada' }, { sub: 'g-77', given_name: 'Ada', email: 'Ada.Lovelace@gmail.com', email_verified: true }, [{ email: 'ada.lovelace+gh@gmail.com', primary: true, verified: true }]);
+    const start = await req('/auth/github/start?return=/');
+    expect(new URL(start.headers.get('Location')!).searchParams.get('scope')).toBe('user:email');
+    expect((await status(await oauth('github'))).signupCredits?.outcome).toBe('granted');
+    expect(granted).toHaveBeenCalledWith(expect.anything(), expect.any(String), 'adalovelace@gmail.com');
+    expect((await status(await oauth('google'))).signupCredits).toEqual({ outcome: 'refused', reason: 'seen_before' });
+    expect((await confirmedAccount('adalovelace@gmail.com')).body.signupCredits).toEqual({ outcome: 'refused', reason: 'seen_before' });
+    expect(granted).toHaveBeenCalledTimes(1);
   });
 
   it('refuses a deleted GitHub account coming back', async () => {

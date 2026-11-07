@@ -16,6 +16,7 @@ function mockProviders(profile: Record<string, unknown> = { id: 42, login: 'octo
       return Response.json({ access_token: 'gh-token' });
     }
     if (url === 'https://api.github.com/user') return Response.json(profile);
+    if (url === 'https://api.github.com/user/emails') return Response.json([]);
     if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'g-token' });
     if (url === 'https://openidconnect.googleapis.com/v1/userinfo') return Response.json({ sub: 'g-1', given_name: 'Grace', name: 'Grace Hopper' });
     return real(input, init);

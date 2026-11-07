@@ -72,9 +72,9 @@ export async function recordPending(env: Env & { SESSION_SECRET: string }, userI
 
 export interface SignupIdentity {
   userId: string;
-  /** The identity's claim, the one passed to grantSignupCredits. */
-  primary: string;
-  /** Every claim of the account (the primary first). */
+  /** The ledger's identity (src/signupCredits.ts): the normalized verified address, else `${provider}\n${subject}`. */
+  identityKey: string;
+  /** Every claim of the account: the HMACs of its identity and of its address. */
   claims: string[];
   /** The address's domain, when there is one. */
   domain?: string;
@@ -104,7 +104,7 @@ export async function decideSignupCredits(env: Env, who: SignupIdentity): Promis
   const reason = await check(DB, who, row.ip_hash, t);
   if (reason === 'granted') {
     try {
-      await signupLedger.grant(env, who.userId, who.primary);
+      await signupLedger.grant(env, who.userId, who.identityKey);
     } catch (e) {
       // Stays pending: the claims are taken, so the admin grants by hand (the event says whose).
       log('error', 'Granting sign-up credits failed', { userId: who.userId, error: errorText(e) });

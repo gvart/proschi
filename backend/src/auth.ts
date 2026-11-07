@@ -62,10 +62,11 @@ const PROVIDERS: Record<ProviderId, Provider> = {
     clientId: (env) => env.GITHUB_CLIENT_ID,
     clientSecret: (env) => env.GITHUB_CLIENT_SECRET,
     authorizeUrl: (clientId, redirectUri, state, challenge) =>
-      // No scope: read-only access to the public profile.
+      // user:email: read-only, for the primary verified address (only its HMAC is kept, src/signupChecks.ts).
       `https://github.com/login/oauth/authorize?${new URLSearchParams({
         client_id: clientId,
         redirect_uri: redirectUri,
+        scope: 'user:email',
         state,
         code_challenge: challenge,
         code_challenge_method: 'S256',
@@ -87,8 +88,7 @@ const PROVIDERS: Record<ProviderId, Provider> = {
         headers: { Authorization: `Bearer ${String(token.access_token)}`, Accept: 'application/vnd.github+json', 'User-Agent': 'proschi-api' },
       });
       if (typeof user.id !== 'number') throw new Error('GitHub returned no user id');
-      // `email` is the public address, which GitHub only lets users pick from their verified ones.
-      return { subject: String(user.id), name: String(user.login ?? `user${user.id}`), ...(typeof user.email === 'string' ? { verifiedEmail: user.email } : {}) };
+      return { subject: String(user.id), name: String(user.login ?? `user${user.id}`), ...(await githubEmail(String(token.access_token))) };
     },
   },
   google: {
@@ -130,6 +130,21 @@ const PROVIDERS: Record<ProviderId, Provider> = {
     },
   },
 };
+
+/** The GitHub account's primary verified address (GET /user/emails, scope user:email); none when it has none or the call fails. */
+async function githubEmail(accessToken: string): Promise<{ verifiedEmail?: string }> {
+  try {
+    const response = await fetch('https://api.github.com/user/emails', {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: 'application/vnd.github+json', 'User-Agent': 'proschi-api' },
+    });
+    if (!response.ok) return {};
+    const emails = (await response.json()) as { email?: unknown; primary?: unknown; verified?: unknown }[];
+    const primary = Array.isArray(emails) ? emails.find((e) => e.primary === true && e.verified === true && typeof e.email === 'string') : undefined;
+    return primary ? { verifiedEmail: primary.email as string } : {};
+  } catch {
+    return {};
+  }
+}
 
 export function isProvider(id: string): id is ProviderId {
   return Object.prototype.hasOwnProperty.call(PROVIDERS, id);
@@ -362,10 +377,12 @@ async function oauthSignupCredits(ctx: Ctx, userId: string, provider: ProviderId
   const { env } = ctx;
   if (!secretOk(env)) return;
   try {
-    const primary = await identityHash(env.SESSION_SECRET, provider, profile.subject);
     const address = normalizeEmail(profile.verifiedEmail);
-    const claims = address ? [primary, await emailClaim(env, address.normalized)] : [primary];
-    await decideSignupCredits(env, { userId, primary, claims, domain: address?.domain, ip: ctx.ip });
+    const own = await identityHash(env.SESSION_SECRET, provider, profile.subject);
+    const claims = address ? [own, await emailClaim(env, address.normalized)] : [own];
+    // The ledger's key is the inbox, so GitHub, Google and a password on one address get the credits once.
+    const identityKey = address ? address.normalized : `${provider}\n${profile.subject}`;
+    await decideSignupCredits(env, { userId, identityKey, claims, domain: address?.domain, ip: ctx.ip });
   } catch (e) {
     log('error', 'Checking sign-up credits failed', { requestId: ctx.requestId, error: errorText(e) });
   }
