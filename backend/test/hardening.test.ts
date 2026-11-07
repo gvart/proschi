@@ -268,6 +268,7 @@ describe('data export', () => {
       documentVersions: [],
       documentShares: [],
       emailReminders: null,
+      emailSignIn: { login: null, signupCredits: null },
       billing: null,
       billingWebhooks: [],
       credits: [],
