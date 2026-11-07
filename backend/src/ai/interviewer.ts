@@ -1,6 +1,6 @@
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../frontend/src/practice/modes/session';
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
-import { AiError, collect, HAIKU, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type TextBlock } from './client';
+import { AiError, collect, HAIKU, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type TextBlock, type Usage } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
 import { fence, HINT_PROMPT, INTERVIEWER_PROMPT, VERDICT_PROMPT } from './prompts';
 
@@ -417,9 +417,10 @@ function sessionReport(context: ProblemContext, state: InterviewState, now: numb
 /**
  * The verdict, Sonnet with adaptive thinking and a JSON schema. A response
  * that does not validate is asked for once more, then is an AiError
- * ('malformed'). Returns the state, finished and with the tokens counted.
+ * ('malformed'). Returns the state, finished and with the tokens counted,
+ * and `billable`, the call that validated: what the user pays for (P27).
  */
-export async function verdict(deps: Deps, state: InterviewState): Promise<{ verdict: InterviewVerdict; state: InterviewState }> {
+export async function verdict(deps: Deps, state: InterviewState): Promise<{ verdict: InterviewVerdict; state: InterviewState; billable: Usage }> {
   const { client, context, now } = deps;
   if (context.problem.id !== state.problemId) throw new InterviewLimitError('problem', 'The context is of another problem');
   if (state.finished) throw new InterviewLimitError('finished', 'The interview is over');
@@ -445,7 +446,7 @@ export async function verdict(deps: Deps, state: InterviewState): Promise<{ verd
     }
     spent = addUsage(spent, SONNET, result.usage);
     const parsed = parseVerdict(result.text);
-    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, SONNET, spent[SONNET]), finished: true } };
+    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, SONNET, spent[SONNET]), finished: true }, billable: result.usage };
     if (attempt >= 1) throw new AiError('malformed', 'The verdict did not validate twice', { usage: spent[SONNET] });
   }
 }

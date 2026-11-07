@@ -1,7 +1,10 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HAIKU } from '../src/ai/client';
+import { grantSignupCredits, topupStatement } from '../src/credits';
+import type { Env } from '../src/env';
 import { pruneInterviewTranscripts, TRANSCRIPT_TTL_MS } from '../src/interviews';
+import { balanceMc, costMc, hold, interviewTurnHoldMc, verdictHoldMc } from '../src/meter';
 import { call, resetDatabase, signedInUser } from './helpers';
 import { messageResponse, sseResponse, streamEvents, type Recorded } from './ai/mockClaude';
 
@@ -52,7 +55,17 @@ async function events(response: Response): Promise<SseEvent[]> {
 
 const startOne = (token: string, body: unknown = { problem: 'url-shortener', minutes: 45 }) => call('/api/interviews', { method: 'POST', token, body });
 const turnOf = (token: string, id: string, body: unknown) => call(`/api/interviews/${id}/turn`, { method: 'POST', token, body });
-const credits = async (token: string) => ((await (await call('/api/interviews', { token })).json()) as { credits: { total: number } }).credits.total;
+const credits = async (token: string) => ((await (await call('/api/interviews', { token })).json()) as { credits: { balance: number } }).credits.balance;
+const e = env as Env;
+/** A signed-in user with its 100 sign-up credits (and `topup` more). */
+async function user(topup = 0): Promise<{ id: string; token: string }> {
+  const u = await signedInUser();
+  await grantSignupCredits(env, u.id, `github\n${u.id}`);
+  if (topup) await topupStatement(env.DB, u.id, topup * 1000, 'credits_1000', `ord-${u.id}`).run();
+  return u;
+}
+const charges = async (userId: string) =>
+  (await env.DB.prepare('SELECT action, charged_mc FROM credit_charges WHERE user_id = ? ORDER BY created_at, rowid').bind(userId).all<{ action: string; charged_mc: number }>()).results;
 const row = (id: string) => env.DB.prepare('SELECT status, state, verdict, tokens, cost_usd FROM ai_interviews WHERE id = ?').bind(id).first<{ status: string; state: string | null; verdict: string | null; tokens: number; cost_usd: number }>();
 
 /** Moves a session's start `ms` into the past, in its row and its state. */
@@ -78,7 +91,7 @@ describe('AI interviews', () => {
 
   it('answers 501 without the API key, and 401 signed out', async () => {
     delete env.ANTHROPIC_API_KEY;
-    const { token } = await signedInUser();
+    const { token } = await user();
     expect((await startOne(token)).status).toBe(501);
     expect((await call('/api/interviews', { token })).status).toBe(501);
     expect((await turnOf(token, 'x', { message: 'hi' })).status).toBe(501);
@@ -86,26 +99,33 @@ describe('AI interviews', () => {
     expect((await call('/api/interviews', { method: 'POST', body: { problem: 'url-shortener', minutes: 45 } })).status).toBe(401);
   });
 
-  it('spends a credit to start, and answers 402 no_credits with the balance once none is left', async () => {
-    const { token } = await signedInUser();
-    expect(await credits(token)).toBe(1);
+  it('holds the verdict’s credits to start, and answers 402 no_credits {needed, balance} without enough', async () => {
+    const poor = await signedInUser();
+    const refused = await startOne(poor.token);
+    expect(refused.status).toBe(402);
+    const needed = (verdictHoldMc(e) + interviewTurnHoldMc(e)) / 1000;
+    expect(await refused.json()).toEqual({ error: 'no_credits', needed, balance: 0 });
+
+    const { token } = await user();
+    expect(await credits(token)).toBe(100);
     expect((await startOne(token, { problem: 'nope', minutes: 45 })).status).toBe(400);
     expect((await startOne(token, { problem: 'url-shortener', minutes: 50 })).status).toBe(400);
     const res = await startOne(token);
     expect(res.status).toBe(201);
-    const body = (await res.json()) as { interview: { status: string; phase: string; messages: { role: string; text: string }[] }; credits: { total: number } };
+    const body = (await res.json()) as { interview: { status: string; phase: string; messages: { role: string; text: string }[] }; credits: { balance: number } };
     expect(body.interview).toMatchObject({ status: 'active', phase: 'clarify', problem: 'url-shortener', minutes: 45 });
     expect(body.interview.messages).toEqual([expect.objectContaining({ role: 'interviewer', text: expect.stringContaining('URL Shortener') })]);
-    expect(body.credits.total).toBe(0);
-    // Even ending the open one: without a credit nothing changes.
-    const refused = await startOne(token, { problem: 'url-shortener', minutes: 45, replace: true });
-    expect(refused.status).toBe(402);
-    expect(await refused.json()).toMatchObject({ error: 'no_credits', credits: { total: 0, trial: 0, monthly: 0, pack: 0 } });
+    // Nothing is charged to start: the verdict's worst case is only held.
+    expect(body.credits.balance).toBe((100_000 - verdictHoldMc(e)) / 1000);
+    // Ending the open one lets go of its hold, so a new one can start on the same credits.
+    const replaced = await startOne(token, { problem: 'url-shortener', minutes: 45, replace: true });
+    expect(replaced.status).toBe(201);
+    expect(await credits(token)).toBe((100_000 - verdictHoldMc(e)) / 1000);
   });
 
   it('streams a turn as text events, then the hint, the grade and done, and keeps the transcript', async () => {
     const calls = claude();
-    const { token } = await signedInUser();
+    const { id: userId, token } = await user();
     const id = await started(token);
     const res = await turnOf(token, id, { message: 'How many new links a month?', design: 'not a design' });
     expect(res.status).toBe(200);
@@ -130,12 +150,18 @@ describe('AI interviews', () => {
     const saved = await row(id);
     expect(saved!.tokens).toBeGreaterThan(0);
     expect(saved!.cost_usd).toBeGreaterThan(0);
+    // The turn is charged its real cost (the reply and the hint), far below its hold.
+    const real = costMc({ model: 'claude-sonnet-5-5', input_tokens: 100, output_tokens: 50 }, e) + costMc({ model: HAIKU, input_tokens: 100, output_tokens: 50 }, e);
+    const [charge] = await charges(userId);
+    expect(charge.action).toBe('mock_interview');
+    expect(Math.abs(charge.charged_mc - real)).toBeLessThanOrEqual(1);
+    expect(await balanceMc(e, userId)).toBe(100_000 - verdictHoldMc(e) - charge.charged_mc);
   });
 
   it('answers 404 for another user’s session', async () => {
     claude();
-    const owner = await signedInUser();
-    const other = await signedInUser();
+    const owner = await user();
+    const other = await user();
     const id = await started(owner.token);
     expect((await call(`/api/interviews/${id}`, { token: other.token })).status).toBe(404);
     expect((await turnOf(other.token, id, { message: 'hi' })).status).toBe(404);
@@ -143,47 +169,67 @@ describe('AI interviews', () => {
     expect(((await (await call('/api/interviews', { token: other.token })).json()) as { interviews: unknown[] }).interviews).toEqual([]);
   });
 
-  it('refunds the credit when the first turn fails, and ends the session', async () => {
-    claude({ reply: failing });
-    const { token } = await signedInUser();
+  it('charges a failed turn nothing, and keeps the session open to try again', async () => {
+    let fail = true;
+    claude({ reply: () => (fail ? failing() : sseResponse(streamEvents('Sure.'))) });
+    const { id: userId, token } = await user();
     const id = await started(token);
-    await age(id, 20 * MIN);
+    const before = await credits(token);
     const res = await turnOf(token, id, { message: 'Hello' });
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ error: 'ai_failed', refunded: true });
-    expect((await row(id))!.status).toBe('failed');
-    expect(await credits(token)).toBe(1);
-    expect((await turnOf(token, id, { message: 'Hello again' })).status).toBe(409);
+    expect(await res.json()).toEqual({ error: 'ai_failed', retryable: false });
+    expect((await row(id))!.status).toBe('active');
+    expect(await credits(token)).toBe(before);
+    expect(await charges(userId)).toEqual([]);
+    fail = false;
+    expect((await events(await turnOf(token, id, { message: 'Hello again' }))).at(-1)!.event).toBe('done');
+    expect(await charges(userId)).toHaveLength(1);
   });
 
-  it('refunds a failure in the first 5 minutes, but not a later one after the first turn', async () => {
-    let fail = false;
-    claude({ reply: () => (fail ? failing() : sseResponse(streamEvents('Sure.'))) });
-    const { token } = await signedInUser();
-    const early = await started(token);
-    await events(await turnOf(token, early, { message: 'One' }));
-    fail = true;
-    const res = await turnOf(token, early, { message: 'Two' });
-    expect(await res.json()).toMatchObject({ refunded: true });
-    expect(await credits(token)).toBe(1);
+  it('at 0 credits moves the session to its wrap-up, and the verdict still runs from its hold', async () => {
+    const calls = claude();
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    // Everything left is taken by something else (another tab's call, say).
+    const drained = await hold(e, userId, await balanceMc(e, userId), 'elsewhere');
+    expect(drained.ok).toBe(true);
+    const res = await turnOf(token, id, { message: 'Next?' });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toEqual({ error: 'no_credits', needed: interviewTurnHoldMc(e) / 1000, balance: 0, wrapUp: true });
+    expect(calls).toHaveLength(0);
+    const got = (await (await call(`/api/interviews/${id}`, { token })).json()) as { interview: { phase: string } };
+    expect(got.interview.phase).toBe('wrapup');
+    // The lease was let go.
+    expect((await env.DB.prepare('SELECT turning_until FROM ai_interviews WHERE id = ?').bind(id).first<{ turning_until: number | null }>())!.turning_until).toBeNull();
+    const finished = await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
+    expect(finished.status).toBe(200);
+    expect(await finished.json()).toMatchObject({ interview: { status: 'finished', verdict: verdictJson } });
+    expect((await charges(userId)).map((c) => c.action)).toEqual(['verdict']);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds WHERE ref = ?').bind(id).first<{ n: number }>()).toEqual({ n: 0 });
+  });
 
-    fail = false;
-    const late = await started(token);
-    await events(await turnOf(token, late, { message: 'One' }));
-    await age(late, 6 * MIN);
-    fail = true;
-    const kept = await turnOf(token, late, { message: 'Two' });
-    expect(kept.status).toBe(502);
-    expect(await kept.json()).toMatchObject({ error: 'ai_failed', refunded: false });
-    expect((await row(late))!.status).toBe('active');
-    expect(await credits(token)).toBe(0);
+  it('charges only the verdict that validated, not the malformed one asked for again', async () => {
+    let n = 0;
+    claude({
+      verdict: () =>
+        ++n === 1
+          ? messageResponse('not json', { usage: { input_tokens: 20_000, output_tokens: 8_000 } })
+          : messageResponse(JSON.stringify(verdictJson), { usage: { input_tokens: 1_000, output_tokens: 500 } }),
+    });
+    const { id: userId, token } = await user();
+    const id = await started(token);
+    expect((await call(`/api/interviews/${id}/finish`, { method: 'POST', token })).status).toBe(200);
+    expect(n).toBe(2);
+    const [charge] = await charges(userId);
+    expect(charge).toEqual({ action: 'verdict', charged_mc: costMc({ model: 'claude-sonnet-5-5', input_tokens: 1_000, output_tokens: 500 }, e) });
+    expect(await balanceMc(e, userId)).toBe(100_000 - charge.charged_mc);
   });
 
   it('takes one turn at a time: parallel turns call the model once and the others answer 409 turn_in_progress', async () => {
     let open!: () => void;
     const gate = new Promise<void>((resolve) => (open = resolve));
     const calls = claude({ reply: async () => (await gate, sseResponse(streamEvents('Sure.'))) });
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     const N = 4;
     const pending = Array.from({ length: N }, (_, i) => turnOf(token, id, { message: `Turn ${i}` }));
@@ -204,7 +250,7 @@ describe('AI interviews', () => {
 
   it('lets a turn go once its lease is past, and refuses a finish while a turn holds the session', async () => {
     claude();
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     await env.DB.prepare('UPDATE ai_interviews SET turning_until = ? WHERE id = ?').bind(Date.now() + 60_000, id).run();
     expect(await (await turnOf(token, id, { message: 'hi' })).json()).toMatchObject({ error: 'turn_in_progress' });
@@ -216,17 +262,17 @@ describe('AI interviews', () => {
     expect((await env.DB.prepare('SELECT turning_until FROM ai_interviews WHERE id = ?').bind(id).first<{ turning_until: number | null }>())!.turning_until).toBeNull();
   });
 
-  it('counts a failed call’s tokens, and gives no refund once the session billed more than the threshold', async () => {
-    // The stream fails after the model billed the input: no refund loop pays for model calls.
+  it('counts a failed call’s tokens against the cap, but charges the user nothing for it', async () => {
+    // The stream fails after the model billed the input: it counts toward the token cap, not the credits.
     const broken = () => sseResponse([{ type: 'message_start', message: { id: 'm', model: 'claude-sonnet-5-5', usage: { input_tokens: 3000, output_tokens: 1 } } }, { type: 'error', error: { type: 'overloaded_error', message: 'busy' } }]);
     claude({ reply: broken });
-    const { token } = await signedInUser();
+    const { id: userId, token } = await user();
     const id = await started(token);
     const res = await turnOf(token, id, { message: 'Hello' });
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ error: 'ai_failed', refunded: false, retryable: true });
+    expect(await res.json()).toEqual({ error: 'ai_failed', retryable: true });
     expect(await row(id)).toMatchObject({ status: 'active', tokens: 3001 });
-    expect(await credits(token)).toBe(0);
+    expect(await charges(userId)).toEqual([]);
     // Failed calls add up against the cap too.
     const again = await turnOf(token, id, { message: 'Hello' });
     expect(again.status).toBe(502);
@@ -235,7 +281,7 @@ describe('AI interviews', () => {
 
   it('checks the token cap against the stored total, failed calls included', async () => {
     const calls = claude();
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     await env.DB.prepare('UPDATE ai_interviews SET tokens = 590000 WHERE id = ?').bind(id).run();
     const budget = await turnOf(token, id, { message: 'hi' });
@@ -244,22 +290,24 @@ describe('AI interviews', () => {
     expect(calls).toHaveLength(0);
   });
 
-  it('counts a failed verdict’s tokens and keeps the session open without a refund', async () => {
+  it('counts a failed verdict’s tokens, charges nothing and keeps the session open with its hold', async () => {
     claude({ verdict: () => messageResponse('', { stop: 'refusal', usage: { input_tokens: 5000 } }) });
-    const { token } = await signedInUser();
+    const { id: userId, token } = await user();
     const id = await started(token);
     const res = await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ error: 'ai_failed', refunded: false });
+    expect(await res.json()).toEqual({ error: 'ai_failed', retryable: false });
     expect(await row(id)).toMatchObject({ status: 'active', tokens: 5050 });
-    expect(await credits(token)).toBe(0);
+    expect(await charges(userId)).toEqual([]);
+    // The verdict's hold stays for the next try.
+    expect(await credits(token)).toBe((100_000 - verdictHoldMc(e)) / 1000);
   });
 
-  it('never flips a finished session to failed, or refunds it, from a stale failing turn', async () => {
+  it('never flips a finished session to failed from a stale failing turn', async () => {
     let open!: () => void;
     const gate = new Promise<void>((resolve) => (open = resolve));
     claude({ reply: async () => (await gate, failing()) });
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     const pending = turnOf(token, id, { message: 'Hello' });
     await new Promise((resolve) => setTimeout(resolve, 100));
@@ -268,14 +316,12 @@ describe('AI interviews', () => {
     open();
     const res = await pending;
     expect(res.status).toBe(502);
-    expect(await res.json()).toMatchObject({ refunded: false });
     expect((await row(id))!.status).toBe('finished');
-    expect(await credits(token)).toBe(0);
   });
 
   it('refuses turns past the 60-minute wall clock or the token budget, and oversized input', async () => {
     const calls = claude();
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     expect((await turnOf(token, id, { message: 'x'.repeat(4001) })).status).toBe(400);
     expect((await turnOf(token, id, { message: 'hi', design: 'x'.repeat(64 * 1024 + 1) })).status).toBe(400);
@@ -290,13 +336,13 @@ describe('AI interviews', () => {
     expect(time.status).toBe(409);
     expect(await time.json()).toMatchObject({ error: 'time' });
     expect(calls).toHaveLength(0);
-    // Nothing failed: the credit stays spent and the session open for its verdict.
+    // Nothing failed: the session stays open for its verdict.
     expect((await row(id))!.status).toBe('active');
   });
 
   it('finishes with the verdict once, and takes no turns after', async () => {
     const calls = claude();
-    const { token } = await signedInUser();
+    const { token } = await user();
     const id = await started(token);
     await events(await turnOf(token, id, { message: 'Hello' }));
     const res = await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
@@ -311,16 +357,16 @@ describe('AI interviews', () => {
     expect(list.interviews).toMatchObject([{ id, status: 'finished', verdict: { passed: true } }]);
   });
 
-  it('answers 409 active_session while one is open, and ends it only when asked, without returning its credit', async () => {
+  it('answers 409 active_session while one is open, and ends it only when asked, letting go of its hold', async () => {
     claude();
-    const { id: userId, token } = await signedInUser();
-    await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'grant', 'pack', 5, 'pack_5', 'ord', 0)").bind(userId).run();
+    const { token } = await user(1000);
     const first = await started(token);
-    expect(await credits(token)).toBe(5);
+    const left = (1_100_000 - verdictHoldMc(e)) / 1000;
+    expect(await credits(token)).toBe(left);
     const refused = await startOne(token, { problem: 'url-shortener', minutes: 30 });
     expect(refused.status).toBe(409);
     expect(await refused.json()).toEqual({ error: 'active_session', id: first, problem: 'url-shortener' });
-    expect(await credits(token)).toBe(5);
+    expect(await credits(token)).toBe(left);
     expect((await row(first))!.status).toBe('active');
     expect((await startOne(token, { problem: 'url-shortener', minutes: 45, replace: 'yes' })).status).toBe(400);
 
@@ -329,7 +375,7 @@ describe('AI interviews', () => {
     const second = ((await replaced.json()) as { interview: { id: string } }).interview.id;
     expect((await row(first))!.status).toBe('abandoned');
     expect((await row(second))!.status).toBe('active');
-    expect(await credits(token)).toBe(4);
+    expect(await credits(token)).toBe(left);
     // A finished one doesn't block a new start.
     await call(`/api/interviews/${second}/finish`, { method: 'POST', token });
     expect((await startOne(token)).status).toBe(201);
@@ -337,7 +383,7 @@ describe('AI interviews', () => {
 
   it('exports the sessions with their transcripts, and deletes them with the account', async () => {
     claude();
-    const { id: userId, token } = await signedInUser();
+    const { id: userId, token } = await user();
     const id = await started(token);
     await events(await turnOf(token, id, { message: 'Hello' }));
     await call(`/api/interviews/${id}/finish`, { method: 'POST', token });
@@ -352,13 +398,14 @@ describe('AI interviews', () => {
 
   it('clears transcripts older than 90 days and keeps the verdicts', async () => {
     claude();
-    const { token } = await signedInUser();
+    const { token } = await user();
     const old = await started(token);
     await events(await turnOf(token, old, { message: 'Hello' }));
     await call(`/api/interviews/${old}/finish`, { method: 'POST', token });
     await age(old, TRANSCRIPT_TTL_MS + MIN);
     await env.DB.prepare('UPDATE ai_interview_messages SET at = at - ? WHERE interview_id = ?').bind(TRANSCRIPT_TTL_MS + MIN, old).run();
-    const { token: token2 } = await signedInUser();
+    const { token: token2 } = await user();
+
     const recent = await started(token2);
 
     expect(await pruneInterviewTranscripts(env)).toBe(1);

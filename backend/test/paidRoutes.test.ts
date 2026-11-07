@@ -1,6 +1,7 @@
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { HAIKU } from '../src/ai/client';
+import { grantSignupCredits } from '../src/credits';
 import { sha256 } from '../src/crypto';
 import { FEATURES } from '../src/features';
 import { isPaidPath, PAID_ROUTES } from '../src/index';
@@ -61,10 +62,12 @@ let bearers = 0;
 /**
  * An account on `plan`: 'comp' is on free with Pro given by the admin until
  * tomorrow (users.comp_until, src/plans.ts effectivePlan), 'expired' on free
- * with a comp that ended an hour ago.
+ * with a comp that ended an hour ago. Free accounts have their 100 sign-up
+ * credits (src/credits.ts grantSignupCredits).
  */
 async function account(plan: 'free' | 'pro' | 'comp' | 'expired', credential: Credential): Promise<Who> {
   const { id, token } = await signedInUser();
+  if (plan === 'free' || plan === 'expired') await grantSignupCredits(env, id, `test\n${id}`);
   if (plan === 'pro') await env.DB.prepare("UPDATE users SET plan = 'pro' WHERE id = ?").bind(id).run();
   const nowS = Math.floor(Date.now() / 1000);
   if (plan === 'comp') await env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(nowS + 86_400, id).run();
@@ -117,11 +120,12 @@ const CASES: Record<string, Case> = {
   'POST api/interviews': {
     free: async (who) => {
       await startedInterview(who);
-      // The one trial interview is spent: ending the open one with `replace`, or any other field, starts no other.
-      const again = await send(who, 'POST', '/api/interviews', { problem: 'url-shortener', minutes: 45, replace: true, credits: 99, bucket: 'pack', refId: 'x', plan: 'pro' });
+      // The sign-up credits spent: ending the open one with `replace`, or any other field, starts no other.
+      await env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at) VALUES (?, 'settle', 'signup', '', -100000, 'mock_interview', 'spent', 0)").bind(who.id).run();
+      const again = await send(who, 'POST', '/api/interviews', { problem: 'url-shortener', minutes: 45, replace: true, credits: 99, bucket: 'topup', refId: 'x', plan: 'pro' });
       expect(again.status).toBe(402);
-      expect(await again.json()).toMatchObject({ error: 'no_credits', credits: { total: 0 } });
-      expect((await env.DB.prepare("SELECT COUNT(*) AS n FROM credits WHERE user_id = ? AND kind = 'spend'").bind(who.id).first<{ n: number }>())!.n).toBe(1);
+      expect(await again.json()).toMatchObject({ error: 'no_credits', balance: 0 });
+      expect((await env.DB.prepare('SELECT SUM(delta_mc) AS n FROM credits WHERE user_id = ?').bind(who.id).first<{ n: number }>())!.n).toBe(0);
     },
     pro: async (who) => void (await startedInterview(who)),
   },
@@ -189,12 +193,13 @@ const CASES: Record<string, Case> = {
       expect(((await (await send(who, 'POST', `/api/interviews/${older}/finish`)).json()) as { interview: { verdict?: unknown } }).interview.verdict).toEqual(VERDICT);
     },
   },
+  // design_partner is on every plan, paid in credits.
   'POST api/review': {
-    free: async (who) => planRequired(await send(who, 'POST', '/api/review', REVIEW_BODY), 'ai_review'),
+    free: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
     pro: async (who) => expect((await send(who, 'POST', '/api/review', REVIEW_BODY)).status).toBe(200),
   },
   'GET api/review/usage': {
-    free: async (who) => planRequired(await send(who, 'GET', '/api/review/usage'), 'ai_review'),
+    free: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
     pro: async (who) => expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200),
   },
   'GET api/roadmap/next': {
@@ -299,13 +304,13 @@ describe('paid routes', () => {
     expect((await call(`/api/share/${share.token}`)).status).toBe(404);
   });
 
-  it('a comped account gets Pro’s limits and monthly interviews, and /api/me/plan says pro', async () => {
+  it('a comped account gets Pro’s limits and monthly credits, and /api/me/plan says pro', async () => {
     const who = await account('comp', 'cookie');
-    const plan = (await (await send(who, 'GET', '/api/me/plan')).json()) as { plan: string; limits: { documents: number | null }; credits: { monthly: number }; features: Record<string, { ok: boolean }> };
+    const plan = (await (await send(who, 'GET', '/api/me/plan')).json()) as { plan: string; limits: { documents: number | null }; credits: { monthly: { allowance: number } }; features: Record<string, { ok: boolean }> };
     expect(plan.plan).toBe('pro');
     expect(plan.limits.documents).toBeNull();
-    expect(plan.credits.monthly).toBe(4);
-    expect(Object.values(plan.features).every((f) => f.ok)).toBe(true);
+    expect(plan.credits.monthly.allowance).toBe(800);
+    expect(Object.entries(plan.features).filter(([, f]) => !f.ok).map(([id]) => id)).toEqual(['deep_mode', 'interview_report']);
     const expired = await account('expired', 'cookie');
     expect(((await (await send(expired, 'GET', '/api/me/plan')).json()) as { plan: string }).plan).toBe('free');
   });
@@ -370,8 +375,8 @@ describe('a downgrade', () => {
       expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
       expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
       await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
-      await planRequired(await send(who, 'GET', '/api/review/usage'), 'ai_review');
-      await planRequired(await send(who, 'POST', '/api/review', REVIEW_BODY), 'ai_review');
+      // The in-depth review is on every plan: what is left of the credits decides.
+      expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
     });
   }
 
