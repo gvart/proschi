@@ -50,6 +50,7 @@ test.describe('admin panel', () => {
     await expect(attention.getByText('POLAR_PRODUCT_PACK_5')).toBeVisible();
     await expect(attention.getByText('1 delivery refused or failed in the last 7 days')).toBeVisible();
     await expect(attention.getByRole('link', { name: 'Open Missing secrets' })).toHaveAttribute('href', '#/health');
+    await expect(attention.getByText('2 sign-ups refused free credits today (1 seen before, 1 disposable)')).toBeVisible();
     await expect(attention.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
 
     await nav(page).getByRole('link', { name: 'Users' }).click();
@@ -58,6 +59,9 @@ test.describe('admin panel', () => {
     await expect(page.getByRole('heading', { level: 1, name: 'Users' })).toBeVisible();
     await page.getByRole('button', { name: 'spammer9000' }).click();
     await expect(page).toHaveURL(new RegExp(`#/users/${USER}$`));
+    const signIn = page.getByRole('region', { name: 'Sign-in and sign-up credits' });
+    await expect(signIn.getByText('Email and password')).toBeVisible();
+    await expect(signIn.getByText('Refused: this person had an account before (same address or sign-in)')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'spammer9000' })).toBeVisible();
     await expect(page.getByText('free plan')).toBeVisible();
 

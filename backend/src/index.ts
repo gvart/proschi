@@ -35,6 +35,7 @@ import { getChallengeLeaderboard, getChallengeToday, postChallengeAttempt, postC
 import { configuredProviders, finishLogin, isProvider, logout, revokeAllSessions, startLogin, unlinkIdentity } from './auth';
 import { confirm as confirmEmailLogin, emailSignInAvailable, emailStatus, login as emailLogin, resend as resendConfirmation, reset as resetPassword, resetRequest, signup as emailSignup, startEmailLogin } from './emailAuth';
 import { turnstileSiteKey } from './turnstile';
+import { getSignups, getUserSignIn } from './adminSignups';
 import { createContext, type Ctx } from './context';
 import { hourlyCron } from './cron';
 import { deleteAllDocuments, deleteDocument, getLimits, listDocuments, putDocument } from './documents';
@@ -310,6 +311,8 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('GET', 'api', 'admin', 'health')) return getHealth(request, ctx);
   if (is('GET', 'api', 'admin', 'users')) return listUsers(request, ctx);
   if (is('GET', 'api', 'admin', 'users', '*')) return getUser(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'users', '*', 'sign-in')) return getUserSignIn(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'signups')) return getSignups(request, ctx);
   if (is('PATCH', 'api', 'admin', 'users', '*')) return patchUser(request, ctx, id);
   if (is('DELETE', 'api', 'admin', 'users', '*')) return deleteUser(request, ctx, id);
   if (is('POST', 'api', 'admin', 'users', '*', 'block')) return blockUser(request, ctx, id);

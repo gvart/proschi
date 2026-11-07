@@ -328,6 +328,10 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
       if (path === '/api/admin/events') return route.fulfill({ json: EVENTS });
       if (path === '/api/admin/audit') return route.fulfill({ json: AUDIT });
       if (path === '/api/admin/passkeys') return route.fulfill({ json: PASSKEYS });
+      if (path === '/api/admin/signups') return route.fulfill({ json: { refusedToday: 2, byReason: [{ reason: 'seen_before', n: 1 }, { reason: 'disposable', n: 1 }] } });
+      if (/^\/api\/admin\/users\/[^/]+\/sign-in$/.test(path)) {
+        return route.fulfill({ json: { methods: ['email'], confirmed: true, confirmedAt: now - DAY, signupCredits: { outcome: 'refused', reason: 'seen_before', decidedAt: now - DAY } } });
+      }
       const credits = /^\/api\/admin\/users\/([^/]+)\/credits$/.exec(path);
       if (credits) return route.fulfill({ json: ledger(credits[1]) });
       const user = /^\/api\/admin\/users\/([^/]+)$/.exec(path);

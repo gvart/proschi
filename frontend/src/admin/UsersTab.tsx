@@ -3,6 +3,7 @@ import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, 
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
 import { useAction, useLoad, type SortDir } from './hooks';
 import UserBilling from './UserBilling';
+import UserSignIn from './UserSignIn';
 import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton, SortHeader, Stat } from './ui';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
@@ -160,6 +161,8 @@ function UserDetailView({ id, onBack, onSignedOut }: { id: string; onBack: () =>
           <Stat label="Synced diagrams" value={formatNumber(data.documents.count)} note={formatBytes(data.documents.bytes)} />
         </div>
       </Section>
+
+      <UserSignIn id={id} onSignedOut={onSignedOut} />
 
       <UserBilling id={id} data={data} onChanged={detail.reload} onSignedOut={onSignedOut} />
 
