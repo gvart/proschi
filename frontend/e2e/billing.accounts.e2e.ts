@@ -77,7 +77,7 @@ test('upgrade: pricing, Polar checkout, back to Plan & billing on Pro', async ({
   expect((await welcome.boundingBox())!.y).toBeLessThan((await billing.boundingBox())!.y);
   await expect(billing.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
   await expect(billing).toContainText('Pro yearly, renews on 6 November 2027.');
-  await expect(billing.getByTestId('credits')).toHaveText('AI interviews left: 5 (4 of 4 this month, 1 free one).');
+  await expect(billing.getByTestId('credits')).toHaveText('4 of 4 this month, 1 free one.');
   await expect(page).not.toHaveURL(/checkout=done/);
   await expect(billing.getByRole('link', { name: 'Upgrade to Pro' })).toHaveCount(0);
 
@@ -187,7 +187,7 @@ test('checkout return: a pack shows the interviews added, without the welcome; n
   current = { ...FREE_PLAN, customer: true, credits: { total: 6, monthly: 0, trial: 1, pack: 5, period: '2026-11' } };
   await page.clock.runFor(1000);
   await expect(banner(page)).toHaveText('5 interviews added.');
-  await expect(page.getByTestId('credits')).toHaveText('AI interviews left: 6 (1 free one, 5 from packs).');
+  await expect(page.getByTestId('credits')).toHaveText('1 free one, 5 from packs.');
   await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
   await expect(page.getByTestId('pro-badge')).toHaveCount(0);
   await expect(page).not.toHaveURL(/checkout|product/);

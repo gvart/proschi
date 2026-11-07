@@ -80,6 +80,12 @@ function Figure({ label, value, unit, children }: { label: string; value: number
   );
 }
 
+/** Where the interviews left come from: "3 of 4 this month, 1 free one." */
+function creditsText(plan: PlanInfo): string {
+  const text = creditParts(plan).join(', ');
+  return text ? `${text[0].toUpperCase()}${text.slice(1)}.` : 'None left.';
+}
+
 export default function PlanBilling() {
   const { plan, error } = usePlan(billingEnabled);
   const used = useDiagramsUsed();
@@ -140,14 +146,13 @@ export default function PlanBilling() {
             <Figure label="AI interviews left" value={plan.credits.total}>
               <Meter label="AI interviews left" value={plan.credits.total} max={Math.max(plan.credits.total, plan.limits.interviewsPerMonth + plan.credits.trial + plan.credits.pack)} />
               <p className="mt-2 text-xs text-muted" data-testid="credits">
-                AI interviews left: <strong className="text-ink">{plan.credits.total}</strong>
-                {creditParts(plan).length ? ` (${creditParts(plan).join(', ')})` : ''}.
+                {creditsText(plan)}
               </p>
             </Figure>
             <Figure
               label="Diagrams in your account"
               value={used ?? '–'}
-              unit={plan.limits.documents === null ? 'no limit' : `of ${plan.limits.documents}`}
+              unit={plan.limits.documents === null ? 'kept, no limit' : `of ${plan.limits.documents}`}
             >
               {plan.limits.documents !== null && <Meter label="Diagrams in your account" value={used ?? 0} max={plan.limits.documents} />}
               <p className="mt-2 text-xs text-muted">

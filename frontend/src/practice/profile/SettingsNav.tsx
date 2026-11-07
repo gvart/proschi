@@ -75,7 +75,7 @@ export default function SettingsNav({ sections }: { sections: { id: SectionId; t
                   aria-current={on ? 'true' : undefined}
                   className={`-ml-[2px] block w-full border-l-bw-1 py-1.5 pl-4 pr-2 text-left text-sm transition-colors duration-d1 ${
                     on ? 'border-ink font-bold text-ink' : 'border-transparent text-muted hover:border-ink/40 hover:text-ink'
-                  } ${id === 'danger' && !on ? 'text-red-700 dark:text-red-300' : ''}`}
+                  }`}
                 >
                   {title}
                 </button>
@@ -101,7 +101,7 @@ export default function SettingsNav({ sections }: { sections: { id: SectionId; t
                   type="button"
                   onClick={() => go(id)}
                   aria-current={id === current ? 'true' : undefined}
-                  className={`block w-full px-3 py-2.5 text-left text-sm hover:bg-pop-yellow/30 ${id === current ? 'font-bold text-ink' : id === 'danger' ? 'text-red-700 dark:text-red-300' : 'text-ink'}`}
+                  className={`block w-full px-3 py-2.5 text-left text-sm hover:bg-pop-yellow/30 ${id === current ? 'font-bold text-ink' : 'text-ink'}`}
                 >
                   {title}
                 </button>

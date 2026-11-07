@@ -69,7 +69,7 @@ export default function AccountRoute({ account, activity }: { account: Account; 
 
       <div className="mt-8 min-[900px]:grid min-[900px]:grid-cols-[13rem_minmax(0,1fr)] min-[900px]:gap-12">
         <SettingsNav sections={sections} />
-        <div className="mt-4 max-w-3xl space-y-12 min-[900px]:mt-0">
+        <div className="mt-4 max-w-3xl space-y-10 min-[900px]:mt-0">
           <PlanBilling />
           <ProfileSection account={account} user={user} />
           <LearningSection activity={activity} />
