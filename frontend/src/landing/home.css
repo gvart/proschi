@@ -1400,6 +1400,16 @@ h3 {
   padding: 0 40px;
   font-size: var(--fs-20);
 }
+.closer__note {
+  max-width: 34rem;
+  margin: 12px auto 28px;
+  opacity: 0.85;
+}
+.closer__note a {
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
 .closer__examples-title {
   margin-top: 40px;
   font-weight: 700;

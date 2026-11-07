@@ -307,9 +307,11 @@ requirements {
       <section class="closer" aria-labelledby="closer-title">
         <div class="ps-wrap closer__inner" data-reveal>
           <h2 id="closer-title" class="closer__title">
-            <span>Free.</span> <span>Open source.</span> <span>No account.</span>
+            <span>Free.</span> <span>Open source.</span> <span>No account needed.</span>
           </h2>
-          <p class="closer__sub">Your diagrams never leave the browser.</p>
+          <!-- if:… blocks are kept only in builds that have the feature (src/landing/flags.ts). -->
+          <p class="closer__sub">The editor and the simulation run in your browser.<!--if:accounts--> Sign in to sync your diagrams and practice progress across devices.<!--/if--></p>
+          <!--if:billing--><p class="closer__note">Mock interviews and Design partner run on credits, and a free account comes with enough to try a mock interview. <a href="./pricing/">See plans</a></p><!--/if-->
           <a class="ps-btn ps-btn--primary ps-btn--lg closer__cta" data-magnetic href="./app/">Start typing <span class="ps-btn__trail" aria-hidden="true">→</span></a>
           <p class="closer__examples-title" id="examples-title">Or open an example, break it, make it yours:</p>
           <ul class="closer__examples" aria-labelledby="examples-title">
