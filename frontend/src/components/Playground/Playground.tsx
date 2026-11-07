@@ -839,7 +839,7 @@ export default function Playground() {
     >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact siteNav={false} actions={<AccountMenu account={account} />}>
-        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-initial">
           <button
             type="button"
             aria-label="Diagrams"
@@ -993,7 +993,7 @@ export default function Playground() {
           }}
         />
 
-        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
           <select
             aria-label="Use case"
             value={useCase?.id ?? ''}
@@ -1061,12 +1061,13 @@ export default function Playground() {
           <div data-tour="share">
             <Menu
               label={copied ? 'Copied' : 'Share'}
+              title="Share: a link, a short link or an embed"
               align="right"
               buttonClassName={outlineButton}
               trigger={
                 <>
                   {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
-                  <span className="hidden sm:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
+                  <span className="hidden xl:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
                 </>
               }
             >

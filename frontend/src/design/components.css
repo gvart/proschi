@@ -720,6 +720,26 @@
   gap: 6px 8px;
   min-width: 0;
 }
+/* From 1280px the bar stays one row: what is too long (a diagram's or a
+   problem's title) is cut short instead of wrapping. To make room for the
+   toolbar, the account control shows its icon only, and the credits chip its
+   number only, until the bar is wide enough (both say the rest in their
+   label and menu). */
+@media (min-width: 1280px) {
+  .ps-header__tools {
+    flex-wrap: nowrap;
+  }
+}
+@media (max-width: 1439px) {
+  .ps-header--compact .ps-credits__word {
+    display: none;
+  }
+}
+@media (max-width: 1599px) {
+  .ps-header--compact .ps-account__name {
+    display: none;
+  }
+}
 /* On phones the toolbar's items join the bar's own row, and a group marked
    .ps-header__wrap drops to a full-width row of its own under it. */
 @media (max-width: 639px) {
@@ -745,7 +765,9 @@
   padding: 0 8px;
   font-size: var(--fs-14);
 }
-@media (min-width: 1280px) {
+/* A compact bar with site links (a practice problem) is full of its own
+   controls: the links stay in the menu until there is room for them too. */
+@media (min-width: 1680px) {
   .ps-header--compact .ps-nav {
     display: flex;
   }
