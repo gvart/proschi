@@ -306,6 +306,66 @@ export const PASSKEYS = {
   sessions: 2,
 };
 
+/** The Inbox (GET /api/admin/feedback): a bug with a screenshot and a diagram, unread; a proposal in progress; a question done. */
+export const FEEDBACK_BUG = '44444444-4444-4444-8444-444444444444';
+const sender = { id: USER, displayName: 'Ada Lovelace', blocked: false };
+export const FEEDBACK = {
+  total: 2,
+  offset: 0,
+  pageSize: 50,
+  counts: { unread: 1, open: 2, new: 1, inProgress: 1, done: 1 },
+  messages: [
+    {
+      id: FEEDBACK_BUG,
+      kind: 'bug',
+      subject: 'Playback stops at the cache',
+      excerpt: 'When I play the checkout use case, the dots stop at the Redis node and never come back.',
+      status: 'new',
+      createdAt: now - 1_200,
+      read: false,
+      hasDiagram: true,
+      screenshots: 1,
+      sender,
+    },
+    {
+      id: '55555555-5555-4555-8555-555555555555',
+      kind: 'proposal',
+      subject: null,
+      excerpt: 'It would help to export the diagram as SVG for slides.',
+      status: 'in_progress',
+      createdAt: now - 2 * DAY,
+      read: true,
+      hasDiagram: false,
+      screenshots: 0,
+      sender: { id: PRO_USER, displayName: 'Grace Hopper', blocked: false },
+    },
+  ],
+};
+
+export const FEEDBACK_DETAIL = {
+  id: FEEDBACK_BUG,
+  kind: 'bug',
+  subject: 'Playback stops at the cache',
+  message: 'When I play the checkout use case, the dots stop at the Redis node and never come back.\n\nSteps: open the editor, press Play.\n<script>alert(1)</script>',
+  context: {
+    path: '/app/',
+    userAgent: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+    viewport: '1440×900',
+    plan: 'pro',
+    version: { id: 'b1c2d3e4', tag: 'v0.42.0', timestamp: '2026-11-06T10:00:00Z' },
+  },
+  diagram: 'service api "API"\ndatabase db "Postgres"\napi -> db',
+  status: 'new',
+  note: null,
+  createdAt: now - 1_200,
+  updatedAt: now - 1_200,
+  sender: { ...sender, email: 'ada@example.com' },
+  screenshots: [{ key: 'AAAAAAAAAAAAAAAAAAAAAA', type: 'image/png', bytes: 182_000 }],
+};
+
+/** A 1×1 PNG, for the screenshots. */
+export const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+
 /** Mocks /api/admin/*; returns every change the page sent, with its body. */
 export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAvailable: boolean; signedIn: boolean }) {
   const state: { blocked: boolean; compUntil: number | null } = { blocked: false, compUntil: null };
@@ -322,6 +382,7 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
         if (path.endsWith('/comp')) state.compUntil = body?.until as number;
         if (path.endsWith('/comp/end')) state.compUntil = null;
         if (path.endsWith('/credits')) return route.fulfill({ json: { delta: body?.kind === 'revoke' ? -Number(body.credits) : Number(body?.credits), credits: {} } });
+        if (request.method() === 'PATCH' && path.startsWith('/api/admin/feedback/')) return route.fulfill({ json: { status: body?.status, note: body?.note ?? null } });
         return route.fulfill({ status: 204 });
       }
       if (path === '/api/admin/status') return route.fulfill({ json: status });
@@ -341,6 +402,9 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
       if (/^\/api\/admin\/users\/[^/]+\/sign-in$/.test(path)) {
         return route.fulfill({ json: { methods: ['email'], confirmed: true, confirmedAt: now - DAY, signupCredits: { outcome: 'refused', reason: 'seen_before', decidedAt: now - DAY } } });
       }
+      if (path === '/api/admin/feedback') return route.fulfill({ json: FEEDBACK });
+      if (path === `/api/admin/feedback/${FEEDBACK_BUG}`) return route.fulfill({ json: FEEDBACK_DETAIL });
+      if (path.startsWith(`/api/admin/feedback/${FEEDBACK_BUG}/files/`)) return route.fulfill({ body: PNG_1PX, contentType: 'image/png' });
       const credits = /^\/api\/admin\/users\/([^/]+)\/credits$/.exec(path);
       if (credits) return route.fulfill({ json: ledger(credits[1]) });
       const user = /^\/api\/admin\/users\/([^/]+)$/.exec(path);
