@@ -143,12 +143,14 @@ export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: 
             <Check ok={config.polar.webhookSecret} label="POLAR_WEBHOOK_SECRET set" />
             <Check ok={config.polar.productProMonthly} label="POLAR_PRODUCT_PRO_MONTHLY set" />
             <Check ok={config.polar.productProYearly} label="POLAR_PRODUCT_PRO_YEARLY set" />
-            <Check ok={config.polar.productPack5} label="POLAR_PRODUCT_PACK_5 set" />
+            <Check ok={config.polar.productMaxMonthly} label="POLAR_PRODUCT_MAX_MONTHLY set" />
+            <Check ok={config.polar.productMaxYearly} label="POLAR_PRODUCT_MAX_YEARLY set" />
+            <Check ok={config.polar.productCredits1000} label="POLAR_PRODUCT_CREDITS_1000 set" />
             <li className={`adm-check adm-check--${config.polarServer === 'live' ? 'ok' : 'off'}`}>
               <span aria-hidden="true">{config.polarServer === 'live' ? '✓' : '–'}</span> POLAR_SERVER: {config.polarServer === 'live' ? 'live (real payments)' : 'sandbox (test payments)'}
             </li>
           </ul>
-          <p className="adm-muted">{config.billing ? 'Billing is on.' : 'Billing is off: checkout answers 501 until all five Polar secrets are set.'} Only whether each is set is shown, never a value.</p>
+          <p className="adm-muted">{config.billing ? 'Billing is on.' : 'Billing is off: checkout answers 501 until all seven Polar secrets are set.'} Only whether each is set is shown, never a value.</p>
         </Section>
       </div>
 

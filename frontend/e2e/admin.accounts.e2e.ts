@@ -43,11 +43,11 @@ test.describe('admin panel', () => {
     const kpis = page.getByRole('region', { name: 'Key numbers' });
     for (const label of ['Sign-ups', 'Weekly active users', 'Pro subscribers', 'Interviews finished', 'AI spend', 'Webhook failures']) await expect(kpis.getByText(label, { exact: true })).toBeVisible();
     await expect(kpis.getByText('vs previous 30 days').first()).toBeVisible();
-    for (const chart of ['Sign-ups', 'Weekly active users', 'AI spend (USD)', 'AI interviews finished', 'Pro subscribers', 'Interview pack orders']) {
+    for (const chart of ['Sign-ups', 'Weekly active users', 'AI spend (USD)', 'AI interviews finished', 'Pro subscribers', 'Credit top-up orders']) {
       await expect(page.getByRole('figure', { name: chart, exact: true })).toBeVisible();
     }
     const attention = page.getByRole('region', { name: 'Needs attention' });
-    await expect(attention.getByText('POLAR_PRODUCT_PACK_5')).toBeVisible();
+    await expect(attention.getByText('POLAR_PRODUCT_CREDITS_1000')).toBeVisible();
     await expect(attention.getByText('1 delivery refused or failed in the last 7 days')).toBeVisible();
     await expect(attention.getByRole('link', { name: 'Open Missing secrets' })).toHaveAttribute('href', '#/health');
     await expect(attention.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
@@ -78,21 +78,21 @@ test.describe('admin panel', () => {
     await expect(page.getByRole('heading', { name: 'Ada Lovelace' })).toBeVisible();
     await expect(page.getByText('pro plan')).toBeVisible();
     await expect(page.getByRole('link', { name: /Open in Polar \(sandbox\)/ })).toHaveAttribute('href', 'https://sandbox.polar.sh/to/dashboard/customers/cus_01JAZ2K7M3');
-    await expect(page.getByText('3 monthly · 0 trial · 6 pack')).toBeVisible();
+    await expect(page.getByText('721.148 of 800 monthly · 0 sign-up · 1,012.652 top-up')).toBeVisible();
     await expect(page.getByRole('heading', { name: 'Credit ledger (7)' })).toBeVisible();
     await expect(page.getByRole('link', { name: 'ord_01JAZ4X9Q2' })).toHaveAttribute('href', 'https://sandbox.polar.sh/to/dashboard/sales/ord_01JAZ4X9Q2');
 
     await page.getByRole('button', { name: 'Grant or revoke credits' }).click();
     const dialog = page.getByRole('dialog', { name: 'Credits for Ada Lovelace' });
     await expect(dialog).toBeVisible();
-    await dialog.getByLabel('Pack credits').fill('2');
+    await dialog.getByLabel('Credits (up to 3 decimals)').fill('12.5');
     // The reason is required: the browser keeps the form from submitting without one.
-    await dialog.getByRole('button', { name: 'Grant 2 credits' }).click();
+    await dialog.getByRole('button', { name: 'Grant 12.5 credits' }).click();
     expect(posts).toEqual([]);
     await dialog.getByLabel('Reason (in the audit log)').fill('Support ticket 1234');
-    await dialog.getByRole('button', { name: 'Grant 2 credits' }).click();
-    await expect(page.getByText('Granted 2 pack credits.')).toBeVisible();
-    expect(posts).toEqual([{ method: 'POST', path: `/api/admin/users/${PRO_USER}/credits`, body: { kind: 'grant', credits: 2, ref: expect.stringMatching(/^[0-9a-f-]{36}$/), reason: 'Support ticket 1234' } }]);
+    await dialog.getByRole('button', { name: 'Grant 12.5 credits' }).click();
+    await expect(page.getByText('Granted 12.5 top-up credits.')).toBeVisible();
+    expect(posts).toEqual([{ method: 'POST', path: `/api/admin/users/${PRO_USER}/credits`, body: { kind: 'grant', credits: 12.5, ref: expect.stringMatching(/^[0-9a-f-]{36}$/), reason: 'Support ticket 1234' } }]);
 
     await page.getByRole('button', { name: 'Comp Pro' }).click();
     const comp = page.getByRole('dialog', { name: 'Comp Pro for Ada Lovelace' });
@@ -124,7 +124,7 @@ test.describe('admin panel', () => {
     await expect(page).toHaveURL(/#\/overview\/90$/);
     await expect(range.getByRole('button', { name: 'Last 90 days' })).toHaveAttribute('aria-pressed', 'true');
     await expect(signups.getByText('in 90 days')).toBeVisible();
-    await expect(page.getByRole('figure', { name: 'Interview pack orders', exact: true }).getByText('in 90 days')).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Credit top-up orders', exact: true }).getByText('in 90 days')).toBeVisible();
     await expect(page.getByRole('region', { name: 'Key numbers' }).getByText('vs previous 90 days')).toHaveCount(6);
     // Every day of the range is in the chart's table.
     await signups.getByText('Show numbers').click();
@@ -162,8 +162,11 @@ test.describe('admin panel', () => {
     await mockAdmin(page, signedIn);
     await page.goto('admin/#/billing');
     await expect(nav(page).getByRole('link', { name: 'Billing' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('heading', { name: 'Pro accounts (4)' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Paid accounts (5)' })).toBeVisible();
     await expect(page.getByText('Comp until')).toBeVisible();
+    await expect(page.getByRole('row', { name: /Margaret Hamilton/ }).getByText('Max', { exact: true })).toBeVisible();
+    await expect(page.getByText('Max accounts')).toBeVisible();
+    await expect(page.getByText('Top-up orders', { exact: true })).toBeVisible();
     await expect(page.getByRole('link', { name: 'ord_01JC7N2V8F' })).toHaveAttribute('href', 'https://sandbox.polar.sh/to/dashboard/sales/ord_01JC7N2V8F');
   });
 
@@ -183,8 +186,12 @@ test.describe('admin panel', () => {
   test('the AI tab: interviews per day, cost, top accounts and the token cap', async ({ page }) => {
     await mockAdmin(page, signedIn);
     await page.goto('admin/#/ai');
-    await expect(page.getByRole('figure', { name: /AI interviews, by the UTC day/ })).toBeVisible();
-    await expect(page.getByRole('list', { name: 'Series' }).getByRole('listitem')).toHaveCount(4);
+    const interviews = page.getByRole('figure', { name: /AI interviews, by the UTC day/ });
+    await expect(interviews).toBeVisible();
+    await expect(interviews.getByRole('list', { name: 'Series' }).getByRole('listitem')).toHaveCount(3);
+    // The credits charged per day, against what those calls cost.
+    await expect(page.getByRole('figure', { name: /Credits charged \(€\) against/ })).toBeVisible();
+    await expect(page.getByText('Credits charged', { exact: true })).toBeVisible();
     await expect(page.getByText('Hit the token cap')).toBeVisible();
     await page.getByRole('button', { name: 'Ada Lovelace' }).click();
     await expect(page).toHaveURL(new RegExp(`#/users/${PRO_USER}$`));

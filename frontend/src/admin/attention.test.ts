@@ -10,7 +10,7 @@ const config: Health['config'] = {
   setupToken: false,
   anthropicKey: true,
   aiGateway: false,
-  polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productPack5: true },
+  polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productMaxMonthly: true, productMaxYearly: true, productCredits1000: true },
   polarServer: 'live',
   billing: true,
 };
@@ -18,9 +18,9 @@ const config: Health['config'] = {
 describe('needs attention', () => {
   it('names the required secrets that are missing, never the optional ones', () => {
     expect(missingSecrets(config)).toEqual([]);
-    expect(missingSecrets({ ...config, anthropicKey: false, polar: { ...config.polar, productPack5: false }, setupToken: true })).toEqual([
+    expect(missingSecrets({ ...config, anthropicKey: false, polar: { ...config.polar, productCredits1000: false }, setupToken: true })).toEqual([
       'ANTHROPIC_API_KEY',
-      'POLAR_PRODUCT_PACK_5',
+      'POLAR_PRODUCT_CREDITS_1000',
       'ADMIN_SETUP_TOKEN (still set: remove it)',
     ]);
     expect(missingSecrets({ ...config, providers: [] })).toEqual(['a sign-in provider']);

@@ -13,7 +13,7 @@ function OrderLink({ dashboard, orderId }: { dashboard: PolarDashboard; orderId:
   );
 }
 
-/** Pro accounts, subscribers, pack orders and refunds (the webhook log is WebhooksTab). Amounts live in Polar; D1 has counts only. */
+/** Pro and Max accounts, subscribers, credit top-up orders and refunds (the webhook log is WebhooksTab). Amounts live in Polar; D1 has counts only. */
 export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
   const [offset, setOffset] = useState(0);
   const billing = useLoad(() => getBilling(offset), [offset], onSignedOut);
@@ -26,7 +26,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
       </>
     );
   const { counts, polarDashboard: dashboard } = data;
-  const atList = counts.monthly * PRICES.proMonthly + (counts.yearly * PRICES.proYearly) / 12;
+  const atList = counts.monthly * PRICES.proMonthly + (counts.yearly * PRICES.proYearly) / 12 + counts.maxMonthly * PRICES.maxMonthly + (counts.maxYearly * PRICES.maxYearly) / 12;
   return (
     <>
       <PageHeader
@@ -41,10 +41,13 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
       <Section title="Subscribers">
         <div className="adm-stats">
           <Stat label="Pro accounts" value={formatNumber(counts.pro)} note={`${formatNumber(counts.comped)} comped · ${formatNumber(counts.canceling)} canceling`} />
-          <Stat label="Monthly" value={formatNumber(counts.monthly)} note={`€${PRICES.proMonthly} a month list price`} />
-          <Stat label="Yearly" value={formatNumber(counts.yearly)} note={`€${PRICES.proYearly} a year list price`} />
+          <Stat label="Max accounts" value={formatNumber(counts.max)} />
+          <Stat label="Pro monthly" value={formatNumber(counts.monthly)} note={`€${PRICES.proMonthly} a month list price`} />
+          <Stat label="Pro yearly" value={formatNumber(counts.yearly)} note={`€${PRICES.proYearly} a year list price`} />
+          <Stat label="Max monthly" value={formatNumber(counts.maxMonthly)} note={`€${PRICES.maxMonthly} a month list price`} />
+          <Stat label="Max yearly" value={formatNumber(counts.maxYearly)} note={`€${PRICES.maxYearly} a year list price`} />
           <Stat label="Past due" value={formatNumber(counts.pastDue)} tone={counts.pastDue ? 'warn' : undefined} note="still Pro while Polar retries" />
-          <Stat label="Pack orders" value={formatNumber(counts.packOrdersThisMonth)} note={`this month, ${formatNumber(counts.packOrders)} in all · €${PRICES.pack} each`} />
+          <Stat label="Top-up orders" value={formatNumber(counts.topupOrdersThisMonth)} note={`this month, ${formatNumber(counts.topupOrders)} in all · €${PRICES.topup} for ${formatNumber(PRICES.topupCredits)} credits`} />
           <Stat label="Refunded orders" value={formatNumber(counts.refundedThisMonth)} note={`this month, ${formatNumber(counts.refunded)} in all`} tone={counts.refundedThisMonth ? 'warn' : undefined} />
         </div>
         <p className="adm-muted">
@@ -56,9 +59,9 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
         </p>
       </Section>
 
-      <Section title={`Pro accounts (${formatNumber(data.total)})`}>
+      <Section title={`Paid accounts (${formatNumber(data.total)})`}>
         {data.pro.length === 0 ? (
-          <Empty>Nobody is on Pro yet.</Empty>
+          <Empty>Nobody is on Pro or Max yet.</Empty>
         ) : (
           <>
             <ProTable rows={data.pro} dashboard={dashboard} onOpenUser={onOpenUser} />
@@ -68,7 +71,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
       </Section>
 
       <div className="adm-columns">
-        <Section title="Recent pack orders">
+        <Section title="Recent top-up orders">
           {data.orders.length === 0 ? (
             <Empty>None yet.</Empty>
           ) : (
@@ -116,7 +119,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
               <tbody>
                 {[
                   ...data.refundedOrders.map((r) => ({ key: `r-${r.orderId}`, at: r.refundedAt, what: <>Refunded order <OrderLink dashboard={dashboard} orderId={r.orderId} /></>, user: r.user, delta: null })),
-                  ...data.adjustments.map((a) => ({ key: `a-${a.kind}-${a.refId}`, at: a.createdAt, what: <>{a.kind === 'revoke' ? 'Pack taken back' : a.kind === 'admin_grant' ? 'Admin grant' : 'Admin revoke'}</>, user: a.user, delta: a.delta })),
+                  ...data.adjustments.map((a) => ({ key: `a-${a.kind}-${a.refId}`, at: a.createdAt, what: <>{a.kind === 'topup_revoke' ? 'Top-up taken back' : a.kind === 'admin_grant' ? 'Admin grant' : 'Admin revoke'}</>, user: a.user, delta: a.delta })),
                 ]
                   .sort((a, b) => b.at - a.at)
                   .map((r) => (
@@ -132,7 +135,7 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
               </tbody>
             </table>
           )}
-          <p className="adm-footnote">Refunds are made in Polar; its webhook takes back what is left of a pack.</p>
+          <p className="adm-footnote">Refunds are made in Polar; its webhook takes back what is left of a top-up.</p>
         </Section>
       </div>
 
@@ -140,12 +143,13 @@ export default function BillingTab({ onOpenUser, onSignedOut }: { onOpenUser: (i
   );
 }
 
-/** The page of Pro accounts, sortable by each column. */
+/** The page of Pro and Max accounts, sortable by each column. */
 function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashboard: PolarDashboard; onOpenUser: (id: string) => void }) {
   const table = useSort(
     rows,
     {
       name: (p) => p.displayName,
+      plan: (p) => p.plan,
       through: (p) => (p.source === 'subscription' ? (p.product ?? '') : p.source),
       status: (p) => p.status,
       ends: (p) => p.currentPeriodEnd ?? p.compUntil,
@@ -158,7 +162,8 @@ function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashb
         <thead>
           <tr>
             <SortHeader label="Name" {...table.by('name')} />
-            <SortHeader label="Pro through" {...table.by('through')} />
+            <SortHeader label="Plan" {...table.by('plan')} />
+            <SortHeader label="Through" {...table.by('through')} />
             <SortHeader label="Status" {...table.by('status')} />
             <SortHeader label="Renews or ends" {...table.by('ends')} />
             <th scope="col">Polar</th>
@@ -170,6 +175,7 @@ function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashb
               <td>
                 <UserLink user={p} onOpenUser={onOpenUser} />
               </td>
+              <td>{humanize(p.plan)}</td>
               <td>{p.source === 'subscription' ? humanize(p.product ?? 'subscription') : p.source === 'comp' ? `Comp until ${formatDate(p.compUntil)}` : 'Plan set by hand'}</td>
               <td className="adm-badges">
                 {p.status && <span className={`ps-badge ps-badge--${p.status === 'past_due' ? 'yellow' : p.source === 'subscription' ? 'pass' : 'neutral'}`}>{humanize(p.status)}</span>}
