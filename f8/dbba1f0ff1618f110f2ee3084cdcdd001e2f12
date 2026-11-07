@@ -1,0 +1,43 @@
+docs/EDITORS.md
+  s_e17b87e0a1b3ca::t_739f1633b0b0aa 431-432
+docs/PRACTICE.md
+  s_e17b87e0a1b3ca::t_739f1633b0b0aa 572-574
+frontend/src/components/Feature.test.tsx
+  s_e17b87e0a1b3ca::t_5b1f811bc1f419 26,30,47,49,58,65,72,76,81,87,92,95
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_b4bb77dcce954b 191
+frontend/src/services/featureContract.ts
+  s_e17b87e0a1b3ca::t_83051ea5f3278a 9
+backend/README.md
+  s_e17b87e0a1b3ca::t_90405edacdcdc2 334,399,511-521,1108,1159-1160,1164
+frontend/src/components/featureState.ts
+  s_e17b87e0a1b3ca::t_5b1f811bc1f419 12
+backend/test/features.test.ts
+  s_e17b87e0a1b3ca::t_5b1f811bc1f419 28
+backend/test/paidRoutes.test.ts
+  s_e17b87e0a1b3ca::t_f95d0d349ae2ca 270-272,386-387
+  s_e17b87e0a1b3ca::t_38de74df9aae56 32,43,285
+backend/src/ai/reviewer.ts
+  s_e17b87e0a1b3ca::t_a06f7ccb98a609 4,9-10
+backend/src/roadmap.ts
+  s_e17b87e0a1b3ca::t_ecf6ee9bc724bb 17-18,34
+frontend/src/review/contract.ts
+  s_e17b87e0a1b3ca::t_ffa42c42aa75c7 2-5
+  s_e17b87e0a1b3ca::t_1d8482a2ef7848 178,210
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "f8dbba1f0ff1618f110f2ee3084cdcdd001e2f12",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
