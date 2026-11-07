@@ -1,0 +1,119 @@
+backend/wrangler.jsonc
+  s_e17b87e0a1b3ca::t_3830560ba0596c 31,90-91
+backend/src/adminSignups.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-50
+backend/src/signupCredits.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1,3-11,14-17
+  s_e17b87e0a1b3ca::t_8f5dd50e346e2a 2,12-13,18
+frontend/src/admin/UserSignIn.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-33
+frontend/src/auth/Turnstile.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-90
+frontend/public/_headers
+  s_e17b87e0a1b3ca::t_3830560ba0596c 32-38
+backend/src/emailAuth.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-396
+backend/src/auth.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 3,12,42-43,65,69,91,102,125-129,134-148,297,315,349-350,366,370-401
+  s_e17b87e0a1b3ca::t_1853c20d767ac8 402
+backend/migrations/0026_email_auth.sql
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-81
+backend/test/auth.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 21,57
+  s_e17b87e0a1b3ca::t_d5b99a573ba536 5
+  s_e17b87e0a1b3ca::t_dda284ae6229e8 119-120,124
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 14-15
+backend/README.md
+  s_e17b87e0a1b3ca::t_3830560ba0596c 20-21,23-25,685-762,1305-1306
+backend/src/env.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 101-108
+frontend/src/services/api.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 14-15
+frontend/vite.config.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 86-87
+backend/src/emails.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 192-244
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 36-38,76-77,223-235,330-331
+frontend/src/admin/signups.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-41
+backend/src/signupChecks.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-155
+frontend/src/components/Playground/CloudStatus.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 6
+frontend/src/auth/SignInApp.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-527
+docs/PRIVACY.md
+  s_e17b87e0a1b3ca::t_3830560ba0596c 11,118-119,226-228,233-234,236-240,424-469,530-533
+frontend/e2e/admin.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 53,62-64
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 18,253
+backend/test/setup.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 7,12
+frontend/e2e/signin.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-148
+frontend/src/auth/main.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-14
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_1b99577176b0b3 57
+backend/src/disposableDomains.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-3
+backend/test/admin.test.ts
+  s_e17b87e0a1b3ca::t_1b99577176b0b3 391
+backend/test/emailAuth.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-456
+frontend/signin/index.html
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-30
+frontend/e2e/admin.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 340-343
+frontend/src/auth/signin.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-67
+backend/test/apptokens.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 33
+backend/vitest.config.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 34-36
+frontend/src/admin/OverviewTab.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 10,70,110-115
+  s_e17b87e0a1b3ca::t_66a02c2c0f6c30 116
+backend/scripts/disposable.mjs
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-44
+backend/test/adminSignups.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-74
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 271
+backend/src/cron.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 2-3,61
+frontend/src/auth/signin.test.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-27
+frontend/src/admin/UsersTab.tsx
+  s_e17b87e0a1b3ca::t_3830560ba0596c 6,165
+  s_e17b87e0a1b3ca::t_3031a1e03949b2 166
+backend/src/password.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-65
+backend/src/admin.ts
+  s_e17b87e0a1b3ca::t_8f5dd50e346e2a 188
+frontend/src/practice/account.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 24
+backend/.dev.vars.example
+  s_e17b87e0a1b3ca::t_3830560ba0596c 43-48
+backend/src/turnstile.ts
+  s_e17b87e0a1b3ca::t_3830560ba0596c 1-52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "21fa631d8cab8ab34cd4fd9737b4cd74fa078278",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
