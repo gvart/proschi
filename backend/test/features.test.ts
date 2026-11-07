@@ -41,7 +41,7 @@ describe('features', () => {
     const { id, token } = await signedInUser();
     const refused = await route(request(token), ctx, 'a');
     expect(refused.status).toBe(402);
-    expect(await refused.json()).toEqual({ error: 'plan_required', feature: 'ai_roadmap', message: 'AI next steps are part of Pro' });
+    expect(await refused.json()).toEqual({ error: 'plan_required', feature: 'ai_roadmap', message: 'Your next steps are part of Pro' });
     await setPlan(id, 'pro');
     const allowed = await route(request(token), ctx, 'a');
     expect(allowed.status).toBe(200);
