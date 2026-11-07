@@ -9,9 +9,14 @@ const box = (page: Page, name: string) => page.locator('.react-flow__node-system
 const status = (page: Page, name: string) => box(page, name).locator('.pc-system__pill');
 const breadcrumb = (page: Page) => page.getByRole('navigation', { name: 'Breadcrumb' });
 
-/** Waits until the boxes have glided into their layout, so a pointer lands where it aims. */
+/**
+ * Waits until the boxes have glided into their layout, so a pointer lands where it aims: no layout
+ * on its way (ELK runs in a worker, so a slow one would otherwise look settled on the old positions),
+ * then the boxes still on screen (the fit after it moves the viewport, not the nodes).
+ */
 async function layoutSettled(page: Page) {
-  const positions = () => page.locator('.react-flow__node').evaluateAll((nodes) => nodes.map((n) => (n as HTMLElement).style.transform).join('|'));
+  await expect(page.locator('[data-layout-busy]')).toHaveCount(0);
+  const positions = () => page.locator('.react-flow__node').evaluateAll((nodes) => JSON.stringify(nodes.map((n) => n.getBoundingClientRect().toJSON())));
   let last = '';
   await expect
     .poll(async () => {
