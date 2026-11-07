@@ -14,6 +14,8 @@ import { estimateFor, type Intent, type PartnerContext, type Question, type Turn
 import { confirm } from '../design/dialogs';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
+import MicButton, { type MicButtonHandle } from '../voice/MicButton';
+import { useVoiceDraft } from '../voice/useVoiceDraft';
 
 /**
  * Design partner (docs/design/paid-plans.md P29, P30): one conversation per
@@ -148,6 +150,8 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
   const [starter, setStarter] = useState<Starter>('chat');
   const input = useRef<HTMLTextAreaElement>(null);
   const scroller = useRef<HTMLDivElement>(null);
+  const mic = useRef<MicButtonHandle>(null);
+  const voice = useVoiceDraft(setDraft, MAX_MESSAGE);
   const deep = deepAllowed && (state.sessionId ? state.sessionDeep : deepChoice);
   const busy = state.status !== 'idle';
 
@@ -166,7 +170,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     if (!el) return;
     el.style.height = 'auto';
     el.style.height = `${Math.min(el.scrollHeight, 148)}px`;
-  }, [draft]);
+  }, [draft, voice.interim]);
 
   const estimate = (intent: Intent) => `${formatRange(estimateFor(estimates, intent, deep))} credits`;
 
@@ -177,8 +181,10 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
 
   const submit = async (e?: FormEvent) => {
     e?.preventDefault();
-    const text = draft.trim();
+    const text = voice.shown(draft).trim();
     if (!text || busy) return;
+    mic.current?.stop();
+    voice.clear();
     const picked = starter;
     setDraft('');
     setStarter('chat');
@@ -305,15 +311,18 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
           <textarea
             id={`partner-message-${storeKey}`}
             ref={input}
-            value={draft}
-            onChange={(e) => setDraft(e.target.value.slice(0, MAX_MESSAGE))}
+            value={voice.shown(draft)}
+            onChange={(e) => {
+              voice.clear();
+              setDraft(e.target.value.slice(0, MAX_MESSAGE));
+            }}
             onKeyDown={onKey}
             rows={1}
             placeholder={starter !== 'chat' ? STARTERS[starter].placeholder : openQuestions?.length ? 'Answer in your own words, or pick an option' : practice ? 'Ask about the problem or your design' : 'Ask about your design'}
             className="max-h-[148px] min-h-[36px] flex-1 min-w-0 resize-none bg-transparent px-2 py-1.5 text-sm text-ink placeholder:text-muted focus:outline-none"
           />
-          {/* Slot for the shared MicButton (src/voice): <MicButton onText={(t) => setDraft((d) => (d ? `${d} ${t}` : t))} /> */}
-          <button type="submit" disabled={busy || !draft.trim()} aria-label="Send" title="Send (Enter)" className={`${primaryButton} !h-9 !w-9 !justify-center !p-0 disabled:opacity-40`}>
+          <MicButton ref={mic} onText={voice.onText} />
+          <button type="submit" disabled={busy || !voice.shown(draft).trim()} aria-label="Send" title="Send (Enter)" className={`${primaryButton} !h-9 !w-9 !justify-center !p-0 disabled:opacity-40`}>
             <ArrowUp size={16} aria-hidden="true" />
           </button>
         </div>
