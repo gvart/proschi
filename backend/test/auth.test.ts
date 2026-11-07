@@ -51,7 +51,7 @@ describe('sign-in', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lists the configured providers', async () => {
-    expect(await (await call('/auth/providers')).json()).toEqual({ providers: ['github', 'google'] });
+    expect(await (await call('/auth/providers')).json()).toEqual({ providers: ['github', 'google', 'email'] });
   });
 
   it('redirects to GitHub with state and a PKCE challenge, and sets a signed state cookie', async () => {

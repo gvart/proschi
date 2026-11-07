@@ -29,6 +29,9 @@ export default defineConfig(async () => {
             ANTHROPIC_API_KEY: '',
             AI_GATEWAY_URL: '',
             AI_GATEWAY_TOKEN: '',
+            // Turnstile off unless a test sets the secret (with Siteverify mocked).
+            TURNSTILE_SITE_KEY: '',
+            TURNSTILE_SECRET_KEY: '',
           },
         },
       }),
