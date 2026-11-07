@@ -24,7 +24,8 @@ export interface TurnBody {
 }
 
 type Turn = Record<string, unknown> & { id: string; role: 'user' | 'partner' };
-type Reply = (body: TurnBody, partner: PartnerMock) => { status: number; json: unknown } | Turn;
+type Answer = { status: number; json: unknown } | Turn;
+type Reply = (body: TurnBody, partner: PartnerMock) => Answer | Promise<Answer>;
 
 const METRICS_BEFORE = { tests: { passed: 4, total: 7 }, p99Ms: 212, availability: 0.995, costPerMonth: 380 };
 const METRICS_AFTER = { tests: { passed: 7, total: 7 }, p99Ms: 38, availability: 0.9995, costPerMonth: 455 };
@@ -56,11 +57,16 @@ export class PartnerMock {
     };
   }
 
-  private reply(body: TurnBody): Turn | { status: number; json: unknown } {
+  private async reply(body: TurnBody): Promise<Answer> {
     const queued = this.queue.shift();
     if (queued) return queued(body, this);
     const id = `t${++this.n}`;
     const at = Date.now();
+    return this.answer(body, id, at);
+  }
+
+  /** The default answer of an intent. */
+  answer(body: TurnBody, id = `t${++this.n}`, at = Date.now()): Turn {
     switch (body.intent) {
       case 'review':
         return {
@@ -101,7 +107,7 @@ export class PartnerMock {
         if (parts[2] === 'turns') {
           const body = request.postDataJSON() as TurnBody;
           this.bodies.push(body);
-          const answer = this.reply(body);
+          const answer = await this.reply(body);
           if ('status' in answer && typeof answer.status === 'number') return route.fulfill(answer as { status: number; json: unknown });
           const turn = answer as Turn;
           session.turns.push({ id: `u${this.n}`, role: 'user', message: body.message, at: Date.now() }, turn);

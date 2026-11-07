@@ -120,6 +120,32 @@ test('reject, improve this, and a card whose edits no longer apply', async ({ pa
   await expect(latest.getByRole('button', { name: 'Accept' })).toHaveCount(0);
 });
 
+test('building from a description shows how far along it is, then the design as a change', async ({ page }) => {
+  const partner = await openEditor(page);
+  let release!: () => void;
+  const answered = new Promise<void>((r) => (release = r));
+  partner.queue.push(async (body, p) => {
+    await answered;
+    return p.answer(body);
+  });
+  await page.getByTestId('partner-button').click();
+  await panel(page).getByRole('button', { name: /Build a system from a description/ }).click();
+  await panel(page).getByRole('textbox', { name: 'Describe the system' }).fill('A URL shortener with 10k redirects a second');
+  await panel(page).getByRole('button', { name: 'Build it' }).click();
+  const thinking = panel(page).getByTestId('partner-thinking');
+  await expect(thinking).toContainText('Reading your description…');
+  await expect(thinking).toContainText(/[1-9] s/);
+  // The panel stays usable meanwhile: a draft can be typed, it just waits to be sent.
+  const box = panel(page).getByRole('textbox', { name: 'Message Design partner' });
+  await box.fill('Next question');
+  await expect(panel(page).getByRole('button', { name: 'Send' })).toBeDisabled();
+  release();
+  await expect(panel(page).getByTestId('change-card')).toBeVisible();
+  await expect(thinking).toHaveCount(0);
+  expect(partner.bodies[0]).toMatchObject({ intent: 'build', message: 'A URL shortener with 10k redirects a second' });
+  await expect(box).toHaveValue('Next question');
+});
+
 test('out of credits: the message stays and the panel links to top-ups and plans', async ({ page, errors }) => {
   const partner = await openEditor(page);
   partner.queue.push(() => ({ status: 402, json: { error: 'no_credits', needed: 6, balance: 2.5 } }));
@@ -231,8 +257,17 @@ test('shots', async ({ page, errors }) => {
   await take('editor-empty-desktop');
   await panel(page).getByRole('button', { name: /Review my design/ }).click();
   await expect(panel(page).getByRole('heading', { name: 'What to look at' })).toBeVisible();
+  let release!: () => void;
+  const answered = new Promise<void>((r) => (release = r));
+  partner.queue.push(async (body, p) => {
+    await answered;
+    return p.answer(body);
+  });
   await panel(page).getByRole('textbox', { name: 'Message Design partner' }).fill('Take the reads off the database');
   await page.keyboard.press('Enter');
+  await expect(panel(page).getByTestId('partner-thinking')).toContainText('Thinking it through…', { timeout: 8000 });
+  await take('editor-thinking-desktop');
+  release();
   await expect(panel(page).getByTestId('change-card')).toBeVisible();
   await take('editor-change-desktop');
   partner.queue.push(() => ({ status: 402, json: { error: 'no_credits', needed: 6, balance: 2.5 } }));
@@ -243,6 +278,8 @@ test('shots', async ({ page, errors }) => {
   await panel(page).getByRole('button', { name: 'Dismiss' }).click();
   await panel(page).getByTestId('change-card').getByRole('button', { name: 'Accept' }).click();
   await take('editor-applied-desktop');
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await take('editor-applied-1440');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await take('editor-change-phone');

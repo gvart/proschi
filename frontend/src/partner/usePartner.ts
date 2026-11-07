@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { createSession, decide as postDecision, getSession, NoCreditsError, sendTurn, SignedOutError, TurnInProgressError } from './api';
 import type { Intent, PartnerContext, Turn, TurnRequest } from './contract';
-import { reportBalance } from './credits';
+import { reportBalance } from '../services/useCredits';
 import { loadStored, saveStored, type Decision } from './store';
 
 /** Why the last send did not get an answer. */
@@ -65,36 +65,6 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
     if (turns.some((t) => t.assisted)) onAssistedRef.current?.();
   };
 
-  // Another document or problem: its own conversation, read back from the server.
-  useEffect(() => {
-    clearTimeout(pollTimer.current);
-    const stored = enabled ? loadStored(storeKey) : undefined;
-    if (!stored) {
-      setState(EMPTY);
-      return;
-    }
-    let live = true;
-    setState({ ...EMPTY, sessionId: stored.id, decisions: stored.decisions ?? {}, status: 'resuming' });
-    getSession(stored.id).then(
-      (session) => {
-        if (!live) return;
-        if (!session) {
-          saveStored(storeKey, undefined);
-          setState(EMPTY);
-          return;
-        }
-        setState((s) => ({ ...s, status: 'idle', sessionDeep: session.deep, turns: session.turns }));
-        noteAssisted(session.turns);
-      },
-      (e) => live && setState((s) => ({ ...s, status: 'idle', problem: e instanceof SignedOutError ? { kind: 'signed_out' } : { kind: 'error', message: 'The conversation could not be loaded. Try again in a moment.' } })),
-    );
-    return () => {
-      live = false;
-    };
-  }, [storeKey, enabled]);
-
-  useEffect(() => () => clearTimeout(pollTimer.current), []);
-
   /** After a 409: read the conversation until its running answer is in, then let the user send again. */
   const pollBusy = useCallback(
     (id: string, started = Date.now()) => {
@@ -114,6 +84,38 @@ export function usePartner({ storeKey, context, enabled, getSource, getFiles, on
     },
     [],
   );
+
+  // Another document or problem: its own conversation, read back from the server.
+  useEffect(() => {
+    clearTimeout(pollTimer.current);
+    const stored = enabled ? loadStored(storeKey) : undefined;
+    if (!stored) {
+      setState(EMPTY);
+      return;
+    }
+    let live = true;
+    setState({ ...EMPTY, sessionId: stored.id, decisions: stored.decisions ?? {}, status: 'resuming' });
+    getSession(stored.id).then(
+      (session) => {
+        if (!live) return;
+        if (!session) {
+          saveStored(storeKey, undefined);
+          setState(EMPTY);
+          return;
+        }
+        const waiting = session.turns[session.turns.length - 1]?.role === 'user';
+        setState((s) => ({ ...s, status: 'idle', sessionDeep: session.deep, turns: session.turns, ...(waiting ? { problem: { kind: 'busy' as const } } : {}) }));
+        noteAssisted(session.turns);
+        if (waiting) pollBusy(stored.id);
+      },
+      (e) => live && setState((s) => ({ ...s, status: 'idle', problem: e instanceof SignedOutError ? { kind: 'signed_out' } : { kind: 'error', message: 'The conversation could not be loaded. Try again in a moment.' } })),
+    );
+    return () => {
+      live = false;
+    };
+  }, [storeKey, enabled, pollBusy]);
+
+  useEffect(() => () => clearTimeout(pollTimer.current), []);
 
   /** Sends a turn; resolves true when it was answered (the composer then clears). */
   const send = useCallback(

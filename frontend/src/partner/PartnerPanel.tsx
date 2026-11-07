@@ -6,9 +6,10 @@ import { useFeature } from '../components/featureState';
 import UpgradeHint from '../components/UpgradeHint';
 import { billingEnabled, pricingHref } from '../services/billing';
 import type { Account } from '../practice/useAccount';
-import { useEstimates } from './credits';
+import { useEstimates } from '../services/useCredits';
+import { formatCredits, formatRange } from '../services/credits';
 import ChangeCard from './ChangeCard';
-import { estimateFor, formatCredits, formatRange, type Intent, type PartnerContext, type Question, type Turn } from './contract';
+import { estimateFor, type Intent, type PartnerContext, type Question, type Turn } from './contract';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
 
@@ -46,11 +47,35 @@ export interface PartnerPanelProps {
 
 const MAX_MESSAGE = 4000;
 
-const THINKING: Partial<Record<Intent, string>> = {
-  review: 'Reading your design, its tests and the simulation…',
-  build: 'Drafting the system and checking it against the simulation…',
-  solve: 'Working out the changes and running the tests on them…',
-  improve: 'Reworking the change and checking it again…',
+/** What a turn is doing while it runs, by the second it starts at: a build takes about a minute, a review a few seconds. */
+const STAGES: Record<Intent, [number, string][]> = {
+  review: [
+    [0, 'Reading your design and its tests…'],
+    [4, 'Weighing the trade-offs…'],
+    [12, 'Writing the review…'],
+  ],
+  build: [
+    [0, 'Reading your description…'],
+    [6, 'Drafting the design…'],
+    [25, 'Checking it against the simulation…'],
+    [40, 'Running the tests on it…'],
+  ],
+  solve: [
+    [0, 'Reading your design and its tests…'],
+    [5, 'Working out the changes…'],
+    [20, 'Checking them against the simulation…'],
+    [35, 'Running the tests on them…'],
+  ],
+  improve: [
+    [0, 'Reading the change again…'],
+    [5, 'Reworking it…'],
+    [20, 'Checking it against the simulation…'],
+  ],
+  chat: [
+    [0, 'Reading your design…'],
+    [4, 'Thinking it through…'],
+    [12, 'Writing the answer…'],
+  ],
 };
 
 export default function PartnerPanel(props: PartnerPanelProps) {
@@ -107,10 +132,10 @@ function PanelHeader({ practice, onClose, children }: { practice: boolean; onClo
   );
 }
 
-function Conversation({ storeKey, context, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
+function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
   const practice = context.kind === 'practice';
   const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, onAssisted });
-  const estimates = useEstimates();
+  const estimates = useEstimates(account.state.status === 'signed-in');
   const [deepChoice, setDeepChoice] = useState(false);
   const [draft, setDraft] = useState('');
   const input = useRef<HTMLTextAreaElement>(null);
@@ -135,7 +160,7 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
     el.style.height = `${Math.min(el.scrollHeight, 148)}px`;
   }, [draft]);
 
-  const estimate = (intent: Intent) => (estimates ? formatRange(estimateFor(estimates, intent, deep)) : undefined);
+  const estimate = (intent: Intent) => `${formatRange(estimateFor(estimates, intent, deep))} credits`;
 
   const ask = async (intent: Intent, message: string, changeId?: string) => {
     const ok = await send(intent, message, { deep, ...(changeId ? { changeId } : {}) });
@@ -178,13 +203,13 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
             onClick={toggleDeep}
             aria-pressed={deep}
             disabled={busy}
-            title={`Deep: a stronger model that thinks longer, about ${formatCredits(estimates?.deepMultiplier ?? 3)}× the credits`}
+            title={`Deep: a stronger model that thinks longer, about ${formatCredits(estimates.deepMultiplier)}× the credits`}
             className="inline-flex h-8 items-center gap-1.5 rounded-sm border-bw-1 border-ink/30 px-2 text-xs font-semibold text-ink hover:border-ink aria-pressed:border-ink aria-pressed:bg-pop-lilac aria-pressed:text-on-accent disabled:opacity-50"
             data-testid="partner-deep"
           >
             <span className={`h-1.5 w-1.5 rounded-full ${deep ? 'bg-on-accent' : 'bg-ink/30'}`} aria-hidden="true" />
             Deep
-            {estimates && <span className="font-mono font-normal opacity-70">×{formatCredits(estimates.deepMultiplier)}</span>}
+            <span className="font-mono font-normal opacity-70">×{formatCredits(estimates.deepMultiplier)}</span>
           </button>
         )}
         {state.turns.length > 0 && (
@@ -236,7 +261,7 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
                 </PartnerMessage>
               ),
             )}
-            {state.status === 'sending' && <Thinking text={(state.sending && THINKING[state.sending]) ?? 'Thinking…'} />}
+            {state.status === 'sending' && <Thinking intent={state.sending ?? 'chat'} />}
           </ol>
         )}
       </div>
@@ -264,7 +289,7 @@ function Conversation({ storeKey, context, base = '../', source, getSource, getF
         </div>
         <p className="mt-1.5 flex items-center justify-between gap-2 text-[11px] text-muted tabular-nums" data-testid="partner-footnote">
           <span>{estimate('chat') ? `A message: ${estimate('chat')}` : 'Enter to send, Shift+Enter for a new line'}</span>
-          {state.balance !== undefined && <span data-testid="partner-balance">{formatCredits(state.balance)} credits left</span>}
+          {state.balance !== undefined && <span data-testid="partner-balance">{formatCredits(state.balance, { floor: true })} credits left</span>}
         </p>
       </form>
     </>
@@ -490,15 +515,37 @@ function Questions({ questions, active, onAnswer }: { questions: Question[]; act
   );
 }
 
-function Thinking({ text }: { text: string }) {
+function Thinking({ intent }: { intent: Intent }) {
+  const [started] = useState(() => Date.now());
+  const [now, setNow] = useState(started);
+  useEffect(() => {
+    const timer = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(timer);
+  }, []);
+  const seconds = Math.floor((now - started) / 1000);
+  const stages = STAGES[intent];
+  const current = stages.filter(([at]) => seconds >= at).length - 1;
   return (
-    <li role="status" className="flex items-center gap-2.5 text-sm text-muted" data-testid="partner-thinking">
-      <span className="inline-flex gap-1" aria-hidden="true">
-        {[0, 1, 2].map((i) => (
-          <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink/50 motion-reduce:animate-none" style={{ animationDelay: `${i * 140}ms` }} />
-        ))}
-      </span>
-      {text}
+    <li className="rounded-sm border-bw-1 border-ink/15 bg-paper px-3 py-2.5 text-sm" data-testid="partner-thinking">
+      <p role="status" className="flex items-center gap-2.5 text-ink">
+        <span className="inline-flex gap-1" aria-hidden="true">
+          {[0, 1, 2].map((i) => (
+            <span key={i} className="h-1.5 w-1.5 animate-bounce rounded-full bg-ink/50 motion-reduce:animate-none" style={{ animationDelay: `${i * 140}ms` }} />
+          ))}
+        </span>
+        <span className="flex-1">{stages[current][1]}</span>
+        <span className="font-mono text-[11px] text-muted tabular-nums" aria-hidden="true">
+          {seconds} s
+        </span>
+      </p>
+      {stages.length > 1 && (
+        <ol className="mt-2 flex gap-1" aria-hidden="true">
+          {stages.map(([at], i) => (
+            <li key={at} className={`h-1 flex-1 rounded-full transition-colors duration-d2 ${i < current ? 'bg-ink/50' : i === current ? 'bg-pop-lilac' : 'bg-ink/10'}`} />
+          ))}
+        </ol>
+      )}
+      {seconds >= 15 && <p className="mt-2 text-xs text-muted">{intent === 'build' || intent === 'solve' ? 'Changes are checked against the tests before they show, so this takes up to a minute.' : 'Almost there.'} You can keep editing meanwhile.</p>}
     </li>
   );
 }

@@ -1,4 +1,5 @@
 import { api, ApiError } from '../services/api';
+import { noCredits } from '../services/credits';
 import { parseSession, parseTurnAnswer, type PartnerContext, type Session, type TurnAnswer, type TurnRequest } from './contract';
 
 /** Design partner's endpoints (docs/impl/design-partner.md, "Design partner"). */
@@ -34,9 +35,10 @@ export class SignedOutError extends Error {
 const body = (e: ApiError) => (e.body && typeof e.body === 'object' ? (e.body as Record<string, unknown>) : {});
 
 function translate(e: unknown): never {
+  const short = noCredits(e);
+  if (short) throw new NoCreditsError(short.needed, short.balance);
   if (e instanceof ApiError) {
     const b = body(e);
-    if (e.status === 402 && b.error === 'no_credits') throw new NoCreditsError(Number(b.needed) || 0, Number(b.balance) || 0);
     if (e.status === 409 && b.error === 'turn_in_progress') throw new TurnInProgressError();
     if (e.status === 401) throw new SignedOutError();
   }

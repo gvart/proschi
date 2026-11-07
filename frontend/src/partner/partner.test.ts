@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { estimateFor, formatCredits, formatRange, parseEstimates, parseSession, parseTurnAnswer } from './contract';
+import { estimateFor, parseSession, parseTurnAnswer } from './contract';
 import { applyEdits, countLines, diffLines, editHunks } from './edits';
 import { loadStored, saveStored } from './store';
 import { createSession, decide, getSession, NoCreditsError, sendTurn, SignedOutError, TurnInProgressError } from './api';
@@ -47,21 +47,10 @@ describe('contract', () => {
   it('reads a turn answer and the estimates', () => {
     expect(parseTurnAnswer({ turn: { id: 't', role: 'partner', message: 'ok', at: 1 }, credits: { charged: 3.25, balance: 96.75 } })).toMatchObject({ credits: { charged: 3.25, balance: 96.75 } });
     expect(parseTurnAnswer({ credits: {} })).toBeUndefined();
-    const e = parseEstimates({ mock_interview: { min: 20, max: 60 }, partner_review: { min: 5, max: 15 }, partner_build: { min: 10, max: 40 }, partner_turn: { min: 1, max: 4 }, deepMultiplier: 5 })!;
+    const e = { mock_interview: { min: 20, max: 60 }, partner_review: { min: 5, max: 15 }, partner_build: { min: 10, max: 40 }, partner_turn: { min: 1, max: 4 }, deepMultiplier: 5 };
     expect(estimateFor(e, 'review', false)).toEqual({ min: 5, max: 15 });
     expect(estimateFor(e, 'chat', true)).toEqual({ min: 5, max: 20 });
     expect(estimateFor(e, 'build', false)).toEqual({ min: 10, max: 40 });
-    expect(parseEstimates({ partner_review: { min: 1 } })).toBeUndefined();
-  });
-
-  it('formats credits for people', () => {
-    expect(formatCredits(812.4)).toBe('812');
-    expect(formatCredits(3.42)).toBe('3.4');
-    expect(formatCredits(0.125)).toBe('0.13');
-    expect(formatCredits(1200)).toBe('1,200');
-    expect(formatRange({ min: 5, max: 15 })).toBe('about 5–15 credits');
-    expect(formatRange({ min: 0.4, max: 2.2 })).toBe('about 0.4–3 credits');
-    expect(formatRange({ min: 4, max: 4 })).toBe('about 4 credits');
   });
 });
 

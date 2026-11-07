@@ -1,6 +1,8 @@
+import type { CreditEstimates, Range } from '../services/credits';
+
 /**
  * Design partner's API types (docs/impl/design-partner.md, "Design partner"
- * and "Credits"; docs/design/paid-plans.md P29–P31) and the parsers that
+ * docs/design/paid-plans.md P29–P31) and the parsers that
  * read the server's answers. A malformed field reads as absent rather than
  * breaking the panel.
  */
@@ -68,19 +70,6 @@ export interface TurnRequest {
 export interface TurnAnswer {
   turn: Turn;
   credits: { charged: number; balance: number };
-}
-
-export interface Range {
-  min: number;
-  max: number;
-}
-
-export interface Estimates {
-  mock_interview: Range;
-  partner_review: Range;
-  partner_build: Range;
-  partner_turn: Range;
-  deepMultiplier: number;
 }
 
 const isObject = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
@@ -165,44 +154,9 @@ export function parseTurnAnswer(v: unknown): TurnAnswer | undefined {
   return { turn, credits: { charged: num(c.charged) ?? 0, balance: num(c.balance) ?? 0 } };
 }
 
-function parseRange(v: unknown): Range | undefined {
-  if (!isObject(v)) return undefined;
-  const min = num(v.min);
-  const max = num(v.max);
-  return min !== null && max !== null ? { min, max } : undefined;
-}
-
-export function parseEstimates(v: unknown): Estimates | undefined {
-  if (!isObject(v)) return undefined;
-  const review = parseRange(v.partner_review);
-  const build = parseRange(v.partner_build);
-  const turn = parseRange(v.partner_turn);
-  if (!review || !build || !turn) return undefined;
-  return {
-    mock_interview: parseRange(v.mock_interview) ?? { min: 0, max: 0 },
-    partner_review: review,
-    partner_build: build,
-    partner_turn: turn,
-    deepMultiplier: num(v.deepMultiplier) ?? 1,
-  };
-}
-
-/** The estimate of one intent; Deep multiplies it. */
-export function estimateFor(estimates: Estimates, intent: Intent, deep: boolean): Range {
+/** The estimate of one intent (GET /api/credits/estimates); Deep multiplies it. */
+export function estimateFor(estimates: CreditEstimates, intent: Intent, deep: boolean): Range {
   const base = intent === 'review' ? estimates.partner_review : intent === 'build' ? estimates.partner_build : estimates.partner_turn;
   const k = deep ? estimates.deepMultiplier : 1;
   return { min: base.min * k, max: base.max * k };
-}
-
-/** Credits for people: whole numbers from 10 up, one decimal under, two under 1. */
-export function formatCredits(n: number): string {
-  const places = Math.abs(n) >= 10 ? 0 : Math.abs(n) >= 1 ? 1 : 2;
-  return Number(n.toFixed(places)).toLocaleString('en-US');
-}
-
-/** "about 5–15 credits". */
-export function formatRange({ min, max }: Range): string {
-  const lo = formatCredits(Math.max(0, Math.floor(min * 10) / 10));
-  const hi = formatCredits(Math.ceil(max));
-  return lo === hi ? `about ${hi} credits` : `about ${lo}–${hi} credits`;
 }
