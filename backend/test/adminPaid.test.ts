@@ -53,7 +53,7 @@ const subscription = (userId: string, status: string, modified: string, product 
   type: `subscription.${status === 'canceled' ? 'canceled' : 'updated'}`,
   data: { id: `sub-${userId}`, status, product_id: product, customer_id: `cus-${userId}`, customer: { id: `cus-${userId}`, external_id: userId }, current_period_end: '2026-12-06T00:00:00Z', modified_at: modified },
 });
-const paidPack = (userId: string, order: string) => ({ type: 'order.paid', data: { id: order, product_id: 'prod-pack-5', customer_id: `cus-${userId}`, customer: { external_id: userId } } });
+const paidTopup = (userId: string, order: string) => ({ type: 'order.paid', data: { id: order, product_id: 'prod-credits-1000', customer_id: `cus-${userId}`, customer: { external_id: userId } } });
 
 const nowS = () => Math.floor(Date.now() / 1000);
 const ref = () => crypto.randomUUID();
@@ -93,37 +93,38 @@ describe('admin: the paid product', () => {
     expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM admin_audit WHERE action != 'admin.setup'").first()).toEqual({ n: 0 });
   });
 
-  it('grants and revokes pack credits once per ref, with a reason, never below 0, in the audit log', async () => {
+  it('grants and revokes top-up credits once per ref, in decimal credits, with a reason, never below 0, in the audit log', async () => {
     const admin = await setUp();
     const { id } = await signedInUser();
     const path = `/api/admin/users/${id}/credits`;
-    const grant = { kind: 'grant', credits: 3, ref: ref(), reason: 'Support: the interview crashed' };
+    const grant = { kind: 'grant', credits: 2.5, ref: ref(), reason: 'Support: the interview crashed' };
 
     // A reason is required, and so are a sane amount and a ref.
-    for (const bad of [{ ...grant, reason: '' }, { ...grant, reason: '   ' }, { ...grant, reason: undefined }, { ...grant, credits: 0 }, { ...grant, credits: 101 }, { ...grant, credits: 1.5 }, { ...grant, ref: 'x' }, { ...grant, kind: 'gift' }]) {
+    for (const bad of [{ ...grant, reason: '' }, { ...grant, reason: '   ' }, { ...grant, reason: undefined }, { ...grant, credits: 0 }, { ...grant, credits: 10_000.001 }, { ...grant, credits: 0.0005 }, { ...grant, credits: 1.2345 }, { ...grant, ref: 'x' }, { ...grant, kind: 'gift' }]) {
       expect((await adminCall(path, admin, { method: 'POST', body: bad })).status, JSON.stringify(bad)).toBe(400);
     }
     expect(await audit('user.credits.grant')).toEqual([]);
 
     const granted = await adminCall(path, admin, { method: 'POST', body: grant });
     expect(granted.status).toBe(200);
-    expect(await granted.json()).toMatchObject({ delta: 3, credits: { pack: 3, trial: 1, total: 4 } });
+    expect(await granted.json()).toMatchObject({ delta: 2.5, credits: { balance: 2.5, topup: 2.5, signup: 0 } });
     // The same ref again: nothing more, and no second audit entry.
-    expect(await (await adminCall(path, admin, { method: 'POST', body: grant })).json()).toMatchObject({ duplicate: true, delta: 3, credits: { pack: 3 } });
+    expect(await (await adminCall(path, admin, { method: 'POST', body: grant })).json()).toMatchObject({ duplicate: true, delta: 2.5, credits: { topup: 2.5 } });
     const entries = await audit('user.credits.grant');
-    expect(entries).toEqual([{ target: id, detail: { credits: 3, reason: grant.reason, ref: grant.ref }, passkey_id: expect.any(String) }]);
+    expect(entries).toEqual([{ target: id, detail: { credits: 2.5, reason: grant.reason, ref: grant.ref }, passkey_id: expect.any(String) }]);
+    expect(await env.DB.prepare("SELECT delta_mc FROM credits WHERE user_id = ? AND kind = 'admin_grant'").bind(id).first()).toEqual({ delta_mc: 2500 });
 
-    // A revoke takes at most what is left: 5 asked, 3 there.
+    // A revoke takes at most what is left: 5 asked, 2.5 there.
     const revoke = { kind: 'revoke', credits: 5, ref: ref(), reason: 'Granted by mistake' };
-    expect(await (await adminCall(path, admin, { method: 'POST', body: revoke })).json()).toMatchObject({ delta: -3, credits: { pack: 0 } });
-    expect(await audit('user.credits.revoke')).toEqual([{ target: id, detail: { credits: 3, reason: revoke.reason, ref: revoke.ref }, passkey_id: expect.any(String) }]);
+    expect(await (await adminCall(path, admin, { method: 'POST', body: revoke })).json()).toMatchObject({ delta: -2.5, credits: { topup: 0 } });
+    expect(await audit('user.credits.revoke')).toEqual([{ target: id, detail: { credits: 2.5, reason: revoke.reason, ref: revoke.ref }, passkey_id: expect.any(String) }]);
     // Nothing left: 409, and no row.
     expect((await adminCall(path, admin, { method: 'POST', body: { ...revoke, ref: ref() } })).status).toBe(409);
-    const ledger = (await (await adminCall(path, admin)).json()) as { total: number; entries: { kind: string; delta: number; bucket: string; refId: string }[] };
+    const ledger = (await (await adminCall(path, admin)).json()) as { total: number; entries: { kind: string; credits: number; bucket: string; refId: string }[] };
     expect(ledger.total).toBe(2);
-    expect(ledger.entries.map((e) => [e.kind, e.bucket, e.delta])).toEqual([
-      ['admin_revoke', 'pack', -3],
-      ['admin_grant', 'pack', 3],
+    expect(ledger.entries.map((e) => [e.kind, e.bucket, e.credits])).toEqual([
+      ['admin_revoke', 'topup', -2.5],
+      ['admin_grant', 'topup', 2.5],
     ]);
     // A ref used for one account can't be replayed on another.
     const other = await signedInUser();
@@ -175,7 +176,7 @@ describe('admin: the paid product', () => {
     const admin = await setUp();
     const user = await signedInUser();
     await deliver(subscription(user.id, 'past_due', '2026-11-06T10:00:00Z', 'prod-pro-yearly'));
-    await deliver(paidPack(user.id, 'ord-1'));
+    await deliver(paidTopup(user.id, 'ord-1'));
     const detail = (await (await adminCall(`/api/admin/users/${user.id}`, admin)).json()) as Record<string, unknown>;
     expect(detail.user).toMatchObject({ plan: 'pro', effectivePlan: 'pro', compUntil: null });
     expect(detail.billing).toEqual({
@@ -188,43 +189,59 @@ describe('admin: the paid product', () => {
       pastDue: true,
       updatedAt: expect.any(Number),
     });
-    expect(detail.credits).toMatchObject({ monthly: 4, trial: 1, pack: 5, total: 10 });
+    expect(detail.credits).toMatchObject({ balance: 1800, monthly: { allowance: 800, left: 800 }, signup: 0, topup: 1000 });
     expect(detail.polarDashboard).toEqual({ server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' });
   });
 
-  it('sums up billing: Pro accounts, subscribers, comps, pack orders and refunds', async () => {
+  it('sums up billing: Pro and Max accounts, subscribers, comps, top-up orders and refunds', async () => {
     const admin = await setUp();
-    const [monthly, yearly, comped, packer] = [await signedInUser('Mo'), await signedInUser('Yan'), await signedInUser('Cam'), await signedInUser('Pat')];
+    const [monthly, yearly, comped, packer, max] = [await signedInUser('Mo'), await signedInUser('Yan'), await signedInUser('Cam'), await signedInUser('Pat'), await signedInUser('Mia')];
     await deliver(subscription(monthly.id, 'active', '2026-11-06T10:00:00Z'));
+    await deliver(subscription(max.id, 'active', '2026-11-06T10:00:00Z', 'prod-max-monthly'));
     await deliver(subscription(yearly.id, 'active', '2026-11-06T10:00:00Z', 'prod-pro-yearly'));
     await adminCall(`/api/admin/users/${comped.id}/comp`, admin, { method: 'POST', body: { until: nowS() + 86_400, reason: 'x' } });
-    await deliver(paidPack(packer.id, 'ord-a'));
-    await deliver(paidPack(packer.id, 'ord-b'));
+    await deliver(paidTopup(packer.id, 'ord-a'));
+    await deliver(paidTopup(packer.id, 'ord-b'));
     await deliver({ type: 'order.refunded', data: { id: 'ord-b' } });
     const billing = (await (await adminCall('/api/admin/billing', admin)).json()) as {
       counts: Record<string, number>;
-      pro: { displayName: string; source: string }[];
+      pro: { displayName: string; source: string; plan: string }[];
       orders: { orderId: string; refunded: boolean }[];
       adjustments: { kind: string; delta: number }[];
       refundedOrders: { orderId: string; user: { displayName: string } }[];
     };
-    expect(billing.counts).toEqual({ pro: 3, monthly: 1, yearly: 1, pastDue: 0, canceling: 0, comped: 1, packOrdersThisMonth: 2, packOrders: 2, refundedThisMonth: 1, refunded: 1 });
-    expect(billing.pro.map((p) => [p.displayName, p.source])).toEqual([
-      ['Cam', 'comp'],
-      ['Mo', 'subscription'],
-      ['Yan', 'subscription'],
+    expect(billing.counts).toEqual({
+      pro: 3,
+      max: 1,
+      monthly: 1,
+      yearly: 1,
+      maxMonthly: 1,
+      maxYearly: 0,
+      pastDue: 0,
+      canceling: 0,
+      comped: 1,
+      topupOrdersThisMonth: 2,
+      topupOrders: 2,
+      refundedThisMonth: 1,
+      refunded: 1,
+    });
+    expect(billing.pro.map((p) => [p.displayName, p.plan, p.source])).toEqual([
+      ['Cam', 'pro', 'comp'],
+      ['Mia', 'max', 'subscription'],
+      ['Mo', 'pro', 'subscription'],
+      ['Yan', 'pro', 'subscription'],
     ]);
     expect(billing.orders.map((o) => [o.orderId, o.refunded])).toEqual([
       ['ord-b', true],
       ['ord-a', false],
     ]);
-    expect(billing.adjustments.map((a) => [a.kind, a.delta])).toEqual([['revoke', -5]]);
+    expect(billing.adjustments.map((a) => [a.kind, a.delta])).toEqual([['topup_revoke', -1000]]);
     expect(billing.refundedOrders).toEqual([{ orderId: 'ord-b', refundedAt: expect.any(Number), user: { id: packer.id, displayName: 'Pat' } }]);
     // No amounts anywhere: D1 stores none.
     expect(JSON.stringify(billing)).not.toMatch(/amount|price|€|eur/i);
   });
 
-  it('sums up AI usage for 30 days: interviews, refunds, reviews, cost, top users and the token cap', async () => {
+  it('sums up AI usage for 30 days: interviews, reviews, cost, credits charged against it, top users and the token cap', async () => {
     const admin = await setUp();
     const ada = await signedInUser('Ada');
     const bob = await signedInUser('Bob');
@@ -238,17 +255,28 @@ describe('admin: the paid product', () => {
       insert('i3', bob.id, 'failed', 1_000, 0.01),
       insert('i4', bob.id, 'active', 2_000, 0.02),
       insert('old', bob.id, 'finished', 2_000, 9, t - 40 * 86_400_000),
-      env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'refund', 'trial', 1, 'interview', 'i3', ?)").bind(bob.id, t),
-      env.DB.prepare('INSERT INTO review_usage (user_id, day, count) VALUES (?, ?, 7)').bind(ada.id, today),
+      env.DB.prepare("INSERT INTO credit_charges (hold_id, user_id, action, ref, deep, charged_mc, cost_usd, created_at) VALUES ('h1', ?, 'design_partner', 'review:r1', 0, 40000, 0.2, ?)").bind(ada.id, t),
+      env.DB.prepare("INSERT INTO credit_charges (hold_id, user_id, action, ref, deep, charged_mc, cost_usd, created_at) VALUES ('h2', ?, 'mock_interview', 'i1', 0, 10500, 0.05, ?)").bind(ada.id, t),
     ]);
     const ai = (await (await adminCall('/api/admin/ai', admin)).json()) as {
-      days: { day: string; started: number; finished: number; failed: number; refunded: number; reviews: number; tokens: number; costUsd: number }[];
+      days: { day: string; started: number; finished: number; failed: number; reviews: number; tokens: number; costUsd: number; credits: number; chargedEur: number; chargedCostUsd: number }[];
       totals: Record<string, number | null>;
       topUsers: { displayName: string; costUsd: number }[];
     };
     expect(ai.days).toHaveLength(30);
-    expect(ai.days.at(-1)).toEqual({ day: today, started: 4, finished: 2, failed: 1, refunded: 1, reviews: 7, tokens: TOKEN_CAP + 93_000, costUsd: expect.closeTo(2.03, 5) });
-    expect(ai.totals).toMatchObject({ sessions: 4, finished: 2, capped: 1, cappedShare: 0.25, reviews: 7, avgCostPerFinished: 1 });
+    expect(ai.days.at(-1)).toEqual({
+      day: today,
+      started: 4,
+      finished: 2,
+      failed: 1,
+      reviews: 1,
+      tokens: TOKEN_CAP + 93_000,
+      costUsd: expect.closeTo(2.03, 5),
+      credits: 50.5,
+      chargedEur: expect.closeTo(0.505, 9),
+      chargedCostUsd: expect.closeTo(0.25, 9),
+    });
+    expect(ai.totals).toMatchObject({ sessions: 4, finished: 2, capped: 1, cappedShare: 0.25, reviews: 1, credits: 50.5, avgCostPerFinished: 1 });
     expect(ai.topUsers.map((u) => u.displayName)).toEqual(['Ada', 'Bob']);
     const overview = (await (await adminCall('/api/admin/overview', admin)).json()) as { aiSpend: { day: string; costUsd: number }[] };
     expect(overview.aiSpend).toHaveLength(30);
@@ -267,13 +295,13 @@ describe('admin: the paid product', () => {
       env.DB.prepare('UPDATE users SET created_at = ? WHERE id = ?').bind(s, ada.id),
       env.DB.prepare('UPDATE users SET created_at = ? WHERE id = ?').bind(s - 3 * 86_400, bob.id),
       env.DB.prepare("INSERT INTO card_reviews (id, user_id, card_id, card_version, rating, reviewed_at, duration_ms, day) VALUES ('r1', ?, 'c1', 1, 3, ?, 1000, ?)").bind(bob.id, s - 10 * 86_400, day(10)),
-      // An interview started 2 days ago and finished yesterday; a pack today.
+      // An interview started 2 days ago and finished yesterday; a top-up today.
       env.DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, started_at, ended_at, tokens, cost_usd) VALUES ('i1', ?, 'url-shortener', 45, 'finished', ?, ?, 1000, 0.5)").bind(
         ada.id,
         t - 2 * 86_400_000,
         t - 86_400_000,
       ),
-      env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'grant', 'pack', 5, 'pack_5', 'ord_1', ?)").bind(ada.id, t),
+      env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, period, delta_mc, item, ref_id, created_at) VALUES (?, 'topup', 'topup', '', 1000000, 'credits_1000', 'ord_1', ?)").bind(ada.id, t),
       // Bob subscribed 5 days ago; a bad signature today.
       env.DB.prepare("INSERT INTO billing (user_id, status, product, updated_at) VALUES (?, 'active', 'pro_monthly', ?)").bind(bob.id, t),
       env.DB.prepare("INSERT INTO billing_webhooks (received_at, webhook_id, type, outcome, user_id) VALUES (?, 'w1', 'subscription.active', 'applied', ?)").bind(t - 5 * 86_400_000, bob.id),
@@ -290,7 +318,7 @@ describe('admin: the paid product', () => {
     }
     const trends = (await (await adminCall('/api/admin/trends?days=30', admin)).json()) as { points: Record<string, number | string>[]; usage: { days: { counts: Record<string, number> }[] } };
     const at = (n: number) => trends.points[trends.points.length - 1 - n];
-    expect(at(0)).toEqual({ day: day(0), signups: 1, active: 2, interviewsStarted: 0, interviewsFinished: 0, aiCostUsd: 0, packOrders: 1, webhookFailures: 1, proSubscribers: 1 });
+    expect(at(0)).toEqual({ day: day(0), signups: 1, active: 2, interviewsStarted: 0, interviewsFinished: 0, aiCostUsd: 0, topupOrders: 1, webhookFailures: 1, proSubscribers: 1 });
     expect(at(1)).toMatchObject({ interviewsFinished: 1 });
     expect(at(2)).toMatchObject({ interviewsStarted: 1, aiCostUsd: 0.5 });
     expect(at(3)).toMatchObject({ signups: 1, active: 1 });
@@ -337,7 +365,7 @@ describe('admin: the paid product', () => {
     expect((await env.DB.prepare('SELECT COUNT(*) AS n FROM billing_webhooks').first<{ n: number }>())!.n).toBe(4);
     const health = (await (await adminCall('/api/admin/health', admin)).json()) as { cron: { runs: { job: string; detail: Record<string, number> }[] }; database: { tables: Record<string, number> } };
     expect(health.cron.runs.find((r) => r.job === 'billing_webhooks')!.detail.deleted).toBe(1);
-    expect(health.database.tables).toMatchObject({ billing_webhooks: 4, billing: 1, billing_events: 3, credits: 0, ai_interviews: 0, document_shares: 0, refunded_orders: 0, review_usage: 0 });
+    expect(health.database.tables).toMatchObject({ billing_webhooks: 4, billing: 1, billing_events: 3, credits: 0, ai_interviews: 0, document_shares: 0, refunded_orders: 0, credit_holds: 0, credit_charges: 0, signup_identities: 0 });
 
     await env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id).run();
     expect(await env.DB.prepare('SELECT COUNT(*) AS n, COUNT(user_id) AS users FROM billing_webhooks').first()).toEqual({ n: 4, users: 0 });
@@ -366,7 +394,7 @@ describe('admin: the paid product', () => {
     WINDOW_TIMEOUT,
   );
 
-  it('lets an account that is Pro only by a comp subscribe; an active subscription still answers already_pro', async () => {
+  it('lets an account that is Pro only by a comp subscribe; an active subscription answers has_subscription', async () => {
     const admin = await setUp();
     const user = await signedInUser();
     const real = globalThis.fetch;
@@ -384,7 +412,7 @@ describe('admin: the paid product', () => {
     expect((await deliver(subscription(user.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
     const again = await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_monthly' } });
     expect(again.status).toBe(409);
-    expect(await again.json()).toMatchObject({ error: 'already_pro' });
+    expect(await again.json()).toMatchObject({ error: 'has_subscription' });
     // past_due keeps Pro, so it is a subscription too.
     expect((await deliver(subscription(user.id, 'past_due', '2026-11-06T11:00:00Z'))).status).toBe(200);
     expect((await call('/api/billing/checkout', { method: 'POST', token: user.token, body: { product: 'pro_monthly' } })).status).toBe(409);
@@ -411,11 +439,11 @@ describe('admin: the paid product', () => {
     expect(JSON.parse(on).config).toMatchObject({
       anthropicKey: true,
       aiGateway: true,
-      polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productPack5: true },
+      polar: { accessToken: true, webhookSecret: true, productProMonthly: true, productProYearly: true, productMaxMonthly: true, productMaxYearly: true, productCredits1000: true },
       polarServer: 'live',
       billing: true,
     });
-    for (const secret of [...Object.values(values), SECRET, 'prod-pro-monthly', 'prod-pack-5', 'polar-test-token', SETUP_TOKEN, env.SESSION_SECRET as string]) {
+    for (const secret of [...Object.values(values), SECRET, 'prod-pro-monthly', 'prod-max-monthly', 'prod-credits-1000', 'polar-test-token', SETUP_TOKEN, env.SESSION_SECRET as string]) {
       expect(on, secret).not.toContain(secret);
     }
     const off = JSON.parse(await health({ ANTHROPIC_API_KEY: '', AI_GATEWAY_URL: '', POLAR_WEBHOOK_SECRET: '', POLAR_SERVER: 'sandbox' })).config;
