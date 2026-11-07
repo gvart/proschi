@@ -40,6 +40,12 @@ POLAR_PRODUCT_MAX_MONTHLY=
 POLAR_PRODUCT_MAX_YEARLY=
 POLAR_PRODUCT_CREDITS_1000=
 
+# --- Turnstile on email sign-in: optional (unset: skipped, with a log line) ---
+# Cloudflare's test secret 1x0000000000000000000000000000000AA always passes, 2x0000000000000000000000000000000AA always fails;
+# put the matching test site key 1x00000000000000000000AA in TURNSTILE_SITE_KEY here too (README "Email sign-in").
+TURNSTILE_SITE_KEY=
+TURNSTILE_SECRET_KEY=
+
 # --- Admin and metrics: optional ---
 # Registers the admin panel's first passkey (/admin/), 16+ characters; works only while none exists.
 ADMIN_SETUP_TOKEN=

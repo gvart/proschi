@@ -2,6 +2,7 @@ import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SESSION_COOKIE } from '../src/auth';
 import { grantSignupCredits } from '../src/credits';
+import { signupLedger } from '../src/signupCredits';
 import { call, ORIGIN, resetDatabase } from './helpers';
 
 const RETURN = '/practice/?a=1#/url-shortener';
@@ -17,6 +18,7 @@ function mockProviders(profile: Record<string, unknown> = { id: 42, login: 'octo
       return Response.json({ access_token: 'gh-token' });
     }
     if (url === 'https://api.github.com/user') return Response.json(profile);
+    if (url === 'https://api.github.com/user/emails') return Response.json([]);
     if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'g-token' });
     if (url === 'https://openidconnect.googleapis.com/v1/userinfo') return Response.json({ sub: 'g-1', given_name: 'Grace', name: 'Grace Hopper' });
     return real(input, init);
@@ -52,7 +54,7 @@ describe('sign-in', () => {
   afterEach(() => vi.restoreAllMocks());
 
   it('lists the configured providers', async () => {
-    expect(await (await call('/auth/providers')).json()).toEqual({ providers: ['github', 'google'] });
+    expect(await (await call('/auth/providers')).json()).toEqual({ providers: ['github', 'google', 'email'] });
   });
 
   it('redirects to GitHub with state and a PKCE challenge, and sets a signed state cookie', async () => {
@@ -114,10 +116,12 @@ describe('sign-in', () => {
 
   it('gives sign-in no credits, and an identity its sign-up credits once, even after its account is deleted; keeps only hashes', async () => {
     mockProviders();
+    // The ledger on its own: sign-in's eligibility checks (src/signupChecks.ts) are tested in their own file.
+    vi.spyOn(signupLedger, 'grant').mockResolvedValue('already');
     const balanceOf = async (token: string) => ((await (await call('/api/me/plan', { token })).json()) as { credits: { balance: number } }).credits.balance;
     const userId = async () => (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!.id;
     const first = await signIn();
-    // Signing in grants nothing: the caller grants after its own checks.
+    // With the checks stubbed out, signing in grants nothing.
     expect(await balanceOf(first.token)).toBe(0);
     expect(await grantSignupCredits(env, await userId(), 'github\n42')).toBe('granted');
     expect(await grantSignupCredits(env, await userId(), 'github\n42')).toBe('already');

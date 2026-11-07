@@ -17,11 +17,12 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 
 ## What the API does
 
-- **Sign-in** with GitHub or Google (OAuth 2 with PKCE). A signed, ten-minute
+- **Sign-in** with GitHub or Google (OAuth 2 with PKCE), or an email address
+  and password ([Email sign-in](#email-sign-in)). A signed, ten-minute
   state cookie ties the callback to the browser that started the sign-in. No
-  email address or avatar is stored, only the provider's user id and a display
-  name (an address the user gives for [email reminders](#email-reminders) is
-  the one exception).
+  avatar is stored, and no email address but the one an account signs in
+  with or gives for [email reminders](#email-reminders): GitHub's and
+  Google's verified address is only hashed, for the sign-up credits' checks.
 - **Personal stats**: per problem the number of test runs, the last design, the
   first solve, the runs it took, and the cheapest and fastest solving designs.
   Progress already in the browser is uploaded on first sign-in.
@@ -681,6 +682,84 @@ which Workers do not have.
   the request, and characters outside Archivo's Latin sets (other scripts, emoji) are
   drawn as boxes. A failed render redirects to the site's `/og.png`.
 
+### Email sign-in
+
+Email and password, next to GitHub and Google (`src/emailAuth.ts`,
+`src/password.ts`, `src/turnstile.ts`, migration 0026; the page is
+`frontend/signin/`, `frontend/src/auth/`). `GET /auth/providers` lists
+`email` when `SESSION_SECRET` and the `EMAIL` binding are set, and
+`turnstileSiteKey` when Turnstile is on. What is kept is in
+[docs/PRIVACY.md](../docs/PRIVACY.md#email-sign-in).
+
+    GET  /auth/email/start?return=[&link=1]  → /signin/ (every "Sign in with Email" button)
+    POST /auth/email/signup {email, password, turnstile, link?}  202, always the same message
+    POST /auth/email/confirm {token}          confirms, signs in: {confirmed, signupCredits}
+    POST /auth/email/login {email, password, turnstile}  {confirmed}; 401 "Wrong email or password"
+    POST /auth/email/resend                   signed in, unconfirmed: the link again (202)
+    POST /auth/email/reset-request {email, turnstile}    202, always the same message
+    POST /auth/email/reset {token, password}  new password, ends every session, signs in
+    GET  /auth/email/status                   {signedIn, email, confirmed, signupCredits}
+
+- **Accounts.** The identity is `identities` (`email`, the normalized
+  address: lowercase; Gmail and Googlemail without dots and `+tag`; other
+  domains without `+tag`), so one mailbox is one account, deleting it leaves
+  the usual tombstone, and Settings can link or unlink it. `email_logins`
+  keeps the address as typed (lowercased) and the password hash.
+- **Passwords**: PBKDF2-SHA256 through WebCrypto, 100,000 iterations (the
+  most Cloudflare's runtime allows), a random 16-byte salt each, stored as
+  `pbkdf2$sha256$<iterations>$<salt>$<hash>`, compared in constant time. At
+  least 10 characters, not on a short common-password list, not the address.
+- **Links.** The confirmation (24 h) and reset (1 h) links are
+  `/signin/#confirm=<token>` and `#reset=<token>`: the hash never reaches a
+  server log; the page POSTs the token from a button (mail scanners open
+  links). Stored as SHA-256, single use. One email of a kind per account a
+  minute and 5 a day; past that nothing is sent and the answer is the same.
+  A reset ends every session and app code, and confirms the address.
+- **No account enumeration.** Sign-up and reset always answer 202 with the
+  same message; a taken address gets an email saying so (with a reset link)
+  instead. A wrong password and an unknown address are one 401, and an
+  unknown address still costs a PBKDF2 run. Sign-up with a still unconfirmed
+  address sends a new link that carries the new password, which confirming
+  sets (ending other sessions): whoever owns the inbox ends up with their
+  own password.
+- **Backoff.** `login_failures` counts failures per account (an HMAC of the
+  normalized address, existing or not) and per IP (an HMAC). From the 5th
+  failure per account (20th per IP) each one locks for 1, 2, 4, … minutes,
+  at most an hour: 429 with Retry-After. A success clears the account's
+  count; counts are forgotten after a day. On top, `AUTH_LIMITER` (20 a
+  minute per IP) covers every step.
+- **Turnstile** on sign-up, sign-in and reset: the page renders the widget
+  with `TURNSTILE_SITE_KEY` (a `vars` entry, public) and the server checks
+  the token with Siteverify and `TURNSTILE_SECRET_KEY` (a secret), and that
+  its action is the form's. Without the secret the check is skipped with a
+  log line (local development, tests). Cloudflare's test keys: site key
+  `1x00000000000000000000AA` (always passes) or `2x00000000000000000000AB`
+  (always blocks), secret `1x0000000000000000000000000000000AA` (passes) or
+  `2x0000000000000000000000000000000AA` (fails).
+- **Free sign-up credits** (`src/signupChecks.ts`, docs/design/paid-plans.md
+  P26): only when the address is confirmed (GitHub and Google at once), its
+  domain isn't disposable (`src/disposableDomains.ts`, refreshed with
+  `node scripts/disposable.mjs` from the community list), none of the
+  account's identities (provider and user id, the normalized address, the
+  verified address GitHub or Google gives) is in `signup_claims` or
+  `account_tombstones`, and its sign-up IP's HMAC got credits for fewer than
+  3 accounts in 7 days (`signup_ip_grants`). The grant goes through
+  `src/signupCredits.ts` to the ledger, keyed by the normalized verified
+  address (`${provider}\n${subject}` for an OAuth account without one). The
+  decision and why is in `signup_checks`; the page says plainly why there
+  are none, and the admin panel shows it per account and counts today's
+  refusals.
+- **Mail** goes out like the reminders (`src/email.ts`, from
+  `reminders@proschi.app`). Cloudflare Email Service sends to any recipient
+  once the domain is onboarded, on Workers Paid (3,000 a month included).
+
+**Owner setup**: create a Turnstile widget (dashboard → Turnstile → Add
+widget, hostname `proschi.app`, mode Managed), put its site key in
+`wrangler.jsonc` `vars.TURNSTILE_SITE_KEY` and its secret with
+`npx wrangler secret put TURNSTILE_SECRET_KEY`. GitHub's OAuth app needs
+nothing new (the `user:email` scope is asked for at sign-in); Google's
+consent screen gains the `email` scope.
+
 ### Email reminders
 
 Opt-in reminder emails for signed-in users (`src/reminders.ts`; what is kept
@@ -1223,7 +1302,8 @@ Before turning the paid features on at proschi.app:
   `AI_GATEWAY_URL` and `AI_GATEWAY_TOKEN`, `METRICS_TOKEN`,
   `CREDITS_USD_EUR` (the dollar-to-euro rate credits are priced at;
   unset: 0.95), and
-  `ADMIN_SETUP_TOKEN` (once). `POLAR_SERVER` must not be `sandbox` (leave
+  `ADMIN_SETUP_TOKEN` (once); `TURNSTILE_SECRET_KEY`, with the site key in
+  `wrangler.jsonc` `vars` ([Email sign-in](#email-sign-in)). `POLAR_SERVER` must not be `sandbox` (leave
   it unset).
 - **Polar (production, not the sandbox)**:
   - products: Pro monthly (€12/month), Pro yearly (€99/year), Max monthly

@@ -11,6 +11,8 @@ import { test as base, expect, type Locator, type Page } from '@playwright/test'
 const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   // Signed out (build with accounts), GET /api/me answers 401 and the page reads that as signed out; Chromium logs every non-2xx load.
   /^Failed to load resource: the server responded with a status of 401 \(Unauthorized\) \(http:\/\/127\.0\.0\.1:\d+\/api\/me:0\)$/,
+  // The sign-in page's forms (signin.accounts.e2e.ts): a wrong password answers 401 and a used link 400, which the page shows as a message.
+  /^Failed to load resource: the server responded with a status of 40[01] \([^)]+\) \(http:\/\/127\.0\.0\.1:\d+\/auth\/email\/(login|confirm|reset):0\)$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */

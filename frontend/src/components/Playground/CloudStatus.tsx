@@ -3,7 +3,7 @@ import { MenuItem } from './Menu';
 import UpgradeHint from './UpgradeHint';
 import { cloudLabel, type CloudState, type CloudSync } from './useCloudSync';
 
-const PROVIDER_LABEL = { github: 'GitHub', google: 'Google' } as const;
+const PROVIDER_LABEL = { github: 'GitHub', google: 'Google', email: 'Email' } as const;
 
 /** The small cloud by the diagram's title in the header: only when signed in with sync on. */
 export function CloudIcon({ state }: { state: CloudState }) {

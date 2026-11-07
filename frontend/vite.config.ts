@@ -83,6 +83,8 @@ export default defineConfig(async () => ({
         cardsIndex: fileURLToPath(new URL('./practice/cards/index.html', import.meta.url)),
         cardTopicPage: fileURLToPath(new URL('./practice/cards/_topic/index.html', import.meta.url)),
         cardPage: fileURLToPath(new URL('./practice/cards/_topic/_card/index.html', import.meta.url)),
+        // The sign-in page (src/auth/): email and password, its confirmation and reset links, noindex.
+        signin: fileURLToPath(new URL('./signin/index.html', import.meta.url)),
         // The pricing page (src/pricing/), only in builds with paid plans (VITE_BILLING=true; docs/design/paid-plans.md P10).
         ...(process.env.VITE_BILLING === 'true' ? { pricing: fileURLToPath(new URL('./pricing/index.html', import.meta.url)) } : {}),
       },

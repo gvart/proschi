@@ -7,6 +7,7 @@ import { change, periods, sum } from './chartScale';
 import { formatNumber, formatUsd, humanize } from './format';
 import { useLoad } from './hooks';
 import { routeHash } from './route';
+import { getSignups, refusedSummary } from './signups';
 import Sparkline from './Sparkline';
 import { ErrorNote, PageHeader, Section, Skeleton } from './ui';
 
@@ -66,6 +67,7 @@ export default function OverviewTab({
   const overview = useLoad(getOverview, [], onSignedOut);
   const health = useLoad(getHealth, [], onSignedOut);
   const webhooks = useLoad(() => listWebhooks(''), [], onSignedOut);
+  const signups = useLoad(getSignups, [], onSignedOut);
   const [event, setEvent] = useState('editor_open');
   const data = trends.data;
   // While another range loads, the last one stays on screen, dimmed.
@@ -104,6 +106,13 @@ export default function OverviewTab({
                 ? `${formatNumber(n)} ${n === 1 ? 'delivery' : 'deliveries'} refused or failed in the last 7 days`
                 : 'No refused or failed deliveries in the last 7 days';
             })()}
+          />
+          <Attention
+            loading={!signups.data}
+            ok={!signups.data?.refusedToday}
+            href={routeHash({ page: 'users' })}
+            title="Sign-ups refused free credits"
+            detail={signups.data ? refusedSummary(signups.data) : ''}
           />
           <Attention
             loading={!health.data}
