@@ -92,11 +92,11 @@ export function nextPollIn(s: ReturnState, now: number): number | null {
 /** The banner's text. */
 export function returnMessage(s: ReturnState): string {
   if (s.phase === 'done') {
-    if (s.kind === 'pack') return `${s.interviews} interviews added.`;
-    return `You're on Pro: ${s.interviews} AI interviews this month.`;
+    if (s.kind === 'pack') return `${s.interviews} mock interviews added.`;
+    return `You're on Pro: ${s.interviews} mock interviews this month.`;
   }
   if (s.phase === 'slow') {
     return "Polar hasn't confirmed the payment yet. It usually takes a few seconds; this page updates when it does. If it doesn't within a few minutes, contact support.";
   }
-  return s.kind === 'pack' ? `Payment received. Adding ${PRICES.packInterviews} interviews…` : 'Payment received. Activating Pro…';
+  return s.kind === 'pack' ? `Payment received. Adding ${PRICES.packInterviews} mock interviews…` : 'Payment received. Activating Pro…';
 }

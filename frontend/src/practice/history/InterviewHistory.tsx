@@ -74,7 +74,7 @@ export default function InterviewHistory() {
         Interview history
       </h2>
       {total === 0 ? (
-        <p className={`mt-3 p-4 text-sm text-ink/80 ${card}`}>No AI interviews yet. Start one from any problem with Interview mode, then its verdict and scores show up here.</p>
+        <p className={`mt-3 p-4 text-sm text-ink/80 ${card}`}>No mock interviews yet. Start one from any problem with Interview mode, then its verdict and scores show up here.</p>
       ) : (
         <>
           {full && sessions.length > 0 && (
@@ -150,7 +150,7 @@ export function InterviewVerdictPage({ id }: { id: string }) {
         <>
           <h1 className="mt-3 font-display text-[clamp(1.75rem,4vw,2.5rem)] font-extrabold leading-[1.1] text-ink">{titleOf(interview.problem)}</h1>
           <p className="mt-1 text-sm tabular-nums text-muted">
-            AI interview · {formatDay(interview.startedAt)} · {interview.minutes} min
+            Mock interview · {formatDay(interview.startedAt)} · {interview.minutes} min
           </p>
           <div className={`mt-4 ${card}`}>
             <VerdictView picksFor={interview.id} endedAt={interview.endedAt} verdict={interview.verdict} />
