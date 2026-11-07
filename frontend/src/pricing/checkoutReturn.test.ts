@@ -68,7 +68,7 @@ describe('Pro', () => {
     expect(returnMessage(s)).toBe('Payment received. Activating Pro…');
     s = onPlan(s, plan({ plan: 'pro', status: 'active', perMonth: 800 }));
     expect(s.phase).toBe('done');
-    expect(returnMessage(s)).toBe("You're on Pro: 800 credits a month, starting now.");
+    expect(returnMessage(s)).toBe("You're on Pro: about 14–21 mock interviews a month (800 credits), starting now.");
   });
   it('a switch from monthly to yearly is done once the subscription has the new product', () => {
     expect(onPlan(PRO, plan({ plan: 'pro', status: 'active', perMonth: 800, product: 'pro_monthly' })).phase).toBe('activating');
@@ -93,7 +93,7 @@ describe('Max', () => {
     expect(onPlan(MAX, plan({ plan: 'pro', status: 'active', perMonth: 800 })).phase).toBe('activating');
     const s = onPlan(MAX, plan({ plan: 'max', status: 'active', perMonth: 2200 }));
     expect(s).toMatchObject({ phase: 'done', credits: 2200 });
-    expect(returnMessage(s)).toBe("You're on Max: 2,200 credits a month, Deep mode and printable interview reports.");
+    expect(returnMessage(s)).toBe("You're on Max: about 38–59 mock interviews a month (2,200 credits), the Deep verdict and printable interview reports.");
   });
 });
 
@@ -106,7 +106,7 @@ describe('a top-up', () => {
     expect(s.phase).toBe('activating');
     s = onPlan(s, plan({ topup: 1200 }));
     expect(s).toMatchObject({ phase: 'done', credits: 1000 });
-    expect(returnMessage(s)).toBe('1,000 credits added. They never expire.');
+    expect(returnMessage(s)).toBe('1,000 credits added, enough for about 17–26 mock interviews. They never expire.');
     expect(onPlan(s, plan({ topup: 2200 }))).toBe(s);
   });
   it('is not done by Pro', () => {

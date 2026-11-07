@@ -48,18 +48,22 @@ async function mockBilling(page: Page, plan: () => Plan, usage: unknown = { item
   return posts;
 }
 
-test('pricing: three plans, monthly or yearly, what credits buy, and a checkout per product', async ({ page }) => {
+test('pricing: three plans led by the mock interviews they cover, monthly or yearly, how credits work, and a checkout per product', async ({ page }) => {
   const posts = await mockBilling(page, () => FREE_PLAN);
   await page.goto('pricing/');
-  await expect(page.getByRole('heading', { name: 'Free to design. Credits for the coaching.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Walk into your system design interview ready.' })).toBeVisible();
   const pro = page.getByRole('region', { name: 'Pro' });
   const max = page.getByRole('region', { name: 'Max' });
-  await expect(page.getByRole('region', { name: 'Free' })).toContainText('100creditsonce, at sign-up');
+  // The counts follow the estimates the server answers (accounts.ts ESTIMATES: an interview 45–60, a review 5–15, a build 20–40; pricing/planValue.ts).
+  const free = page.getByRole('region', { name: 'Free' });
+  await expect(free.getByTestId('plan-value')).toHaveText('About 1–2 mock interviews onceor about 6–20 design reviews or 2–5 systems built with Design partner100 credits once, at sign-up');
   await expect(page.getByRole('region', { name: 'Free' })).toContainText('Your plan');
   await expect(pro).toContainText('Recommended');
   await expect(max).toContainText('Most credits');
-  await expect(pro).toContainText('800creditsevery month');
-  await expect(max).toContainText('2,200creditsevery month');
+  await expect(pro.getByTestId('plan-value')).toHaveText('About 13–17 mock interviews a monthor about 53–160 design reviews or 20–40 systems built with Design partner800 credits a month');
+  await expect(max.getByTestId('plan-value')).toHaveText('About 36–48 mock interviews a monthor about 146–440 design reviews or 55–110 systems built with Design partner2,200 credits a month');
+  await expect(max).toContainText('Deep verdict');
+  await expect(max).toContainText('A printable interview report');
 
   await expect(page.getByRole('radio', { name: /Yearly/ })).toHaveAttribute('aria-checked', 'true');
   await expect(pro.getByText('€99', { exact: true })).toBeVisible();
@@ -69,12 +73,17 @@ test('pricing: three plans, monthly or yearly, what credits buy, and a checkout 
   await expect(pro.getByText('€12', { exact: true })).toBeVisible();
   await expect(max.getByText('€29', { exact: true })).toBeVisible();
 
-  const costs = page.getByRole('region', { name: 'What credits buy' });
+  await expect(page.getByText('Mock interviews and Design partner share the same credits')).toBeVisible();
+  const costs = page.getByRole('region', { name: 'How credits work' });
+  await expect(costs.getByText('Mock interview', { exact: true })).toBeHidden();
+  await costs.getByText('How credits work').click();
   await expect(costs).toContainText('Mock interview');
   await expect(costs).toContainText('45–60');
-  await expect(costs).toContainText('Design partner review');
+  await expect(costs).toContainText('Design review');
   await expect(costs).toContainText('5–15');
   await expect(costs).toContainText('20–40');
+  await expect(costs).toContainText('Refine a design');
+  await expect(page.getByRole('heading', { name: 'Top-up: about 16–22 mock interviews for €12' })).toBeVisible();
   await expect(page.getByTestId('pricing-balance')).toHaveText('You have 100 credits.');
 
   await max.getByRole('button', { name: 'Get Max, €29 a month' }).click();
@@ -169,7 +178,7 @@ test('settings: on Free, the sign-up credits and the way to the plans; nothing s
   await mockBilling(page, () => FREE_PLAN);
   await page.goto('practice/#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
-  await expect(billing).toContainText('Pro adds 800 credits a month and unlimited diagrams; Max 2,200 and Deep mode.');
+  await expect(billing).toContainText('Pro covers about 14–21 mock interviews a month (800 credits); Max about 38–59, with the Deep verdict and printable reports.');
   await expect(billing.getByRole('meter', { name: 'Sign-up credits left' })).toHaveAttribute('aria-valuemax', '100');
   await expect(billing.getByRole('meter', { name: 'Diagrams in your account' })).toHaveAttribute('aria-valuemax', '5');
   await expect(billing).toContainText('Nothing spent yet.');
@@ -211,7 +220,7 @@ test('checkout return: activating, then Pro when the webhook lands after two ask
   current = PRO_PLAN;
   await page.clock.runFor(2000);
   const welcome = page.getByRole('region', { name: 'Welcome to Pro' });
-  await expect(welcome).toContainText("You're on Pro: 800 credits a month, starting now.");
+  await expect(welcome).toContainText("You're on Pro: about 14–21 mock interviews a month (800 credits), starting now.");
   await expect(welcome).toBeInViewport();
   expect((await welcome.boundingBox())!.y).toBeLessThan((await billing.boundingBox())!.y);
   await expect(welcome.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/url-shortener?interview=mock');
@@ -226,7 +235,7 @@ test('checkout return: activating, then Pro when the webhook lands after two ask
 
   // The same checkout again: its welcome was shown, so the banner alone.
   await page.goto('practice/?checkout=done&product=pro_yearly&checkout_id=chk_2#/me');
-  await expect(banner(page)).toHaveText("You're on Pro: 800 credits a month, starting now.");
+  await expect(banner(page)).toHaveText("You're on Pro: about 14–21 mock interviews a month (800 credits), starting now.");
   await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
 });
 
@@ -244,7 +253,7 @@ test('checkout return: an upgrade to Max waits for the subscription to change, t
   current = MAX_PLAN_NOW;
   await page.clock.runFor(2000);
   const welcome = page.getByRole('region', { name: 'Welcome to Max' });
-  await expect(welcome).toContainText("You're on Max: 2,200 credits a month, Deep mode and printable interview reports.");
+  await expect(welcome).toContainText("You're on Max: about 38–59 mock interviews a month (2,200 credits), the Deep verdict and printable interview reports.");
   await expect(page.getByTestId('plan-badge')).toHaveText('Max');
 });
 
@@ -277,7 +286,7 @@ test('checkout return: a top-up shows the credits added; no parameters, no banne
   current = { ...FREE_PLAN, customer: true, credits: { balance: 1100, monthly: null, signup: 100, topup: 1000 } };
   await page.clock.runFor(1000);
   const welcome = page.getByRole('region', { name: 'Credits added' });
-  await expect(welcome).toContainText('1,000 credits added. They never expire.');
+  await expect(welcome).toContainText('1,000 credits added, enough for about 17–26 mock interviews. They never expire.');
   await expect(page.getByTestId('credits')).toContainText('Top-ups1,000never expire');
   await expect(page.getByTestId('plan-badge')).toHaveCount(0);
   await page.getByRole('button', { name: 'Account', exact: true }).click();

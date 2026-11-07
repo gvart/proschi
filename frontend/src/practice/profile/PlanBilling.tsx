@@ -2,6 +2,7 @@ import { useEffect, useState, type ReactNode } from 'react';
 import { CreditCard, Sparkles, Zap } from 'lucide-react';
 import { outlineButton, primaryButton } from '../../components/Playground/ui';
 import { fetchTransport } from '../../playground/cloudSync';
+import { formatCount, interviewsText, partnerText, planValue } from '../../pricing/planValue';
 import { usePlan } from '../../pricing/usePlan';
 import { billingEnabled, buyPlan, checkout, openPortal, PLAN_CHANGED, PLAN_CREDITS, PRICES, pricingHref, productPlan, type PlanInfo, type Product } from '../../services/billing';
 import { formatCredits, formatRange, getUsage, TYPICAL_COSTS, USAGE_LABEL, type UsageItem } from '../../services/credits';
@@ -101,6 +102,16 @@ function Figure({ label, value, unit, children }: { label: string; value: number
       </p>
       {children}
     </div>
+  );
+}
+
+/** What the credits left are worth: mock interviews first, then Design partner (pricing/planValue.ts); nothing when they don't cover an interview. */
+function Worth({ credits }: { credits: number }) {
+  if (planValue(credits).interviews.hi < 1) return null;
+  return (
+    <p data-testid="credits-worth" className="mt-2 text-xs text-ink/80">
+      Enough for {interviewsText(credits)}, or {partnerText(credits)} with Design partner.
+    </p>
   );
 }
 
@@ -208,7 +219,7 @@ export default function PlanBilling() {
             <p className="flex min-w-0 flex-wrap items-center gap-2 text-sm text-ink">
               <span className={`rounded-sm border-bw-1 border-ink px-2 py-0.5 text-xs font-bold uppercase tracking-wide ${BADGE[plan.plan] ?? BADGE.free}`}>{name}</span>
               {renewalText(plan) ??
-                `Pro adds ${formatCredits(PLAN_CREDITS.pro)} credits a month and unlimited diagrams; Max ${formatCredits(PLAN_CREDITS.max)} and Deep mode.`}
+                `Pro covers ${interviewsText(PLAN_CREDITS.pro)} a month (${formatCredits(PLAN_CREDITS.pro)} credits); Max about ${formatCount(planValue(PLAN_CREDITS.max).interviews)}, with the Deep verdict and printable reports.`}
             </p>
             <div className="flex shrink-0 flex-wrap gap-2 sm:justify-end">
               {plan.plan === 'free' && (
@@ -243,12 +254,16 @@ export default function PlanBilling() {
               ) : (
                 <Meter label="Sign-up credits left" value={plan.credits.signup} max={PLAN_CREDITS.free} />
               )}
+              <Worth credits={plan.credits.balance} />
               <Breakdown plan={plan} />
               {plan.billing && (
-                <button type="button" className={`${outlineButton} mt-3`} disabled={busy} onClick={() => go(() => checkout('credits_1000'))}>
-                  <CreditCard size={14} aria-hidden="true" />
-                  Buy {formatCredits(PRICES.topupCredits)} credits, €{PRICES.topup}
-                </button>
+                <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1">
+                  <button type="button" className={outlineButton} disabled={busy} onClick={() => go(() => checkout('credits_1000'))}>
+                    <CreditCard size={14} aria-hidden="true" />
+                    Buy {formatCredits(PRICES.topupCredits)} credits, €{PRICES.topup}
+                  </button>
+                  <span className="text-xs text-muted">Adds {interviewsText(PRICES.topupCredits)}</span>
+                </div>
               )}
             </Figure>
             <Figure label="Diagrams in your account" value={used ?? '–'} unit={plan.limits.documents === null ? 'kept, no limit' : `of ${plan.limits.documents}`}>
