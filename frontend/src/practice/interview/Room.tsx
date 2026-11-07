@@ -79,9 +79,11 @@ export default function Room({ problem, board, phone, phase, pulse, clock, talk,
   const editorPane = (
     <section aria-label="Code" className="flex h-full min-w-0 flex-col bg-surface">
       <div className="flex items-center gap-2 border-b border-ink/15 px-3 py-1.5 font-mono text-xs text-muted">
-        solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
+        <span className="min-w-0 flex-1 truncate">
+          solution.proschi <span className="font-sans">· imports</span> {PROBLEM_FILE}
+        </span>
         {!phone && (
-          <button type="button" onClick={() => code.onChange(false)} className={`ml-auto ${iconButton} !h-7 !w-7`} aria-label="Hide the code" title="Hide the code">
+          <button type="button" onClick={() => code.onChange(false)} className={`${iconButton} !h-7 !w-7`} aria-label="Hide the code" title="Hide the code">
             <X size={14} />
           </button>
         )}
@@ -211,7 +213,7 @@ function TopBar({ problem, phone, phase, pulse, clock, talk, sound, code, onChec
             className={`flex items-center gap-1 whitespace-nowrap rounded-full border-bw-1 px-2 py-0.5 text-xs font-semibold ${now ? `border-ink bg-pop-yellow text-on-accent ${pulse ? 'ps-room-pulse' : ''}` : done ? 'border-ink/40 text-ink' : 'border-ink/15 text-muted'} ${phone && !now ? 'max-[479px]:hidden' : ''}`}
           >
             {done ? <Check size={11} aria-hidden="true" /> : <span className="font-mono">{i + 1}</span>}
-            <span className={phone && !now ? 'sr-only' : ''}>{p.label}</span>
+            <span className={!now ? (phone ? 'sr-only' : 'max-[1439px]:sr-only') : ''}>{p.label}</span>
           </li>
         );
       })}
