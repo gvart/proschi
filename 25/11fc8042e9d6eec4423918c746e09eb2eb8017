@@ -1,0 +1,56 @@
+backend/test/auth.test.ts
+  s_e17b87e0a1b3ca::t_6cc0aba9093cc3 4,115,117-118,120-124,126,129-131,133-136,138-139
+backend/src/plans.ts
+  s_e17b87e0a1b3ca::t_3360cc8f17651e 3-5,9-15,24-25,28,35-38,44,61,66,70
+backend/src/env.ts
+  s_e17b87e0a1b3ca::t_f6f15101e640fa 30,71,79,82-89
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_9be33c655663dd 57
+backend/src/features.ts
+  s_e17b87e0a1b3ca::t_a5e46a7dd8e1c9 12,21-29
+backend/vitest.config.ts
+  s_e17b87e0a1b3ca::t_b4cd95ee057725 27-29
+backend/test/plans.test.ts
+  s_e17b87e0a1b3ca::t_c598d70ca6ad67 15-17
+backend/src/credits.ts
+  s_e17b87e0a1b3ca::t_90b36b420dfba5 3,6-9,13-20,22,25,27-28,30-32,35-42,47-50,53-59,63-66,68,70-77,80-114,117-118,120,123,125-126,128,137-140,144-146,151,153-157,161-164,166-194,201,203,205,217-219,221-222,225,227-228
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_8dfe17fc0f6aed 21,255,257-258
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_8acccaf166341d 274
+backend/test/features.test.ts
+  s_e17b87e0a1b3ca::t_27e2e4e4252482 60-62,65-69
+backend/test/admin.test.ts
+  s_e17b87e0a1b3ca::t_8acccaf166341d 391
+backend/src/cron.ts
+  s_e17b87e0a1b3ca::t_8dfe17fc0f6aed 11,65
+backend/src/meter.ts
+  s_e17b87e0a1b3ca::t_90c81a60db6b83 3-159,161-172,174,177-266
+  s_e17b87e0a1b3ca::t_24676556cde691 1-2
+  s_e17b87e0a1b3ca::t_c2b627332becf3 160,173,175-176
+  s_e17b87e0a1b3ca::t_6328fcf50dd5fa 267-292
+backend/test/credits.test.ts
+  s_e17b87e0a1b3ca::t_de3c4a4f3ccaa9 3-6,8,12,15-18,20-32,34-53,56-74,76-84,88-97,100,102-106,108-111,113,115-129,132,134-140,143,145-152,155-191,194-219,221,224,226-227,230-233,235,237
+  s_e17b87e0a1b3ca::t_8798bddc052aa9 33
+  s_e17b87e0a1b3ca::t_1d99a882aa299c 85-87
+frontend/src/services/featureContract.ts
+  s_e17b87e0a1b3ca::t_a5e46a7dd8e1c9 9-13
+backend/migrations/0024_metered_credits.sql
+  s_e17b87e0a1b3ca::t_44aae3c35434a6 1-96
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "2511fc8042e9d6eec4423918c746e09eb2eb8017",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
