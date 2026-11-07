@@ -1,0 +1,59 @@
+frontend/e2e/admin.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_ca0e69cb9b5b93 1,15-16,42,47,49-50,105-122,125,129-133,135-141,161
+frontend/src/admin/ui.tsx
+  s_e17b87e0a1b3ca::t_f70719a569d432 1,4,17-56
+  s_e17b87e0a1b3ca::t_4a9d20dbcc2086 57-58,182-191
+  s_e17b87e0a1b3ca::t_f047e2730336d5 3,59
+frontend/src/admin/route.test.ts
+  s_e17b87e0a1b3ca::t_1023a88cd85f4f 2,5-17,21-26
+frontend/src/admin/admin.css
+  s_e17b87e0a1b3ca::t_e15b7e32301244 1-4,7-13,19-40,46-48,50-52,56-57,59-61,68-143,145-150,153-189,192-211,234,236,239-240,254-255,262,267-271,276,281-283,292,296,300,316,323,349,353,355-356,396,401-402,406-575,667-669,969
+frontend/src/admin/AdminApp.tsx
+  s_e17b87e0a1b3ca::t_ed34d57b38d982 6,10,19-26,29,31,85-86,88,101,107-109,120-122,124-125
+frontend/src/admin/Nav.tsx
+  s_e17b87e0a1b3ca::t_be1b67e9838660 1-42
+frontend/src/admin/BillingTab.tsx
+  s_e17b87e0a1b3ca::t_4a9d20dbcc2086 16
+  s_e17b87e0a1b3ca::t_97f37676374aa5 3
+  s_e17b87e0a1b3ca::t_52606ee131788d 6,26-27,34-35
+frontend/src/admin/route.ts
+  s_e17b87e0a1b3ca::t_44b93950ef8446 1-18,21,31-32,35-36,40,42-44,46,49-50,52-53
+  s_e17b87e0a1b3ca::t_6f0ed954ee2955 23-29
+  s_e17b87e0a1b3ca::t_d8c0f6c37c86c5 22,30
+frontend/src/admin/WebhooksTab.tsx
+  s_e17b87e0a1b3ca::t_dbbcf83606f732 1-97
+frontend/src/admin/EventsTab.tsx
+  s_e17b87e0a1b3ca::t_f6ca8f1a5d5036 17-32,34-64,116-146
+  s_e17b87e0a1b3ca::t_27eaa7c2556432 1,6,16,147
+frontend/src/admin/UsersTab.tsx
+  s_e17b87e0a1b3ca::t_f6ca8f1a5d5036 41-76,78-104
+  s_e17b87e0a1b3ca::t_72ca35cb569685 6,40,105
+frontend/src/admin/AiTab.tsx
+  s_e17b87e0a1b3ca::t_49271b4de5f893 6,24
+frontend/src/admin/HealthTab.tsx
+  s_e17b87e0a1b3ca::t_3e6bbfccf543c8 1,5,22-23,26,29-30
+frontend/src/admin/OverviewTab.tsx
+  s_e17b87e0a1b3ca::t_4552547a08a0a8 6,18
+frontend/src/admin/PasskeysTab.tsx
+  s_e17b87e0a1b3ca::t_7d317662cae69c 5,15
+frontend/src/admin/SharesTab.tsx
+  s_e17b87e0a1b3ca::t_a3b517138b128d 5,11
+frontend/src/admin/hooks.ts
+  s_e17b87e0a1b3ca::t_c2addc9c137c74 1,69-90
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "af8677ffe8ad85bb7db932ccc4bb4a423950b872",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
