@@ -336,7 +336,7 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
               />
               <div className="flex flex-col gap-1.5">
                 <MicButton ref={mic} onText={onText} onState={onMicState} disabled={!active} />
-                <button type="submit" disabled={!canTalk || !said} className={`${primaryButton} justify-center disabled:opacity-50`} aria-label="Send">
+                <button type="submit" disabled={!canTalk || !said} className={`${primaryButton} h-9 min-w-9 shrink-0 justify-center !p-0 !shadow-none disabled:opacity-50`} aria-label="Send">
                   <Send size={14} aria-hidden="true" />
                 </button>
               </div>

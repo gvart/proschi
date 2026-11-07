@@ -53,6 +53,14 @@ test('the edge tab and Ctrl+J open the panel; one composer, with starter chips t
   await expect(composer).toHaveValue('');
   await expect(composer).toHaveAttribute('placeholder', /Describe the system/);
   await expect(footnote).toContainText('A build: about 10–40 credits');
+  // Build starts taller so its hint reads whole, with no scrollbar, and Mic and Send are the same size, level with each other and the box's bottom.
+  expect(await composer.evaluate((t) => t.scrollHeight > t.clientHeight)).toBe(false);
+  const [field, mic, send] = await Promise.all([composer.boundingBox(), panel(page).getByTestId('mic-button').boundingBox(), panel(page).getByRole('button', { name: 'Send' }).boundingBox()]);
+  expect(field!.height).toBeGreaterThan(80);
+  expect(mic!.height).toBe(send!.height);
+  expect(mic!.width).toBe(send!.width);
+  expect(mic!.y + mic!.height).toBe(send!.y + send!.height);
+  expect(mic!.y + mic!.height).toBe(field!.y + field!.height);
   await chip(page, 'Build a system from a description').click();
   await expect(footnote).toContainText('A message: about 1–4 credits');
   // No Deep without Max.
