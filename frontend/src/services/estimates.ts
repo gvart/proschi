@@ -5,9 +5,11 @@
  * server's own numbers (backend/test/credits.test.ts).
  */
 
+/** What an action usually costs, low to high; `worst` (from the server) is what it can never cost more than. */
 export interface Range {
   min: number;
   max: number;
+  worst?: number;
 }
 
 /** GET /api/credits/estimates. */
@@ -30,11 +32,11 @@ export interface CreditEstimates {
  * fails when the two differ, so change both together.
  */
 export const TYPICAL_COSTS: CreditEstimates = {
-  mock_interview: { min: 37.984, max: 140.92 },
-  partner_review: { min: 10.26, max: 49.4 },
-  partner_build: { min: 16.796, max: 72.2 },
-  partner_turn: { min: 4.978, max: 30.4 },
-  verdict: { min: 14.592, max: 53.2 },
+  mock_interview: { min: 37.253, max: 57.039, worst: 1096.536 },
+  partner_review: { min: 8.36, max: 12.16, worst: 49.4 },
+  partner_build: { min: 12.996, max: 20.596, worst: 72.2 },
+  partner_turn: { min: 4.028, max: 5.928, worst: 30.4 },
+  verdict: { min: 12.692, max: 16.492, worst: 53.2 },
   // Opus's price per token over Sonnet's (meter.ts DEEP_MULTIPLIER).
   deepMultiplier: 2,
 };

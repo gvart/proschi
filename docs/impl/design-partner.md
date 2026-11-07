@@ -22,7 +22,7 @@ millicredits). Plan is `'free' | 'pro' | 'max'`.
   and `plan` may be `'max'`. `features` gains `design_partner`, `deep_mode`,
   `interview_report`; `ai_review` is retired (design_partner replaces it).
 - `GET /api/credits/estimates` →
-  `{ mock_interview: {min, max}, partner_review: {min, max}, partner_build: {min, max}, partner_turn: {min, max}, verdict: {min, max}, deepMultiplier: number }` (`verdict`: the mock interview's verdict alone, what Deep multiplies there)
+  `{ mock_interview: {min, max, worst}, partner_review: {min, max, worst}, partner_build: {min, max, worst}, partner_turn: {min, max, worst}, verdict: {min, max, worst}, deepMultiplier: number }` (`verdict`: the mock interview's verdict alone, what Deep multiplies there). `min`–`max` is the typical cost, what the page shows ("about 40–55"); `worst` is what the action can never cost more than (the hold; for a mock interview the session's cap), shown where it matters ("never more than …"). The page's fallback is `frontend/src/services/estimates.ts` `TYPICAL_COSTS`, equal to the server's answer at the default rate (backend test/credits.test.ts).
 - `GET /api/credits/usage?limit=50` →
   `{ items: [{ at: number /*ms*/, action: 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps', ref: string, credits: number, deep: boolean }] }`
 - Not enough credits: `402 { error: 'no_credits', needed: number, balance: number }`.

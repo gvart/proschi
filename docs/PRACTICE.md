@@ -226,8 +226,9 @@ summaries stay in the browser; nothing is sent to the server.
 Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
 offers a choice: **On your own (free)**, the mode above, or a **Mock
 interview** with an interviewer, with its estimate in credits for the chosen
-length against your balance ("about 45–60 credits for 45 min; you have
-760"), and, without enough, a top-up and a link to the plans.
+length against your balance ("about 35–55 credits for 45 min; you have
+760", never more than what you have or the session's cap), and, without
+enough, a top-up and a link to the plans.
 `practice/#/<problem>?interview=mock` opens the start screen with the mock
 interview chosen (`?interview=ai` still works). The interview is charged
 for what it uses (the free plan gets 100 credits at sign-up); if the
