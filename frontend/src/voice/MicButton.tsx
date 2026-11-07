@@ -19,6 +19,8 @@ import { createRecognizer, voiceSupported, type MicState, type Recognizer } from
 
 export interface MicButtonHandle {
   stop(): void;
+  /** Starts listening, as a tap would (the interview room's voice mode); nothing while already on. */
+  start(): void;
 }
 
 interface Props {
@@ -82,7 +84,20 @@ export default function MicButton({ onText, onState, disabled, lang, server = tr
     else r.start();
   };
 
-  useImperativeHandle(ref, () => ({ stop: () => recognizer.current?.stop() }), []);
+  const onRef = useRef(on);
+  useEffect(() => {
+    onRef.current = on;
+  }, [on]);
+  useImperativeHandle(
+    ref,
+    () => ({
+      stop: () => recognizer.current?.stop(),
+      start: () => {
+        if (!onRef.current) get()?.start();
+      },
+    }),
+    [get],
+  );
   useEffect(() => () => recognizer.current?.stop(), []);
   useEffect(() => {
     if (disabled && on) recognizer.current?.stop();

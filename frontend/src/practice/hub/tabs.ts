@@ -36,7 +36,7 @@ export interface HubGroup {
   tabs: HubTab[];
 }
 
-/** The bar's two menus. The mock interview joins interview prep (it opens on a problem, not a section). */
+/** The bar's two menus. The mock interview joins interview prep (its own pages, not a section). */
 export const HUB_GROUPS: HubGroup[] = [
   { id: 'prep', label: 'Interview prep', short: 'Interview', tabs: ['roadmap'] },
   { id: 'more', label: 'More practice', short: 'More', tabs: ['review', 'challenge', 'arcade'] },
@@ -44,9 +44,8 @@ export const HUB_GROUPS: HubGroup[] = [
 
 export const tabLink = (id: HubTab): HubTabLink => HUB_TABS.find((t) => t.id === id)!;
 
-/** The problem the bar's "Mock interview" opens on: a classic first interview question. */
-export const MOCK_PROBLEM = 'url-shortener';
-export const mockInterviewHref = (problemId = MOCK_PROBLEM) => `#/${problemId}?interview=mock`;
+/** The bar's "Mock interview": its set-up, which picks the problem (practice/interview). */
+export const mockInterviewHref = () => '#/interview';
 
 /**
  * The hub's tab for a route (the hash without `#/`), or undefined for a page

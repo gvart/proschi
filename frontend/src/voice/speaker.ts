@@ -26,8 +26,8 @@ export function pickVoice(voices: readonly SpeechSynthesisVoice[], lang = 'en-US
   return [...english].sort((a, b) => rank(a) - rank(b))[0];
 }
 
-/** Reads `text` aloud, cutting off anything still being read. */
-export function speak(text: string, lang = 'en-US'): void {
+/** Reads `text` aloud, cutting off anything still being read; `onEnd` runs once it is done (or fails). */
+export function speak(text: string, lang = 'en-US', onEnd?: () => void): void {
   if (!speechSupported() || !text.trim()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
@@ -36,6 +36,10 @@ export function speak(text: string, lang = 'en-US'): void {
   if (voice) u.voice = voice;
   u.lang = voice?.lang ?? lang;
   u.rate = 1.02;
+  if (onEnd) {
+    u.onend = () => onEnd();
+    u.onerror = () => onEnd();
+  }
   synth.speak(u);
 }
 

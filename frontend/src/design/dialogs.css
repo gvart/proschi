@@ -107,7 +107,8 @@
 
 .ps-toasts {
   position: fixed;
-  right: 16px;
+  /* Clear of a column pinned to the right (toastClearance.ts useToastInset). */
+  right: calc(16px + var(--ps-toast-right, 0px));
   /* Above any bar pinned to the bottom of the page (toastClearance.ts). */
   bottom: calc(16px + var(--ps-toast-bottom, 0px));
   z-index: 1000;

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MessagesSquare, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -42,12 +42,9 @@ import { useKeyboardViewport } from '../components/Playground/useKeyboardViewpor
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
 import { eyebrow, field, iconButton, outlineButton, subBar, toolButton } from '../components/Playground/ui';
-import { parseInterview } from './modes/interviewFile';
 import { evaluateChecks, guidedReducer, parseGuided } from './modes/guidedFile';
-import { interviewReducer, startSession, summarize, type InterviewAction, type InterviewSession } from './modes/session';
-import { appendHistory, loadGuided, loadHistory, loadSession, saveGuided, saveSession, type GuidedState } from './modes/store';
-import InterviewPanel, { InterviewClock } from './modes/InterviewPanel';
-import { hasAiInterview } from './modes/ai/api';
+import { loadGuided, saveGuided, type GuidedState } from './modes/store';
+import { setupHref } from './interview/links';
 import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 import './practiceLayout.css';
@@ -98,8 +95,6 @@ interface ProblemPageProps {
    * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
    */
   openLesson?: 'always' | 'unread';
-  /** `ai` (practice/#/<id>?interview=mock, or the alias ?interview=ai): open on interview mode's start screen with the mock interview chosen, past the lesson; nothing starts. */
-  interviewWith?: 'ai';
 }
 
 /** The stage a problem opens on. */
@@ -114,13 +109,13 @@ function initialStage(problem: Problem, openLesson: ProblemPageProps['openLesson
  * side by side in resizable panes, the tests folded under them until the
  * first run). The lesson stays a click away, in a drawer. Tabs on phones.
  */
-export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, interviewWith }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   useFeedbackDiagram(source);
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const hasLesson = problem.lesson !== undefined;
-  const [stage, setStage] = useState<Stage>(() => initialStage(problem, interviewWith ? undefined : openLesson));
+  const [stage, setStage] = useState<Stage>(() => initialStage(problem, openLesson));
   const [drawer, setDrawer] = useState(false);
   // A heading to bring into view once the drawer shows (openLessonAt).
   const [lessonTarget, setLessonTarget] = useState<string>();
@@ -189,35 +184,20 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   useEffect(() => track('problem_start', { once: 'session', key: `problem_start:${problem.id}` }), [problem.id]);
 
-  // Interview and guided mode: opt-in, one at a time, remembered in this browser (modes/store.ts).
-  const interview = useMemo(() => {
-    if (problem.interview === undefined) return undefined;
-    const read = parseInterview(problem.interview);
-    return read.issues.length === 0 ? read.interview : undefined;
-  }, [problem.interview]);
+  // Guided mode: opt-in, remembered in this browser (modes/store.ts). The mock interview has its own room (practice/interview).
   const guidedSteps = useMemo(() => {
     if (problem.guided === undefined) return undefined;
     const read = parseGuided(problem.guided);
     return read.issues.length === 0 ? read.steps : undefined;
   }, [problem.guided]);
-  const [session, setSession] = useState<InterviewSession | undefined>(() => (interview ? loadSession(problem.id) : undefined));
-  const [interviewOn, setInterviewOn] = useState(() => session !== undefined || (!!interview && (interviewWith === 'ai' || hasAiInterview(problem.id))));
-  // The AI interviewer's "Send my design" reads the editor's source when pressed.
+  const [guidedState, setGuidedState] = useState<GuidedState>(() => (guidedSteps ? loadGuided(problem.id, guidedSteps.length) : { done: [], active: false }));
+  const guidedOn = !!guidedSteps && guidedState.active;
+  // Design partner reads the editor's source when it is asked.
   const sourceNow = useRef(source);
   useEffect(() => {
     sourceNow.current = source;
   }, [source]);
   const getSource = useCallback(() => sourceNow.current, []);
-  const [guidedState, setGuidedState] = useState<GuidedState>(() => (guidedSteps ? loadGuided(problem.id, guidedSteps.length) : { done: [], active: false }));
-  const guidedOn = !!guidedSteps && guidedState.active && !interviewOn;
-  const dispatchInterview = useCallback((a: InterviewAction) => setSession((s) => s && interviewReducer(s, a)), []);
-  useEffect(() => {
-    if (!interview) return;
-    saveSession(session, problem.id);
-    if (session?.finishedAt !== undefined && !loadHistory().some((h) => h.problem === session.problem && h.startedAt === session.startedAt)) {
-      appendHistory(summarize(session, interview, session.finishedAt));
-    }
-  }, [session, interview, problem.id]);
   const updateGuided = useCallback(
     (update: (g: GuidedState) => GuidedState) =>
       setGuidedState((g) => {
@@ -227,15 +207,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       }),
     [problem.id],
   );
-  const openInterview = () => {
-    updateGuided((g) => ({ ...g, active: false }));
-    setInterviewOn(true);
-    setPane('statement');
-  };
-  const exitInterview = () => {
-    setSession(undefined);
-    setInterviewOn(false);
-  };
   const openGuided = () => {
     updateGuided((g) => ({ ...g, active: true }));
     setPane('statement');
@@ -283,7 +254,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       setFirstSolve({ runs: runs + 1, metrics: result.metrics, before: progress });
     }
     if (!result.blocked) {
-      if (interviewOn) dispatchInterview({ type: 'tests', passed: result.passed, total: result.results.length, solved: result.solved });
       onProgress((p) => withRun(p, problem, result.solved));
       // For a build without accounts' achievements; the reference solution runs once, on the first solve.
       recordRunStats(problem.id, result, () => runTests(parseSolution(problem, problem.solution), engine).metrics?.costUsd);
@@ -326,12 +296,11 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     else panel.collapse();
   };
 
-  // Design partner (src/partner): coaches on this problem; off during an interview (P29, P30).
+  // Design partner (src/partner): coaches on this problem (P29, P30); the interview room has none.
   const hasPartner = account.state.status !== 'off';
   const [partnerOpen, setPartnerOpen] = useState(false);
   const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
   const closePartner = useCallback(() => setPartnerOpen(false), []);
-  const partnerOff = interviewOn ? 'Design partner is off while interview mode is on, so the interview stays your own work. Leave interview mode to use it again.' : undefined;
   const partnerContext = useMemo(() => ({ kind: 'practice' as const, problemId: problem.id }), [problem.id]);
   const applyPartner = useCallback((next: string) => {
     if (editorRef.current) editorRef.current.replace(next);
@@ -345,7 +314,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
 
   const inLesson = hasLesson && stage === 'lesson';
-  usePartnerShortcut(togglePartner, hasPartner && !inLesson && !partnerOff);
+  usePartnerShortcut(togglePartner, hasPartner && !inLesson);
   const lessonButton = (className: string) =>
     hasLesson && (
       <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
@@ -356,24 +325,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const statement = (
     <div data-tour="statement" className="h-full overflow-y-auto bg-surface">
-      {interviewOn && interview ? (
-        <InterviewPanel
-          problemId={problem.id}
-          statement={problem.statement}
-          interview={interview}
-          session={session}
-          dispatch={dispatchInterview}
-          onStart={(duration) => setSession(startSession(problem.id, duration, Date.now()))}
-          onExit={exitInterview}
-          onRestart={() => setSession(undefined)}
-          getSource={getSource}
-          preferAi={interviewWith === 'ai'}
-          onShow={phone ? () => setPane('statement') : undefined}
-        >
-          <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
-        </InterviewPanel>
-      ) : (
-        <>
+      <>
           {guidedOn && guidedSteps && (
             <GuidedPanel
               steps={guidedSteps}
@@ -395,13 +347,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             solved={status === 'solved'}
             onUseSolution={() => setSource(problem.solution)}
             modes={
-              (interview || (guidedSteps && !guidedOn)) && (
+              (problem.interview !== undefined || (guidedSteps && !guidedOn)) && (
                 <div className="flex flex-wrap items-center gap-2" aria-label="Practice modes" role="group">
-                  {interview && (
-                    <button type="button" onClick={openInterview} className={outlineButton} title="Practise the interview: clarify, estimate, design and wrap up against the clock">
+                  {problem.interview !== undefined && (
+                    <a href={setupHref(problem.id)} className={outlineButton} title="A mock interview on this problem: clarify, estimate, design and wrap up against the clock">
                       <Timer size={14} aria-hidden="true" />
                       Interview mode
-                    </button>
+                    </a>
                   )}
                   {guidedSteps && !guidedOn && (
                     <button type="button" onClick={openGuided} className={outlineButton} title="Build the design step by step, with a check after each step">
@@ -414,7 +366,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             }
           />
         </>
-      )}
     </div>
   );
 
@@ -452,7 +403,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const partnerDock = hasPartner && (
     <>
-    {!phone && <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />}
+    {!phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
     <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
       <Suspense fallback={null}>
         <PartnerPanel
@@ -464,7 +415,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           apply={applyPartner}
           undo={undoPartner}
           onClose={closePartner}
-          offReason={partnerOff}
           onAssisted={markAssisted}
           diagramOf={partnerDiagram}
         />
@@ -489,7 +439,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             source={source}
             input={() => practiceReviewInput(problem, source, engine)}
             onSelect={goTo}
-            onOpenPartner={hasPartner && !partnerOff ? () => setPartnerOpen(true) : undefined}
+            onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
           />
         }
         mistake={
@@ -553,24 +503,19 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             <CompanyBadge company={problem.company} />
           </span>
         )}
-        {interviewOn && session && !inLesson && (
-          <span className="ml-auto">
-            <InterviewClock session={session} dispatch={dispatchInterview} />
-          </span>
-        )}
         {inLesson ? (
           <span className="ml-auto" />
         ) : (
           <>
             {/* From sm up the lesson, Reset and Help have their own buttons; on phones Reset and Help share "More", so the row does not wrap. */}
-            <span className={`hidden sm:flex items-center gap-1 ${interviewOn && session ? '' : 'ml-auto'}`}>
+            <span className={`hidden sm:flex items-center gap-1 ml-auto`}>
               {lessonButton(outlineButton)}
               <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start over from the starter code">
                 <RotateCcw size={14} />
                 <span className="hidden min-[1440px]:inline">Reset</span>
               </button>
             </span>
-            <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
+            <MoreMenu className={`sm:hidden ml-auto`} onReset={reset} onTour={startTour} />
             <ZenButton zen={zen} className={iconButton} />
           </>
         )}
@@ -584,20 +529,18 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         <div className="flex items-stretch bg-surface border-b-bw-1 border-ink">
           <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill flex-1 min-w-0 !border-b-0">
             {PANES.map(({ id, label, icon }) => {
-              // In interview mode the first pane is the interview (its chat, with the problem folded inside it): it says so.
-              const interviewTab = id === 'statement' && interviewOn;
-              const Icon = interviewTab ? MessagesSquare : icon;
+              const Icon = icon;
               return (
-                <button key={id} role="tab" data-tour={`tab-${id}`} data-testid={interviewTab ? 'tab-interview' : undefined} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
+                <button key={id} role="tab" data-tour={`tab-${id}`} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
                   <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
-                  {interviewTab ? 'Interview' : label}
+                  {label}
                 </button>
               );
             })}
           </div>
           {lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
-          {/* In the tab bar, not over the panes; off (so not shown) during an interview. */}
-          {hasPartner && !partnerOff && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
+          {/* In the tab bar, not over the panes. */}
+          {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
         </div>
       )}
       </ZenCollapse>
