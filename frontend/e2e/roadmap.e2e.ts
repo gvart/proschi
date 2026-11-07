@@ -1,5 +1,5 @@
 import type { Locator, Page } from '@playwright/test';
-import { expect, sectionLink, test, waitForCanvas } from './fixtures';
+import { expect, loadReferenceSolution, sectionLink, test, waitForCanvas } from './fixtures';
 
 /** A stage of the roadmap, by its title. */
 const stage = (page: Page, title: string) => page.getByRole('listitem', { name: new RegExp(`^Stage \\d+: ${title}$`) });
@@ -41,9 +41,7 @@ test.describe('interview prep roadmap', () => {
     await waitForCanvas(page);
 
     // Solve it with the reference solution (both steps ask for confirmation).
-    page.on('dialog', (dialog) => dialog.accept());
-    await page.getByRole('button', { name: 'Show reference solution' }).click();
-    await page.getByRole('button', { name: 'Load into the editor' }).click();
+    await loadReferenceSolution(page);
     await page.getByRole('button', { name: 'Run tests' }).click();
     await expect(page.getByRole('status').filter({ hasText: 'Solved.' })).toBeVisible();
 

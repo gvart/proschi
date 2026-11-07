@@ -208,6 +208,19 @@ export async function mockClipboard(page: Page): Promise<void> {
   });
 }
 
+/** Answers the open confirm or prompt (src/design/dialogs.ts) with its button named `name`. */
+export async function answerDialog(page: Page, name: string): Promise<void> {
+  await page.locator('.ps-dialog').getByRole('button', { name, exact: true }).click();
+}
+
+/** Loads the open problem's reference solution into the editor, saying yes to both confirms. */
+export async function loadReferenceSolution(page: Page): Promise<void> {
+  await page.getByRole('button', { name: 'Show reference solution' }).click();
+  await answerDialog(page, 'Show solution');
+  await page.getByRole('button', { name: 'Load into the editor' }).click();
+  await answerDialog(page, 'Replace');
+}
+
 /** The last text copied since mockClipboard, or '' for none. */
 export function copiedText(page: Page): Promise<string> {
   return page.evaluate(() => (window as unknown as { __copied: string[] }).__copied.at(-1) ?? '');
