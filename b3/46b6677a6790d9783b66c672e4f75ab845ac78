@@ -1,0 +1,27 @@
+backend/src/billing.ts
+  s_e17b87e0a1b3ca::t_cdad3e913e2db0 96-100,256-261,265-266,272-273
+backend/wrangler.jsonc
+  s_e17b87e0a1b3ca::t_cdad3e913e2db0 71-75,126-128
+backend/src/env.ts
+  s_e17b87e0a1b3ca::t_cdad3e913e2db0 32-34
+backend/test/adminPaid.test.ts
+  s_e17b87e0a1b3ca::t_6217d90d0c0a63 310-311
+  s_e17b87e0a1b3ca::t_7d587e25c44330 10,43-44,49,300-309,312-347
+  s_e17b87e0a1b3ca::t_5f37003e836fa5 348-349
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "b346b6677a6790d9783b66c672e4f75ab845ac78",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
