@@ -1,0 +1,61 @@
+backend/src/context.ts
+  s_e17b87e0a1b3ca::t_47c1a71db11b5c 2,16-17
+backend/src/auth.ts
+  s_e17b87e0a1b3ca::t_9f0ef85df368f8 6,486
+  s_e17b87e0a1b3ca::t_8398ad86105814 466-467,477,481,483-485,487
+backend/test/versions.test.ts
+  s_e17b87e0a1b3ca::t_7616daecf64b33 296
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_4892fc6b9a9b22 252-267
+backend/test/apptokens.test.ts
+  s_e17b87e0a1b3ca::t_e3db9caf5ae107 466-486
+  s_e17b87e0a1b3ca::t_7616daecf64b33 5,21,112,115-116,130-131,133,341-345,356-362,368,372-378,380-383,414
+backend/test/paidRoutes.test.ts
+  s_e17b87e0a1b3ca::t_c5116c9e9f6b5c 8,14-17,71-73,309-313,316-325,333,365-366
+  s_e17b87e0a1b3ca::t_b9f9a5d1e9a0d3 326,410-418
+  s_e17b87e0a1b3ca::t_048ce33c4ad60b 327-328
+backend/README.md
+  s_e17b87e0a1b3ca::t_a2191413c4eccb 143,431-434,989,997-999,1017-1018,1028-1054,1101-1103
+  s_e17b87e0a1b3ca::t_716692fb21abd6 150,179
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_e3db9caf5ae107 28,160,187,192
+backend/test/scopes.test.ts
+  s_e17b87e0a1b3ca::t_a443683287998f 1-91,93-110,112-133,135-144,146-171
+  s_e17b87e0a1b3ca::t_18d0e323702002 92
+  s_e17b87e0a1b3ca::t_d85f567d059017 111,134,145
+backend/migrations/0030_token_scopes.sql
+  s_e17b87e0a1b3ca::t_f089dcf35c6f45 1-11
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_d255f0a61d88c3 31,137,311
+  s_e17b87e0a1b3ca::t_954f9466de69ca 66
+  s_e17b87e0a1b3ca::t_9f0ef85df368f8 242
+  s_e17b87e0a1b3ca::t_47c1a71db11b5c 32,239-241,243-244
+backend/src/apptokens.ts
+  s_e17b87e0a1b3ca::t_ce9166f28c56a5 7,25-29,99,103-104,133-134,138,142-145,152,163,190,192,198,210,213,226
+  s_e17b87e0a1b3ca::t_d255f0a61d88c3 5,246-266
+  s_e17b87e0a1b3ca::t_ef4e31a65ccb21 267
+docs/PRIVACY.md
+  s_e17b87e0a1b3ca::t_031059877415f4 140-142
+  s_e17b87e0a1b3ca::t_40dac2f1b10bb1 143
+tooling/README.md
+  s_e17b87e0a1b3ca::t_70d8e8473e2e45 71-73
+backend/src/scopes.ts
+  s_e17b87e0a1b3ca::t_a4f366edeb0da3 1-2,4-97,100-102
+  s_e17b87e0a1b3ca::t_9f0ef85df368f8 3,98-99
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "642d426fcb1690bdef62a09ee1b21ae0a4d038e5",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
