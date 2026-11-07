@@ -1,6 +1,6 @@
 -- Email and password sign-in, and the checks that keep throwaway accounts
 -- from collecting the free sign-up credits (src/emailAuth.ts,
--- src/signupCredits.ts; docs/design/paid-plans.md P26, P32). Times are Unix
+-- src/signupCredits.ts; docs/design/paid-plans.md P26). Times are Unix
 -- seconds, like `users` and `sessions`.
 
 -- An account's email sign-in. Its identity is also in `identities`

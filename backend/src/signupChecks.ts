@@ -6,7 +6,7 @@ import { errorText, log } from './log';
 import { signupLedger } from './signupCredits';
 
 /**
- * Who gets the free sign-up credits (docs/design/paid-plans.md P26, P32).
+ * Who gets the free sign-up credits (docs/design/paid-plans.md P26).
  * Only an account that passes every check, once:
  *
  *  1. its address is confirmed: an email account after its confirmation link
