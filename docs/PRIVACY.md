@@ -392,12 +392,38 @@ after a design review, a feature Design partner replaced, keep the reviewed
 problem instead). They are private, part of **Download my data**, and deleted with your
 account.
 
+## Feedback
+
+Signed in, **Send feedback** (in the help menu, the footer and Settings →
+Contact us) sends a message to the operator: a bug, a question, a proposal
+or anything else. Only you start it, and the dialog lists what goes with it
+before you send.
+
+**What is stored**: the type, the subject and message as you wrote them,
+your account (so the operator knows who wrote and can reply), and the
+context the dialog shows: the page's address without its query, your
+browser's user agent, the window size, your plan and the site's version.
+If you tick **Attach my current diagram**, its source; if you add
+screenshots (up to 3 PNG, JPEG or WebP images of 5 MB), those, stored
+privately in Cloudflare R2 where only the operator's admin panel can open
+them. Nothing is emailed and nothing is shared. The operator can mark a
+message new, in progress or done and keep an internal note on it.
+
+The operator answers, when one is needed, at your account's confirmed email
+address (your email sign-in, or your email reminders' address), if it has
+one. Your messages are in **Download my data** (the screenshots by type and
+size, not the operator's notes) and are deleted with your account,
+screenshots included; the operator can also delete one. You can send up to
+5 messages an hour and 20 a day.
+
 ## The site's operator
 
 Proschi has one operator, who signs in to an admin panel (`/admin/`) with a
 passkey. It reads the database directly, so the operator can see what the
 server stores about an account (listed above), with these limits: the email
-reminders' address is shown masked (`a***@example.com`), and session tokens
+reminders' address is shown masked (`a***@example.com`) except on a
+message you sent with Send feedback, where your confirmed address is shown
+so the operator can reply, and session tokens
 exist only as hashes. The panel shows aggregates (accounts, sign-ups, the
 usage counts) and, per account, the display name, sign-in providers and
 their user ids, when it joined and was last active (a date), its progress
@@ -517,7 +543,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, mock interviews with the picks for your next steps, Design partner chats, every session with its kind (the site or an
+  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, mock interviews with the picks for your next steps, Design partner chats, the messages you sent with Send feedback, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).
@@ -529,7 +555,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 - **Delete account** removes your account, sessions (apps' too), progress, card
   reviews, daily challenge results, badges, game progress, short links,
   synced diagrams and their versions and live share links, the email reminders' address, the
-  billing data, interview credits, mock interviews and the picks for your next steps from the server at once (a Pro
+  billing data, interview credits, mock interviews and the picks for your next steps, and your feedback messages with their screenshots from the server at once (a Pro
   subscription is canceled at Polar first);
   the progress and diagrams in your browser stay.
   Only a one-way keyed hash of each sign-in identity (GitHub or Google and
