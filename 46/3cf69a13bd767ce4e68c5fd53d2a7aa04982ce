@@ -1,0 +1,84 @@
+frontend/src/partner/api.ts
+  s_e17b87e0a1b3ca::t_9872664d38384e 1,3-74
+  s_e17b87e0a1b3ca::t_ecea31081426ae 2
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 105-106
+  s_e17b87e0a1b3ca::t_27dddd74b25877 107-108,141,207-208,548-571,1046-1047,1325-1341
+  s_e17b87e0a1b3ca::t_9243dcde42ca9b 1239
+frontend/src/partner/ChangeCard.tsx
+  s_e17b87e0a1b3ca::t_554d39f75d0309 1-268,270-285
+  s_e17b87e0a1b3ca::t_0f8f65af2ba6de 269
+frontend/src/partner/PartnerButton.tsx
+  s_e17b87e0a1b3ca::t_21acf82f09077d 1-2,4-32
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 3
+frontend/src/partner/credits.ts
+  s_e17b87e0a1b3ca::t_4288b6fe1fa6c6 1-38
+frontend/src/partner/partner.test.ts
+  s_e17b87e0a1b3ca::t_131fdf11feeaa4 1-171
+frontend/src/review/review.test.ts
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 1
+  s_e17b87e0a1b3ca::t_1d09f7304f7d0b 9,115,117
+frontend/src/practice/Badges.tsx
+  s_e17b87e0a1b3ca::t_48c130cdf88dd5 19-27
+frontend/src/partner/contract.ts
+  s_e17b87e0a1b3ca::t_be6c33bbda5b0e 1-208
+frontend/src/partner/PartnerDock.tsx
+  s_e17b87e0a1b3ca::t_62e40527ac3bcc 1,3-55
+  s_e17b87e0a1b3ca::t_8756b3852473d5 2
+frontend/src/partner/shortcut.ts
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 1-22
+frontend/src/components/Playground/CodeEditor.tsx
+  s_e17b87e0a1b3ca::t_ba8a0aba84c3b9 5,21-24,58-70,125,167-177
+frontend/src/partner/usePartner.ts
+  s_e17b87e0a1b3ca::t_de2b4e77478892 59,120-121,156-157
+  s_e17b87e0a1b3ca::t_ecea31081426ae 4,145
+  s_e17b87e0a1b3ca::t_3acf193c383b1f 54-58
+  s_e17b87e0a1b3ca::t_4f5be791df4365 1-3,5-53,60-119,122-144,146-155,158-190
+frontend/src/services/featureContract.ts
+  s_e17b87e0a1b3ca::t_eab6f80cd3663f 9
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_15b4b80d7aacd8 17-18,21,54,325-338,340,431-447,522,548,583-584,614-615,617
+  s_e17b87e0a1b3ca::t_9243dcde42ca9b 466
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 19-20
+  s_e17b87e0a1b3ca::t_d5fb89f62e123d 448-449
+frontend/src/practice/progress.ts
+  s_e17b87e0a1b3ca::t_48c130cdf88dd5 17-18,41,78-85
+frontend/src/practice/account.ts
+  s_e17b87e0a1b3ca::t_f493c99dca06e1 50
+frontend/src/review/ReviewPanel.tsx
+  s_e17b87e0a1b3ca::t_02471faa516ab7 100
+  s_e17b87e0a1b3ca::t_0bd431d7b720ff 1-2,5,7,16,18-19,27,41-44,46,55,57-58,64-65,67-68,85-93
+  s_e17b87e0a1b3ca::t_2d3b677306ad1a 128
+frontend/src/partner/PartnerPanel.tsx
+  s_e17b87e0a1b3ca::t_959564a9d341c8 1-3,5-8,10,13-112,114-578
+  s_e17b87e0a1b3ca::t_6d04378d9500f7 4
+  s_e17b87e0a1b3ca::t_ecea31081426ae 9,11,113
+  s_e17b87e0a1b3ca::t_d4d203cfb586bd 12
+frontend/src/partner/store.ts
+  s_e17b87e0a1b3ca::t_eecbc0944b52e4 1-40
+frontend/src/partner/edits.ts
+  s_e17b87e0a1b3ca::t_babe917d6068eb 1-71,76-77
+  s_e17b87e0a1b3ca::t_7ec08691fea0b2 72-75
+frontend/src/review/reviewer.ts
+  s_e17b87e0a1b3ca::t_c829574cf45a46 1,6-8,13-14,17,19
+frontend/src/partner/partner.css
+  s_e17b87e0a1b3ca::t_d4993b1d9f8330 1-12
+frontend/src/practice/ProblemList.tsx
+  s_e17b87e0a1b3ca::t_283bfcacb87b57 2,76
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "463cf69a13bd767ce4e68c5fd53d2a7aa04982ce",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
