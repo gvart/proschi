@@ -22,19 +22,23 @@ ANTHROPIC_API_KEY=
 AI_GATEWAY_URL=
 # Optional: an authenticated gateway's token (sent as cf-aig-authorization).
 AI_GATEWAY_TOKEN=
+# Optional: the USD-to-EUR rate credits are priced at (2x the model cost, €0.01 a credit); unset: 0.95.
+CREDITS_USD_EUR=
 
 # --- Polar: required only for checkout, the customer portal and the webhook (501 without them) ---
-# Not needed to test Pro features: `npm run local:pro` and `npm run local:credits` set those up.
+# Not needed to test paid features: `npm run local:pro`, `local:max` and `local:credits` set those up.
 # `sandbox` for sandbox-api.polar.sh; anything else (or unset) is production. Keep it sandbox locally.
 POLAR_SERVER=sandbox
 # An organization access token (checkouts:write, customer_sessions:write, subscriptions:write).
 POLAR_ACCESS_TOKEN=
 # The webhook endpoint's secret as Polar shows it (polar_whs_… or whsec_…).
 POLAR_WEBHOOK_SECRET=
-# Product ids of Pro monthly, Pro yearly and the 5 interview pack.
+# Product ids of Pro monthly and yearly, Max monthly and yearly, and the 1000-credit top-up.
 POLAR_PRODUCT_PRO_MONTHLY=
 POLAR_PRODUCT_PRO_YEARLY=
-POLAR_PRODUCT_PACK_5=
+POLAR_PRODUCT_MAX_MONTHLY=
+POLAR_PRODUCT_MAX_YEARLY=
+POLAR_PRODUCT_CREDITS_1000=
 
 # --- Admin and metrics: optional ---
 # Registers the admin panel's first passkey (/admin/), 16+ characters; works only while none exists.
