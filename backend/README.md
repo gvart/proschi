@@ -766,7 +766,7 @@ Email and password, next to GitHub and Google (`src/emailAuth.ts`,
   `node scripts/disposable.mjs` from the community list), none of the
   account's identities (provider and user id, the normalized address, the
   verified address GitHub or Google gives) is in `signup_claims` or
-  `account_tombstones`, and its sign-up IP's HMAC got credits for fewer than
+  `account_tombstones`, and its sign-up IP's HMAC (of the /64 for IPv6) got credits for fewer than
   3 accounts in 7 days (`signup_ip_grants`). The grant goes through
   `src/signupCredits.ts` to the ledger, keyed by the normalized verified
   address (`${provider}\n${subject}` for an OAuth account without one). The

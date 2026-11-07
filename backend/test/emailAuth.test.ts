@@ -8,7 +8,7 @@ import type { Env } from '../src/env';
 import worker from '../src/index';
 import { hashPassword, passwordProblem, PBKDF2_ITERATIONS, verifyPassword } from '../src/password';
 import { signupLedger } from '../src/signupCredits';
-import { isDisposable, normalizeEmail } from '../src/signupChecks';
+import { ipHash, isDisposable, normalizeEmail } from '../src/signupChecks';
 import { ORIGIN, resetDatabase, signedInUser, withinOneWindow, WINDOW_TIMEOUT } from './helpers';
 
 // The ledger is metering's (src/credits.ts); here only whether and how it is called.
@@ -121,6 +121,8 @@ describe('addresses', () => {
     expect(normalizeEmail(' Ada.Lovelace+Proschi@GMail.com ')).toEqual({ email: 'ada.lovelace+proschi@gmail.com', normalized: 'adalovelace@gmail.com', domain: 'gmail.com' });
     expect(normalizeEmail('a.da@googlemail.com')?.normalized).toBe('ada@gmail.com');
     expect(normalizeEmail('first.last+tag@example.com')?.normalized).toBe('first.last@example.com');
+    expect(normalizeEmail('ada+a+b@proton.me')?.normalized).toBe('ada@proton.me');
+    expect(normalizeEmail('ada+x@outlook.com')?.normalized).toBe('ada@outlook.com');
     expect(normalizeEmail('x@Sub.Example.co')?.domain).toBe('sub.example.co');
     for (const bad of ['', 'no-at', 'a@b', '+tag@example.com', 'a b@example.com', 42, `${'a'.repeat(250)}@example.com`]) expect(normalizeEmail(bad)).toBeUndefined();
   });
@@ -441,6 +443,31 @@ describe('sign-up credits', () => {
       // A week later the IP may again.
       await env.DB.prepare('UPDATE signup_ip_grants SET granted_at = granted_at - 8 * 86400').run();
       expect((await confirmedAccount('user6@example.com', ip)).body.signupCredits.outcome).toBe('granted');
+    },
+    WINDOW_TIMEOUT,
+  );
+});
+
+describe('the sign-up IP limit over IPv6', () => {
+  const e = { ...env, SESSION_SECRET: SECRET } as Env & { SESSION_SECRET: string };
+
+  it('counts an IPv6 address by its /64, and an IPv4 address as it is', async () => {
+    const same = await Promise.all(['2001:db8:1:2::a', '2001:DB8:1:2:ffff::1', '2001:0db8:0001:0002:0:0:0:3'].map((ip) => ipHash(e, ip)));
+    expect(new Set(same).size).toBe(1);
+    expect(await ipHash(e, '2001:db8:1:3::1')).not.toBe(same[0]);
+    expect(await ipHash(e, '203.0.113.7')).toBe(await hmacSha256('203.0.113.7', `${SECRET}/signup-ip`));
+    expect(await ipHash(e, '203.0.113.7')).not.toBe(await ipHash(e, '203.0.113.8'));
+    // An IPv4-mapped address is its IPv4 one.
+    expect(await ipHash(e, '::ffff:203.0.113.7')).toBe(await ipHash(e, '203.0.113.7'));
+  });
+
+  it(
+    'refuses a fourth account from one /64 however its addresses rotate',
+    async () => {
+      await withinOneWindow(15_000);
+      for (const [n, ip] of ['2001:db8:9:9::1', '2001:db8:9:9::2', '2001:db8:9:9:1:2:3:4'].entries()) expect((await confirmedAccount(`v6-${n}@example.com`, ip)).body.signupCredits.outcome).toBe('granted');
+      expect((await confirmedAccount('v6-4@example.com', '2001:db8:9:9:ffff:ffff:ffff:ffff')).body.signupCredits).toEqual({ outcome: 'refused', reason: 'ip_limit' });
+      expect((await confirmedAccount('v6-5@example.com', '2001:db8:9:a::1')).body.signupCredits.outcome).toBe('granted');
     },
     WINDOW_TIMEOUT,
   );
