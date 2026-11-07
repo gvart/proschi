@@ -1,0 +1,32 @@
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_577a3ea04c7232 1061
+  s_e17b87e0a1b3ca::t_23c9f0ce5f95c1 1045
+frontend/e2e/editor.e2e.ts
+  s_e17b87e0a1b3ca::t_23c9f0ce5f95c1 98
+frontend/e2e/interview.e2e.ts
+  s_e17b87e0a1b3ca::t_cef2b68fcecaf3 226
+frontend/e2e/systems.e2e.ts
+  s_e17b87e0a1b3ca::t_23c9f0ce5f95c1 192
+frontend/e2e/import.e2e.ts
+  s_e17b87e0a1b3ca::t_23c9f0ce5f95c1 46
+frontend/e2e/versions.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_ec47b1cc9503ae 81-82
+frontend/src/practice/ProblemFilters.tsx
+  s_e17b87e0a1b3ca::t_cef2b68fcecaf3 34
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c19cdc95b716e754be5e6ecf0040eb1872bc2175",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
