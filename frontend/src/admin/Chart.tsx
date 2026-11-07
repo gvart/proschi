@@ -76,7 +76,7 @@ export default function Chart({
   const integers = all.every(Number.isInteger);
   const ticks = kind === 'line' ? lineTicks(Math.min(...all), max, integers) : niceTicks(max, integers);
   const [bottom, , top] = ticks;
-  const tick = (v: number) => (top >= 10_000 ? formatCompact(v) : format(v));
+  const tick = (v: number) => (top >= 10_000 ? formatCompact(v) : Number.isInteger(v) ? format(v).replace(/\.00$/, '') : format(v));
   const y = (v: number) => height - ((v - bottom) / (top - bottom)) * height;
   // A day's centre as a share of the plot's width: bars sit in equal slots, line points run edge to edge.
   const x = (i: number) => (kind === 'bar' ? (i + 0.5) / Math.max(1, n) : n <= 1 ? 0.5 : i / (n - 1));

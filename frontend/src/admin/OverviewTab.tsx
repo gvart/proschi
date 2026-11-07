@@ -91,28 +91,6 @@ export default function OverviewTab({
         )}
       </section>
 
-      {CHARTS.map((pair, i) => (
-        <div key={i} className="adm-grid">
-          {pair.map((c) => (
-            <Section key={c.key} label={c.title}>
-              {data ? (
-                <Chart
-                  kind={c.kind}
-                  title={c.title}
-                  series={[{ id: c.key, label: c.title }]}
-                  points={current.map((p) => ({ day: p.day, values: { [c.key]: p[c.key] } }))}
-                  format={c.format}
-                  empty={c.empty}
-                  refetching={refetching}
-                />
-              ) : (
-                <Skeleton rows={6} what={c.title} />
-              )}
-            </Section>
-          ))}
-        </div>
-      ))}
-
       <Section title="Needs attention">
         <ul className="adm-attention">
           <Attention
@@ -158,6 +136,29 @@ export default function OverviewTab({
           />
         </ul>
       </Section>
+
+      {CHARTS.map((pair, i) => (
+        <div key={i} className="adm-grid">
+          {pair.map((c) => (
+            <Section key={c.key} label={c.title}>
+              {data ? (
+                <Chart
+                  kind={c.kind}
+                  title={c.title}
+                  series={[{ id: c.key, label: c.title }]}
+                  points={current.map((p) => ({ day: p.day, values: { [c.key]: p[c.key] } }))}
+                  format={c.format}
+                  empty={c.empty}
+                  refetching={refetching}
+                />
+              ) : (
+                <Skeleton rows={6} what={c.title} />
+              )}
+            </Section>
+          ))}
+        </div>
+      ))}
+
 
       {data && (
         <Section

@@ -341,6 +341,10 @@
   gap: 8px;
 }
 
+.adm-pager {
+  margin-top: 16px;
+}
+
 .adm-toolbar .adm-input[type='search'] {
   flex: 1 1 260px;
 }
@@ -1229,6 +1233,7 @@
 }
 
 .adm-delta .adm-muted {
+  flex-basis: 100%;
   font-size: var(--fs-12);
   font-weight: 400;
 }
