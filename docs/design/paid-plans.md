@@ -351,3 +351,51 @@ id; don't rewrite old ones.
   bound has to price every token at the output rate, so one that kept the
   worst case at 150 credits would end ordinary sessions early.
   `TOKEN_CAP` stays as the runaway guard.
+- **P45. The interview room.** The mock interview leaves the problem page
+  for pages of its own (`frontend/src/practice/interview`), in three steps.
+  **Set up** (`#/interview`): the problem is "Surprise me" by default, a
+  random one not yet done in a mock interview (the account's sessions from
+  `GET /api/interviews`, else a list in this browser), never the language
+  tutorial, with optional difficulty and topic filters, and revealed only in
+  the room, as in a real interview; or one chosen in a searchable picker, or
+  the same as last time. Then the length, voice or text (with a mic check:
+  the permission and a level meter), sound, and for the interviewer its
+  credits estimate against the balance (typical, and never more than the
+  cap or the balance, P40) and a consent line: starting is the agreement.
+  "On my own (free, no interviewer)" is the same room, clock and phases
+  without the chat (P25). **The room** (`#/interview/<problem>`): the
+  whiteboard (the visual canvas with its palette, settings and the Flows
+  builder, P46) takes the page. A slim chat on the right, which folds away,
+  holds the problem (folded once the talk starts), the interviewer's and
+  your messages, the coaching hints inline (and as toasts kept clear of the
+  chat and the composer) and a composer with the mic. The top bar has the
+  phases, the clock, voice or text, sound, Show code, Check my design,
+  Finish and Exit. The code is hidden by default: Show code opens it in a
+  drawer beside the whiteboard, remembered, for those who know Proschi.
+  Phones get Chat (first) and Whiteboard tabs. **Voice** listens
+  hands-free and sends an answer after 1.8 s of silence, with a countdown
+  to cancel or send now; replies are spoken with `speechSynthesis` (P39),
+  the mic paused meanwhile, and talking, typing or Interrupt cuts them off.
+  Voice or text is chosen at the set-up and switchable in the room. **Sound
+  cues** are synthesized with Web Audio (no files), quiet, on by default
+  and remembered: a new phase, 5 and 1 minute left, a hint, a reply while
+  the tab is hidden, checks passed or failed, and the end; their visual
+  pulses stop under reduced motion. **The result** is the verdict (or, on
+  your own, the summary) with New interview (a new random problem) and Try
+  this problem again. The problem page's Interview mode links to the
+  set-up with its problem chosen, and the old `#/<problem>?interview=mock`
+  (or `=ai`) links redirect there. Design partner is not in the room. No
+  server change: the room uses the P26 API as it was.
+- **P46. The visual flows builder.** A use case and its scenarios can be
+  made without code, so a design is complete from the canvas alone.
+  **Flows** on the canvas (in the interview room and on problem pages)
+  lists the use cases as tabs, suggests the missing ones the problem's
+  traffic names, and shows each one's steps, with its scenarios as
+  alternatives. A step is added by clicking the component it starts at and
+  then the one it goes to (or choosing both), its kind (request, response
+  or message) guessed from the steps before it, and a label typed or picked
+  from suggestions for the target's kind. Steps go to the main flow or to a
+  scenario. Every change is a text edit in `dsl/edit.ts` (`addUseCase`,
+  `addStep`, `addScenario` and their removals, unit tested, down to
+  building whole reference designs), so the code stays the source of truth
+  (P41); a request step also adds the connection it needs.

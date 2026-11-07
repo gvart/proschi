@@ -212,61 +212,88 @@ account are joined. The reading badges count them (docs/CARDS.md,
 
 ## `interview.md`
 
-Interview mode is an opt-in toggle on the problem page. It runs a timed
-interview (30, 45 or 60 minutes, pausable) in four phases: **Clarify** (the
-statement without its `## Scale` and `## Constraints` sections, and a list
-of clarifying questions to pick from), **Estimate** (back-of-the-envelope
-questions graded against a range, then the worked answer), **Design** (the
-normal editor and tests, the clock still running) and **Wrap-up** (a
-self-review checklist and a summary). The session, time per phase and the
-summaries stay in the browser; nothing is sent to the server.
+The mock interview has pages of its own: **Interview prep › Mock
+interview** (`practice/#/interview`), or **Interview mode** on a problem
+page, which opens it with that problem chosen. It goes in three steps.
+
+1. **Set up.** The problem is **Surprise me** by default: a random one you
+   have not done in a mock interview yet, revealed only in the room, with
+   optional difficulty and topic filters. **Choose a problem** opens a
+   searchable list, and **Same as last time** is there after the first.
+   Then the length (30, 45 or 60 minutes), voice or text with a mic check,
+   sound effects, and who interviews you (below).
+2. **The room** (`practice/#/interview/<problem>`). The whiteboard, the
+   visual canvas, takes the page: add components from the palette, connect
+   them, change their settings, and add each use case's steps and scenarios
+   under **Flows**. **Check my design** runs the problem's tests on it. The
+   code is hidden; **Show code** opens it beside the whiteboard and is
+   remembered. The rail on the right holds the problem, and the
+   conversation or the phase's questions; on phones it is its own tab, the
+   first one. The top bar has the four phases (**Clarify**, **Estimate**,
+   **Design**, **Wrap-up**, 10/10/70/10 of the time), the clock and the
+   switches. Short synthesized sounds mark a new phase, the last 5 and 1
+   minutes, a hint, the checks and the end (on by default, switched off in
+   the set-up or the top bar).
+3. **The result**: the verdict or the summary, **New interview** (another
+   random problem) and **Try this problem again**.
+
+**On my own (free, no interviewer)** runs the phases from this file:
+**Clarify** shows the statement without its `## Scale` and `## Constraints`
+sections and a list of clarifying questions to pick from, **Estimate**
+grades back-of-the-envelope answers against a range, then shows the worked
+answer, **Design** is the whiteboard against the clock (pausable), and
+**Wrap-up** is a self-review checklist, then a summary. The session, time
+per phase and the summaries stay in the browser; nothing is sent to the
+server.
 
 ### Mock interviews
 
-Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
-offers a choice: **On your own (free)**, the mode above, or a **Mock
-interview** with an interviewer, with its estimate in credits for the chosen
-length against your balance ("about 35–55 credits for 45 min; you have
-760", never more than what you have or the session's cap), and, without
-enough, a top-up and a link to the plans.
-`practice/#/<problem>?interview=mock` opens the start screen with the mock
-interview chosen (`?interview=ai` still works). The interview is charged
-for what it uses (the free plan gets 100 credits at sign-up); if the
-credits run out, it moves to the wrap-up and still gives its verdict. The
-first start asks once for consent and names what is sent to
-Anthropic. The interviewer is Claude by Anthropic (backend `src/ai/`, routes in
+Signed in, and when the server has an `ANTHROPIC_API_KEY`, the set-up
+offers a **Mock interview** with an interviewer (chosen by default) next to
+**On my own**, with its estimate in credits for the chosen length against
+your balance ("about 35–55 credits for 45 min; you have 760", never more
+than what you have or the session's cap), and, without enough, a top-up
+and a link to the plans. The old `practice/#/<problem>?interview=mock`
+(and `?interview=ai`) open the set-up with that problem and the
+interviewer chosen. The interview is charged for what it uses (the free
+plan gets 100 credits at sign-up); if the credits run out, it moves to the
+wrap-up and still gives its verdict. A line over Start names what is sent
+to Anthropic: starting is the agreement. The interviewer is Claude by Anthropic (backend `src/ai/`, routes in
 `src/interviews.ts`), and the session lives on the server, so a reload picks
 it up again.
 
-- **A chat next to the editor**, in the statement column. The interviewer
+- **A chat next to the whiteboard**, in the room's rail. The interviewer
   greets, then answers clarifying questions from the hidden `## Scale` and
   `## Constraints`, asks this file's estimates in the Estimate phase and the
   lesson's "In the interview" follow-ups in Design and Wrap-up. It never
   asks again for what you already know: the statement you were shown and
   every fact it gave this session. It checks numbers with a calculator and
   takes an estimate within 10x of its reference as the right order of
-  magnitude. Replies stream in. The **mic** listens hands-free until you
-  tap it again: the browser's own speech recognition where there is one
-  (free), otherwise short recordings written down on the server (about 0.1
-  credit a minute of speech). The words show in the box as you speak, a red
-  **Listening** marks it, and a blocked microphone says how to allow it.
-  Typing always works. **Voice on** reads the replies aloud in the
-  browser's voice; it is off by default, remembered, and stops when you
-  talk or type.
-- **On phones** the first tab is **Interview**: the chat, with the problem
-  folded inside it, so the conversation has a whole screen. A reply that
-  comes while you are on another tab says so, with a button back.
+  magnitude. Replies stream in.
+- **Voice or text**, chosen in the set-up and switchable in the top bar.
+  In text mode you type, and the **mic** dictates into the box. In voice
+  mode the mic listens hands-free and your answer goes after about two
+  seconds of silence, with a countdown to **Cancel** or **Send now**; the
+  replies are read aloud in the browser's voice while the mic waits, and
+  **Interrupt**, talking or typing cuts them off. The mic uses the
+  browser's own speech recognition where there is one (free), otherwise
+  short recordings written down on the server (about 0.1 credit a minute of
+  speech). A blocked microphone says how to allow it, and typing always
+  works.
+- **On phones** the first tab is **Chat**, so the conversation has a whole
+  screen, then **Whiteboard**. A reply that comes while you are on the
+  whiteboard says so, with a button back.
 - **The phase and the clock**: the same four phases and 10/10/70/10 split of
   30, 45 or 60 minutes. The clock moves the phase on; **Next phase** moves
   on earlier. Whatever the length, a session stops taking turns after 60
   minutes or at its credit cap (100, 150 or 200 credits for 30, 45 or 60
   minutes); the verdict can always be asked for.
-- **Coaching hints** after a turn, as toasts in the corner (at the bottom
-  on phones, two at most, each closable): **Focus now** (what to do next in
-  this phase), **Can improve** (what to fix in what you just said) and
-  **Wrap up** (near the end of a phase). **Coaching** in the chat lists
-  them all.
-- **Send my design** attaches the editor's source to the message. The server
+- **Coaching hints** after a turn, under the reply in the chat and as
+  toasts clear of the chat (above the composer on phones, two at most, each
+  closable): **Focus now** (what to do next in this phase), **Can improve**
+  (what to fix in what you just said) and **Wrap up** (near the end of a
+  phase).
+- **Send my design** attaches the whiteboard's design to the message. The server
   runs the problem's tests on it and hands the model those results; it never
   trusts the page's.
 - **The verdict**, on **Finish and get the verdict**: pass or fail, a score
