@@ -16,6 +16,13 @@ async function startInterview(page: Page) {
   return chat;
 }
 
+/** Whether two boxes overlap. */
+const overlaps = (a: { x: number; y: number; width: number; height: number }, b: typeof a) =>
+  a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+
+/** Every toast's box (the hint toasts are inside them). */
+const toastBoxes = (page: Page) => page.locator('.ps-toast').evaluateAll((els) => els.map((e) => e.getBoundingClientRect().toJSON() as { x: number; y: number; width: number; height: number }));
+
 /**
  * A fake Web Speech recognizer: `window.__speech.say(text, final)` sends a
  * result to the running one, and `window.__speech.deny = true` makes the
@@ -84,6 +91,23 @@ async function fakeSynthesis(page: Page) {
  * the default.
  */
 test.describe('AI interviewer', () => {
+  test('the coaching toasts sit above the tests bar, never on Run tests', async ({ page }) => {
+    await page.setViewportSize({ width: 1440, height: 900 });
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
+    const chat = await startInterview(page);
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
+    await chat.getByRole('button', { name: 'Send my design' }).click();
+    await expect(page.getByTestId('hint-toast')).toBeVisible();
+    const run = (await page.getByRole('button', { name: 'Run tests' }).boundingBox())!;
+    const boxes = await toastBoxes(page);
+    expect(boxes.length).toBeGreaterThan(0);
+    for (const box of boxes) {
+      expect(overlaps(box, run)).toBe(false);
+      expect(box.y + box.height).toBeLessThanOrEqual(run.y);
+    }
+  });
+
   test('a full session: start, three turns with hint toasts, resume, finish and the verdict', async ({ page }) => {
     await mockSignedIn(page);
     const mock = await mockInterviews(page, {
@@ -336,6 +360,19 @@ test.describe('AI interviewer', () => {
 
 test.describe('AI interviewer on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
+
+  test('the coaching toasts sit above the composer, and the Design partner tab never floats over the chat', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
+    const chat = await startInterview(page);
+    // Partner is off during an interview: on a phone it isn't drawn at all, rather than over the bubbles.
+    await expect(page.getByTestId('partner-button')).toHaveCount(0);
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
+    await chat.getByRole('button', { name: 'Send my design' }).click();
+    await expect(page.getByTestId('hint-toast')).toBeVisible();
+    const composer = (await chat.locator('form').last().boundingBox())!;
+    for (const box of await toastBoxes(page)) expect(box.y + box.height).toBeLessThanOrEqual(composer.y);
+  });
 
   test('the chat has its own Interview tab, and a reply on another tab says so with a way back', async ({ page }) => {
     await mockSignedIn(page);

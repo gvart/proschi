@@ -452,7 +452,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const partnerDock = hasPartner && (
     <>
-    <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />
+    {!phone && <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />}
     <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
       <Suspense fallback={null}>
         <PartnerPanel
@@ -596,6 +596,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             })}
           </div>
           {lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
+          {/* In the tab bar, not over the panes; off (so not shown) during an interview. */}
+          {hasPartner && !partnerOff && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
         </div>
       )}
       </ZenCollapse>

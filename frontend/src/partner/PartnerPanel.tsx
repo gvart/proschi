@@ -12,6 +12,7 @@ import ChangeCard from './ChangeCard';
 import type { Diagram } from '../dsl/types';
 import { estimateFor, type Intent, type PartnerContext, type Question, type Turn } from './contract';
 import { confirm } from '../design/dialogs';
+import { useToastClearance } from '../design/toastClearance';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
 import MicButton, { type MicButtonHandle } from '../voice/MicButton';
@@ -149,6 +150,8 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
   /** What the composer sends: picked with a starter chip, back to a plain message once sent. */
   const [starter, setStarter] = useState<Starter>('chat');
   const input = useRef<HTMLTextAreaElement>(null);
+  // Docked along the bottom on phones: toasts land above the composer, not on Send.
+  const clearToasts = useToastClearance();
   const scroller = useRef<HTMLDivElement>(null);
   const mic = useRef<MicButtonHandle>(null);
   const voice = useVoiceDraft(setDraft, MAX_MESSAGE);
@@ -301,7 +304,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
         )}
       </div>
 
-      <form onSubmit={(e) => void submit(e)} className="shrink-0 border-t-bw-1 border-ink bg-surface px-3 pb-3 pt-2.5">
+      <form ref={clearToasts} onSubmit={(e) => void submit(e)} className="shrink-0 border-t-bw-1 border-ink bg-surface px-3 pb-3 pt-2.5">
         {state.problem && <ProblemLine problem={state.problem} base={base} onDismiss={dismiss} />}
         {state.status !== 'resuming' && <StarterChips practice={practice} busy={busy} starter={starter} onPick={pick} estimate={estimate} onAsk={ask} />}
         <div className="flex items-end gap-1.5 rounded-sm border-bw-1 border-ink bg-paper p-1 transition-shadow duration-d1 focus-within:shadow-brutal-sm">

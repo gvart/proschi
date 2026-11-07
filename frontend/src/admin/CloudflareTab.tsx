@@ -1,11 +1,11 @@
 import { CircleCheck, OctagonAlert, RefreshCw, TriangleAlert } from 'lucide-react';
 import { getCfUsage, type CfMetric, type CfStatus, type CfUsage } from './api';
-import { compare, formatQuantity, formatResetDay, resetLabel, verdict, type PlanOption, type Tone } from './cfVerdict';
+import { compare, formatPrice, formatQuantity, formatResetDay, resetLabel, verdict, type PlanOption, type Tone } from './cfVerdict';
 import { formatAgo, formatPercent, formatUsd, shortDay } from './format';
 import { useLoad } from './hooks';
 import { ErrorNote, PageHeader, Section, Skeleton } from './ui';
 
-const PRODUCTS: CfMetric['product'][] = ['Workers', 'D1', 'R2', 'Email'];
+const PRODUCTS: CfMetric['product'][] = ['Workers', 'Workers AI', 'D1', 'R2', 'Email'];
 const STATUS_LABEL: Record<CfStatus, string> = { ok: 'On track', watch: 'Watch', over: 'Over' };
 
 /** Cloudflare usage (GET /api/admin/cf-usage): the verdict, one meter per quota, Free against Paid. */
@@ -152,9 +152,17 @@ function Meter({ m }: { m: CfMetric }) {
           </div>
         )}
         <div>
-          <dt>{m.period === 'day' ? 'Daily limit' : 'Monthly'}</dt>
+          <dt>{m.period === 'day' ? (m.priceUsd !== undefined ? 'Free daily' : 'Daily limit') : 'Monthly'}</dt>
           <dd>{resetLabel(m)}</dd>
         </div>
+        {m.per !== undefined && m.priceUsd !== undefined && (
+          <div>
+            <dt>Past it</dt>
+            <dd>
+              {formatPrice(m.priceUsd)} / {formatQuantity(m.unit, m.per)}
+            </dd>
+          </div>
+        )}
         {m.overageUsd !== null && m.overageUsd > 0 && (
           <div>
             <dt>Extra</dt>

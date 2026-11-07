@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CfMetric, CfUsage } from './api';
-import { attention, compare, flagged, formatQuantity, resetLabel, verdict } from './cfVerdict';
+import { attention, compare, flagged, formatPrice, formatQuantity, resetLabel, verdict } from './cfVerdict';
 
 const series = Array.from({ length: 30 }, (_, i) => ({ day: `2026-10-${String(i + 1).padStart(2, '0')}`, value: 0 }));
 
@@ -132,6 +132,10 @@ describe('cf usage: needs attention and formatting', () => {
   it('formats quantities and resets', () => {
     expect(formatQuantity('rows', 25e9)).toBe('25B');
     expect(formatQuantity('ms', 30e6)).toBe('30M ms');
+    expect(formatQuantity('neurons', 10_000)).toBe('10K');
+    expect(formatPrice(0.3)).toBe('$0.30');
+    expect(formatPrice(0.011)).toBe('$0.011');
+    expect(formatPrice(4.5)).toBe('$4.50');
     expect(formatQuantity('bytes', 5e9)).toBe('5 GB');
     expect(formatQuantity('bytes', 12_345_678)).toBe('12 MB');
     expect(formatQuantity('bytes', 1010)).toBe('1 kB');

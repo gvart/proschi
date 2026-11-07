@@ -6,6 +6,7 @@ import {
   calendarMonth,
   freeChecks,
   paidSubscription,
+  parseAi,
   parseD1Storage,
   parseR2,
   parseWorkers,
@@ -106,6 +107,29 @@ describe('cf usage: quotas and projections', () => {
     expect(statusOf(10, 79, 100)).toBe('ok');
   });
 
+  it('Workers AI: 10,000 free neurons a day, reset at 00:00 UTC; Paid bills each day past them at $0.011 per 1,000', () => {
+    const q = quota('paid', 'ai.neurons');
+    expect(q).toMatchObject({ product: 'Workers AI', unit: 'neurons', period: 'day', included: 10_000, per: 1000, priceUsd: 0.011 });
+    expect(quota('free', 'ai.neurons')).toMatchObject({ period: 'day', included: 10_000 });
+    expect(quota('free', 'ai.neurons').priceUsd).toBeUndefined();
+    // 15 days so far: 30,000 neurons each (20,000 past the allocation), and 6,000 by 06:00 today (24,000 projected: 14,000 past).
+    const noon = at('2026-11-16T06:00:00Z');
+    const points = [...Array.from({ length: 15 }, (_, i) => ({ t: month.start + i * DAY, value: 30_000 })), { t: at('2026-11-16T00:00:00Z'), value: 6000 }];
+    const m = buildMetric(q, points, utcDay(noon), noon, 'paid', month);
+    expect(m.used).toBe(6000);
+    expect(m.projected).toBeCloseTo(24_000);
+    expect(m.periodEnd).toBe('2026-11-17T00:00:00.000Z');
+    expect(m.passesAt).toBe('2026-11-16T10:00:00.000Z');
+    expect(m.status).toBe('watch');
+    expect(m.series.at(-1)).toEqual({ day: '2026-11-16', value: 6000 });
+    // (15 × 20,000 + 14,000) over 16 days, carried to 30: 588,750 neurons, at $0.011 per 1,000.
+    expect(m.overageUsd).toBe(6.48);
+    // Under the allocation every day: nothing to pay.
+    const quiet = buildMetric(q, [{ t: at('2026-11-15T00:00:00Z'), value: 9000 }], utcDay(noon), noon, 'paid', month);
+    expect(quiet.overageUsd).toBe(0);
+    expect(buildMetric(quota('free', 'ai.neurons'), points, utcDay(noon), noon, 'free', month).overageUsd).toBeNull();
+  });
+
   it("counts the days Free's daily limits were passed", () => {
     const series = Array.from({ length: 30 }, (_, i) => ({ day: `d${i}`, value: i >= 27 || i === 5 ? 150_000 : 1000 }));
     expect(freeChecks(new Map([['workers.requests', series]]))).toEqual([
@@ -126,6 +150,8 @@ describe("cf usage: Cloudflare's answers", () => {
       { sum: { requests: 9 }, dimensions: { date: '2026-11-07', actionType: 'DeleteObject' } },
     ]);
     expect(r2['r2.classA'].map((p) => p.value)).toEqual([3, 4]);
+    // aiInferenceAdaptiveGroups: neurons by UTC day, all models.
+    expect(parseAi([{ sum: { totalNeurons: 412.5 }, dimensions: { date: '2026-11-07' } }])['ai.neurons']).toEqual([{ t: at('2026-11-07T00:00:00Z'), value: 412.5 }]);
     expect(r2['r2.classB'].map((p) => p.value)).toEqual([5]);
     const s = parseD1Storage([
       { max: { databaseSizeBytes: 100 }, dimensions: { date: '2026-11-07', databaseId: 'a' } },
@@ -179,6 +205,8 @@ function mockCloudflare({ fail = [] as string[], subscriptions = 403 as number |
     switch (dataset) {
       case 'workersInvocationsAdaptive':
         return gql([{ sum: { requests: 1200, cpuTimeUs: 3_000_000 }, dimensions: { datetimeHour: hour() } }]);
+      case 'aiInferenceAdaptiveGroups':
+        return gql([{ sum: { totalNeurons: 823 }, dimensions: { date: today() } }]);
       case 'd1AnalyticsAdaptiveGroups':
         return gql([{ sum: { rowsRead: 40_000, rowsWritten: 300 }, dimensions: { date: today() } }]);
       case 'd1StorageAdaptiveGroups':
@@ -245,11 +273,13 @@ describe('GET /api/admin/cf-usage', () => {
     expect(byId['r2.classA'].used).toBe(7);
     expect(byId['r2.storage'].used).toBe(1010);
     expect(byId['email.sent'].used).toBe(12);
+    expect(byId['ai.neurons']).toMatchObject({ product: 'Workers AI', used: 823, included: 10_000, per: 1000, priceUsd: 0.011, period: 'day', overageUsd: 0 });
+    expect(calls.find((c) => c.query?.includes('aiInferenceAdaptiveGroups'))?.query).toMatch(/sum \{ totalNeurons \} dimensions \{ date \}/);
     expect(body.costs).toEqual({ paidBaseUsd: 5, paidOverageUsd: 0, paidTotalUsd: 5 });
-    expect(body.freeTier.map((f) => f.id)).toEqual(['workers.requests', 'd1.rowsRead', 'd1.rowsWritten']);
+    expect(body.freeTier.map((f) => f.id)).toEqual(['workers.requests', 'ai.neurons', 'd1.rowsRead', 'd1.rowsWritten']);
     expect(calls.every((c) => c.auth === `Bearer ${TOKEN}`)).toBe(true);
     const fetched = calls.length;
-    expect(fetched).toBe(7); // subscriptions, five account datasets and the zone's email
+    expect(fetched).toBe(8); // subscriptions, six account datasets and the zone's email
 
     const again = (await (await adminCall('/api/admin/cf-usage', admin)).json()) as CfUsage;
     expect(again.cached).toBe(true);
@@ -289,6 +319,7 @@ describe('GET /api/admin/cf-usage', () => {
     expect(body.errors).toEqual([{ product: 'D1', message: 'not authorized for d1AnalyticsAdaptiveGroups' }]);
     expect(body.metrics.some((m) => m.id === 'd1.rowsRead')).toBe(false);
     expect(body.metrics.some((m) => m.id === 'workers.requests')).toBe(true);
+    expect(body.metrics.some((m) => m.id === 'ai.neurons')).toBe(true);
     expect(body.notes.some((n) => n.includes('CF_ZONE_ID'))).toBe(true);
   });
 
@@ -303,7 +334,7 @@ describe('GET /api/admin/cf-usage', () => {
     expect(response.status).toBe(200);
     const body = (await response.json()) as CfUsage;
     expect(body.metrics).toEqual([]);
-    expect(body.errors).toHaveLength(5);
+    expect(body.errors).toHaveLength(6);
     expect(body.errors[0].message).toBe('Cloudflare API answered 502');
   });
 

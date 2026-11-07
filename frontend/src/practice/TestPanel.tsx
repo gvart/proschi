@@ -1,6 +1,7 @@
 import { AlertCircle, AlertTriangle, CheckCircle2, ChevronDown, ChevronUp, ClipboardCheck, FlaskConical, Loader2, PartyPopper, Play, XCircle } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { celebrate } from '../design/celebrate';
+import { useToastClearance } from '../design/toastClearance';
 import { primaryButton, subBar } from '../components/Playground/ui';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { RunResult } from './workspace';
@@ -53,6 +54,8 @@ export default function TestPanel({ run, stale, diagnostics, onRun, running = fa
   // The first solve on this page gets a little burst (skipped under reduced motion), unless the celebration brings its own.
   const solvedRef = useRef<HTMLDivElement>(null);
   const celebrated = useRef(false);
+  // Folded along the bottom of the workspace, the bar (and its Run tests) stays clear of the toasts.
+  const clearToasts = useToastClearance();
   const solved = !!run?.solved;
   const hasCelebration = !!celebration;
   useEffect(() => {
@@ -61,7 +64,7 @@ export default function TestPanel({ run, stale, diagnostics, onRun, running = fa
     if (!hasCelebration) void celebrate(solvedRef.current);
   }, [solved, hasCelebration]);
   return (
-    <div className="h-full flex flex-col bg-surface">
+    <div ref={clearToasts} className="h-full flex flex-col bg-surface">
       <div className={`flex-none flex items-center gap-2 h-11 px-3 ${subBar}`}>
         {review ? (
           <>

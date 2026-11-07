@@ -140,12 +140,15 @@ export type CfStatus = 'ok' | 'watch' | 'over';
 
 export interface CfMetric {
   id: string;
-  product: 'Workers' | 'D1' | 'R2' | 'Email';
+  product: 'Workers' | 'Workers AI' | 'D1' | 'R2' | 'Email';
   label: string;
-  unit: 'requests' | 'ms' | 'rows' | 'bytes' | 'operations' | 'emails';
+  unit: 'requests' | 'ms' | 'neurons' | 'rows' | 'bytes' | 'operations' | 'emails';
   kind: 'flow' | 'stock';
   period: 'day' | 'month';
   included: number;
+  /** Paid's price past `included`: `priceUsd` for every `per` units. */
+  per?: number;
+  priceUsd?: number;
   used: number;
   percent: number;
   periodStart: string;

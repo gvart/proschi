@@ -279,6 +279,11 @@ test.describe('practice', () => {
 test('on a phone the panel is a full-height sheet', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openEditor(page);
+  // In the tab bar, not floating over the panes.
+  const bar = (await page.locator('[data-tour="panes"]').boundingBox())!;
+  const tab = (await page.getByTestId('partner-button').boundingBox())!;
+  expect(tab.y).toBeGreaterThanOrEqual(bar.y);
+  expect(tab.y + tab.height).toBeLessThanOrEqual(bar.y + bar.height + 1);
   await page.getByTestId('partner-button').click();
   const sheet = page.getByRole('dialog', { name: 'Design partner' });
   await expect(sheet).toBeVisible();
