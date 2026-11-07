@@ -1,0 +1,30 @@
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_ea93402049fb84 72-73,77,93
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_d24ee5cc9e5027 87
+  s_e17b87e0a1b3ca::t_7c595f634c2912 1,6-54,56-77,278-346,354-357,359-367
+  s_e17b87e0a1b3ca::t_d5065cce0f0026 347-353,358
+  s_e17b87e0a1b3ca::t_c1fbbc510361a8 80-84,93,125-129,134-135,137-147,154-157
+  s_e17b87e0a1b3ca::t_15c16d8f201be2 55
+frontend/src/practice/modes/ai/AiInterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_5e7acb1d6398f6 2,4-8,24-30,34-36,54-55,58,68,92-124,152,154,157-159,174-177,196,205-206,253-266,270,296,306-319,343-348,351,355-356,368,379
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_ea93402049fb84 2,367,569-573,578-579
+  s_e17b87e0a1b3ca::t_edf5a94831895c 574-577
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "7dc318f07bca0ceb489759acb318af3808f950b2",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
