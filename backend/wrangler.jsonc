@@ -43,6 +43,9 @@
       "migrations_dir": "migrations"
     }
   ],
+  // Feedback screenshots (src/feedback.ts): private, served to the admin only through /api/admin/feedback.
+  // `npx wrangler r2 bucket create proschi-feedback` once (README "Production checklist").
+  "r2_buckets": [{ "binding": "FEEDBACK_BUCKET", "bucket_name": "proschi-feedback" }],
   // Per minute: test runs (they run the simulation), account changes,
   // progress uploads, card review requests, daily challenge attempts, short links, synced diagram
   // requests and reminder confirmation emails per user;
@@ -107,6 +110,7 @@
           "migrations_dir": "migrations"
         }
       ],
+      "r2_buckets": [{ "binding": "FEEDBACK_BUCKET", "bucket_name": "proschi-feedback-staging" }],
       "ratelimits": [
         { "name": "RUN_LIMITER", "namespace_id": "2001", "simple": { "limit": 30, "period": 60 } },
         { "name": "AUTH_LIMITER", "namespace_id": "2002", "simple": { "limit": 20, "period": 60 } },

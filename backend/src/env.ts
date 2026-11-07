@@ -38,6 +38,12 @@ export interface Env {
    * reminders; only src/email.ts uses it. Unset, opting in answers 503.
    */
   EMAIL?: SendEmail;
+  /**
+   * Feedback screenshots (wrangler.jsonc `r2_buckets`, bucket proschi-feedback;
+   * src/feedback.ts), served to the admin only. Unset, messages can still be
+   * sent, without screenshots.
+   */
+  FEEDBACK_BUCKET?: R2Bucket;
   /** The built site (frontend/dist), served for every path outside /api and /auth. */
   ASSETS: Fetcher;
   /** `production` or `staging`; unset in local development. */

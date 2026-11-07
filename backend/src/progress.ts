@@ -23,6 +23,7 @@ import { exportCharges } from './meter';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
 import { exportPartnerSessions } from './partner';
+import { deleteFeedbackFiles, exportFeedback } from './feedback';
 
 /** The signed-in user's account and practice progress. */
 
@@ -131,6 +132,8 @@ export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
   await revokeOnDelete(ctx.env, user.id);
+  // Feedback screenshots are in R2, which the cascade below cannot reach.
+  await deleteFeedbackFiles(ctx.env, user.id);
   // Only an HMAC of each identity and whether the trial was used stay, so signing up again doesn't give a new trial (src/credits.ts).
   await ctx.env.DB.batch([...(await tombstoneStatements(ctx.env, user.id)), ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(user.id)]);
   ctx.setCookies = [sessionCookie('', 0)];
@@ -265,6 +268,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     partnerSessions: await exportPartnerSessions(ctx.env, user.id),
     // The AI roadmap's picks (Pro): the next steps picked after an interview or a review, each with its reason.
     roadmapRecs: await exportRoadmapRecs(DB, user.id),
+    // Messages sent with Send feedback, with their context and, if attached, the diagram (the screenshots' type and size; the operator's notes stay out).
+    feedback: await exportFeedback(DB, user.id),
   };
   return json(body, 200, { ...NO_STORE, 'Content-Disposition': 'attachment; filename="proschi-data.json"' });
 }
