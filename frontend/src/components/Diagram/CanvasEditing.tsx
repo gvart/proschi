@@ -37,10 +37,12 @@ interface PaletteDockProps {
   onClose: () => void;
   /** The palette was just opened by the reader, so its search takes the focus. */
   focus: boolean;
+  /** The selection's settings (a docked Inspector): shown in the panel in place of the palette until closed. */
+  settings?: ReactNode;
 }
 
 /** The palette docked to the left of the canvas, or on a phone a bottom sheet where a tap adds. */
-export function PaletteDock({ open, phone, onAdd, onClose, focus }: PaletteDockProps) {
+export function PaletteDock({ open, phone, onAdd, onClose, focus, settings }: PaletteDockProps) {
   if (!open) return null;
   if (phone) {
     return (
@@ -65,9 +67,8 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus }: PaletteDockP
     );
   }
   return (
-    <div className="w-52 shrink-0 border-r-bw-1 border-ink">
-      <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
-    </div>
+    // One panel beside the canvas, so neither covers the diagram: the selection's settings, else the palette.
+    <div className="w-60 shrink-0 border-r-bw-1 border-ink">{settings ?? <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />}</div>
   );
 }
 

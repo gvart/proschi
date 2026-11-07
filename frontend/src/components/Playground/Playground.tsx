@@ -1819,6 +1819,23 @@ function DiagramView({
     [onNodesChange],
   );
 
+  // With the palette docked, the settings take its place beside the canvas instead of covering the diagram.
+  const dockSettings = showSettings && paletteOpen && !phone;
+  const inspector = showSettings && (
+    <Inspector
+      key={single.id}
+      node={selectedNode}
+      edge={selectedNode ? undefined : selectedEdge}
+      capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
+      importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
+      system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
+      docked={dockSettings}
+      onEdit={onEdit}
+      onDelete={deleteSelection}
+      onClose={() => setClosedSettings(single.id)}
+    />
+  );
+
   return (
     <div
       className="flex h-full"
@@ -1830,7 +1847,7 @@ function DiagramView({
         else onRedo();
       }}
     >
-    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} />
+    <PaletteDock open={paletteOpen} phone={phone} focus={paletteFocus} onAdd={(tech) => addComponent(tech)} onClose={closePalette} settings={dockSettings ? inspector : undefined} />
     <div
       ref={wrapperRef}
       // Focusable, so the keys above work after a drop from the palette.
@@ -2016,19 +2033,9 @@ function DiagramView({
           </Panel>
         )}
       </ReactFlow>
-      {showSettings && (
+      {showSettings && !dockSettings && (
         <div className="pointer-events-none absolute inset-x-2 bottom-2 z-10 flex max-h-[55%] max-md:[[data-keyboard]_&]:max-h-[calc(100%-1rem)] md:inset-x-auto md:bottom-auto md:right-2 md:top-14 md:max-h-[calc(100%-4.5rem)] md:w-72">
-          <Inspector
-            key={single.id}
-            node={selectedNode}
-            edge={selectedNode ? undefined : selectedEdge}
-            capacity={selectedNode ? diagram.capacity?.find((c) => c.node === selectedNode.id) : undefined}
-            importedFrom={selectedNode ? importedNodes.get(selectedNode.id) : selectedEdge?.loc.file}
-            system={selectedNode ? (nodes.find((n) => n.id === selectedNode.id)?.data as SystemNodeData | undefined)?.system : undefined}
-            onEdit={onEdit}
-            onDelete={deleteSelection}
-            onClose={() => setClosedSettings(single.id)}
-          />
+          {inspector}
         </div>
       )}
       {menu && <CanvasMenu menu={menu} onSettings={() => setClosedSettings(null)} onDelete={deleteSelection} onClose={closeMenu} />}

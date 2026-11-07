@@ -4,8 +4,9 @@ import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
 import type { Engine } from '../hld/engine';
 import CodeEditor, { type CodeEditorHandle } from '../components/Playground/CodeEditor';
-import DiagramCanvas from '../components/Diagram/DiagramCanvas';
+import EditableCanvas from '../components/Diagram/EditableCanvas';
 import { useDiagramLayout } from '../components/Diagram/useDiagramLayout';
+import { EmptyCanvas } from '../components/Diagram/CanvasEditing';
 import { UseCasePlayer } from '../components/UseCases/UseCasePlayback';
 import AnalysisPanel from '../components/Analysis/AnalysisPanel';
 import Markdown from './Markdown';
@@ -336,6 +337,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     else setSource(next);
   }, []);
   const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  // Ctrl/Cmd+Z on the canvas: every canvas edit is one step of the code editor's history.
+  const undoCanvas = useCallback(() => void editorRef.current?.undo(), []);
+  const redoCanvas = useCallback(() => void editorRef.current?.redo(), []);
   const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
 
   const inLesson = hasLesson && stage === 'lesson';
@@ -426,7 +430,20 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const diagramPane = (
     <section aria-label="Diagram" className="h-full min-w-0 flex flex-col">
-      <DiagramPane diagram={diagram} nodes={nodes} edges={edges} fitKey={`${pane}:${settled}:${fitTick}`} engine={engine} onSelect={goTo} zen={zen.zen} />
+      <DiagramPane
+        diagram={diagram}
+        nodes={nodes}
+        edges={edges}
+        fitKey={`${pane}:${settled}:${fitTick}`}
+        engine={engine}
+        onSelect={goTo}
+        zen={zen.zen}
+        source={source}
+        onChange={setSource}
+        onUndo={undoCanvas}
+        onRedo={redoCanvas}
+        phone={phone}
+      />
     </section>
   );
 
@@ -764,10 +781,16 @@ interface DiagramPaneProps {
   onSelect: (loc: SourceLoc) => void;
   /** Zen mode folds the tab bar away. */
   zen: boolean;
+  /** The solution's text: the canvas edits it (EditableCanvas), leaving the problem's own nodes alone. */
+  source: string;
+  onChange: (next: string) => void;
+  onUndo: () => void;
+  onRedo: () => void;
+  phone: boolean;
 }
 
 /** The design as a diagram, one scenario played step by step, or its capacity analysis. */
-function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen }: DiagramPaneProps) {
+function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, source, onChange, onUndo, onRedo, phone }: DiagramPaneProps) {
   const [tab, setTab] = useState<'diagram' | 'playback' | 'analysis'>('diagram');
   const analysis = useMemo(() => (tab === 'analysis' ? engine.analyze(diagram) : undefined), [tab, engine, diagram]);
   const options = useMemo(
@@ -818,11 +841,21 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen }: D
         ) : tab === 'analysis' && analysis ? (
           <AnalysisPanel diagram={diagram} analysis={analysis} onSelect={onSelect} />
         ) : (
-          <DiagramCanvas nodes={nodes} edges={edges} fitKey={fitKey} legend={diagram.legend} />
+          <EditableCanvas
+            source={source}
+            diagram={diagram}
+            onChange={onChange}
+            onUndo={onUndo}
+            onRedo={onRedo}
+            nodes={nodes}
+            edges={edges}
+            fitKey={fitKey}
+            problemCapacity
+            paletteKey="proschi.practice.palette"
+            phone={phone}
+          />
         )}
-        {nodes.length === 0 && tab === 'diagram' && (
-          <p className="absolute inset-0 flex items-center justify-center text-sm text-muted pointer-events-none">Your design appears here as you type.</p>
-        )}
+        {nodes.length === 0 && tab === 'diagram' && <EmptyCanvas />}
       </div>
     </div>
   );

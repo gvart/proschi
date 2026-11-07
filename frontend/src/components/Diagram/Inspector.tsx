@@ -30,6 +30,10 @@ interface InspectorProps {
   importedFrom?: string;
   /** What the simulation says about a system box: its contract and the load it is sent. */
   system?: SystemSummary;
+  /** Practice: the problem sets each component's capacity, so only a store's shards can be set here. */
+  problemCapacity?: boolean;
+  /** Shown in the side panel in place of the palette, rather than as a card over the canvas. */
+  docked?: boolean;
   /** Applies a text edit to the document. */
   onEdit: (edit: Edit) => void;
   /** Deletes the node or connection from the text. */
@@ -51,14 +55,14 @@ const CAPACITY_ROWS: { part: CapacityPart; label: string; unit: string; storeOnl
  * The settings of the selected node or connection. Every change is a small
  * edit of the text, which stays the source of truth.
  */
-export default function Inspector({ node, edge, capacity, importedFrom, system, onEdit, onDelete, onClose }: InspectorProps) {
+export default function Inspector({ node, edge, capacity, importedFrom, system, problemCapacity = false, docked = false, onEdit, onDelete, onClose }: InspectorProps) {
   const title = node ? node.name : edge ? `${edge.source} → ${edge.target}` : '';
   const readOnly = importedFrom !== undefined;
   return (
     <aside
       role="region"
       aria-label={`${title} settings`}
-      className="pointer-events-auto flex max-h-full w-full flex-col rounded-sm border-bw-1 border-ink bg-surface shadow-brutal-md"
+      className={`pointer-events-auto flex w-full flex-col bg-surface ${docked ? 'h-full' : 'max-h-full rounded-sm border-bw-1 border-ink shadow-brutal-md'}`}
     >
       <div className="flex items-center gap-2 border-b border-ink/15 py-1 pl-3 pr-1">
         <h2 className="min-w-0 flex-1 truncate text-sm font-bold text-ink">{title}</h2>
@@ -80,13 +84,13 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
         {node && node.kind === 'system' ? (
           <SystemFields node={node} system={system} readOnly={readOnly} onEdit={onEdit} />
         ) : (
-          node && <NodeFields node={node} capacity={capacity} readOnly={readOnly} onEdit={onEdit} />
+          node && <NodeFields node={node} capacity={capacity} readOnly={readOnly} problemCapacity={problemCapacity} onEdit={onEdit} />
         )}
         {edge && (
           <TextField
-            label="Label"
+            label="Label or protocol"
             value={edge.label ?? ''}
-            placeholder="e.g. reads, HTTPS"
+            placeholder="e.g. HTTPS, gRPC, reads"
             disabled={readOnly || /[{[<]/.test(edge.label ?? '')}
             onCommit={(label) => onEdit((src) => setEdgeLabel(src, edge.id, label || null))}
           />
@@ -96,7 +100,7 @@ export default function Inspector({ node, edge, capacity, importedFrom, system, 
   );
 }
 
-function NodeFields({ node, capacity, readOnly, onEdit }: { node: DiagramNode; capacity?: CapacityOverride; readOnly: boolean; onEdit: (edit: Edit) => void }) {
+function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { node: DiagramNode; capacity?: CapacityOverride; readOnly: boolean; problemCapacity: boolean; onEdit: (edit: Edit) => void }) {
   const listId = useId();
   const id = node.id;
   const kind = kindOf(node);
@@ -151,7 +155,24 @@ function NodeFields({ node, capacity, readOnly, onEdit }: { node: DiagramNode; c
       )}
       <TextField label="Owner team" value={node.ownerTeam ?? ''} placeholder="e.g. payments" disabled={readOnly} onCommit={(team) => onEdit((src) => setOwner(src, id, team || null))} />
       <TextField label="Description" value={node.description ?? ''} disabled={readOnly} onCommit={(text) => onEdit((src) => setDescription(src, id, text || null))} />
-      {simulated && (
+      {simulated && problemCapacity && store && (
+        <fieldset className="space-y-2 border-t border-ink/15 pt-3">
+          <legend className={eyebrow}>Capacity</legend>
+          <p className="text-xs text-muted">The problem sets what each component can take; how many shards a store is split into is yours.</p>
+          <TextField
+            label="Shards"
+            inputMode="decimal"
+            value={typeof capacity?.shards === 'number' ? String(capacity.shards) : ''}
+            disabled={readOnly}
+            onCommit={(text) => {
+              const value = text === '' ? null : Number(text);
+              if (value !== null && !(value >= 1)) return false;
+              onEdit((src) => setCapacity(src, id, 'shards', value));
+            }}
+          />
+        </fieldset>
+      )}
+      {simulated && !problemCapacity && (
         <fieldset className="space-y-2 border-t border-ink/15 pt-3">
           <legend className={eyebrow}>Capacity per replica</legend>
           <p className="text-xs text-muted">Leave empty for the tech's defaults.</p>
