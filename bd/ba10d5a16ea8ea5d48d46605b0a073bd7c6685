@@ -1,0 +1,48 @@
+frontend/src/practice/hub/tabs.ts
+  s_e17b87e0a1b3ca::t_a261fb3d111d1f 2-9,18-19,24-27,31-49
+  s_e17b87e0a1b3ca::t_eea8b084728554 50
+frontend/src/practice/ProblemList.tsx
+  s_e17b87e0a1b3ca::t_6715944a901f81 15-18,24,44,54,56
+frontend/src/practice/hub/PracticeHub.tsx
+  s_e17b87e0a1b3ca::t_c64d7451814bb3 1-3,6-14,17,19-22,27,32-33,37-51,54-67,69,75-154
+frontend/src/game/ui/daily.ts
+  s_e17b87e0a1b3ca::t_d4316bda449438 4
+frontend/src/practice/hub/goal.ts
+  s_e17b87e0a1b3ca::t_c87ee6064f7b62 1-81
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_fa0de559caa047 20,32-33,86-88,194-206,211,216,278,280-286,291
+frontend/src/design/site.ts
+  s_e17b87e0a1b3ca::t_d4316bda449438 23
+frontend/src/practice/hub/continue.ts
+  s_e17b87e0a1b3ca::t_4313b394750d85 7-8,50,58-59,65
+frontend/src/practice/profile/AccountSections.tsx
+  s_e17b87e0a1b3ca::t_111cf8b0e91f28 12,129-130,132,134-136,138-169,172-185
+frontend/src/practice/Streak.tsx
+  s_e17b87e0a1b3ca::t_d4316bda449438 2,6,10
+frontend/src/practice/hub/HomeExtras.tsx
+  s_e17b87e0a1b3ca::t_8967c4494ef146 1-108,110-212
+  s_e17b87e0a1b3ca::t_4313b394750d85 109
+frontend/src/practice/hub/todayStatus.ts
+  s_e17b87e0a1b3ca::t_d4316bda449438 10
+frontend/src/practice/skills/ProgressRoute.tsx
+  s_e17b87e0a1b3ca::t_fa0de559caa047 62-63,164
+  s_e17b87e0a1b3ca::t_69d0fc58d40ade 51
+docs/PRIVACY.md
+  s_e17b87e0a1b3ca::t_d4ac5a06bd45f3 29
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "bdba10d5a16ea8ea5d48d46605b0a073bd7c6685",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
