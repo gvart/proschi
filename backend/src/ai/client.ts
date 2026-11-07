@@ -49,9 +49,38 @@ export interface TextBlock {
   cache_control?: CacheControl;
 }
 
+export interface ToolUseBlock {
+  type: 'tool_use';
+  id: string;
+  name: string;
+  input: unknown;
+}
+
+export interface ToolResultBlock {
+  type: 'tool_result';
+  tool_use_id: string;
+  content: string;
+  is_error?: boolean;
+}
+
+/** A thinking block (with its signature) or a redacted one: passed back unchanged within the tool loop that produced it. */
+export interface ThinkingBlock {
+  type: 'thinking' | 'redacted_thinking';
+  [field: string]: unknown;
+}
+
+export type ContentBlock = TextBlock | ToolUseBlock | ToolResultBlock | ThinkingBlock;
+
 export interface MessageParam {
   role: 'user' | 'assistant';
-  content: string | TextBlock[];
+  content: string | ContentBlock[];
+}
+
+export interface ToolDefinition {
+  name: string;
+  description: string;
+  input_schema: Record<string, unknown>;
+  strict?: boolean;
 }
 
 export interface MessageRequest {
@@ -60,6 +89,7 @@ export interface MessageRequest {
   system: TextBlock[];
   messages: MessageParam[];
   thinking?: { type: 'adaptive' } | { type: 'between_tools' } | { type: 'disabled' };
+  tools?: readonly ToolDefinition[];
   output_config?: {
     effort?: 'low' | 'medium' | 'high';
     format?: { type: 'json_schema'; schema: Record<string, unknown> };
@@ -83,6 +113,10 @@ export interface MessageResult {
   model: string;
   /** The text blocks joined; thinking and fallback blocks are left out. */
   text: string;
+  /** Every content block as answered, for a tool round trip (thinking blocks included, as the API asks). */
+  content: ContentBlock[];
+  /** The tool calls asked for (stop reason `tool_use`). */
+  toolUses: ToolUseBlock[];
   stopReason: string;
   usage: Usage;
 }
@@ -218,7 +252,7 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
 
   async function create(req: MessageRequest): Promise<MessageResult> {
     const { res, done } = await send(req, false);
-    let raw: { model?: string; content?: { type: string; text?: string }[]; stop_reason?: string; usage?: unknown };
+    let raw: { model?: string; content?: ({ type: string; text?: string } & Record<string, unknown>)[]; stop_reason?: string; usage?: unknown };
     try {
       raw = (await res.json()) as typeof raw;
     } catch (e) {
@@ -226,8 +260,10 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
     } finally {
       done();
     }
+    const content = (raw.content ?? []) as ContentBlock[];
     const text = (raw.content ?? []).filter((b) => b.type === 'text').map((b) => b.text ?? '').join('');
-    return finish({ model: raw.model ?? req.model, text, stopReason: raw.stop_reason ?? '', usage: usageOf(raw.usage) });
+    const toolUses = content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+    return finish({ model: raw.model ?? req.model, text, content, toolUses, stopReason: raw.stop_reason ?? '', usage: usageOf(raw.usage) });
   }
 
   async function* stream(req: MessageRequest): AsyncIterable<StreamEvent> {
@@ -240,9 +276,20 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
     let stopReason = '';
     let usage = { ...NO_USAGE };
     let text = '';
+    // The blocks by index, and the JSON of each tool call's input as it streams.
+    const blocks: (Record<string, unknown> & { type: string })[] = [];
+    const json: string[] = [];
     try {
       for await (const event of sseEvents(res.body)) {
-        let data: { type?: string; message?: { model?: string; usage?: unknown }; delta?: { type?: string; text?: string; stop_reason?: string }; usage?: unknown; error?: { type?: string; message?: string } };
+        let data: {
+          type?: string;
+          index?: number;
+          content_block?: Record<string, unknown> & { type: string };
+          message?: { model?: string; usage?: unknown };
+          delta?: { type?: string; text?: string; thinking?: string; signature?: string; partial_json?: string; stop_reason?: string };
+          usage?: unknown;
+          error?: { type?: string; message?: string };
+        };
         try {
           data = JSON.parse(event) as typeof data;
         } catch {
@@ -253,12 +300,31 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
             model = data.message?.model ?? model;
             usage = usageOf(data.message?.usage);
             break;
-          case 'content_block_delta':
+          case 'content_block_start':
+            if (data.index !== undefined && data.content_block) blocks[data.index] = { ...data.content_block };
+            break;
+          case 'content_block_delta': {
+            const block = data.index !== undefined ? blocks[data.index] : undefined;
             if (data.delta?.type === 'text_delta' && data.delta.text) {
               text += data.delta.text;
+              if (block) block.text = `${(block.text as string | undefined) ?? ''}${data.delta.text}`;
               yield { type: 'text', text: data.delta.text };
+            } else if (block && data.delta?.type === 'thinking_delta') block.thinking = `${(block.thinking as string | undefined) ?? ''}${data.delta.thinking ?? ''}`;
+            else if (block && data.delta?.type === 'signature_delta') block.signature = data.delta.signature;
+            else if (data.index !== undefined && data.delta?.type === 'input_json_delta') json[data.index] = (json[data.index] ?? '') + (data.delta.partial_json ?? '');
+            break;
+          }
+          case 'content_block_stop': {
+            const block = data.index !== undefined ? blocks[data.index] : undefined;
+            if (block?.type === 'tool_use') {
+              try {
+                block.input = JSON.parse(json[data.index!] || '{}');
+              } catch {
+                throw new AiError('malformed', 'A tool call input is not JSON', { usage });
+              }
             }
             break;
+          }
           case 'message_delta': {
             stopReason = data.delta?.stop_reason ?? stopReason;
             // message_delta's usage is cumulative: the final output count, and the input counts when it repeats them.
@@ -280,7 +346,9 @@ export function createClient(env: AiEnv, opts: ClientOptions = {}): ClaudeClient
       done();
     }
     if (!stopReason) throw new AiError('network', 'The stream ended before the message did', { usage });
-    yield { type: 'done', result: finish({ model, text, stopReason, usage }) };
+    const content = blocks.filter(Boolean) as unknown as ContentBlock[];
+    const toolUses = content.filter((b): b is ToolUseBlock => b.type === 'tool_use');
+    yield { type: 'done', result: finish({ model, text, content, toolUses, stopReason, usage }) };
   }
 
   return { create, stream };

@@ -111,7 +111,7 @@ export function buildContext(problem: Problem, files: { interview: string; lesso
   const estimates = interview.estimates.map((e, i) => {
     const id = `e${i + 1}`;
     topics.push({ id, kind: 'estimate', label: e.question });
-    return `- [${id}] ${e.question}\n  Answer: ${fmt(e.answer)} ${e.unit} (accept ${fmt(e.low)} to ${fmt(e.high)})\n  Worked: ${e.solution}`;
+    return `- [${id}] ${e.question}\n  Answer: ${fmt(e.answer)} ${e.unit} (accept ${fmt(e.low)} to ${fmt(e.high)}; the right order of magnitude ${fmt(e.answer / 10)} to ${fmt(e.answer * 10)})\n  Worked: ${e.solution}`;
   });
   const followups = followUps(files.lessonInterview).map((f, i) => {
     const id = `f${i + 1}`;

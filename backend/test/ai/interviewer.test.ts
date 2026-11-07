@@ -32,7 +32,7 @@ const deps = (client: ReturnType<typeof claude>['client'], minutes: number) => (
 const sonnetStreams = (calls: Recorded[]) => calls.filter((c) => c.body.model === SONNET && c.body.stream);
 const lastUser = (r: Recorded) => {
   const m = r.body.messages.at(-1)!;
-  return typeof m.content === 'string' ? m.content : m.content.map((b) => b.text).join('');
+  return typeof m.content === 'string' ? m.content : (m.content as TextBlock[]).map((b) => b.text).join('');
 };
 
 describe('AI interviewer', () => {
@@ -83,11 +83,11 @@ describe('AI interviewer', () => {
       expect(r.body.system[1]).toEqual({ type: 'text', text: context.text, cache_control: { type: 'ephemeral', ttl: '1h' } });
     }
     // Sonnet: the breakpoint is on the last message only (2 of the 4 allowed in all).
-    const marks = (r: Recorded) => r.body.messages.filter((m) => typeof m.content !== 'string' && m.content.some((b) => b.cache_control)).length;
+    const marks = (r: Recorded) => r.body.messages.filter((m) => typeof m.content !== 'string' && (m.content as TextBlock[]).some((b) => b.cache_control)).length;
     expect(marks(second)).toBe(1);
     expect((second.body.messages.at(-1)!.content as TextBlock[])[0].cache_control).toEqual({ type: 'ephemeral' });
     // Turn 2's messages begin with exactly turn 1's (breakpoint aside): append-only.
-    const plain = (r: Recorded) => r.body.messages.map((m) => ({ role: m.role, text: typeof m.content === 'string' ? m.content : m.content.map((b) => b.text).join('') }));
+    const plain = (r: Recorded) => r.body.messages.map((m) => ({ role: m.role, text: typeof m.content === 'string' ? m.content : (m.content as TextBlock[]).map((b) => b.text).join('') }));
     expect(plain(second).slice(0, plain(first).length)).toEqual(plain(first));
     expect(second.body.messages[0].role).toBe('user');
     expect(second.body.thinking).toEqual({ type: 'between_tools' });

@@ -1,6 +1,7 @@
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../frontend/src/practice/modes/session';
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
-import { AiError, collect, HAIKU, malformed, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type ModelUsage, type TextBlock } from './client';
+import { CALCULATE_TOOL, calculateTool } from './calc';
+import { AiError, collect, HAIKU, malformed, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type MessageResult, type ModelUsage, type TextBlock, type ToolResultBlock, type Usage } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
 import { knownFactsBlock, knownTopics, revealedIn } from './facts';
 import { fence, HINT_PROMPT, INTERVIEWER_PROMPT, VERDICT_PROMPT } from './prompts';
@@ -97,6 +98,8 @@ export interface Deps {
 const billedSoFar = (deps: Deps, state: InterviewState): number => Math.max(billedTokens(state.usage), deps.tokens ?? 0);
 
 const REPLY_MAX_TOKENS = 1_024;
+/** Calculator calls answered in one turn (P38); one round of them, then the reply. */
+const MAX_CALCULATIONS = 6;
 const HINT_MAX_TOKENS = 400;
 const VERDICT_MAX_TOKENS = 16_000;
 /** Entries of the transcript the hint sees. */
@@ -236,8 +239,8 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
   const design = input.design !== undefined ? { source: input.design, grade: gradeDesign(context.problem, input.design) } : undefined;
   const rendered = renderTurn(context, state, phase, elapsed, input.message, design);
 
-  // Sonnet sees the new turn and the reply; Haiku sees them again in its window.
-  const estimate = 2 * approxTokens(rendered) + REPLY_MAX_TOKENS + HINT_MAX_TOKENS + 2_000;
+  // Sonnet sees the new turn (twice with a calculation) and the reply; Haiku sees them again in its window.
+  const estimate = 3 * approxTokens(rendered) + 2 * REPLY_MAX_TOKENS + HINT_MAX_TOKENS + 3_000;
   if (!turnFits(billedSoFar(deps, state), estimate)) throw new InterviewLimitError('budget', 'The interview has used its token budget; ask for the verdict');
 
   let next: InterviewState = {
@@ -257,18 +260,22 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
     // A conversational turn needs no extended thinking; it keeps replies quick and the history free of thinking blocks.
     thinking: { type: 'between_tools' },
     output_config: { effort: 'medium' },
+    // The calculator (P38): numbers are checked by computing them before one is called wrong.
+    tools: [CALCULATE_TOOL],
   };
-  const result = await collect(client.stream(request), input.onText);
-  const reply = result.text.trim();
+  const calls = await reply(client, request, input.onText);
+  const reply_ = calls.map((c) => c.text.trim()).filter(Boolean).join(' ');
+  if (!reply_) throw malformed('The reply has no text', calls.at(-1)!, calls.slice(0, -1).map((c) => ({ model: c.model, ...c.usage })));
+  const sonnetUsed = calls.reduce((u, c) => addUsage(u, SONNET, c.usage), emptyUsage())[SONNET];
   next = {
     ...next,
-    usage: addUsage(next.usage, SONNET, result.usage),
-    transcript: [...next.transcript, { role: 'interviewer', text: reply, phase, at: elapsed }],
+    usage: addUsage(next.usage, SONNET, sonnetUsed),
+    transcript: [...next.transcript, { role: 'interviewer', text: reply_, phase, at: elapsed }],
     // The facts the reply stated, by their numbers: kept even when the hint below fails (P38).
-    revealed: union(next.revealed, revealedIn(context.topics, reply)),
+    revealed: union(next.revealed, revealedIn(context.topics, reply_)),
   };
 
-  const billed: ModelUsage[] = [{ model: result.model, ...result.usage }];
+  const billed: ModelUsage[] = calls.map((c) => ({ model: c.model, ...c.usage }));
   let hint: Hint | undefined;
   try {
     const coached = await coach(client, context, next, elapsed);
@@ -281,7 +288,44 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
     next = { ...next, usage: addUsage(next.usage, HAIKU, e.usage) };
     billed.push(...e.charge);
   }
-  return { reply, state: next, ...(hint ? { hint } : {}), ...(design ? { grade: design.grade } : {}), elapsedMs: elapsed, billed };
+  return { reply: reply_, state: next, ...(hint ? { hint } : {}), ...(design ? { grade: design.grade } : {}), elapsedMs: elapsed, billed };
+}
+
+const sumUsage = (a: Usage, b: Usage | undefined): Usage =>
+  b
+    ? {
+        input_tokens: a.input_tokens + b.input_tokens,
+        output_tokens: a.output_tokens + b.output_tokens,
+        cache_creation_input_tokens: a.cache_creation_input_tokens + b.cache_creation_input_tokens,
+        cache_read_input_tokens: a.cache_read_input_tokens + b.cache_read_input_tokens,
+      }
+    : a;
+
+/**
+ * The interviewer's reply: one streamed call, and when it asks the
+ * calculator, the server computes each expression (src/ai/calc.ts) and asks
+ * once more with the results. The tool exchange stays out of the stored
+ * transcript, so the history keeps only the reply's text. Returns every call;
+ * a failed second call charges the first too (P34).
+ */
+async function reply(client: ClaudeClient, request: MessageRequest, onText?: (text: string) => void): Promise<MessageResult[]> {
+  const first = await collect(client.stream(request), onText);
+  if (first.stopReason !== 'tool_use' || !first.toolUses.length) return [first];
+  const results: ToolResultBlock[] = first.toolUses.map((use, i) => {
+    const r = i < MAX_CALCULATIONS ? calculateTool(use.input) : { content: `At most ${MAX_CALCULATIONS} calculations a turn`, isError: true };
+    return { type: 'tool_result', tool_use_id: use.id, content: r.content, ...(r.isError ? { is_error: true } : {}) };
+  });
+  const followUp: MessageRequest = {
+    ...request,
+    messages: [...request.messages, { role: 'assistant', content: first.content }, { role: 'user', content: results }],
+  };
+  if (first.text.trim()) onText?.(' ');
+  try {
+    return [first, await collect(client.stream(followUp), onText)];
+  } catch (e) {
+    if (!(e instanceof AiError)) throw e;
+    throw new AiError(e.kind, e.message, { status: e.status, usage: sumUsage(first.usage, e.usage), charge: [{ model: first.model, ...first.usage }, ...e.charge] });
+  }
 }
 
 const union = (a: readonly string[] | undefined, b: readonly string[]): string[] => [...new Set([...(a ?? []), ...b])];
