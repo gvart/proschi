@@ -143,3 +143,22 @@ id; don't rewrite old ones.
   tokens and cost per day, and the share of sessions that reached the token
   cap. The health page says whether each paid secret is set, never its
   value.
+- **P25. No "AI" in the product's names.** Users are tired of "AI"
+  everything, so the paid features are named for what they do. The AI
+  interviewer is the **mock interview** ("Start a mock interview", "4 mock
+  interviews a month", "Mock interview pack: 5 for €15"). It stays distinct
+  from the free, self-run interview mode: interview mode's start screen
+  offers **On your own** (the scripted mode, in this browser) or **Mock
+  interview** (with an interviewer). The AI design review is the **in-depth
+  review**; the free one, written from the simulation and the tests, stays
+  the automatic review. The AI roadmap's picks are **Your next steps**. This
+  covers the pricing page, upgrade hints, the Pro badge, the checkout
+  celebration, Settings, the account menu, the landing page, the docs pages
+  and meta descriptions, and the messages the API shows users. The deep link
+  is `#/<problem>?interview=mock`; `?interview=ai` stays an alias. Code
+  identifiers, files, routes, feature ids (`ai_interview`, `ai_review`,
+  `ai_roadmap`), the database, analytics events and the admin panel keep
+  their names. One factual disclosure stays, on the mock interview's consent
+  screen: the interviewer is Claude, an AI model made by Anthropic, and the
+  conversation is sent to Anthropic (EU AI Act transparency, P8). The
+  privacy page and the terms still name the AI provider plainly.
