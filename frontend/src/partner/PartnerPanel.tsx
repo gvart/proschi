@@ -11,6 +11,7 @@ import { formatCredits, formatRange } from '../services/credits';
 import ChangeCard from './ChangeCard';
 import type { Diagram } from '../dsl/types';
 import { estimateFor, type Intent, type PartnerContext, type Question, type Turn } from './contract';
+import { confirm } from '../design/dialogs';
 import { PARTNER_SHORTCUT } from './shortcut';
 import { usePartner, type PartnerProblem } from './usePartner';
 
@@ -204,14 +205,15 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) void submit(e);
   };
 
-  const toggleDeep = () => {
-    if (state.turns.length > 0 && !window.confirm(deep ? 'Turn Deep off? That starts a new conversation.' : 'Turn on Deep? That starts a new conversation.')) return;
+  const toggleDeep = async () => {
+    if (state.turns.length > 0 && !(await confirm({ title: deep ? 'Turn Deep off?' : 'Turn on Deep?', body: 'That starts a new conversation.', confirmLabel: deep ? 'Turn off' : 'Turn on' }))) return;
     if (state.sessionId) reset();
     setDeepChoice(!deep);
   };
 
-  const newConversation = () => {
-    if (window.confirm('Start a new conversation? This one is closed.')) reset();
+  const newConversation = async () => {
+    if (!(await confirm({ title: 'Start a new conversation?', body: 'This one is closed.', confirmLabel: 'Start new' }))) return;
+    reset();
   };
 
   // Only the newest partner turn's questions take answers.
@@ -225,7 +227,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
         {deepAllowed && (
           <button
             type="button"
-            onClick={toggleDeep}
+            onClick={() => void toggleDeep()}
             aria-pressed={deep}
             disabled={busy}
             title={`Deep: a stronger model that thinks longer, about ${formatCredits(estimates.deepMultiplier)}× the credits`}
@@ -238,7 +240,7 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
           </button>
         )}
         {state.turns.length > 0 && (
-          <button type="button" onClick={newConversation} disabled={busy} aria-label="New conversation" title="New conversation" className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink disabled:opacity-50">
+          <button type="button" onClick={() => void newConversation()} disabled={busy} aria-label="New conversation" title="New conversation" className="grid h-8 w-8 place-items-center rounded-sm text-muted hover:bg-ink/10 hover:text-ink disabled:opacity-50">
             <SquarePen size={15} aria-hidden="true" />
           </button>
         )}
