@@ -93,6 +93,8 @@ export default function ProgressRoute({
   const badges: ProfileBadge[] = answer ? answer.achievements.map(profileBadge) : preview;
   const level = levelOf(answer?.stats ?? { solved: 0, mastered: 0, longestStreak: 0 });
   const earned = badges.filter((b) => b.earned).length;
+  // Problems interviewed with the interviewer, and on your own.
+  const interviewed = (answer?.stats.interviews ?? 0) + (answer?.stats.soloInterviews ?? 0);
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
   const streak = ready && summarize(ready).streak;
   const solved = problems.filter((p) => statusOf(progress, p.id) === 'solved');
@@ -158,7 +160,7 @@ export default function ProgressRoute({
             <Stat label="Cards mastered" value={answer?.stats.mastered ?? 0} />
             <Stat label="Longest streak" value={answer?.stats.longestStreak ?? 0} unit={answer?.stats.longestStreak === 1 ? 'day' : 'days'} />
             <Stat label="Cards reviewed" value={answer?.stats.reviews ?? 0} />
-            <Stat label="Interviews" value={(answer?.stats.interviews ?? 0) + (answer?.stats.soloInterviews ?? 0)} unit="problems" />
+            <Stat label="Interviews" value={interviewed} unit={interviewed === 1 ? 'problem' : 'problems'} />
             <Stat label="Badges" value={earned} unit={`of ${badges.length}`} />
           </dl>
         </div>
