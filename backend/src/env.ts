@@ -103,6 +103,13 @@ export interface Env {
    */
   TURNSTILE_SITE_KEY?: string;
   TURNSTILE_SECRET_KEY?: string;
+  /**
+   * Admin campaigns (src/campaigns.ts): the most campaign emails sent a UTC
+   * day (unset: 500; the rest go out the next day), and the admin's own
+   * address, where "Send a test to me" goes (unset: no test sends).
+   */
+  CAMPAIGN_DAILY_CAP?: string;
+  ADMIN_EMAIL?: string;
 }
 
 /** Whether SESSION_SECRET is set and long enough to sign with. */

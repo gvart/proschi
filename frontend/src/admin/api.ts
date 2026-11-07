@@ -377,3 +377,79 @@ export const listEvents = (params: { kind: string; level: string; before?: numbe
   );
 
 export const listAudit = (before?: number) => api<{ entries: AuditEntry[]; next: number | null }>(`/api/admin/audit${before ? `?before=${before}` : ''}`);
+
+// --- Campaigns (backend/src/campaigns.ts) ----------------------------------
+
+export type Audience =
+  | { type: 'all' }
+  | { type: 'plan'; plan: 'free' | 'pro' | 'max' }
+  | { type: 'active'; days: number }
+  | { type: 'signup'; after?: string; before?: string }
+  | { type: 'user'; id: string };
+
+/** What the composer sends: `credits` 0 for none. */
+export interface CampaignDraft {
+  audience: Audience;
+  credits: number;
+  email: boolean;
+  inapp: boolean;
+  subject: string;
+  body: string;
+  linkUrl: string;
+  linkLabel: string;
+}
+
+export type CampaignStatus = 'draft' | 'sending' | 'done' | 'cancelled';
+
+export interface CampaignStats {
+  recipients: number;
+  pending: number;
+  granted: number;
+  sent: number;
+  failed: number;
+  skippedOptout: number;
+  skippedUnconfirmed: number;
+  shown: number;
+  dismissed: number;
+  clicked: number;
+  unsubscribes: number;
+}
+
+export interface Campaign {
+  id: string;
+  status: CampaignStatus;
+  audience: Audience;
+  credits: number;
+  email: boolean;
+  inapp: boolean;
+  subject: string;
+  body: string;
+  link: { url: string; label: string } | null;
+  reason: string | null;
+  createdAt: number;
+  updatedAt: number;
+  startedAt: number | null;
+  finishedAt: number | null;
+  stats: CampaignStats;
+}
+
+export interface AudienceCount {
+  accounts: number;
+  emails: number;
+  optedOut: number;
+  unconfirmed: number;
+}
+
+const campaigns = '/api/admin/campaigns';
+const campaign = (id: string) => `${campaigns}/${encodeURIComponent(id)}`;
+
+export const listCampaigns = () => api<{ campaigns: Campaign[]; dailyCap: number; sentToday: number; testAddress: string | null; emailConfigured: boolean }>(campaigns);
+export const getCampaign = (id: string) => api<Campaign>(campaign(id));
+export const createCampaign = (draft: CampaignDraft) => api<Omit<Campaign, 'stats'>>(campaigns, { method: 'POST', body: draft });
+export const updateCampaign = (id: string, draft: CampaignDraft) => api<Omit<Campaign, 'stats'>>(campaign(id), { method: 'PUT', body: draft });
+export const countAudience = (audience: Audience) => api<AudienceCount>(`${campaigns}/audience`, { method: 'POST', body: { audience } });
+export const previewCampaign = (draft: CampaignDraft) => api<{ subject: string; html: string; text: string }>(`${campaigns}/preview`, { method: 'POST', body: draft });
+export const testCampaign = (draft: CampaignDraft) => api<{ sent: boolean; to: string }>(`${campaigns}/test`, { method: 'POST', body: draft });
+export const sendCampaign = (id: string, reason: string) => api<Omit<Campaign, 'stats'>>(`${campaign(id)}/send`, { method: 'POST', body: { reason } });
+export const cancelCampaign = (id: string, reason: string) => api<Omit<Campaign, 'stats'>>(`${campaign(id)}/cancel`, { method: 'POST', body: { reason } });
+export const resumeCampaign = (id: string, reason: string) => api<Omit<Campaign, 'stats'>>(`${campaign(id)}/resume`, { method: 'POST', body: { reason } });

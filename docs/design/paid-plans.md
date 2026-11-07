@@ -237,3 +237,15 @@ id; don't rewrite old ones.
   credits are unspent, never below 0. A new subscription (from free) still
   gets its plan's full allowance; a downgrade still keeps the base. So Max
   for a minute, paid at Pro's price, gains nothing.
+- **P36. Campaigns: gifts and product news.** No automatic grant at launch:
+  existing accounts get credits only through an admin campaign
+  (`src/campaigns.ts`), as top-up `admin_grant` rows with ref
+  `campaign:<id>:<user>`, once per account. Product news email goes to the
+  confirmed email sign-in address or the verified GitHub/Google address
+  (`contact_emails`, saved at each OAuth sign-in from now on; never a sign-in
+  identity), never to the reminders' address (given for reminders only),
+  and never after an opt-out (Settings, or the one-click link in every such
+  email). Transactional email is not affected. A campaign can also show one
+  dismissible announcement in the app. Sending needs a reason; a campaign
+  never grants or emails anyone twice (a recipient row per account, an email
+  marked before it goes out); at most `CAMPAIGN_DAILY_CAP` emails a day.

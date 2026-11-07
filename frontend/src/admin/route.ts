@@ -3,6 +3,7 @@
 export const GROUPS = [
   { label: 'Overview', items: [{ id: 'overview', label: 'Overview', description: 'Growth, revenue and AI at a glance, and what needs attention.' }] },
   { label: 'People', items: [{ id: 'users', label: 'Users', description: 'Search accounts, open one, and moderate it.' }] },
+  { label: 'Outreach', items: [{ id: 'campaigns', label: 'Campaigns', description: 'Give credits, email product news and show announcements in the app.' }] },
   { label: 'Revenue', items: [{ id: 'billing', label: 'Billing', description: 'Pro accounts, pack orders and refunds. Amounts live in Polar.' }] },
   { label: 'AI', items: [{ id: 'ai', label: 'AI usage', description: 'Interviews, reviews and what they cost over the last 30 days.' }] },
   { label: 'Content', items: [{ id: 'links', label: 'Links', description: 'Short links and live share links: the user content other people see.' }] },

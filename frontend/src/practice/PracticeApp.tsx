@@ -19,6 +19,7 @@ import { useAccount } from './useAccount';
 import { summarize, useActivity } from './activity';
 import { StreakChip } from './Streak';
 import AccountMenu from './AccountMenu';
+import Announcement from '../announcements/Announcement';
 import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
 import HelpMenu from '../onboarding/HelpMenu';
@@ -276,6 +277,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         )}
         {hubTab ? (
           <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' ? undefined : streak}>
+            {signedIn && <Announcement />}
             {hubTab === 'problems' ? (
               <ProblemList
                 problems={problems}
