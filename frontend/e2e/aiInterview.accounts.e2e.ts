@@ -23,8 +23,11 @@ test.describe('AI interviewer', () => {
     const start = page.getByRole('region', { name: 'Interview mode' });
     await expect(start.getByRole('radio', { name: /On your own \(free\)/ })).toHaveAttribute('aria-checked', 'true');
     await start.getByRole('radio', { name: /Mock interview/ }).click();
-    await expect(start.getByTestId('ai-credits')).toHaveText('1 mock interview left');
-    await expect(start.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
+    // The estimate for the chosen length, against the balance.
+    await expect(start.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min; you have 100.');
+    await start.getByRole('radio', { name: '30 min' }).click();
+    await expect(start.getByTestId('ai-credits')).toContainText('about 30–40 credits for 30 min; you have 100.');
+    await start.getByRole('radio', { name: '45 min' }).click();
     await start.getByRole('button', { name: 'Start a mock interview' }).click();
 
     // The one-time consent names what goes to the AI provider.
@@ -96,7 +99,7 @@ test.describe('AI interviewer', () => {
   for (const choice of ['resume', 'replace'] as const) {
     test(`an interview already open: ${choice === 'resume' ? 'Resume it (the default)' : 'End it and start a new one'}`, async ({ page, errors }) => {
       await mockSignedIn(page);
-      const mock = await mockInterviews(page, { replies: [], credits: 2, open: 'Welcome back: where were we on the read path?' });
+      const mock = await mockInterviews(page, { replies: [], credits: 120, open: 'Welcome back: where were we on the read path?' });
       await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
       await page.goto('practice/#/url-shortener');
       await page.getByRole('button', { name: 'Interview mode' }).click();
@@ -107,7 +110,7 @@ test.describe('AI interviewer', () => {
       const open = page.getByRole('region', { name: 'Mock interview in progress' });
       await expect(open.getByRole('heading', { name: 'You have a mock interview in progress' })).toBeVisible();
       await expect(open.getByRole('button', { name: 'Resume it' })).toBeFocused();
-      await expect(open.getByText(/credit is not returned/)).toBeVisible();
+      await expect(open.getByText(/credits the old interview used are not returned/)).toBeVisible();
       const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
       if (choice === 'resume') {
         await open.getByRole('button', { name: 'Resume it' }).click();
@@ -124,15 +127,54 @@ test.describe('AI interviewer', () => {
     });
   }
 
-  test('the scripted mode still starts by default, and no credits disables the AI start', async ({ page }) => {
+  test('a start refused for want of credits (402 no_credits) says what it needs', async ({ page, errors }) => {
     await mockSignedIn(page);
-    await mockInterviews(page, { replies: [], credits: 0 });
+    await mockInterviews(page, { replies: [], credits: 50, needed: 70 });
+    await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
     await page.goto('practice/#/url-shortener');
     await page.getByRole('button', { name: 'Interview mode' }).click();
     const start = page.getByRole('region', { name: 'Interview mode' });
     await start.getByRole('radio', { name: /Mock interview/ }).click();
-    await expect(start.getByTestId('ai-credits')).toHaveText('0 mock interviews left');
+    await start.getByRole('button', { name: 'Start a mock interview' }).click();
+    await expect(start.getByTestId('ai-credits')).toContainText('You have 50 credits. A 45-minute mock interview takes at least 70.');
     await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeDisabled();
+    // The 402 is expected; Chromium logs every non-2xx load.
+    for (let i = errors.length - 1; i >= 0; i--) if (/status of 402/.test(errors[i])) errors.splice(i, 1);
+  });
+
+  test('out of credits mid-interview: a calm note, the wrap-up and the verdict', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [{ text: 'Let us wrap up: summarise your design.', phase: 'wrapup' }], runsOutAfter: 1 });
+    await page.addInitScript(() => localStorage.setItem('proschi.aiInterview.consent', 'true'));
+    await page.goto('practice/#/url-shortener');
+    await page.getByRole('button', { name: 'Interview mode' }).click();
+    const start = page.getByRole('region', { name: 'Interview mode' });
+    await start.getByRole('radio', { name: /Mock interview/ }).click();
+    await start.getByRole('button', { name: 'Start a mock interview' }).click();
+    const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
+    await expect(chat.getByTestId('out-of-credits')).toHaveCount(0);
+    await chat.getByRole('textbox', { name: 'Your answer' }).fill('How many links a month?');
+    await chat.getByRole('button', { name: 'Send', exact: true }).click();
+    await expect(chat.getByTestId('out-of-credits')).toHaveText(/out of credits, so the interviewer is wrapping up\. Your verdict is already paid for/);
+    await expect(chat.locator('[aria-current="step"]')).toHaveText('4. Wrap-up');
+    await expect(page.getByTestId('credits-chip')).toHaveAttribute('data-low', 'true');
+    page.once('dialog', (d) => void d.accept());
+    await chat.getByRole('button', { name: 'Finish and get the verdict' }).click();
+    await expect(page.getByRole('region', { name: 'Interview verdict' }).getByTestId('verdict-result')).toHaveText('Pass');
+  });
+
+  test('the scripted mode still starts by default, and too few credits offers a top-up instead of the AI start', async ({ page, errors }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [], credits: 12 });
+    await page.goto('practice/#/url-shortener');
+    await page.getByRole('button', { name: 'Interview mode' }).click();
+    const start = page.getByRole('region', { name: 'Interview mode' });
+    await start.getByRole('radio', { name: /Mock interview/ }).click();
+    await expect(start.getByTestId('ai-credits')).toContainText('You have 12 credits. A 45-minute mock interview takes about 45–60.');
+    await expect(start.getByRole('button', { name: 'Buy 1,000 credits, €12' })).toBeVisible();
+    await expect(start.getByTestId('ai-upgrade')).toHaveAttribute('href', '../pricing/');
+    await expect(start.getByRole('button', { name: 'Start a mock interview' })).toBeDisabled();
+    expect(errors).toEqual([]);
     await start.getByRole('radio', { name: /On your own \(free\)/ }).click();
     await start.getByRole('button', { name: 'Start the interview' }).click();
     await expect(start.getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();

@@ -1,46 +1,43 @@
 import type { Page } from '@playwright/test';
-import { featuresFor, mockSignedIn } from './accounts';
+import { mockSignedIn, planAnswer } from './accounts';
 import { codeEditor, expect, test } from './fixtures';
 
 /**
- * Pro and packs (backend/src/billing.ts) in the build with accounts and
- * billing (`npm run build:accounts` sets VITE_BILLING=true). The API and
- * Polar's hosted checkout and portal are mocked: Polar's pages are stand-ins
- * on this origin, so no request leaves the machine.
+ * Plans and credits (backend/src/billing.ts, docs/design/paid-plans.md P26)
+ * in the build with accounts and billing (`npm run build:accounts` sets
+ * VITE_BILLING=true). The API and Polar's hosted checkout and portal are
+ * mocked: Polar's pages are stand-ins on this origin, so no request leaves
+ * the machine.
  */
 
 type Plan = Record<string, unknown>;
 
-const FREE_PLAN: Plan = {
-  plan: 'free',
-  billing: true,
-  subscription: null,
-  customer: false,
-  limits: { documents: 5, versionsPerDocument: 20, documentBytes: 65536, interviewsPerMonth: 0 },
-  credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' },
-  features: featuresFor('free'),
-};
+const FREE_PLAN: Plan = planAnswer('free');
+const PRO_PLAN: Plan = planAnswer('pro', { balance: 652, monthly: { allowance: 800, left: 612, resetsAt: Date.parse('2026-12-01T00:00:00Z') }, signup: 40, topup: 0 });
+const MAX_PLAN: Plan = { ...planAnswer('max'), subscription: { status: 'active', product: 'pro_yearly', currentPeriodEnd: Date.parse('2027-11-06T00:00:00Z'), cancelAtPeriodEnd: false } };
+const MAX_PLAN_NOW: Plan = planAnswer('max');
 
-const PRO_PLAN: Plan = {
-  plan: 'pro',
-  billing: true,
-  subscription: { status: 'active', product: 'pro_yearly', currentPeriodEnd: Date.parse('2027-11-06T00:00:00Z'), cancelAtPeriodEnd: false },
-  customer: true,
-  limits: { documents: null, versionsPerDocument: null, documentBytes: 524288, interviewsPerMonth: 4 },
-  credits: { total: 5, monthly: 4, trial: 1, pack: 0, period: '2026-11' },
-  features: featuresFor('pro'),
+const USAGE = {
+  items: [
+    { at: Date.parse('2026-11-06T14:05:00Z'), action: 'verdict', ref: 'iv-2', credits: 31.25, deep: true },
+    { at: Date.parse('2026-11-06T13:20:00Z'), action: 'mock_interview', ref: 'iv-2', credits: 41.5, deep: false },
+    { at: Date.parse('2026-11-05T09:12:00Z'), action: 'design_partner', ref: 'ps-1', credits: 8.4, deep: false },
+    { at: Date.parse('2026-11-05T09:13:00Z'), action: 'next_steps', ref: 'iv-1', credits: 0.6, deep: false },
+  ],
 };
 
 /** The billing API on top of mockSignedIn, with `plan()` as GET /api/me/plan; returns what was POSTed. */
-async function mockBilling(page: Page, plan: () => Plan) {
+async function mockBilling(page: Page, plan: () => Plan, usage: unknown = { items: [] }) {
   const posts: { path: string; body: unknown }[] = [];
   await mockSignedIn(page);
-  await page.route(/\/api\/(me\/plan|billing\/[a-z]+)$/, (route) => {
+  await page.route(/\/api\/credits\/usage/, (route) => route.fulfill({ json: usage }));
+  await page.route(/\/api\/(me\/plan|billing\/[a-z-]+)$/, (route) => {
     const request = route.request();
     const path = new URL(request.url()).pathname;
     if (request.method() === 'GET') return route.fulfill({ json: plan() });
     posts.push({ path, body: request.postDataJSON() as unknown });
     const here = new URL(request.url()).origin;
+    if (path.endsWith('/change-plan')) return route.fulfill({ json: { ok: true, plan: 'max', effective: 'now' } });
     if (path.endsWith('/checkout')) return route.fulfill({ json: { url: `${here}/polar/checkout/abc` } });
     return route.fulfill({ json: { url: `${here}/polar/portal/xyz` } });
   });
@@ -51,60 +48,131 @@ async function mockBilling(page: Page, plan: () => Plan) {
   return posts;
 }
 
-test('upgrade: pricing, Polar checkout, back to Plan & billing on Pro', async ({ page }) => {
-  let current = FREE_PLAN;
-  const posts = await mockBilling(page, () => current);
+test('pricing: three plans, monthly or yearly, what credits buy, and a checkout per product', async ({ page }) => {
+  const posts = await mockBilling(page, () => FREE_PLAN);
   await page.goto('pricing/');
-  await expect(page.getByRole('heading', { name: 'Free to design. Pro to go further.' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Free to design. Credits for the coaching.' })).toBeVisible();
+  const pro = page.getByRole('region', { name: 'Pro' });
+  const max = page.getByRole('region', { name: 'Max' });
+  await expect(page.getByRole('region', { name: 'Free' })).toContainText('100creditsonce, at sign-up');
+  await expect(page.getByRole('region', { name: 'Free' })).toContainText('Your plan');
+  await expect(pro).toContainText('Recommended');
+  await expect(max).toContainText('Most credits');
+  await expect(pro).toContainText('800creditsevery month');
+  await expect(max).toContainText('2,200creditsevery month');
+
   await expect(page.getByRole('radio', { name: /Yearly/ })).toHaveAttribute('aria-checked', 'true');
-  await expect(page.getByText('€89', { exact: true })).toBeVisible();
+  await expect(pro.getByText('€99', { exact: true })).toBeVisible();
+  await expect(pro).toContainText('€8.25 a month, billed yearly, save 31%');
+  await expect(max.getByText('€249', { exact: true })).toBeVisible();
   await page.getByRole('radio', { name: 'Monthly' }).click();
-  await expect(page.getByText('€12', { exact: true })).toBeVisible();
-  await page.getByRole('radio', { name: /Yearly/ }).click();
+  await expect(pro.getByText('€12', { exact: true })).toBeVisible();
+  await expect(max.getByText('€29', { exact: true })).toBeVisible();
 
-  await page.getByRole('button', { name: 'Upgrade to Pro, €89 a year' }).click();
+  const costs = page.getByRole('region', { name: 'What credits buy' });
+  await expect(costs).toContainText('Mock interview');
+  await expect(costs).toContainText('45–60');
+  await expect(costs).toContainText('Design partner review');
+  await expect(costs).toContainText('5–15');
+  await expect(costs).toContainText('20–40');
+  await expect(page.getByTestId('pricing-balance')).toHaveText('You have 100 credits.');
+
+  await max.getByRole('button', { name: 'Get Max, €29 a month' }).click();
   await expect(page.getByRole('heading', { name: 'Polar checkout' })).toBeVisible();
-  expect(posts).toEqual([{ path: '/api/billing/checkout', body: { product: 'pro_yearly' } }]);
+  await page.goBack();
+  await page.getByRole('radio', { name: /Yearly/ }).click();
+  await page.getByRole('region', { name: 'Pro' }).getByRole('button', { name: 'Get Pro, €99 a year' }).click();
+  await expect(page.getByRole('heading', { name: 'Polar checkout' })).toBeVisible();
+  await page.goBack();
+  await page.getByRole('region', { name: /Top-up/ }).getByRole('button', { name: 'Buy 1,000 credits, €12' }).click();
+  await expect(page.getByRole('heading', { name: 'Polar checkout' })).toBeVisible();
+  expect(posts.map((p) => p.body)).toEqual([{ product: 'max_monthly' }, { product: 'pro_yearly' }, { product: 'credits_1000' }]);
+});
 
-  // Polar sends the browser back once paid; the webhook has made the account Pro.
-  current = PRO_PLAN;
-  await page.goto('practice/?checkout=done&product=pro_yearly&checkout_id=chk_1#/me');
+test('pricing: on Pro, Max is a switch of the subscription, after a confirm', async ({ page }) => {
+  const posts = await mockBilling(page, () => PRO_PLAN);
+  await page.goto('pricing/');
+  const pro = page.getByRole('region', { name: 'Pro' });
+  await expect(pro).toContainText('You are on Pro.');
+  await expect(pro.getByRole('button', { name: 'Manage in Polar' })).toBeVisible();
+  let asked = '';
+  page.once('dialog', (d) => {
+    asked = d.message();
+    void d.dismiss();
+  });
+  await page.getByRole('region', { name: 'Max' }).getByRole('button', { name: 'Upgrade to Max, €249 a year' }).click();
+  expect(asked).toBe('Switch to Max yearly, €249 a year? Polar charges the difference for the rest of this period.');
+  expect(posts).toEqual([]);
+  page.once('dialog', (d) => void d.accept());
+  await page.getByRole('region', { name: 'Max' }).getByRole('button', { name: 'Upgrade to Max, €249 a year' }).click();
+  // Back on Settings as from a checkout, waiting for the webhook.
+  await expect(page).toHaveURL(/practice\/\?checkout=done&product=max_yearly#\/me$/);
+  expect(posts).toEqual([{ path: '/api/billing/change-plan', body: { product: 'max_yearly' } }]);
+});
+
+test('pricing: signed out, the buttons sign in first', async ({ page }) => {
+  await mockBilling(page, () => FREE_PLAN);
+  await page.route(/\/api\/me$/, (route) => route.fulfill({ status: 401, json: { error: 'Not signed in' } }));
+  await page.goto('pricing/');
+  await expect(page.getByRole('region', { name: 'Pro' }).getByRole('button', { name: 'Sign in with GitHub to get Pro' })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Max' }).getByRole('button', { name: 'Sign in with Google to get Max' })).toBeVisible();
+  await expect(page.getByRole('region', { name: /Top-up/ }).getByRole('button', { name: 'Sign in with Google to buy' })).toBeVisible();
+  await expect(page.getByTestId('credits-chip')).toHaveCount(0);
+});
+
+test('header: the credits chip links to Plan & billing and turns orange when low; the plan badge', async ({ page }) => {
+  let current = PRO_PLAN;
+  await mockBilling(page, () => current);
+  await page.goto('pricing/');
+  const chip = page.getByTestId('credits-chip');
+  await expect(chip).toContainText('652');
+  await expect(chip).toHaveAttribute('href', '../practice/#/me');
+  await expect(chip).not.toHaveAttribute('data-low');
+  await expect(page.getByTestId('plan-badge')).toHaveText('Pro');
+
+  current = { ...MAX_PLAN_NOW, credits: { balance: 150, monthly: { allowance: 2200, left: 150, resetsAt: 0 }, signup: 0, topup: 0 } };
+  await page.reload();
+  await expect(chip).toContainText('150');
+  await expect(chip).toHaveAttribute('data-low', 'true');
+  await expect(chip).toHaveAccessibleName('150 credits left, running low. Plan and billing');
+  await expect(page.getByTestId('plan-badge')).toHaveText('Max');
+});
+
+test('settings: plan, monthly credits with the reset date, the balances, top-up and the usage list', async ({ page }) => {
+  const posts = await mockBilling(page, () => PRO_PLAN, USAGE);
+  await page.goto('practice/#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
-  // The welcome shows at the top of the page, above the sections, in view.
-  const welcome = page.getByRole('region', { name: 'Welcome to Pro' });
-  await expect(welcome).toContainText("You're on Pro: 4 mock interviews this month.");
-  await expect(welcome).toBeInViewport();
-  expect((await welcome.boundingBox())!.y).toBeLessThan((await billing.boundingBox())!.y);
-  await expect(billing.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
   await expect(billing).toContainText('Pro yearly, renews on 6 November 2027.');
-  await expect(billing.getByTestId('credits')).toHaveText('4 of 4 this month, 1 free one.');
-  await expect(page).not.toHaveURL(/checkout=done/);
-  await expect(billing.getByRole('link', { name: 'Upgrade to Pro' })).toHaveCount(0);
+  await expect(billing.getByRole('meter', { name: 'Monthly credits left' })).toHaveAttribute('aria-valuenow', '612');
+  await expect(billing.getByRole('meter', { name: 'Monthly credits left' })).toHaveAttribute('aria-valuemax', '800');
+  await expect(billing.getByTestId('credits')).toContainText('This month612 of 800resets on 1 December');
+  await expect(billing.getByTestId('credits')).toContainText('Sign-up40of 100, never expire');
+  const usage = billing.getByRole('table', { name: 'Credits spent, newest first' });
+  await expect(usage.getByRole('row')).toHaveCount(5);
+  await expect(usage.getByRole('row').nth(1)).toContainText('VerdictDeep31');
+  await expect(usage.getByRole('row').nth(2)).toContainText('Mock interview42');
+  await expect(usage.getByRole('row').nth(3)).toContainText('Design partner8.4');
+  await expect(usage.getByRole('row').nth(4)).toContainText('Your next steps0.6');
 
-  await billing.getByRole('button', { name: 'Manage billing and invoices' }).click();
+  await billing.getByRole('button', { name: 'Buy 1,000 credits, €12' }).click();
+  await expect(page.getByRole('heading', { name: 'Polar checkout' })).toBeVisible();
+  expect(posts).toEqual([{ path: '/api/billing/checkout', body: { product: 'credits_1000' } }]);
+  await page.goBack();
+  await billing.getByRole('button', { name: 'Manage in Polar' }).click();
   await expect(page.getByRole('heading', { name: 'Polar portal' })).toBeVisible();
   expect(posts.at(-1)).toEqual({ path: '/api/billing/portal', body: null });
 });
 
-test('pricing: signed out, the buttons sign in first; a pack can be bought from the account page', async ({ page }) => {
-  const posts = await mockBilling(page, () => FREE_PLAN);
-  // Signed out: /api/me answers 401.
-  await page.route(/\/api\/me$/, (route) => route.fulfill({ status: 401, json: { error: 'Not signed in' } }));
-  await page.goto('pricing/');
-  await expect(page.getByRole('button', { name: 'Sign in with GitHub to upgrade' })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Sign in with Google to buy' })).toBeVisible();
-  await page.unroute(/\/api\/me$/);
-
+test('settings: on Free, the sign-up credits and the way to the plans; nothing spent yet', async ({ page }) => {
+  await mockBilling(page, () => FREE_PLAN);
   await page.goto('practice/#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
-  await expect(billing).toContainText('Pro adds unlimited diagrams and 4 mock interviews a month.');
+  await expect(billing).toContainText('Pro adds 800 credits a month and unlimited diagrams; Max 2,200 and Deep mode.');
+  await expect(billing.getByRole('meter', { name: 'Sign-up credits left' })).toHaveAttribute('aria-valuemax', '100');
   await expect(billing.getByRole('meter', { name: 'Diagrams in your account' })).toHaveAttribute('aria-valuemax', '5');
-  await expect(billing).toContainText('Up to 20 versions of each.');
-  await expect(billing.getByRole('link', { name: 'Upgrade to Pro' })).toHaveAttribute('href', '../pricing/');
-  await expect(billing.getByRole('button', { name: 'Manage billing and invoices' })).toHaveCount(0);
-  await billing.getByRole('button', { name: 'Buy 5 mock interviews, €15' }).click();
-  await expect(page.getByRole('heading', { name: 'Polar checkout' })).toBeVisible();
-  expect(posts).toEqual([{ path: '/api/billing/checkout', body: { product: 'pack_5' } }]);
+  await expect(billing).toContainText('Nothing spent yet.');
+  await expect(billing.getByRole('link', { name: 'See plans' })).toHaveAttribute('href', '../pricing/');
+  await expect(billing.getByRole('button', { name: 'Manage in Polar' })).toHaveCount(0);
 });
 
 test('the editor offers Pro where the account is full', async ({ page }) => {
@@ -129,33 +197,53 @@ test('checkout return: activating, then Pro when the webhook lands after two ask
   let current = FREE_PLAN;
   await mockBilling(page, () => current);
   await page.clock.install();
-  await page.goto('practice/?checkout=done&product=pro_monthly&checkout_id=chk_2#/me');
+  await page.goto('practice/?checkout=done&product=pro_yearly&checkout_id=chk_2#/me');
   const billing = page.getByRole('region', { name: 'Plan & billing' });
   await expect(banner(page)).toHaveText('Payment received. Activating Pro…');
   await expect(banner(page)).toHaveAttribute('role', 'status');
-  await expect(page.getByTestId('pro-badge')).toHaveCount(0);
+  await expect(page.getByTestId('plan-badge')).toHaveCount(0);
   // The asks at 1 and 2 s still find the free plan; the webhook lands before the one at 4 s.
   await page.clock.runFor(2500);
   await expect(banner(page)).toHaveText('Payment received. Activating Pro…');
-  await expect(page).toHaveURL(/checkout=done&product=pro_monthly/);
+  await expect(page).toHaveURL(/checkout=done&product=pro_yearly/);
   current = PRO_PLAN;
   await page.clock.runFor(2000);
   const welcome = page.getByRole('region', { name: 'Welcome to Pro' });
-  await expect(welcome).toContainText("You're on Pro: 4 mock interviews this month.");
+  await expect(welcome).toContainText("You're on Pro: 800 credits a month, starting now.");
+  await expect(welcome).toBeInViewport();
+  expect((await welcome.boundingBox())!.y).toBeLessThan((await billing.boundingBox())!.y);
   await expect(welcome.getByRole('link', { name: 'Start a mock interview' })).toHaveAttribute('href', '#/url-shortener?interview=mock');
-  await expect(welcome.getByRole('link', { name: 'Review a design' })).toHaveAttribute('href', '../app/');
+  await expect(welcome.getByRole('link', { name: 'Ask Design partner' })).toHaveAttribute('href', '../app/');
   await expect(welcome.getByRole('link', { name: 'See your roadmap' })).toHaveAttribute('href', '#/roadmap');
   // The rest of the page and the header read the new plan; the address forgets the checkout.
   await expect(billing).toContainText('Pro yearly, renews on 6 November 2027.');
-  await expect(page.getByTestId('pro-badge')).toHaveText('Pro');
+  await expect(page.getByTestId('plan-badge')).toHaveText('Pro');
   await expect(page).not.toHaveURL(/checkout|product/);
   await welcome.getByRole('button', { name: 'Dismiss the welcome' }).click();
   await expect(welcome).toHaveCount(0);
 
   // The same checkout again: its welcome was shown, so the banner alone.
-  await page.goto('practice/?checkout=done&product=pro_monthly&checkout_id=chk_2#/me');
-  await expect(banner(page)).toHaveText("You're on Pro: 4 mock interviews this month.");
+  await page.goto('practice/?checkout=done&product=pro_yearly&checkout_id=chk_2#/me');
+  await expect(banner(page)).toHaveText("You're on Pro: 800 credits a month, starting now.");
   await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
+});
+
+test('checkout return: an upgrade to Max waits for the subscription to change, then welcomes Max', async ({ page }) => {
+  let current = PRO_PLAN;
+  await mockBilling(page, () => current);
+  await page.clock.install();
+  await page.goto('practice/?checkout=done&product=max_yearly#/me');
+  await expect(banner(page)).toHaveText('Payment received. Activating Max…');
+  await page.clock.runFor(1500);
+  // Max, but the subscription still has the Pro product: not yet.
+  current = MAX_PLAN;
+  await page.clock.runFor(1000);
+  await expect(banner(page)).toHaveText('Payment received. Activating Max…');
+  current = MAX_PLAN_NOW;
+  await page.clock.runFor(2000);
+  const welcome = page.getByRole('region', { name: 'Welcome to Max' });
+  await expect(welcome).toContainText("You're on Max: 2,200 credits a month, Deep mode and printable interview reports.");
+  await expect(page.getByTestId('plan-badge')).toHaveText('Max');
 });
 
 test('checkout return: slow after a minute without the webhook, and Check again', async ({ page }) => {
@@ -177,23 +265,24 @@ test('checkout return: slow after a minute without the webhook, and Check again'
   await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toBeVisible();
 });
 
-test('checkout return: a pack shows the interviews added, without the welcome; no parameters, no banner', async ({ page }) => {
+test('checkout return: a top-up shows the credits added; no parameters, no banner', async ({ page }) => {
   let current = FREE_PLAN;
   await mockBilling(page, () => current);
   await page.clock.install();
-  await page.goto('practice/?checkout=done&product=pack_5&checkout_id=chk_4#/me');
-  await expect(banner(page)).toHaveText('Payment received. Adding 5 mock interviews…');
+  await page.goto('practice/?checkout=done&product=credits_1000&checkout_id=chk_4#/me');
+  await expect(banner(page)).toHaveText('Payment received. Adding 1,000 credits…');
   await page.clock.runFor(1500);
-  current = { ...FREE_PLAN, customer: true, credits: { total: 6, monthly: 0, trial: 1, pack: 5, period: '2026-11' } };
+  current = { ...FREE_PLAN, customer: true, credits: { balance: 1100, monthly: null, signup: 100, topup: 1000 } };
   await page.clock.runFor(1000);
-  await expect(banner(page)).toHaveText('5 mock interviews added.');
-  await expect(page.getByTestId('credits')).toHaveText('1 free one, 5 from packs.');
-  await expect(page.getByRole('region', { name: 'Welcome to Pro' })).toHaveCount(0);
-  await expect(page.getByTestId('pro-badge')).toHaveCount(0);
+  const welcome = page.getByRole('region', { name: 'Credits added' });
+  await expect(welcome).toContainText('1,000 credits added. They never expire.');
+  await expect(page.getByTestId('credits')).toContainText('Top-ups1,000never expire');
+  await expect(page.getByTestId('credits-chip')).toContainText('1,100');
+  await expect(page.getByTestId('plan-badge')).toHaveCount(0);
   await expect(page).not.toHaveURL(/checkout|product/);
 
   // A reload (the address without the parameters, as after Polar's back button to the pricing page) shows no banner.
   await page.reload();
-  await expect(page.getByRole('region', { name: 'Plan & billing' })).toContainText('Mock interviews left');
+  await expect(page.getByRole('region', { name: 'Plan & billing' })).toContainText('Credits left');
   await expect(banner(page)).toHaveCount(0);
 });
