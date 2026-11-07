@@ -1,16 +1,13 @@
 import { useEffect, useRef, type ReactNode } from 'react';
-import { CalendarCheck, Flame, LogIn, Snowflake, X } from 'lucide-react';
+import { CalendarCheck, Flame, Snowflake, X } from 'lucide-react';
 import { GOAL_CHOICES, type DailyGoal, type Streak, type WeeklyRecap } from '../learn/streak';
 import { celebrate } from '../design/celebrate';
 import { announceCelebration } from './celebrating';
-import { eyebrow, primaryButton, toolButton } from '../components/Playground/ui';
-import { PROVIDER_LABEL } from './account';
-import type { Account } from './useAccount';
+import { eyebrow, toolButton } from '../components/Playground/ui';
 
 /**
  * The daily goal and streak on the page (src/learn/streak.ts): the streak
- * widget, the goal picker, the weekly recap and the sign-in invitation shown
- * instead of a streak when signed out.
+ * widget, the goal picker and the weekly recap.
  */
 
 const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
@@ -114,26 +111,6 @@ export function GoalChoices({ goal, onPick, labelledBy }: { goal: DailyGoal; onP
           </button>
         );
       })}
-    </div>
-  );
-}
-
-/** Signed out with accounts on: what a streak needs, and the way in. */
-export function StreakInvite({ account, compact = false }: { account: Account; compact?: boolean }) {
-  const providers = account.state.status === 'signed-out' ? account.state.providers : [];
-  return (
-    <div role="group" aria-label="Daily streak" className="inline-flex max-w-full flex-wrap items-center gap-x-3 gap-y-2 rounded-brutal border-bw-2 border-dashed border-ink/60 bg-surface px-3 py-2">
-      <Flame size={20} className="shrink-0 text-muted" aria-hidden="true" />
-      <p className="min-w-0 flex-1 text-sm text-ink">
-        <strong>Keep a daily streak.</strong>
-        {!compact && ' Sign in to set a daily goal, count your streak and keep it on every device.'}
-      </p>
-      {providers.slice(0, 1).map((p) => (
-        <button key={p} type="button" onClick={() => account.signIn(p)} className={`min-h-[40px] ${primaryButton}`}>
-          <LogIn size={14} aria-hidden="true" />
-          {providers.length > 1 ? 'Sign in' : `Sign in with ${PROVIDER_LABEL[p]}`}
-        </button>
-      ))}
     </div>
   );
 }

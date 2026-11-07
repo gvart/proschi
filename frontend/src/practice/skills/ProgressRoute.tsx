@@ -48,6 +48,7 @@ const preview: ProfileBadge[] = ACHIEVEMENTS.map((a) => ({ ...a, earned: false }
 
 export default function ProgressRoute({
   account,
+  showStreak = false,
   achievements,
   roadmap,
   stages,
@@ -58,6 +59,8 @@ export default function ProgressRoute({
   account: Account;
   /** `#/progress/interview/<id>`: show that AI interview's verdict instead. */
   verdictId?: string;
+  /** The streak section, for those who keep one (hub/goal.ts). */
+  showStreak?: boolean;
   achievements: Achievements;
   activity: Activity;
   /** This browser's progress (merged with the account's when signed in): the problems solved. */
@@ -158,7 +161,7 @@ export default function ProgressRoute({
         </div>
       </section>
 
-      {(streak || challenge) && (
+      {showStreak && (streak || challenge) && (
         <section aria-labelledby="streak-title" className="mt-10">
           <h2 id="streak-title" className="font-display text-2xl font-extrabold text-ink">
             Streak

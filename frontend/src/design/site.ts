@@ -20,7 +20,7 @@ export const CONTRIBUTING_URL = `${GITHUB_URL}/blob/main/CONTRIBUTING.md`;
 export const CONTRIBUTE_PROBLEM_URL = `${CONTRIBUTING_URL}#adding-a-new-problem`;
 /** A new issue from .github/ISSUE_TEMPLATE/problem-idea.md, for an idea without the code. */
 export const SUGGEST_PROBLEM_URL = `${GITHUB_URL}/issues/new?template=problem-idea.md`;
-/** The practice hub: the Today panel and the problem list, with the hub's tabs (src/practice/hub/). */
+/** The practice hub: the problem list, with the hub's sections (src/practice/hub/). */
 export const PRACTICE_HREF = 'practice/';
 /** The interview prep roadmap: a tab of the practice hub (src/practice/roadmap.ts). */
 export const ROADMAP_HREF = 'practice/#/roadmap';

@@ -17,7 +17,7 @@ import { api, ApiError, type Me } from '../services/api';
 import { mergeServerProgress, progressToImport } from './account';
 import { useAccount } from './useAccount';
 import { summarize, useActivity } from './activity';
-import { StreakInvite, StreakWidget } from './Streak';
+import { StreakWidget } from './Streak';
 import AccountMenu from './AccountMenu';
 import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
@@ -29,7 +29,8 @@ import { useAchievements } from './skills/useAchievements';
 import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
-import TodayPanel from './hub/TodayPanel';
+import HomeExtras, { GoalSummary } from './hub/HomeExtras';
+import { useGoal, wantsInterview, wantsStreak } from './hub/goal';
 import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
@@ -82,9 +83,9 @@ const firstGuide = GUIDES[0] && { ...GUIDES[0], minutes: guideMinutes[GUIDES[0].
  * system design game (`#/arcade/daily` on today's daily run), `#/challenge`
  * the daily challenge, `#/progress` progress (level, skills, badges, streak),
  * `#/me` the account and settings page and `#/u/<user id>` a public profile; hash routes work under
- * any sub-path. The list (with the Today panel above it), the roadmap,
- * review, challenge, Arcade and progress pages are the practice hub's tabs
- * (hub/tabs.ts). useHashRoute (hashRoute.ts) reads it, and scrolls to the
+ * any sub-path. The list (with what the visitor's goal adds above it,
+ * hub/HomeExtras.tsx), the roadmap, review, challenge, Arcade and progress
+ * pages are the practice hub's sections (hub/tabs.ts). useHashRoute (hashRoute.ts) reads it, and scrolls to the
  * top on a new address or back to where it was on back/forward.
  */
 
@@ -190,22 +191,29 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   // Read again on each page but a problem's: a solve or a session there changes it.
   const activity = useActivity(account, { key: route, enabled: !problem });
   const ready = activity.state.status === 'ready' ? activity.state : undefined;
-  const streak = ready ? (
-    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} />
-  ) : activity.state.status === 'sign-in' ? (
-    <StreakInvite account={account} compact />
+  // The streak and daily nudges show only to those who want them (a daily habit, or switched on in Settings).
+  const goal = useGoal();
+  const showStreak = wantsStreak(goal);
+  const providers = account.state.status === 'signed-out' ? account.state.providers : [];
+  const streak = !showStreak ? undefined : ready ? (
+    <StreakWidget streak={summarize(ready).streak} goal={ready.goal} compact />
+  ) : activity.state.status === 'sign-in' && providers.length > 0 ? (
+    <p className="text-sm text-muted">
+      <button type="button" onClick={() => account.signIn(providers[0])} className="font-semibold text-ink underline decoration-ink/30 underline-offset-2 hover:decoration-ink">
+        Sign in
+      </button>{' '}
+      to count your streak
+    </p>
   ) : undefined;
-  // The Today panel's: the same, with the sign-in invitation saying what a streak needs.
-  const streakFull = activity.state.status === 'sign-in' ? <StreakInvite account={account} /> : streak;
   const achievements = useAchievements(account.state, progress);
   // The practice hub's tab: the list (also under an unknown problem's address), the roadmap (with its guides), daily review, the challenge, the Arcade or progress.
   const hubTab = onRoadmap || guide || onReview || onChallenge || onArcade || onProgress ? hubTabOf(route) : onProfile ? undefined : 'problems';
-  // "Continue" on the Today panel: the last problem opened here, while unsolved, else the roadmap's next step.
+  // "Continue" on the home: the last problem opened here, while unsolved, else (for interview prep) the roadmap's next step.
   const problemOpen = problem?.id;
   useEffect(() => {
     if (problemOpen) saveLastProblem({ id: problemOpen, roadmap: fromRoadmap });
   }, [problemOpen, fromRoadmap]);
-  const next = hubTab === 'problems' ? continueTarget({ last: loadLastProblem(), progress, known: new Set(problems.map((p) => p.id)), roadmap: roadmapNow, access }) : undefined;
+  const next = hubTab === 'problems' ? continueTarget({ last: loadLastProblem(), progress, known: new Set(problems.map((p) => p.id)), roadmap: roadmapNow, access, roadmapStep: wantsInterview(goal) }) : undefined;
   const { refresh: refreshAchievements } = achievements;
   // A new page checks for new badges (signed in, at most every few seconds).
   useEffect(() => refreshAchievements(), [route, refreshAchievements]);
@@ -267,23 +275,20 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}
         {hubTab ? (
-          <PracticeHub
-            tab={hubTab}
-            onIntent={preloadSection}
-            streak={streak}
-            today={
-              hubTab === 'problems' ? (
-                <TodayPanel account={account} streak={streakFull} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} />
-              ) : undefined
-            }
-          >
+          <PracticeHub tab={hubTab} onIntent={preloadSection} aside={hubTab === 'problems' ? undefined : streak}>
             {hubTab === 'problems' ? (
-              <ProblemList problems={problems} progress={progress} stats={stats}>
+              <ProblemList
+                problems={problems}
+                progress={progress}
+                stats={stats}
+                meta={<GoalSummary goal={goal} />}
+                top={<HomeExtras goal={goal} account={account} next={next} nextTitle={next && problems.find((p) => p.id === next.id)?.title} streak={streak} />}
+              >
                 {leaderboard && <LeaderboardPanel leaderboard={leaderboard} />}
               </ProblemList>
             ) : onProgress ? (
               <Suspense fallback={<PageLoading label="Loading your progress…" />}>
-                <ProgressRoute account={account} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} verdictId={verdictId} />
+                <ProgressRoute account={account} showStreak={showStreak} achievements={achievements} roadmap={roadmapNow} stages={roadmap} activity={activity} progress={progress} verdictId={verdictId} />
               </Suspense>
             ) : onArcade ? (
               <Suspense fallback={<PageLoading label="Loading Scale or Fail…" />}>
