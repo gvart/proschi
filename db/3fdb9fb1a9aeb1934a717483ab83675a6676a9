@@ -1,0 +1,24 @@
+frontend/src/design/components.css
+  s_e17b87e0a1b3ca::t_182f04079e66a8 438-470
+  s_e17b87e0a1b3ca::t_3a430be65678e7 630-633
+frontend/src/practice/AccountMenu.tsx
+  s_e17b87e0a1b3ca::t_182f04079e66a8 125,129
+frontend/src/design/account.ts
+  s_e17b87e0a1b3ca::t_3a430be65678e7 5-6,9-10,15,90-104,151-157
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "db3fdb9fb1a9aeb1934a717483ab83675a6676a9",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
