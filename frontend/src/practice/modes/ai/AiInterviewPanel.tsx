@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Mic, MicOff, Send, Target, X } from 'lucide-react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
+import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Mic, MicOff, Printer, Send, Sparkles, Target, X } from 'lucide-react';
 import { refreshCredits, useCredits } from '../../../services/useCredits';
 import Markdown from '../../Markdown';
 import { useNow } from '../useNow';
@@ -12,6 +12,8 @@ import { PICK_PENDING_MS } from '../../history/api';
 import { useFeature } from '../../../components/featureState';
 import { NoNewPicks, Picking, PickList } from '../../history/NextForYou';
 import { useRoadmapNext } from '../../history/useRoadmapNext';
+
+const InterviewReport = lazy(() => import('./InterviewReport'));
 
 /**
  * Interview mode with the AI interviewer (backend/src/interviews.ts): a chat
@@ -98,7 +100,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
     );
   }
   if (!interview) return <p className="px-4 py-4 text-sm text-muted">Loading the interview…</p>;
-  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={interview.id} endedAt={interview.endedAt} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
+  if (interview.status === 'finished' && interview.verdict) return <VerdictView picksFor={interview.id} endedAt={interview.endedAt} deep={interview.deep} verdict={interview.verdict} onRestart={onRestart} onExit={onExit} />;
 
   const left = interview.minutes * 60_000 - (now - interview.startedAt);
   const timeUp = interview.deadline !== undefined && now >= interview.deadline;
@@ -376,15 +378,39 @@ const problemTitle = (id: string) => listings.find((p) => p.id === id)?.title;
  * what to practise next, with the AI roadmap's picks made after it linked
  * (`picksFor`, the session's id; with the ai_roadmap feature only). In interview mode it
  * ends with Start again and Leave; on the progress page's history without them.
+ * A Deep verdict (Max) says so; with interview_report (Max) the session's
+ * printable report opens from it.
  */
-export function VerdictView({ picksFor, endedAt, verdict, onRestart, onExit }: { picksFor?: string; endedAt?: number; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
+export function VerdictView({ picksFor, endedAt, deep, verdict, onRestart, onExit }: { picksFor?: string; endedAt?: number; deep?: boolean; verdict: Verdict; onRestart?: () => void; onExit?: () => void }) {
   // A verdict that just ended may still be getting its picks: they are asked for again a few times.
   const [wait] = useState(() => endedAt !== undefined && Date.now() - endedAt < PICK_PENDING_MS);
   const roadmap = useFeature('ai_roadmap');
   const picks = useRoadmapNext(roadmap.ok && !!picksFor, { interview: picksFor, wait });
+  const report = useFeature('interview_report');
+  const [printing, setPrinting] = useState(false);
+  const closeReport = useCallback(() => setPrinting(false), []);
   return (
     <section aria-label="Interview verdict" className="px-4 py-4 space-y-4">
-      <h2 className="font-display text-lg font-bold text-ink">Interview verdict</h2>
+      <div className="flex flex-wrap items-center gap-2">
+        <h2 className="font-display text-lg font-bold text-ink">Interview verdict</h2>
+        {deep && (
+          <span data-testid="verdict-deep" className="inline-flex items-center gap-1 rounded-sm border-bw-1 border-ink bg-pop-lilac/30 px-1.5 py-0.5 text-xs font-semibold text-ink">
+            <Sparkles size={12} aria-hidden="true" />
+            Deep verdict
+          </span>
+        )}
+        {report.ok && picksFor && (
+          <button type="button" onClick={() => setPrinting(true)} className={`ml-auto ${toolButton}`} data-testid="verdict-report" title="A printable report of this interview; save it as a PDF from the print dialog">
+            <Printer size={14} aria-hidden="true" />
+            Print report
+          </button>
+        )}
+      </div>
+      {printing && picksFor && (
+        <Suspense fallback={null}>
+          <InterviewReport id={picksFor} onClose={closeReport} />
+        </Suspense>
+      )}
       <p
         data-testid="verdict-result"
         className={`inline-flex items-center gap-2 rounded-sm border-bw-1 border-ink px-3 py-1.5 text-base font-bold ${verdict.passed ? 'bg-pass/20 text-ink' : 'bg-fail/20 text-ink'}`}

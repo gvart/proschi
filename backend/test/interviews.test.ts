@@ -417,3 +417,100 @@ describe('AI interviews', () => {
     expect((await turnOf(token, old, { message: 'x' })).status).toBe(409);
   });
 });
+
+describe('Deep mock interviews and the report (Max, P31)', () => {
+  beforeEach(async () => {
+    await resetDatabase();
+    env.ANTHROPIC_API_KEY = 'sk-test';
+  });
+  afterEach(() => {
+    delete env.ANTHROPIC_API_KEY;
+    vi.restoreAllMocks();
+  });
+
+  async function onPlan(plan: 'pro' | 'max'): Promise<{ id: string; token: string }> {
+    const u = await signedInUser();
+    await env.DB.prepare('UPDATE users SET plan = ? WHERE id = ?').bind(plan, u.id).run();
+    return u;
+  }
+  const deepCharges = async (userId: string) =>
+    (await env.DB.prepare('SELECT action, deep, charged_mc FROM credit_charges WHERE user_id = ? ORDER BY created_at, rowid').bind(userId).all<{ action: string; deep: number; charged_mc: number }>()).results;
+
+  it('refuses deep off Max with 402 plan_required, whatever the client sends', async () => {
+    claude();
+    const pro = await onPlan('pro');
+    const res = await startOne(pro.token, { problem: 'url-shortener', minutes: 45, deep: true });
+    expect(res.status).toBe(402);
+    expect(await res.json()).toMatchObject({ error: 'plan_required', feature: 'deep_mode' });
+    expect((await startOne(pro.token, { problem: 'url-shortener', minutes: 45, deep: 'yes' })).status).toBe(400);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM ai_interviews WHERE user_id = ?').bind(pro.id).first<{ n: number }>()).toEqual({ n: 0 });
+  });
+
+  it('runs a Deep verdict on Opus, holds and settles it Deep at Opus’s price; turns and hints stay on Sonnet and Haiku', async () => {
+    const calls = claude({ verdict: () => messageResponse(JSON.stringify(verdictJson), { model: 'claude-opus-5-5', usage: { input_tokens: 1_000, output_tokens: 500 } }) });
+    const max = await onPlan('max');
+    const res = await startOne(max.token, { problem: 'url-shortener', minutes: 45, deep: true });
+    expect(res.status).toBe(201);
+    const { interview } = (await res.json()) as { interview: { id: string; deep: boolean } };
+    expect(interview.deep).toBe(true);
+    // The Deep verdict's worst case is held from the start: Opus's.
+    const held = await env.DB.prepare('SELECT amount_mc FROM credit_holds WHERE ref = ? ORDER BY created_at LIMIT 1').bind(interview.id).first<{ amount_mc: number }>();
+    expect(held!.amount_mc).toBe(verdictHoldMc(e, true));
+    expect(verdictHoldMc(e, true)).toBeGreaterThan(verdictHoldMc(e));
+
+    await events(await turnOf(max.token, interview.id, { message: 'Hello' }));
+    const finished = await call(`/api/interviews/${interview.id}/finish`, { method: 'POST', token: max.token });
+    expect(finished.status).toBe(200);
+    expect(await finished.json()).toMatchObject({ interview: { status: 'finished', deep: true, verdict: verdictJson } });
+
+    const models = calls.map((c) => ({ model: c.body.model, stream: !!c.body.stream }));
+    expect(models.filter((m) => m.stream).every((m) => m.model === 'claude-sonnet-5-5')).toBe(true);
+    expect(models.some((m) => m.model === HAIKU)).toBe(true);
+    expect(models.filter((m) => m.model === 'claude-opus-5-5')).toEqual([{ model: 'claude-opus-5-5', stream: false }]);
+
+    const all = await deepCharges(max.id);
+    expect(all.find((c) => c.action === 'verdict')).toEqual({ action: 'verdict', deep: 1, charged_mc: costMc({ model: 'claude-opus-5-5', input_tokens: 1_000, output_tokens: 500 }, e) });
+    expect(all.filter((c) => c.action === 'mock_interview').every((c) => c.deep === 0)).toBe(true);
+  });
+
+  it('writes the ordinary verdict when the account left Max before it', async () => {
+    const calls = claude();
+    const max = await onPlan('max');
+    const { interview } = (await (await startOne(max.token, { problem: 'url-shortener', minutes: 45, deep: true })).json()) as { interview: { id: string } };
+    await env.DB.prepare("UPDATE users SET plan = 'pro' WHERE id = ?").bind(max.id).run();
+    const finished = await call(`/api/interviews/${interview.id}/finish`, { method: 'POST', token: max.token });
+    expect(await finished.json()).toMatchObject({ interview: { deep: false } });
+    expect(calls.at(-1)!.body.model).toBe('claude-sonnet-5-5');
+    expect((await deepCharges(max.id)).find((c) => c.action === 'verdict')).toMatchObject({ deep: 0 });
+  });
+
+  it('serves the report to Max only (402 plan_required otherwise), with the last design and its tests', async () => {
+    claude();
+    const max = await onPlan('max');
+    const id = await started(max.token);
+    await events(await turnOf(max.token, id, { message: 'Here it is', design: 'import "problem.proschi"\n' }));
+    // No verdict yet: nothing to report.
+    expect((await call(`/api/interviews/${id}/report`, { token: max.token })).status).toBe(404);
+    await call(`/api/interviews/${id}/finish`, { method: 'POST', token: max.token });
+    const res = await call(`/api/interviews/${id}/report`, { token: max.token });
+    expect(res.status).toBe(200);
+    const { report } = (await res.json()) as { report: Record<string, unknown> & { design?: { source: string; grade: { total: number } } } };
+    expect(report).toMatchObject({ id, problem: 'url-shortener', minutes: 45, status: 'finished', deep: false, verdict: verdictJson });
+    expect(report.design?.source).toBe('import "problem.proschi"\n');
+    expect(typeof report.design?.grade.total).toBe('number');
+
+    // Another account's session is not found; a Pro account is refused before that.
+    const other = await onPlan('max');
+    expect((await call(`/api/interviews/${id}/report`, { token: other.token })).status).toBe(404);
+    const pro = await onPlan('pro');
+    const refused = await call(`/api/interviews/${id}/report`, { token: pro.token });
+    expect(refused.status).toBe(402);
+    expect(await refused.json()).toMatchObject({ error: 'plan_required', feature: 'interview_report' });
+
+    // Past its 90 days the report keeps the verdict, without the design.
+    await env.DB.prepare('UPDATE ai_interviews SET state = NULL WHERE id = ?').bind(id).run();
+    const later = (await (await call(`/api/interviews/${id}/report`, { token: max.token })).json()) as { report: { design?: unknown; verdict: unknown } };
+    expect(later.report.design).toBeUndefined();
+    expect(later.report.verdict).toEqual(verdictJson);
+  });
+});

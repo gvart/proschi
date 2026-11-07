@@ -368,6 +368,16 @@ P31, docs/impl/design-partner.md "Credits").
   then settles. At 0 credits the turn answers the 402 with `wrapUp: true`,
   the session moves to wrap-up, and the verdict still runs from its hold.
   The token cap and the lease stay as they were.
+- **Max extras** (P31). `POST /api/interviews {deep: true}` (feature
+  `deep_mode`, else 402 `plan_required`) stores `deep` on the session
+  (migration 0027): its verdict runs on `claude-opus-5-5`, holds Opus's
+  worst case from the start and settles with `deep = 1`; turns stay on
+  Sonnet, hints on Haiku. The plan is checked again at the verdict: an
+  account that left Max gets the ordinary one. `GET
+  /api/interviews/<id>/report` (feature `interview_report`) answers the
+  finished session's summary, verdict and `deep`, plus the last design
+  sent with its test results while the transcript is kept; 404 without a
+  verdict. It makes no model call, so it answers without the AI key.
 
 **Setup.** In Polar (sandbox first): create the products Pro monthly
 (€12/month), Pro yearly (€99/year), Max monthly (€29/month), Max yearly

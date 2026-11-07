@@ -1,6 +1,6 @@
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../frontend/src/practice/modes/session';
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
-import { AiError, collect, HAIKU, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type TextBlock, type Usage } from './client';
+import { AiError, collect, HAIKU, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type TextBlock, type Usage } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
 import { fence, HINT_PROMPT, INTERVIEWER_PROMPT, VERDICT_PROMPT } from './prompts';
 
@@ -415,19 +415,21 @@ function sessionReport(context: ProblemContext, state: InterviewState, now: numb
 }
 
 /**
- * The verdict, Sonnet with adaptive thinking and a JSON schema. A response
- * that does not validate is asked for once more, then is an AiError
- * ('malformed'). Returns the state, finished and with the tokens counted,
- * and `billable`, the call that validated: what the user pays for (P27).
+ * The verdict, Sonnet with adaptive thinking and a JSON schema; with `deep`
+ * (Deep mode, Max, P31) Opus. A response that does not validate is asked for
+ * once more, then is an AiError ('malformed'). Returns the state, finished
+ * and with the tokens counted, `billable`, the call that validated: what the
+ * user pays for (P27), and the `model` that wrote it.
  */
-export async function verdict(deps: Deps, state: InterviewState): Promise<{ verdict: InterviewVerdict; state: InterviewState; billable: Usage }> {
+export async function verdict(deps: Deps, state: InterviewState, opts: { deep?: boolean } = {}): Promise<{ verdict: InterviewVerdict; state: InterviewState; billable: Usage; model: typeof SONNET | typeof OPUS }> {
+  const model = opts.deep ? OPUS : SONNET;
   const { client, context, now } = deps;
   if (context.problem.id !== state.problemId) throw new InterviewLimitError('problem', 'The context is of another problem');
   if (state.finished) throw new InterviewLimitError('finished', 'The interview is over');
   // The reserve is kept for this call; past the cap entirely (it cannot happen through turn()), refuse.
   if (billedSoFar(deps, state) > TOKEN_CAP - VERDICT_RESERVE / 4) throw new InterviewLimitError('budget', 'The interview has used its token budget');
   const request: MessageRequest = {
-    model: SONNET,
+    model,
     max_tokens: VERDICT_MAX_TOKENS,
     system: systemBlocks(VERDICT_PROMPT, context),
     messages: [{ role: 'user', content: sessionReport(context, state, now) }],
@@ -441,12 +443,12 @@ export async function verdict(deps: Deps, state: InterviewState): Promise<{ verd
       result = await client.create(request);
     } catch (e) {
       // A failed second attempt still bills the first one's tokens.
-      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: addUsage(spent, SONNET, e.usage)[SONNET] });
+      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: addUsage(spent, model, e.usage)[model] });
       throw e;
     }
-    spent = addUsage(spent, SONNET, result.usage);
+    spent = addUsage(spent, model, result.usage);
     const parsed = parseVerdict(result.text);
-    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, SONNET, spent[SONNET]), finished: true }, billable: result.usage };
-    if (attempt >= 1) throw new AiError('malformed', 'The verdict did not validate twice', { usage: spent[SONNET] });
+    if (parsed) return { verdict: parsed, state: { ...state, usage: addUsage(state.usage, model, spent[model]), finished: true }, billable: result.usage, model };
+    if (attempt >= 1) throw new AiError('malformed', 'The verdict did not validate twice', { usage: spent[model] });
   }
 }

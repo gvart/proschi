@@ -26,6 +26,13 @@ describe('estimates', () => {
     expect(interviewEstimate(TYPICAL_COSTS, 30)).toEqual({ min: 30, max: 40 });
     expect(interviewEstimate(TYPICAL_COSTS, 60)).toEqual({ min: 60, max: 80 });
   });
+  it('adds what a Deep verdict costs beyond the ordinary one, whatever the length', () => {
+    const e = { ...TYPICAL_COSTS, verdict: { min: 15, max: 50 }, deepMultiplier: 2 };
+    expect(interviewEstimate(e, 45, true)).toEqual({ min: 60, max: 110 });
+    expect(interviewEstimate(e, 30, true)).toEqual({ min: 45, max: 90 });
+    // Without the server's verdict range, the typical one.
+    expect(interviewEstimate({ ...e, verdict: undefined }, 45, true)).toEqual({ min: 60, max: 115 });
+  });
 });
 
 describe('isLow', () => {

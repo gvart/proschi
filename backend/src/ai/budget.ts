@@ -23,11 +23,14 @@ export const MAX_DESIGN_CHARS = 64 * 1024;
 
 export type SessionUsage = Record<Model, Usage>;
 
-export const emptyUsage = (): SessionUsage => ({ [SONNET]: { ...NO_USAGE }, [HAIKU]: { ...NO_USAGE } }) as SessionUsage;
+export const emptyUsage = (): SessionUsage => ({ [SONNET]: { ...NO_USAGE }, [HAIKU]: { ...NO_USAGE }, [OPUS]: { ...NO_USAGE } });
+
+/** A model's usage in `total`; a session stored before Deep verdicts (P31) has no Opus entry. */
+const of = (total: SessionUsage, model: Model): Usage => total[model] ?? NO_USAGE;
 
 export function addUsage(total: SessionUsage, model: Model, u: Usage | undefined): SessionUsage {
   if (!u) return total;
-  const t = total[model];
+  const t = of(total, model);
   return {
     ...total,
     [model]: {
@@ -64,8 +67,8 @@ export function sessionCostUsd(total: SessionUsage): number {
 export function usageSince(after: SessionUsage, before: SessionUsage): SessionUsage {
   const out = emptyUsage();
   for (const model of Object.keys(out) as Model[]) {
-    const a = after[model];
-    const b = before[model];
+    const a = of(after, model);
+    const b = of(before, model);
     out[model] = {
       input_tokens: a.input_tokens - b.input_tokens,
       output_tokens: a.output_tokens - b.output_tokens,

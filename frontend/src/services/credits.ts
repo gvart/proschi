@@ -21,6 +21,8 @@ export interface CreditEstimates {
   partner_review: Range;
   partner_build: Range;
   partner_turn: Range;
+  /** The mock interview's verdict alone, inside `mock_interview`: what Deep mode multiplies there. */
+  verdict?: Range;
   /** Deep mode (Max) costs about this many times as much. */
   deepMultiplier: number;
 }
@@ -31,6 +33,7 @@ export const TYPICAL_COSTS: CreditEstimates = {
   partner_review: { min: 5, max: 15 },
   partner_build: { min: 20, max: 40 },
   partner_turn: { min: 1, max: 5 },
+  verdict: { min: 15, max: 55 },
   deepMultiplier: 5,
 };
 
@@ -83,10 +86,16 @@ export function formatCredits(n: number, { floor = false }: { floor?: boolean } 
 /** "about 45–60", or "about 50" when the two meet. */
 export const formatRange = ({ min, max }: Range): string => (Math.round(min) === Math.round(max) ? `about ${Math.round(min)}` : `about ${Math.round(min)}–${Math.round(max)}`);
 
-/** The mock interview's estimate for an interview of `minutes`: the 45-minute one in proportion, to the nearest 5. */
-export function interviewEstimate(estimates: CreditEstimates, minutes: number): Range {
-  const scale = (n: number) => Math.max(5, Math.round((n * minutes) / ESTIMATE_MINUTES / 5) * 5);
-  return { min: scale(estimates.mock_interview.min), max: scale(estimates.mock_interview.max) };
+/**
+ * The mock interview's estimate for an interview of `minutes`: the 45-minute
+ * one in proportion, to the nearest 5. `deep` (Max, P31) adds what the Deep
+ * verdict costs beyond the ordinary one: only the verdict runs Deep.
+ */
+export function interviewEstimate(estimates: CreditEstimates, minutes: number, deep = false): Range {
+  const verdict = estimates.verdict ?? TYPICAL_COSTS.verdict!;
+  const extra = deep ? estimates.deepMultiplier - 1 : 0;
+  const scale = (n: number, v: number) => Math.max(5, Math.round(((n * minutes) / ESTIMATE_MINUTES + v * extra) / 5) * 5);
+  return { min: scale(estimates.mock_interview.min, verdict.min), max: scale(estimates.mock_interview.max, verdict.max) };
 }
 
 /** What the monthly or sign-up allowance is, to measure the balance against. */

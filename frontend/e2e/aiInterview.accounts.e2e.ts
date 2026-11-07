@@ -115,12 +115,12 @@ test.describe('AI interviewer', () => {
       if (choice === 'resume') {
         await open.getByRole('button', { name: 'Resume it' }).click();
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toBeVisible();
-        expect(mock.starts).toEqual([{ replace: false }]);
+        expect(mock.starts).toEqual([{ replace: false, deep: false }]);
       } else {
         await open.getByRole('button', { name: 'End it and start a new one' }).click();
         await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toHaveCount(0);
-        expect(mock.starts).toEqual([{ replace: false }, { replace: true }]);
+        expect(mock.starts).toEqual([{ replace: false, deep: false }, { replace: true, deep: false }]);
       }
       // The 409 active_session is expected; Chromium logs every non-2xx load.
       for (let i = errors.length - 1; i >= 0; i--) if (/status of 409/.test(errors[i])) errors.splice(i, 1);

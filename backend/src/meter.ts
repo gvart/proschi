@@ -241,8 +241,11 @@ export function typicalMc(c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>): numb
 /** What one mock interview turn holds: the reply and the hint at their worst. */
 export const interviewTurnHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => worstMc(CALLS.interviewReply, env) + worstMc(CALLS.interviewHint, env);
 
-/** What a mock interview's verdict holds from its start (P28). */
-export const verdictHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => worstMc(CALLS.verdict, env);
+/** A Deep verdict (Max, P31): the same call on Opus. */
+const DEEP_VERDICT: CallShape = { ...CALLS.verdict, model: OPUS };
+
+/** What a mock interview's verdict holds from its start (P28); a Deep one holds Opus's worst case. */
+export const verdictHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>, deep = false): number => worstMc(deep ? DEEP_VERDICT : CALLS.verdict, env);
 
 /** Turns in a short and a long mock interview, for the estimate's range. */
 const SHORT_TURNS = 8;
@@ -261,6 +264,8 @@ export function estimates(env: Pick<Env, 'CREDITS_USD_EUR'>) {
     partner_review: one(CALLS.partnerReview),
     partner_build: one(CALLS.partnerBuild),
     partner_turn: one(CALLS.partnerTurn),
+    /** The verdict alone, in the mock interview's estimate: what Deep mode multiplies there (P31). */
+    verdict: one(CALLS.verdict),
     deepMultiplier: DEEP_MULTIPLIER,
   };
 }

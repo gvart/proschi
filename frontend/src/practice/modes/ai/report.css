@@ -1,0 +1,77 @@
+/* The printable interview report (InterviewReport.tsx). On screen a sheet of
+   paper over a grey desk; in print only the sheet, light whatever the theme
+   (.ps-light on the root sets the light colour tokens). */
+
+.interview-report {
+  background: #d9d5cc;
+}
+
+.report-sheet {
+  /* A4's width less 14mm margins: the screen and the page break alike. */
+  width: min(182mm, calc(100% - 32px));
+  padding: 14mm 12mm;
+  box-shadow: 0 2px 14px rgb(0 0 0 / 0.18);
+}
+
+.report-h2 {
+  font-family: var(--font-display);
+  font-size: var(--fs-16);
+  font-weight: 700;
+}
+
+.report-diagram {
+  height: 105mm;
+  background: rgb(var(--c-paper));
+}
+
+@media (max-width: 640px) {
+  .report-sheet {
+    padding: 20px 16px;
+    margin-top: 16px;
+  }
+  .report-diagram {
+    height: 280px;
+  }
+}
+
+@media print {
+  @page {
+    size: A4;
+    margin: 14mm;
+  }
+  body.printing-report > *:not(.interview-report) {
+    display: none !important;
+  }
+  html:has(body.printing-report),
+  body.printing-report {
+    background: #fff !important;
+    color-scheme: light;
+  }
+  .interview-report {
+    position: static !important;
+    overflow: visible !important;
+    background: #fff !important;
+    print-color-adjust: exact;
+    -webkit-print-color-adjust: exact;
+  }
+  .report-toolbar {
+    display: none !important;
+  }
+  .report-sheet {
+    width: auto;
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+  }
+  .report-block,
+  .report-design li {
+    break-inside: avoid;
+  }
+  .report-diagram {
+    height: 110mm;
+  }
+  .react-flow__controls,
+  .react-flow__minimap {
+    display: none !important;
+  }
+}
