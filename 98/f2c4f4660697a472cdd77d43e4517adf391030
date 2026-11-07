@@ -1,0 +1,46 @@
+frontend/src/services/credits.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 7
+frontend/src/services/estimates.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 3
+backend/src/ai/partnerChanges.ts
+  s_e17b87e0a1b3ca::t_aa26eea4e8e4ed 10
+backend/.dev.vars.example
+  s_e17b87e0a1b3ca::t_a6e73f07007063 54-56
+backend/src/partner.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 18
+backend/migrations/0025_partner.sql
+  s_e17b87e0a1b3ca::t_8652ee04c67308 2
+backend/README.md
+  s_e17b87e0a1b3ca::t_a51ddc71ecace9 1156-1157
+  s_e17b87e0a1b3ca::t_b475910d0c1122 919-920,1332-1402
+  s_e17b87e0a1b3ca::t_4607e93974ccea 336,550-573
+  s_e17b87e0a1b3ca::t_edb7c39a758517 574
+frontend/e2e/partner.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 4
+backend/src/ai/partnerPrompt.ts
+  s_e17b87e0a1b3ca::t_aa26eea4e8e4ed 11
+frontend/src/partner/contract.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 4
+backend/src/credits.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 37
+frontend/src/partner/api.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 5
+frontend/src/services/billing.ts
+  s_e17b87e0a1b3ca::t_8652ee04c67308 37
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "98f2c4f4660697a472cdd77d43e4517adf391030",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
