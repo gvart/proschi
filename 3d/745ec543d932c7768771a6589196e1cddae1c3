@@ -1,0 +1,25 @@
+backend/test/emailAuth.test.ts
+  s_e17b87e0a1b3ca::t_60a027fd0a5fcc 11,124-125,451-470
+  s_e17b87e0a1b3ca::t_d2492467fe3ed5 471-475
+backend/src/signupChecks.ts
+  s_e17b87e0a1b3ca::t_77a7b9601615d6 64
+  s_e17b87e0a1b3ca::t_c57fc9216e0178 19-20,56-63,65-76,78
+backend/README.md
+  s_e17b87e0a1b3ca::t_314552809e4b49 769
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3d745ec543d932c7768771a6589196e1cddae1c3",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
