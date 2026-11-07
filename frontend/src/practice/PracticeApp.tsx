@@ -19,6 +19,7 @@ import { useAccount } from './useAccount';
 import { summarize, useActivity } from './activity';
 import { StreakInvite, StreakWidget } from './Streak';
 import AccountMenu from './AccountMenu';
+import Announcement from '../announcements/Announcement';
 import LeaderboardPanel from './LeaderboardPanel';
 import { useLeaderboard, useStatsSummary } from './useCommunity';
 import HelpMenu from '../onboarding/HelpMenu';
@@ -263,6 +264,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
         }
       />
       <div className="flex-1 bg-paper">
+        {signedIn && <Announcement />}
         {route && !onPage && (
           <p className="max-w-4xl mx-auto px-4 pt-6 text-sm text-red-700 dark:text-red-300">No problem called “{problemId}”. Pick one below.</p>
         )}

@@ -4,6 +4,7 @@ import { api, ApiError, type EmailPrefs } from '../../services/api';
 import { track } from '../../services/metrics';
 import { field, outlineButton, primaryButton } from '../../components/Playground/ui';
 import { browserTimeZone, isEmailAddress, REMINDER_KINDS, type ReminderKind } from './reminderForm';
+import ProductNews from './ProductNews';
 import { Row, Section, switchInput } from './settingsUi';
 
 /**
@@ -203,6 +204,8 @@ export default function EmailReminders() {
           )}
         </>
       )}
+
+      <ProductNews />
 
       {(error || notice) && (
         <div className="p-4">

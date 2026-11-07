@@ -6,6 +6,7 @@ import { getStatus, signOut, type Status } from './api';
 import { parseRoute, routeHash, type Route } from './route';
 import AiTab from './AiTab';
 import BillingTab from './BillingTab';
+import CampaignsTab from './CampaignsTab';
 import { AuditTab, EventsTab } from './EventsTab';
 import Nav from './Nav';
 import Gate from './Gate';
@@ -91,6 +92,9 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
       break;
     case 'users':
       content = <UsersTab key={route.param ?? ''} userId={route.param} onOpen={openUser} onSignedOut={onSignedOut} />;
+      break;
+    case 'campaigns':
+      content = <CampaignsTab param={route.param} onOpen={(id) => go({ page: 'campaigns', param: id })} onSignedOut={onSignedOut} />;
       break;
     case 'billing':
       content = <BillingTab onOpenUser={openUser} onSignedOut={onSignedOut} />;

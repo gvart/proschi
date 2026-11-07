@@ -22,7 +22,7 @@ describe('admin routes', () => {
   });
 
   it('lists every page once, in its group', () => {
-    expect(GROUPS.map((g) => g.label)).toEqual(['Overview', 'People', 'Revenue', 'AI', 'Content', 'System']);
+    expect(GROUPS.map((g) => g.label)).toEqual(['Overview', 'People', 'Outreach', 'Revenue', 'AI', 'Content', 'System']);
     expect(new Set(PAGES.map((p) => p.id)).size).toBe(PAGES.length);
   });
 });
