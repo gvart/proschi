@@ -388,7 +388,7 @@ describe('admin: short links, overview, health, events', () => {
     };
     expect(health.database.ok).toBe(true);
     expect(health.database.tables.users).toBe(0);
-    expect(health.cron.runs.map((r) => r.job)).toEqual(['app_events', 'billing_webhooks', 'credit_holds', 'email_sign_in', 'game_runs', 'interview_transcripts', 'partner_transcripts', 'reminders', 'sessions', 'tombstones', 'usage_counts']);
+    expect(health.cron.runs.map((r) => r.job)).toEqual(['app_events', 'billing_webhooks', 'campaigns', 'credit_holds', 'email_sign_in', 'game_runs', 'interview_transcripts', 'partner_transcripts', 'reminders', 'sessions', 'tombstones', 'usage_counts']);
     expect(health.cron.runs.every((r) => r.level === 'info' && typeof r.detail.ms === 'number')).toBe(true);
     expect(health.config).toMatchObject({ sessionSecret: true, providers: ['github', 'google'], metricsToken: true, setupToken: true });
     expect(health.worker).toMatchObject({ environment: expect.any(String), simVersion: expect.any(Number) });

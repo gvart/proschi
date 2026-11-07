@@ -9,6 +9,7 @@ import { errorText, log } from './log';
 import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
 import { effectivePlan } from './plans';
+import { saveContactEmail } from './contactEmail';
 import { decideSignupCredits, emailClaim, normalizeEmail } from './signupChecks';
 
 /**
@@ -351,7 +352,10 @@ async function upsertUser(ctx: Ctx, provider: ProviderId, profile: Profile): Pro
   const existing = await env.DB.prepare('SELECT user_id FROM identities WHERE provider = ? AND subject = ?')
     .bind(provider, profile.subject)
     .first<{ user_id: string }>();
-  if (existing) return existing.user_id;
+  if (existing) {
+    await saveContactEmail(env, existing.user_id, provider, profile.verifiedEmail);
+    return existing.user_id;
+  }
   const id = crypto.randomUUID();
   const cleaned = cleanName(profile.name);
   const name = cleaned && !rejectName(cleaned) ? cleaned : 'Proschi user';
@@ -364,6 +368,7 @@ async function upsertUser(ctx: Ctx, provider: ProviderId, profile: Profile): Pro
     ...(priorTrial ? [priorTrial] : []),
   ]);
   await oauthSignupCredits(ctx, id, provider, profile);
+  await saveContactEmail(env, id, provider, profile.verifiedEmail);
   return id;
 }
 
