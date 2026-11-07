@@ -1,0 +1,58 @@
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_be6ba562b72359 267
+  s_e17b87e0a1b3ca::t_60b20ce928f350 22
+frontend/src/admin/campaignText.test.ts
+  s_e17b87e0a1b3ca::t_63505154461857 1-24
+frontend/src/admin/CampaignsTab.tsx
+  s_e17b87e0a1b3ca::t_698d16a2188d56 25
+  s_e17b87e0a1b3ca::t_43edbb60fd520b 2,282
+  s_e17b87e0a1b3ca::t_f3e9fd011d8699 41,164,344,406,638
+  s_e17b87e0a1b3ca::t_efaa8208435882 1,3-24,26-40,42-163,165-281,283-343,345-405,407-637,639-705
+frontend/src/announcements/markdown.test.tsx
+  s_e17b87e0a1b3ca::t_5e7454b2d4ff00 1-20
+frontend/src/admin/route.ts
+  s_e17b87e0a1b3ca::t_354cc6260afdcb 6
+frontend/src/admin/route.test.ts
+  s_e17b87e0a1b3ca::t_bba968f2ae2a39 25
+frontend/src/announcements/markdown.tsx
+  s_e17b87e0a1b3ca::t_df282cd1147140 49
+  s_e17b87e0a1b3ca::t_0673f155b294e5 1-48,50-105
+frontend/src/admin/api.ts
+  s_e17b87e0a1b3ca::t_b2f9694a653dfe 380-447,450-452
+  s_e17b87e0a1b3ca::t_c5a3ce2a5ea2f9 448-449,453-455
+frontend/src/admin/Nav.tsx
+  s_e17b87e0a1b3ca::t_3a8ea1041af815 1,7
+frontend/src/admin/campaignText.ts
+  s_e17b87e0a1b3ca::t_9d63bdd71e911f 1-48
+frontend/src/admin/AdminApp.tsx
+  s_e17b87e0a1b3ca::t_baf92872a4be27 9,96-97
+  s_e17b87e0a1b3ca::t_2f98df187cbf8f 98
+frontend/src/admin/launchTemplate.ts
+  s_e17b87e0a1b3ca::t_70044705802b33 1-27
+frontend/src/practice/profile/EmailReminders.tsx
+  s_e17b87e0a1b3ca::t_ab6415145c2942 7
+  s_e17b87e0a1b3ca::t_51a1a85fcb83d8 208-209
+frontend/src/practice/profile/ProductNews.tsx
+  s_e17b87e0a1b3ca::t_6c9b6b07a5b274 1-73
+frontend/src/announcements/Announcement.tsx
+  s_e17b87e0a1b3ca::t_36cffc338101f6 1-77,80-86
+  s_e17b87e0a1b3ca::t_8ad25dcc98423c 78-79
+frontend/src/admin/campaigns.css
+  s_e17b87e0a1b3ca::t_0efe988a08bf86 1-169
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c62584a92f1818343790b00e99903688591c8d3a",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
