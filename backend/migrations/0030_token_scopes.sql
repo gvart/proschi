@@ -9,3 +9,6 @@ ALTER TABLE app_auth_codes ADD COLUMN scopes TEXT;
 UPDATE sessions SET scopes = 'profile:read documents:read' WHERE kind IN ('app_access', 'app_refresh');
 UPDATE app_auth_codes SET scopes = 'profile:read documents:read';
 
+-- The practice page's learning goal (frontend/src/practice/hub/goal.ts,
+-- P43), as JSON {goals, asked, streak?}; NULL until the account has one.
+ALTER TABLE users ADD COLUMN practice_goal TEXT;

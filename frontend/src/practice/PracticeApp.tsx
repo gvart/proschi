@@ -31,7 +31,7 @@ import { notifyActivity } from './skills/activity';
 import AchievementToast from './skills/AchievementToast';
 import PracticeHub from './hub/PracticeHub';
 import HomeExtras, { GoalSummary } from './hub/HomeExtras';
-import { asksGoal, useGoal, wantsInterview, wantsStreak, type AnnouncementState } from './hub/goal';
+import { asksGoal, mergeAccountGoal, onGoalChange, useGoal, wantsInterview, wantsStreak, type AnnouncementState, type GoalState } from './hub/goal';
 import { hubTabOf, type HubTab } from './hub/tabs';
 import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue';
 import { profileIdOf } from './profile/profile';
@@ -119,6 +119,15 @@ async function sendLessonsRead(ids: string[]): Promise<void> {
   }
 }
 
+/** Keeps the learning goal with the account (PATCH /api/me); a failure is dropped: it stays in this browser, and the next change sends it again. */
+async function sendGoal(goal: GoalState): Promise<void> {
+  try {
+    await api('/api/me', { method: 'PATCH', body: { practiceGoal: goal } });
+  } catch {
+    // Kept in this browser.
+  }
+}
+
 /** `engine` defaults to the simulation in frontend/src/sim (loaded with the problem page). */
 export default function PracticeApp({ engine }: { engine?: Engine }) {
   const hash = useHashRoute();
@@ -149,6 +158,9 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       const missing = lessonsRead().filter((id) => !remote.has(id));
       markLessonsRead([...remote], 'account');
       if (me.lessons && missing.length) void sendLessonsRead(missing);
+      // The learning goal: the account's wins; an account without one gets this browser's.
+      const goalToSend = mergeAccountGoal(me.user.practiceGoal);
+      if (goalToSend) void sendGoal(goalToSend);
     },
     [updateProgress],
   );
@@ -161,6 +173,12 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
   const onAnnouncement = useCallback((shown: boolean) => setAnnouncement(shown ? 'shown' : 'none'), []);
   // Signed in, each lesson read here goes to the account too; without accounts, the badges are checked here at once.
   const accountsOff = account.state.status === 'off';
+  // Signed in, each change of the learning goal goes to the account too.
+  useEffect(() => {
+    if (!signedIn) return;
+    onGoalChange((g) => void sendGoal(g));
+    return () => onGoalChange(undefined);
+  }, [signedIn]);
   useEffect(() => {
     if (signedIn) return onLessonsRead((ids, source) => source === 'here' && void sendLessonsRead(ids));
     if (accountsOff) return onLessonsRead(() => notifyActivity());

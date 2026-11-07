@@ -265,3 +265,14 @@ id; don't rewrite old ones.
   export, email and sign-in changes, campaigns or feedback; a cookie session
   has every right. Tokens issued before got the CLI's scopes. Settings lists
   the running sign-ins with their scopes (`GET /api/me/apps`, site only).
+- **P43. The learning goal lives on the account.** What the practice page
+  is for (the goals, whether the question was answered, the streak switch)
+  is a small JSON column, `users.practice_goal` (migration 0030), read in
+  `GET /api/me` (`user.practiceGoal`, null until set) and written with
+  `PATCH /api/me {practiceGoal}`, validated strictly (known goals once each,
+  `asked` and `streak` booleans). On sign-in the account's goal replaces the
+  browser's; an account without one gets the browser's once (then it has
+  one). Signed in, every change is sent too; signed out it stays in
+  `localStorage` (`proschi.practice.goal`) as before, which also keeps the
+  last signed-in value. It is in the data export (`user.practiceGoal`) and
+  goes with the account; docs/PRIVACY.md lists it.

@@ -62,6 +62,8 @@ export interface User {
   createdAt?: number;
   /** The account's plan (`users.plan`): 'free' or 'pro'; absent from an older Worker. */
   plan?: string;
+  /** What the practice page is for (practice/hub/goal.ts GoalState), null until set; absent from an older Worker. */
+  practiceGoal?: unknown;
 }
 
 /** A problem's progress as the server keeps it. */

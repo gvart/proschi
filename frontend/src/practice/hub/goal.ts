@@ -7,8 +7,11 @@ import { loadJson, saveJson } from '../../services/storage';
  * beside the problem list: interview prep adds the roadmap's next step and the
  * mock interview, a daily habit the streak and today's review, challenge and
  * Arcade run; solving problems (or no answer) adds nothing. The streak can also
- * be switched on or off by itself. Kept in this browser only
- * (`proschi.practice.goal`, listed in docs/PRIVACY.md).
+ * be switched on or off by itself. Kept in this browser
+ * (`proschi.practice.goal`, listed in docs/PRIVACY.md) and, signed in, with
+ * the account too (`practiceGoal` of GET and PATCH /api/me,
+ * docs/design/paid-plans.md P43): the account's wins on sign-in, an account
+ * without one gets this browser's, and every change is sent to it.
  */
 
 export type Goal = 'solve' | 'interview' | 'habit';
@@ -69,10 +72,38 @@ function read(): GoalState {
   return current;
 }
 
-export function setGoal(update: (g: GoalState) => GoalState): void {
-  current = parseGoal(update(read()));
+/** Signed in: where each change goes too (PracticeApp sets it while signed in). */
+let push: ((g: GoalState) => void) | undefined;
+
+export function onGoalChange(send: ((g: GoalState) => void) | undefined): void {
+  push = send;
+}
+
+function store(goal: GoalState): void {
+  current = goal;
   saveJson(GOAL_KEY, current);
   for (const l of listeners) l();
+}
+
+export function setGoal(update: (g: GoalState) => GoalState): void {
+  store(parseGoal(update(read())));
+  push?.(read());
+}
+
+/**
+ * On sign-in, with the account's goal (`user.practiceGoal`; undefined from a
+ * Worker without it): the account's replaces this browser's; an account
+ * without one (null) gets this browser's, if it has anything to keep, which
+ * is returned to send. Once sent, the account has one, so it happens once.
+ */
+export function mergeAccountGoal(remote: unknown): GoalState | undefined {
+  if (remote === undefined) return undefined;
+  if (remote !== null) {
+    store(parseGoal(remote));
+    return undefined;
+  }
+  const local = read();
+  return local.asked || local.goals.length > 0 || local.streak !== undefined ? local : undefined;
 }
 
 function subscribe(listener: () => void): () => void {
