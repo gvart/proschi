@@ -12,6 +12,7 @@ import ReactFlow, {
 import type { Edge, EdgeChange, Node, NodeChange } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { confirm, copyFallback, notify, prompt } from '../../design/dialogs';
+import { useToastClearance } from '../../design/toastClearance';
 import { Group, Panel as SplitPanel, Separator, type Layout } from 'react-resizable-panels';
 import {
   AlignLeft,
@@ -1175,7 +1176,8 @@ export default function Playground() {
           />
         )}
 
-        <div data-tour="panes" className="md:hidden bg-surface">
+        <div data-tour="panes" className="md:hidden flex items-stretch bg-surface">
+          <div className="flex-1 min-w-0">
           <Tabs
             label="View"
             idPrefix="pane"
@@ -1187,6 +1189,9 @@ export default function Playground() {
               { id: 'diagram', label: playing ? 'Playback' : VIEW_LABEL[view], icon: <Network size={16} /> },
             ]}
           />
+          </div>
+          {/* Phones: in the tab bar, not floating over the panes. */}
+          {hasPartner && phone && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
         </div>
       </ZenCollapse>
 
@@ -1362,7 +1367,7 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
-      {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
+      {hasPartner && !phone && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
       {hasPartner && (
         <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
           <Suspense fallback={<PaneLoading />}>
@@ -1687,6 +1692,8 @@ function DiagramView({
   const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
+  // Rename and Delete stay clear of the toasts.
+  const clearToasts = useToastClearance();
   // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
   const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
   const [sheet, setSheet] = useState(false);
@@ -1977,7 +1984,7 @@ function DiagramView({
               </p>
             )}
             {hasSelection && !showSettings && (
-              <div role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
+              <div ref={clearToasts} role="toolbar" aria-label="Selection" className="flex items-center gap-1 rounded-full border-bw-1 border-ink bg-surface py-1 pl-4 pr-1 shadow-brutal-sm">
                 <span className="max-w-[10rem] truncate pr-1 text-sm font-semibold text-ink">
                   {singleNode ? (singleNode.data?.name ?? singleNode.id) : `${selectionCount} selected`}
                 </span>
