@@ -241,17 +241,31 @@ it up again.
 - **A chat next to the editor**, in the statement column. The interviewer
   greets, then answers clarifying questions from the hidden `## Scale` and
   `## Constraints`, asks this file's estimates in the Estimate phase and the
-  lesson's "In the interview" follow-ups in Design and Wrap-up. Replies
-  stream in. A mic button dictates through the browser's speech recognition
-  where there is one (it is hidden elsewhere); typing always works.
+  lesson's "In the interview" follow-ups in Design and Wrap-up. It never
+  asks again for what you already know: the statement you were shown and
+  every fact it gave this session. It checks numbers with a calculator and
+  takes an estimate within 10x of its reference as the right order of
+  magnitude. Replies stream in. The **mic** listens hands-free until you
+  tap it again: the browser's own speech recognition where there is one
+  (free), otherwise short recordings written down on the server (about 0.1
+  credit a minute of speech). The words show in the box as you speak, a red
+  **Listening** marks it, and a blocked microphone says how to allow it.
+  Typing always works. **Voice on** reads the replies aloud in the
+  browser's voice; it is off by default, remembered, and stops when you
+  talk or type.
+- **On phones** the first tab is **Interview**: the chat, with the problem
+  folded inside it, so the conversation has a whole screen. A reply that
+  comes while you are on another tab says so, with a button back.
 - **The phase and the clock**: the same four phases and 10/10/70/10 split of
   30, 45 or 60 minutes. The clock moves the phase on; **Next phase** moves
   on earlier. Whatever the length, a session stops taking turns after 60
   minutes or at its credit cap (100, 150 or 200 credits for 30, 45 or 60
   minutes); the verdict can always be asked for.
-- **Coaching cards** after each turn: **Focus now** (what to do next),
-  **Can improve** (what to fix in what you just said) and **Wrap up** (near
-  the end of a phase).
+- **Coaching hints** after a turn, as toasts in the corner (at the bottom
+  on phones, two at most, each closable): **Focus now** (what to do next in
+  this phase), **Can improve** (what to fix in what you just said) and
+  **Wrap up** (near the end of a phase). **Coaching** in the chat lists
+  them all.
 - **Send my design** attaches the editor's source to the message. The server
   runs the problem's tests on it and hands the model those results; it never
   trusts the page's.
