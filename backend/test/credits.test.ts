@@ -2,7 +2,8 @@ import { env } from 'cloudflare:workers';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { buckets, creditsView, grantSignupCredits, identityHash, revokeStatement, tombstoneStatements, topupStatement } from '../src/credits';
 import type { Env } from '../src/env';
-import { balanceMc, costMc, estimateMc, estimates, hold, HOLD_TTL_MS, pruneHolds, release, settle, type Usage } from '../src/meter';
+import { balanceMc, costMc, estimateMc, estimates, hold, HOLD_TTL_MS, pruneHolds, release, settle, settleFailed, topUp, type Usage } from '../src/meter';
+import { AiError } from '../src/ai/client';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /** The credit ledger (src/credits.ts) and the meter (src/meter.ts): millicredits, holds, settles, plans. */
@@ -138,6 +139,36 @@ describe('meter', () => {
     expect(settled.chargedMc).toBe(5_000);
     expect(settled.balanceMc).toBe(95_000);
     expect(await charges(id)).toEqual([{ action: 'design_partner', charged_mc: 5_000, deep: 1 }]);
+  });
+
+  it('tops a hold up only when the balance covers it, and the settle is then capped at the larger hold', async () => {
+    const { id } = await signedInUser();
+    await grantSignupCredits(env, id, 'github\ntopup');
+    const held = await hold(e, id, 40_000, 'retry');
+    if (!held.ok) throw new Error('not held');
+    expect(await topUp(e, held.holdId, id, 60_001)).toBe(false);
+    expect(await balanceMc(e, id)).toBe(60_000);
+    expect(await topUp(e, held.holdId, id, 50_000)).toBe(true);
+    expect(await balanceMc(e, id)).toBe(10_000);
+    // Another account can't top up this hold.
+    const other = await signedInUser();
+    await grantSignupCredits(env, other.id, 'github\ntopup-other');
+    expect(await topUp(e, held.holdId, other.id, 1)).toBe(false);
+    expect((await settle(e, held.holdId, [sonnet(1_000_000, 100_000)], 'design_partner', false)).chargedMc).toBe(90_000);
+    // Gone once settled.
+    expect(await topUp(e, held.holdId, id, 1)).toBe(false);
+  });
+
+  it('settles a failed call for what the model answered, and releases one that failed before any answer (P34)', async () => {
+    const { id } = await signedInUser();
+    await grantSignupCredits(env, id, 'github\nfailed');
+    const a = await hold(e, id, 50_000, 'a');
+    const b = await hold(e, id, 40_000, 'b');
+    if (!a.ok || !b.ok) throw new Error('not held');
+    const cut = new AiError('truncated', 'cut', { charge: [{ ...sonnet(1_000, 2_000), cache_creation_input_tokens: 0, cache_read_input_tokens: 0 }] });
+    expect(await settleFailed(e, a.holdId, cut, 'design_partner', false)).toBe(costMc(sonnet(1_000, 2_000), e));
+    expect(await settleFailed(e, b.holdId, new AiError('overloaded', 'busy'), 'design_partner', false)).toBe(0);
+    expect(await balanceMc(e, id)).toBe(100_000 - costMc(sonnet(1_000, 2_000), e));
   });
 
   it('charges nothing for a released hold (a failed call)', async () => {

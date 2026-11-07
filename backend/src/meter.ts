@@ -1,3 +1,4 @@
+import { AiError } from './ai/client';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
 import { buckets, credits, LEDGER_TOTAL_SQL, monthlyGrantStatement, periodOf, planOf, spendable } from './credits';
@@ -6,12 +7,14 @@ import { json } from './http';
 import { MC } from './plans';
 
 /**
- * Metered credits (docs/design/paid-plans.md P26, P27): what a model call
+ * Metered credits (docs/design/paid-plans.md P26, P27, P34): what a model call
  * costs the user, and the hold-then-settle that charges it.
  *
  *   hold(env, user, amountMc, ref)          before a call: keeps its worst case back, or {ok: false} when the balance can't cover it
+ *   topUp(env, holdId, userId, extraMc)     before a second call on the same hold (a retry, a repair): holds its worst case too, or false
  *   settle(env, holdId, usage[], action, deep)   after it: charges the real cost (never more than the hold) and lets go of the rest
- *   release(env, holdId)                    a failed call: charges nothing
+ *   release(env, holdId)                    a call that failed on our side or the infrastructure's: charges nothing
+ *   settleFailed(env, holdId, error, action, deep)   a failed call: charges what the model answered (P34), else releases
  *
  * A credit is €0.01 at retail; a call costs 2x what the answering model cost
  * us (USD→EUR at CREDITS_USD_EUR, 0.95 unset), so every credit keeps a 100%
@@ -136,8 +139,8 @@ export async function hold(
  * against the hold, at most the hold's amount, and lets go of the hold. The
  * charge is taken from the monthly allowance, then the sign-up credits, then
  * the top-up. Once per hold: settling it again, or after a release, charges
- * nothing. Pass only the calls the user pays for: not a failed one, nor the
- * first answer when a malformed one was asked for again (P27).
+ * nothing. Pass every call the model answered, a malformed, refused or
+ * truncated one included (P34); not one that failed before an answer.
  */
 export async function settle(env: Env, holdId: string, usage: Usage[], action: Action, deep: boolean): Promise<{ chargedMc: number; balanceMc: number }> {
   const { DB } = env;
@@ -176,9 +179,45 @@ export async function settle(env: Env, holdId: string, usage: Usage[], action: A
   return { chargedMc, balanceMc: row ? await balanceMc(env, row.user_id) : 0 };
 }
 
-/** Lets go of a hold and charges nothing: the call failed (P27). Releasing it again, or after a settle, changes nothing. */
+/** Lets go of a hold and charges nothing: the call failed on our side or the infrastructure's (P34). Releasing it again, or after a settle, changes nothing. */
 export async function release(env: Env, holdId: string): Promise<void> {
   await env.DB.prepare('DELETE FROM credit_holds WHERE id = ?').bind(holdId).run();
+}
+
+/**
+ * Adds `extraMc` to a live hold of `userId` when the balance less every
+ * unexpired hold covers it, and keeps it at least HOLD_TTL_MS more: a second
+ * call on the same hold (a retry of a malformed answer, a repair) is held
+ * before it runs, so it can't run unheld. False when it can't be covered, or
+ * the hold is gone; the hold is then unchanged.
+ */
+export async function topUp(env: Env, holdId: string, userId: string, extraMc: number): Promise<boolean> {
+  const extra = Math.max(0, Math.ceil(extraMc));
+  const at = Date.now();
+  // One statement, as hold(): two top-ups at once can't both pass the check.
+  const { meta } = await env.DB.prepare(
+    `UPDATE credit_holds SET amount_mc = amount_mc + ?3, expires_at = MAX(expires_at, ?5)
+     WHERE id = ?4 AND user_id = ?1 AND expires_at > ?6
+       AND ${LEDGER_TOTAL_SQL} - (SELECT COALESCE(SUM(amount_mc), 0) FROM credit_holds WHERE user_id = ?1 AND expires_at > ?6) >= ?3`,
+  )
+    .bind(userId, periodOf(at), extra, holdId, at + HOLD_TTL_MS, at)
+    .run();
+  return meta.changes > 0;
+}
+
+/**
+ * After a failed call (P34): charges what the model answered (the error's
+ * `charge`: a refusal, a cut-off or malformed answer, an earlier attempt),
+ * or releases the hold when nothing reached the model. Returns what was
+ * charged, in millicredits.
+ */
+export async function settleFailed(env: Env, holdId: string, error: unknown, action: Action, deep: boolean): Promise<number> {
+  const charge = error instanceof AiError ? error.charge : [];
+  if (!charge.length) {
+    await release(env, holdId);
+    return 0;
+  }
+  return (await settle(env, holdId, charge, action, deep)).chargedMc;
 }
 
 /** What can be held now, in millicredits: every bucket that counts less the unexpired holds, never below 0. */

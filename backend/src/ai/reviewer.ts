@@ -4,7 +4,7 @@ import type { Problem } from '../../../frontend/src/practice/types';
 import { parseDesignReview, type DesignReview, type DesignReviewRequest } from '../../../frontend/src/review/contract';
 import { practiceReviewInput } from '../../../frontend/src/review/practice';
 import { buildReviewRequest, type ReviewInput } from '../../../frontend/src/review/request';
-import { AiError, SONNET, type ClaudeClient, type MessageRequest, type TextBlock, type Usage } from './client';
+import { AiError, malformed, SONNET, type ClaudeClient, type MessageRequest, type ModelUsage, type TextBlock } from './client';
 import type { ProblemContext } from './context';
 import { fence } from './prompts';
 
@@ -172,17 +172,26 @@ export function reviewRequest(req: DesignReviewRequest, context?: ProblemContext
 
 /**
  * Reviews `req` (the server's own, from serverReviewRequest). An answer that
- * does not validate is asked for once more, then is an AiError ('malformed').
+ * does not validate is asked for once more, when `more()` (topping up the
+ * credit hold) allows it, then is an AiError ('malformed'). `usage` is every
+ * answer the model gave, the malformed one too: what the user pays (P34); a
+ * failure's `charge` carries the same.
  */
-export async function aiReview(client: ClaudeClient, req: DesignReviewRequest, context?: ProblemContext): Promise<{ review: DesignReview; usage: Usage[] }> {
+export async function aiReview(client: ClaudeClient, req: DesignReviewRequest, context?: ProblemContext, more: () => Promise<boolean> = async () => true): Promise<{ review: DesignReview; usage: ModelUsage[] }> {
   const request = reviewRequest(req, context);
   const nodeIds = new Set(req.model.nodes.map((n) => n.id));
-  const usage: Usage[] = [];
+  const usage: ModelUsage[] = [];
   for (let attempt = 0; ; attempt++) {
-    const result = await client.create(request);
-    usage.push(result.usage);
+    let result;
+    try {
+      result = await client.create(request);
+    } catch (e) {
+      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: e.usage, charge: [...usage, ...e.charge] });
+      throw e;
+    }
     const review = parseModelReview(result.text, nodeIds);
-    if (review) return { review, usage };
-    if (attempt >= 1) throw new AiError('malformed', 'The review did not validate twice', { usage: result.usage });
+    if (review) return { review, usage: [...usage, { model: result.model, ...result.usage }] };
+    if (attempt >= 1 || !(await more())) throw malformed('The review did not validate', result, usage);
+    usage.push({ model: result.model, ...result.usage });
   }
 }

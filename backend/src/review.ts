@@ -8,7 +8,7 @@ import { credits, nextPeriodAt } from './credits';
 import { requireFeature } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
-import { balanceMc, estimateMc, hold, noCredits, release, settle } from './meter';
+import { balanceMc, estimateMc, hold, noCredits, settle, settleFailed, topUp } from './meter';
 import { refreshAfterReview } from './roadmap';
 import { findProblem } from './verify';
 
@@ -18,9 +18,10 @@ import { findProblem } from './verify';
  * design_partner feature, which replaces it (P29): anyone signed in, paid
  * in credits (src/meter.ts), with no daily cap. Its worst case is held
  * before the model is called (402 no_credits when the balance can't cover
- * it), its real cost charged after, and a failed review is charged nothing;
- * when the first answer didn't validate and was asked for again, only the
- * second is charged. The body is checked against the contract the page
+ * it), its real cost charged after: every answer the model gave, a refused,
+ * cut-off or malformed one too (P34); a review that failed before the model
+ * answered is charged nothing. A malformed answer is asked for again only
+ * once the hold is topped up for it. The body is checked against the contract the page
  * builds it from (frontend/src/review/contract.ts), but only its source,
  * problem id and, for an editor diagram, the files it imports are used: the
  * server parses, simulates and tests the design itself (P6,
@@ -68,17 +69,20 @@ export const reviewDesign = requireFeature('design_partner', async (_request: Re
 
   try {
     const req = serverReviewRequest(page.source, solved, { path: page.path, imports: page.imports });
-    const { review, usage } = await aiReview(createClient(env), req, solved ? problemContext(solved.id) : undefined);
-    // Only the answer that validated is charged (P27): a malformed first one was the reviewer's retry.
-    const charged = await settle(env, held.holdId, usage.slice(-1).map((u) => ({ model: SONNET, ...u })), 'design_partner', false);
+    // The reviewer's retry of a malformed answer is held before it runs (P34).
+    const more = () => topUp(env, held.holdId, user.id, reviewHoldMc(ctx, page));
+    const { review, usage } = await aiReview(createClient(env), req, solved ? problemContext(solved.id) : undefined, more);
+    // Every answer the model gave is charged (P34), a malformed first one too.
+    const charged = await settle(env, held.holdId, usage, 'design_partner', false);
     // The AI roadmap's next steps, at most once a day from a review (src/roadmap.ts); after the answer, and never failing it.
     ctx.exec.waitUntil(refreshAfterReview(env, user, solved?.id, review, ctx.requestId).catch((e: unknown) => log('warn', 'roadmap.failed', { requestId: ctx.requestId, error: errorText(e) })));
     log('info', 'review.done', { requestId: ctx.requestId, userId: user.id, problem: solved?.id, chargedMc: charged.chargedMc });
     return json({ ...review, credits: { charged: credits(charged.chargedMc), balance: credits(charged.balanceMc) } }, 200, NO_STORE);
   } catch (e) {
-    await release(env, held.holdId);
+    // What the model answered (refused, cut off, malformed) is charged; a failure before any answer is not (P34).
+    const chargedMc = await settleFailed(env, held.holdId, e, 'design_partner', false);
     if (!(e instanceof AiError)) throw e;
-    log('error', 'review.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, error: errorText(e) });
+    log('error', 'review.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, chargedMc, error: errorText(e) });
     // Busy or unreachable: worth trying again (503, the page offers the rule review meanwhile); anything else failed outright.
     return e.retryable
       ? json({ error: 'ai_unavailable', message: 'The in-depth review is busy; try again in a minute' }, 503, NO_STORE)

@@ -156,7 +156,11 @@ describe('the AI roadmap: routes', () => {
   });
 
   it('keeps the verdict when the pick fails: an API error, or no known id', async () => {
-    for (const picks of [() => Response.json({ type: 'error', error: { type: 'api_error', message: 'down' } }, { status: 500 }), () => messageResponse(JSON.stringify({ picks: [{ kind: 'problem', id: 'nope', reason: 'x' }] }), { model: HAIKU })]) {
+    const cases = [
+      { picks: () => Response.json({ type: 'error', error: { type: 'api_error', message: 'down' } }, { status: 500 }), charged: 0 },
+      { picks: () => messageResponse(JSON.stringify({ picks: [{ kind: 'problem', id: 'nope', reason: 'x' }] }), { model: HAIKU }), charged: 1 },
+    ];
+    for (const { picks, charged } of cases) {
       await resetDatabase();
       vi.restoreAllMocks();
       const calls = claude({ picks });
@@ -171,8 +175,8 @@ describe('the AI roadmap: routes', () => {
       expect(await recCount(userId)).toBe(0);
       expect(((await (await next(token)).json()) as { next: unknown }).next).toBeNull();
       expect(await env.DB.prepare('SELECT status FROM ai_interviews WHERE id = ?').bind(id).first()).toEqual({ status: 'finished' });
-      // A failed pick is charged nothing, and holds nothing.
-      expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_charges WHERE action = 'next_steps'").first()).toEqual({ n: 0 });
+      // A pick that failed on the API's side is charged nothing; one the model answered uselessly is charged (P34). Neither holds anything.
+      expect(await env.DB.prepare("SELECT COUNT(*) AS n FROM credit_charges WHERE action = 'next_steps'").first()).toEqual({ n: charged });
       expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds').first()).toEqual({ n: 0 });
     }
   });

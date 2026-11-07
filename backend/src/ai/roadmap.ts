@@ -1,4 +1,4 @@
-import { HAIKU, AiError, type ClaudeClient, type Usage } from './client';
+import { HAIKU, malformed, type ClaudeClient, type Usage } from './client';
 import { fence } from './prompts';
 
 /**
@@ -112,6 +112,6 @@ export async function pickNext(client: ClaudeClient, input: PickInput): Promise<
     output_config: { effort: 'low', format: { type: 'json_schema', schema: PICKS_SCHEMA } },
   });
   const picks = parsePicks(result.text, input.candidates);
-  if (!picks.length) throw new AiError('malformed', 'No pick names a known problem or topic', { usage: result.usage });
+  if (!picks.length) throw malformed('No pick names a known problem or topic', result);
   return { picks, usage: result.usage };
 }

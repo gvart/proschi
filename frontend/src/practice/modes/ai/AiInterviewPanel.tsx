@@ -170,7 +170,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
       <section aria-label="Mock interview" className="px-4 py-4 space-y-3">
         <p role="alert" className="flex items-start gap-2 rounded-sm border-bw-1 border-ink bg-pop-pink/25 px-3 py-2 text-sm text-ink">
           <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          The interviewer stopped working early in this interview. Answers that failed were not charged. Start again when you are ready.
+          The interviewer stopped working early in this interview. Answers that failed on our side were not charged. Start again when you are ready.
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onRestart} className={primaryButton}>

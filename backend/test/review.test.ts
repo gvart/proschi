@@ -80,6 +80,11 @@ const charged = async (id: string) => {
 };
 
 /** What a review answered with Sonnet and `usage` is charged, in credits. */
+/** What the account was charged for reviews, in credits (no hold left behind). */
+const chargedCredits = async (id: string) => {
+  expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM credit_holds WHERE user_id = ?').bind(id).first<{ n: number }>()).toEqual({ n: 0 });
+  return (await env.DB.prepare("SELECT COALESCE(SUM(charged_mc), 0) AS mc FROM credit_charges WHERE user_id = ? AND action = 'design_partner'").bind(id).first<{ mc: number }>())!.mc / 1000;
+};
 const priced = (usage: { input_tokens: number; output_tokens: number }) => costMc({ model: SONNET, ...usage }, env) / 1000;
 
 describe('POST /api/review: the request', () => {
@@ -233,17 +238,32 @@ describe('POST /api/review: the AI review', () => {
   });
 
 
-  it('answers 502 for model output that does not validate twice, and charges nothing', async () => {
+  it('answers 502 for model output that does not validate twice, and charges both answers (P34)', async () => {
     const calls = mockClaude((_req, n) => messageResponse(n === 0 ? 'not json' : JSON.stringify({ ...GOOD, issues: [{ severity: 'fatal', title: 'x', detail: 'y' }] })));
     const { id, token } = await proUser();
     const response = await review({ source: EDITOR_SOURCE, model: valid.model }, { token });
     expect(response.status).toBe(502);
     expect(await response.json()).toMatchObject({ error: 'review_failed' });
     expect(calls).toHaveLength(2);
-    expect(await charged(id)).toBe(0);
+    expect(await chargedCredits(id)).toBe(priced({ input_tokens: 200, output_tokens: 100 }));
   });
 
-  it('retries one malformed answer, and charges only the one that validated', async () => {
+  it('charges a review cut off at max_tokens (a "write the longest answer you can" design) for what the model wrote', async () => {
+    mockClaude(() => messageResponse('{"summary": "an endless', { stop: 'max_tokens', usage: { input_tokens: 3000, output_tokens: 16_000 } }));
+    const { id, token } = await proUser();
+    const response = await review({ source: EDITOR_SOURCE, model: valid.model }, { token });
+    expect(response.status).toBe(502);
+    expect(await chargedCredits(id)).toBe(priced({ input_tokens: 3000, output_tokens: 16_000 }));
+  });
+
+  it('charges a refusal for its real usage', async () => {
+    mockClaude(() => messageResponse('', { stop: 'refusal', usage: { input_tokens: 4000, output_tokens: 10 } }));
+    const { id, token } = await proUser();
+    expect((await review({ source: EDITOR_SOURCE, model: valid.model }, { token })).status).toBe(502);
+    expect(await chargedCredits(id)).toBe(priced({ input_tokens: 4000, output_tokens: 10 }));
+  });
+
+  it('retries one malformed answer, and charges both: the malformed one and the one that validated (P34)', async () => {
     mockClaude((_req, n) =>
       n === 0
         ? messageResponse(JSON.stringify({ summary: '', strengths: [], issues: [], suggestions: [] }), { usage: { input_tokens: 9000, output_tokens: 9000 } })
@@ -252,7 +272,7 @@ describe('POST /api/review: the AI review', () => {
     const { token } = await proUser();
     const response = await review({ source: EDITOR_SOURCE, model: valid.model }, { token });
     expect(response.status).toBe(200);
-    expect(((await response.json()) as { credits: { charged: number } }).credits.charged).toBe(priced({ input_tokens: 200, output_tokens: 70 }));
+    expect(((await response.json()) as { credits: { charged: number } }).credits.charged).toBe(priced({ input_tokens: 9200, output_tokens: 9070 }));
   });
 
   it('answers 503 ai_unavailable when the model is overloaded, and charges nothing', async () => {

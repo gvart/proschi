@@ -261,7 +261,8 @@ it up again.
 On Pro, the verdict also links **Practise them here**: the 3
 picks made after it (below, "Your next steps").
 
-An answer that fails on our side isn't charged; if the interviewer fails on
+An answer that fails on our side isn't charged; one the model gave is, even
+when it was cut off or declined. If the interviewer fails on
 the first turn, the session ends. Transcripts are kept 90 days, the
 verdicts for history ([Privacy](PRIVACY.md#mock-interviews)).
 

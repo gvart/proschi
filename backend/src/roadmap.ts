@@ -1,6 +1,6 @@
 import { ROADMAP } from '../../frontend/src/practice/roadmapStages';
 import { evaluate } from './achievements';
-import { aiEnabled, AiError, createClient, type Usage } from './ai/client';
+import { aiEnabled, AiError, createClient, HAIKU, type ModelUsage, type Usage } from './ai/client';
 import { pickNext, type Candidates, type Pick } from './ai/roadmap';
 import type { InterviewVerdict } from './ai/interviewer';
 import type { User } from './auth';
@@ -72,12 +72,19 @@ async function candidatesFor(env: Env, user: User): Promise<{ candidates: Candid
   return { candidates: { problems, topics }, weakest: answer.skills.weakest };
 }
 
+/** What a pick spent: `used`, the tokens (to count with the session), and `charge`, what the user pays (P34). */
+export interface Picked {
+  used?: Usage;
+  charge: ModelUsage[];
+}
+
 /**
- * Picks and stores the next steps; returns the tokens spent (to count with
- * the session), or undefined when nothing was called. Never throws: a
+ * Picks and stores the next steps; returns the tokens spent (undefined when
+ * nothing was called) and the calls to charge: the picks once stored, or
+ * whatever the model answered when they failed (P34). Never throws: a
  * failure is logged and the caller carries on.
  */
-async function recommend(env: Env, user: User, source: RecSource, sourceId: string | undefined, report: string, requestId?: string): Promise<Usage | undefined> {
+async function recommend(env: Env, user: User, source: RecSource, sourceId: string | undefined, report: string, requestId?: string): Promise<Picked> {
   try {
     const { candidates, weakest } = await candidatesFor(env, user);
     const { picks, usage } = await pickNext(createClient(env, { timeoutMs: PICK_TIMEOUT_MS, maxRetries: 1 }), { report, weakest, candidates });
@@ -85,10 +92,10 @@ async function recommend(env: Env, user: User, source: RecSource, sourceId: stri
       .bind(user.id, Date.now(), source, sourceId ?? null, JSON.stringify(picks))
       .run();
     log('info', 'roadmap.picked', { requestId, userId: user.id, source, picks: picks.length });
-    return usage;
+    return { used: usage, charge: [{ model: HAIKU, ...usage }] };
   } catch (e) {
     log('warn', 'roadmap.failed', { requestId, userId: user.id, source, ...(e instanceof AiError ? { kind: e.kind } : {}), error: errorText(e).split('\n')[0] });
-    return e instanceof AiError ? e.usage : undefined;
+    return e instanceof AiError ? { used: e.usage, charge: e.charge } : { charge: [] };
   }
 }
 
@@ -104,9 +111,9 @@ export function verdictReport(problemId: string, v: InterviewVerdict): string {
   ].join('\n');
 }
 
-/** After an AI interview's verdict (src/interviews.ts finishInterview): Pro only. Returns Haiku's tokens, or undefined. */
-export async function recommendAfterInterview(env: Env, user: User, interviewId: string, problemId: string, verdict: InterviewVerdict, requestId?: string): Promise<Usage | undefined> {
-  if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return undefined;
+/** After an AI interview's verdict (src/interviews.ts finishInterview): Pro only. Returns Haiku's tokens and what to charge. */
+export async function recommendAfterInterview(env: Env, user: User, interviewId: string, problemId: string, verdict: InterviewVerdict, requestId?: string): Promise<Picked> {
+  if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return { charge: [] };
   return recommend(env, user, 'interview', interviewId, verdictReport(problemId, verdict), requestId);
 }
 

@@ -1,7 +1,7 @@
 import { MAX_REVIEW_BODY, MAX_REVIEW_IMPORTS, MAX_REVIEW_SOURCE } from '../../frontend/src/review/contract';
 import type { User } from './auth';
 import { WALL_CLOCK_MS } from './ai/budget';
-import { AiError, aiEnabled, createClient, type MessageRequest, type MessageResult } from './ai/client';
+import { AiError, aiEnabled, createClient, malformed, type MessageRequest, type MessageResult, type ModelUsage } from './ai/client';
 import { approxTokens, problemContext, type ProblemContext } from './ai/context';
 import { checkChange, measure, type ChangeResult, type DesignSite, type Edit } from './ai/partnerChanges';
 import { INTENTS, MAX_TOKENS, parsePartnerAnswer, partnerRequest, repairMessage, type HistoryTurn, type Intent, type PartnerAnswer, type TurnInput } from './ai/partnerPrompt';
@@ -11,7 +11,6 @@ import type { Env } from './env';
 import { can, planRequired, requireFeature, type FeatureRoute } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
-import type { Usage } from './meter';
 import { credits, partnerBilling } from './partnerBilling';
 
 /**
@@ -30,8 +29,11 @@ import { credits, partnerBilling } from './partnerBilling';
  * per session (a 90-second lease, 409 turn_in_progress), none during the
  * user's open mock interview (409 interview_active, P29). A turn holds its
  * estimated cost before the model is called (402 no_credits), then settles
- * with the real usage; a failed turn releases the hold and is not charged,
- * and neither is an answer that did not validate and was asked for again.
+ * with the real usage of every answer the model gave (P34): one that did not
+ * validate, was refused or cut off is charged too. A turn that failed before
+ * the model answered (network, timeout, overloaded) releases the hold. A
+ * second call (the retry of a malformed answer, a repair) tops the hold up
+ * first, and is skipped when it can't.
  *
  * The server never trusts the page's numbers (P6): it parses, simulates and
  * tests the source itself, and checks each proposed change
@@ -236,19 +238,25 @@ function turnBody(body: Record<string, unknown>): TurnBody {
   return { intent, message, source: body.source, files, ...(intent === 'improve' ? { changeId: body.changeId as string } : {}) };
 }
 
-const meterUsage = (r: MessageResult): Usage => ({ model: r.model, ...r.usage });
+const meterUsage = (r: MessageResult): ModelUsage => ({ model: r.model, ...r.usage });
 
 interface Answered {
   answer: PartnerAnswer;
   changes: { title: string; why: string; edits: Edit[]; result: ChangeResult }[];
-  /** The calls to charge: the answer that was kept, and a repair. Not an answer that did not validate. */
-  billed: Usage[];
+  /** The calls to charge: every answer the model gave, one that did not validate and a repair included (P34). */
+  billed: ModelUsage[];
 }
+
+/** Input tokens of a request, roughly: what a second call on the hold is sized by. */
+const approxInput = (r: MessageRequest): number => approxTokens(JSON.stringify(r.system) + JSON.stringify(r.messages));
 
 /**
  * Asks the model for the turn, and checks its answer: one more call when it
  * does not validate, and one repair call when a change does not apply. Each
- * change is checked against `source` (measured as `before`).
+ * change is checked against `source` (measured as `before`). Before either
+ * second call the lease is extended and the hold topped up (`more`, sized
+ * by the call's input); a hold that can't be topped up skips the call. A
+ * failure is an AiError whose `charge` holds every answer the model gave.
  */
 async function answer(
   env: Env,
@@ -256,17 +264,32 @@ async function answer(
   check: (edits: Edit[]) => ChangeResult,
   coach: boolean,
   extend: () => Promise<void>,
+  more: (inputTokens: number) => Promise<boolean>,
 ): Promise<Answered> {
   const client = createClient(env);
-  const billed: Usage[] = [];
+  const billed: ModelUsage[] = [];
+  /** One call; a failed one carries the answers before it in its charge. */
+  const ask = async (req: MessageRequest): Promise<MessageResult> => {
+    try {
+      return await client.create(req);
+    } catch (e) {
+      if (e instanceof AiError) throw new AiError(e.kind, e.message, { status: e.status, usage: e.usage, charge: [...billed, ...e.charge] });
+      throw e;
+    }
+  };
   let first: { result: MessageResult; answer: PartnerAnswer } | undefined;
   for (let attempt = 0; !first; attempt++) {
-    const result = await client.create(request);
+    const result = await ask(request);
     const parsed = parsePartnerAnswer(result.text);
     if (parsed) {
       billed.push(meterUsage(result));
       first = { result, answer: parsed };
-    } else if (attempt >= 1) throw new AiError('malformed', 'The answer did not validate twice', { usage: result.usage });
+      continue;
+    }
+    // Asked again only once, and only held: else the answer that did not validate is charged and the turn fails.
+    if (attempt >= 1 || !(await more(approxInput(request)))) throw malformed('The answer did not validate', result, billed);
+    billed.push(meterUsage(result));
+    await extend();
   }
   const checked = (a: PartnerAnswer) => (coach ? [] : a.changes).map((c) => ({ ...c, result: check(c.edits) }));
   let kept = first.answer;
@@ -286,8 +309,9 @@ async function answer(
         changes = checked(repaired);
       }
     } catch (e) {
-      // A failed repair is not charged; the first answer stands, its failed changes as they are.
+      // A failed repair: the first answer stands, its failed changes as they are; what the model answered is charged (P34).
       if (!(e instanceof AiError)) throw e;
+      billed.push(...e.charge);
     }
   }
   return { answer: coach ? { ...kept, changes: [] } : kept, changes, billed };
@@ -348,8 +372,7 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
     const history: HistoryTurn[] = turns.map((t) => ({ role: t.role, intent: t.intent, message: t.message, changes: byTurn.get(t.id) }));
     const req = partnerRequest(input, history, { deep, context });
 
-    const approxInput = approxTokens(JSON.stringify(req.system) + JSON.stringify(req.messages));
-    const estimate = partnerBilling.estimateMc(req.model, MAX_TOKENS, approxInput, env);
+    const estimate = partnerBilling.estimateMc(req.model, MAX_TOKENS, approxInput(req), env);
     const hold = await partnerBilling.hold(env, user.id, estimate, `partner:${id}:${turns.length + 1}`);
     if (!hold.ok) {
       await letGo();
@@ -359,7 +382,9 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
 
     // Coach first on a practice problem (P30): only `solve` gets changes.
     const coach = practice && body.intent !== 'solve';
-    const result = await answer(env, req, (edits) => checkChange(body.source, before, edits, site, body.intent === 'build'), coach, extend);
+    const held = hold.holdId;
+    const more = (inputTokens: number) => partnerBilling.topUp(env, held, user.id, partnerBilling.estimateMc(req.model, MAX_TOKENS, inputTokens, env));
+    const result = await answer(env, req, (edits) => checkChange(body.source, before, edits, site, body.intent === 'build'), coach, extend, more);
     const charged = await partnerBilling.settle(env, holdId, result.billed, deep);
     holdId = undefined;
 
@@ -402,10 +427,15 @@ export const postPartnerTurn = partnerRoute(async (request: Request, ctx: Ctx, u
     };
     return json({ turn, credits: { charged: credits(charged.chargedMc), balance: credits(charged.balanceMc) } }, 200, NO_STORE);
   } catch (e) {
-    if (holdId) await partnerBilling.release(env, holdId).catch((err: unknown) => log('error', 'partner.release_failed', { requestId: ctx.requestId, error: errorText(err) }));
+    // What the model answered is charged (P34); a failure before any answer releases the hold.
+    const charge = e instanceof AiError ? e.charge : [];
+    if (holdId)
+      await (charge.length ? partnerBilling.settle(env, holdId, charge, deep) : partnerBilling.release(env, holdId)).catch((err: unknown) =>
+        log('error', 'partner.release_failed', { requestId: ctx.requestId, error: errorText(err) }),
+      );
     await letGo();
     if (!(e instanceof AiError)) throw e;
-    log('error', 'partner.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, error: errorText(e) });
+    log('error', 'partner.failed', { requestId: ctx.requestId, userId: user.id, kind: e.kind, charged: charge.length, error: errorText(e) });
     return e.retryable
       ? json({ error: 'ai_unavailable', message: 'Design partner is busy; try again in a minute' }, 503, NO_STORE)
       : json({ error: 'partner_failed', message: 'Design partner could not answer; try again' }, 502, NO_STORE);

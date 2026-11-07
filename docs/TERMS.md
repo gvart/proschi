@@ -19,8 +19,10 @@ the files in your repository).
 Mock interviews and Design partner are paid for in credits. One credit is
 worth €0.01. Each action is charged for what it used, so a short answer
 costs less than a long one; it shows an estimate before it starts, and the
-real cost is in **Plan & billing** on your account page afterwards. An
-answer that fails on our side isn't charged. Monthly credits are spent
+real cost is in **Plan & billing** on your account page afterwards. You
+pay for what the model did: an answer it gave is charged even when it was
+cut off, declined or came out malformed. An answer that fails on our side
+(a network error, a timeout, a busy service) isn't charged. Monthly credits are spent
 first, then the sign-up credits, then top-ups.
 
 ## Pro and Max

@@ -339,8 +339,10 @@ P31, docs/impl/design-partner.md "Credits").
 - **Price.** A call is charged twice what it cost us: the model's price per
   token (`PRICES` in `src/meter.ts`, with cache reads and writes), times 2,
   in euros at `CREDITS_USD_EUR` (unset: 0.95), at €0.01 a credit, rounded up
-  to a millicredit. Failed calls and the retry of a malformed answer are
-  charged nothing.
+  to a millicredit. Every answer the model gave is charged, a refused, cut-off
+  or malformed one and its retry included (P34); a call that failed before
+  the model answered (network, timeout, rate limit, overloaded, 5xx) is
+  charged nothing (`AiError.charge` says which, `settleFailed` applies it).
 - **Ledger** (`src/credits.ts`, table `credits`, migration 0024): an
   append-only list of rows in millicredits (`delta_mc`), in one of three
   buckets. A balance is summed, never stored. `monthly`: Pro's 800 or Max's
@@ -358,7 +360,9 @@ P31, docs/impl/design-partner.md "Credits").
   if the balance less the unexpired holds covers it, so parallel calls can't
   overdraw. After it, `settle` charges the real cost, never more than the
   hold, in one batch with the hold's deletion (a row in `credit_charges`
-  keeps what each call charged and cost). `release` frees a hold. Holds
+  keeps what each call charged and cost). `topUp` adds a second call's worst
+  case to a hold before it runs (a retry, a repair), or refuses and the call
+  is skipped. `release` frees a hold. Holds
   expire after 5 minutes (a mock interview's verdict hold lasts its wall
   clock plus 30 minutes); the daily cron prunes old ones (`credit_holds`).
   Too few credits answers `402 {error: 'no_credits', needed, balance}`, in
@@ -596,7 +600,9 @@ How it works (`src/review.ts`, `src/ai/reviewer.ts`):
 
 - A review holds its worst case (Sonnet's 16,000 output tokens and its input
   guessed from the characters sent) before the model is called, and settles
-  what the answer that validated cost; a failed review releases the hold.
+  what every answer the model gave cost (P34); one that failed before an
+  answer releases the hold. A malformed answer is asked again only after
+  `topUp`.
   There is no daily cap. The charges are in Download my data
   (`creditCharges`) and deleted with the account.
 - One Sonnet call (`claude-sonnet-5-5`, adaptive thinking, effort medium)

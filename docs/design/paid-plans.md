@@ -210,3 +210,17 @@ id; don't rewrite old ones.
   sign-in identity (provider and subject, or the email). A keyed hash of the
   identity is kept after the account is deleted, so deleting and signing up
   again gives nothing more.
+- **P34. Charged for what the model did (replaces P27's "not charged").**
+  Every call that reached the model is charged for its real usage, whatever
+  came of it: an answer cut off at max_tokens, a refusal, an answer that did
+  not validate and the automatic retry of it, and a repair. Only a failure
+  on our side or the infrastructure's with no model work billed is free: a
+  network error, a timeout before the response, a rate limit, overloaded or
+  another 5xx; its hold is released. (`AiError.charge` carries what to
+  charge; `settleFailed` charges it or releases.) A second call on the same
+  hold (the retry of a malformed answer, a Design partner repair) tops the
+  hold up to its own worst case first (`topUp`); when the balance can't
+  cover it, the second call is not made and what was answered is charged.
+  A verdict that failed after the model answered uses up the session's
+  verdict hold, so each further try holds and pays again. Hold-then-settle,
+  the estimates and parallel safety of P27 stay.
