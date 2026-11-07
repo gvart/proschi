@@ -102,6 +102,10 @@ import { downloadBlob, downloadText, exportImage, fileNameFor, renderPreviewPng 
 import { MAX_PREVIEW_BYTES, createShare, embedSnippet, embedUrl, fetchShare, shareIdFromSearch } from '../../services/shares';
 import { ApiError } from '../../services/api';
 import { FeaturesContext, showsUpgrade, useFeatures } from '../featureState';
+import PartnerButton from '../../partner/PartnerButton';
+import { usePartnerShortcut } from '../../partner/shortcut';
+import PartnerDock from '../../partner/PartnerDock';
+import { useIsPhone } from '../../onboarding/layout';
 import { useAccount } from '../../practice/useAccount';
 import AccountMenu from '../../practice/AccountMenu';
 import { track } from '../../services/metrics';
@@ -134,6 +138,7 @@ import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView
 const HldView = lazy(() => import('../Hld/HldView'));
 const ResultsPanel = lazy(() => import('../Analysis/ResultsPanel'));
 const ReviewPanel = lazy(() => import('../../review/ReviewPanel'));
+const PartnerPanel = lazy(() => import('../../partner/PartnerPanel'));
 const ExamplesGallery = lazy(() => import('./ExamplesGallery'));
 const ShortLinksDialog = lazy(() => import('./ShortLinksDialog'));
 const ImportDialog = lazy(() => import('./ImportDialog'));
@@ -198,6 +203,8 @@ function initialView(): View {
 function initialTourMode(): StartMode {
   return startMode('editor', { deepLink: isDeepLink(), returning: isReturning() });
 }
+
+const EDITOR_CONTEXT = { kind: 'editor' } as const;
 
 /** The pane a phone opens on: the code on a first visit, where it all starts; the diagram for a link or a returning visitor. */
 function initialMobilePane(): 'code' | 'diagram' {
@@ -537,6 +544,30 @@ export default function Playground() {
   const signedIn = account.state.status === 'signed-in';
   const features = useFeatures(account.state);
   const shareLinks = features('share_links');
+
+  // Design partner (src/partner): on builds with accounts, beside the panes or as a sheet on phones.
+  const hasPartner = account.state.status !== 'off';
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const phone = useIsPhone();
+  const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
+  const closePartner = useCallback(() => setPartnerOpen(false), []);
+  usePartnerShortcut(togglePartner, hasPartner);
+  const sourceNow = useRef(source);
+  const importsNow = useRef(imports);
+  useEffect(() => {
+    sourceNow.current = source;
+    importsNow.current = imports;
+  });
+  const partnerSource = useCallback(() => sourceNow.current, []);
+  const partnerFiles = useCallback(() => Object.entries(importsNow.current ?? {}).map(([name, text]) => ({ name, source: text })), []);
+  const applyPartner = useCallback(
+    (next: string) => {
+      if (editorRef.current) editorRef.current.replace(next);
+      else setSource(next);
+    },
+    [setSource],
+  );
+  const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
 
   const copyText = async (text: string, prompt: string) => {
     try {
@@ -1012,6 +1043,8 @@ export default function Playground() {
             </button>
           )}
 
+          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
+
           <ZenButton zen={zen} className={iconButton} />
 
           <div data-tour="export">
@@ -1203,6 +1236,7 @@ export default function Playground() {
                         source={source}
                         input={() => editorReviewInput(parsedSource, parsed, simulation.analysis, simulation.results, { path: rootPath, imports })}
                         onSelect={selectDiagnostic}
+                        onOpenPartner={hasPartner ? () => setPartnerOpen(true) : undefined}
                       />
                     }
                   />
@@ -1288,6 +1322,23 @@ export default function Playground() {
           </section>
         </SplitPanel>
       </Group>
+      {hasPartner && (
+        <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+          <Suspense fallback={<PaneLoading />}>
+            <PartnerPanel
+              storeKey={`editor:${current.id}`}
+              context={EDITOR_CONTEXT}
+              account={account}
+              source={source}
+              getSource={partnerSource}
+              getFiles={partnerFiles}
+              apply={applyPartner}
+              undo={undoPartner}
+              onClose={closePartner}
+            />
+          </Suspense>
+        </PartnerDock>
+      )}
       </div>
 
       {drawer && (

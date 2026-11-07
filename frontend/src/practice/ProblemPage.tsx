@@ -14,8 +14,11 @@ import LessonHost from './LessonHost';
 import TestPanel from './TestPanel';
 import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
-import { CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import { lessonRead, markLessonRead, sourceOf, statusOf, withRun, withSource, type Progress } from './progress';
+import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
+import { lessonRead, markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
+import PartnerButton from '../partner/PartnerButton';
+import { usePartnerShortcut } from '../partner/shortcut';
+import PartnerDock from '../partner/PartnerDock';
 import { PROBLEM_FILE, parseSolution, runTests, type DesignMetrics, type RunResult } from './workspace';
 import { localDay } from '../learn/streak';
 import { recordLocalSolve } from './activity';
@@ -48,6 +51,7 @@ import { track } from '../services/metrics';
 import './practiceLayout.css';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
+const PartnerPanel = lazy(() => import('../partner/PartnerPanel'));
 // On phones, Help's items join Reset in one "More" menu (MoreMenu).
 const HelpMenuItems = lazy(() => import('../onboarding/HelpMenuItems'));
 const CheatSheet = lazy(() => import('../onboarding/CheatSheet'));
@@ -318,7 +322,22 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     else panel.collapse();
   };
 
+  // Design partner (src/partner): coaches on this problem; off during an interview (P29, P30).
+  const hasPartner = account.state.status !== 'off';
+  const [partnerOpen, setPartnerOpen] = useState(false);
+  const togglePartner = useCallback(() => setPartnerOpen((o) => !o), []);
+  const closePartner = useCallback(() => setPartnerOpen(false), []);
+  const partnerOff = interviewOn ? 'Design partner is off while interview mode is on, so the interview stays your own work. Leave interview mode to use it again.' : undefined;
+  const partnerContext = useMemo(() => ({ kind: 'practice' as const, problemId: problem.id }), [problem.id]);
+  const applyPartner = useCallback((next: string) => {
+    if (editorRef.current) editorRef.current.replace(next);
+    else setSource(next);
+  }, []);
+  const undoPartner = useCallback(() => editorRef.current?.undo() ?? false, []);
+  const markAssisted = useCallback(() => onProgress((p) => withAssisted(p, problem.id)), [onProgress, problem.id]);
+
   const inLesson = hasLesson && stage === 'lesson';
+  usePartnerShortcut(togglePartner, hasPartner && !inLesson && !partnerOff);
   const lessonButton = (className: string) =>
     hasLesson && (
       <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
@@ -409,6 +428,25 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     </section>
   );
 
+  const partnerDock = hasPartner && (
+    <PartnerDock open={partnerOpen} phone={phone} onClose={closePartner}>
+      <Suspense fallback={null}>
+        <PartnerPanel
+          storeKey={`practice:${problem.id}`}
+          context={partnerContext}
+          account={account}
+          source={source}
+          getSource={getSource}
+          apply={applyPartner}
+          undo={undoPartner}
+          onClose={closePartner}
+          offReason={partnerOff}
+          onAssisted={markAssisted}
+        />
+      </Suspense>
+    </PartnerDock>
+  );
+
   const tests = (
     <section data-tour="tests" className="h-full flex flex-col">
       <TestPanel
@@ -425,6 +463,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             source={source}
             input={() => practiceReviewInput(problem, source, engine)}
             onSelect={goTo}
+            onOpenPartner={hasPartner && !partnerOff ? () => setPartnerOpen(true) : undefined}
           />
         }
         mistake={
@@ -480,6 +519,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
           <span className="truncate">{problem.title}</span>
+          {progress[problem.id]?.assisted && <AssistedTag />}
         </h1>
         <DifficultyBadge difficulty={problem.difficulty} />
         {problem.company && (
@@ -505,6 +545,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               </button>
             </span>
             <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />
+            {hasPartner && <PartnerButton open={partnerOpen && !partnerOff} onToggle={togglePartner} disabledReason={partnerOff && 'Design partner is off during an interview'} />}
             <ZenButton zen={zen} className={iconButton} />
           </>
         )}
@@ -539,7 +580,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             ))}
           </div>
         ) : (
-          <Group orientation="vertical" className="flex-1 min-h-0" onLayoutChanged={refit}>
+          <div className="flex flex-1 min-h-0">
+          <Group orientation="vertical" className="flex-1 min-h-0 min-w-0" onLayoutChanged={refit}>
             <Panel id="workspace" minSize="25%">
               <Group orientation="horizontal" className="h-full" onLayoutChanged={refit}>
                 <Panel id="statement" defaultSize="30%" minSize="18%" maxSize="55%">
@@ -569,7 +611,10 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               {tests}
             </Panel>
           </Group>
+          {partnerDock}
+          </div>
         ))}
+      {phone && !inLesson && partnerDock}
 
       {hasLesson && (
         <LessonHost mode={inLesson ? 'page' : drawer ? 'drawer' : 'closed'} onClose={() => setDrawer(false)} scrollRef={lessonScroll} title={problem.title}>

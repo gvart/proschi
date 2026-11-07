@@ -14,6 +14,8 @@ export interface ProblemProgress {
   status: Status;
   /** The last source in the editor, when it differs from the starter. */
   source?: string;
+  /** Design partner wrote changes for it on request (docs/design/paid-plans.md P30). */
+  assisted?: true;
 }
 
 export type Progress = Record<string, ProblemProgress>;
@@ -36,7 +38,7 @@ export function readProgress(raw: unknown): Progress {
   for (const [id, value] of Object.entries(raw as Record<string, unknown>)) {
     const entry = value as Partial<ProblemProgress> | null;
     if (!isSafeKey(id) || !entry || typeof entry !== 'object' || !STATUSES.includes(entry.status as Status)) continue;
-    progress[id] = { status: entry.status as Status, ...(typeof entry.source === 'string' ? { source: entry.source } : {}) };
+    progress[id] = { status: entry.status as Status, ...(typeof entry.source === 'string' ? { source: entry.source } : {}), ...(entry.assisted === true ? { assisted: true as const } : {}) };
   }
   return progress;
 }
@@ -73,7 +75,14 @@ export function withSource(progress: Progress, problem: Problem, source: string)
   const current = statusOf(progress, problem.id);
   const changed = source.trim() !== problem.starter.trim();
   const status: Status = current === 'solved' ? 'solved' : changed ? 'attempted' : current;
-  return { ...progress, [problem.id]: { status, ...(changed ? { source } : {}) } };
+  return { ...progress, [problem.id]: { status, ...(changed ? { source } : {}), ...(progress[problem.id]?.assisted ? { assisted: true as const } : {}) } };
+}
+
+/** Marks a problem assisted: Design partner showed the changes for it. Kept through later edits and runs. */
+export function withAssisted(progress: Progress, id: string): Progress {
+  const entry = progress[id] ?? { status: 'attempted' as Status };
+  if (entry.assisted) return progress;
+  return { ...progress, [id]: { ...entry, status: entry.status === 'todo' ? 'attempted' : entry.status, assisted: true } };
 }
 
 /** Records a test run: all passing solves the problem; any other run makes it at least attempted. */
