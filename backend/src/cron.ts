@@ -1,5 +1,6 @@
 import { pruneAudit } from './admin';
 import { purgeAdminSessions } from './adminAuth';
+import { pruneBillingWebhooks } from './billing';
 import { TOMBSTONE_TTL_MS } from './documents';
 import { now, type Env } from './env';
 import { pruneEvents, recordEvent } from './events';
@@ -62,6 +63,7 @@ export async function dailyCron(env: Env): Promise<void> {
   await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
   await runJob(env, 'interview_transcripts', async () => ({ cleared: await pruneInterviewTranscripts(env) }));
   await runJob(env, 'review_usage', async () => ({ deleted: await pruneReviewUsage(env) }));
+  await runJob(env, 'billing_webhooks', async () => ({ deleted: await pruneBillingWebhooks(env) }));
 }
 
 /**

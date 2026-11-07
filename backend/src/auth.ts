@@ -8,6 +8,7 @@ import { recordEvent } from './events';
 import { errorText, log } from './log';
 import { countServerEvent } from './metrics';
 import { rejectName } from './moderation';
+import { effectivePlan } from './plans';
 
 /**
  * Sign-in with GitHub or Google (OAuth 2 authorization code flow with PKCE).
@@ -359,7 +360,7 @@ export interface User {
   publicProfile: boolean;
   /** Cards a day the user aims for (GOAL_CHOICES in frontend/src/learn/streak.ts); a solve also meets it. */
   dailyGoal: number;
-  /** The account's plan, for its limits (src/plans.ts). */
+  /** The account's effective plan (src/plans.ts effectivePlan: a comp counts), for its features and limits. */
   plan: string;
 }
 
@@ -369,11 +370,12 @@ interface UserRow {
   public_profile: number;
   daily_goal: number;
   plan: string;
+  comp_until: number | null;
   last_seen_day: string | null;
   expires_at: number;
 }
 
-const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal, plan: row.plan });
+const toUser = (row: UserRow): User => ({ id: row.id, displayName: row.display_name, publicProfile: row.public_profile === 1, dailyGoal: row.daily_goal, plan: effectivePlan(row.plan, row.comp_until) });
 
 /**
  * Notes today (UTC) as the account's last seen day, at most once a day and
@@ -407,7 +409,7 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
     if (!bearer) return undefined;
     // Access tokens only: a refresh token or a cookie's token is refused here.
     const row = await ctx.env.DB.prepare(
-      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+      `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
        WHERE s.token_hash = ? AND s.kind = 'app_access' AND s.expires_at > ? AND u.blocked_at IS NULL`,
     )
       .bind(await sha256(bearer), now())
@@ -422,7 +424,7 @@ export async function authenticate(request: Request, ctx: Ctx): Promise<User | u
   const hash = await sha256(token);
   const t = now();
   const row = await ctx.env.DB.prepare(
-    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
+    `SELECT u.id, u.display_name, u.public_profile, u.daily_goal, u.plan, u.comp_until, u.last_seen_day, s.expires_at FROM sessions s JOIN users u ON u.id = s.user_id
      WHERE s.token_hash = ? AND s.kind = 'web' AND s.expires_at > ? AND u.blocked_at IS NULL`,
   )
     .bind(hash, t)
