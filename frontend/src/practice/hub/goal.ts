@@ -46,6 +46,21 @@ export function parseGoal(raw: unknown): GoalState {
 export const wantsStreak = (g: GoalState) => g.streak ?? g.goals.includes('habit');
 export const wantsInterview = (g: GoalState) => g.goals.includes('interview');
 
+/** Whether the signed-in announcement (announcements/Announcement.tsx) is still loading, on the page, or not there (none, dismissed, or signed out). */
+export type AnnouncementState = 'loading' | 'shown' | 'none';
+
+/**
+ * Whether the home asks "What are you here for?": not once answered, and only
+ * one card above the list at a time, the announcement first. Signed in, it
+ * waits until the announcement is known to be absent (none or dismissed);
+ * while the account is still loading, it waits too, so it never flashes up and
+ * gives way to an announcement.
+ */
+export function asksGoal(goal: GoalState, account: 'off' | 'loading' | 'signed-out' | 'signed-in', announcement: AnnouncementState): boolean {
+  if (goal.asked || account === 'loading') return false;
+  return account !== 'signed-in' || announcement === 'none';
+}
+
 let current: GoalState | undefined;
 const listeners = new Set<() => void>();
 

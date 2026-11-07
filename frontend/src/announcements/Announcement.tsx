@@ -59,22 +59,29 @@ export function AnnouncementCard({ data, onDismiss, onClick }: { data: Announcem
   );
 }
 
-/** The signed-in user's announcement, if any, under the page header. */
-export default function Announcement() {
+/** The signed-in user's announcement, if any, under the page header; `onChange` hears whether it is on the page once known, and when it goes. */
+export default function Announcement({ onChange }: { onChange?: (shown: boolean) => void }) {
   const [data, setData] = useState<AnnouncementData | null>(null);
   useEffect(() => {
     let live = true;
     api<{ announcement: AnnouncementData | null }>('/api/me/announcement').then(
-      (r) => live && setData(r.announcement),
-      () => undefined,
+      (r) => {
+        if (!live) return;
+        setData(r.announcement);
+        onChange?.(r.announcement !== null);
+      },
+      () => live && onChange?.(false),
     );
     return () => {
       live = false;
     };
+    // Once, on mount: the caller's callback is not a reason to fetch again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   if (!data) return null;
   const mark = (what: 'dismiss' | 'click') => {
     setData(null);
+    onChange?.(false);
     // keepalive: a click leaves the page, and the request must still arrive.
     void fetch(`/api/me/announcement/${encodeURIComponent(data.id)}/${what}`, { method: 'POST', credentials: 'same-origin', keepalive: true }).catch(() => undefined);
   };
