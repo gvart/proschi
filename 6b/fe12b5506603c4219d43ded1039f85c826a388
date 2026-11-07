@@ -1,0 +1,56 @@
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_c9d0746b3cf4bd 218-235
+frontend/src/practice/interview/setupSteps.ts
+  s_e17b87e0a1b3ca::t_33095a128621b4 2-27
+  s_e17b87e0a1b3ca::t_0c9631a453c42d 1,28-32
+frontend/src/practice/interview/Setup.tsx
+  s_e17b87e0a1b3ca::t_da315151b8ff40 225,262,400
+  s_e17b87e0a1b3ca::t_210054d6e79cfe 71
+  s_e17b87e0a1b3ca::t_0c9631a453c42d 18,22
+  s_e17b87e0a1b3ca::t_0ed5323407d0d9 1-2,4,8,10,12,16,19,23-24,27-33,45-53,68,70,86,88,107-138,187-203,205-224,226-261,263-324,327-330,351-353,356-357,379-382,384-395,397-399,401-408,410-418,420-422,424,426-427,449-462
+  s_e17b87e0a1b3ca::t_26489a1fa687e1 7
+  s_e17b87e0a1b3ca::t_b98c0bb5215757 463-465
+frontend/src/practice/interview/setup.css
+  s_e17b87e0a1b3ca::t_ec842dc14615b4 1-23
+frontend/src/practice/interview/setup.test.tsx
+  s_e17b87e0a1b3ca::t_8244a949f60768 1-108
+frontend/e2e/interview.e2e.ts
+  s_e17b87e0a1b3ca::t_39f26ca54ef3d8 2,26,35-39,48-50,53-55,60-71,83,169,200-204
+frontend/src/practice/interview/SetupReview.tsx
+  s_e17b87e0a1b3ca::t_243139ab371326 42-44,56
+  s_e17b87e0a1b3ca::t_a8b5bc4c63fa4c 1-41,50-52,55,63,65-68,70,76-183
+  s_e17b87e0a1b3ca::t_4888ac5113016a 46-47,49,53-54,58-59,61,64,69,71,73-75
+  s_e17b87e0a1b3ca::t_da315151b8ff40 45,48,57,60,62,72
+frontend/src/practice/interview/ProblemStep.tsx
+  s_e17b87e0a1b3ca::t_da315151b8ff40 87
+  s_e17b87e0a1b3ca::t_5cca89ea602614 56
+  s_e17b87e0a1b3ca::t_0c9631a453c42d 9,82
+  s_e17b87e0a1b3ca::t_1371d8f2706116 1-8,10-55,57-81,83-86,88-118
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_384a225437e2bf 4
+  s_e17b87e0a1b3ca::t_39f26ca54ef3d8 19-23,127-129,131-133,136-137,139,141,143,198,211-212,214,229-231,244,272,283,289-295
+frontend/src/practice/interview/wizard.tsx
+  s_e17b87e0a1b3ca::t_da315151b8ff40 67,121-122,124,126
+  s_e17b87e0a1b3ca::t_b9e8f96e347c35 1-66,68-120,123,125,127-146
+frontend/e2e/partner.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_39f26ca54ef3d8 276
+  s_e17b87e0a1b3ca::t_384a225437e2bf 3
+frontend/e2e/maxExtras.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_39f26ca54ef3d8 4,13,18
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "6bfe12b5506603c4219d43ded1039f85c826a388",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
