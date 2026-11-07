@@ -454,7 +454,7 @@ export default function Playground() {
       });
     });
   }, []);
-  const layoutSettled = useAutoLayout(shown, showLaidOut);
+  const { settled: layoutSettled, busy: layoutBusy } = useAutoLayout(shown, showLaidOut);
 
   const stopPlaying = () => {
     setPlaying(false);
@@ -839,7 +839,7 @@ export default function Playground() {
     >
       <ZenCollapse zen={zen.zen}>
         <Header base="../" current="editor" compact siteNav={false} actions={<AccountMenu account={account} />}>
-        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-none">
+        <div className="flex items-center gap-1 min-w-0 flex-1 sm:flex-initial">
           <button
             type="button"
             aria-label="Diagrams"
@@ -993,7 +993,7 @@ export default function Playground() {
           }}
         />
 
-        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap sm:ml-auto">
+        <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
           <select
             aria-label="Use case"
             value={useCase?.id ?? ''}
@@ -1043,7 +1043,7 @@ export default function Playground() {
             </button>
           )}
 
-          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} labelClassName="hidden min-[1360px]:inline" />}
+          {hasPartner && <PartnerButton open={partnerOpen} onToggle={togglePartner} />}
 
           <ZenButton zen={zen} className={iconButton} />
 
@@ -1061,12 +1061,13 @@ export default function Playground() {
           <div data-tour="share">
             <Menu
               label={copied ? 'Copied' : 'Share'}
+              title="Share: a link, a short link or an embed"
               align="right"
               buttonClassName={outlineButton}
               trigger={
                 <>
                   {copied ? <Check size={16} className="text-pass" /> : <Link size={16} />}
-                  <span className="hidden sm:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
+                  <span className="hidden xl:inline">{copied ? 'Copied' : shortening ? 'Sharing…' : 'Share'}</span>
                 </>
               }
             >
@@ -1290,6 +1291,7 @@ export default function Playground() {
                           onResetLayout={() => editSource(clearPositions)}
                           onDelete={deleteFromCanvas}
                           fitKey={`${mobilePane}:${layoutSettled}`}
+                          layoutBusy={layoutBusy}
                         glideKey={String(splitMoves)}
                           imageRequest={imageRequest}
                           onImageDone={() => setImageRequest(null)}
@@ -1569,6 +1571,8 @@ interface DiagramViewProps {
   onDelete: (nodeIds: string[], edgeIds: string[]) => void;
   /** Changes when the view becomes visible again, so it can re-fit. */
   fitKey: string;
+  /** A layout is on its way (ELK, then the glide): `data-layout-busy` on the canvas, which the e2e tests wait out. */
+  layoutBusy: boolean;
   /** Changes when the pane was resized in place (the splitter), so it can glide to a new fit. */
   glideKey: string;
   /** An image to export (the Export menu in the header), made once the nodes are drawn. */
@@ -1616,6 +1620,7 @@ function DiagramView({
   onResetLayout,
   onDelete,
   fitKey,
+  layoutBusy,
   glideKey,
   imageRequest,
   onImageDone,
@@ -1740,6 +1745,7 @@ function DiagramView({
     <div
       ref={wrapperRef}
       className="relative h-full"
+      data-layout-busy={layoutBusy || undefined}
       onDragOver={(e) => {
         if (!e.dataTransfer.types.includes(TECH_DRAG_TYPE)) return;
         e.preventDefault();

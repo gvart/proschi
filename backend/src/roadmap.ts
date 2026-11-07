@@ -10,14 +10,12 @@ import { now, type Env } from './env';
 import { can, requireFeature } from './features';
 import { json, rateLimit } from './http';
 import { errorText, log } from './log';
-import { CALLS, hold, release, settle, worstMc } from './meter';
 import { findProblem } from './verify';
 
 /**
  * The AI roadmap (docs/design/paid-plans.md P1, P9; migration 0021): Pro
- * only. After a Pro user's AI interview verdict (src/interviews.ts), and at
- * most once a day after an AI design review (src/review.ts), Haiku picks the
- * next 3 steps from the roadmap's problems and the card topics
+ * only. After a Pro user's AI interview verdict (src/interviews.ts), Haiku
+ * picks the next 3 steps from the roadmap's problems and the card topics
  * (src/ai/roadmap.ts). A failed pick never fails what prompted it.
  *
  *   GET /api/roadmap/next[?interview=<id>]   the newest picks (or the picks made after that interview): {next: {…} | null}
@@ -28,13 +26,12 @@ import { findProblem } from './verify';
  */
 
 const NO_STORE = { 'Cache-Control': 'no-store' };
-/** The picks a review refreshes are at least this old. */
-export const REVIEW_REFRESH_MS = 86_400_000;
 /** How long after a verdict its picks count as still coming (the call's timeout twice, and room). */
 export const PENDING_MS = 60_000;
 /** A pick is a nicety: it gets less time than the verdict, and one retry. */
 const PICK_TIMEOUT_MS = 20_000;
 
+/** 'review': picks made after the retired AI design review (P29), still read from older rows. */
 export type RecSource = 'interview' | 'review';
 
 export interface RoadmapNext {
@@ -116,37 +113,6 @@ export function verdictReport(problemId: string, v: InterviewVerdict): string {
 export async function recommendAfterInterview(env: Env, user: User, interviewId: string, problemId: string, verdict: InterviewVerdict, requestId?: string): Promise<Picked> {
   if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return { charge: [] };
   return recommend(env, user, 'interview', interviewId, verdictReport(problemId, verdict), requestId);
-}
-
-/**
- * After an AI design review (src/review.ts): Pro only, and only when the
- * newest picks are a day old or there are none, and no review tried in the
- * last day (`roadmap_refresh`, claimed in one statement, so a failed try or
- * parallel reviews call once). Held and charged as `next_steps` (P34): the
- * picks, or what the model answered when they failed; nothing without the
- * credits for the hold.
- */
-export async function refreshAfterReview(env: Env, user: User, problemId: string | undefined, review: { summary: string; issues: { title: string; detail: string }[] }, requestId?: string): Promise<void> {
-  if (!can(user, 'ai_roadmap', env).ok || !aiEnabled(env)) return;
-  const t = Date.now();
-  const last = await env.DB.prepare('SELECT MAX(created_at) AS at FROM roadmap_recs WHERE user_id = ?').bind(user.id).first<{ at: number | null }>();
-  if (last?.at && t - last.at < REVIEW_REFRESH_MS) return;
-  const claimed = await env.DB.prepare(
-    'INSERT INTO roadmap_refresh (user_id, tried_at) VALUES (?1, ?2) ON CONFLICT (user_id) DO UPDATE SET tried_at = excluded.tried_at WHERE roadmap_refresh.tried_at <= ?3 RETURNING user_id',
-  )
-    .bind(user.id, t, t - REVIEW_REFRESH_MS)
-    .first();
-  if (!claimed) return;
-  const held = await hold(env, user.id, worstMc(CALLS.nextSteps, env), `next_steps:review:${user.id}`);
-  if (!held.ok) return;
-  const title = problemId ? (findProblem(problemId)?.title ?? problemId) : undefined;
-  const report = [
-    `AI design review of ${title ? `a solution to "${title}" (${problemId})` : 'a diagram in the editor'}.`,
-    `Summary: ${review.summary}`,
-    `Issues:\n${review.issues.map((i) => `- ${i.title}: ${i.detail}`).join('\n') || '- none'}`,
-  ].join('\n');
-  const { charge } = await recommend(env, user, 'review', problemId, report, requestId);
-  await (charge.length ? settle(env, held.holdId, charge, 'next_steps', false) : release(env, held.holdId));
 }
 
 /** A stored row as the API answers it; picks whose problem or topic is gone are left out. */

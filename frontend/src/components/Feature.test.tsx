@@ -23,11 +23,11 @@ function App({ account, children }: { account: AccountState; children: React.Rea
 }
 
 function State() {
-  const s = useFeature('ai_review');
+  const s = useFeature('ai_roadmap');
   return <output data-testid="state">{JSON.stringify(s)}</output>;
 }
 
-const review = (props: Partial<React.ComponentProps<typeof Feature>> = {}) => <Feature name="ai_review" pro={<p>paid</p>} free={<p>rules</p>} {...props} />;
+const review = (props: Partial<React.ComponentProps<typeof Feature>> = {}) => <Feature name="ai_roadmap" pro={<p>paid</p>} free={<p>rules</p>} {...props} />;
 
 /** Renders signed in with `features` as GET /api/me/plan's, once it has answered. */
 async function signedIn(features: PlanInfo['features'] | Partial<PlanInfo['features']>, ui = review()) {
@@ -44,9 +44,9 @@ afterEach(cleanup);
 
 describe('<Feature>', () => {
   it('asks again when a purchase lands (PLAN_CHANGED)', async () => {
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } });
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } });
     expect(screen.getByText('rules')).toBeTruthy();
-    billing.getPlan.mockResolvedValue({ plan: 'pro', features: { ai_review: { ok: true } } as PlanInfo['features'] });
+    billing.getPlan.mockResolvedValue({ plan: 'pro', features: { ai_roadmap: { ok: true } } as PlanInfo['features'] });
     await act(async () => {
       window.dispatchEvent(new CustomEvent('proschi:plan-changed', { detail: 'pro' }));
     });
@@ -55,44 +55,44 @@ describe('<Feature>', () => {
   });
 
   it('renders pro when the server says ok', async () => {
-    await signedIn({ ai_review: { ok: true } });
+    await signedIn({ ai_roadmap: { ok: true } });
     expect(screen.getByText('paid')).toBeTruthy();
     expect(screen.queryByText('rules')).toBeNull();
     expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('renders free with the upgrade hint for needs_pro', async () => {
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } });
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } });
     expect(screen.getByText('rules')).toBeTruthy();
     expect(screen.queryByText('paid')).toBeNull();
     expect(screen.getByRole('link', { name: 'Upgrade to Pro' }).getAttribute('href')).toBe('../pricing/');
   });
 
   it('renders free without the hint with hint={false}, with billing_off, or without paid plans', async () => {
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } }, review({ hint: false }));
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } }, review({ hint: false }));
     expect(screen.getByText('rules')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     cleanup();
-    await signedIn({ ai_review: { ok: false, reason: 'billing_off' } });
+    await signedIn({ ai_roadmap: { ok: false, reason: 'billing_off' } });
     expect(screen.getByText('rules')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
     cleanup();
     billing.on = false;
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } });
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } });
     expect(screen.getByText('rules')).toBeTruthy();
     expect(screen.queryByRole('link')).toBeNull();
   });
 
   it('places a custom hint where a free function puts it', async () => {
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } }, review({ free: (hint) => <p data-testid="box">Want it? {hint}</p>, hint: <a href="x">See Pro</a> }));
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } }, review({ free: (hint) => <p data-testid="box">Want it? {hint}</p>, hint: <a href="x">See Pro</a> }));
     expect(screen.getByTestId('box').textContent).toBe('Want it? See Pro');
   });
 
   it('renders both either way, also while loading', async () => {
-    await signedIn({ ai_review: { ok: true } }, review({ both: <p>always</p> }));
+    await signedIn({ ai_roadmap: { ok: true } }, review({ both: <p>always</p> }));
     expect(screen.getByText('always')).toBeTruthy();
     cleanup();
-    await signedIn({ ai_review: { ok: false, reason: 'needs_pro' } }, review({ both: <p>always</p> }));
+    await signedIn({ ai_roadmap: { ok: false, reason: 'needs_pro' } }, review({ both: <p>always</p> }));
     expect(screen.getByText('always')).toBeTruthy();
     cleanup();
     render(<App account={{ status: 'loading' }}>{review({ both: <p>always</p> })}</App>);

@@ -21,6 +21,12 @@ import { signupLedger } from './signupCredits';
  *
  * An account that fails one still exists and can buy credits; the decision
  * and why is in `signup_checks` for the page and the admin panel.
+ *
+ * `signup_claims` is not the ledger's `signup_identities` (src/credits.ts):
+ * claims are every identity ever checked, granted or refused, taken before
+ * the grant and with no account id; `signup_identities` is only the
+ * identities that were granted, which grantSignupCredits checks itself so
+ * the ledger is once per identity on its own.
  */
 
 export const IP_GRANTS_PER_WEEK = 3;

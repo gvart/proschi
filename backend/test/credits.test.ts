@@ -4,6 +4,7 @@ import { buckets, creditsView, grantSignupCredits, identityHash, revokeStatement
 import type { Env } from '../src/env';
 import { balanceMc, costMc, estimateMc, estimates, hold, HOLD_TTL_MS, pruneHolds, release, settle, settleFailed, topUp, type Usage } from '../src/meter';
 import { AiError } from '../src/ai/client';
+import { TYPICAL_COSTS } from '../../frontend/src/services/estimates';
 import { call, resetDatabase, signedInUser } from './helpers';
 
 /** The credit ledger (src/credits.ts) and the meter (src/meter.ts): millicredits, holds, settles, plans. */
@@ -48,6 +49,10 @@ describe('cost', () => {
     const est = estimates(e);
     expect(est.deepMultiplier).toBe(2);
     for (const k of ['mock_interview', 'partner_review', 'partner_build', 'partner_turn'] as const) expect(est[k].min).toBeLessThan(est[k].max);
+  });
+
+  it('are what the page shows before it has asked (frontend TYPICAL_COSTS), at the default rate', () => {
+    expect(estimates({})).toEqual(TYPICAL_COSTS);
   });
 });
 

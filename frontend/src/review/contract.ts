@@ -1,11 +1,8 @@
 /**
- * AI design review: the contract between the page and `POST /api/review`
- * (backend/README.md, "Design review"). Pure and dependency-free, so the
- * Worker validates request bodies with the same definition the page builds
- * them from (backend/src/review.ts imports this file).
- *
- * The endpoint is Pro's AI review; everyone else gets the page's own review,
- * rules over the same request (./rules.ts, ./reviewer.ts).
+ * The design review's request and answer: the page's own review, rules over
+ * this request (./rules.ts, ./reviewer.ts). Pure and dependency-free, so the
+ * Worker builds Design partner's view of a design from the same definition
+ * (backend/src/ai/reviewer.ts, backend/src/partner.ts import this file).
  */
 
 /** One node of the design, as the review sees it. */
@@ -178,7 +175,7 @@ export interface ReviewMetrics {
   nodes?: ReviewNodeMetrics[];
 }
 
-/** What the page sends to `POST /api/review`. */
+/** What a review reads: the design, its parse, tests and numbers. */
 export interface DesignReviewRequest {
   /** The practice problem, when reviewing a solution to one; absent in the editor. */
   problem?: { id: string; version: number; title: string };
@@ -210,7 +207,7 @@ export interface DesignReviewIssue {
   nodeId?: string;
 }
 
-/** What `POST /api/review` answers with, once implemented, and what the rule reviewer gives. */
+/** What the rule reviewer gives. */
 export interface DesignReview {
   summary: string;
   strengths: string[];
@@ -218,28 +215,6 @@ export interface DesignReview {
   suggestions: string[];
   /** Who wrote it: `rules` for the page's own reviewer (./rules.ts); absent for the API's. */
   by?: 'rules';
-}
-
-/** A Pro user's AI reviews today (GET /api/review/usage, and with each review and each 429 daily_limit). */
-export interface ReviewUsage {
-  /** Reviews a UTC day (20, docs/design/paid-plans.md P17). */
-  limit: number;
-  used: number;
-  remaining: number;
-  /** Unix milliseconds: the next UTC midnight, when the count starts again. */
-  resetAt: number;
-}
-
-/** What `POST /api/review` answers with: the review and the usage after it. */
-export interface DesignReviewResponse extends DesignReview {
-  usage: ReviewUsage;
-}
-
-/** A ReviewUsage from an untrusted answer; undefined for anything else. */
-export function parseReviewUsage(data: unknown): ReviewUsage | undefined {
-  if (!isObj(data)) return undefined;
-  const { limit, used, remaining, resetAt } = data;
-  return [limit, used, remaining, resetAt].every(isNum) ? { limit: limit as number, used: used as number, remaining: remaining as number, resetAt: resetAt as number } : undefined;
 }
 
 // ---------- limits ----------

@@ -9,7 +9,7 @@ import type { FeatureAccess, FeatureId, FeatureReason } from '../services/featur
  * /api/me/plan's `features`; the page only reads that answer, never the plan.
  *
  *   const features = useFeatures(account.state)    once per app, given to <FeaturesContext.Provider value={features}>
- *   useFeature('ai_review')                        {ok, reason, loading} inside it
+ *   useFeature('ai_roadmap')                       {ok, reason, loading} inside it
  *   <Feature name="share_links" pro={…} free={…} />    ./Feature.tsx
  */
 

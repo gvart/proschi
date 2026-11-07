@@ -29,17 +29,17 @@ export function featuresFor(plan: string | undefined): Record<string, { ok: bool
   const pro = plan === 'pro' || plan === 'max';
   const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
   const max = plan === 'max' ? { ok: true } : { ok: false, reason: 'needs_pro' };
-  return { ai_interview: { ok: true }, ai_review: paid, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max };
+  return { ai_interview: { ok: true }, interview_history: paid, ai_roadmap: paid, share_links: paid, design_partner: { ok: true }, deep_mode: max, interview_report: max };
 }
 
 /** GET /api/credits/estimates as the server answers it with the default prices. */
 export const ESTIMATES = {
-  mock_interview: { min: 45, max: 60 },
-  partner_review: { min: 5, max: 15 },
-  partner_build: { min: 20, max: 40 },
-  partner_turn: { min: 1, max: 5 },
-  verdict: { min: 15, max: 55 },
-  deepMultiplier: 5,
+  mock_interview: { min: 45, max: 60, worst: 1100 },
+  partner_review: { min: 5, max: 15, worst: 50 },
+  partner_build: { min: 20, max: 40, worst: 72 },
+  partner_turn: { min: 1, max: 5, worst: 30 },
+  verdict: { min: 15, max: 55, worst: 53 },
+  deepMultiplier: 2,
 };
 
 type Credits = { balance: number; monthly: { allowance: number; left: number; resetsAt: number } | null; signup: number; topup: number };

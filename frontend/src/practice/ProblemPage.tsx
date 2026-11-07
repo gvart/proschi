@@ -512,9 +512,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     >
       <ZenCollapse zen={zen.zen}>
       <Header base="../" current="practice" compact>
-        <a href={back.href} className={toolButton}>
+        <a href={back.href} className={toolButton} aria-label={back.label} title={back.label}>
           <ArrowLeft size={16} />
-          <span className="hidden sm:inline">{back.label}</span>
+          <span className="hidden xl:inline">{back.label}</span>
         </a>
         <h1 className="flex items-center gap-2 min-w-0 font-display text-lg font-bold tracking-tight text-ink">
           <StatusIcon status={status} />
@@ -539,9 +539,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
             {/* From sm up the lesson, Reset and Help have their own buttons; on phones Reset and Help share "More", so the row does not wrap. */}
             <span className={`hidden sm:flex items-center gap-1 ${interviewOn && session ? '' : 'ml-auto'}`}>
               {lessonButton(outlineButton)}
-              <button onClick={reset} className={toolButton} title="Start over from the starter code">
+              <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start over from the starter code">
                 <RotateCcw size={14} />
-                Reset
+                <span className="hidden min-[1440px]:inline">Reset</span>
               </button>
             </span>
             <MoreMenu className={`sm:hidden ${interviewOn && session ? '' : 'ml-auto'}`} onReset={reset} onTour={startTour} />

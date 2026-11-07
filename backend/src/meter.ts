@@ -1,3 +1,4 @@
+import { MAX_TURNS, TOKEN_CAP, VERDICT_RESERVE } from './ai/budget';
 import { AiError } from './ai/client';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
@@ -246,8 +247,8 @@ interface CallShape {
   model: string;
   maxOutput: number;
   input: number;
-  /** Output it usually writes, for the low end of an estimate. */
-  typicalOutput: number;
+  /** Output it usually writes, low and high: the typical estimate's ends. */
+  typicalOutput: readonly [number, number];
 }
 
 const SONNET = 'claude-sonnet-5-5';
@@ -260,21 +261,21 @@ const OPUS = 'claude-opus-5-5';
  * verdict one Sonnet call that thinks.
  */
 export const CALLS = {
-  interviewReply: { model: SONNET, maxOutput: 1_024, input: 20_000, typicalOutput: 400 },
-  interviewHint: { model: HAIKU, maxOutput: 400, input: 4_000, typicalOutput: 150 },
-  verdict: { model: SONNET, maxOutput: 16_000, input: 30_000, typicalOutput: 6_000 },
-  nextSteps: { model: HAIKU, maxOutput: 1_024, input: 6_000, typicalOutput: 400 },
-  partnerReview: { model: SONNET, maxOutput: 16_000, input: 25_000, typicalOutput: 4_000 },
-  partnerBuild: { model: SONNET, maxOutput: 32_000, input: 15_000, typicalOutput: 8_000 },
-  partnerTurn: { model: SONNET, maxOutput: 8_000, input: 20_000, typicalOutput: 1_500 },
+  interviewReply: { model: SONNET, maxOutput: 1_024, input: 20_000, typicalOutput: [300, 500] },
+  interviewHint: { model: HAIKU, maxOutput: 400, input: 4_000, typicalOutput: [100, 200] },
+  verdict: { model: SONNET, maxOutput: 16_000, input: 30_000, typicalOutput: [5_000, 7_000] },
+  nextSteps: { model: HAIKU, maxOutput: 1_024, input: 6_000, typicalOutput: [300, 500] },
+  partnerReview: { model: SONNET, maxOutput: 16_000, input: 25_000, typicalOutput: [3_000, 5_000] },
+  partnerBuild: { model: SONNET, maxOutput: 32_000, input: 15_000, typicalOutput: [6_000, 10_000] },
+  partnerTurn: { model: SONNET, maxOutput: 8_000, input: 20_000, typicalOutput: [1_000, 2_000] },
 } satisfies Record<string, CallShape>;
 
 /** A call's worst case, for its hold. */
 export const worstMc = (c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>): number => estimateMc(c.model, c.maxOutput, c.input, env);
 
-/** A call's usual cost: its input mostly read from the cache, its usual output. */
-export function typicalMc(c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>): number {
-  return costMc({ model: c.model, input_tokens: Math.round(c.input * 0.2), cache_read_input_tokens: Math.round(c.input * 0.8), output_tokens: c.typicalOutput }, env);
+/** A call's usual cost: its input mostly read from the cache, its usual output at the low (0) or high (1) end. */
+export function typicalMc(c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>, end: 0 | 1 = 0): number {
+  return costMc({ model: c.model, input_tokens: Math.round(c.input * 0.2), cache_read_input_tokens: Math.round(c.input * 0.8), output_tokens: c.typicalOutput[end] }, env);
 }
 
 /** What one mock interview turn holds: the reply and the hint at their worst. */
@@ -286,20 +287,47 @@ const DEEP_VERDICT: CallShape = { ...CALLS.verdict, model: OPUS };
 /** What a mock interview's verdict holds from its start (P28); a Deep one holds Opus's worst case. */
 export const verdictHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>, deep = false): number => worstMc(deep ? DEEP_VERDICT : CALLS.verdict, env);
 
-/** Turns in a short and a long mock interview, for the estimate's range. */
-const SHORT_TURNS = 8;
-const LONG_TURNS = 30;
+/**
+ * Candidate turns in a typical 45-minute mock interview, low and high. With
+ * the calls' typical outputs above this gives about 37–57 credits, which is
+ * what 45-minute interviews cost on the real API ($0.20–0.30 at 2x and
+ * 0.95 EUR/USD); keep the two in step when either changes.
+ */
+const TYPICAL_TURNS = [9, 13] as const;
+
+/**
+ * The most a mock interview can be charged, whatever happens: its turns stop
+ * once the session has used TOKEN_CAP less VERDICT_RESERVE billed tokens
+ * (src/ai/budget.ts), no billed token of a turn costs more than Sonnet's
+ * output, the turn that crosses the line is charged at most its hold, and
+ * the verdict at most its hold (a settle never charges more than its hold).
+ * MAX_TURNS turns at their holds bound it too.
+ */
+function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolean): number {
+  const turnHold = interviewTurnHoldMc(env);
+  const turns = Math.min(costMc({ model: SONNET, input_tokens: 0, output_tokens: TOKEN_CAP - VERDICT_RESERVE }, env) + turnHold, MAX_TURNS * turnHold);
+  return turns + verdictHoldMc(env, deep);
+}
 
 /** Opus's price over Sonnet's: what Deep mode multiplies a call by (P31). */
 export const DEEP_MULTIPLIER = PRICES[OPUS].output / PRICES[SONNET].output;
 
-/** GET /api/credits/estimates: what each action usually costs, in credits, low to high. */
+/**
+ * GET /api/credits/estimates: what each action usually costs, in credits, low
+ * to high (`min`, `max`: the typical range the page shows), and `worst`, what
+ * it can never cost more than (the hold of one call; for a mock interview,
+ * interviewWorstMc). Holds keep using the worst case.
+ */
 export function estimates(env: Pick<Env, 'CREDITS_USD_EUR'>) {
-  const turn = typicalMc(CALLS.interviewReply, env) + typicalMc(CALLS.interviewHint, env);
-  const range = (min: number, max: number) => ({ min: credits(min), max: credits(max) });
-  const one = (c: CallShape) => range(typicalMc(c, env), worstMc(c, env));
+  const turn = (end: 0 | 1) => typicalMc(CALLS.interviewReply, env, end) + typicalMc(CALLS.interviewHint, env, end);
+  const range = (min: number, max: number, worst: number) => ({ min: credits(min), max: credits(max), worst: credits(worst) });
+  const one = (c: CallShape) => range(typicalMc(c, env, 0), typicalMc(c, env, 1), worstMc(c, env));
   return {
-    mock_interview: range(SHORT_TURNS * turn + typicalMc(CALLS.verdict, env), LONG_TURNS * turn + worstMc(CALLS.verdict, env)),
+    mock_interview: range(
+      TYPICAL_TURNS[0] * turn(0) + typicalMc(CALLS.verdict, env, 0),
+      TYPICAL_TURNS[1] * turn(1) + typicalMc(CALLS.verdict, env, 1),
+      interviewWorstMc(env, false),
+    ),
     partner_review: one(CALLS.partnerReview),
     partner_build: one(CALLS.partnerBuild),
     partner_turn: one(CALLS.partnerTurn),

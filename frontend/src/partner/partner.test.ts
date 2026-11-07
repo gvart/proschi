@@ -47,9 +47,9 @@ describe('contract', () => {
   it('reads a turn answer and the estimates', () => {
     expect(parseTurnAnswer({ turn: { id: 't', role: 'partner', message: 'ok', at: 1 }, credits: { charged: 3.25, balance: 96.75 } })).toMatchObject({ credits: { charged: 3.25, balance: 96.75 } });
     expect(parseTurnAnswer({ credits: {} })).toBeUndefined();
-    const e = { mock_interview: { min: 20, max: 60 }, partner_review: { min: 5, max: 15 }, partner_build: { min: 10, max: 40 }, partner_turn: { min: 1, max: 4 }, deepMultiplier: 5 };
+    const e = { mock_interview: { min: 20, max: 60 }, partner_review: { min: 5, max: 15 }, partner_build: { min: 10, max: 40 }, partner_turn: { min: 1, max: 4 }, deepMultiplier: 2 };
     expect(estimateFor(e, 'review', false)).toEqual({ min: 5, max: 15 });
-    expect(estimateFor(e, 'chat', true)).toEqual({ min: 5, max: 20 });
+    expect(estimateFor(e, 'chat', true)).toEqual({ min: 2, max: 8 });
     expect(estimateFor(e, 'build', false)).toEqual({ min: 10, max: 40 });
   });
 });
