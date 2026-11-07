@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { adjustCredits, compUser, endComp, listUserCredits, type UserDetail } from './api';
 import { formatDate, formatDateTime, formatNumber, humanize } from './format';
+import { polarCustomerUrl, polarOrderUrl, polarSubscriptionUrl } from './polarLinks';
 import { useAction, useLoad } from './hooks';
 import { Dialog, ErrorNote, Pager, Section, Skeleton, Stat } from './ui';
 
@@ -29,7 +30,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
         title="Plan and billing"
         actions={
           billing?.polarCustomerId ? (
-            <a className="ps-btn ps-btn--secondary ps-btn--sm" href={`${polarDashboard.customers}/${encodeURIComponent(billing.polarCustomerId)}`} target="_blank" rel="noreferrer">
+            <a className="ps-btn ps-btn--secondary ps-btn--sm" href={polarCustomerUrl(polarDashboard, billing.polarCustomerId)} target="_blank" rel="noreferrer">
               Open in Polar{polarDashboard.server === 'sandbox' ? ' (sandbox)' : ''} ↗
             </a>
           ) : undefined
@@ -69,7 +70,15 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
             <dt>Polar customer</dt>
             <dd className="adm-mono">{billing.polarCustomerId ?? '—'}</dd>
             <dt>Polar subscription</dt>
-            <dd className="adm-mono">{billing.polarSubscriptionId ?? '—'}</dd>
+            <dd className="adm-mono">
+              {billing.polarSubscriptionId ? (
+                <a href={polarSubscriptionUrl(polarDashboard, billing.polarSubscriptionId)} target="_blank" rel="noreferrer">
+                  {billing.polarSubscriptionId}
+                </a>
+              ) : (
+                '—'
+              )}
+            </dd>
             <dt>Last webhook change</dt>
             <dd>{formatDateTime(billing.updatedAt)}</dd>
           </dl>
@@ -125,7 +134,7 @@ export default function UserBilling({ id, data, onChanged, onSignedOut }: { id: 
                       <td>{humanize(e.item)}</td>
                       <td className="adm-mono adm-cut" title={e.refId}>
                         {e.kind === 'topup' || e.kind === 'topup_revoke' ? (
-                          <a href={`${polarDashboard.orders}/${encodeURIComponent(e.refId)}`} target="_blank" rel="noreferrer">
+                          <a href={polarOrderUrl(polarDashboard, e.refId)} target="_blank" rel="noreferrer">
                             {e.refId}
                           </a>
                         ) : (

@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { PRICES } from '../services/billing';
 import { getBilling, type Billing, type PolarDashboard } from './api';
+import { polarCustomerUrl, polarOrderUrl } from './polarLinks';
 import { formatDate, formatDateTime, formatNumber, humanize } from './format';
 import { useLoad, useSort } from './hooks';
 import { Empty, ErrorNote, PageHeader, Pager, Section, Skeleton, SortHeader, Stat, UserLink } from './ui';
 
 function OrderLink({ dashboard, orderId }: { dashboard: PolarDashboard; orderId: string }) {
   return (
-    <a className="adm-mono" href={`${dashboard.orders}/${encodeURIComponent(orderId)}`} target="_blank" rel="noreferrer">
+    <a className="adm-mono" href={polarOrderUrl(dashboard, orderId)} target="_blank" rel="noreferrer">
       {orderId}
     </a>
   );
@@ -185,7 +186,7 @@ function ProTable({ rows, dashboard, onOpenUser }: { rows: Billing['pro']; dashb
               <td>{formatDate(p.currentPeriodEnd)}</td>
               <td>
                 {p.polarCustomerId ? (
-                  <a href={`${dashboard.customers}/${encodeURIComponent(p.polarCustomerId)}`} target="_blank" rel="noreferrer">
+                  <a href={polarCustomerUrl(dashboard, p.polarCustomerId)} target="_blank" rel="noreferrer">
                     Customer ↗
                   </a>
                 ) : (

@@ -649,12 +649,20 @@ const polarServer = (env: Env): 'sandbox' | 'live' => (env.POLAR_SERVER === 'san
 
 /**
  * Polar's dashboard, where refunds and everything about money are done
- * (Proschi never refunds itself): `/to/dashboard/…` opens the signed-in
- * organization's page; the panel appends a customer's or an order's id.
+ * (Proschi never refunds itself): `/to/dashboard/<rest>` redirects to
+ * `/dashboard/<the signed-in user's organization>/<rest>`, on sandbox.polar.sh
+ * as on polar.sh (Polar's web app, `app/(main)/to/[...path]`); the panel
+ * appends a customer's, an order's or a subscription's id
+ * (frontend/src/admin/polarLinks.ts).
  */
-function polarDashboard(env: Env): { server: 'sandbox' | 'live'; customers: string; orders: string } {
+export function polarDashboard(env: Env): { server: 'sandbox' | 'live'; customers: string; orders: string; subscriptions: string } {
   const base = polarServer(env) === 'sandbox' ? 'https://sandbox.polar.sh' : 'https://polar.sh';
-  return { server: polarServer(env), customers: `${base}/to/dashboard/customers`, orders: `${base}/to/dashboard/sales` };
+  return {
+    server: polarServer(env),
+    customers: `${base}/to/dashboard/customers`,
+    orders: `${base}/to/dashboard/sales`,
+    subscriptions: `${base}/to/dashboard/sales/subscriptions`,
+  };
 }
 
 type Row = Record<string, string | number | null>;
