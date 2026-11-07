@@ -366,6 +366,81 @@ export const FEEDBACK_DETAIL = {
 /** A 1×1 PNG, for the screenshots. */
 export const PNG_1PX = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
 
+/**
+ * Cloudflare usage (GET /api/admin/cf-usage) on Workers Paid, this calendar
+ * month: D1 rows read on course to pass its 25B (a watch, with overage), the
+ * rest well within. `plan: 'free'` gives Free's daily limits, Workers
+ * requests over 100k on three of the last seven days.
+ */
+export function cfUsage(plan: 'free' | 'paid' = 'paid') {
+  const nowMs = Date.now();
+  const d = new Date(nowMs);
+  const monthStart = Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), 1);
+  const monthEnd = Date.UTC(d.getUTCFullYear(), d.getUTCMonth() + 1, 1);
+  const dayStart = Math.floor(nowMs / 86_400_000) * 86_400_000;
+  const iso = (ms: number) => new Date(ms).toISOString();
+  type Spec = { id: string; product: string; label: string; unit: string; kind: 'flow' | 'stock'; period: 'day' | 'month'; included: number; per?: number; price?: number; daily: (i: number) => number };
+  // Today's bar is a part of a day: scaled by how much of it has gone.
+  const todayShare = Math.max(0.05, (nowMs - dayStart) / 86_400_000);
+  const build = (q: Spec) => {
+    const series = days.map((day, i) => ({ day, value: Math.round(q.daily(i) * (q.kind === 'flow' && i === days.length - 1 ? todayShare : 1)) }));
+    const [start, end] = q.period === 'day' ? [dayStart, dayStart + 86_400_000] : [monthStart, monthEnd];
+    const elapsed = Math.max(3_600_000, nowMs - start);
+    const used = q.kind === 'stock' ? series.at(-1)!.value : series.filter((p) => Date.parse(`${p.day}T00:00:00Z`) >= start).reduce((sum, p) => sum + p.value, 0);
+    const projected = q.kind === 'flow' ? (used * (end - start)) / elapsed : used;
+    const rate = used / elapsed;
+    const passesAt = q.kind === 'flow' && used < q.included && projected > q.included ? iso(start + q.included / rate) : null;
+    const overageUsd = plan === 'paid' && q.per ? Math.round((Math.max(0, projected - q.included) / q.per) * q.price! * 100) / 100 : null;
+    const status = used >= q.included ? 'over' : projected >= 0.8 * q.included ? 'watch' : 'ok';
+    return { id: q.id, product: q.product, label: q.label, unit: q.unit, kind: q.kind, period: q.period, included: q.included, used, percent: used / q.included, periodStart: iso(start), periodEnd: iso(end), projected, passesAt, overageUsd, status, series };
+  };
+  const wavy = (base: number, amp: number) => (i: number) => base + amp * Math.sin(i / 2.2) + base * 0.04 * (i % 4);
+  // D1 rows read: paced to end the month at about 125% of 25B, whatever day this runs.
+  const rowsPerDay = (25e9 * 1.25) / ((monthEnd - monthStart) / 86_400_000);
+  const paid: Spec[] = [
+    { id: 'workers.requests', product: 'Workers', label: 'Workers requests', unit: 'requests', kind: 'flow', period: 'month', included: 10e6, per: 1e6, price: 0.3, daily: wavy(95_000, 18_000) },
+    { id: 'workers.cpu', product: 'Workers', label: 'Workers CPU time', unit: 'ms', kind: 'flow', period: 'month', included: 30e6, per: 1e6, price: 0.02, daily: wavy(310_000, 60_000) },
+    { id: 'd1.rowsRead', product: 'D1', label: 'D1 rows read', unit: 'rows', kind: 'flow', period: 'month', included: 25e9, per: 1e6, price: 0.001, daily: wavy(rowsPerDay, rowsPerDay * 0.08) },
+    { id: 'd1.rowsWritten', product: 'D1', label: 'D1 rows written', unit: 'rows', kind: 'flow', period: 'month', included: 50e6, per: 1e6, price: 1, daily: wavy(240_000, 50_000) },
+    { id: 'd1.storage', product: 'D1', label: 'D1 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 5e9, per: 1e9, price: 0.75, daily: (i) => 410e6 + i * 2.5e6 },
+    { id: 'r2.classA', product: 'R2', label: 'R2 class A operations', unit: 'operations', kind: 'flow', period: 'month', included: 1e6, per: 1e6, price: 4.5, daily: wavy(140, 60) },
+    { id: 'r2.classB', product: 'R2', label: 'R2 class B operations', unit: 'operations', kind: 'flow', period: 'month', included: 10e6, per: 1e6, price: 0.36, daily: wavy(900, 300) },
+    { id: 'r2.storage', product: 'R2', label: 'R2 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 10e9, per: 1e9, price: 0.015, daily: (i) => 38e6 + i * 0.4e6 },
+    { id: 'email.sent', product: 'Email', label: 'Emails sent', unit: 'emails', kind: 'flow', period: 'month', included: 3000, per: 1000, price: 0.35, daily: wavy(48, 20) },
+  ];
+  const freeRequests = (i: number) => (i >= 26 && i < 29 ? 128_000 - (i - 26) * 9000 : wavy(70_000, 14_000)(i));
+  const free: Spec[] = [
+    { id: 'workers.requests', product: 'Workers', label: 'Workers requests', unit: 'requests', kind: 'flow', period: 'day', included: 100_000, daily: freeRequests },
+    { id: 'd1.rowsRead', product: 'D1', label: 'D1 rows read', unit: 'rows', kind: 'flow', period: 'day', included: 5e6, daily: wavy(2.1e6, 0.6e6) },
+    { id: 'd1.rowsWritten', product: 'D1', label: 'D1 rows written', unit: 'rows', kind: 'flow', period: 'day', included: 100_000, daily: wavy(21_000, 6000) },
+    { id: 'd1.storage', product: 'D1', label: 'D1 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 5e9, daily: (i) => 410e6 + i * 2.5e6 },
+    { id: 'r2.classA', product: 'R2', label: 'R2 class A operations', unit: 'operations', kind: 'flow', period: 'month', included: 1e6, daily: wavy(140, 60) },
+    { id: 'r2.classB', product: 'R2', label: 'R2 class B operations', unit: 'operations', kind: 'flow', period: 'month', included: 10e6, daily: wavy(900, 300) },
+    { id: 'r2.storage', product: 'R2', label: 'R2 storage', unit: 'bytes', kind: 'stock', period: 'month', included: 10e9, daily: (i) => 38e6 + i * 0.4e6 },
+  ];
+  const metrics = (plan === 'paid' ? paid : free).map(build);
+  // Free's daily limits against the same days.
+  const freeTier = ['workers.requests', 'd1.rowsRead', 'd1.rowsWritten']
+    .map((id) => [metrics.find((m) => m.id === id)!, free.find((f) => f.id === id)!] as const)
+    .map(([m, q]) => {
+      const values = m.series.map((p) => p.value);
+      return { id: q.id, label: q.label, included: q.included, maxDay: Math.max(...values), daysOver7: values.slice(-7).filter((v) => v > q.included).length, daysOver30: values.filter((v) => v > q.included).length };
+    });
+  const overage = Math.round(metrics.reduce((sum, m) => sum + (m.overageUsd ?? 0), 0) * 100) / 100;
+  return {
+    plan,
+    planSource: plan === 'paid' ? 'subscription' : 'CF_PLAN',
+    period: { start: iso(monthStart), end: iso(monthEnd), source: plan === 'paid' ? 'subscription' : 'calendar' },
+    fetchedAt: iso(nowMs - 4 * 60_000),
+    cached: true,
+    metrics,
+    freeTier,
+    costs: { paidBaseUsd: 5, paidOverageUsd: overage, paidTotalUsd: Math.round((5 + overage) * 100) / 100 },
+    errors: [],
+    notes: plan === 'free' ? ['Plan from CF_PLAN and the UTC calendar month as the period: the token cannot read the account’s subscriptions (add Billing Read for the exact renewal date).'] : [],
+  };
+}
+
 /** Mocks /api/admin/*; returns every change the page sent, with its body. */
 export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAvailable: boolean; signedIn: boolean }) {
   const state: { blocked: boolean; compUntil: number | null } = { blocked: false, compUntil: null };
@@ -389,6 +464,7 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
       if (path === '/api/admin/overview') return route.fulfill({ json: OVERVIEW });
       if (path === '/api/admin/trends') return route.fulfill({ json: trends(Number(new URL(request.url()).searchParams.get('days'))) });
       if (path === '/api/admin/health') return route.fulfill({ json: HEALTH });
+      if (path === '/api/admin/cf-usage') return route.fulfill({ json: cfUsage() });
       if (path === '/api/admin/users') return route.fulfill({ json: USERS });
       if (path === '/api/admin/billing') return route.fulfill({ json: BILLING });
       if (path === '/api/admin/ai') return route.fulfill({ json: AI });

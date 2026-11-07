@@ -127,10 +127,59 @@ export interface Health {
     polar: { accessToken: boolean; webhookSecret: boolean; productProMonthly: boolean; productProYearly: boolean; productMaxMonthly: boolean; productMaxYearly: boolean; productCredits1000: boolean };
     polarServer: 'sandbox' | 'live';
     billing: boolean;
+    /** The Cloudflare usage page's secrets (backend/src/cfUsage.ts). */
+    cloudflare?: { apiToken: boolean; accountId: boolean; zoneId: boolean; plan: CfPlan };
   };
 }
 
 export const getHealth = () => api<Health>('/api/admin/health');
+
+/** GET /api/admin/cf-usage (backend/src/cfUsage.ts): the Cloudflare account's usage against its plan. */
+export type CfPlan = 'free' | 'paid';
+export type CfStatus = 'ok' | 'watch' | 'over';
+
+export interface CfMetric {
+  id: string;
+  product: 'Workers' | 'D1' | 'R2' | 'Email';
+  label: string;
+  unit: 'requests' | 'ms' | 'rows' | 'bytes' | 'operations' | 'emails';
+  kind: 'flow' | 'stock';
+  period: 'day' | 'month';
+  included: number;
+  used: number;
+  percent: number;
+  periodStart: string;
+  periodEnd: string;
+  projected: number;
+  passesAt: string | null;
+  overageUsd: number | null;
+  status: CfStatus;
+  series: { day: string; value: number }[];
+}
+
+export interface CfFreeCheck {
+  id: string;
+  label: string;
+  included: number;
+  maxDay: number;
+  daysOver7: number;
+  daysOver30: number;
+}
+
+export interface CfUsage {
+  plan: CfPlan;
+  planSource: 'subscription' | 'CF_PLAN';
+  period: { start: string; end: string; source: 'subscription' | 'calendar' };
+  fetchedAt: string;
+  cached: boolean;
+  metrics: CfMetric[];
+  freeTier: CfFreeCheck[];
+  costs: { paidBaseUsd: number; paidOverageUsd: number; paidTotalUsd: number };
+  errors: { product: string; message: string }[];
+  notes: string[];
+}
+
+export const getCfUsage = () => api<CfUsage>('/api/admin/cf-usage');
 
 export interface UserRow {
   id: string;

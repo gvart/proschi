@@ -1476,3 +1476,269 @@
   resize: vertical;
   font-weight: 400;
 }
+
+/* Cloudflare usage (CloudflareTab.tsx): the verdict, one meter per quota, Free against Paid. */
+.adm-cf__updated {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  white-space: nowrap;
+}
+
+.adm-cf__verdict {
+  --tone: var(--adm-good);
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  box-shadow: inset 3px 0 0 var(--tone);
+}
+.adm-cf__verdict > svg {
+  color: var(--tone);
+  margin-top: 2px;
+}
+.adm-cf__verdict--watch {
+  --tone: rgb(var(--c-yellow));
+}
+.adm-cf__verdict--watch > svg {
+  color: rgb(var(--c-ink));
+}
+.adm-cf__verdict--over {
+  --tone: var(--adm-bad);
+}
+.adm-cf__verdict-text {
+  font-size: var(--fs-18);
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin-bottom: 4px;
+}
+
+.adm-cf__errors {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-radius: var(--r-md);
+  background: rgb(var(--c-yellow) / 0.18);
+  font-size: var(--fs-14);
+}
+.adm-cf__errors svg {
+  flex: none;
+  margin-top: 2px;
+}
+
+.adm-cf__meters {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.adm-cf__meter {
+  --fill: var(--adm-series-1);
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  min-width: 0;
+  padding: 16px;
+  border-radius: 8px;
+  background: var(--adm-wash);
+}
+.adm-cf__meter--watch {
+  --fill: rgb(var(--c-yellow));
+}
+.adm-cf__meter--over {
+  --fill: rgb(var(--c-fail));
+}
+
+.adm-cf__meter-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adm-cf__meter-head h3 {
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+.adm-cf__amount {
+  font-variant-numeric: tabular-nums;
+}
+.adm-cf__used {
+  font-family: var(--font-mono);
+  font-size: var(--fs-20);
+  font-weight: 600;
+}
+.adm-cf__amount .adm-muted {
+  font-family: var(--font-mono);
+  font-size: var(--fs-12);
+}
+
+/* The meter: used as a solid fill, the rest of the projection as a tint of it, the quota as a tick, the projection's end as a marker. */
+.adm-cf__bar {
+  position: relative;
+  height: 8px;
+  margin: 4px 0;
+  border-radius: 4px;
+  background: rgb(var(--c-ink) / 0.1);
+}
+.adm-cf__bar-used,
+.adm-cf__bar-projected {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  border-radius: 4px;
+}
+.adm-cf__bar-used {
+  background: var(--fill);
+}
+.adm-cf__bar-projected {
+  background: color-mix(in srgb, var(--fill) 35%, transparent);
+  background-image: repeating-linear-gradient(135deg, transparent 0 3px, rgb(var(--c-surface) / 0.55) 3px 5px);
+}
+.adm-cf__bar-quota {
+  position: absolute;
+  top: -4px;
+  bottom: -4px;
+  width: 2px;
+  margin-left: -1px;
+  background: rgb(var(--c-ink) / 0.7);
+}
+.adm-cf__bar-marker {
+  position: absolute;
+  top: 50%;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border: 2px solid rgb(var(--c-surface));
+  border-radius: 50%;
+  background: rgb(var(--c-ink));
+}
+
+.adm-cf__facts {
+  display: grid;
+  gap: 2px;
+  font-size: var(--fs-12);
+}
+.adm-cf__facts div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adm-cf__facts dt {
+  color: rgb(var(--c-muted));
+}
+.adm-cf__facts dd {
+  font-family: var(--font-mono);
+  text-align: right;
+}
+
+.adm-cf__bars {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+}
+.adm-cf__bars svg {
+  display: block;
+  width: 100%;
+  height: 40px;
+  overflow: visible;
+}
+.adm-cf__bars-hit {
+  fill: transparent;
+}
+.adm-cf__bars-bar {
+  fill: rgb(var(--c-ink) / 0.35);
+}
+.adm-cf__bars-day:hover .adm-cf__bars-bar {
+  fill: var(--adm-series-1);
+}
+.adm-cf__bars-bar.is-over {
+  fill: rgb(var(--c-fail));
+}
+.adm-cf__bars-quota {
+  stroke: rgb(var(--c-ink) / 0.6);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+}
+.adm-cf__bars-axis {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-cf__recommend {
+  font-size: var(--fs-16);
+  font-weight: 600;
+}
+.adm-cf__recommend .adm-muted {
+  font-weight: 400;
+}
+
+.adm-cf__plans {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 699px) {
+  .adm-cf__plans {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.adm-cf__plan {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
+}
+.adm-cf__plan-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.adm-cf__plan-cost {
+  font-family: var(--font-mono);
+  font-size: var(--fs-20);
+  font-weight: 600;
+}
+.adm-cf__plan-cost .adm-muted {
+  font-family: var(--font-sans);
+  font-weight: 400;
+}
+.adm-cf__plan-reasons,
+.adm-cf__notes,
+.adm-cf__steps {
+  display: grid;
+  gap: 4px;
+  padding-left: 20px;
+  font-size: var(--fs-14);
+}
+.adm-cf__plan-reasons {
+  list-style: disc;
+}
+.adm-cf__steps {
+  list-style: decimal;
+}
+.adm-cf__notes {
+  list-style: disc;
+}
+
+@media (max-width: 599px) {
+  .adm-cf__meters {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .adm-cf__verdict-text {
+    font-size: var(--fs-16);
+  }
+}

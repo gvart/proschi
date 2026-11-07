@@ -151,7 +151,7 @@ test.describe('admin panel', () => {
     await expect(page).toHaveURL(/#\/links$/);
     await expect(nav(page).getByRole('link', { name: 'Links' })).toHaveAttribute('aria-current', 'page');
     for (const group of ['People', 'Outreach', 'Revenue', 'AI', 'Content', 'System']) await expect(nav(page).getByText(group, { exact: true })).toBeVisible();
-    await expect(nav(page).getByRole('link')).toHaveCount(12);
+    await expect(nav(page).getByRole('link')).toHaveCount(13);
     await expect(nav(page).locator('[aria-current="page"]')).toHaveCount(1);
 
     await nav(page).getByRole('link', { name: 'Webhooks' }).click();

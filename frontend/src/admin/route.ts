@@ -11,6 +11,7 @@ export const GROUPS = [
     label: 'System',
     items: [
       { id: 'health', label: 'Health', description: 'The database, scheduled jobs, errors, email and configuration.' },
+      { id: 'cloudflare', label: 'Cloudflare usage', description: "What's left of the Cloudflare plan's quotas this period, and whether to upgrade." },
       { id: 'events', label: 'Events', description: 'Errors, cron runs, sign-in failures and rate limits, kept 30 days.' },
       { id: 'webhooks', label: 'Webhooks', description: "Polar's webhook deliveries and what was done with each, kept 90 days." },
       { id: 'audit', label: 'Audit log', description: 'Every change made in the admin panel, kept 400 days.' },
