@@ -1,0 +1,41 @@
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_29e7814cc4d91a 122-130,161-163,176-181
+  s_e17b87e0a1b3ca::t_362f2c910e1a11 34
+docs/PRIVACY.md
+  s_e17b87e0a1b3ca::t_031059877415f4 29,162-167
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_e1fd85863cef89 268-278
+backend/test/hardening.test.ts
+  s_e17b87e0a1b3ca::t_49a3af4fad1694 236
+frontend/src/services/api.ts
+  s_e17b87e0a1b3ca::t_29e7814cc4d91a 65-66
+backend/migrations/0030_token_scopes.sql
+  s_e17b87e0a1b3ca::t_f089dcf35c6f45 12-14
+frontend/src/practice/hub/goal.ts
+  s_e17b87e0a1b3ca::t_29e7814cc4d91a 10-14,75-83,88-107
+  s_e17b87e0a1b3ca::t_43b8296944bb1e 108
+frontend/src/practice/hub/goalSync.test.ts
+  s_e17b87e0a1b3ca::t_caace6ade8c135 1-37
+backend/test/practiceGoal.test.ts
+  s_e17b87e0a1b3ca::t_8eebad92c4cd41 1-51
+backend/README.md
+  s_e17b87e0a1b3ca::t_d8c8166080f2b4 147-148
+backend/src/progress.ts
+  s_e17b87e0a1b3ca::t_98af7517e2acea 74-97,107-108,114-115,118-123,132,156-162,164,193,215-216
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c54bbc94b7c2ae05ed5c2a69f477691dd601b521",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
