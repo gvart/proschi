@@ -87,7 +87,7 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
       <p className={eyebrow}>Pricing</p>
       <h1 className="mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Free to design. Pro to go further.</h1>
       <p className="mt-3 max-w-2xl text-ink/80">
-        The editor, the simulation and every practice problem stay free and open source. Pro adds room in your account and AI interviews that coach you
+        The editor, the simulation and every practice problem stay free and open source. Pro adds room in your account and mock interviews that coach you
         while they test you.
       </p>
 
@@ -124,7 +124,7 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
               'Unlimited diagrams in your browser',
               `${FREE.documents} diagrams in your account, synced across devices`,
               `${FREE.versions} versions per diagram, ${FREE.sizeKiB} KiB each`,
-              `${FREE.interviews} AI mock interview, to try it`,
+              `${FREE.interviews} mock interview, to try it`,
             ]}
           />
           <div className="mt-auto pt-5">
@@ -144,9 +144,9 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
             items={[
               'Everything in Free',
               'Unlimited diagrams and versions in your account',
-              `${PRICES.proInterviews} AI mock interviews a month, with live coaching`,
-              'AI design review of any diagram',
-              'Interview history and an AI roadmap of what to practice next',
+              `${PRICES.proInterviews} mock interviews a month, with live coaching`,
+              'In-depth review of any diagram, on its trade-offs',
+              'Interview history and your next steps, picked after each interview',
               'Private, revocable share links',
             ]}
           />
@@ -171,18 +171,18 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
       <section aria-labelledby="plan-pack" className={`mt-5 ${card} bg-surface sm:flex-row sm:items-center sm:gap-6`}>
         <div className="flex-1">
           <h2 id="plan-pack" className="font-display text-xl font-bold text-ink">
-            Interview pack
+            Mock interview pack
           </h2>
           <p className="mt-1 text-sm text-ink/80">
-            {PRICES.packInterviews} more AI mock interviews for €{PRICES.pack}, on any plan. Pack interviews never expire; Pro uses its monthly ones first.
+            {PRICES.packInterviews} more mock interviews for €{PRICES.pack}, on any plan. Pack interviews never expire; Pro uses its monthly ones first.
           </p>
           {plan && plan.credits.total > 0 && (
             <p className="mt-1 text-sm text-muted">
-              You have {plan.credits.total} interview{plan.credits.total === 1 ? '' : 's'} left.
+              You have {plan.credits.total} mock interview{plan.credits.total === 1 ? '' : 's'} left.
             </p>
           )}
         </div>
-        <div className="mt-4 sm:mt-0">{action(`Buy ${PRICES.packInterviews} interviews, €${PRICES.pack}`, 'pack_5', false)}</div>
+        <div className="mt-4 sm:mt-0">{action(`Buy ${PRICES.packInterviews} mock interviews, €${PRICES.pack}`, 'pack_5', false)}</div>
       </section>
 
       <section aria-labelledby="pricing-faq" className="mt-10 max-w-3xl">
@@ -198,8 +198,8 @@ export function Pricing({ account, plan }: { account: Account; plan?: PlanInfo }
             ones you saved least recently become read-only until you delete some or come back to Pro. Pack interviews stay yours.
           </Faq>
           <Faq q="Do unused interviews carry over?">Pro&rsquo;s {PRICES.proInterviews} a month don&rsquo;t; pack interviews never expire.</Faq>
-          <Faq q="What is sent to the AI?">
-            An AI interview sends your answers and diagram to the AI provider. See the{' '}
+          <Faq q="Who is the interviewer?">
+            Claude, made by Anthropic. A mock interview sends Anthropic your answers and diagram, and an in-depth review sends the diagram. See the{' '}
             <a href="../docs/privacy/" className="font-semibold underline underline-offset-2">
               privacy page
             </a>{' '}
