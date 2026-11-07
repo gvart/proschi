@@ -70,7 +70,7 @@ export function useAction(after?: () => void): { run: (action: () => Promise<unk
 export type SortDir = 'asc' | 'desc';
 
 /** Sorts `rows` by the column picked with SortHeader; `keys` gives each column's value. */
-export function useSort<T, K extends string>(rows: T[], keys: Record<K, (row: T) => string | number | null>, initial: { key: K; dir: SortDir }) {
+export function useSort<T, K extends string>(rows: T[], keys: Record<K, (row: T) => string | number | null>, initial: { key: NoInfer<K>; dir: SortDir }) {
   const [sort, setSort] = useState(initial);
   const sorted = useMemo(() => {
     const value = keys[sort.key];
@@ -86,5 +86,7 @@ export function useSort<T, K extends string>(rows: T[], keys: Record<K, (row: T)
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, sort]);
   const toggle = (key: K) => setSort((s) => (s.key === key ? { key, dir: s.dir === 'asc' ? 'desc' : 'asc' } : { key, dir: initial.dir }));
-  return { rows: sorted, sort, toggle };
+  /** SortHeader's props for a column. */
+  const by = (key: K) => ({ active: sort.key === key, dir: sort.dir, onSort: () => toggle(key) });
+  return { rows: sorted, sort, toggle, by };
 }

@@ -70,6 +70,8 @@
   display: grid;
   grid-template-columns: 220px minmax(0, 1fr);
   min-height: calc(100vh - 56px);
+  /* The sidebar's edge, drawn on the shell so it runs the page's full height. */
+  background: linear-gradient(var(--adm-line), var(--adm-line)) 219px 0 / 1px 100% no-repeat;
 }
 
 .adm-nav {
@@ -79,7 +81,6 @@
   height: calc(100vh - 56px);
   overflow-y: auto;
   padding: 20px 12px;
-  border-right: 1px solid var(--adm-line);
   display: grid;
   align-content: start;
   gap: 16px;
@@ -154,6 +155,7 @@
 @media (max-width: 899px) {
   .adm-shell {
     grid-template-columns: minmax(0, 1fr);
+    background: none;
   }
   .adm-nav {
     z-index: 4;
@@ -162,7 +164,6 @@
     gap: 2px;
     padding: 8px 12px;
     overflow-x: auto;
-    border-right: 0;
     border-bottom: 1px solid var(--adm-line);
     background: rgb(var(--c-paper));
   }
@@ -703,86 +704,13 @@
   white-space: nowrap;
 }
 
-/* Bar charts (BarChart.tsx): one series, thin bars on a quiet baseline. */
-.adm-chart {
-  display: grid;
-  gap: 6px;
-}
-
-.adm-chart__head {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: space-between;
-  gap: 8px;
-  font-size: var(--fs-14);
-}
-
-.adm-chart__title {
-  font-weight: 700;
-}
-
-.adm-chart__readout {
-  color: rgb(var(--c-muted));
-  font-variant-numeric: tabular-nums;
-}
-
-.adm-chart__plot {
-  position: relative;
-  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.4);
-}
-
-.adm-chart__slot {
-  position: absolute;
-  bottom: 0;
-  top: 0;
-  display: flex;
-  align-items: flex-end;
-  justify-content: center;
-  padding: 0;
-  background: none;
-  border: 0;
-  cursor: default;
-}
-
-.adm-chart__slot:focus-visible {
-  outline: 2px solid rgb(var(--c-ink));
-  outline-offset: 1px;
-}
-
-.adm-chart__bar {
-  flex: 1;
-  max-width: 24px;
-  background: rgb(var(--c-blue));
-  border-radius: 4px 4px 0 0;
-}
-
-.adm-chart__slot.is-active .adm-chart__bar {
-  background: rgb(var(--c-pink));
-}
-
-.adm-chart__axis {
-  display: flex;
-  justify-content: space-between;
-  font-size: var(--fs-12);
-  color: rgb(var(--c-muted));
-}
-
-.adm-chart__table summary {
-  cursor: pointer;
-  font-size: var(--fs-12);
-  color: rgb(var(--c-muted));
-}
-
-.adm-chart__table table {
-  margin-top: 6px;
-  max-width: 320px;
-}
-
-/* Line charts (LineChart.tsx): up to four series, the reference categorical
-   slots 1–4 (blue, orange, aqua, yellow), validated adjacent-pair CVD-safe
-   on the light surface and, stepped for it, on the dark one. Aqua and yellow
-   sit below 3:1 on white, so every line is named at its end and the numbers
-   are in the table. */
+/* Charts (Chart.tsx, Sparkline.tsx): one system for every chart in the
+   panel. Thin marks, a hairline grid on three clean ticks, recessive axis
+   text, a crosshair and tooltip on hover. The series colours are the
+   reference categorical slots 1–4 (blue, orange, aqua, yellow), validated
+   adjacent-pair CVD-safe on the light surface and, stepped for it, on the
+   dark one (dataviz validate_palette.js). Aqua and yellow sit below 3:1 on
+   white, so lines are named at their ends and every chart has its table. */
 .adm {
   --adm-series-1: #2a78d6;
   --adm-series-2: #eb6834;
@@ -816,11 +744,49 @@
   --series: var(--adm-series-4);
 }
 
+.adm-chart {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
+  transition: opacity var(--d-2) linear;
+}
+
+.adm-chart__head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: var(--fs-14);
+}
+
+.adm-chart__title {
+  font-weight: 600;
+}
+
+.adm-chart__summary {
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-12);
+}
+
+.adm-chart__summary strong {
+  color: rgb(var(--c-ink));
+  font-size: var(--fs-14);
+  font-weight: 700;
+}
+
 .adm-legend {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 4px 16px;
   font-size: var(--fs-14);
+}
+
+.adm-legend__list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 16px;
 }
 
 .adm-legend__item {
@@ -829,62 +795,102 @@
   gap: 6px;
 }
 
-/* A line key, not a box: the legend mirrors the mark. */
+.adm-legend__when {
+  margin-left: auto;
+  font-size: var(--fs-12);
+}
+
+/* The key mirrors the mark: a stroke for lines, a block for bars. */
 .adm-legend__key {
-  width: 16px;
+  flex: none;
+  width: 14px;
   height: 2px;
   border-radius: 1px;
   background: var(--series);
 }
 
+.adm-legend__key--bar {
+  width: 10px;
+  height: 10px;
+  border-radius: 2px;
+}
+
 .adm-legend__value {
   font-weight: 700;
+}
+
+/* The y ticks, the plot and (for lines with two or more series) their end labels. */
+.adm-plot {
+  display: grid;
+  grid-template-columns: 44px minmax(0, 1fr);
+}
+
+.adm-plot--labelled {
+  grid-template-columns: 44px minmax(0, 1fr) 76px;
+}
+
+.adm-plot__ticks,
+.adm-plot__labels {
+  position: relative;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
   font-variant-numeric: tabular-nums;
 }
 
-.adm-lines {
-  display: flex;
-  gap: 8px;
+.adm-plot__ticks span {
+  position: absolute;
+  right: 8px;
+  transform: translateY(-50%);
+  white-space: nowrap;
 }
 
-.adm-lines__plot {
+.adm-plot__labels span {
+  position: absolute;
+  left: 8px;
+  transform: translateY(-50%);
+  white-space: nowrap;
+}
+
+.adm-plot__area {
   position: relative;
-  flex: 1;
-  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.4);
 }
 
-.adm-lines__svg {
+.adm-plot__grid {
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 1px;
+  background: var(--adm-line);
+}
+
+.adm-plot__grid.is-base {
+  background: var(--adm-line-strong);
+}
+
+.adm-plot__hit {
   position: absolute;
   inset: 0;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
+  cursor: crosshair;
+  touch-action: pan-y;
 }
 
-.adm-lines__grid {
-  stroke: rgb(var(--c-ink) / 0.12);
-  stroke-width: 1;
+.adm-plot__hit:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
-.adm-lines__line {
-  fill: none;
-  stroke: var(--series);
-  stroke-width: 2;
-  stroke-linejoin: round;
-  stroke-linecap: round;
-}
-
-.adm-lines__crosshair {
+.adm-plot__crosshair {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 1px;
-  background: rgb(var(--c-ink) / 0.5);
+  background: rgb(var(--c-ink) / 0.45);
   pointer-events: none;
 }
 
 /* 8px, with a 2px ring in the surface colour where lines cross. */
-.adm-lines__dot {
+.adm-plot__dot {
   position: absolute;
   width: 12px;
   height: 12px;
@@ -895,38 +901,156 @@
   pointer-events: none;
 }
 
-.adm-lines__slot {
+.adm-plot__empty {
   position: absolute;
-  top: 0;
-  bottom: 0;
-  padding: 0;
-  background: none;
-  border: 0;
-  cursor: default;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+  pointer-events: none;
 }
 
-.adm-lines__slot:focus-visible {
-  outline: 2px solid rgb(var(--c-ink));
-  outline-offset: -2px;
-}
-
-.adm-lines__labels {
-  position: relative;
-  width: 72px;
-  flex: none;
+.adm-plot__axis {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  margin-left: 44px;
   font-size: var(--fs-12);
   color: rgb(var(--c-muted));
 }
 
-.adm-lines__label {
-  position: absolute;
-  left: 0;
-  transform: translateY(-50%);
-  white-space: nowrap;
+.adm-plot__axis.adm-plot--labelled {
+  margin-right: 76px;
 }
 
-.adm-lines__axis {
-  margin-right: 80px;
+.adm-plot__axis span:last-child {
+  text-align: right;
+}
+
+/* Bars: equal slots, each bar at most 24px with a 2px gap, a 4px rounded end, square on the baseline. */
+.adm-bars {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: flex-end;
+}
+
+.adm-bars__slot {
+  flex: 1;
+  height: 100%;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  padding: 0 1px;
+}
+
+.adm-bars__bar {
+  width: 100%;
+  max-width: 24px;
+  background: var(--series);
+  border-radius: 4px 4px 0 0;
+}
+
+.adm-bars__slot.is-active .adm-bars__bar {
+  filter: brightness(1.15);
+  box-shadow: 0 0 0 2px rgb(var(--c-surface)), 0 0 0 3px rgb(var(--c-ink) / 0.5);
+}
+
+.adm-lines {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.adm-lines__line {
+  fill: none;
+  stroke: var(--series);
+  stroke-width: 2;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+/* The tooltip: the day, then each value (strong) and its series. */
+.adm-tip {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  transform: translateX(-50%);
+  display: grid;
+  gap: 2px;
+  min-width: 96px;
+  padding: 6px 10px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 6px;
+  background: rgb(var(--c-surface));
+  box-shadow: 0 4px 12px rgb(0 0 0 / 0.12);
+  font-size: var(--fs-12);
+  white-space: nowrap;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.adm-tip.is-start {
+  transform: translateX(-12px);
+}
+
+.adm-tip.is-end {
+  transform: translateX(calc(-100% + 12px));
+}
+
+.adm-tip__day {
+  color: rgb(var(--c-muted));
+}
+
+.adm-tip__row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.adm-tip__row strong {
+  font-size: var(--fs-14);
+  font-variant-numeric: tabular-nums;
+}
+
+.adm-chart__table summary {
+  width: max-content;
+  cursor: pointer;
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-chart__scroll {
+  max-height: 280px;
+  overflow-y: auto;
+  margin-top: 8px;
+  max-width: 420px;
+}
+
+/* A stat tile's sparkline: the period before in grey, this one in the accent. */
+.adm-spark {
+  display: block;
+  width: 100%;
+  height: 32px;
+  overflow: visible;
+}
+
+.adm-spark polyline {
+  fill: none;
+  stroke-width: 1.5;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.adm-spark__before {
+  stroke: rgb(var(--c-ink) / 0.25);
+}
+
+.adm-spark__now {
+  stroke: var(--adm-series-1);
+  stroke-width: 2;
 }
 
 /* The billing tab's two side-by-side cards. */
@@ -998,4 +1122,17 @@
   align-items: center;
   gap: 6px;
   font-weight: 600;
+}
+
+/* Cards side by side, two to a row on a wide screen (the overview and AI charts), one under 900px. */
+.adm-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+@media (max-width: 1099px) {
+  .adm-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }

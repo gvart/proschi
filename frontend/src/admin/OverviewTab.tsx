@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { getOverview } from './api';
-import BarChart from './BarChart';
+import Chart from './Chart';
 import { formatNumber, formatUsd, humanize } from './format';
 import { useLoad } from './hooks';
 import { ErrorNote, Loading, PageHeader, Section, Stat } from './ui';
@@ -24,7 +24,7 @@ export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut
           <Stat label="Blocked" value={formatNumber(users.blocked)} tone={users.blocked ? 'warn' : undefined} />
           <Stat label="Email reminders" value={formatNumber(users.emailReminders)} note="confirmed addresses" />
         </div>
-        <BarChart title="Sign-ups" bars={data.signups.map((s) => ({ day: s.day, value: s.count }))} />
+        <Chart kind="bar" title="Sign-ups" series={[{ id: "n", label: "Sign-ups" }]} points={data.signups.map((s) => ({ day: s.day, values: { n: s.count } }))} />
       </Section>
 
       <Section title="AI spend">
@@ -32,7 +32,7 @@ export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut
           <Stat label="Today" value={formatUsd(data.aiSpend.at(-1)?.costUsd ?? 0)} note="AI interviews started today" />
           <Stat label="30 days" value={formatUsd(data.aiSpend.reduce((sum, d) => sum + d.costUsd, 0))} />
         </div>
-        <BarChart title="AI interview spend (USD)" bars={data.aiSpend.map((d) => ({ day: d.day, value: d.costUsd }))} format={formatUsd} />
+        <Chart kind="bar" title="AI interview spend (USD)" series={[{ id: "n", label: "Spend" }]} points={data.aiSpend.map((d) => ({ day: d.day, values: { n: d.costUsd } }))} format={formatUsd} />
       </Section>
 
       <Section title="Last 24 hours">
@@ -77,7 +77,7 @@ export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut
           </label>
         }
       >
-        <BarChart title={humanize(event)} bars={data.usage.days.map((d) => ({ day: d.day, value: d.counts[event] ?? 0 }))} />
+        <Chart kind="bar" title={humanize(event)} series={[{ id: "n", label: humanize(event) }]} points={data.usage.days.map((d) => ({ day: d.day, values: { n: d.counts[event] ?? 0 } }))} />
       </Section>
     </>
   );

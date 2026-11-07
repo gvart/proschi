@@ -6,7 +6,14 @@ import { useLoad } from './hooks';
 import { Empty, ErrorNote, PageHeader, Section, Skeleton, UserLink } from './ui';
 
 const OUTCOMES: WebhookOutcome[] = ['applied', 'duplicate', 'ignored', 'stale', 'bad_signature', 'error'];
-const OUTCOME_TONE: Record<WebhookOutcome, string> = { applied: 'pass', duplicate: 'neutral', ignored: 'neutral', stale: 'yellow', bad_signature: 'fail', error: 'fail' };
+const OUTCOME_TONE: Record<WebhookOutcome, string> = {
+  applied: 'pass',
+  duplicate: 'neutral',
+  ignored: 'neutral',
+  stale: 'yellow',
+  bad_signature: 'fail',
+  error: 'fail',
+};
 
 /** Polar's webhook deliveries, newest first, kept 90 days: when, the event, what was done with it and the account. */
 export default function WebhooksTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
@@ -80,17 +87,29 @@ export default function WebhooksTab({ onOpenUser, onSignedOut }: { onOpenUser: (
             </div>
             {(before.length > 0 || log.data.next !== null) && (
               <div className="adm-pager">
-                <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" disabled={!before.length} onClick={() => setBefore((b) => b.slice(0, -1))}>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--secondary ps-btn--sm"
+                  disabled={!before.length}
+                  onClick={() => setBefore((b) => b.slice(0, -1))}
+                >
                   Newer
                 </button>
-                <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" disabled={log.data.next === null} onClick={() => log.data?.next != null && setBefore((b) => [...b, log.data!.next!])}>
+                <button
+                  type="button"
+                  className="ps-btn ps-btn--secondary ps-btn--sm"
+                  disabled={log.data.next === null}
+                  onClick={() => log.data?.next != null && setBefore((b) => [...b, log.data!.next!])}
+                >
                   Older
                 </button>
               </div>
             )}
           </div>
         )}
-        <p className="adm-footnote">Stale: older than what is stored, not applied. Bad signature: refused with 403, its body never read. No payload is ever stored.</p>
+        <p className="adm-footnote">
+          Stale: older than what is stored, not applied. Bad signature: refused with 403, its body never read. No payload is ever stored.
+        </p>
       </Section>
     </>
   );
