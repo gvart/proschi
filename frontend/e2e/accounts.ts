@@ -64,6 +64,9 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     [/^\/api\/me$/, me],
     [/^\/auth\/providers$/, { providers: ['github', 'google'] }],
     [/^\/api\/me\/email$/, { email: null }],
+    // Admin campaigns: no announcement, product news on without an address (campaigns.accounts.e2e.ts mocks real ones).
+    [/^\/api\/me\/announcement$/, { announcement: null }],
+    [/^\/api\/me\/news$/, { on: true, email: null, source: null }],
     [/^\/api\/me\/activity$/, { day: '', goal: { reviews: me.user.dailyGoal ?? 10, solves: 1 }, days: [] }],
     [/^\/api\/me\/achievements$/, { achievements: [], skills: { readiness: 0, topics: [], weakest: [] }, stats: { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 } }],
     [/^\/api\/cards\/state$/, { states: {}, today: { reviews: 0, new: 0 } }],
