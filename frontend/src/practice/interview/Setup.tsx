@@ -453,7 +453,7 @@ function PhaseSplit({ minutes }: { minutes: number }) {
       <p className="mb-2 text-xs font-bold uppercase tracking-[0.08em] text-muted">How {minutes} minutes split</p>
       <ol aria-label="Time per phase" className="flex overflow-hidden rounded-sm border-bw-1 border-ink/30">
         {PHASES.map((p, i) => (
-          <li key={p.id} style={{ flexGrow: PHASE_SHARE[p.id] }} className={`min-w-0 basis-0 px-2 py-1.5 text-xs ${i > 0 ? 'border-l-bw-1 border-ink/30' : ''} ${i % 2 ? 'bg-paper/60' : 'bg-surface'}`}>
+          <li key={p.id} style={{ flexGrow: PHASE_SHARE[p.id] }} className={`min-w-[4.75rem] basis-0 px-2 py-1.5 text-xs ${i > 0 ? 'border-l-bw-1 border-ink/30' : ''} ${i % 2 ? 'bg-paper/60' : 'bg-surface'}`}>
             <span className="block truncate font-semibold text-ink">{p.label}</span>
             <span className="block text-muted">{Math.round(minutes * PHASE_SHARE[p.id])} min</span>
           </li>
