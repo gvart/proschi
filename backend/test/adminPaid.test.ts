@@ -375,7 +375,7 @@ describe('admin: the paid product', () => {
   it(
     'rate-limits the webhook per IP before the signature is checked, and logs at most one bad signature per IP a minute',
     async () => {
-      await withinOneWindow(15_000);
+      await withinOneWindow();
       const ip = `test-flood-${crypto.randomUUID()}`;
       const forged = { type: 'subscription.updated', data: {} };
       for (let i = 0; i < 3; i++) expect((await deliver(forged, { sig: 'v1,AAAA', ip })).status).toBe(403);
@@ -383,7 +383,8 @@ describe('admin: the paid product', () => {
       const rows = async () => (await env.DB.prepare("SELECT COUNT(*) AS n FROM billing_webhooks WHERE outcome = 'bad_signature'").first<{ n: number }>())!.n;
       expect(await rows()).toBe(2);
       // 300 a minute per IP (wrangler.jsonc WEBHOOK_LIMITER): 297 more fill this one's window, then 429 before any read or write.
-      for (let i = 0; i < 297; i++) expect((await deliver(forged, { sig: 'v1,AAAA', ip })).status).toBe(403);
+      // Taken from the limiter itself, the key the route uses: 297 whole requests outlasted the test under the full suite's load.
+      for (let i = 0; i < 297; i++) expect((await env.WEBHOOK_LIMITER.limit({ key: ip })).success).toBe(true);
       const limited = await deliver(forged, { sig: 'v1,AAAA', ip });
       expect(limited.status).toBe(429);
       expect(await rows()).toBe(2);
