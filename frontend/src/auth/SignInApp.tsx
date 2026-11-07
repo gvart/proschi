@@ -95,7 +95,7 @@ function Body({ view, setView, providers, siteKey }: { view: View; setView: (v: 
       );
     case 'signin':
     case 'signup':
-      return <SignInOrUp mode={view.kind} setView={setView} providers={providers} siteKey={siteKey} />;
+      return <SignInOrUp key={view.kind} mode={view.kind} setView={setView} providers={providers} siteKey={siteKey} />;
     case 'forgot':
       return <Forgot setView={setView} siteKey={siteKey} />;
     case 'link':
@@ -504,7 +504,7 @@ function AccountStatus({ status }: { status: EmailStatus }) {
             {busy ? 'Sending…' : 'Resend the link'}
           </button>
           <a className={outlineButton} href={place.returnTo}>
-            Continue without
+            Continue for now
           </a>
         </div>
       </>
