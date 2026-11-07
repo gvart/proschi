@@ -6,7 +6,7 @@
  */
 
 /** The plans an account can be on (`users.plan`); src/features.ts says which get each paid feature. */
-export type Plan = 'free' | 'pro';
+export type Plan = 'free' | 'pro' | 'max';
 
 export interface Limits {
   /** Live (not deleted) synced diagrams (src/documents.ts). */

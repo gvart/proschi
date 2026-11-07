@@ -23,6 +23,9 @@ export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; desc
   interview_history: { plans: ['pro'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
   ai_roadmap: { plans: ['pro'], description: 'Your next steps are part of Pro' },
   share_links: { plans: ['pro'], description: 'Live share links are part of Pro' },
+  design_partner: { plans: ['free', 'pro', 'max'], description: 'Design partner is for anyone signed in; the credits decide how much' },
+  deep_mode: { plans: ['max'], description: 'Deep mode is part of Max' },
+  interview_report: { plans: ['max'], description: 'The printable interview report is part of Max' },
 };
 
 /**

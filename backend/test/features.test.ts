@@ -57,9 +57,12 @@ describe('features', () => {
       interview_history: { ok: false, reason: 'needs_pro' },
       ai_roadmap: { ok: false, reason: 'needs_pro' },
       share_links: { ok: false, reason: 'needs_pro' },
+      design_partner: { ok: true },
+      deep_mode: { ok: false, reason: 'needs_pro' },
+      interview_report: { ok: false, reason: 'needs_pro' },
     });
     await setPlan(id, 'pro');
-    expect(await plan()).toEqual(Object.fromEntries(FEATURE_IDS.map((f) => [f, { ok: true }])));
+    expect(await plan()).toEqual({ ...Object.fromEntries(FEATURE_IDS.map((f) => [f, { ok: true }])), deep_mode: { ok: false, reason: 'needs_pro' }, interview_report: { ok: false, reason: 'needs_pro' } });
     expect(featureMap({ plan: 'free' }, noBilling).share_links).toEqual({ ok: false, reason: 'billing_off' });
   });
 });
