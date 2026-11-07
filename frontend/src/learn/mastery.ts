@@ -37,6 +37,13 @@ import { isNew, reviewable, type CardStates } from './review';
  * GAME_LESSONS_FOR_FULL of them for the whole GAME_BONUS. It is a bonus, not
  * a part, so a topic never scores less for being played.
  *
+ * A finished mock interview adds a bonus too, INTERVIEW_BONUS at most, to
+ * the topics its problem relates to: with the interviewer, scaled by the
+ * verdict's mean score (1 of 5 adds nothing, 5 of 5 all of it), and its
+ * estimation score counts for the `estimation` topic whatever the problem;
+ * on your own, a flat SOLO_SHARE of it. The best interview counts, so
+ * repeating one never adds more.
+ *
  * Readiness is the mean of the topics' mastery weighted by how many cards
  * each has, so a topic with more to know counts more.
  */
@@ -50,6 +57,9 @@ export const ACCURACY_WINDOW = 20;
 /** The most Scale or Fail adds to a topic's mastery, and the game lessons that earn all of it. */
 export const GAME_BONUS = 0.05;
 export const GAME_LESSONS_FOR_FULL = 3;
+/** The most a mock interview adds to a topic's mastery, and the share of it one on your own adds. */
+export const INTERVIEW_BONUS = 0.05;
+export const SOLO_SHARE = 0.5;
 /** The topic whose mastery includes estimation accuracy. */
 export const ESTIMATION_TOPIC = 'estimation';
 
@@ -58,6 +68,26 @@ export interface ProblemInfo {
   id: string;
   difficulty: 'easy' | 'medium' | 'hard';
   tags: string[];
+}
+
+/** A finished mock interview, as the skill map, the level and the badges count it. */
+export interface InterviewDone {
+  problem: string;
+  /** With the AI interviewer (it has a verdict), or on your own. */
+  mode: 'mock' | 'solo';
+  /** The verdict passed; always false on your own. */
+  passed: boolean;
+  /** Finished within its time with a pass, or on your own with every check passing. */
+  onTime: boolean;
+  /** The verdict's score per skill (requirements, estimation, design, tradeoffs, communication), 1 to 5; with the interviewer only. */
+  scores?: Readonly<Record<string, number>>;
+}
+
+/** What an interview shows of a skill, from 0 to 1: the verdict's mean score scaled from 1–5, or SOLO_SHARE on your own. */
+export function interviewScore(i: Pick<InterviewDone, 'mode' | 'scores'>): number {
+  if (i.mode === 'solo') return SOLO_SHARE;
+  const scores = Object.values(i.scores ?? {}).filter((n) => Number.isFinite(n));
+  return scores.length ? clamp01((scores.reduce((a, b) => a + b, 0) / scores.length - 1) / 4) : 0;
 }
 
 export interface MasteryInput {
@@ -73,6 +103,8 @@ export interface MasteryInput {
   estimateRatings: readonly Rating[];
   /** Scale or Fail lessons met per topic id; none when absent. */
   gameLessons?: Readonly<Record<string, number>>;
+  /** Mock interviews finished; none when absent. */
+  interviews?: readonly InterviewDone[];
 }
 
 export interface TopicMastery {
@@ -87,6 +119,8 @@ export interface TopicMastery {
   accuracy?: number;
   /** The Scale or Fail bonus, 0 to GAME_BONUS; absent without game lessons. */
   game?: number;
+  /** The mock interview bonus, 0 to INTERVIEW_BONUS; absent without one that adds. */
+  interview?: number;
   /** The topic's reviewable cards: its weight in readiness. */
   cards: number;
 }
@@ -142,14 +176,22 @@ export function topicMastery(topic: string, input: MasteryInput): TopicMastery {
   }
   const lessons = input.gameLessons?.[topic] ?? 0;
   const game = lessons > 0 ? GAME_BONUS * Math.min(1, lessons / GAME_LESSONS_FOR_FULL) : undefined;
+  let best = 0;
+  for (const i of input.interviews ?? []) {
+    if (related.includes(i.problem)) best = Math.max(best, interviewScore(i));
+    const estimation = i.mode === 'mock' ? i.scores?.estimation : undefined;
+    if (topic === ESTIMATION_TOPIC && estimation !== undefined && Number.isFinite(estimation)) best = Math.max(best, clamp01((estimation - 1) / 4));
+  }
+  const interview = best > 0 ? INTERVIEW_BONUS * best : undefined;
   return {
     topic,
-    mastery: clamp01(total / weights + (game ?? 0)),
+    mastery: clamp01(total / weights + (game ?? 0) + (interview ?? 0)),
     recall,
     coverage,
     ...(problems !== undefined ? { problems } : {}),
     ...(accuracy !== undefined ? { accuracy } : {}),
     ...(game !== undefined ? { game } : {}),
+    ...(interview !== undefined ? { interview } : {}),
     cards: pool.length,
   };
 }
