@@ -41,7 +41,7 @@ import { useZenMode } from '../components/Playground/useZenMode';
 import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
-import { eyebrow, field, iconButton, outlineButton, subBar, toolButton } from '../components/Playground/ui';
+import { eyebrow, iconButton, outlineButton, subBar, toolButton } from '../components/Playground/ui';
 import { evaluateChecks, guidedReducer, parseGuided } from './modes/guidedFile';
 import { loadGuided, saveGuided, type GuidedState } from './modes/store';
 import { setupHref } from './interview/links';
@@ -49,6 +49,7 @@ import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 import './practiceLayout.css';
 import { useFeedbackDiagram } from '../feedback/diagram';
+import Select from '../design/Select';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 const PartnerPanel = lazy(() => import('../partner/PartnerPanel'));
@@ -776,18 +777,14 @@ function DiagramPane({ diagram, nodes, edges, fitKey, engine, onSelect, zen, sou
           </button>
         ))}
         {tab === 'playback' && current && (
-          <select
+          <Select
+            size="sm"
             aria-label="Scenario"
             value={current.key}
-            onChange={(e) => setSelected(e.target.value)}
-            className={`ml-auto min-w-0 max-w-[60%] ${field} !py-1`}
-          >
-            {options.map((o) => (
-              <option key={o.key} value={o.key}>
-                {o.useCase.scenarios.length > 1 ? `${o.useCase.name} › ${o.scenario.name}` : o.useCase.name}
-              </option>
-            ))}
-          </select>
+            onChange={setSelected}
+            options={options.map((o) => ({ value: o.key, label: o.useCase.scenarios.length > 1 ? `${o.useCase.name} › ${o.scenario.name}` : o.useCase.name }))}
+            className="ml-auto max-w-[60%]"
+          />
         )}
       </div>
       </ZenCollapse>

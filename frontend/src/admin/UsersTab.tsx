@@ -6,6 +6,7 @@ import { useAction, useLoad, type SortDir } from './hooks';
 import UserBilling from './UserBilling';
 import UserSignIn from './UserSignIn';
 import { Empty, ErrorNote, PageHeader, Pager, SearchBox, Section, Skeleton, SortHeader, Stat } from './ui';
+import Select from '../design/Select';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -48,13 +49,13 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
       <Section title={users.data ? `Accounts (${formatNumber(users.data.total)})` : 'Accounts'}>
         <div className="adm-toolbar">
           <SearchBox value={q} onChange={search} label="Search accounts" placeholder="Name, account id or GitHub/Google user id" />
-          <select className="adm-input" aria-label="Show" value={filter} onChange={(e) => (setFilter(e.target.value as UserFilter), setOffset(0))}>
-            {FILTERS.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.label}
-              </option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            aria-label="Show"
+            value={filter}
+            onChange={(v) => (setFilter(v as UserFilter), setOffset(0))}
+            options={FILTERS.map((f) => ({ value: f.id, label: f.label }))}
+          />
         </div>
         <ErrorNote>{users.error}</ErrorNote>
         {!users.data ? (

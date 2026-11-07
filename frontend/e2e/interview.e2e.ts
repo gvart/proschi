@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, canvasNodes, codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
+import { answerDialog, canvasNodes, chooseOption, codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
 
 /**
  * The mock interview's pages without accounts (practice/interview, P45): the
@@ -241,13 +241,13 @@ test.describe('the interview room on your own', () => {
     await canvasNodes(page).filter({ hasText: 'ID Generator' }).click();
     await expect(step.getByRole('status')).toHaveText('Now click the component it goes to.');
     await canvasNodes(page).filter({ hasText: 'ZooKeeper' }).click();
-    await expect(step.getByLabel('Starts at')).toHaveValue('idgen');
-    await expect(step.getByLabel('Goes to')).toHaveValue('zk');
+    await expect(step.getByLabel('Starts at')).toHaveAttribute('data-value', 'idgen');
+    await expect(step.getByLabel('Goes to')).toHaveAttribute('data-value', 'zk');
     await step.getByRole('textbox', { name: 'Label' }).fill('CREATE worker id');
     await step.getByRole('button', { name: 'Add step' }).click();
     await flows.getByRole('button', { name: 'Add a step' }).click();
-    await step.getByLabel('Starts at').selectOption('zk');
-    await step.getByLabel('Goes to').selectOption('idgen');
+    await chooseOption(step.getByLabel('Starts at'), 'ZooKeeper');
+    await chooseOption(step.getByLabel('Goes to'), 'ID Generator');
     await expect(step.getByRole('radio', { name: 'Response' })).toHaveAttribute('aria-checked', 'true');
     await step.getByRole('textbox', { name: 'Label' }).fill('worker id');
     await step.getByRole('button', { name: 'Add step' }).click();

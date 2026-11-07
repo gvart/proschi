@@ -32,6 +32,7 @@ import {
   LogIn,
   List,
   Play,
+  Route,
   Trash2,
   Upload,
   Code2,
@@ -127,8 +128,9 @@ import { useCloudFiles } from './useCloudFiles';
 import { withCloudErrors } from '../../playground/cloudRefs';
 import type { VersionInfo } from '../../playground/versions';
 import type { VersionMode } from './VersionViewer';
-import { eyebrow, field, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
+import { eyebrow, iconButton, outlineButton, primaryButton, subBar, toolButton } from './ui';
 import Tabs from '../../design/Tabs';
+import Select from '../../design/Select';
 import HelpMenu from '../../onboarding/HelpMenu';
 import Header from '../../design/Header';
 import { markSeen, startMode, type StartMode } from '../../onboarding/seen';
@@ -363,7 +365,18 @@ export default function Playground() {
   const playback: PlaybackTarget | undefined =
     playing && useCase ? { useCase: useCase.id, ...(hasScenarios && scenario ? { scenario: scenario.id } : {}), step: playStep + 1 } : undefined;
   const playbackKey = playback ? `${playback.useCase}/${playback.scenario ?? ''}#${playback.step}` : '';
-  const useCaseGroups = useMemo(() => groupByEndpoint(shown.useCases), [shown]);
+  const useCaseOptions = useMemo(
+    () =>
+      groupByEndpoint(shown.useCases).flatMap((group) =>
+        group.useCases.map((u) => ({
+          value: u.id,
+          label: u.name,
+          group: group.label || undefined,
+          description: u.scenarios.length > 1 ? `${u.scenarios.length} scenarios` : undefined,
+        })),
+      ),
+    [shown],
+  );
   // The player restarts when this changes, so each scenario starts at its first step.
   const playedUseCase = useMemo(
     () => (useCase && scenario ? { id: `${useCase.id}/${scenario.id}`, name: useCase.name, steps: scenario.steps, condition: scenario.condition } : undefined),
@@ -1027,31 +1040,26 @@ export default function Playground() {
         />
 
         <div className="ps-header__wrap flex items-center gap-2 w-full sm:w-auto sm:min-w-0 sm:flex-wrap xl:flex-nowrap sm:ml-auto">
-          <select
+          <Select
             aria-label="Use case"
+            title={`Use case: the flow Play runs${useCase ? `. Now: ${useCase.name}` : ''}`}
+            prefix={
+              <>
+                <Route size={16} aria-hidden="true" className="shrink-0" />
+                <span className="hidden sm:inline shrink-0 text-xs font-bold uppercase tracking-[0.08em] text-muted">Use case</span>
+              </>
+            }
             value={useCase?.id ?? ''}
-            onChange={(e) => {
-              setSelectedUseCaseId(e.target.value);
+            onChange={(id) => {
+              setSelectedUseCaseId(id);
               setSelectedScenarioId(undefined);
               setInitialStep(undefined);
             }}
-            title={useCase?.name}
+            options={useCaseOptions}
+            placeholder="No use cases"
             disabled={shown.useCases.length === 0}
-            className={`flex-1 min-w-0 sm:flex-none sm:max-w-[11rem] truncate ${field}`}
-          >
-            {shown.useCases.length === 0 && <option value="">No use cases</option>}
-            {useCaseGroups.map((group) =>
-              group.label ? (
-                <optgroup key={group.label} label={group.label}>
-                  {group.useCases.map((u) => (
-                    <UseCaseOption key={u.id} useCase={u} />
-                  ))}
-                </optgroup>
-              ) : (
-                group.useCases.map((u) => <UseCaseOption key={u.id} useCase={u} />)
-              ),
-            )}
-          </select>
+            className="h-9 flex-1 min-w-0 sm:flex-none sm:w-[17rem]"
+          />
 
           {playing ? (
             <button
@@ -1525,15 +1533,6 @@ export default function Playground() {
   );
   // The paid features (components/Feature.tsx) for everything below: the review panel, the share link dialog.
   return <FeaturesContext.Provider value={features}>{page}</FeaturesContext.Provider>;
-}
-
-function UseCaseOption({ useCase }: { useCase: DiagramUseCase }) {
-  const count = useCase.scenarios.length;
-  return (
-    <option value={useCase.id}>
-      {count > 1 ? `${useCase.name} · ${count} scenarios` : useCase.name}
-    </option>
-  );
 }
 
 interface ScenarioBarProps {

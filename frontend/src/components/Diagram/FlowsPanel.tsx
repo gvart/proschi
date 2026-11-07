@@ -5,6 +5,7 @@ import { addScenario, addStep, addUseCase, removeScenario, removeStep, removeUse
 import type { Diagram } from '../../dsl/types';
 import { eyebrow, field, iconButton, outlineButton, primaryButton, toolButton } from '../Playground/ui';
 import { defaultStepKind, labelSuggestions, missingScenarios, missingUseCases, outlineSteps } from './flows';
+import Select from '../../design/Select';
 
 /**
  * The Flows builder (docs/design/paid-plans.md P46): use cases and their
@@ -341,26 +342,24 @@ function StepForm({
       </p>
       <div className="grid grid-cols-2 gap-1.5">
         <Labelled id={fromId} label="Starts at">
-          <select id={fromId} value={from ?? ''} onChange={(e) => select(e.target.value, 'from')} className={`w-full ${field} !py-1`}>
-            <option value="">Choose…</option>
-            {nodes.map((n) => (
-              <option key={n.id} value={n.id}>
-                {n.name}
-              </option>
-            ))}
-          </select>
+          <Select
+            size="sm"
+            id={fromId}
+            value={from ?? ''}
+            onChange={(v) => select(v, 'from')}
+            options={[{ value: '', label: 'Choose…' }, ...nodes.map((n) => ({ value: n.id, label: n.name }))]}
+            className="w-full"
+          />
         </Labelled>
         <Labelled id={toId} label="Goes to">
-          <select id={toId} value={to ?? ''} onChange={(e) => select(e.target.value, 'to')} className={`w-full ${field} !py-1`}>
-            <option value="">Choose…</option>
-            {nodes
-              .filter((n) => n.id !== from)
-              .map((n) => (
-                <option key={n.id} value={n.id}>
-                  {n.name}
-                </option>
-              ))}
-          </select>
+          <Select
+            size="sm"
+            id={toId}
+            value={to ?? ''}
+            onChange={(v) => select(v, 'to')}
+            options={[{ value: '', label: 'Choose…' }, ...nodes.filter((n) => n.id !== from).map((n) => ({ value: n.id, label: n.name }))]}
+            className="w-full"
+          />
         </Labelled>
       </div>
       {both && (

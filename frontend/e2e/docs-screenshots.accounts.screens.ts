@@ -1,6 +1,6 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
-import { codeEditor, expect, test, waitForCanvas } from './fixtures';
+import { chooseOption, codeEditor, expect, test, waitForCanvas } from './fixtures';
 import { Account, seed } from './versions';
 
 /**
@@ -105,7 +105,7 @@ test('Two versions compared (VERSIONS)', async ({ page }) => {
   const dialog = await openVersions(page);
   await dialog.getByRole('button', { name: 'Compare 2026-09-14' }).click();
   const compare = page.getByRole('dialog', { name: 'Compare versions' });
-  await compare.getByLabel('Target').selectOption('2026-11-01');
+  await chooseOption(compare.getByLabel('Target'), '2026-11-01');
   await expect(compare.locator('.react-flow__node.pc-diff-added')).toHaveText(/Order cache/);
   await page.waitForTimeout(1500);
   await page.screenshot({ path: out('versions-compare') });

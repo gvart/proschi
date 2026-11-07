@@ -284,3 +284,9 @@ export async function addFromPalette(page: Page, search: string, name: string): 
   await palette.getByRole('searchbox', { name: 'Search components' }).fill(search);
   await palette.getByRole('button', { name, exact: true }).click();
 }
+
+/** Opens one of the design system's selects (src/design/Select.tsx) and picks the option with this exact label. */
+export async function chooseOption(select: Locator, option: string): Promise<void> {
+  await select.click();
+  await select.page().getByRole('option', { name: option, exact: true }).click();
+}

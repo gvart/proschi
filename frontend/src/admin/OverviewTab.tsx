@@ -12,6 +12,7 @@ import { routeHash } from './route';
 import { getSignups, refusedSummary } from './signups';
 import Sparkline from './Sparkline';
 import { ErrorNote, PageHeader, Section, Skeleton } from './ui';
+import Select from '../design/Select';
 
 type Key = Exclude<keyof TrendPoint, 'day'>;
 
@@ -198,13 +199,7 @@ export default function OverviewTab({
           actions={
             <label className="adm-inline">
               <span className="adm-muted">Event</span>
-              <select className="adm-input" value={event} onChange={(e) => setEvent(e.target.value)}>
-                {data.usage.events.map((name) => (
-                  <option key={name} value={name}>
-                    {humanize(name)}
-                  </option>
-                ))}
-              </select>
+              <Select size="sm" value={event} onChange={setEvent} options={data.usage.events.map((name) => ({ value: name, label: humanize(name) }))} />
             </label>
           }
         >

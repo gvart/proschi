@@ -18,6 +18,7 @@ import type { CapacityOverride, DiagramEdge, DiagramNode, InstanceSize } from '.
 import { eyebrow, field, iconButton } from '../Playground/ui';
 import type { SystemSummary } from '../Canvas/systemSummary';
 import { formatRps } from '../../sim';
+import Select from '../../design/Select';
 
 type Edit = (source: string) => string;
 
@@ -178,16 +179,18 @@ function NodeFields({ node, capacity, readOnly, problemCapacity, onEdit }: { nod
           <p className="text-xs text-muted">Leave empty for the tech's defaults.</p>
           <label className="block">
             <span className={eyebrow}>Instance size</span>
-            <select
+            <Select
+              size="sm"
               value={capacity?.size ?? 'S'}
               disabled={readOnly}
-              onChange={(e) => onEdit((src) => setSize(src, id, e.target.value === 'S' ? null : (e.target.value as InstanceSize)))}
-              className={`${field} mt-1 w-full`}
-            >
-              <option value="S">S (the tech's defaults)</option>
-              <option value="M">M: ×2 capacity, ×1.8 cost</option>
-              <option value="L">L: ×4 capacity, ×3.5 cost</option>
-            </select>
+              onChange={(v) => onEdit((src) => setSize(src, id, v === 'S' ? null : (v as InstanceSize)))}
+              options={[
+                { value: 'S', label: "S (the tech's defaults)" },
+                { value: 'M', label: 'M: ×2 capacity, ×1.8 cost' },
+                { value: 'L', label: 'L: ×4 capacity, ×3.5 cost' },
+              ]}
+              className="mt-1 w-full"
+            />
           </label>
           {CAPACITY_ROWS.filter((r) => !r.storeOnly || store).map((row) => {
             const current = capacity?.[CAPACITY_FIELD[row.part]];

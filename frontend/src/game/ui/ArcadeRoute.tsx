@@ -18,6 +18,7 @@ import RunScreen from './RunScreen';
 import { loadRun, loadSettings, saveRun, saveSettings, type Settings } from './store';
 import { useArcade } from './useArcade';
 import './arcade.css';
+import Select from '../../design/Select';
 
 /**
  * The Arcade tab of the practice hub (`#/arcade`): Scale or Fail. The home
@@ -143,13 +144,12 @@ export default function ArcadeRoute({ account, activity, focusDaily = false }: {
             {top > 0 && (
               <label className="text-sm inline-flex items-center gap-1">
                 Ascension
-                <select className="rounded-sm border-bw-1 border-ink bg-surface px-1 py-1" value={asc} onChange={(e) => setAscension({ ...ascension, [s.id]: Number(e.target.value) })}>
-                  {Array.from({ length: top + 1 }, (_, i) => (
-                    <option key={i} value={i}>
-                      {i}
-                    </option>
-                  ))}
-                </select>
+                <Select
+                  size="sm"
+                  value={String(asc)}
+                  onChange={(v) => setAscension({ ...ascension, [s.id]: Number(v) })}
+                  options={Array.from({ length: top + 1 }, (_, i) => ({ value: String(i), label: String(i) }))}
+                />
               </label>
             )}
             <button type="button" className={primaryButton} disabled={!!starting || arcade.busy} onClick={() => void begin(s.id, { mode: 'normal', scenario: s.id, ascension: asc })}>
@@ -414,13 +414,7 @@ function Leaderboards({ scenarios, day }: { scenarios: { id: string; title: stri
         <h3 className="font-display text-xl font-extrabold flex items-center gap-1.5">
           <Trophy size={18} aria-hidden="true" /> Leaderboard
         </h3>
-        <select className="rounded-sm border-bw-1 border-ink bg-surface px-2 py-1 text-sm" value={which} onChange={(e) => setWhich(e.target.value)} aria-label="Leaderboard">
-          {options.map((o) => (
-            <option key={o.key} value={o.key}>
-              {o.label}
-            </option>
-          ))}
-        </select>
+        <Select size="sm" aria-label="Leaderboard" value={which} onChange={setWhich} options={options.map((o) => ({ value: o.key, label: o.label }))} />
       </div>
       {board === undefined && <p className="mt-2 text-sm text-muted">Loading…</p>}
       {board === null && <p className="mt-2 text-sm text-muted">The leaderboard is not available right now.</p>}

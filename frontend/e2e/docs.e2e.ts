@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from 'node:fs';
 import type { Page } from '@playwright/test';
-import { canvasNodes, expect, test } from './fixtures';
+import { canvasNodes, chooseOption, expect, test } from './fixtures';
 
 /** The built docs pages, dist/docs/**\/index.html, as URLs. */
 const DIST = new URL('../dist/', import.meta.url);
@@ -74,7 +74,7 @@ test.describe('docs', () => {
     await expect.poll(() => example.locator('.react-flow__node').count()).toBe(3);
 
     // Pick the failure scenario and play it.
-    await example.getByRole('combobox').selectOption({ label: 'Place order › DB down' });
+    await chooseOption(example.getByRole('combobox'), 'Place order › DB down');
     await example.getByRole('button', { name: 'Play' }).click();
     const stage = example.getByRole('region', { name: /playing Place order › DB down/ });
     await expect(stage).toBeVisible();
