@@ -54,7 +54,8 @@ test('opting in sends the address and time zone, and waits for the confirmation'
   // playwright.config.ts runs the browser in UTC.
   expect(calls).toEqual([{ method: 'PUT', body: { email: 'me@example.com', timeZone: 'UTC' } }]);
   await expect(section).toContainText('Waiting for you to confirm me@example.com');
-  await expect(section.getByRole('switch')).toHaveCount(0);
+  // No reminder switches until it is confirmed (Product news is a switch of its own).
+  await expect(section.getByRole('switch', { name: /^(?!Product news)/ })).toHaveCount(0);
   await expect(section.getByRole('button', { name: 'Resend the link' })).toBeVisible();
 });
 

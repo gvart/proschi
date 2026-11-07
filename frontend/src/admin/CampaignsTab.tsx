@@ -512,7 +512,7 @@ function Composer({ initial, onOpen, onSent }: { initial?: Campaign; onOpen: (id
           <Section title="Message">
             <form className="adm-form" onSubmit={(e) => e.preventDefault()}>
               <label>
-                Subject (also the announcement&apos;s title)
+                Subject (also the announcement’s title)
                 <input className="adm-input" maxLength={150} value={draft.subject} onChange={(e) => set({ subject: e.target.value })} placeholder="e.g. {{credits}} credits are on your Proschi account" />
               </label>
               <label>
