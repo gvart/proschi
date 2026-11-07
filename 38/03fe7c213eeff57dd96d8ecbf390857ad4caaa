@@ -1,0 +1,31 @@
+frontend/src/design/dialogs.css
+  s_e17b87e0a1b3ca::t_72236891f84bda 1-213
+frontend/src/design/dialogs.test.tsx
+  s_e17b87e0a1b3ca::t_502d094fbd543f 1-18,20-177
+  s_e17b87e0a1b3ca::t_2c710478294241 19
+frontend/src/design/dialogStore.ts
+  s_e17b87e0a1b3ca::t_a4dbfbff6830df 1-83,85-103
+  s_e17b87e0a1b3ca::t_5654c5fa0cef77 84
+frontend/src/design/dialogs.ts
+  s_e17b87e0a1b3ca::t_e32f36e066b159 1-62
+frontend/src/design/DialogHost.tsx
+  s_e17b87e0a1b3ca::t_688d591a55b4ab 112-118,140-155,157-184,213-238
+  s_e17b87e0a1b3ca::t_bb6f18c6435e04 111,119,139,185,212,239
+  s_e17b87e0a1b3ca::t_dd13299ce2829d 1-110,120-138,156,186-211,240-301
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "3803fe7c213eeff57dd96d8ecbf390857ad4caaa",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "unknown"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
