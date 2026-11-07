@@ -145,9 +145,9 @@ Limits are set per account plan:
 | Versions per diagram | 20 | Unlimited (fair use: 1000) |
 | Size of a diagram with its imports | 64 KiB | 512 KiB |
 
-If Pro ends, nothing is deleted: past 5 diagrams, the ones saved least
+If Pro or Max ends, nothing is deleted: past 5 diagrams, the ones saved least
 recently become read-only in the account until you delete some, and your
-edits to them stay in the browser. See [Terms](TERMS.md#pro).
+edits to them stay in the browser. See [Terms](TERMS.md#pro-and-max).
 
 The panel shows how many versions a diagram uses. Deleting a diagram from
 the account deletes its versions too. What the account stores is listed in

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Flag, Lightbulb, Mic, MicOff, Send, Target, X } from 'lucide-react';
+import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Mic, MicOff, Send, Target, X } from 'lucide-react';
+import { refreshCredits, useCredits } from '../../../services/useCredits';
 import Markdown from '../../Markdown';
 import { useNow } from '../useNow';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../../components/Playground/ui';
@@ -48,6 +49,9 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   const [busy, setBusy] = useState<'turn' | 'finish'>();
   const [error, setError] = useState<string>();
   const [draft, setDraft] = useState('');
+  /** A turn was refused for want of credits; the server has moved the interview to its wrap-up. */
+  const [refused, setOutOfCredits] = useState(false);
+  const { credits } = useCredits(true);
   const chat = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -124,10 +128,13 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
       setDraft(input.message);
       if (e instanceof TurnError && e.refunded) {
         setInterview((i) => i && { ...i, status: 'failed' });
+      } else if (e instanceof TurnError && (e.code === 'no_credits' || e.status === 402)) {
+        setOutOfCredits(true);
       } else setError(turnErrorText(e));
     } finally {
       setStreaming(undefined);
       setBusy(undefined);
+      refreshCredits();
     }
   };
 
@@ -152,6 +159,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
       setError(`The verdict could not be written (${e instanceof Error ? e.message : String(e)}). Try again in a moment.`);
     } finally {
       setBusy(undefined);
+      refreshCredits();
     }
   };
 
@@ -160,7 +168,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
       <section aria-label="Mock interview" className="px-4 py-4 space-y-3">
         <p role="alert" className="flex items-start gap-2 rounded-sm border-bw-1 border-ink bg-pop-pink/25 px-3 py-2 text-sm text-ink">
           <CircleAlert size={16} className="mt-0.5 shrink-0" aria-hidden="true" />
-          The interviewer stopped working early in this interview, so your credit was given back. Start again when you are ready.
+          The interviewer stopped working early in this interview. Answers that failed were not charged. Start again when you are ready.
         </p>
         <div className="flex flex-wrap gap-2">
           <button type="button" onClick={onRestart} className={primaryButton}>
@@ -175,6 +183,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   }
 
   const canTalk = active && !timeUp && !busy;
+  const outOfCredits = active && (refused || (credits !== undefined && credits.balance <= 0));
   return (
     <section aria-label="Mock interview" className="flex h-full min-h-0 flex-col">
       <div className="sticky top-0 z-10 border-b-bw-1 border-ink bg-surface px-3 py-2 space-y-2">
@@ -209,7 +218,16 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
             </li>
           ))}
         </ol>
-        {hint && <CoachingCard hint={hint} />}
+        {outOfCredits ? (
+          <aside aria-label="Out of credits" data-testid="out-of-credits" className="flex items-start gap-2 rounded-sm border-bw-1 border-ink/40 bg-paper px-3 py-2 text-sm text-ink">
+            <Coins size={15} className="mt-0.5 shrink-0" aria-hidden="true" />
+            <p>
+              You&rsquo;re out of credits, so the interviewer is wrapping up. Your verdict is already paid for: finish when you&rsquo;re ready.
+            </p>
+          </aside>
+        ) : (
+          hint && <CoachingCard hint={hint} />
+        )}
       </div>
 
       <div ref={chat} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3" aria-live="polite" aria-busy={busy === 'turn'}>
@@ -295,7 +313,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
               )}
             </>
           )}
-          <button type="button" disabled={!!busy || !active} onClick={() => void finish()} className={`ml-auto ${timeUp ? primaryButton : outlineButton} disabled:opacity-50`}>
+          <button type="button" disabled={!!busy || !active} onClick={() => void finish()} className={`ml-auto ${timeUp || outOfCredits ? primaryButton : outlineButton} disabled:opacity-50`}>
             <Flag size={14} aria-hidden="true" />
             {busy === 'finish' ? 'Writing the verdict…' : 'Finish and get the verdict'}
           </button>

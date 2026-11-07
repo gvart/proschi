@@ -1,19 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import type { PlanInfo } from '../services/billing';
+import type { PlanInfo, Product } from '../services/billing';
 import { nextPollIn, onPlan, onTick, readCheckoutReturn, returnMessage, SLOW_AFTER, startReturn, withoutCheckoutReturn, type ReturnState } from './checkoutReturn';
 
-const plan = (over: { plan?: string; status?: string; pack?: number; perMonth?: number } = {}): PlanInfo => ({
+const plan = (over: { plan?: string; status?: string; topup?: number; perMonth?: number; product?: Product } = {}): PlanInfo => ({
   plan: over.plan ?? 'free',
   billing: true,
-  subscription: over.status ? { status: over.status, product: 'pro_monthly', currentPeriodEnd: null, cancelAtPeriodEnd: false } : null,
+  subscription: over.status ? { status: over.status, product: over.product ?? null, currentPeriodEnd: null, cancelAtPeriodEnd: false } : null,
   customer: true,
-  limits: { documents: null, versionsPerDocument: null, documentBytes: 1, interviewsPerMonth: over.perMonth ?? 0 },
-  credits: { total: 0, monthly: 0, trial: 0, pack: over.pack ?? 0, period: '2026-11' },
+  limits: { documents: null, versionsPerDocument: null, documentBytes: 1 },
+  credits: { balance: 0, monthly: over.perMonth ? { allowance: over.perMonth, left: over.perMonth, resetsAt: 0 } : null, signup: 0, topup: over.topup ?? 0 },
   features: {} as PlanInfo['features'],
 });
 
 const PRO = startReturn({ product: 'pro_yearly', checkoutId: null }, 0);
-const PACK = startReturn({ product: 'pack_5', checkoutId: null }, 0);
+const MAX = startReturn({ product: 'max_monthly', checkoutId: null }, 0);
+const TOPUP = startReturn({ product: 'credits_1000', checkoutId: null }, 0);
 
 /** Every scheduled ask from the start, in ms. */
 function schedule(s: ReturnState): number[] {
@@ -25,7 +26,8 @@ function schedule(s: ReturnState): number[] {
 
 describe('readCheckoutReturn', () => {
   it('reads the product and Polar’s checkout id', () => {
-    expect(readCheckoutReturn('https://p.app/practice/?checkout=done&product=pack_5&checkout_id=abc#/me')).toEqual({ product: 'pack_5', checkoutId: 'abc' });
+    expect(readCheckoutReturn('https://p.app/practice/?checkout=done&product=credits_1000&checkout_id=abc#/me')).toEqual({ product: 'credits_1000', checkoutId: 'abc' });
+    expect(readCheckoutReturn('https://p.app/practice/?checkout=done&product=max_yearly#/me')).toEqual({ product: 'max_yearly', checkoutId: null });
   });
   it('is null without checkout=done, and ignores an unknown product or an unfilled id', () => {
     expect(readCheckoutReturn('https://p.app/practice/#/me')).toBeNull();
@@ -64,9 +66,16 @@ describe('Pro', () => {
     let s = onPlan(PRO, plan());
     expect(s.phase).toBe('activating');
     expect(returnMessage(s)).toBe('Payment received. Activating Pro…');
-    s = onPlan(s, plan({ plan: 'pro', status: 'active', perMonth: 4 }));
+    s = onPlan(s, plan({ plan: 'pro', status: 'active', perMonth: 800 }));
     expect(s.phase).toBe('done');
-    expect(returnMessage(s)).toBe("You're on Pro: 4 mock interviews this month.");
+    expect(returnMessage(s)).toBe("You're on Pro: 800 credits a month, starting now.");
+  });
+  it('a switch from monthly to yearly is done once the subscription has the new product', () => {
+    expect(onPlan(PRO, plan({ plan: 'pro', status: 'active', perMonth: 800, product: 'pro_monthly' })).phase).toBe('activating');
+    expect(onPlan(PRO, plan({ plan: 'pro', status: 'active', perMonth: 800, product: 'pro_yearly' })).phase).toBe('done');
+  });
+  it('is not done by Max', () => {
+    expect(onPlan(PRO, plan({ plan: 'max', status: 'active', perMonth: 2200 })).phase).toBe('activating');
   });
   it('is not done by an admin’s comp alone', () => {
     expect(onPlan(PRO, plan({ plan: 'pro' })).phase).toBe('activating');
@@ -74,23 +83,33 @@ describe('Pro', () => {
   it('still finishes from slow', () => {
     const slow = onTick(PRO, SLOW_AFTER);
     expect(returnMessage(slow)).toMatch(/^Polar hasn't confirmed the payment yet/);
-    expect(onPlan(slow, plan({ plan: 'pro', status: 'trialing', perMonth: 4 })).phase).toBe('done');
+    expect(onPlan(slow, plan({ plan: 'pro', status: 'trialing', perMonth: 800 })).phase).toBe('done');
   });
 });
 
-describe('a pack', () => {
-  it('is done once the pack credits go up from the first answer', () => {
-    let s = onPlan(PACK, plan({ pack: 2 }));
-    expect(s).toMatchObject({ phase: 'activating', baseline: 2 });
-    expect(returnMessage(s)).toBe('Payment received. Adding 5 mock interviews…');
-    s = onPlan(s, plan({ pack: 2 }));
+describe('Max', () => {
+  it('is done once the plan is Max by a subscription, an upgrade from Pro too', () => {
+    expect(returnMessage(MAX)).toBe('Payment received. Activating Max…');
+    expect(onPlan(MAX, plan({ plan: 'pro', status: 'active', perMonth: 800 })).phase).toBe('activating');
+    const s = onPlan(MAX, plan({ plan: 'max', status: 'active', perMonth: 2200 }));
+    expect(s).toMatchObject({ phase: 'done', credits: 2200 });
+    expect(returnMessage(s)).toBe("You're on Max: 2,200 credits a month, Deep mode and printable interview reports.");
+  });
+});
+
+describe('a top-up', () => {
+  it('is done once the top-up credits go up from the first answer', () => {
+    let s = onPlan(TOPUP, plan({ topup: 200 }));
+    expect(s).toMatchObject({ phase: 'activating', baseline: 200 });
+    expect(returnMessage(s)).toBe('Payment received. Adding 1,000 credits…');
+    s = onPlan(s, plan({ topup: 200 }));
     expect(s.phase).toBe('activating');
-    s = onPlan(s, plan({ pack: 7 }));
-    expect(s).toMatchObject({ phase: 'done', interviews: 5 });
-    expect(returnMessage(s)).toBe('5 mock interviews added.');
-    expect(onPlan(s, plan({ pack: 12 }))).toBe(s);
+    s = onPlan(s, plan({ topup: 1200 }));
+    expect(s).toMatchObject({ phase: 'done', credits: 1000 });
+    expect(returnMessage(s)).toBe('1,000 credits added. They never expire.');
+    expect(onPlan(s, plan({ topup: 2200 }))).toBe(s);
   });
   it('is not done by Pro', () => {
-    expect(onPlan(onPlan(PACK, plan()), plan({ plan: 'pro', status: 'active' })).phase).toBe('activating');
+    expect(onPlan(onPlan(TOPUP, plan()), plan({ plan: 'pro', status: 'active' })).phase).toBe('activating');
   });
 });

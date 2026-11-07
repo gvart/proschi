@@ -20,8 +20,9 @@ import { checkoutReturn } from './checkoutReturned';
  * Back from Polar's checkout (`?checkout=done&product=…`) on the account
  * page: a banner that asks GET /api/me/plan on pricing/checkoutReturn.ts's
  * schedule until Polar's webhook has made the purchase show (activating,
- * slow after a minute, done). Done with Pro, a "Welcome to Pro" card with a
- * burst of confetti, once a purchase; with a pack, the banner alone.
+ * slow after a minute, done). Done, a "Welcome to Pro" or "Welcome to Max"
+ * card, or "Credits added" for a top-up, with a burst of confetti, once a
+ * purchase. A plan switch (services/billing.ts changePlan) comes back the same way.
  * Nothing on a normal visit. Self-contained, so the page mounts it in one line.
  */
 
@@ -66,7 +67,7 @@ function useCheckoutReturn(): { state: ReturnState | null; checkoutId: string | 
     if (!doneKind || !readCheckoutReturn(window.location.href)) return;
     // A reload doesn't show it again; the rest of the page reads the new plan.
     window.history.replaceState(window.history.state, '', withoutCheckoutReturn(window.location.href));
-    announcePlanChanged(doneKind === 'pro' ? 'pro' : undefined);
+    announcePlanChanged(doneKind === 'topup' ? undefined : doneKind);
   }, [doneKind]);
   return { state, checkoutId: ret?.checkoutId ?? null, again: ask };
 }
@@ -119,22 +120,29 @@ function Banner({ state, checkoutId, again }: { state: ReturnState; checkoutId: 
   );
 }
 
-/** Where Pro starts: links on the practice page (`#/…`, a problem opened on interview mode with the mock interview chosen) and to the editor, whose Results tab has the in-depth review. */
+/** Where the credits go: links on the practice page (`#/…`, a problem opened on interview mode with the mock interview chosen) and to the editor, which has Design partner. */
 const STARTS = [
   { href: '#/url-shortener?interview=mock', label: 'Start a mock interview', Icon: MessagesSquare },
-  { href: '../app/', label: 'Review a design', Icon: ScanSearch },
+  { href: '../app/', label: 'Ask Design partner', Icon: ScanSearch },
   { href: '#/roadmap', label: 'See your roadmap', Icon: MapIcon },
 ] as const;
 
-function WelcomePro({ state, onDismiss }: { state: ReturnState; onDismiss: () => void }) {
+const WELCOME = {
+  pro: { title: 'Welcome to Pro', tone: 'bg-pop-yellow/30' },
+  max: { title: 'Welcome to Max', tone: 'bg-pop-lilac/30' },
+  topup: { title: 'Credits added', tone: 'bg-pop-yellow/30' },
+} as const;
+
+function Welcome({ state, onDismiss }: { state: ReturnState; onDismiss: () => void }) {
+  const { title, tone } = WELCOME[state.kind];
   return (
-    <Celebration label="Welcome to Pro" tone="bg-pop-yellow/30" className="mt-3">
+    <Celebration label={title} tone={tone} className="mt-3">
       <div className="flex items-start gap-2">
         <div className="min-w-0 flex-1">
           <p className={eyebrow}>Payment confirmed</p>
           <h3 className="mt-0.5 flex items-center gap-2 font-display text-lg font-bold text-ink">
             <PartyPopper size={18} aria-hidden="true" />
-            Welcome to Pro
+            {title}
           </h3>
           <p role="status" className="mt-1 text-sm text-ink/80">
             {returnMessage(state)}
@@ -161,11 +169,11 @@ export default function CheckoutStatus() {
   // This checkout's welcome shown before, in this browser: the banner alone.
   const [seen] = useState(() => welcomed(checkoutId));
   const [dismissed, setDismissed] = useState(false);
-  const proDone = state?.phase === 'done' && state.kind === 'pro';
+  const done = state?.phase === 'done';
   useEffect(() => {
-    if (proDone && !seen) rememberWelcome(checkoutId);
-  }, [proDone, seen, checkoutId]);
+    if (done && !seen) rememberWelcome(checkoutId);
+  }, [done, seen, checkoutId]);
   if (!state || dismissed) return null;
-  if (proDone && !seen) return <WelcomePro state={state} onDismiss={() => setDismissed(true)} />;
+  if (done && !seen) return <Welcome state={state} onDismiss={() => setDismissed(true)} />;
   return <Banner state={state} checkoutId={checkoutId} again={again} />;
 }

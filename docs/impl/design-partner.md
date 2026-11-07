@@ -7,7 +7,7 @@ that finishes the work.
 - [ ] metering (backend): millicredit ledger, holds, plans free/pro/max, Polar products
 - [ ] partner-api (backend): sessions, turns, change validation, practice coaching
 - [ ] partner-ui (frontend): panel, change cards, accept/reject/improve
-- [ ] plans-ui (frontend): pricing, credits chip, usage, estimates, out-of-credits
+- [x] plans-ui (frontend): pricing, credits chip, usage, estimates, out-of-credits
 - [ ] max-extras: Deep toggle, printable report
 - [ ] hardening: security + billing review, full checks
 

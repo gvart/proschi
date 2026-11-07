@@ -435,6 +435,12 @@
     display: none;
   }
 }
+/* The credits chip (practice/AccountMenu.tsx) takes the wordmark's room on phones. */
+@media (max-width: 429px) {
+  .ps-header--actions:not(.ps-header--compact):has([data-credits-chip]) .ps-wordmark__text {
+    display: none;
+  }
+}
 
 .ps-nav {
   display: none;

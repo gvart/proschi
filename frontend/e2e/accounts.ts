@@ -26,9 +26,35 @@ export const GAME_ME = {
 
 /** GET /api/me/plan's `features` for a plan, as backend/src/features.ts answers them with billing on. */
 export function featuresFor(plan: string | undefined): Record<string, { ok: boolean; reason?: string }> {
-  const pro = plan === 'pro';
+  const pro = plan === 'pro' || plan === 'max';
   const paid = pro ? { ok: true } : { ok: false, reason: 'needs_pro' };
   return { ai_interview: { ok: true }, ai_review: paid, interview_history: paid, ai_roadmap: paid, share_links: paid };
+}
+
+/** GET /api/credits/estimates as the server answers it with the default prices. */
+export const ESTIMATES = {
+  mock_interview: { min: 45, max: 60 },
+  partner_review: { min: 5, max: 15 },
+  partner_build: { min: 20, max: 40 },
+  partner_turn: { min: 1, max: 5 },
+  deepMultiplier: 5,
+};
+
+type Credits = { balance: number; monthly: { allowance: number; left: number; resetsAt: number } | null; signup: number; topup: number };
+
+/** GET /api/me/plan for `plan` with billing on: Free with its 100 sign-up credits, or a paid plan with its month untouched. */
+export function planAnswer(plan: 'free' | 'pro' | 'max', credits?: Credits): Record<string, unknown> {
+  const allowance = { pro: 800, max: 2200 }[plan as 'pro' | 'max'];
+  const resetsAt = Date.parse('2026-12-01T00:00:00Z');
+  return {
+    plan,
+    billing: true,
+    subscription: plan === 'free' ? null : { status: 'active', product: `${plan}_yearly`, currentPeriodEnd: Date.parse('2027-11-06T00:00:00Z'), cancelAtPeriodEnd: false },
+    customer: plan !== 'free',
+    limits: plan === 'free' ? { documents: 5, versionsPerDocument: 20, documentBytes: 65536 } : { documents: null, versionsPerDocument: null, documentBytes: 524288 },
+    credits: credits ?? (allowance ? { balance: allowance, monthly: { allowance, left: allowance, resetsAt }, signup: 0, topup: 0 } : { balance: 100, monthly: null, signup: 100, topup: 0 }),
+    features: featuresFor(plan),
+  };
 }
 
 export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void> {
@@ -50,20 +76,12 @@ export async function mockSignedIn(page: Page, me: Me = SIGNED_IN): Promise<void
     // Cloud sync of the editor's diagrams: an empty account (editor.accounts.e2e.ts mocks a real one).
     [/^\/api\/me\/documents$/, { documents: [], cursor: 0, limit: 5, used: 0 }],
     // Plan & billing on the account page (VITE_BILLING): the free plan (billing.accounts.e2e.ts mocks Pro).
-    [
-      /^\/api\/me\/plan$/,
-      {
-        plan: 'free',
-        billing: true,
-        subscription: null,
-        customer: false,
-        limits: { documents: 5, versionsPerDocument: 20, documentBytes: 65536, interviewsPerMonth: 0 },
-        credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' },
-        features: featuresFor(me.user.plan),
-      },
-    ],
-    // The AI interviewer on interview mode's start screen: none yet, the trial credit left (aiInterview.accounts.e2e.ts mocks a session).
-    [/^\/api\/interviews$/, { interviews: [], credits: { total: 1, monthly: 0, trial: 1, pack: 0, period: '2026-11' } }],
+    [/^\/api\/me\/plan$/, planAnswer(me.user.plan === 'pro' || me.user.plan === 'max' ? me.user.plan : 'free')],
+    // Metered credits: the typical estimates and nothing spent yet (billing.accounts.e2e.ts mocks real use).
+    [/^\/api\/credits\/estimates$/, ESTIMATES],
+    [/^\/api\/credits\/usage$/, { items: [] }],
+    // The AI interviewer on interview mode's start screen: none yet (aiInterview.accounts.e2e.ts mocks a session).
+    [/^\/api\/interviews$/, { interviews: [] }],
     // The progress page's interview history and the roadmap's AI picks: none yet (history.accounts.e2e.ts mocks real ones).
     [/^\/api\/interviews\/history$/, { full: false, total: 0, sessions: [] }],
     [/^\/api\/roadmap\/next$/, { next: null }],

@@ -1,4 +1,5 @@
 import type { Page } from '@playwright/test';
+import { planAnswer } from './accounts';
 
 /**
  * A stateful mock of the AI interviewer's API (backend/src/interviews.ts)
@@ -40,11 +41,18 @@ export interface InterviewMock {
   starts: { replace: boolean }[];
 }
 
-/** `open`: a session already in progress on the server (started in another tab or browser), with its first message. */
-export async function mockInterviews(page: Page, opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string }): Promise<InterviewMock> {
+/**
+ * `open`: a session already in progress on the server (started in another tab or browser), with its first message.
+ * `credits`: the balance (100 by default, the sign-up credits); a start needs 30 and each turn costs 4.
+ * `runsOutAfter`: the balance drops to 0 after that many turns, and the interview moves to the wrap-up (P28).
+ */
+export async function mockInterviews(
+  page: Page,
+  opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string; runsOutAfter?: number; needed?: number },
+): Promise<InterviewMock> {
   const mock: InterviewMock = { turns: [], starts: [] };
-  const credits = (total: number) => ({ total, monthly: 0, trial: total, pack: 0, period: '2026-11' });
-  let left = opts.credits ?? 1;
+  let left = opts.credits ?? 100;
+  await page.route(/\/api\/me\/plan$/, (route) => route.fulfill({ json: planAnswer('free', { balance: left, monthly: null, signup: left, topup: 0 }) }));
   let session: Record<string, unknown> | undefined = opts.open
     ? { id: 'iv-0', problem: 'url-shortener', minutes: 45, status: 'active', startedAt: Date.now() - 5 * 60_000, deadline: Date.now() + 55 * 60_000 }
     : undefined;
@@ -55,13 +63,12 @@ export async function mockInterviews(page: Page, opts: { replies: MockReply[]; v
     async (route) => {
       const req = route.request();
       const parts = new URL(req.url()).pathname.split('/').filter(Boolean);
-      if (req.method() === 'GET' && parts.length === 2) return route.fulfill({ json: { interviews: session ? [session] : [], credits: credits(left) } });
+      if (req.method() === 'GET' && parts.length === 2) return route.fulfill({ json: { interviews: session ? [session] : [] } });
       if (req.method() === 'POST' && parts.length === 2) {
         const replace = (req.postDataJSON() as { replace?: boolean }).replace === true;
         mock.starts.push({ replace });
         if (session?.status === 'active' && !replace) return route.fulfill({ status: 409, json: { error: 'active_session', id: session.id, problem: session.problem } });
-        if (left <= 0) return route.fulfill({ status: 402, json: { error: 'no_credits', credits: credits(0) } });
-        left--;
+        if (left < (opts.needed ?? 30)) return route.fulfill({ status: 402, json: { error: 'no_credits', needed: opts.needed ?? 30, balance: left } });
         const startedAt = opts.startedAt ?? Date.now();
         messages.length = 0;
         messages.push({
@@ -70,7 +77,7 @@ export async function mockInterviews(page: Page, opts: { replies: MockReply[]; v
           at: startedAt,
         });
         session = { id: 'iv-1', problem: 'url-shortener', minutes: 45, status: 'active', startedAt, deadline: startedAt + 60 * 60_000 };
-        return route.fulfill({ status: 201, json: { interview: { ...session, phase, turns: 0, messages }, credits: credits(left) } });
+        return route.fulfill({ status: 201, json: { interview: { ...session, phase, turns: 0, messages } } });
       }
       if (!session) return route.fulfill({ status: 404, json: { error: 'Not found' } });
       if (req.method() === 'GET') return route.fulfill({ json: { interview: { ...session, phase, turns: mock.turns.length, messages } } });
@@ -79,6 +86,11 @@ export async function mockInterviews(page: Page, opts: { replies: MockReply[]; v
         mock.turns.push(body);
         const reply = opts.replies[mock.turns.length - 1] ?? { text: 'Go on.' };
         if (reply.phase) phase = reply.phase;
+        left = Math.max(0, left - 4);
+        if (opts.runsOutAfter !== undefined && mock.turns.length >= opts.runsOutAfter) {
+          left = 0;
+          phase = 'wrapup';
+        }
         messages.push({ role: 'candidate', text: body.message, at: Date.now(), ...(body.design !== undefined ? { design: true } : {}) });
         messages.push({ role: 'interviewer', text: reply.text, at: Date.now(), ...(reply.hint ? { hint: reply.hint } : {}) });
         const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;

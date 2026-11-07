@@ -225,11 +225,14 @@ summaries stay in the browser; nothing is sent to the server.
 
 Signed in, and when the server has an `ANTHROPIC_API_KEY`, the start screen
 offers a choice: **On your own (free)**, the mode above, or a **Mock
-interview** with an interviewer, with the mock interviews left (and, with
-billing on, a link to Pro and the packs). `practice/#/<problem>?interview=mock`
-opens the start screen with the mock interview chosen (`?interview=ai` still
-works). Starting one spends a credit (the free plan has one for
-life); the first start asks once for consent and names what is sent to
+interview** with an interviewer, with its estimate in credits for the chosen
+length against your balance ("about 45–60 credits for 45 min; you have
+760"), and, without enough, a top-up and a link to the plans.
+`practice/#/<problem>?interview=mock` opens the start screen with the mock
+interview chosen (`?interview=ai` still works). The interview is charged
+for what it uses (the free plan gets 100 credits at sign-up); if the
+credits run out, it moves to the wrap-up and still gives its verdict. The
+first start asks once for consent and names what is sent to
 Anthropic. The interviewer is Claude by Anthropic (backend `src/ai/`, routes in
 `src/interviews.ts`), and the session lives on the server, so a reload picks
 it up again.
@@ -258,8 +261,8 @@ it up again.
 On Pro, the verdict also links **Practise them here**: the 3
 picks made after it (below, "Your next steps").
 
-If the interviewer fails on the first turn or in the first 5 minutes, the
-credit is given back and the session ends. Transcripts are kept 90 days, the
+An answer that fails on our side isn't charged; if the interviewer fails on
+the first turn, the session ends. Transcripts are kept 90 days, the
 verdicts for history ([Privacy](PRIVACY.md#mock-interviews)).
 
 **Interview history**, on the progress page (`practice/#/progress`, signed

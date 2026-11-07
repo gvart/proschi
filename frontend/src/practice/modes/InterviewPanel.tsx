@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, type FormEvent, type ReactNode } from 'react';
-import { Bot, CircleAlert, CircleCheck, Flag, Pause, Play, ShieldCheck, Sparkles, Timer, X } from 'lucide-react';
+import { Bot, CircleAlert, CircleCheck, CreditCard, Flag, Pause, Play, ShieldCheck, Timer, X } from 'lucide-react';
 import Markdown from '../Markdown';
 import { useNow } from './useNow';
 import { formatFactor, formatNumber, hashText, parseNumber, seededRandom } from '../../learn/grade';
@@ -9,7 +9,10 @@ import { apiEnabled } from '../../services/api';
 import { useFeature } from '../../components/featureState';
 import UpgradeHint from '../../components/UpgradeHint';
 import AiInterviewPanel from './ai/AiInterviewPanel';
-import { giveConsent, hasConsent, listInterviews, loadActive, saveActive, startError, startInterview, type Credits } from './ai/api';
+import { giveConsent, hasConsent, listInterviews, loadActive, saveActive, startError, startInterview } from './ai/api';
+import { billingEnabled, checkout, PRICES } from '../../services/billing';
+import { formatCredits, formatRange, interviewEstimate, type Range } from '../../services/credits';
+import { refreshCredits, useCredits, useEstimates } from '../../services/useCredits';
 import {
   CHECKLIST,
   DEFAULT_DURATION,
@@ -135,20 +138,27 @@ function StartScreen({
 }) {
   const [duration, setDuration] = useState<Duration>(DEFAULT_DURATION);
   const [kind, setKind] = useState<Kind>(preferAi ? 'ai' : 'scripted');
-  /** The credits left; undefined until known, null when the server has no AI interviewer. */
-  const [credits, setCredits] = useState<Credits | null>();
+  /** Whether the server has the interviewer; undefined until known. */
+  const [available, setAvailable] = useState<boolean>();
+  const { credits } = useCredits(ai);
+  const estimate = interviewEstimate(useEstimates(ai), duration);
+  /** A start the server refused for want of credits (402 no_credits). */
+  const [short, setShort] = useState<{ needed: number; balance: number }>();
   const [consenting, setConsenting] = useState(false);
   const [starting, setStarting] = useState(false);
   const [error, setError] = useState<ReactNode>();
   useEffect(() => {
     if (!ai) return;
     let live = true;
-    void listInterviews().then((r) => live && setCredits(r ? r.credits : null));
+    void listInterviews().then((r) => live && setAvailable(r !== undefined));
     return () => {
       live = false;
     };
   }, [ai]);
-  const chosen: Kind = ai && credits ? kind : 'scripted';
+  const chosen: Kind = ai && available && credits ? kind : 'scripted';
+  const balance = credits?.balance ?? 0;
+  /** Not enough for the shortest likely interview of this length. */
+  const notEnough = short !== undefined || (credits !== undefined && balance < estimate.min);
 
   /** An AI interview still open (409 active_session): resume it, or end it and start this one. */
   const [open, setOpen] = useState<{ id: string; problem: string }>();
@@ -158,17 +168,14 @@ function StartScreen({
     setError(undefined);
     try {
       const { interview } = await startInterview(problemId, duration, replace);
+      refreshCredits();
       onStartAi(interview.id);
     } catch (e) {
       const why = startError(e);
       if (why.code === 'active_session') setOpen({ id: why.id, problem: why.problem });
       else if (why.code === 'no_credits') {
-        if (why.credits) setCredits(why.credits);
-        setError(
-          <>
-            No mock interviews left. <UpgradeLink />
-          </>,
-        );
+        setShort({ needed: why.needed, balance: why.balance });
+        refreshCredits();
       } else setError(`The interview could not start (${why.message}). Try again in a moment.`);
       setConsenting(false);
     } finally {
@@ -211,7 +218,7 @@ function StartScreen({
             End it and start a new one
           </button>
         </div>
-        <p className="text-xs text-ink">Ending it uses one more mock interview for the new one. The old interview’s credit is not returned, and it gets no verdict.</p>
+        <p className="text-xs text-ink">The credits the old interview used are not returned, and it gets no verdict.</p>
         <button type="button" onClick={() => setOpen(undefined)} className={toolButton}>
           Back
         </button>
@@ -271,7 +278,7 @@ function StartScreen({
         Practise the whole interview against the clock. The statement starts without its scale and constraints: ask clarifying questions to uncover them, estimate the load, design and run the tests, then review your
         design.
       </p>
-      {ai && credits && (
+      {ai && available && credits && (
         <fieldset>
           <legend className={eyebrow}>Interviewer</legend>
           <div className="mt-1 grid gap-2 sm:grid-cols-2" role="radiogroup" aria-label="Interviewer">
@@ -279,13 +286,9 @@ function StartScreen({
               Pick questions from a list and check your estimates. Stays in this browser.
             </ModeChoice>
             <ModeChoice checked={chosen === 'ai'} onSelect={() => setKind('ai')} title="Mock interview" icon={<Bot size={14} aria-hidden="true" />}>
-              A live interviewer that answers, follows up, coaches you and gives a verdict.{' '}
-              <span data-testid="ai-credits" className="font-semibold">
-                {credits.total === 1 ? '1 mock interview left' : `${credits.total} mock interviews left`}
-              </span>
+              A live interviewer that answers, follows up, coaches you and gives a verdict.
             </ModeChoice>
           </div>
-          {chosen === 'ai' && <UpgradeLink className="mt-2 text-xs" />}
         </fieldset>
       )}
       <fieldset>
@@ -297,7 +300,10 @@ function StartScreen({
               type="button"
               role="radio"
               aria-checked={duration === d}
-              onClick={() => setDuration(d)}
+              onClick={() => {
+                setDuration(d);
+                setShort(undefined);
+              }}
               className={`rounded-sm border-bw-1 px-3 py-1.5 text-sm font-semibold ${duration === d ? 'border-ink bg-ink text-paper' : 'border-ink/40 text-ink hover:border-ink'}`}
             >
               {d} min
@@ -315,18 +321,18 @@ function StartScreen({
           </li>
         ))}
       </ol>
-      <p className="text-xs text-muted">
-        {chosen === 'ai'
-          ? 'Starting uses one mock interview. If the interviewer fails in the first 5 minutes, you get it back.'
-          : 'Your time per phase, questions, estimates and the summary stay in this browser.'}
-      </p>
+      {chosen === 'ai' && credits ? (
+        <InterviewCost estimate={estimate} minutes={duration} balance={balance} short={short} notEnough={notEnough} />
+      ) : (
+        <p className="text-xs text-muted">Your time per phase, questions, estimates and the summary stay in this browser.</p>
+      )}
       {error && (
         <p role="alert" className="text-sm text-red-700 dark:text-red-300">
           {error}
         </p>
       )}
       <div className="flex flex-wrap gap-2">
-        <button type="button" onClick={start} disabled={starting || (chosen === 'ai' && credits?.total === 0)} className={`${primaryButton} disabled:opacity-50`}>
+        <button type="button" onClick={start} disabled={starting || (chosen === 'ai' && notEnough)} className={`${primaryButton} disabled:opacity-50`}>
           {chosen === 'ai' ? <Bot size={14} aria-hidden="true" /> : <Timer size={14} aria-hidden="true" />}
           {chosen === 'ai' ? (starting ? 'Starting…' : 'Start a mock interview') : 'Start the interview'}
         </button>
@@ -357,12 +363,53 @@ function ModeChoice({ checked, onSelect, title, icon, children }: { checked: boo
 }
 
 /** More interviews: Pro's monthly ones or a pack, for any plan (nothing without paid plans). */
-function UpgradeLink({ className = '' }: { className?: string }) {
+/** What a mock interview of this length is likely to cost against the balance; without enough, the ways to get more. */
+function InterviewCost({ estimate, minutes, balance, short, notEnough }: { estimate: Range; minutes: number; balance: number; short?: { needed: number; balance: number }; notEnough: boolean }) {
+  const [buying, setBuying] = useState(false);
+  const [failed, setFailed] = useState<string>();
+  const have = formatCredits(short?.balance ?? balance, { floor: true });
+  if (!notEnough) {
+    return (
+      <div data-testid="ai-credits" className="rounded-sm border-bw-1 border-ink/30 bg-paper px-3 py-2 text-sm text-ink">
+        <p>
+          <strong className="tabular-nums">{formatRange(estimate)} credits</strong> for {minutes} min; you have <strong className="tabular-nums">{have}</strong>.
+        </p>
+        <p className="mt-0.5 text-xs text-muted">You pay for what the interview uses. If you run out, the interviewer moves to the wrap-up and still gives you the verdict.</p>
+      </div>
+    );
+  }
+  const buy = () => {
+    setBuying(true);
+    setFailed(undefined);
+    checkout('credits_1000').catch((e: unknown) => {
+      setBuying(false);
+      setFailed(e instanceof Error ? e.message : String(e));
+    });
+  };
   return (
-    <UpgradeHint testId="ai-upgrade" icon={false} className={`inline-flex items-center gap-1 font-semibold text-ink underline decoration-pop-yellow decoration-2 underline-offset-2 hover:decoration-ink ${className}`}>
-      <Sparkles size={12} aria-hidden="true" />
-      Get more with Pro or a mock interview pack
-    </UpgradeHint>
+    <div data-testid="ai-credits" data-enough="false" role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/15 px-3 py-2 text-sm text-ink">
+      <p>
+        You have <strong className="tabular-nums">{have} credits</strong>. A {minutes}-minute mock interview takes{' '}
+        <strong className="tabular-nums">{short?.needed ? `at least ${formatCredits(short.needed)}` : formatRange(estimate)}</strong>.
+      </p>
+      <p className="mt-0.5 text-xs text-muted">Top-up credits never expire. A plan adds credits every month.</p>
+      {failed && (
+        <p role="alert" className="mt-1 text-xs text-red-700 dark:text-red-300">
+          {failed}
+        </p>
+      )}
+      {billingEnabled && (
+        <div className="mt-2 flex flex-wrap gap-2">
+          <button type="button" onClick={buy} disabled={buying} className={`${primaryButton} disabled:opacity-50`}>
+            <CreditCard size={14} aria-hidden="true" />
+            {buying ? 'Opening…' : `Buy ${formatCredits(PRICES.topupCredits)} credits, €${PRICES.topup}`}
+          </button>
+          <UpgradeHint testId="ai-upgrade" className={outlineButton}>
+            See plans
+          </UpgradeHint>
+        </div>
+      )}
+    </div>
   );
 }
 
