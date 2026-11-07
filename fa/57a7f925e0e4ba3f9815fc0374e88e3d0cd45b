@@ -1,0 +1,42 @@
+frontend/src/practice/achievements.json
+  s_e17b87e0a1b3ca::t_021083d4c10028 55-60
+frontend/src/learn/achievements.test.ts
+  s_e17b87e0a1b3ca::t_eaa811f5ce2688 180-186
+  s_e17b87e0a1b3ca::t_0bba4afd09f6c3 200
+  s_e17b87e0a1b3ca::t_566975042ff804 36
+  s_e17b87e0a1b3ca::t_179a66aeca92c9 25,38-39,74-80,174
+frontend/src/learn/level.test.ts
+  s_e17b87e0a1b3ca::t_566975042ff804 11
+  s_e17b87e0a1b3ca::t_cbca34a30c5efe 26-32
+frontend/src/learn/mastery.test.ts
+  s_e17b87e0a1b3ca::t_dea457acf5a711 134-162
+frontend/src/practice/profile/profile.test.ts
+  s_e17b87e0a1b3ca::t_179a66aeca92c9 60
+frontend/src/learn/achievements.ts
+  s_e17b87e0a1b3ca::t_8d503560b953d7 6,25,72-78,103-105,162-163,242-249,266-276,362-363,371,383,393-394,408
+  s_e17b87e0a1b3ca::t_c71386e7cf8fc0 553
+frontend/src/learn/mastery.ts
+  s_e17b87e0a1b3ca::t_accba7ca97806b 40-46,60-62,73-92,106-107,122-123,179-185,188,194
+frontend/src/learn/level.ts
+  s_e17b87e0a1b3ca::t_accba7ca97806b 8,16-17,23-24,32-34,47,55-62
+frontend/src/practice/achievements.lock
+  s_e17b87e0a1b3ca::t_c2a34beca65d13 23-27
+frontend/src/practice/skills/AchievementIcon.tsx
+  s_e17b87e0a1b3ca::t_26dfb08d85a38d 1,21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "fa57a7f925e0e4ba3f9815fc0374e88e3d0cd45b",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
