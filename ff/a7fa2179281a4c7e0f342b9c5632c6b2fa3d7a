@@ -1,0 +1,94 @@
+frontend/e2e/partner.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 180,183
+frontend/src/components/featureState.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 12
+frontend/e2e/accounts.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 32,37-42
+frontend/src/components/Diagram/useDiagramLayout.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 15-16,18,21,25,46,51-53,56-59,65,76
+frontend/src/partner/PartnerButton.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 14,25,28-29
+frontend/src/practice/modes/InterviewPanel.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 410-416
+docs/impl/design-partner.md
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 25
+frontend/src/services/estimates.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 1-42
+frontend/src/services/featureContract.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 9
+backend/src/index.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 193
+backend/README.md
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 167,334,415,527-537,1128,1179-1180,1184
+backend/src/roadmap.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 17-18,34
+frontend/e2e/systems.e2e.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 12-16,18-19
+backend/src/signupChecks.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 24-29
+frontend/src/review/contract.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 2-5,178,210
+frontend/src/design/account.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 5-6,9-10,15,90-104,151-157
+frontend/src/practice/AccountMenu.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 125,129
+docs/PRACTICE.md
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 229-231,574-576
+frontend/src/pricing/PricingApp.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 49,51,247-249
+backend/test/credits.test.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 7,53-55
+  s_e17b87e0a1b3ca::t_a2faa9fed28409 56
+frontend/src/services/credits.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 3,13,73-76
+backend/test/features.test.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 28
+backend/src/credits.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 208-216
+backend/src/ai/reviewer.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 4,9-10
+docs/EDITORS.md
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 431-432
+frontend/src/components/Feature.test.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 26,30,47,49,58,65,72,76,81,87,92,95
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 457,842,996,1046,1064,1070,1294,1574-1575,1623,1748
+frontend/src/partner/contract.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 161
+frontend/e2e/maxExtras.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 29-30
+backend/test/paidRoutes.test.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 32,43,94-104,186-187,286-288,301,402-403
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 515,517,542,544
+frontend/src/services/credits.test.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 25-28,31,35-40
+backend/src/meter.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 1,250-251,264-270,276-278,290-310,315-320,322-324,326-330
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 28-29
+backend/test/helpers.ts
+  s_e17b87e0a1b3ca::t_32051ba2cf2c16 57
+frontend/e2e/partner.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 11-15
+frontend/src/design/components.css
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 438-470,630-633,723-742,768-770
+frontend/src/partner/partner.test.ts
+  s_e17b87e0a1b3ca::t_6b7911b54ca7fe 50,52
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ffa7fa2179281a4c7e0f342b9c5632c6b2fa3d7a",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
