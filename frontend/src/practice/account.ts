@@ -21,7 +21,7 @@ export function takeLoginError(href: string): { error?: string; linked?: string;
   return { ...(error ? { error } : {}), ...(linked ? { linked } : {}), cleanUrl: url.toString() };
 }
 
-export const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google' };
+export const PROVIDER_LABEL: Record<ProviderId, string> = { github: 'GitHub', google: 'Google', email: 'Email' };
 
 /** What to tell the user about the sign-in or linking the API redirected back from. */
 export function loginMessage({ error, linked }: { error?: string; linked?: string }): string | undefined {
