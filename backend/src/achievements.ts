@@ -23,6 +23,7 @@ import { requireUser } from './auth';
 import { allCards, cardTopics } from './cards';
 import { loadChallengeStats } from './challenge';
 import { loadGameStats } from './game';
+import { loadInterviewsDone } from './soloInterviews';
 import type { Ctx } from './context';
 import { now } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
@@ -113,7 +114,7 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
   const cards = allCards();
   const estimates = [...cards.values()].filter((c) => c.type === 'estimate').map((c) => c.id);
 
-  const [activity, challenges, game, lessons, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
+  const [activity, challenges, game, lessons, interviews, [states, total, estimateRows, solves, earnedRows]] = await Promise.all([
     // The daily streak as GET /api/me/activity counts it (streak.ts): the user's goal, solves and freezes included.
     loadActivity(DB, user.id, today),
     // The daily challenge's badges: attempts are kept by UTC day.
@@ -122,6 +123,8 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
     loadGameStats(DB, user.id),
     // The reading badges.
     loadLessonsRead(DB, user.id),
+    // The interview badges, the level's interview XP and the skill map's interview bonus.
+    loadInterviewsDone(DB, user.id),
     DB.batch([
       DB.prepare('SELECT card_id, card_version, due_at, stability, difficulty, reps, lapses, last_review_at FROM card_state WHERE user_id = ?').bind(user.id),
       DB.prepare('SELECT COUNT(*) AS n FROM card_reviews WHERE user_id = ?').bind(user.id),
@@ -170,6 +173,7 @@ export async function evaluate(DB: D1Database, user: { id: string; dailyGoal: nu
     challenges,
     game,
     lessons,
+    interviews,
   });
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, catalog(), earned, t);
   return { statuses, newly, earned, answer: achievementsAnswer(statuses, skills, snapshot), activity };

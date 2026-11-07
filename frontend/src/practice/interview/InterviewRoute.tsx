@@ -8,7 +8,11 @@ import { parseInterview } from '../modes/interviewFile';
 import { interviewReducer, summarize, type InterviewAction, type InterviewSession } from '../modes/session';
 import { appendHistory, loadHistory, loadSession, saveSession } from '../modes/store';
 import { loadActive, saveActive, type AiInterview } from '../modes/ai/api';
+import type { AchievementsAnswer } from '../../learn/achievements';
+import type { Achievements } from '../skills/useAchievements';
 import { useSoundPref } from './prefs';
+import { sendSoloInterviews } from './record';
+import ResultProgress from './ResultProgress';
 import { roomHref, setupHref } from './links';
 import { playCue } from './sounds';
 import Setup from './Setup';
@@ -32,9 +36,13 @@ interface InterviewRouteProps {
   engine?: Engine;
   /** The site's header, over the set-up and the result (the room has its own bar). */
   header: ReactNode;
+  /** The learner's progress (useAchievements): the result shows what the interview added to it. */
+  achievements?: Achievements;
+  /** Signed in: an interview on your own also goes to the account. */
+  signedIn?: boolean;
 }
 
-export default function InterviewRoute({ problemId, query, engine = defaultEngine, header }: InterviewRouteProps) {
+export default function InterviewRoute({ problemId, query, engine = defaultEngine, header, achievements, signedIn = false }: InterviewRouteProps) {
   useEffect(() => {
     document.title = 'Mock interview · Proschi practice';
   }, []);
@@ -46,7 +54,7 @@ export default function InterviewRoute({ problemId, query, engine = defaultEngin
       </Page>
     );
   }
-  return <ProblemInterview key={problemId} id={problemId} engine={engine} header={header} />;
+  return <ProblemInterview key={problemId} id={problemId} engine={engine} header={header} achievements={achievements} signedIn={signedIn} />;
 }
 
 function Page({ header, children }: { header: ReactNode; children: ReactNode }) {
@@ -58,7 +66,9 @@ function Page({ header, children }: { header: ReactNode; children: ReactNode }) 
   );
 }
 
-function ProblemInterview({ id, engine, header }: { id: string; engine: Engine; header: ReactNode }) {
+type Counting = { achievements?: Achievements; signedIn: boolean };
+
+function ProblemInterview({ id, engine, header, ...counting }: { id: string; engine: Engine; header: ReactNode } & Counting) {
   const problem = use(loadProblem(id));
   if (!problem) {
     return (
@@ -69,10 +79,10 @@ function ProblemInterview({ id, engine, header }: { id: string; engine: Engine; 
       </Page>
     );
   }
-  return <Interview problem={problem} engine={engine} header={header} />;
+  return <Interview problem={problem} engine={engine} header={header} {...counting} />;
 }
 
-function Interview({ problem, engine, header }: { problem: Problem; engine: Engine; header: ReactNode }) {
+function Interview({ problem, engine, header, achievements, signedIn }: { problem: Problem; engine: Engine; header: ReactNode } & Counting) {
   const phone = useIsPhone();
   const [soundOn] = useSoundPref();
   const file = useMemo(() => {
@@ -84,16 +94,27 @@ function Interview({ problem, engine, header }: { problem: Problem; engine: Engi
   const [session, setSession] = useState<InterviewSession | undefined>(() => (mockId ? undefined : loadSession(problem.id)));
   const [verdict, setVerdict] = useState<AiInterview>();
   const dispatch = useCallback((a: InterviewAction) => setSession((s) => s && interviewReducer(s, a)), []);
+  const refresh = achievements?.refresh;
+
+  // The progress while the room is open: the result compares against it (ResultProgress.tsx).
+  const done = verdict !== undefined || session?.finishedAt !== undefined;
+  const answerNow = achievements?.state.status === 'ready' ? achievements.state.answer : undefined;
+  const [before, setBefore] = useState<AchievementsAnswer>();
+  if (!done && answerNow && answerNow !== before) setBefore(answerNow);
 
   // A session on your own is kept as it goes; once finished, its summary joins the history.
   useEffect(() => {
     if (!session || !file) return;
     saveSession(session, problem.id);
     if (session.finishedAt !== undefined && !loadHistory().some((h) => h.problem === session.problem && h.startedAt === session.startedAt)) {
-      appendHistory(summarize(session, file, session.finishedAt));
+      const summary = summarize(session, file, session.finishedAt);
+      appendHistory(summary);
       if (soundOn) playCue('finish');
+      // It counts towards the progress now: signed in, once the account has it.
+      if (signedIn) void sendSoloInterviews([summary]).then(() => refresh?.(true));
+      else refresh?.(true);
     }
-  }, [session, file, problem.id, soundOn]);
+  }, [session, file, problem.id, soundOn, signedIn, refresh]);
 
   const none = !mockId && !session;
   useEffect(() => {
@@ -101,10 +122,12 @@ function Interview({ problem, engine, header }: { problem: Problem; engine: Engi
   }, [none, problem.id]);
   const exit = useCallback(() => (window.location.hash = setupHref()), []);
 
+  const progress = (endedAt: number) => achievements && <ResultProgress state={achievements.state} before={before} endedAt={endedAt} onSeen={achievements.markSeen} />;
+
   if (verdict) {
     return (
       <Page header={header}>
-        <Result kind="mock" problem={problem} interview={verdict} />
+        <Result kind="mock" problem={problem} interview={verdict} progress={progress(verdict.endedAt ?? Date.now())} />
       </Page>
     );
   }
@@ -119,6 +142,8 @@ function Interview({ problem, engine, header }: { problem: Problem; engine: Engi
         onVerdict={(s) => {
           saveActive(problem.id, undefined);
           setVerdict(s.interview);
+          // The server counted it with the verdict.
+          refresh?.(true);
         }}
         onRestart={() => {
           saveActive(problem.id, undefined);
@@ -131,7 +156,7 @@ function Interview({ problem, engine, header }: { problem: Problem; engine: Engi
   if (session.finishedAt !== undefined) {
     return (
       <Page header={header}>
-        <Result kind="solo" problem={problem} summary={summarize(session, file, session.finishedAt)} />
+        <Result kind="solo" problem={problem} summary={summarize(session, file, session.finishedAt)} progress={progress(session.finishedAt)} />
       </Page>
     );
   }

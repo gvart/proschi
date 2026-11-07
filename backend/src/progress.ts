@@ -23,6 +23,7 @@ import { exportCredits, tombstoneStatements } from './credits';
 import { exportCharges } from './meter';
 import { exportRoadmapRecs } from './roadmap';
 import { exportInterviews } from './interviews';
+import { exportSoloInterviews } from './soloInterviews';
 import { exportPartnerSessions } from './partner';
 import { deleteFeedbackFiles, exportFeedback } from './feedback';
 import { parseScopes } from './scopes';
@@ -164,7 +165,7 @@ export async function updateMe(request: Request, ctx: Ctx): Promise<Response> {
   return json({ user: { id: user.id, displayName, publicProfile, dailyGoal, ...(practiceGoal ? { practiceGoal } : {}) } }, 200, NO_STORE);
 }
 
-/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
+/** DELETE /api/me: the account, its identities, sessions (apps' tokens and sign-in codes too), progress, lessons read, interviews on your own, card reviews, achievements, daily challenge attempts, game progress, short links, synced diagrams with their versions and share links, and the email reminders' address (ON DELETE CASCADE). */
 export async function deleteMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   // A subscription still billing is revoked at Polar first; billing and credits go with the account (ON DELETE CASCADE).
@@ -283,6 +284,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       lessonId: r.lesson_id,
       readAt: r.read_at,
     })),
+    // Mock interviews finished on your own, as the browser sent them.
+    soloInterviews: await exportSoloInterviews(DB, user.id),
     // Short links: the diagram of each; the preview image is at imageUrl.
     shares: await exportShares(DB, user.id, new URL(request.url).origin),
     // The editor's diagrams kept by cloud sync, with tombstones of deleted ones (kept 30 days).

@@ -5,7 +5,7 @@ import problems from 'virtual:practice-listings';
 import { MAX_SCORE } from '../../learn/challenge';
 import type { AchievementsAnswer } from '../../learn/achievements';
 import { percent } from '../../learn/mastery';
-import { levelOf, XP_PER_MASTERED_CARD, XP_PER_SOLVE, XP_PER_STREAK_DAY } from '../../learn/level';
+import { levelOf, XP_PER_INTERVIEW, XP_PER_MASTERED_CARD, XP_PER_SOLO_INTERVIEW, XP_PER_SOLVE, XP_PER_STREAK_DAY } from '../../learn/level';
 import { roadmapHref, type RoadmapStage, type RoadmapState } from '../roadmap';
 import PaneLoading from '../../components/PaneLoading';
 import { eyebrow, primaryButton } from '../../components/Playground/ui';
@@ -23,6 +23,7 @@ import SkillRadar, { type RadarPoint } from './SkillRadar';
 import type { Achievements } from './useAchievements';
 import { useChallengeSummary } from './useChallengeSummary';
 import InterviewHistory, { InterviewVerdictPage } from '../history/InterviewHistory';
+import SoloHistory from '../history/SoloHistory';
 
 /**
  * The progress page (`#/progress`), the one place for progress, read top to
@@ -34,7 +35,8 @@ import InterviewHistory, { InterviewVerdictPage } from '../history/InterviewHist
  * "interview ready" score with the weakest topics to train), the roadmap's
  * progress, the next badges to earn with every badge behind "All badges"
  * (BadgeGrid), the AI interview history (history/InterviewHistory.tsx, each
- * verdict at `#/progress/interview/<id>`), and the problems solved. Signed out, a locked preview with a
+ * verdict at `#/progress/interview/<id>`) and the interviews on your own
+ * (history/SoloHistory.tsx), and the problems solved. Signed out, a locked preview with a
  * sign-in invitation. A tab of the practice hub; the account's settings are
  * on `#/me`.
  *
@@ -148,14 +150,15 @@ export default function ProgressRoute({
             <div className="h-full bg-pop-yellow" style={{ width: `${Math.round(level.progress * 100)}%` }} />
           </div>
           <p className="mt-2 text-xs text-muted">
-            {XP_PER_SOLVE} XP per problem solved, {XP_PER_MASTERED_CARD} per card mastered (remembered for 21 days or more) and {XP_PER_STREAK_DAY} per day of your
-            longest streak.
+            {XP_PER_SOLVE} XP per problem solved, {XP_PER_MASTERED_CARD} per card mastered (remembered for 21 days or more), {XP_PER_STREAK_DAY} per day of your
+            longest streak, and per problem interviewed {XP_PER_INTERVIEW} with the interviewer or {XP_PER_SOLO_INTERVIEW} on your own.
           </p>
-          <dl className="mt-4 grid grid-cols-2 gap-3 border-t-bw-1 border-dashed border-ink/40 pt-4 sm:grid-cols-5">
+          <dl className="mt-4 grid grid-cols-2 gap-3 border-t-bw-1 border-dashed border-ink/40 pt-4 sm:grid-cols-3 md:grid-cols-6">
             <Stat label="Problems solved" value={answer?.stats.solved ?? 0} />
             <Stat label="Cards mastered" value={answer?.stats.mastered ?? 0} />
             <Stat label="Longest streak" value={answer?.stats.longestStreak ?? 0} unit={answer?.stats.longestStreak === 1 ? 'day' : 'days'} />
             <Stat label="Cards reviewed" value={answer?.stats.reviews ?? 0} />
+            <Stat label="Interviews" value={(answer?.stats.interviews ?? 0) + (answer?.stats.soloInterviews ?? 0)} unit="problems" />
             <Stat label="Badges" value={earned} unit={`of ${badges.length}`} />
           </dl>
         </div>
@@ -255,6 +258,7 @@ export default function ProgressRoute({
       </div>
 
       {account.state.status === 'signed-in' && <InterviewHistory />}
+      <SoloHistory />
 
       <RoadmapProgress roadmap={roadmap} stages={stages} />
 
