@@ -720,7 +720,13 @@ Email and password, next to GitHub and Google (`src/emailAuth.ts`,
   address: lowercase; Gmail and Googlemail without dots and `+tag`; other
   domains without `+tag`), so one mailbox is one account, deleting it leaves
   the usual tombstone, and Settings can link or unlink it. `email_logins`
-  keeps the address as typed (lowercased) and the password hash.
+  keeps the address as typed (lowercased) and the password hash. A link
+  (`link: true`, signed in) gets its identity only when that account, signed
+  in, opens its confirmation link (else 400, the link kept): until then it
+  signs nothing in, gets no reset link and no password from a sign-up, and a
+  sign-up of the same address deletes it and its links and starts a fresh
+  account, so an inbox's owner can't be confirmed into an account that
+  linked their address.
 - **Passwords**: PBKDF2-SHA256 through WebCrypto, 100,000 iterations (the
   most Cloudflare's runtime allows), a random 16-byte salt each, stored as
   `pbkdf2$sha256$<iterations>$<salt>$<hash>`, compared in constant time. At

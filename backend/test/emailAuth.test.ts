@@ -9,7 +9,7 @@ import worker from '../src/index';
 import { hashPassword, passwordProblem, PBKDF2_ITERATIONS, verifyPassword } from '../src/password';
 import { signupLedger } from '../src/signupCredits';
 import { isDisposable, normalizeEmail } from '../src/signupChecks';
-import { ORIGIN, resetDatabase, withinOneWindow, WINDOW_TIMEOUT } from './helpers';
+import { ORIGIN, resetDatabase, signedInUser, withinOneWindow, WINDOW_TIMEOUT } from './helpers';
 
 // The ledger is metering's (src/credits.ts); here only whether and how it is called.
 let granted: MockInstance<typeof signupLedger.grant>;
@@ -246,6 +246,67 @@ describe('email sign-up, confirmation and sign-in', () => {
     await env.DB.prepare("INSERT INTO identities (provider, subject, user_id) VALUES ('github', 'gh-ada', ?)").bind(id).run();
     expect((await req('/api/me/identities/email', { method: 'DELETE', token })).status).toBe(204);
     expect((await login('ada@example.com')).status).toBe(401);
+  });
+});
+
+describe('linking an email sign-in to a signed-in account', () => {
+  const link = (token: string, email: string, password = PASSWORD) => req('/auth/email/signup', { body: { email, password, link: true }, token });
+  const confirmAs = (confirmToken: string, token?: string) => req('/auth/email/confirm', { body: { token: confirmToken }, token });
+  const emailIdentity = (normalized: string) => env.DB.prepare("SELECT user_id FROM identities WHERE provider = 'email' AND subject = ?").bind(normalized).first<{ user_id: string }>();
+
+  it('can’t take over the inbox owner’s account: a link to their address waits for its own confirmation, and their sign-up replaces it', async () => {
+    // The attacker, signed in with GitHub, links the victim's address with a password of their own.
+    const attacker = await signedInUser();
+    expect((await link(attacker.token, 'victim@example.com', 'attacker password 1')).status).toBe(202);
+    const attackerLink = lastLink('confirm');
+    // Not usable before it is confirmed: no sign-in, no reset email, no identity.
+    expect((await login('victim@example.com', 'attacker password 1')).status).toBe(401);
+    mail.sent.length = 0;
+    expect((await req('/auth/email/reset-request', { body: { email: 'victim@example.com' } })).status).toBe(202);
+    expect(mail.sent).toEqual([]);
+    expect(await emailIdentity('victim@example.com')).toBeNull();
+
+    // The victim signs up with their own address: a fresh account, the pending link and its tokens gone.
+    expect((await signup('victim@example.com', 'victim password 12')).status).toBe(202);
+    const confirmed = await confirm(lastLink('confirm'));
+    expect(confirmed.status).toBe(200);
+    const victimId = (await emailIdentity('victim@example.com'))!.user_id;
+    expect(victimId).not.toBe(attacker.id);
+    const me = (await (await req('/api/me', { token: sessionOf(confirmed)! })).json()) as { user: { id: string } };
+    expect(me.user.id).toBe(victimId);
+    // The attacker's account never gets the address, nor a session from the victim's password.
+    expect((await confirmAs(attackerLink, attacker.token)).status).toBe(400);
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM email_logins WHERE user_id = ?').bind(attacker.id).first()).toEqual({ n: 0 });
+    expect((await login('victim@example.com', 'attacker password 1')).status).toBe(401);
+    const victimLogin = await login('victim@example.com', 'victim password 12');
+    expect(victimLogin.status).toBe(200);
+    expect(((await (await req('/api/me', { token: sessionOf(victimLogin)! })).json()) as { user: { id: string } }).user.id).toBe(victimId);
+  });
+
+  it('confirms a link only for the account that asked for it, signed in, without using the link up otherwise', async () => {
+    const owner = await signedInUser();
+    expect((await link(owner.token, 'ada@example.com')).status).toBe(202);
+    const token = lastLink('confirm');
+    expect(await status(owner.token)).toMatchObject({ email: 'ada@example.com', confirmed: false });
+    // Opened signed out, or by someone else: refused, and the link still works.
+    expect((await confirmAs(token)).status).toBe(400);
+    const other = await signedInUser();
+    expect((await confirmAs(token, other.token)).status).toBe(400);
+    const ok = await confirmAs(token, owner.token);
+    expect(ok.status).toBe(200);
+    expect((await emailIdentity('ada@example.com'))!.user_id).toBe(owner.id);
+    const signedIn = await login('ada@example.com');
+    expect(signedIn.status).toBe(200);
+    expect(((await (await req('/api/me', { token: sessionOf(signedIn)! })).json()) as { user: { id: string } }).user.id).toBe(owner.id);
+  });
+
+  it('never puts a password on a pending link: a second sign-up of the address is a fresh account', async () => {
+    const attacker = await signedInUser();
+    await link(attacker.token, 'victim@example.com', 'attacker password 1');
+    await env.DB.prepare('UPDATE email_tokens SET created_at = created_at - 120').run();
+    await signup('victim@example.com', 'victim password 12');
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM email_tokens WHERE user_id = ?').bind(attacker.id).first()).toEqual({ n: 0 });
+    expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM email_tokens WHERE password_hash IS NOT NULL').first()).toEqual({ n: 0 });
   });
 });
 
