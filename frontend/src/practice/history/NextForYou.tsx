@@ -8,7 +8,7 @@ import { useRoadmapNext } from './useRoadmapNext';
 /**
  * The AI roadmap's picks (docs/design/paid-plans.md P9): the next 3 steps,
  * each a roadmap problem or a card topic's deck with the model's reason,
- * linking to it. On the roadmap ("Next for you") and under a verdict.
+ * linking to it. On the roadmap ("Your next steps") and under a verdict.
  */
 
 const KIND_LABEL = { problem: 'Problem', cards: 'Cards' } as const;
@@ -52,11 +52,11 @@ const card = 'mt-6 rounded-brutal border-bw-2 border-ink bg-surface p-4 shadow-b
 const heading = (
   <h2 id="next-for-you" className={`flex items-center gap-1.5 ${eyebrow}`}>
     <Sparkles size={13} aria-hidden="true" />
-    Next for you
+    Your next steps
   </h2>
 );
 
-/** "Next for you" on the roadmap: the picks with the ai_roadmap feature, else the way to Pro where paid plans are on; nothing otherwise, or without the AI (P10). */
+/** "Your next steps" on the roadmap: the picks with the ai_roadmap feature, else the way to Pro where paid plans are on; nothing otherwise, or without the AI (P10). */
 export default function NextForYou({ problemTitle, base = '../' }: { problemTitle: (id: string) => string | undefined; base?: string }) {
   return (
     <Feature
@@ -77,7 +77,7 @@ export default function NextForYou({ problemTitle, base = '../' }: { problemTitl
         hint && (
           <section aria-labelledby="next-for-you" className={card} data-testid="next-for-you">
             {heading}
-            <p className="mt-1 text-sm text-ink/80">After each AI interview, Pro picks your next 3 steps from the roadmap and the cards, with a reason for each.</p>
+            <p className="mt-1 text-sm text-ink/80">After each mock interview, Pro picks your next 3 steps from the roadmap and the cards, with a reason for each.</p>
             {hint}
           </section>
         )
@@ -100,7 +100,7 @@ function Picks({ problemTitle }: { problemTitle: (id: string) => string | undefi
       ) : next ? (
         <>
           <p className="mt-1 text-sm text-ink/80">
-            Picked {next.source === 'interview' ? 'after your last AI interview' : 'after your last AI review'}, from the roadmap and the cards.
+            Picked {next.source === 'interview' ? 'after your last mock interview' : 'after your last in-depth review'}, from the roadmap and the cards.
           </p>
           {picks.status === 'ready' && picks.missed && <NoNewPicks />}
           <div className="mt-3">
@@ -110,7 +110,7 @@ function Picks({ problemTitle }: { problemTitle: (id: string) => string | undefi
       ) : picks.status === 'ready' && picks.missed ? (
         <NoNewPicks />
       ) : (
-        <p className="mt-1 text-sm text-ink/80">After your next AI interview, your next 3 steps appear here, each with the reason it was picked.</p>
+        <p className="mt-1 text-sm text-ink/80">After your next mock interview, your next 3 steps appear here, each with the reason it was picked.</p>
       )}
     </section>
   );

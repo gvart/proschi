@@ -29,7 +29,7 @@ interface RoadmapProps {
   locked?: { id: string; lock: StepLock };
   /** The lessons and guides read (progress.ts lessonsRead). */
   read?: readonly string[];
-  /** The AI roadmap's "Next for you" card (history/NextForYou.tsx), under the progress. */
+  /** The "Your next steps" card (history/NextForYou.tsx), under the progress. */
   nextForYou?: ReactNode;
 }
 
