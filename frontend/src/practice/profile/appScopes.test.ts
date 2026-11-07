@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { scopesText, SCOPE_LABEL } from './AppSignIns';
+import { scopesText, SCOPE_LABEL } from './appScopes';
 
 describe('app sign-in scopes in Settings', () => {
   it('names what the tokens may do', () => {
