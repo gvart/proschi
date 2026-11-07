@@ -69,10 +69,12 @@ interface InterviewPanelProps {
   getSource?: () => string;
   /** The start screen opens with the mock interview chosen, when it is on offer (practice/#/<id>?interview=mock). */
   preferAi?: boolean;
+  /** Brings the interview into view (on phones, its tab). */
+  onShow?: () => void;
 }
 
 /** Interview mode in the left column: the start screen, then one phase at a time, or the AI interviewer's chat. */
-export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, getSource, preferAi = false }: InterviewPanelProps) {
+export default function InterviewPanel({ problemId, statement, interview, session, dispatch, onStart, onExit, onRestart, children, getSource, preferAi = false, onShow }: InterviewPanelProps) {
   // The AI interviewer is on offer with the ai_interview feature (signed in) when the server has it.
   const aiInterview = useFeature('ai_interview');
   const [aiId, setAiId] = useState(() => (apiEnabled ? loadActive(problemId) : undefined));
@@ -88,6 +90,7 @@ export default function InterviewPanel({ problemId, statement, interview, sessio
         id={aiId}
         statement={redacted}
         getSource={getSource}
+        onShow={onShow}
         onRestart={() => setAi(undefined)}
         onExit={() => {
           setAi(undefined);

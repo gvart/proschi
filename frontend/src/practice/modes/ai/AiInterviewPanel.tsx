@@ -1,13 +1,16 @@
 import { lazy, Suspense, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent } from 'react';
-import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Mic, MicOff, Printer, Send, Sparkles, Target, X } from 'lucide-react';
+import { ArrowRight, Bot, CircleAlert, CircleCheck, CircleX, Code2, Coins, Flag, Lightbulb, Printer, Send, Sparkles, Target, Volume2, VolumeX, X } from 'lucide-react';
 import { refreshCredits, useCredits } from '../../../services/useCredits';
-import { confirm } from '../../../design/dialogs';
+import { confirm, notify } from '../../../design/dialogs';
+import MicButton, { type MicButtonHandle } from '../../../voice/MicButton';
+import type { MicState } from '../../../voice/recognizer';
+import { useSpeaker } from '../../../voice/speaker';
+import { useVoiceDraft } from '../../../voice/useVoiceDraft';
 import Markdown from '../../Markdown';
 import { useNow } from '../useNow';
 import { eyebrow, field, outlineButton, primaryButton, toolButton } from '../../../components/Playground/ui';
 import { formatClock, PHASES, type Phase } from '../session';
 import { finishInterview, getInterview, sendTurn, shownPhase, SKILL_LABEL, SKILLS, TurnError, type AiInterview, type AiMessage, type Hint, type HintKind, type Skill, type Verdict } from './api';
-import { useDictation } from './useDictation';
 import listings from 'virtual:practice-listings';
 import { PICK_PENDING_MS } from '../../history/api';
 import { useFeature } from '../../../components/featureState';
@@ -18,13 +21,19 @@ const InterviewReport = lazy(() => import('./InterviewReport'));
 
 /**
  * Interview mode with the AI interviewer (backend/src/interviews.ts): a chat
- * beside the editor. The reply streams in; each turn may bring a coaching
- * card ("Focus now", "Can improve", "Wrap up"); "Send my design" attaches the
- * editor's source, which the server runs the tests on. The session lives on
- * the server, so a reload picks it up again (GET /api/interviews/<id>).
+ * beside the editor. The reply streams in, and with the speaker on it is
+ * read aloud (the browser's own voice, P39). Each turn may bring a coaching
+ * hint ("Focus now", "Can improve", "Wrap up"), shown as a toast (two at
+ * most) and kept in the panel's coaching list. The mic listens hands-free
+ * (src/voice). "Send my design" attaches the editor's source, which the
+ * server runs the tests on. The session lives on the server, so a reload
+ * picks it up again (GET /api/interviews/<id>).
  */
 
 const MAX_MESSAGE = 4000;
+/** Hint toasts on screen at once; an older one goes when a third comes. */
+const MAX_HINT_TOASTS = 2;
+const HINT_TOAST_MS = 15_000;
 
 const phaseIndex = (p: Phase) => PHASES.findIndex((x) => x.id === p);
 
@@ -42,9 +51,11 @@ interface Props {
   onExit: () => void;
   /** Back to the start screen, to start another interview. */
   onRestart: () => void;
+  /** Brings the chat into view (on phones, its tab), from a reply that came while it was hidden. */
+  onShow?: () => void;
 }
 
-export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart }: Props) {
+export default function AiInterviewPanel({ id, statement, getSource, onExit, onRestart, onShow }: Props) {
   const [interview, setInterview] = useState<AiInterview>();
   const [loadError, setLoadError] = useState<string>();
   const [messages, setMessages] = useState<AiMessage[]>([]);
@@ -54,6 +65,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   const [draft, setDraft] = useState('');
   /** A turn was refused for want of credits; the server has moved the interview to its wrap-up. */
   const [refused, setOutOfCredits] = useState(false);
+  const [listening, setListening] = useState(false);
   const { credits } = useCredits(true);
   const chat = useRef<HTMLDivElement>(null);
 
@@ -77,8 +89,39 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages, streaming]);
 
-  const onPhrase = useCallback((text: string) => setDraft((d) => (d.trim() ? `${d.trimEnd()} ${text}` : text).slice(0, MAX_MESSAGE)), []);
-  const dictation = useDictation(onPhrase);
+  const mic = useRef<MicButtonHandle>(null);
+  const voice = useVoiceDraft(setDraft, MAX_MESSAGE);
+  const speaker = useSpeaker();
+  const stopSpeaking = speaker.stop;
+  // Talking stops the interviewer's voice; so does typing (below).
+  const onMicState = useCallback(
+    (s: MicState) => {
+      if (s === 'starting' || s === 'listening') stopSpeaking();
+      setListening(s === 'listening' || s === 'transcribing');
+    },
+    [stopSpeaking],
+  );
+  const toasts = useRef<(() => void)[]>([]);
+  const showHint = useCallback((hint: Hint) => {
+    const Icon = HINT_ICON[hint.kind];
+    toasts.current.push(
+      notify({
+        title: HINT_LABEL[hint.kind],
+        body: (
+          <span className="inline-flex items-start gap-1.5" data-testid="hint-toast" data-kind={hint.kind}>
+            <Icon size={14} className="mt-0.5 shrink-0" aria-hidden="true" />
+            {hint.text}
+          </span>
+        ),
+        duration: HINT_TOAST_MS,
+      }),
+    );
+    while (toasts.current.length > MAX_HINT_TOASTS) toasts.current.shift()!();
+  }, []);
+  useEffect(() => {
+    const open = toasts.current;
+    return () => open.splice(0).forEach((dismiss) => dismiss());
+  }, []);
 
   const active = interview?.status === 'active';
   const now = useNow(active);
@@ -106,11 +149,14 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   const left = interview.minutes * 60_000 - (now - interview.startedAt);
   const timeUp = interview.deadline !== undefined && now >= interview.deadline;
   const phase = shownPhase(interview, now);
-  const hint = [...messages].reverse().find((m) => m.role === 'interviewer' && m.hint)?.hint;
+  const hints = messages.flatMap((m) => (m.role === 'interviewer' && m.hint ? [m.hint] : [])).reverse();
 
+  const said = voice.shown(draft).trim();
   const send = async (input: { message: string; design?: string; advance?: boolean }) => {
     if (busy || !active) return;
-    dictation.stop();
+    mic.current?.stop();
+    voice.clear();
+    stopSpeaking();
     setBusy('turn');
     setError(undefined);
     const sentAt = Date.now();
@@ -125,6 +171,10 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
       });
       setMessages((m) => [...m, { role: 'interviewer', text: done.reply, at: Date.now(), ...(done.hint ? { hint: done.hint } : {}) }]);
       setInterview((i) => i && { ...i, phase: done.phase, turns: done.turns });
+      speaker.say(done.reply);
+      if (done.hint) showHint(done.hint);
+      // The chat is out of sight (on phones, another tab): say so, with a way back.
+      if (onShow && chat.current && chat.current.offsetParent === null) notify({ title: 'The interviewer replied', action: { label: 'Open the interview', onClick: onShow }, duration: 8000 });
     } catch (e) {
       // The turn was not kept: take the message back into the box.
       setMessages((m) => m.filter((x) => x.at !== sentAt));
@@ -143,7 +193,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
 
   const submit = (e?: FormEvent) => {
     e?.preventDefault();
-    if (draft.trim()) void send({ message: draft.trim() });
+    if (said) void send({ message: said });
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) submit(e);
@@ -152,7 +202,8 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
   const finish = async () => {
     if (busy) return;
     if (!timeUp && !(await confirm({ title: 'Finish the interview and get the verdict?', body: 'You cannot continue it afterwards.', confirmLabel: 'Finish' }))) return;
-    dictation.stop();
+    mic.current?.stop();
+    stopSpeaking();
     setBusy('finish');
     setError(undefined);
     try {
@@ -199,10 +250,24 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
             {formatClock(left)}
           </span>
           {left < 0 && <span className="text-xs font-semibold text-red-700 dark:text-red-300">over time</span>}
+          {speaker.supported && (
+            <button
+              type="button"
+              onClick={() => speaker.setOn(!speaker.on)}
+              aria-pressed={speaker.on}
+              data-testid="speaker-toggle"
+              className={`ml-auto ${toolButton} ${speaker.on ? '!bg-pop-yellow/40' : ''}`}
+              aria-label={speaker.on ? 'Stop reading replies aloud' : 'Read replies aloud'}
+              title={speaker.on ? 'Replies are read aloud; click to stop' : 'Read the interviewer’s replies aloud'}
+            >
+              {speaker.on ? <Volume2 size={14} aria-hidden="true" /> : <VolumeX size={14} aria-hidden="true" />}
+              <span className="hidden sm:inline">{speaker.on ? 'Voice on' : 'Voice off'}</span>
+            </button>
+          )}
           <button
             type="button"
             onClick={async () => (await confirm({ title: 'Leave interview mode?', body: 'The interview stays open on the server until you start another one.', confirmLabel: 'Leave' })) && onExit()}
-            className={`ml-auto ${toolButton}`}
+            className={`${speaker.supported ? '' : 'ml-auto '}${toolButton}`}
             aria-label="Leave interview mode"
             title="Leave interview mode"
           >
@@ -228,9 +293,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
               You&rsquo;re out of credits, so the interviewer is wrapping up. Your verdict is already paid for: finish when you&rsquo;re ready.
             </p>
           </aside>
-        ) : (
-          hint && <CoachingCard hint={hint} />
-        )}
+        ) : null}
       </div>
 
       <div ref={chat} className="flex-1 min-h-0 overflow-y-auto px-3 py-3 space-y-3" aria-live="polite" aria-busy={busy === 'turn'}>
@@ -240,6 +303,20 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
             <Markdown source={statement} />
           </div>
         </details>
+        {hints.length > 0 && (
+          <details className="rounded-sm border-bw-1 border-ink/40 bg-paper" data-testid="coaching-history">
+            <summary className="cursor-pointer px-3 py-1.5 text-sm font-semibold text-ink">
+              Coaching <span className="font-normal text-muted tabular-nums">({hints.length})</span>
+            </summary>
+            <ol className="space-y-2 border-t-bw-1 border-ink/40 px-3 py-2">
+              {hints.map((h, i) => (
+                <li key={i}>
+                  <CoachingCard hint={h} />
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
         <ol aria-label="Conversation" className="space-y-3">
           {messages.map((m, i) => (
             <ChatBubble key={`${m.at}-${i}`} message={m} />
@@ -263,27 +340,20 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
             </label>
             <textarea
               id="ai-interview-message"
-              value={draft}
-              onChange={(e) => setDraft(e.target.value.slice(0, MAX_MESSAGE))}
+              value={voice.shown(draft)}
+              onChange={(e) => {
+                voice.clear();
+                stopSpeaking();
+                setDraft(e.target.value.slice(0, MAX_MESSAGE));
+              }}
               onKeyDown={onKey}
               rows={2}
-              placeholder={dictation.listening ? 'Listening… speak your answer' : 'Ask a question or explain your thinking'}
+              placeholder={listening ? 'Listening… speak your answer' : 'Ask a question or explain your thinking'}
               disabled={!active}
               className={`flex-1 min-w-0 resize-y ${field}`}
             />
-            {dictation.supported && (
-              <button
-                type="button"
-                onClick={dictation.toggle}
-                aria-pressed={dictation.listening}
-                aria-label={dictation.listening ? 'Stop dictation' : 'Dictate your answer'}
-                title={dictation.listening ? 'Stop dictation' : 'Dictate your answer'}
-                className={`${outlineButton} ${dictation.listening ? '!bg-pop-pink' : ''}`}
-              >
-                {dictation.listening ? <MicOff size={16} aria-hidden="true" /> : <Mic size={16} aria-hidden="true" />}
-              </button>
-            )}
-            <button type="submit" disabled={!canTalk || !draft.trim()} className={`${primaryButton} disabled:opacity-50`} aria-label="Send">
+            <MicButton ref={mic} onText={voice.onText} onState={onMicState} disabled={!active} />
+            <button type="submit" disabled={!canTalk || !said} className={`${primaryButton} disabled:opacity-50`} aria-label="Send">
               <Send size={14} aria-hidden="true" />
               <span className="hidden sm:inline">Send</span>
             </button>
@@ -295,7 +365,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
               <button
                 type="button"
                 disabled={!canTalk}
-                onClick={() => void send({ message: draft.trim(), design: getSource() })}
+                onClick={() => void send({ message: said, design: getSource() })}
                 className={`${toolButton} disabled:opacity-50`}
                 title="Send the design in the editor with your message; the server runs the tests on it"
               >
@@ -306,7 +376,7 @@ export default function AiInterviewPanel({ id, statement, getSource, onExit, onR
                 <button
                   type="button"
                   disabled={!canTalk}
-                  onClick={() => void send({ message: draft.trim() || `I'd like to move on to the ${PHASES[phaseIndex(phase) + 1].label.toLowerCase()} phase.`, advance: true })}
+                  onClick={() => void send({ message: said || `I'd like to move on to the ${PHASES[phaseIndex(phase) + 1].label.toLowerCase()} phase.`, advance: true })}
                   className={`${toolButton} disabled:opacity-50`}
                   title="Move on to the next phase before the clock does"
                 >
