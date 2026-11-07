@@ -72,6 +72,25 @@ test.describe('AI interviewer', () => {
     await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
   });
 
+  test('a deep link, #/<problem>?interview=ai, opens interview mode with the AI interviewer chosen, starting nothing', async ({ page }) => {
+    await mockSignedIn(page);
+    await mockInterviews(page, { replies: [] });
+    const starts: string[] = [];
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && new URL(r.url()).pathname === '/api/interviews') starts.push(r.url());
+    });
+    await page.goto('practice/#/url-shortener?interview=ai');
+    const start = page.getByRole('region', { name: 'Interview mode' });
+    await expect(start.getByRole('radio', { name: /AI interviewer/ })).toHaveAttribute('aria-checked', 'true');
+    await expect(start.getByRole('button', { name: 'Start the AI interview' })).toBeVisible();
+    await expect(page.getByRole('region', { name: 'AI interview', exact: true })).toHaveCount(0);
+    expect(starts).toEqual([]);
+    // Without the query, the same problem opens as usual: no interview mode.
+    await page.goto('practice/#/');
+    await page.goto('practice/#/url-shortener');
+    await expect(page.getByRole('button', { name: 'Interview mode' })).toBeVisible();
+  });
+
   for (const choice of ['resume', 'replace'] as const) {
     test(`an interview already open: ${choice === 'resume' ? 'Resume it (the default)' : 'End it and start a new one'}`, async ({ page, errors }) => {
       await mockSignedIn(page);
