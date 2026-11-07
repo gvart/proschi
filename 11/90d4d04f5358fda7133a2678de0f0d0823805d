@@ -1,0 +1,52 @@
+frontend/src/pricing/checkoutReturn.test.ts
+  s_e17b87e0a1b3ca::t_56f85ea4292512 1-96
+backend/test/billing.test.ts
+  s_e17b87e0a1b3ca::t_e9920959e09033 237
+backend/src/billing.ts
+  s_e17b87e0a1b3ca::t_e9920959e09033 105-106
+frontend/src/pricing/usePlan.ts
+  s_e17b87e0a1b3ca::t_31438b5b2fadf1 2,4,20-23
+frontend/src/services/billing.ts
+  s_e17b87e0a1b3ca::t_31438b5b2fadf1 43,45
+  s_e17b87e0a1b3ca::t_b26e5d3c20726d 38-42,44
+frontend/src/practice/profile/PlanBilling.tsx
+  s_e17b87e0a1b3ca::t_826f78a91af30a 38
+  s_e17b87e0a1b3ca::t_b26e5d3c20726d 1,6,12-13,59
+frontend/e2e/billing.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_913a6a18aae8c5 116-187,190-192
+  s_e17b87e0a1b3ca::t_3f06f8e9851aa7 188-189
+  s_e17b87e0a1b3ca::t_c578d02447cd22 71,73
+frontend/src/pricing/checkoutReturn.ts
+  s_e17b87e0a1b3ca::t_8e08d7d8b0c66f 2-100,102
+  s_e17b87e0a1b3ca::t_65bd87002445c0 1,101
+frontend/src/components/Feature.test.tsx
+  s_e17b87e0a1b3ca::t_abb060d9ef322f 15,46-56
+backend/README.md
+  s_e17b87e0a1b3ca::t_e9920959e09033 308
+frontend/src/practice/profile/CheckoutStatus.tsx
+  s_e17b87e0a1b3ca::t_3572c396b21c2a 58-64
+  s_e17b87e0a1b3ca::t_e1c575dd1895d4 162-164,167-170
+  s_e17b87e0a1b3ca::t_bbf57ad216add3 10
+  s_e17b87e0a1b3ca::t_05f17e6cf0ea27 1-9,11-57,65-161,165-166,171-172
+frontend/src/practice/AccountMenu.tsx
+  s_e17b87e0a1b3ca::t_b26e5d3c20726d 1,4,12-13,18,68-72,103-115
+  s_e17b87e0a1b3ca::t_b8c1c4be7e4863 116
+frontend/src/components/featureState.ts
+  s_e17b87e0a1b3ca::t_31438b5b2fadf1 3,33,37-42,53
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "1190d4d04f5358fda7133a2678de0f0d0823805d",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
