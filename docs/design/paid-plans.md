@@ -264,3 +264,30 @@ id; don't rewrite old ones.
   ask: starter chips (Review, Build on the editor, Hint on practice) pick
   the intent and its prefill or hint, and the estimate under the composer
   follows the pick.
+- **P42. App and CLI tokens carry scopes.** A bearer token is no longer a
+  full-account credential. Each sign-in's scopes are fixed by its client when
+  the code is issued and kept on every refresh (`sessions.scopes`,
+  `app_auth_codes.scopes`, migration 0030): the `proschi` CLI, its language
+  server and the editor extensions get `profile:read documents:read` (all
+  they call: `GET /api/me`, the synced diagrams and their versions); a
+  native app also `documents:write` and `progress`. Enforced centrally:
+  `src/index.ts` looks the route up in `TOKEN_ROUTES` (`src/scopes.ts`)
+  before any handler or the PAID_ROUTES dispatch and answers 403
+  `insufficient_scope` for any route not listed, and `authenticate` refuses a
+  token without the route's scope. So no token, whatever its scopes, reaches
+  billing, credits, mock interviews, the Design partner, the roadmap's
+  picks, live share links, the admin panel, account changes, deletion or
+  export, email and sign-in changes, campaigns or feedback; a cookie session
+  has every right. Tokens issued before got the CLI's scopes. Settings lists
+  the running sign-ins with their scopes (`GET /api/me/apps`, site only).
+- **P43. The learning goal lives on the account.** What the practice page
+  is for (the goals, whether the question was answered, the streak switch)
+  is a small JSON column, `users.practice_goal` (migration 0030), read in
+  `GET /api/me` (`user.practiceGoal`, null until set) and written with
+  `PATCH /api/me {practiceGoal}`, validated strictly (known goals once each,
+  `asked` and `streak` booleans). On sign-in the account's goal replaces the
+  browser's; an account without one gets the browser's once (then it has
+  one). Signed in, every change is sent too; signed out it stays in
+  `localStorage` (`proschi.practice.goal`) as before, which also keeps the
+  last signed-in value. It is in the data export (`user.practiceGoal`) and
+  goes with the account; docs/PRIVACY.md lists it.

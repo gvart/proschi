@@ -2,6 +2,7 @@ import { createExecutionContext, createScheduledController, waitOnExecutionConte
 import { env, exports } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ACCESS_TTL, REFRESH_TTL } from '../src/apptokens';
+import { APP_SCOPES, CLI_SCOPES } from '../src/scopes';
 import { SESSION_COOKIE } from '../src/auth';
 import { randomToken, sha256, timingSafeEqual } from '../src/crypto';
 import type { Env } from '../src/env';
@@ -17,6 +18,7 @@ interface Tokens {
   refresh_token: string;
   expires_in: number;
   token_type: string;
+  scope: string;
 }
 
 /** Answers GitHub's token and profile endpoints. */
@@ -107,10 +109,11 @@ describe('app sign-in', () => {
     expect(response.status).toBe(200);
     expect(response.headers.get('Cache-Control')).toBe('no-store');
     const tokens = (await response.json()) as Tokens;
-    expect(tokens).toEqual({ access_token: expect.stringMatching(/^[\w-]{43}$/), refresh_token: expect.stringMatching(/^[\w-]{43}$/), expires_in: ACCESS_TTL, token_type: 'Bearer' });
+    expect(tokens).toEqual({ access_token: expect.stringMatching(/^[\w-]{43}$/), refresh_token: expect.stringMatching(/^[\w-]{43}$/), expires_in: ACCESS_TTL, token_type: 'Bearer', scope: APP_SCOPES.join(' ') });
     expect(await count('SELECT COUNT(*) AS n FROM app_auth_codes')).toBe(0);
 
-    const rows = await env.DB.prepare('SELECT token_hash, kind, expires_at, family_id FROM sessions ORDER BY kind').all<Record<string, string | number>>();
+    const rows = await env.DB.prepare('SELECT token_hash, kind, expires_at, family_id, scopes FROM sessions ORDER BY kind').all<Record<string, string | number>>();
+    expect(rows.results.map((r) => r.scopes)).toEqual([APP_SCOPES.join(' '), APP_SCOPES.join(' ')]);
     expect(rows.results.map((r) => r.kind)).toEqual(['app_access', 'app_refresh']);
     expect(rows.results.map((r) => r.token_hash)).toEqual([await sha256(tokens.access_token), await sha256(tokens.refresh_token)]);
     expect(rows.results[0].family_id).toBe(rows.results[1].family_id);
@@ -124,9 +127,10 @@ describe('app sign-in', () => {
     const cards = await call('/api/cards/state?day=2026-10-05', { bearer: tokens.access_token });
     expect(cards.status).toBe(200);
     expect(await cards.json()).toMatchObject({ states: {} });
-    // A change, sent as an app sends it (no Origin).
+    // A change in its scopes, sent as an app sends it (no Origin); an account change is not.
+    expect((await call('/api/me/lessons', { method: 'POST', bearer: tokens.access_token, body: { ids: [] } })).status).not.toBe(403);
     const patched = await call('/api/me', { method: 'PATCH', bearer: tokens.access_token, body: { displayName: 'From the app' } });
-    expect(patched.status).toBe(200);
+    expect(patched.status).toBe(403);
   });
 
   it('accepts a form-encoded token request, as OAuth client libraries send it', async () => {
@@ -334,40 +338,49 @@ describe('app tokens', () => {
     await appSignIn((await pkce()).challenge);
     expect(await count('SELECT COUNT(*) AS n FROM app_auth_codes')).toBe(1);
 
-    const response = await call('/api/me/sessions/revoke-all', { method: 'POST', bearer: tokens.access_token });
-    expect(response.status).toBe(204);
+    // An app's token can't sign the account out everywhere (src/scopes.ts); only the site can.
+    expect((await call('/api/me/sessions/revoke-all', { method: 'POST', bearer: tokens.access_token })).status).toBe(403);
+    expect((await me(tokens.access_token)).status).toBe(200);
+
+    expect((await call('/api/me/sessions/revoke-all', { method: 'POST', token: cookie })).status).toBe(204);
     expect((await me(tokens.access_token)).status).toBe(401);
     expect((await refresh(tokens.refresh_token)).status).toBe(400);
     expect((await call('/api/me', { token: cookie })).status).toBe(401);
     expect(await count('SELECT COUNT(*) AS n FROM app_auth_codes')).toBe(0);
-
-    // From the site.
-    const again = await appTokens();
-    const web = `web-${crypto.randomUUID()}`;
-    await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, 0)').bind(await sha256(web), userId, 4_000_000_000).run();
-    expect((await call('/api/me/sessions/revoke-all', { method: 'POST', token: web })).status).toBe(204);
-    expect((await me(again.access_token)).status).toBe(401);
-    expect((await refresh(again.refresh_token)).status).toBe(400);
   });
 
   it('deleting the account ends them', async () => {
     mockGitHub();
     const tokens = await appTokens();
     await appSignIn((await pkce()).challenge);
-    expect((await call('/api/me', { method: 'DELETE', bearer: tokens.access_token })).status).toBe(204);
+    // Not with an app's token (src/scopes.ts): only on the site.
+    expect((await call('/api/me', { method: 'DELETE', bearer: tokens.access_token })).status).toBe(403);
+    expect(await count('SELECT COUNT(*) AS n FROM users')).toBe(1);
+    const userId = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!.id;
+    const web = `web-${crypto.randomUUID()}`;
+    await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, 0)').bind(await sha256(web), userId, 4_000_000_000).run();
+    expect((await call('/api/me', { method: 'DELETE', token: web })).status).toBe(204);
     expect(await count('SELECT COUNT(*) AS n FROM sessions')).toBe(0);
     expect(await count('SELECT COUNT(*) AS n FROM app_auth_codes')).toBe(0);
     expect((await refresh(tokens.refresh_token)).status).toBe(400);
   });
 
-  it('appear in the export with their kind, without hashes', async () => {
+  it('appear in the export with their kind and scopes, without hashes', async () => {
     mockGitHub();
     const tokens = await appTokens();
     await refresh(tokens.refresh_token);
-    const response = await call('/api/me/export', { bearer: (await appTokens()).access_token });
+    await appTokens();
+    // The export is the site's: an app's token can't download it.
+    expect((await call('/api/me/export', { bearer: tokens.access_token })).status).toBe(403);
+    const userId = (await env.DB.prepare('SELECT id FROM users').first<{ id: string }>())!.id;
+    const web = `web-${crypto.randomUUID()}`;
+    await env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, 0)').bind(await sha256(web), userId, 4_000_000_000).run();
+    const response = await call('/api/me/export', { token: web });
     const text = await response.text();
-    const sessions = (JSON.parse(text) as { sessions: { kind: string; rotatedAt?: number | null }[] }).sessions;
-    expect(sessions.map((s) => s.kind).sort()).toEqual(['app_access', 'app_access', 'app_refresh', 'app_refresh', 'app_refresh']);
+    const sessions = (JSON.parse(text) as { sessions: { kind: string; rotatedAt?: number | null; scopes?: string[] }[] }).sessions;
+    expect(sessions.map((s) => s.kind).sort()).toEqual(['app_access', 'app_access', 'app_refresh', 'app_refresh', 'app_refresh', 'web']);
+    expect(sessions.filter((s) => s.kind !== 'web').every((s) => JSON.stringify(s.scopes) === JSON.stringify(APP_SCOPES))).toBe(true);
+    expect(sessions.find((s) => s.kind === 'web')).not.toHaveProperty('scopes');
     expect(sessions.filter((s) => s.kind === 'app_refresh').map((s) => s.rotatedAt === null)).toContain(false);
     expect(text).not.toContain(tokens.refresh_token);
     expect(text).not.toContain(await sha256(tokens.refresh_token));
@@ -398,7 +411,7 @@ describe('same-origin check with bearer tokens', () => {
     const tokens = await appTokens();
     const web = await signedInUser();
     // An app's request is no browser's: its token is no ambient credential.
-    expect((await call('/api/me', { method: 'PATCH', bearer: tokens.access_token, headers: evil, body: { displayName: 'App' } })).status).toBe(200);
+    expect((await call('/api/me/lessons', { method: 'POST', bearer: tokens.access_token, headers: evil, body: { ids: [] } })).status).not.toBe(403);
     // A cross-site POST with only the cookie is still refused.
     expect((await call('/api/me', { method: 'PATCH', token: web.token, headers: evil, body: { displayName: 'Evil' } })).status).toBe(403);
     expect((await call('/api/me/sessions/revoke-all', { method: 'POST', token: web.token, headers: evil })).status).toBe(403);
@@ -449,6 +462,27 @@ describe('CLI sign-in (proschi-cli, loopback redirect)', () => {
     const location = back.headers.get('Location') ?? '';
     return { location, back, code: new URL(location, 'https://invalid.example').searchParams.get('code') ?? '' };
   }
+
+  it("gives the CLI's tokens only its scopes, kept on refresh: the account's name and the diagrams, read only", async () => {
+    mockGitHub();
+    const { verifier, challenge } = await pkce();
+    const { code } = await cliCode('http://127.0.0.1:53682/callback', challenge);
+    const first = (await (await exchange(code, verifier)).json()) as Tokens;
+    expect(first.scope).toBe(CLI_SCOPES.join(' '));
+    const tokens = (await (await refresh(first.refresh_token)).json()) as Tokens;
+    expect(tokens.scope).toBe(CLI_SCOPES.join(' '));
+    const bearer = tokens.access_token;
+    // What the CLI and the editor extensions call (tooling/src/login.ts, cloud.ts).
+    expect((await me(bearer)).status).toBe(200);
+    expect((await call('/api/me/documents', { bearer })).status).toBe(200);
+    expect((await call('/api/me/documents/d/versions', { bearer })).status).toBe(404);
+    expect((await call('/api/me/versions/resolve?name=d&tag=latest', { bearer })).status).toBe(404);
+    // Writes and practice progress are not in them.
+    const put = await call('/api/me/documents/d', { method: 'PUT', bearer, body: { name: 'd', source: 'title "x"', baseVersion: 0 } });
+    expect(put.status).toBe(403);
+    expect(put.headers.get('WWW-Authenticate')).toBe('Bearer error="insufficient_scope", scope="documents:write"');
+    expect((await call('/api/cards/state?day=2026-10-05', { bearer })).status).toBe(403);
+  });
 
   it('accepts 127.0.0.1 and [::1] on any port', async () => {
     mockGitHub();

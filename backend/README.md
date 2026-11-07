@@ -140,14 +140,14 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /auth/<provider>/callback` | Sets the session cookie (30 days) and redirects to the path; on failure adds `?login_error=cancelled\|failed`. Linking keeps the session and adds `?linked=<provider>` or `?login_error=identity_in_use\|provider_linked` |
 | `GET /auth/<provider>/start?client=app&redirect_uri=<uri>&code_challenge=<S256>&code_challenge_method=S256[&state=]` | A native app's sign-in: the callback sets no cookie and redirects to `redirect_uri?code=<one-time code>[&state=]` (or `?error=access_denied\|server_error`). `redirect_uri` must be listed in `APP_REDIRECT_URIS` ([Mobile apps](#mobile-apps)) |
 | `GET /auth/<provider>/start?client=proschi-cli&redirect_uri=http://127.0.0.1:<port>/callback&…` | The same for the `proschi` CLI, with a loopback `redirect_uri` on any port instead of the allow-list ([Command line sign-in](#command-line-sign-in)) |
-| `POST /auth/token {grant_type, …}` | `authorization_code` with `code` and `code_verifier`, or `refresh_token` with `refresh_token`: `{access_token, token_type: "Bearer", expires_in, refresh_token}` |
+| `POST /auth/token {grant_type, …}` | `authorization_code` with `code` and `code_verifier`, or `refresh_token` with `refresh_token`: `{access_token, token_type: "Bearer", expires_in, refresh_token, scope}` ([Token scopes](#token-scopes)) |
 | `POST /auth/revoke {token}` | Ends the app sign-in an access or refresh token belongs to; 200 whether or not the token was known |
 | `POST /auth/logout` | Ends the session |
 | `GET /api/health` | `{ok, env, simVersion}` once D1 answers; 503 otherwise |
-| `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
-| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30 |
+| `GET /api/me` | `{user: {id, displayName, publicProfile, dailyGoal, providers, practiceGoal}, progress: {<problem id>: {status, runs, source, solvedAt, solvedDay, runsToSolve, bestCostUsd, bestP99Ms}}}` |
+| `PATCH /api/me {displayName?, publicProfile?, dailyGoal?, practiceGoal?}` | `publicProfile: true` shows the user on the leaderboards, with a public profile; `dailyGoal` is cards a day, 5, 10 (the default), 20 or 30; `practiceGoal` is what the practice page is for, `{goals: ['solve' \| 'interview' \| 'habit'], asked, streak?}` (null in `GET /api/me` until set; docs/design/paid-plans.md P43) |
 | `DELETE /api/me` | Deletes the account, its sessions and app tokens, its progress, its card reviews, its daily challenge attempts, its achievements, its game progress and runs, its short links, its synced diagrams and their versions and its email reminders' address |
-| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`), never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl`; `documents` the synced diagrams, tombstones included; `documentVersions` their versions with content (deleted ones with `deletedAt` and the content cleared); `user.plan` the plan; `emailReminders` the reminders' address and settings (null without one; the unsubscribe secret left out) |
+| `GET /api/me/export` | Everything stored about the user, as `proschi-data.json`; `sessions` lists each with its `kind` (`web`, `app_access` or `app_refresh`) and an app token's `scopes`, never the token hashes; `challengeAttempts` the daily challenge attempts; `game` the game progress and runs; `shares` the short links, with their diagrams and each preview's `imageUrl`; `documents` the synced diagrams, tombstones included; `documentVersions` their versions with content (deleted ones with `deletedAt` and the content cleared); `user.plan` the plan; `emailReminders` the reminders' address and settings (null without one; the unsubscribe secret left out) |
 | `GET /api/me/activity?day=YYYY-MM-DD` | With `day` the client's local date: `{day, goal: {reviews, solves}, days: [{day, reviews, newCards, solves, challenges?, runs?}], streak: {current, longest, freezes, frozen, todayDone, today, todayProgress}, recap: {start, end, reviews, newCards, solves, challenges, runs, goalDays, streak}}`. A day with a daily challenge sent (`challenges`) or a game run submitted (`runs`, never imported ones) meets the goal whatever the cards. `days` covers the last 400 days (days without activity left out), `streak` is as of `day` and `recap` is the Monday–Sunday week before `day`'s |
 | `POST /api/me/import {items: [{problemId, source, solved}]}` | The browser's progress on first sign-in, as imported runs; unknown problems are skipped |
 | `GET /api/me/achievements?day=YYYY-MM-DD` | `day` (optional) is the client's local date, for the longest streak as `GET /api/me/activity` counts it. `{achievements: [{id, title, description, icon, tier?, rule, current, target, earned, earnedAt?, unseen}], skills: {readiness, topics: [{topic, mastery}], weakest: [<topic id>]}, stats: {reviews, mastered, longestStreak, estimateStreak, solved}}`: every badge with its progress, mastery and readiness from 0 to 1; stores the badges earned for the first time |
@@ -176,6 +176,7 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
 | `GET /api/email/confirm?token=` / `POST` | The confirmation link: the GET page only shows a button, which POSTs to confirm. 400 for an expired or forged token, or an address changed since |
 | `GET /api/email/unsubscribe?token=` / `POST` | The unsubscribe link: the GET page shows a button; the POST (also mail apps' one-click, RFC 8058, without a session or Origin check) deletes the address; 200 either way |
 | `POST /api/me/sessions/revoke-all` | Ends every session of the user: cookies, apps' tokens and unused app sign-in codes |
+| `GET /api/me/apps` | The running app and CLI sign-ins with their scopes, for Settings ([Token scopes](#token-scopes)); the site only |
 | `DELETE /api/me/identities/<provider>` | Unlinks a provider; 409 for the only one |
 | `POST /api/problems/<id>/runs {source, solved, imported?, day?}` | Records a run; `solved: true` makes the server verify it. `day` is the client's local date (`YYYY-MM-DD`), kept as `solvedDay` for the first verified solve; without it, or more than a day from the server's UTC date, the UTC date is kept |
 | `GET /api/problems/<id>/leaderboard?metric=cost\|p99` | `{problem, metric, players, entries: [{rank, id, displayName, value, at}]}`: each solver's best verified design on the current problem and simulation versions (`value` in USD a month or ms, `at` when it was first reached), lowest first and ties to whoever reached it first; the top 10 who opted in, ranked among every solver. Signed in, also `you: {rank, value, players}` or null. `metric` defaults to `cost`. Cached for a minute (`you` read fresh) |
@@ -427,9 +428,10 @@ interviews) stays a number in `src/plans.ts`.
    another node to replace it.
 
 Every credential reads the account, and with it the plan, from D1 on each
-request (`src/auth.ts` `authenticate`). That covers the session cookie and
-an app's or the CLI's bearer access token, which are `app_access` sessions
-(a refresh token is refused). So a downgrade counts from the next request.
+request (`src/auth.ts` `authenticate`). So a downgrade counts from the next
+request. Only the session cookie reaches the paid routes: an app's or the
+CLI's bearer access token gets 403 `insufficient_scope` on every one of them,
+whatever its scopes ([Token scopes](#token-scopes)).
 Admin sessions are a cookie of their own and reach only `/api/admin/*`.
 Only the signed webhook and SQL change `users.plan`.
 
@@ -984,7 +986,7 @@ site keeps its cookie.
    ```
 
    ```json
-   {"access_token": "…", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "…"}
+   {"access_token": "…", "token_type": "Bearer", "expires_in": 3600, "refresh_token": "…", "scope": "profile:read documents:read documents:write progress"}
    ```
 
    A wrong verifier, an expired or used code is `400 {"error":
@@ -992,7 +994,9 @@ site keeps its cookie.
    uses the code up too.
 5. **Call the API** with `Authorization: Bearer <access_token>`, e.g. `GET
    /api/me`. An expired or revoked access token is a 401 with
-   `WWW-Authenticate: Bearer error="invalid_token"`.
+   `WWW-Authenticate: Bearer error="invalid_token"`; a route the token's
+   scopes don't reach is a 403 with `WWW-Authenticate: Bearer
+   error="insufficient_scope"` ([Token scopes](#token-scopes)).
 6. **Refresh** before or after the hour is up:
 
    ```http
@@ -1010,8 +1014,8 @@ site keeps its cookie.
    descended from it) is revoked, and the app must sign in again. So send a
    refresh once, and don't retry it with the same token in parallel.
 7. **Sign out**: `POST /auth/revoke {"token": "<refresh or access token>"}`
-   ends that sign-in, both tokens. `POST /api/me/sessions/revoke-all` (from
-   the app or the site) and `DELETE /api/me` end every session, app tokens
+   ends that sign-in, both tokens. `POST /api/me/sessions/revoke-all` and
+   `DELETE /api/me` (from the site only) end every session, app tokens
    included.
 
 Codes and tokens are random 32-byte values stored only as their SHA-256
@@ -1020,6 +1024,33 @@ Codes and tokens are random 32-byte values stored only as their SHA-256
 bearer request uses only its token, never a cookie sent along. Token and
 revoke requests count against the per-IP sign-in limit, and none of them is
 logged beyond its path.
+
+### Token scopes
+
+A bearer token reaches only the routes of `TOKEN_ROUTES` in `src/scopes.ts`,
+and of those only the ones its scopes name (docs/design/paid-plans.md P42).
+`src/index.ts` checks the route before any handler runs, and
+`authenticate` checks the token's scopes; a cookie session has every right.
+Every other route answers a token 403 `insufficient_scope`: billing and
+credits, mock interviews, the Design partner, the roadmap's picks, live share
+links, the admin panel, account changes, deletion and the data export, email
+and sign-in changes, product news, short links and feedback.
+
+| Scope | Routes | CLI | App |
+|---|---|---|---|
+| `profile:read` | `GET /api/me`, `GET /api/me/limits` | yes | yes |
+| `documents:read` | `GET /api/me/documents`, its versions, `GET /api/me/versions/resolve` | yes | yes |
+| `documents:write` | `PUT`/`DELETE /api/me/documents/<id>`, tagging and deleting versions | | yes |
+| `progress` | problem runs, cards, the daily challenge, lessons, activity, achievements, the game, `POST /api/me/import` | | yes |
+
+Public routes (stats, leaderboards, short links' diagrams, health, the token
+endpoints) answer a token like any visitor. A sign-in's scopes are fixed by
+its client when the code is issued (`app_auth_codes.scopes`) and kept on
+every refresh (`sessions.scopes`); the token answer names them in `scope`.
+Tokens from before scopes got the CLI's (`migrations/0030_token_scopes.sql`).
+`GET /api/me/apps` (the site only) lists the running sign-ins with their
+scopes, for Settings: `{apps: [{id, scopes, createdAt, refreshedAt,
+expiresAt}]}`.
 
 ## Command line sign-in
 
@@ -1067,7 +1098,9 @@ and no allow-list: any loopback port is accepted, nothing else.
 
    `redirect_uri` is optional, and must be the one of step 2 when sent. 200
    `{"access_token", "token_type": "Bearer", "expires_in": 3600,
-   "refresh_token"}`. A wrong verifier, an expired or used code is 400
+   "refresh_token", "scope": "profile:read documents:read"}`: the CLI's
+   tokens read the account's name and its synced diagrams, nothing else
+   ([Token scopes](#token-scopes)). A wrong verifier, an expired or used code is 400
    `{"error": "invalid_grant", "error_description"}` (the code is used up
    either way); a missing field 400 `invalid_request`.
 5. **Call the API** with `Authorization: Bearer <access_token>` (no cookie

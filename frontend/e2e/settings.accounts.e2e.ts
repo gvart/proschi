@@ -81,7 +81,7 @@ test('profile and learning: the public profile switch, what is visible, and the 
   await expect(toggle).not.toBeChecked();
   await expect(profile.getByRole('link', { name: 'See your public profile' })).toHaveCount(0);
 
-  // What you're here for, kept in this browser: a daily habit switches the streak on, and with it the daily goal.
+  // What you're here for, kept in this browser and sent to the account: a daily habit switches the streak on, and with it the daily goal.
   const learning = page.getByRole('region', { name: 'Learning' });
   const focus = learning.getByRole('group', { name: 'What you’re here for' });
   const streak = learning.getByRole('switch', { name: 'Daily streak' });
@@ -98,8 +98,31 @@ test('profile and learning: the public profile switch, what is visible, and the 
   await expect(goal.getByRole('radio', { name: '20 cards a day' })).toHaveAttribute('aria-checked', 'true');
   expect(writes).toEqual([
     { method: 'PATCH', path: '/api/me', body: { publicProfile: false } },
+    { method: 'PATCH', path: '/api/me', body: { practiceGoal: { goals: ['interview'], asked: true } } },
+    { method: 'PATCH', path: '/api/me', body: { practiceGoal: { goals: ['interview', 'habit'], asked: true } } },
     { method: 'PATCH', path: '/api/me', body: { dailyGoal: 20 } },
   ]);
+});
+
+test("the account's learning goal replaces this browser's on sign-in", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('proschi.practice.goal', JSON.stringify({ goals: ['solve'], asked: true })));
+  await mockSignedIn(page, { ...SIGNED_IN, user: { ...SIGNED_IN.user, practiceGoal: { goals: ['habit'], asked: true } } });
+  await page.goto('practice/#/me');
+  const learning = page.getByRole('region', { name: 'Learning' });
+  await expect(learning.getByRole('switch', { name: 'Daily streak' })).toBeChecked();
+  expect(await page.evaluate(() => JSON.parse(localStorage.getItem('proschi.practice.goal') ?? 'null'))).toEqual({ goals: ['habit'], asked: true });
+});
+
+test('connected accounts list the app and CLI sign-ins with what they may do', async ({ page }) => {
+  await mockSignedIn(page);
+  await page.route('**/api/me/apps', (route) =>
+    route.fulfill({ json: { apps: [{ id: 'f1', scopes: ['profile:read', 'documents:read'], createdAt: 1_790_000_000, refreshedAt: 1_790_000_000, expiresAt: 1_795_000_000 }] } }),
+  );
+  await page.goto('practice/#/me');
+  const accounts = page.getByRole('region', { name: 'Connected accounts' });
+  const list = accounts.getByRole('list', { name: 'App sign-ins' });
+  await expect(list.getByRole('listitem')).toHaveCount(1);
+  await expect(list).toContainText('Can read your name and read your synced diagrams.');
 });
 
 test('destructive actions ask first: cloud copies, unlinking and deleting the account', async ({ page }) => {

@@ -195,11 +195,12 @@ export interface UserDetail {
   audit: AuditEntry[];
 }
 
-/** Polar's dashboard: refunds are done there. Append a customer's or an order's id. */
+/** Polar's dashboard: refunds are done there. Links into it are built by polarLinks.ts. */
 export interface PolarDashboard {
   server: 'sandbox' | 'live';
   customers: string;
   orders: string;
+  subscriptions: string;
 }
 
 export interface Subscription {

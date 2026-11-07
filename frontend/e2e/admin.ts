@@ -110,7 +110,7 @@ export function userDetail(id: string, state: { blocked?: boolean; compUntil?: n
     credits: pro
       ? { balance: 1733.8, monthly: { allowance: 800, left: 721.148, resetsAt: now + 20 * DAY }, signup: 0, topup: 1012.652 }
       : { balance: 100, monthly: null, signup: 100, topup: 0 },
-    polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
+    polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales', subscriptions: 'https://sandbox.polar.sh/to/dashboard/sales/subscriptions' },
     identities: [{ provider: pro ? 'github' : 'google', subject: pro ? 'gh-1815' : 'g-77' }],
     sessions: state.blocked ? [] : [{ kind: 'web', count: 1, lastCreatedAt: 1_800_000_000 }],
     progress: [],
@@ -152,7 +152,7 @@ export const BILLING = {
     { kind: 'topup_revoke', refId: 'ord_01JC5H6Y3A', delta: -1000, createdAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') },
   ],
   refundedOrders: [{ orderId: 'ord_01JC5H6Y3A', refundedAt: now - 2 * DAY - 3600, user: owner('44444444-4444-4444-8444-444444444444', 'Grace Hopper') }],
-  polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' },
+  polarDashboard: { server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales', subscriptions: 'https://sandbox.polar.sh/to/dashboard/sales/subscriptions' },
   billing: true,
 };
 

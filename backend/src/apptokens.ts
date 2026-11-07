@@ -2,7 +2,9 @@ import type { Ctx } from './context';
 import { randomToken, sha256, timingSafeEqual } from './crypto';
 import { now, type Env } from './env';
 import { HttpError, json, rateLimit, readJson } from './http';
+import { requireUser } from './auth';
 import { log } from './log';
+import { parseScopes, scopesFor, type TokenScope } from './scopes';
 
 /**
  * Sign-in for native apps (backend/README.md, "Mobile apps"). An app opens
@@ -20,6 +22,11 @@ import { log } from './log';
  * A refresh rotates both tokens; presenting a rotated refresh token again
  * means it was copied, and revokes the whole family (every token descended
  * from that sign-in).
+ *
+ * Every token carries scopes (src/scopes.ts, docs/design/paid-plans.md P42):
+ * the CLI's only read the account's name and its diagrams, an app's also
+ * practice progress and diagram sync; neither reaches billing, credits, the
+ * AI features, the admin panel or account changes. A refresh keeps them.
  */
 
 export const APP_CODE_TTL = 60;
@@ -89,12 +96,12 @@ const isVerifier = (text: string): boolean => /^[A-Za-z0-9._~-]{43,128}$/.test(t
 /** The app's state: up to 256 printable ASCII characters. */
 export const isAppState = (text: string): boolean => /^[\x21-\x7e]{1,256}$/.test(text);
 
-/** Stores a one-time code for the signed-in user (60 seconds, bound to the challenge and redirect URI) and returns it. */
+/** Stores a one-time code for the signed-in user (60 seconds, bound to the challenge and redirect URI, with the client's scopes) and returns it. */
 export async function issueAppCode(env: Env, userId: string, app: AppLogin): Promise<string> {
   const code = randomToken();
   const t = now();
-  await env.DB.prepare('INSERT INTO app_auth_codes (code_hash, user_id, challenge, redirect_uri, expires_at, created_at) VALUES (?, ?, ?, ?, ?, ?)')
-    .bind(await sha256(code), userId, app.challenge, app.redirectUri, t + APP_CODE_TTL, t)
+  await env.DB.prepare('INSERT INTO app_auth_codes (code_hash, user_id, challenge, redirect_uri, expires_at, created_at, scopes) VALUES (?, ?, ?, ?, ?, ?, ?)')
+    .bind(await sha256(code), userId, app.challenge, app.redirectUri, t + APP_CODE_TTL, t, scopesFor(app.client).join(' '))
     .run();
   return code;
 }
@@ -123,24 +130,26 @@ async function readParams(request: Request): Promise<Record<string, string>> {
   return params;
 }
 
-/** New access and refresh tokens in `familyId`; inserted only while `whileExists` (a token hash) is still stored, when given. */
-async function issueTokens(env: Env, userId: string, familyId: string, whileExists?: string): Promise<Response | undefined> {
+/** New access and refresh tokens in `familyId` with `scopes`; inserted only while `whileExists` (a token hash) is still stored, when given. */
+async function issueTokens(env: Env, userId: string, familyId: string, scopes: readonly TokenScope[], whileExists?: string): Promise<Response | undefined> {
   const access = randomToken();
   const refresh = randomToken();
   const t = now();
+  const scope = scopes.join(' ');
   const insert = (hash: string, kind: string, ttl: number) =>
     whileExists
       ? env.DB.prepare(
-          `INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id)
-           SELECT ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)`,
-        ).bind(hash, userId, t + ttl, t, kind, familyId, whileExists)
-      : env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, ?, ?, ?, ?)').bind(
+          `INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id, scopes)
+           SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM sessions WHERE token_hash = ?)`,
+        ).bind(hash, userId, t + ttl, t, kind, familyId, scope, whileExists)
+      : env.DB.prepare('INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id, scopes) VALUES (?, ?, ?, ?, ?, ?, ?)').bind(
           hash,
           userId,
           t + ttl,
           t,
           kind,
           familyId,
+          scope,
         );
   const results = await env.DB.batch([
     // The family's earlier access tokens end with the rotation.
@@ -151,7 +160,7 @@ async function issueTokens(env: Env, userId: string, familyId: string, whileExis
   // The family was revoked between the rotation and now (a concurrent reuse): nothing was issued.
   if (results[1].meta.changes === 0 || results[2].meta.changes === 0) return undefined;
   return json(
-    { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL, refresh_token: refresh },
+    { access_token: access, token_type: 'Bearer', expires_in: ACCESS_TTL, refresh_token: refresh, scope },
     200,
     { 'Cache-Control': 'no-store', Pragma: 'no-cache' },
   );
@@ -178,15 +187,15 @@ async function exchangeCode(ctx: Ctx, params: Record<string, string>): Promise<R
   if (!code || !verifier) return oauthError(400, 'invalid_request', 'code and code_verifier are required');
   if (!isVerifier(verifier)) return oauthError(400, 'invalid_request', 'code_verifier must be 43 to 128 unreserved characters');
   // Deleted as it is read: a code works once, whatever the outcome.
-  const row = await env.DB.prepare('DELETE FROM app_auth_codes WHERE code_hash = ? RETURNING user_id, challenge, redirect_uri, expires_at')
+  const row = await env.DB.prepare('DELETE FROM app_auth_codes WHERE code_hash = ? RETURNING user_id, challenge, redirect_uri, expires_at, scopes')
     .bind(await sha256(code))
-    .first<{ user_id: string; challenge: string; redirect_uri: string; expires_at: number }>();
+    .first<{ user_id: string; challenge: string; redirect_uri: string; expires_at: number; scopes: string | null }>();
   const verified = row !== null && timingSafeEqual(await sha256(verifier), row.challenge);
   if (!row || !verified || row.expires_at <= now() || (params.redirect_uri !== undefined && params.redirect_uri !== row.redirect_uri)) {
     return oauthError(400, 'invalid_grant', 'The code is invalid, expired or already used, or the verifier does not match');
   }
   ctx.userId = row.user_id;
-  return (await issueTokens(env, row.user_id, crypto.randomUUID())) ?? oauthError(400, 'invalid_grant', 'The code is invalid');
+  return (await issueTokens(env, row.user_id, crypto.randomUUID(), parseScopes(row.scopes))) ?? oauthError(400, 'invalid_grant', 'The code is invalid');
 }
 
 async function refreshTokens(ctx: Ctx, params: Record<string, string>): Promise<Response> {
@@ -198,10 +207,10 @@ async function refreshTokens(ctx: Ctx, params: Record<string, string>): Promise<
   // Conditional, so of two requests with the same token only one rotates it.
   const row = await env.DB.prepare(
     `UPDATE sessions SET used_at = ? WHERE token_hash = ? AND kind = 'app_refresh' AND used_at IS NULL AND expires_at > ?
-     RETURNING user_id, family_id`,
+     RETURNING user_id, family_id, scopes`,
   )
     .bind(t, hash, t)
-    .first<{ user_id: string; family_id: string }>();
+    .first<{ user_id: string; family_id: string; scopes: string | null }>();
   if (!row) {
     const used = await env.DB.prepare("SELECT user_id, family_id FROM sessions WHERE token_hash = ? AND kind = 'app_refresh' AND used_at IS NOT NULL")
       .bind(hash)
@@ -214,7 +223,7 @@ async function refreshTokens(ctx: Ctx, params: Record<string, string>): Promise<
     return oauthError(400, 'invalid_grant', 'The refresh token is invalid, expired or revoked');
   }
   ctx.userId = row.user_id;
-  return (await issueTokens(env, row.user_id, row.family_id, hash)) ?? oauthError(400, 'invalid_grant', 'The refresh token was revoked');
+  return (await issueTokens(env, row.user_id, row.family_id, parseScopes(row.scopes), hash)) ?? oauthError(400, 'invalid_grant', 'The refresh token was revoked');
 }
 
 /**
@@ -233,4 +242,26 @@ export async function revoke(request: Request, ctx: Ctx): Promise<Response> {
     .bind(await sha256(params.token))
     .run();
   return new Response(null, { status: 200, headers: { 'Cache-Control': 'no-store' } });
+}
+
+/**
+ * GET /api/me/apps: the account's app and CLI sign-ins still running (a
+ * refresh token not yet expired), each with its scopes, for Settings. The
+ * site's only: no token's scopes reach it (src/scopes.ts).
+ */
+export async function listAppSignIns(request: Request, ctx: Ctx): Promise<Response> {
+  const user = await requireUser(request, ctx);
+  const rows = await ctx.env.DB.prepare(
+    `SELECT family_id, MIN(created_at) AS created_at, MAX(created_at) AS refreshed_at,
+            MAX(CASE WHEN used_at IS NULL THEN expires_at END) AS expires_at, MAX(CASE WHEN used_at IS NULL THEN scopes END) AS scopes
+     FROM sessions WHERE user_id = ? AND kind = 'app_refresh' AND family_id IS NOT NULL
+     GROUP BY family_id HAVING MAX(CASE WHEN used_at IS NULL THEN expires_at END) > ? ORDER BY created_at DESC`,
+  )
+    .bind(user.id, now())
+    .all<{ family_id: string; created_at: number; refreshed_at: number; expires_at: number; scopes: string | null }>();
+  return json(
+    { apps: rows.results.map((r) => ({ id: r.family_id, scopes: parseScopes(r.scopes), createdAt: r.created_at, refreshedAt: r.refreshed_at, expiresAt: r.expires_at })) },
+    200,
+    { 'Cache-Control': 'no-store' },
+  );
 }

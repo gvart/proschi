@@ -1,6 +1,7 @@
 import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { polarDashboard } from '../src/admin';
 import { ADMIN_COOKIE } from '../src/adminAuth';
 import { TOKEN_CAP } from '../src/ai/budget';
 import { hourlyCron } from '../src/cron';
@@ -190,7 +191,9 @@ describe('admin: the paid product', () => {
       updatedAt: expect.any(Number),
     });
     expect(detail.credits).toMatchObject({ balance: 1800, monthly: { allowance: 800, left: 800 }, signup: 0, topup: 1000 });
-    expect(detail.polarDashboard).toEqual({ server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales' });
+    expect(detail.polarDashboard).toEqual({ server: 'sandbox', customers: 'https://sandbox.polar.sh/to/dashboard/customers', orders: 'https://sandbox.polar.sh/to/dashboard/sales', subscriptions: 'https://sandbox.polar.sh/to/dashboard/sales/subscriptions' });
+    // Live: polar.sh; /to/dashboard/<rest> redirects to the signed-in organization's /dashboard/<org>/<rest> (frontend/src/admin/polarLinks.ts).
+    expect(polarDashboard({ ...env, POLAR_SERVER: undefined } as Env)).toEqual({ server: 'live', customers: 'https://polar.sh/to/dashboard/customers', orders: 'https://polar.sh/to/dashboard/sales', subscriptions: 'https://polar.sh/to/dashboard/sales/subscriptions' });
   });
 
   it('sums up billing: Pro and Max accounts, subscribers, comps, top-up orders and refunds', async () => {

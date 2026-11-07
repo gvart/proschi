@@ -26,7 +26,7 @@ server. What they remember stays in your browser's storage on this device:
 | `proschi.practice` | Practice progress: per problem, your latest design, how many times you ran the tests and whether you solved it |
 | `proschi.practice.runs` | Per problem: how many test runs, the runs it took to solve it, and the monthly cost of your cheapest solving design and of the reference solution, for the badges on a copy of the site without accounts |
 | `proschi.practice.last` | The last practice problem you opened, for "Continue" on the practice page |
-| `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off |
+| `proschi.practice.goal` | What you are on the practice page for (solving problems, interview prep, a daily habit), whether you answered or skipped that question, and whether you switched the daily streak on or off; signed in, a copy of what your account keeps |
 | `proschi.interview.<problem>` | Scripted interview mode in progress on a problem: the length, the phase, the time spent per phase, the questions asked, your estimates, the last test run and the self-review ticks; removed when you leave interview mode |
 | `proschi.interview.history` | The summaries of your last 50 finished scripted interviews (time per phase, questions, estimates, tests, self-review) |
 | `proschi.aiInterview.<problem>` | Signed in: the id of the mock interview open on a problem, so a reload resumes it; the interview itself is on the server, below |
@@ -137,7 +137,10 @@ above are about events, not about you).
   (an access token that lasts an hour and a refresh token that lasts 60
   days), with whether it is the site's cookie or which app token it is, when
   it was issued, when it expires and, for a refresh token, when it was
-  exchanged for new ones. Rotated refresh tokens are kept until they expire,
+  exchanged for new ones, and what the tokens may be used for (their
+  scopes: for the command line tool, reading your name and your synced
+  diagrams; never billing, credits, the AI features or account changes).
+  Settings lists these sign-ins with their scopes. Rotated refresh tokens are kept until they expire,
   to notice a stolen copy being used. During sign-in a hash of a one-time
   code, which the app exchanges for its tokens within 60 seconds, is kept
   with the app's address to return to (for the command line tool, the
@@ -156,7 +159,12 @@ above are about events, not about you).
   local date; and per card the schedule computed from them (when it is due
   next and how well you know it). Reviews made signed out stay in the page
   and are gone when you close it.
-- Your daily goal (cards a day). The daily streak and the weekly recap are
+- Your daily goal (cards a day), and what you are on the practice page for
+  (solving problems, interview prep, a daily habit; whether you answered or
+  skipped that question, and whether you switched the daily streak on or
+  off). Signed in, that answer is kept with your account instead of only in
+  this browser: the first time you sign in, the browser's answer is copied
+  to it if the account has none. The daily streak and the weekly recap are
   computed from your card reviews, solve dates, daily challenges and game
   runs (by the local date each was sent on, kept with them); nothing more is
   stored for them.

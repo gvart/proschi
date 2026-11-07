@@ -12,6 +12,7 @@ import type { Activity } from '../activity';
 import { GoalChoices } from '../Streak';
 import { GOALS, setGoal, useGoal, wantsStreak } from '../hub/goal';
 import type { Account } from '../useAccount';
+import { AppSignIns } from './AppSignIns';
 import { PUBLIC_FIELDS } from './profile';
 import { Confirm, dangerButton, Row, Section, switchInput } from './settingsUi';
 
@@ -235,6 +236,7 @@ export function ConnectedAccounts({ account, state }: { account: Account; state:
           </Row>
         );
       })}
+      <AppSignIns />
     </Section>
   );
 }
