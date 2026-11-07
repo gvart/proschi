@@ -7,6 +7,7 @@ import { parseRoute, routeHash, type Route } from './route';
 import AiTab from './AiTab';
 import BillingTab from './BillingTab';
 import CampaignsTab from './CampaignsTab';
+import CloudflareTab from './CloudflareTab';
 import { AuditTab, EventsTab } from './EventsTab';
 import Nav from './Nav';
 import Gate from './Gate';
@@ -95,6 +96,9 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
   switch (route.page) {
     case 'health':
       content = <HealthTab onSignedOut={onSignedOut} onOpenEvents={openEvents} />;
+      break;
+    case 'cloudflare':
+      content = <CloudflareTab onSignedOut={onSignedOut} />;
       break;
     case 'users':
       content = <UsersTab key={route.param ?? ''} userId={route.param} onOpen={openUser} onSignedOut={onSignedOut} />;

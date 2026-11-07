@@ -1,4 +1,4 @@
-import { Activity, ClipboardList, CreditCard, Inbox, KeyRound, LayoutDashboard, Link2, Megaphone, ScrollText, Sparkles, Users, Webhook, type LucideIcon } from 'lucide-react';
+import { Activity, ClipboardList, Cloud, CreditCard, Inbox, KeyRound, LayoutDashboard, Link2, Megaphone, ScrollText, Sparkles, Users, Webhook, type LucideIcon } from 'lucide-react';
 import { GROUPS, routeHash, type PageId } from './route';
 
 const ICONS: Record<PageId, LucideIcon> = {
@@ -10,6 +10,7 @@ const ICONS: Record<PageId, LucideIcon> = {
   ai: Sparkles,
   links: Link2,
   health: Activity,
+  cloudflare: Cloud,
   events: ScrollText,
   webhooks: Webhook,
   audit: ClipboardList,

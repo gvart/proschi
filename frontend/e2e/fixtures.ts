@@ -15,6 +15,8 @@ const ALLOWED_CONSOLE_ERRORS: RegExp[] = [
   /^Failed to load resource: the server responded with a status of 40[01] \([^)]+\) \(http:\/\/127\.0\.0\.1:\d+\/auth\/email\/(login|confirm|reset):0\)$/,
   // The admin's email preview is a sandboxed srcdoc iframe without scripts: the tests' own init scripts (addInitScript) are refused in it, as intended.
   /^Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.( \(about:srcdoc:0\))?$/,
+  // The admin's Cloudflare usage page before it is set up (cfUsage.accounts.e2e.ts): 501, which the page shows as the setup steps.
+  /^Failed to load resource: the server responded with a status of 501 \(Not Implemented\) \(http:\/\/127\.0\.0\.1:\d+\/api\/admin\/cf-usage:0\)$/,
 ];
 
 /** The key src/onboarding/seen.ts keeps the first-run tours' "seen" flags in. */

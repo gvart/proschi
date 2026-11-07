@@ -34,6 +34,11 @@ export default defineConfig(async () => {
             // Turnstile off unless a test sets the secret (with Siteverify mocked).
             TURNSTILE_SITE_KEY: '',
             TURNSTILE_SECRET_KEY: '',
+            // The Cloudflare usage page is off unless a test sets them (with the API mocked).
+            CF_API_TOKEN: '',
+            CF_ACCOUNT_ID: '',
+            CF_ZONE_ID: '',
+            CF_PLAN: '',
           },
         },
       }),

@@ -54,6 +54,14 @@ METRICS_TOKEN=
 # Admin campaigns: where "Send a test to me" goes (unset: no test sends), and the campaign emails a UTC day (unset: 500).
 ADMIN_EMAIL=
 CAMPAIGN_DAILY_CAP=
+# The Cloudflare usage page (README "Cloudflare usage"): a read-only API token with Account Analytics Read
+# (and Billing Read for the plan and renewal date), and the account id; unset answers 501.
+CF_API_TOKEN=
+CF_ACCOUNT_ID=
+# Optional: the proschi.app zone id, to count emails sent (the token needs Zone Analytics Read too).
+CF_ZONE_ID=
+# Optional: free or paid (unset: paid), when the token can't read the subscriptions.
+CF_PLAN=
 
 # --- Set in wrangler.jsonc `vars`, not here ---
 # ENVIRONMENT (production or staging; only labels /api/health and the admin's health page).

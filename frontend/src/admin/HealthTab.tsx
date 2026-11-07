@@ -132,6 +132,12 @@ export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: 
             <Check ok={config.metricsToken} label="METRICS_TOKEN set (the metrics CLI works)" optional />
             <Check ok={config.appRedirects} label="APP_REDIRECT_URIS set (native app sign-in)" optional />
             <Check ok={!config.setupToken} label={config.setupToken ? 'ADMIN_SETUP_TOKEN is still set: remove it (npx wrangler secret delete ADMIN_SETUP_TOKEN)' : 'ADMIN_SETUP_TOKEN removed'} />
+            <Check ok={Boolean(config.cloudflare?.apiToken)} label="CF_API_TOKEN set (Cloudflare usage; 501 without)" optional />
+            <Check ok={Boolean(config.cloudflare?.accountId)} label="CF_ACCOUNT_ID set" optional />
+            <Check ok={Boolean(config.cloudflare?.zoneId)} label="CF_ZONE_ID set (counts emails sent)" optional />
+            <li className="adm-check adm-check--off">
+              <span aria-hidden="true">–</span> CF_PLAN: {config.cloudflare?.plan ?? 'paid'} (used when the token can’t read the subscription)
+            </li>
           </ul>
         </Section>
 

@@ -1,7 +1,8 @@
 import { ArrowDownRight, ArrowUpRight, ChevronRight, CircleCheck, Minus, TriangleAlert } from 'lucide-react';
 import { useState, type ReactNode } from 'react';
-import { getHealth, getOverview, getTrends, listWebhooks, RANGES, type Range, type TrendPoint } from './api';
+import { getCfUsage, getHealth, getOverview, getTrends, listWebhooks, RANGES, type Range, type TrendPoint } from './api';
 import { failedDeliveries, missingSecrets } from './attention';
+import { attention as cfAttention } from './cfVerdict';
 import { listFeedback } from './feedbackApi';
 import Chart from './Chart';
 import { change, periods, sum } from './chartScale';
@@ -70,6 +71,8 @@ export default function OverviewTab({
   const webhooks = useLoad(() => listWebhooks(''), [], onSignedOut);
   const signups = useLoad(getSignups, [], onSignedOut);
   const inbox = useLoad(() => listFeedback({ status: 'open', kind: '', q: '', offset: 0 }), [], onSignedOut);
+  const cf = useLoad(getCfUsage, [], onSignedOut);
+  const cfCheck = cf.data ? cfAttention(cf.data) : null;
   const [event, setEvent] = useState('editor_open');
   const data = trends.data;
   // While another range loads, the last one stays on screen, dimmed.
@@ -133,6 +136,13 @@ export default function OverviewTab({
             href={routeHash({ page: 'health' })}
             title="Missing secrets"
             detail={health.data ? missingSecrets(health.data.config).join(', ') || 'Every required secret is set' : ''}
+          />
+          <Attention
+            loading={cf.loading && !cf.data}
+            ok={cfCheck?.ok ?? true}
+            href={routeHash({ page: 'cloudflare' })}
+            title="Cloudflare quotas"
+            detail={cfCheck?.detail ?? (cf.error?.includes('CF_API_TOKEN') ? 'Not set up: add CF_API_TOKEN and CF_ACCOUNT_ID' : `Couldn’t check: ${cf.error ?? ''}`)}
           />
           <Attention
             loading={!overview.data}

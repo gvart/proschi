@@ -291,3 +291,17 @@ id; don't rewrite old ones.
   `localStorage` (`proschi.practice.goal`) as before, which also keeps the
   last signed-in value. It is in the data export (`user.practiceGoal`) and
   goes with the account; docs/PRIVACY.md lists it.
+- **P44. Cloudflare usage against the plan, read-only.** The admin's
+  Cloudflare usage page (`backend/src/cfUsage.ts`, `GET
+  /api/admin/cf-usage`) reads the GraphQL Analytics API with a read-only
+  token (`CF_API_TOKEN`: Account Analytics Read; Billing Read optional,
+  Zone Analytics Read for emails with `CF_ZONE_ID`) and never stores
+  usage: one answer is cached 10 minutes in the Cache API. The plan and its
+  billing period come from the `workers_paid` subscription when the token
+  can read it, else `CF_PLAN` (default `paid`) and the UTC calendar month.
+  Quotas and prices are constants (`QUOTAS`), from Cloudflare's pricing
+  pages, updated by hand. A flow is projected in a straight line from the
+  period's start (at least an hour in); a stock (storage) counts as it
+  stands. `watch` from 80% projected, `over` once used. Free never "holds"
+  this Worker whatever its traffic (`limits.cpu_ms` 1000, Email sending),
+  which the page says rather than hides.
