@@ -45,6 +45,8 @@ export function knownTopics(context: ProblemContext, state: { covered: readonly 
 /** The <known_facts> block both models get. */
 export function knownFactsBlock(context: ProblemContext, state: { covered: readonly string[]; revealed?: readonly string[] }): string {
   const known = knownTopics(context, state);
-  const list = known.length ? known.map((t) => `- [${t.id}] ${t.label} ${t.fact ?? ''}`.trimEnd()).join('\n') : '- none yet, beyond the statement';
-  return `<known_facts>\nThe candidate already knows everything in <statement_shown> and these facts, asked for or revealed earlier in this session. Never ask them for one of these, ask them to confirm one, or suggest they ask about it; use it as known.\n${list}\n</known_facts>`;
+  // The areas only, not the reference answers: a topic can hold more than the
+  // reply gave (a smoke run had the model "recall" a number it never said).
+  const list = known.length ? known.map((t) => `- [${t.id}] ${t.label}`).join('\n') : '- none yet, beyond the statement';
+  return `<known_facts>\nThe candidate already knows everything in <statement_shown> and these areas, asked about or answered earlier in this session. Never ask them about one of these again, ask them to confirm it, or suggest they ask about it. What they know of an area is exactly what the interviewer said about it in the transcript, nothing more: never claim you told them something you did not.\n${list}\n</known_facts>`;
 }

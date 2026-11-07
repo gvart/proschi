@@ -54,7 +54,7 @@ describe('known facts (P38)', () => {
     expect(haiku.body.system[0].text).toContain('Never suggest asking about one of these');
     expect(haiku.body.system[1].text).toContain('<statement_shown>');
     // The hint is asked after the reply: it already knows the budget was given.
-    expect(section(text(haiku), 'known_facts')).toContain('[q6] Is there a budget? At most $3,000 a month');
+    expect(section(text(haiku), 'known_facts')).toContain('[q6] Is there a budget?');
     expect(text(haiku)).not.toMatch(/\[q6\] \(clarify\)/);
     expect(text(haiku)).toContain('What a hint is about in this phase: the requirement or scale area');
   });
