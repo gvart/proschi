@@ -249,3 +249,10 @@ id; don't rewrite old ones.
   dismissible announcement in the app. Sending needs a reason; a campaign
   never grants or emails anyone twice (a recipient row per account, an email
   marked before it goes out); at most `CAMPAIGN_DAILY_CAP` emails a day.
+- **P41. Visual editing: the code stays the source of truth.** Every canvas
+  edit (palette drop, connect, settings form, delete) is a `dsl/edit.ts`
+  source-to-source edit of the document, the only writer, which keeps
+  comments and formatting; the canvas never holds a model of its own. Each
+  edit reaches the code editor as one isolated undo step, so Ctrl/Cmd+Z
+  undoes it from the canvas or the code. In practice the canvas writes only
+  the solution file: the problem's imported nodes are read-only there.

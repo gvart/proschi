@@ -3,9 +3,12 @@ import { loadJson, saveJson } from '../../services/storage';
 
 /** The state of visual editing that outlives a canvas (CanvasEditing.tsx): remembered per browser. */
 
-/** Whether the palette is shown, remembered per browser under `key`; `wide` screens show it until it is hidden once. */
-export function usePaletteOpen(key: string, wideFrom: number): [boolean, (open: boolean) => void] {
-  const [open, setOpen] = useState(() => loadJson<boolean | null>(key, null) ?? window.innerWidth >= wideFrom);
+/**
+ * Whether the palette is docked beside the canvas, remembered per browser under `key`. It starts
+ * hidden, so the diagram keeps its width until the reader asks for it (the toolbar's Add component).
+ */
+export function usePaletteOpen(key: string): [boolean, (open: boolean) => void] {
+  const [open, setOpen] = useState(() => loadJson<boolean>(key, false));
   const set = (next: boolean) => {
     setOpen(next);
     saveJson(key, next);

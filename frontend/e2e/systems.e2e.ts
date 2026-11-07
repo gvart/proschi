@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import lz from 'lz-string';
 import { DRONE_TEAM_FILES, droneOrgSource } from '../src/playground/droneStartup';
-import { canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
+import { addFromPalette, canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
 import { droneLink } from './drone';
 
 /** A system box on the canvas, by its name. */
@@ -314,11 +314,7 @@ test('a component added from the palette next to team systems leaves every box s
   await page.goto(droneLink(100));
   await expect(box(page, 'Order Processing')).toBeVisible();
   const before = await canvasNodes(page).count();
-  await page.getByRole('button', { name: 'Add component' }).click();
-  const palette = page.getByRole('dialog', { name: 'Add a component' });
-  await palette.getByRole('searchbox', { name: 'Search components' }).fill('redis');
-  await palette.getByRole('button', { name: 'Redis', exact: true }).click();
-  await expect(palette).toBeHidden();
+  await addFromPalette(page, 'redis', 'Redis');
   // A new layout keeps the sizes React Flow measured; a node without one stays hidden until measured again.
   await expect(canvasNodes(page)).toHaveCount(before + 1);
 });

@@ -67,8 +67,14 @@ export function PaletteDock({ open, phone, onAdd, onClose, focus, settings }: Pa
     );
   }
   return (
-    // One panel beside the canvas, so neither covers the diagram: the selection's settings, else the palette.
-    <div className="w-60 shrink-0 border-r-bw-1 border-ink">{settings ?? <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />}</div>
+    // One panel beside the canvas, so neither covers the diagram: the selection's settings, else the palette
+    // (hidden, not unmounted, so it keeps its search and does not take the focus again).
+    <div className="w-60 shrink-0 border-r-bw-1 border-ink">
+      {settings}
+      <div className="h-full" hidden={!!settings}>
+        <Palette onAdd={onAdd} onClose={onClose} autoFocus={focus} />
+      </div>
+    </div>
   );
 }
 
@@ -147,6 +153,7 @@ export function EmptyCanvas({ children }: { children?: ReactNode }) {
     <div className="pointer-events-none absolute inset-0 flex items-center justify-center p-4">
       <div className="max-w-xs rounded-sm border-bw-1 border-dashed border-ink/40 px-5 py-4 text-center text-sm text-muted">
         <p className="font-semibold text-ink">Drag a component here or describe it in code</p>
+        <p className="mt-1">Components are under Add component, top left.</p>
         <p className="mt-1">
           For example <code className="rounded-sm bg-ink/5 px-1 font-mono">api -&gt; db</code>
         </p>

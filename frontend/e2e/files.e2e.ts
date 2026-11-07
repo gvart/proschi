@@ -92,12 +92,51 @@ test.describe('diagrams sidebar', () => {
     await expect(files(page)).toBeHidden();
   });
 
-  test('the sidebar folds into a rail and opens from it', async ({ page }) => {
+  test('the sidebar folds into a rail, opens over the panes from it, and pins again', async ({ page }) => {
     await files(page).getByRole('button', { name: 'Hide sidebar' }).click();
     await expect(files(page)).toBeHidden();
-    await page.getByRole('button', { name: 'Show sidebar' }).click();
+    const rail = page.getByRole('navigation', { name: 'Diagrams rail' });
+    await expect(rail.getByRole('button', { name: 'Open diagram: Shop' })).toBeVisible();
+
+    // Opened from the rail, it floats over the panes; Escape folds it again.
+    await rail.getByRole('button', { name: 'Show sidebar' }).click();
     await expect(files(page)).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Show sidebar' })).toBeHidden();
+    await page.keyboard.press('Escape');
+    await expect(files(page)).toBeHidden();
+
+    // Opening a diagram from it folds it too.
+    await rail.getByRole('button', { name: 'Show sidebar' }).click();
+    await files(page).getByTestId('file').filter({ hasText: 'Payments DB' }).click();
+    await expect(files(page)).toBeHidden();
+    await expect(rail.getByRole('button', { name: 'Open diagram: Payments DB' })).toBeVisible();
+
+    await rail.getByRole('button', { name: 'Show sidebar' }).click();
+    await files(page).getByRole('button', { name: 'Pin sidebar' }).click();
+    await expect(rail).toBeHidden();
+    await page.reload();
+    await expect(files(page)).toBeVisible();
+  });
+
+  test('the rail jumps to a diagram with quick open', async ({ page }) => {
+    await files(page).getByRole('button', { name: 'Hide sidebar' }).click();
+    await page.getByRole('navigation', { name: 'Diagrams rail' }).getByRole('button', { name: 'Go to diagram' }).click();
+    await expect(page.getByRole('dialog', { name: 'Open a diagram' })).toBeVisible();
+  });
+});
+
+test.describe('diagrams sidebar below 1440px', () => {
+  test.use({ viewport: { width: 1280, height: 800 } });
+
+  test('starts folded into the rail, with the open diagram named on it', async ({ page }) => {
+    await page.goto('app/');
+    await expect(codeEditor(page)).toBeVisible();
+    await expect(files(page)).toBeHidden();
+    await expect(page.getByRole('navigation', { name: 'Diagrams rail' }).getByRole('button', { name: /^Open diagram: / })).toBeVisible();
+    // The header button pins it, and that is remembered.
+    await page.getByRole('button', { name: 'Diagrams' }).click();
+    await expect(files(page)).toBeVisible();
+    await page.reload();
+    await expect(files(page)).toBeVisible();
   });
 });
 

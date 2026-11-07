@@ -58,8 +58,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   const [menu, setMenu] = useState<CanvasMenuState | null>(null);
   const closeMenu = useCallback(() => setMenu(null), []);
   const [hintSeen, dismissHint] = useConnectHint();
-  // A practice canvas is narrow: the palette waits to be asked for, and stays shown once it was.
-  const [docked, setDocked] = usePaletteOpen(paletteKey, Infinity);
+  const [docked, setDocked] = usePaletteOpen(paletteKey);
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const paletteOpen = phone ? sheet : docked;
@@ -90,10 +89,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
     setPending(null);
   }, [nodes, pending]);
 
-  const add = (tech: string) => {
+  /** Adds a component where the layout puts it; a dropped one (or a phone's tap) is selected, a clicked one leaves the palette shown for the next. */
+  const add = (tech: string, select: boolean) => {
     const id = uniqueId(source, tech, imported.keys());
     onChange(addNode(source, { id, name: tech, tech }).source);
-    setPending(id);
+    if (select) setPending(id);
   };
 
   const connect = (from: string, to: string) => {
@@ -153,7 +153,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         open={paletteOpen}
         phone={phone}
         focus={paletteFocus}
-        onAdd={add}
+        onAdd={(tech) => add(tech, phone)}
         onClose={() => (phone ? setSheet(false) : setDocked(false))}
         settings={dockSettings ? inspector : undefined}
       />
@@ -170,7 +170,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           if (!tech) return;
           e.preventDefault();
           e.currentTarget.focus();
-          add(tech);
+          add(tech, true);
         }}
         onKeyDown={(e) => {
           if ((e.key === 'Delete' || e.key === 'Backspace') && current && !(e.target as Element).closest('input, textarea, select, [contenteditable]')) {
@@ -212,9 +212,11 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
           <Background variant={BackgroundVariant.Dots} gap={16} size={1} />
           <Controls showInteractive={false} />
           <Panel position="top-left">
+            {/* While the settings stand in for the palette, the button brings the palette back. */}
             <PaletteToggle
-              open={paletteOpen}
+              open={paletteOpen && !dockSettings}
               onToggle={() => {
+                if (dockSettings) return setSettingsClosed(true);
                 setPaletteFocus(!paletteOpen);
                 if (phone) setSheet(!sheet);
                 else setDocked(!docked);

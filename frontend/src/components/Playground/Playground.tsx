@@ -1683,8 +1683,8 @@ function DiagramView({
   const playing = playback.active;
   const { getNodes, screenToFlowPosition } = useReactFlow();
   const [selection, setSelection] = useState<{ nodes: Node[]; edges: Edge[] }>({ nodes: [], edges: [] });
-  // The palette: docked on wider screens (remembered, shown from 1280px until hidden once), a sheet on phones.
-  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette', 1280);
+  // The palette: docked beside the canvas on wider screens (remembered), a sheet on phones.
+  const [docked, setDocked] = usePaletteOpen('proschi.canvas.palette');
   const [sheet, setSheet] = useState(false);
   const [paletteFocus, setPaletteFocus] = useState(false);
   const canAdd = !playing && crumbs.length === 1;
@@ -1711,9 +1711,13 @@ function DiagramView({
   const singleNode = selection.nodes.length === 1 && selection.edges.length === 0 ? selection.nodes[0] : undefined;
   const dragStartRef = useRef(new Map<string, { x: number; y: number }>());
 
+  /**
+   * A dropped component is selected, so its settings open; one clicked in the palette is not, so
+   * the palette stays for the next one. A phone's sheet closes on a tap, and selects it too.
+   */
   const addComponent = (tech: string, position?: { x: number; y: number }) => {
     const id = onAddNode(tech, position);
-    if (id) setPendingSelect(id);
+    if (id && (position || phone)) setPendingSelect(id);
   };
   /** Selects only `id` (a node or a connection), as a click would. */
   const selectOnly = useCallback(
@@ -1951,7 +1955,8 @@ function DiagramView({
         )}
         {canAdd && (
           <Panel position="top-left">
-            <PaletteToggle open={paletteOpen} onToggle={togglePalette} />
+            {/* While the settings stand in for the palette, the button brings the palette back. */}
+            <PaletteToggle open={paletteOpen && !dockSettings} onToggle={() => (dockSettings ? setClosedSettings(single.id) : togglePalette())} />
           </Panel>
         )}
         {canAdd && !hintSeen && nodes.length >= 2 && edges.length === 0 && (
