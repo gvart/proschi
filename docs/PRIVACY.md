@@ -285,9 +285,9 @@ nobody can tell whether you have an account. Its picture card stops being
 served at once too, but link previews that a chat app or social network
 already fetched are kept by them, beyond our control.
 
-## Pro, interview packs and payments
+## Plans, credits and payments
 
-Pro and interview packs are paid through [Polar](https://polar.sh), the
+Pro, Max and top-ups are paid through [Polar](https://polar.sh), the
 merchant of record: Polar runs the checkout and the billing portal on its
 own pages, charges your card, handles VAT and sends the invoices, under
 [its privacy policy](https://polar.sh/legal/privacy). Proschi never sees or
@@ -299,25 +299,25 @@ the right account) and which product you chose. Nothing else is sent.
 **What is stored here**, once you buy something:
 
 - your Polar customer id and subscription id, the subscription's status
-  (active, canceled and so on), which plan (Pro monthly or yearly), when the
-  paid period ends, whether it is canceled at that date, and when this was
-  last updated;
-- your mock interview credits, as a ledger: each pack bought (5 credits, with
-  Polar's order id), each interview started (1 credit, with the
-  interview's id) and each credit given back for an interview that failed
-  early, with the time of each;
+  (active, canceled and so on), which plan (Pro or Max, monthly or yearly),
+  when the paid period ends, whether it is canceled at that date, and when
+  this was last updated;
+- your credits, as a ledger: the sign-up credits, each month's credits, each
+  top-up bought (with Polar's order id), and each charge with what it was for
+  (a mock interview, Design partner, a verdict, your next steps), its id, the
+  credits and whether it ran in Deep mode, with the time of each;
 - for every message Polar's webhook sends: its id, its type and when it
   arrived, to apply it only once. It holds nothing about you.
 - a log of those messages for the site's operator, kept 90 days: when each
   arrived, its id and type, what was done with it and the account it was
   about; never its content.
-- if the operator gives you Pro for a while, or adds or takes back interview
+- if the operator gives you Pro for a while, or adds or takes back
   credits (say, after a support request), the date the free Pro ends and
   those credits in the ledger; the reason is kept in the operator's audit log.
 
 **What it is used for**: only to know your plan, renewal date and how many
-mock interviews you have left. It is shown in **Plan & billing** on your
-account page.
+credits you have left. It is shown in **Plan & billing** on your account
+page, with your recent use.
 
 **How long**: as long as the account. Deleting the account cancels a
 subscription still running at Polar at once, then removes all of the above
@@ -337,8 +337,7 @@ deleted with the diagram or the account.
 
 ## Mock interviews
 
-A mock interview (one a lifetime on the free plan, 4 a month on Pro, more
-with packs) is started only by you, knowing it is sent to an AI provider:
+A mock interview (paid for in credits, on any plan) is started only by you, knowing it is sent to an AI provider:
 the problem, your diagram and everything you write or dictate in the
 interview are sent to Anthropic's Claude, through Cloudflare's AI Gateway,
 to ask the questions and write the hints and the verdict. The provider uses
