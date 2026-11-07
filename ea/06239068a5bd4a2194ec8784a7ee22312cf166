@@ -1,0 +1,31 @@
+frontend/src/practice/hub/goal.ts
+  s_e17b87e0a1b3ca::t_436e3ec35addf1 49-63
+frontend/e2e/campaigns.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_5da8e952b34b75 107-109,112,116-120
+  s_e17b87e0a1b3ca::t_dc7d68423e25c1 121-122
+frontend/src/practice/hub/hub.test.tsx
+  s_e17b87e0a1b3ca::t_5da8e952b34b75 6,90-101
+  s_e17b87e0a1b3ca::t_fab05449fcadc5 102
+frontend/src/practice/hub/HomeExtras.tsx
+  s_e17b87e0a1b3ca::t_436e3ec35addf1 43,52-53,58
+frontend/src/announcements/Announcement.tsx
+  s_e17b87e0a1b3ca::t_436e3ec35addf1 62-63,68-73,78-79,84
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_436e3ec35addf1 34,159-161,283,290
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "ea06239068a5bd4a2194ec8784a7ee22312cf166",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
