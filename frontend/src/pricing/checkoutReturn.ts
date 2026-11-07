@@ -1,4 +1,5 @@
-import { PRICES, type PlanInfo, type Product } from '../services/billing';
+import { PLAN_CREDITS, PRICES, productPlan, type PlanInfo, type Product } from '../services/billing';
+import { formatCredits } from '../services/credits';
 
 /**
  * Back from Polar's checkout (backend/src/billing.ts success_url:
@@ -16,7 +17,7 @@ export interface CheckoutReturn {
 }
 
 const PARAMS = ['checkout', 'product', 'checkout_id'];
-const PRODUCTS: readonly string[] = ['pro_monthly', 'pro_yearly', 'pack_5'];
+const PRODUCTS: readonly string[] = ['pro_monthly', 'pro_yearly', 'max_monthly', 'max_yearly', 'credits_1000'];
 
 /** The return from a paid checkout in `href`, or null (no `checkout=done`: a normal visit, or Polar's back button to the pricing page). */
 export function readCheckoutReturn(href: string): CheckoutReturn | null {
@@ -47,31 +48,38 @@ const GIVE_UP = 10 * 60_000;
 export type Phase = 'activating' | 'slow' | 'done';
 
 export interface ReturnState {
-  kind: 'pro' | 'pack';
+  /** A plan (Pro or Max, a new one or an upgrade) or a top-up. */
+  kind: 'pro' | 'max' | 'topup';
+  /** The subscription product bought or switched to: a switch from monthly to yearly shows once the subscription has it. */
+  product?: Product;
   phase: Phase;
   startedAt: number;
-  /** Pack credits at the first answer; a pack shows once they go up. */
+  /** Top-up credits at the first answer; a top-up shows once they go up. */
   baseline?: number;
-  /** Done: the interviews the purchase gives (Pro's a month, or the pack's). */
-  interviews?: number;
+  /** Done: the credits the purchase gives (the plan's a month, or the top-up's). */
+  credits?: number;
 }
 
 export function startReturn(ret: CheckoutReturn, now: number): ReturnState {
-  return { kind: ret.product === 'pack_5' ? 'pack' : 'pro', phase: 'activating', startedAt: now };
+  const sub = productPlan(ret.product);
+  if (!sub) return { kind: ret.product === 'credits_1000' ? 'topup' : 'pro', phase: 'activating', startedAt: now };
+  return { kind: sub.plan, product: ret.product!, phase: 'activating', startedAt: now };
 }
 
 const PAID = ['active', 'trialing'];
+const NAME = { pro: 'Pro', max: 'Max' } as const;
 
 /** An answer from GET /api/me/plan. */
 export function onPlan(s: ReturnState, plan: PlanInfo): ReturnState {
   if (s.phase === 'done') return s;
-  if (s.kind === 'pro') {
-    // A subscription, not Pro from an admin's comp alone.
-    const pro = plan.plan === 'pro' && PAID.includes(plan.subscription?.status ?? '');
-    return pro ? { ...s, phase: 'done', interviews: plan.limits.interviewsPerMonth } : s;
+  if (s.kind !== 'topup') {
+    // A subscription, not the plan from an admin's comp alone.
+    const sub = plan.subscription;
+    const on = plan.plan === s.kind && PAID.includes(sub?.status ?? '') && (!s.product || !sub?.product || sub.product === s.product);
+    return on ? { ...s, phase: 'done', credits: plan.credits.monthly?.allowance ?? PLAN_CREDITS[s.kind] } : s;
   }
-  if (s.baseline === undefined) return { ...s, baseline: plan.credits.pack };
-  return plan.credits.pack > s.baseline ? { ...s, phase: 'done', interviews: plan.credits.pack - s.baseline } : s;
+  if (s.baseline === undefined) return { ...s, baseline: plan.credits.topup };
+  return plan.credits.topup > s.baseline ? { ...s, phase: 'done', credits: plan.credits.topup - s.baseline } : s;
 }
 
 /** The clock moved: still activating after SLOW_AFTER is slow. */
@@ -92,11 +100,13 @@ export function nextPollIn(s: ReturnState, now: number): number | null {
 /** The banner's text. */
 export function returnMessage(s: ReturnState): string {
   if (s.phase === 'done') {
-    if (s.kind === 'pack') return `${s.interviews} mock interviews added.`;
-    return `You're on Pro: ${s.interviews} mock interviews this month.`;
+    const credits = formatCredits(s.credits ?? 0);
+    if (s.kind === 'topup') return `${credits} credits added. They never expire.`;
+    if (s.kind === 'max') return `You're on Max: ${credits} credits a month, Deep mode and printable interview reports.`;
+    return `You're on Pro: ${credits} credits a month, starting now.`;
   }
   if (s.phase === 'slow') {
     return "Polar hasn't confirmed the payment yet. It usually takes a few seconds; this page updates when it does. If it doesn't within a few minutes, contact support.";
   }
-  return s.kind === 'pack' ? `Payment received. Adding ${PRICES.packInterviews} mock interviews…` : 'Payment received. Activating Pro…';
+  return s.kind === 'topup' ? `Payment received. Adding ${formatCredits(PRICES.topupCredits)} credits…` : `Payment received. Activating ${NAME[s.kind]}…`;
 }
