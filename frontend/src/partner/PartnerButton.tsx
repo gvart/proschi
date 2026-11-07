@@ -8,12 +8,10 @@ interface PartnerButtonProps {
   /** Why it is off (e.g. during an interview); shown as its title. */
   disabledReason?: string;
   className?: string;
-  /** Where the label shows; icon only below it (a full toolbar passes a wider breakpoint). */
-  labelClassName?: string;
 }
 
 /** "Design partner" in the editor's and practice's toolbars. */
-export default function PartnerButton({ open, onToggle, disabledReason, className = '', labelClassName = 'hidden sm:inline' }: PartnerButtonProps) {
+export default function PartnerButton({ open, onToggle, disabledReason, className = '' }: PartnerButtonProps) {
   return (
     <button
       type="button"
@@ -24,10 +22,11 @@ export default function PartnerButton({ open, onToggle, disabledReason, classNam
       disabled={!!disabledReason}
       title={disabledReason ?? `Design partner: review, questions and changes (${PARTNER_SHORTCUT})`}
       data-testid="partner-button"
-      className={`${outlineButton} aria-pressed:bg-pop-lilac/40 aria-pressed:shadow-none aria-pressed:translate-x-0.5 aria-pressed:translate-y-0.5 ${className}`}
+      className={`${outlineButton} whitespace-nowrap aria-pressed:bg-pop-lilac/40 aria-pressed:shadow-none aria-pressed:translate-x-0.5 aria-pressed:translate-y-0.5 ${className}`}
     >
       <MessagesSquare size={16} aria-hidden="true" />
-      <span className={labelClassName}>Design partner</span>
+      {/* Labelled from 1024px, so it is found; icon only on narrower toolbars, where the title names it. */}
+      <span className="hidden lg:inline">Design partner</span>
     </button>
   );
 }

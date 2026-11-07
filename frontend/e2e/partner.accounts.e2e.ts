@@ -177,10 +177,10 @@ test('Max gets Deep, with its higher estimate, and it starts the conversation de
   const partner = await openEditor(page, 'max');
   await page.getByTestId('partner-button').click();
   const deep = panel(page).getByTestId('partner-deep');
-  await expect(deep).toContainText('×5');
+  await expect(deep).toContainText('×2');
   await deep.click();
   await expect(deep).toHaveAttribute('aria-pressed', 'true');
-  await expect(panel(page).getByRole('button', { name: /Review my design/ })).toContainText('about 25–75 credits');
+  await expect(panel(page).getByRole('button', { name: /Review my design/ })).toContainText('about 10–30 credits');
   await panel(page).getByRole('button', { name: /Review my design/ }).click();
   await expect.poll(() => partner.created).toEqual([{ context: { kind: 'editor' }, deep: true }]);
 });

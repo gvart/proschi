@@ -12,14 +12,17 @@ import { settleNodes } from './settle';
  * into ELK's layout. Returns a counter that changes once that has happened, so
  * the view can fit the final layout. With `everyLayout` it changes after every
  * new layout instead: for read-only canvases, which should re-fit whenever the
- * layout moves (edges added between the same nodes reshape it too).
+ * layout moves (edges added between the same nodes reshape it too). `busy` is
+ * true from a change until its layout is applied, glide included.
  */
-export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, { everyLayout = false } = {}): number {
+export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, { everyLayout = false } = {}): { settled: number; busy: boolean } {
   const shown = useRef<{ nodes: Node[]; provisional: boolean }>({ nodes: [], provisional: false });
   const [settled, setSettled] = useState(0);
+  const [busy, setBusy] = useState(false);
   useEffect(() => {
     let cancelled = false;
     let cancelSettle = () => {};
+    setBusy(true);
     const show = (nodes: Node[], provisional: boolean) => {
       shown.current = { nodes, provisional };
       apply(nodes);
@@ -40,20 +43,26 @@ export function useAutoLayout(diagram: Diagram, apply: (nodes: Node[]) => void, 
         if (!from) {
           show(laidOut, false);
           if (everyLayout) setSettled((n) => n + 1);
+          setBusy(false);
           return;
         }
         cancelSettle = settleNodes(from, laidOut, (nodes) => {
           show(nodes, nodes !== laidOut);
-          if (nodes === laidOut) setSettled((n) => n + 1);
+          if (nodes !== laidOut) return;
+          setSettled((n) => n + 1);
+          setBusy(false);
         });
       })
-      .catch((error) => console.error('Layout failed:', error));
+      .catch((error) => {
+        if (!cancelled) setBusy(false);
+        console.error('Layout failed:', error);
+      });
     return () => {
       cancelled = true;
       cancelSettle();
     };
   }, [diagram, apply, everyLayout]);
-  return settled;
+  return { settled, busy };
 }
 
 /**
@@ -64,6 +73,6 @@ export function useDiagramLayout(diagram: Diagram): { nodes: Node[]; edges: Edge
   const [nodes, setNodes] = useState<Node[]>([]);
   const [edges, setEdges] = useState<Edge[]>([]);
   useEffect(() => setEdges(withEdgeStyles(diagram, toFlowEdges(diagram))), [diagram]);
-  const settled = useAutoLayout(diagram, setNodes, { everyLayout: true });
+  const { settled } = useAutoLayout(diagram, setNodes, { everyLayout: true });
   return { nodes, edges, settled };
 }

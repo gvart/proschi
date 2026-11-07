@@ -46,11 +46,9 @@ export default function PricingApp() {
 type Period = 'monthly' | 'yearly';
 type Busy = Product | 'portal' | null;
 
-/** How many full mock interviews `credits` make, at the estimate's high and low end: "13–17". */
+/** How many mock interviews `credits` make, at the middle of the typical range: "17". */
 function interviews(credits: number, { min, max }: Range): string {
-  const few = Math.floor(credits / max);
-  const many = Math.floor(credits / min);
-  return few === many ? `${few}` : `${few}–${many}`;
+  return `${Math.max(1, Math.round(credits / ((min + max) / 2)))}`;
 }
 
 export function Pricing({ account, plan, estimates }: { account: Account; plan?: PlanInfo; estimates: CreditEstimates }) {
@@ -246,7 +244,9 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
         <dl className="mt-3 space-y-4 text-sm">
           <Faq q="What is a credit?">
             One cent of use. A mock interview or a Design partner answer costs what it took to write, so a short answer costs less than a long one. You see
-            the estimate before you start and the real cost after.
+            the estimate before you start and the real cost after, and nothing costs more than its cap: a Design partner review never more than{' '}
+            {formatCredits(estimates.partner_review.worst ?? estimates.partner_review.max, { floor: true })} credits, a mock interview never more than the
+            credits you have (and {formatCredits(estimates.mock_interview.worst ?? estimates.mock_interview.max, { floor: true })} at most).
           </Faq>
           <Faq q="Why credits, and not a number of interviews?">
             You pay for what you use: a short review costs less than a full interview, and a 30-minute interview less than a 60-minute one. The plan only

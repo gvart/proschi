@@ -8,11 +8,11 @@ import type { Page } from '@playwright/test';
  */
 
 export const ESTIMATES = {
-  mock_interview: { min: 20, max: 60 },
-  partner_review: { min: 5, max: 15 },
-  partner_build: { min: 10, max: 40 },
-  partner_turn: { min: 1, max: 4 },
-  deepMultiplier: 5,
+  mock_interview: { min: 20, max: 60, worst: 1100 },
+  partner_review: { min: 5, max: 15, worst: 50 },
+  partner_build: { min: 10, max: 40, worst: 72 },
+  partner_turn: { min: 1, max: 4, worst: 30 },
+  deepMultiplier: 2,
 };
 
 export interface TurnBody {

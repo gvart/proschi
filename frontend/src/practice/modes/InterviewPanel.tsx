@@ -407,7 +407,13 @@ function InterviewCost({ estimate, minutes, balance, short, notEnough }: { estim
         <p>
           <strong className="tabular-nums">{formatRange(estimate)} credits</strong> for {minutes} min; you have <strong className="tabular-nums">{have}</strong>.
         </p>
-        <p className="mt-0.5 text-xs text-muted">You pay for what the interview uses. If you run out, the interviewer moves to the wrap-up and still gives you the verdict.</p>
+        <p className="mt-0.5 text-xs text-muted">
+          You pay for what the interview uses
+          {estimate.worst !== undefined && (
+            <span data-testid="ai-credits-cap">, never more than {formatCredits(Math.min(estimate.worst, short?.balance ?? balance), { floor: true })} credits</span>
+          )}
+          . If you run out, the interviewer moves to the wrap-up and still gives you the verdict.
+        </p>
       </div>
     );
   }

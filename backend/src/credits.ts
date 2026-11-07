@@ -155,6 +155,15 @@ export function revokeStatement(DB: D1Database, orderId: string, at = Date.now()
 // row outlives the account. Deleting an account also leaves one tombstone
 // per identity it signed in with (migration 0022), saying whether it got the
 // sign-up credits, for accounts made before 0024.
+//
+// `signup_identities` is not `signup_claims` (src/signupChecks.ts), though
+// both hold identity HMACs that outlive the account. A claim is taken when
+// an account is *checked*, before any grant and also when it is refused
+// (disposable, seen before), with no account id, so the ledger can't tell
+// its own fresh claim from another account's. `signup_identities` is the
+// ledger's own guard: taken only by a grant, keyed by the one identity key
+// the credits went to, so grantSignupCredits stays once per identity
+// whoever calls it.
 
 const tombstoneKey = (secret: string) => `${secret}/account-tombstone`;
 

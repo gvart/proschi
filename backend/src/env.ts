@@ -7,7 +7,6 @@ export interface Env {
   PROFILE_LIMITER: RateLimit;
   STATS_LIMITER: RateLimit;
   IMPORT_LIMITER: RateLimit;
-  REVIEW_LIMITER: RateLimit;
   CARD_LIMITER: RateLimit;
   CHALLENGE_LIMITER: RateLimit;
   /** Game runs started, submitted or imported, and purchases, per user. */
@@ -27,8 +26,6 @@ export interface Env {
   INTERVIEW_TURN_LIMITER: RateLimit;
   INTERVIEW_FINISH_LIMITER: RateLimit;
   INTERVIEW_READ_LIMITER: RateLimit;
-  /** In-depth reviews (src/review.ts), per user. */
-  AI_REVIEW_LIMITER: RateLimit;
   /** Polar's webhook (src/billing.ts), per IP, before the signature is checked; and the bad signatures logged, one per IP a minute. */
   WEBHOOK_LIMITER: RateLimit;
   WEBHOOK_LOG_LIMITER: RateLimit;

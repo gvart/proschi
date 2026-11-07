@@ -25,7 +25,7 @@ describe('features', () => {
     expect(can({ plan: 'free' }, 'share_links', env)).toEqual({ ok: false, reason: 'needs_pro' });
     expect(can({ plan: 'free' }, 'share_links', noBilling)).toEqual({ ok: false, reason: 'billing_off' });
     // Billing off refuses nothing more: Pro keeps its features, and every plan keeps the AI interview.
-    expect(can({ plan: 'pro' }, 'ai_review', noBilling)).toEqual({ ok: true });
+    expect(can({ plan: 'pro' }, 'ai_roadmap', noBilling)).toEqual({ ok: true });
     expect(can({ plan: 'free' }, 'ai_interview', env)).toEqual({ ok: true });
     expect(can(null, 'ai_interview', env)).toEqual({ ok: false, reason: 'signed_out' });
     // An unknown plan counts as free.
@@ -53,7 +53,6 @@ describe('features', () => {
     const plan = async () => ((await (await call('/api/me/plan', { token })).json()) as { features: unknown }).features;
     expect(await plan()).toEqual({
       ai_interview: { ok: true },
-      ai_review: { ok: false, reason: 'needs_pro' },
       interview_history: { ok: false, reason: 'needs_pro' },
       ai_roadmap: { ok: false, reason: 'needs_pro' },
       share_links: { ok: false, reason: 'needs_pro' },

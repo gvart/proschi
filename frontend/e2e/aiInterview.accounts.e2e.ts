@@ -25,6 +25,8 @@ test.describe('AI interviewer', () => {
     await start.getByRole('radio', { name: /Mock interview/ }).click();
     // The estimate for the chosen length, against the balance.
     await expect(start.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min; you have 100.');
+    // Never more than the cap, and never more than what there is: the interview wraps up at 0.
+    await expect(start.getByTestId('ai-credits-cap')).toHaveText(', never more than 100 credits');
     await start.getByRole('radio', { name: '30 min' }).click();
     await expect(start.getByTestId('ai-credits')).toContainText('about 30–40 credits for 30 min; you have 100.');
     await start.getByRole('radio', { name: '45 min' }).click();

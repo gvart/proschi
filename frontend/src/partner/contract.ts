@@ -158,5 +158,5 @@ export function parseTurnAnswer(v: unknown): TurnAnswer | undefined {
 export function estimateFor(estimates: CreditEstimates, intent: Intent, deep: boolean): Range {
   const base = intent === 'review' ? estimates.partner_review : intent === 'build' ? estimates.partner_build : estimates.partner_turn;
   const k = deep ? estimates.deepMultiplier : 1;
-  return { min: base.min * k, max: base.max * k };
+  return { min: base.min * k, max: base.max * k, ...(base.worst !== undefined ? { worst: base.worst * k } : {}) };
 }

@@ -19,8 +19,6 @@ export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src
  */
 export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; description: string }>> = {
   ai_interview: { plans: ['free', 'pro', 'max'], description: 'Mock interviews are on every plan; the credits decide how many' },
-  /** Deprecated: design_partner replaces it (P29); POST /api/review now needs design_partner. Kept while the page reads it. */
-  ai_review: { plans: ['pro', 'max'], description: 'The in-depth review is part of Pro' },
   interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
   ai_roadmap: { plans: ['pro', 'max'], description: 'Your next steps are part of Pro' },
   share_links: { plans: ['pro', 'max'], description: 'Live share links are part of Pro' },
