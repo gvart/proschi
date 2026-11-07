@@ -1462,6 +1462,16 @@
   background: var(--adm-wash);
 }
 
+/* Links styled as buttons (Reply, Open read-only): the section's link colour and underline would fight the button. */
+.adm-inbox__actions a.ps-btn {
+  color: rgb(var(--c-ink));
+  text-decoration: none;
+}
+
+.adm-inbox__delete .adm-input {
+  flex: 1 1 260px;
+}
+
 .adm-inbox__note {
   resize: vertical;
   font-weight: 400;

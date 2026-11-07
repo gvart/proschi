@@ -202,7 +202,7 @@ function Form({ plan, onSent, onCancel }: { plan: string; onSent: () => void; on
 
   const left = MAX_MESSAGE - message.length;
   return (
-    <form onSubmit={(e) => void submit(e)} onPaste={onPaste} className="space-y-4 px-5 py-4" noValidate>
+    <form onSubmit={(e) => void submit(e)} onPaste={onPaste} className="space-y-4 px-5 pt-4" noValidate>
       <fieldset>
         <legend className="mb-1.5 text-sm font-semibold">What is it about?</legend>
         <div className="grid grid-cols-2 gap-1.5 sm:grid-cols-4">
@@ -333,7 +333,7 @@ function Form({ plan, onSent, onCancel }: { plan: string; onSent: () => void; on
         </p>
       )}
 
-      <div className="flex justify-end gap-2 border-t-bw-1 border-ink/15 pt-4">
+      <div className="sticky bottom-0 -mx-5 flex justify-end gap-2 border-t-bw-1 border-ink/15 bg-surface px-5 py-3">
         <button type="button" className={outlineButton} onClick={onCancel}>
           Cancel
         </button>

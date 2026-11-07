@@ -178,7 +178,7 @@ function MessageView({ id, onBack, onOpenUser, onChanged, onSignedOut }: { id: s
       <Section title="Message">
         {/* Plain text, as written: React escapes it, and pre-wrap keeps its lines. */}
         <p className="adm-inbox__text">{m.message}</p>
-        <div className="adm-actions">
+        <div className="adm-actions adm-inbox__actions">
           {m.sender.email ? (
             <a className="ps-btn ps-btn--secondary ps-btn--sm" href={`mailto:${m.sender.email}?subject=${encodeURIComponent(`Re: ${m.subject || `your ${KIND_LABEL[m.kind].toLowerCase()} on Proschi`}`)}`}>
               <Mail size={14} aria-hidden="true" /> Reply to {m.sender.email}
@@ -234,7 +234,7 @@ function DiagramSection({ source }: { source: string }) {
   return (
     <Section title="Diagram">
       <pre className="adm-inbox__diagram">{source}</pre>
-      <div className="adm-actions">
+      <div className="adm-actions adm-inbox__actions">
         <a className="ps-btn ps-btn--secondary ps-btn--sm" href={`../embed/${hash}`} target="_blank" rel="noreferrer">
           <ExternalLink size={14} aria-hidden="true" /> Open read-only
         </a>
@@ -286,14 +286,14 @@ function Handling({ id, status: saved, note: savedNote, onSaved, onDeleted }: { 
           <textarea className="adm-input adm-inbox__note" rows={3} maxLength={5000} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Only admins see it; changes go in the audit log." />
         </label>
         <ErrorNote>{save.error}</ErrorNote>
-        <div className="adm-actions">
+        <div className="adm-actions adm-inbox__actions">
           <button type="submit" className="ps-btn ps-btn--primary ps-btn--sm" disabled={!dirty || save.busy}>
             Save
           </button>
         </div>
       </form>
       <form
-        className="adm-inline adm-danger-zone"
+        className="adm-inline adm-danger-zone adm-inbox__delete"
         onSubmit={(e) => {
           e.preventDefault();
           if (window.confirm('Delete this message and its screenshots? This cannot be undone.')) void remove.run(() => deleteFeedback(id, reason));
