@@ -1,0 +1,50 @@
+frontend/e2e/billing.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_34b3b37d490d05 2,6-10,15-18,20-26,30,33-34,40,51-52,54-56,58-60,63,65-67,69-78,80,82-90,92-143,146-155,157-161,166-167,170-171,173-175,200,204,208,212-214,216,220,226-227,231-248,268,272-273,275,277-281,286
+  s_e17b87e0a1b3ca::t_ec7edc411e7df4 57,61-62
+frontend/e2e/accounts.ts
+  s_e17b87e0a1b3ca::t_e79df527a068b2 29
+  s_e17b87e0a1b3ca::t_f08cf894e0679f 79
+  s_e17b87e0a1b3ca::t_2374c4360022dc 34-59
+  s_e17b87e0a1b3ca::t_aec4495a797be0 80-84
+frontend/src/design/components.css
+  s_e17b87e0a1b3ca::t_783e75c0aa1254 438-440
+  s_1a6e9ade9f303e::t_7aca8bc849b454 435-437
+frontend/e2e/aiInterview.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_8362a8d11f0362 130-144
+  s_e17b87e0a1b3ca::t_ec7edc411e7df4 159
+  s_e17b87e0a1b3ca::t_5b9a4c3ea09d6f 113
+  s_e17b87e0a1b3ca::t_aa88e79c0aacda 26-30
+  s_e17b87e0a1b3ca::t_68d486bd040e21 145,147-148,153-158,160-175,177
+  s_e17b87e0a1b3ca::t_dad088f655c9ee 102
+frontend/e2e/aiInterview.ts
+  s_e17b87e0a1b3ca::t_a6fb10ce2bcbf7 80
+  s_e17b87e0a1b3ca::t_63a5d7f9796177 2
+  s_e17b87e0a1b3ca::t_7707010fb3d4c9 44-50,52,54-55
+  s_e17b87e0a1b3ca::t_4db7d8f7d69b2f 89-93
+  s_e17b87e0a1b3ca::t_67c1db56dcddf5 51,71
+  s_e17b87e0a1b3ca::t_44e642c04aa45d 66
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "c4ba12f485ecbf45d01fde423dc4241f4e703c6d",
+  "prompts": {},
+  "sessions": {
+    "s_1a6e9ade9f303e": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "2c9e00ce-6ba5-4b5a-8be5-a4a273976934",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    },
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
