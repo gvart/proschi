@@ -1,0 +1,69 @@
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 308-314
+frontend/e2e/editor.e2e.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 3,72
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-165
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 8,10,342-344,435-448,789-794,798,849-861,863
+frontend/e2e/filesRail.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-25
+frontend/src/components/Canvas/canvas.css
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 136-150
+frontend/src/components/Playground/CodeEditor.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 5,25-26,126-128,181-183
+  s_e17b87e0a1b3ca::t_79074da87c9a7d 184
+frontend/src/components/Diagram/paletteGroups.test.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-29
+frontend/src/components/Diagram/paletteGroups.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-63
+frontend/src/components/Diagram/canvasEditState.test.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-22
+frontend/e2e/systems.e2e.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 4,314
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 250-268
+frontend/src/components/Diagram/canvasEditState.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-41
+frontend/e2e/visual-editing.e2e.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 2,20,159-247
+  s_e17b87e0a1b3ca::t_27822f3dabceeb 248
+frontend/src/components/Diagram/Palette.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 2,5,14-17,21-23,25,27,30-34,37-40,49,60,64,68,70-109,111-112
+docs/STYLING.md
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 120-121,124-125,132-134
+  s_e17b87e0a1b3ca::t_92831860e0fd81 135
+frontend/e2e/files.e2e.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 95,98-138
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 1-262
+frontend/src/components/Diagram/Inspector.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 33-36,58,65,87,91,93,103,158-175
+frontend/src/components/Playground/Playground.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 82,84-86,161,163,259-264,484-488,491-494,512-515,529,534,572-573,755,757-764,766-767,878,1193,1195,1197,1200-1206,1208-1215,1323-1325,1359,1599-1600,1603-1607,1661-1663,1690-1706,1718-1739,1817-1818,1830-1846,1848-1858,1861-1863,1874-1875,1917-1935,1960-1970,2008,2045,2047,2050-2051,2100-2124,2126
+  s_e17b87e0a1b3ca::t_bc96f1d4b13bc6 2125,2127-2128
+frontend/src/dsl/edit.test.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 154-160
+frontend/src/components/Playground/FileSidebar.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 2,40-41,56,402-406
+frontend/src/dsl/edit.ts
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 121-125,129-130,144-146
+frontend/src/onboarding/StarterCard.tsx
+  s_e17b87e0a1b3ca::t_25d64ee26fcb14 21
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "854a596e0bcbf2080e2fae2f4080adb235e285ad",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
