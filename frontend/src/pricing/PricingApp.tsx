@@ -131,7 +131,7 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
       <h1 className="mt-1 font-display text-[clamp(2rem,5vw,3rem)] font-extrabold leading-[1.05] tracking-[-0.02em] text-ink">Free to design. Credits for the coaching.</h1>
       <p className="mt-3 max-w-2xl text-ink/80">
         The editor, the simulation and every practice problem stay free and open source. Mock interviews and Design partner run on credits, so you pay
-        for what you use: a short review costs a few, a full interview about {Math.round((estimates.mock_interview.min + estimates.mock_interview.max) / 2)}.
+        for what you use: a short review costs a few, a full interview {formatRange(estimates.mock_interview)}.
       </p>
 
       <div role="radiogroup" aria-label="Billing period" className="mt-6 inline-flex rounded-sm border-bw-1 border-ink bg-surface p-0.5 shadow-brutal-sm">

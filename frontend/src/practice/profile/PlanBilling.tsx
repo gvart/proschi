@@ -141,7 +141,7 @@ function Usage({ items }: { items: UsageItem[] | null | undefined }) {
             <caption className="sr-only">Credits spent, newest first</caption>
             <thead className="sticky top-0 bg-surface text-left text-xs text-muted">
               <tr>
-                <th scope="col" className="py-1.5 pr-3 font-semibold">
+                <th scope="col" className="sm:w-36 py-1.5 pr-3 font-semibold">
                   When
                 </th>
                 <th scope="col" className="py-1.5 pr-3 font-semibold">

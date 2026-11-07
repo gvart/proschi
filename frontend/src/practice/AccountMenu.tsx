@@ -118,10 +118,11 @@ function CreditsChip({ credits, href }: { credits: CreditBalance; href: string }
     <a
       href={href}
       data-testid="credits-chip"
+      data-credits-chip=""
       data-low={low || undefined}
       aria-label={`${left} credits left${low ? ', running low' : ''}. Plan and billing`}
       title={low ? 'Running low on credits' : 'Credits left'}
-      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-sm border-bw-2 px-2.5 text-sm font-semibold tabular-nums ${
+      className={`inline-flex h-10 shrink-0 items-center gap-1.5 rounded-sm border-bw-2 px-2.5 text-sm font-semibold tabular-nums shadow-[3px_3px_0_rgb(var(--c-shadow))] ${
         low ? 'border-orange-700 bg-orange-100 text-orange-950 dark:border-orange-300 dark:bg-orange-400/20 dark:text-orange-100' : 'border-ink bg-surface text-ink hover:bg-pop-yellow hover:text-on-accent'
       }`}
     >
