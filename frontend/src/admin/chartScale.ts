@@ -14,6 +14,30 @@ export function niceTicks(max: number, integers: boolean): number[] {
   return [0, step, 2 * step];
 }
 
+/**
+ * A line's axis: from 0 like a bar's, unless every value sits in the top
+ * half of that (a level such as weekly actives), when the axis starts at a
+ * clean number below the lowest value, so the line's movement shows. Bars
+ * always start at 0: their length is the value.
+ */
+export function lineTicks(min: number, max: number, integers: boolean): number[] {
+  // A flat line (no movement to show) keeps the axis from 0.
+  if (!(min > max / 2) || max - min < max / 100) return niceTicks(max, integers);
+  for (const candidate of niceSteps(max - min, integers)) {
+    const low = Math.floor(min / candidate) * candidate;
+    if (low + 2 * candidate >= max) return [low, low + candidate, low + 2 * candidate];
+  }
+  return niceTicks(max, integers);
+}
+
+/** Clean steps from about half of `span` upwards: 1, 2, 2.5 and 5 × 10ⁿ. */
+function niceSteps(span: number, integers: boolean): number[] {
+  const raw = Math.max(span, 1e-9) / 2;
+  const magnitude = 10 ** Math.floor(Math.log10(raw));
+  const steps = [1, 2, 2.5, 5, 10, 20, 25, 50, 100].map((m) => m * magnitude).filter((s) => s >= raw && (!integers || Number.isInteger(s)));
+  return steps.length ? steps : [Math.max(1, Math.ceil(raw))];
+}
+
 /** The relative change from `previous` to `current`, or null when there is nothing to compare with. */
 export function change(current: number, previous: number): number | null {
   if (previous === 0) return null;

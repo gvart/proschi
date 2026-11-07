@@ -69,6 +69,36 @@ export interface Overview {
 
 export const getOverview = () => api<Overview>('/api/admin/overview');
 
+/** The overview's time ranges, in days. */
+export const RANGES = [7, 30, 90] as const;
+export type Range = (typeof RANGES)[number];
+
+export interface TrendPoint {
+  /** A UTC day, YYYY-MM-DD. */
+  day: string;
+  signups: number;
+  /** Weekly active accounts: any recorded activity in the 7 days to this day. */
+  active: number;
+  interviewsStarted: number;
+  interviewsFinished: number;
+  aiCostUsd: number;
+  packOrders: number;
+  webhookFailures: number;
+  /** Counted back from today's with the webhook log (90 days). */
+  proSubscribers: number;
+}
+
+/** The range's days and as many before them (2 × days points, oldest first). */
+export interface Trends {
+  days: Range;
+  from: string;
+  to: string;
+  points: TrendPoint[];
+  usage: { events: string[]; days: { day: string; counts: Record<string, number> }[] };
+}
+
+export const getTrends = (days: Range) => api<Trends>(`/api/admin/trends?days=${days}`);
+
 export interface CronRun {
   job: string;
   level: string;

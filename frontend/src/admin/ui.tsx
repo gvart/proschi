@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import type { SortDir } from './hooks';
 import { pageOf, type PageId } from './route';
 
@@ -77,11 +77,12 @@ export function Stat({ label, value, note, tone }: { label: string; value: React
 
 /** A card; without a title it is named by `label` (a chart's own title names it). */
 export function Section({ title, label, actions, children }: { title?: string; label?: string; actions?: ReactNode; children: ReactNode }) {
+  const id = useId();
   return (
-    <section className="adm-section" aria-label={title ? undefined : label}>
+    <section className="adm-section" aria-labelledby={title ? id : undefined} aria-label={title ? undefined : label}>
       {(title || actions) && (
         <div className="adm-section__head">
-          {title && <h2>{title}</h2>}
+          {title && <h2 id={id}>{title}</h2>}
           {actions}
         </div>
       )}

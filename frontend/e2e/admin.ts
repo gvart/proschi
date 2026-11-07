@@ -20,13 +20,51 @@ export const days = Array.from({ length: 30 }, (_, i) => new Date(Date.now() - (
 const wave = (i: number, base: number, amp: number, phase = 0) => Math.max(0, Math.round(base + amp * Math.sin(i / 3 + phase) + (i % 5) - 2));
 
 export const OVERVIEW = {
-  users: { total: 3, blocked: 0, public: 1, emailReminders: 1, new: { day: 1, week: 2, month: 3 }, active: { day: 1, week: 2, month: 2 } },
+  users: { total: 1284, blocked: 3, public: 212, emailReminders: 341, new: { day: 14, week: 88, month: 352 }, active: { day: 96, week: 298, month: 611 } },
   signups: days.map((day) => ({ day, count: day === today ? 1 : 0 })),
-  content: { shares: 1, documents: 0, attempts: 1, solves: 1, cardReviews: 0, challenges: 0, gameRuns: 0 },
+  content: { shares: 917, documents: 2_406, attempts: 5_830, solves: 3_112, cardReviews: 48_221, challenges: 7_904, gameRuns: 2_689 },
   usage: { events: ['editor_open', 'practice_open'], days: days.map((day) => ({ day, counts: day === today ? { editor_open: 41 } : {} })) },
-  events: [{ kind: 'server_error', level: 'error', n: 2 }],
+  events: [
+    { kind: 'server_error', level: 'error', n: 2 },
+    { kind: 'rate_limited', level: 'warn', n: 5 },
+  ],
   aiSpend: days.map((day, i) => ({ day, costUsd: wave(i, 9, 4) * 0.37 })),
 };
+
+/**
+ * The overview's trends (GET /api/admin/trends?days=): `days` and as many
+ * before them, a growing product with weekly rhythm: sign-ups, weekly
+ * actives, AI interviews and spend, Pro subscribers, pack orders, and a
+ * webhook failure now and then.
+ */
+export function trends(days: number) {
+  const span = 2 * days;
+  const day = (i: number) => new Date(Date.now() - (span - 1 - i) * 86_400_000).toISOString().slice(0, 10);
+  const points = Array.from({ length: span }, (_, i) => {
+    // 0 at 180 days ago, 1 today: everything grows with it.
+    const g = (180 - span + i) / 180;
+    const weekend = new Date(Date.now() - (span - 1 - i) * 86_400_000).getUTCDay() % 6 === 0;
+    const started = Math.max(0, Math.round((4 + 6 * g) * (weekend ? 0.6 : 1) + 2 * Math.sin(i / 2.3)));
+    return {
+      day: day(i),
+      signups: Math.max(0, Math.round((6 + 10 * g) * (weekend ? 0.55 : 1) + 3 * Math.sin(i / 1.7))),
+      active: Math.round(140 + 160 * g + 12 * Math.sin(i / 3.5)),
+      interviewsStarted: started,
+      interviewsFinished: Math.max(0, started - (i % 5 === 0 ? 1 : 0)),
+      aiCostUsd: Math.round(started * (0.38 + 0.08 * Math.sin(i)) * 100) / 100,
+      packOrders: (i * 7) % 11 < 3 ? 1 + (i % 2) : 0,
+      webhookFailures: i % 23 === 4 ? 2 : i % 17 === 9 ? 1 : 0,
+      proSubscribers: Math.round(18 + 34 * g + (i % 9 === 0 ? -1 : 0)),
+    };
+  });
+  return {
+    days,
+    from: day(0),
+    to: day(span - 1),
+    points,
+    usage: { events: ['editor_open', 'practice_open'], days: points.map((p, i) => ({ day: p.day, counts: { editor_open: 30 + p.signups * 4 + (i % 7), practice_open: 12 + p.signups } })) },
+  };
+}
 
 export const USERS = {
   total: 2,
@@ -230,6 +268,7 @@ export async function mockAdmin(page: Page, status: { passkeys: boolean; setupAv
       }
       if (path === '/api/admin/status') return route.fulfill({ json: status });
       if (path === '/api/admin/overview') return route.fulfill({ json: OVERVIEW });
+      if (path === '/api/admin/trends') return route.fulfill({ json: trends(Number(new URL(request.url()).searchParams.get('days'))) });
       if (path === '/api/admin/health') return route.fulfill({ json: HEALTH });
       if (path === '/api/admin/users') return route.fulfill({ json: USERS });
       if (path === '/api/admin/billing') return route.fulfill({ json: BILLING });

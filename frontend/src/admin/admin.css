@@ -1136,3 +1136,191 @@
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* The overview (OverviewTab.tsx). */
+
+/* The time range: three buttons, the chosen one in ink. */
+.adm-segmented {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 8px;
+  background: rgb(var(--c-surface));
+}
+
+.adm-segmented button {
+  height: 30px;
+  padding: 0 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: rgb(var(--c-ink) / 0.75);
+  font: 600 var(--fs-14) / 1 var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-segmented button:hover {
+  background: var(--adm-wash);
+}
+
+.adm-segmented button[aria-pressed='true'] {
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+}
+
+.adm-segmented button:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 1px;
+}
+
+/* KPI tiles: six across on a wide screen, three, then two. */
+.adm-kpis {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 12px;
+}
+
+@media (max-width: 1299px) {
+  .adm-kpis {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 599px) {
+  .adm-kpis {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+.adm-kpi {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--adm-line);
+  border-radius: var(--r-md);
+  background: rgb(var(--c-surface));
+  transition: opacity var(--d-2) linear;
+}
+
+.adm-kpi__label {
+  font-size: var(--fs-14);
+  font-weight: 500;
+  color: rgb(var(--c-muted));
+}
+
+.adm-kpi__value {
+  font-size: 1.75rem;
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
+}
+
+.adm-delta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 2px 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.adm-delta .adm-muted {
+  font-size: var(--fs-12);
+  font-weight: 400;
+}
+
+.adm-delta--good {
+  color: var(--adm-good);
+}
+
+.adm-delta--bad {
+  color: var(--adm-bad);
+}
+
+.adm-delta--neutral {
+  color: rgb(var(--c-ink) / 0.75);
+}
+
+/* Needs attention: one row per check, its state, what it found, and a link to its page. */
+.adm-attention {
+  display: grid;
+}
+
+.adm-attention__row {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 12px;
+  padding: 12px 0;
+  border-top: 1px solid var(--adm-line);
+}
+
+.adm-attention__row:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+
+.adm-attention__row:last-child {
+  padding-bottom: 0;
+}
+
+.adm-attention__icon {
+  display: grid;
+  place-items: center;
+  height: 22px;
+  color: var(--adm-good);
+}
+
+.adm-attention__row.is-alert .adm-attention__icon {
+  color: var(--adm-bad);
+}
+
+.adm-attention__text {
+  display: grid;
+  gap: 4px;
+  font-size: var(--fs-14);
+}
+
+.adm-attention__text .adm-chips {
+  margin-top: 2px;
+}
+
+.adm-attention__link {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  height: 22px;
+  font-size: var(--fs-14);
+  font-weight: 600;
+}
+
+/* All-time totals: label over value, in a row that wraps. */
+.adm-totals {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 16px;
+}
+
+.adm-total {
+  display: grid;
+  gap: 2px;
+}
+
+.adm-total dt {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+.adm-total dd {
+  font-size: var(--fs-18);
+  font-weight: 700;
+}
+
+.adm-total dd .adm-muted {
+  font-size: var(--fs-12);
+  font-weight: 400;
+}

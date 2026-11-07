@@ -1,5 +1,5 @@
 import { useId, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { niceTicks } from './chartScale';
+import { lineTicks, niceTicks } from './chartScale';
 import { formatCompact, formatNumber, shortDay } from './format';
 
 export interface Series {
@@ -73,10 +73,11 @@ export default function Chart({
   const n = points.length;
   const all = points.flatMap((p) => series.map((s) => p.values[s.id] ?? 0));
   const max = Math.max(0, ...all);
-  const ticks = niceTicks(max, all.every(Number.isInteger));
-  const top = ticks[2];
+  const integers = all.every(Number.isInteger);
+  const ticks = kind === 'line' ? lineTicks(Math.min(...all), max, integers) : niceTicks(max, integers);
+  const [bottom, , top] = ticks;
   const tick = (v: number) => (top >= 10_000 ? formatCompact(v) : format(v));
-  const y = (v: number) => height - (v / top) * height;
+  const y = (v: number) => height - ((v - bottom) / (top - bottom)) * height;
   // A day's centre as a share of the plot's width: bars sit in equal slots, line points run edge to edge.
   const x = (i: number) => (kind === 'bar' ? (i + 0.5) / Math.max(1, n) : n <= 1 ? 0.5 : i / (n - 1));
   const value = (p: Point | undefined, s: Series) => p?.values[s.id] ?? 0;
@@ -140,7 +141,7 @@ export default function Chart({
         </div>
         <div className="adm-plot__area" style={{ height }}>
           {ticks.map((t) => (
-            <span key={t} className={`adm-plot__grid${t === 0 ? ' is-base' : ''}`} style={{ top: y(t) }} aria-hidden="true" />
+            <span key={t} className={`adm-plot__grid${t === bottom ? ' is-base' : ''}`} style={{ top: y(t) }} aria-hidden="true" />
           ))}
           {kind === 'bar' ? (
             <div className="adm-bars adm-series-1" aria-hidden="true">

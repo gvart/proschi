@@ -40,9 +40,17 @@ test.describe('admin panel', () => {
     const posts = await mockAdmin(page, signedIn);
     await page.goto('admin/');
     await expect(nav(page).getByRole('link', { name: 'Overview' })).toHaveAttribute('aria-current', 'page');
-    await expect(page.getByRole('figure', { name: /Sign-ups/ })).toBeVisible();
-    await expect(page.getByRole('figure', { name: /AI interview spend/ })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
+    const kpis = page.getByRole('region', { name: 'Key numbers' });
+    for (const label of ['Sign-ups', 'Weekly active users', 'Pro subscribers', 'Interviews finished', 'AI spend', 'Webhook failures']) await expect(kpis.getByText(label, { exact: true })).toBeVisible();
+    await expect(kpis.getByText('vs previous 30 days').first()).toBeVisible();
+    for (const chart of ['Sign-ups', 'Weekly active users', 'AI spend (USD)', 'AI interviews finished', 'Pro subscribers', 'Interview pack orders']) {
+      await expect(page.getByRole('figure', { name: chart, exact: true })).toBeVisible();
+    }
+    const attention = page.getByRole('region', { name: 'Needs attention' });
+    await expect(attention.getByText('POLAR_PRODUCT_PACK_5')).toBeVisible();
+    await expect(attention.getByText('1 delivery refused or failed in the last 7 days')).toBeVisible();
+    await expect(attention.getByRole('link', { name: 'Open Missing secrets' })).toHaveAttribute('href', '#/health');
+    await expect(attention.getByRole('button', { name: 'Server error: 2' })).toBeVisible();
 
     await nav(page).getByRole('link', { name: 'Users' }).click();
     await expect(page).toHaveURL(/#\/users$/);
@@ -100,6 +108,37 @@ test.describe('admin panel', () => {
     await end.getByRole('button', { name: 'End comp now' }).click();
     await expect(page.getByText('Comp ended.')).toBeVisible();
     expect(posts[2]).toEqual({ method: 'POST', path: `/api/admin/users/${PRO_USER}/comp/end`, body: { reason: 'Talk cancelled' } });
+  });
+
+  test('the overview’s time range scopes every KPI and chart, and lives in the address', async ({ page }) => {
+    await mockAdmin(page, signedIn);
+    const asked: string[] = [];
+    page.on('request', (r) => r.url().includes('/api/admin/trends') && asked.push(new URL(r.url()).searchParams.get('days')!));
+    await page.goto('admin/');
+    const range = page.getByRole('group', { name: 'Time range' });
+    await expect(range.getByRole('button', { name: 'Last 30 days' })).toHaveAttribute('aria-pressed', 'true');
+    const signups = page.getByRole('figure', { name: 'Sign-ups', exact: true });
+    await expect(signups.getByText('in 30 days')).toBeVisible();
+
+    await range.getByRole('button', { name: 'Last 90 days' }).click();
+    await expect(page).toHaveURL(/#\/overview\/90$/);
+    await expect(range.getByRole('button', { name: 'Last 90 days' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(signups.getByText('in 90 days')).toBeVisible();
+    await expect(page.getByRole('figure', { name: 'Interview pack orders', exact: true }).getByText('in 90 days')).toBeVisible();
+    await expect(page.getByRole('region', { name: 'Key numbers' }).getByText('vs previous 90 days')).toHaveCount(6);
+    // Every day of the range is in the chart's table.
+    await signups.getByText('Show numbers').click();
+    await expect(signups.getByRole('row')).toHaveCount(91);
+
+    await page.goto('admin/#/overview/7');
+    await expect(range.getByRole('button', { name: 'Last 7 days' })).toHaveAttribute('aria-pressed', 'true');
+    await expect(signups.getByText('in 7 days')).toBeVisible();
+    expect(asked).toEqual(['30', '90', '7']);
+
+    // Hovering a day shows its values.
+    const plot = page.getByRole('group', { name: /^Weekly active users: arrow keys/ });
+    await plot.hover({ position: { x: 5, y: 40 } });
+    await expect(page.locator('.adm-tip')).toBeVisible();
   });
 
   test('the sidebar groups the pages, marks the current one, and keeps the old hashes working', async ({ page }) => {

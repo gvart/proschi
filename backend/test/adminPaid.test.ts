@@ -73,7 +73,7 @@ describe('admin: the paid product', () => {
 
   it('needs an admin session for every new route, and this site’s Origin for changes', async () => {
     const { id, token } = await signedInUser();
-    const gets = ['/api/admin/billing', '/api/admin/ai', '/api/admin/webhooks', '/api/admin/document-shares', `/api/admin/users/${id}/credits`];
+    const gets = ['/api/admin/billing', '/api/admin/ai', '/api/admin/trends', '/api/admin/webhooks', '/api/admin/document-shares', `/api/admin/users/${id}/credits`];
     const changes: [string, string, unknown][] = [
       ['POST', `/api/admin/users/${id}/credits`, { kind: 'grant', credits: 1, ref: ref(), reason: 'x' }],
       ['POST', `/api/admin/users/${id}/comp`, { until: nowS() + 86_400, reason: 'x' }],
@@ -253,6 +253,52 @@ describe('admin: the paid product', () => {
     const overview = (await (await adminCall('/api/admin/overview', admin)).json()) as { aiSpend: { day: string; costUsd: number }[] };
     expect(overview.aiSpend).toHaveLength(30);
     expect(overview.aiSpend.at(-1)!.costUsd).toBeCloseTo(2.03, 5);
+  });
+
+  it('gives the overview daily trends for 7, 30 or 90 days and the period before', async () => {
+    const admin = await setUp();
+    const ada = await signedInUser('Ada');
+    const bob = await signedInUser('Bob');
+    const t = Date.now();
+    const s = Math.floor(t / 1000);
+    const day = (n: number) => new Date(t - n * 86_400_000).toISOString().slice(0, 10);
+    await env.DB.batch([
+      // Ada signed up today; Bob 3 days ago, and reviewed a card 10 days ago.
+      env.DB.prepare('UPDATE users SET created_at = ? WHERE id = ?').bind(s, ada.id),
+      env.DB.prepare('UPDATE users SET created_at = ? WHERE id = ?').bind(s - 3 * 86_400, bob.id),
+      env.DB.prepare("INSERT INTO card_reviews (id, user_id, card_id, card_version, rating, reviewed_at, duration_ms, day) VALUES ('r1', ?, 'c1', 1, 3, ?, 1000, ?)").bind(bob.id, s - 10 * 86_400, day(10)),
+      // An interview started 2 days ago and finished yesterday; a pack today.
+      env.DB.prepare("INSERT INTO ai_interviews (id, user_id, problem_id, duration_min, status, started_at, ended_at, tokens, cost_usd) VALUES ('i1', ?, 'url-shortener', 45, 'finished', ?, ?, 1000, 0.5)").bind(
+        ada.id,
+        t - 2 * 86_400_000,
+        t - 86_400_000,
+      ),
+      env.DB.prepare("INSERT INTO credits (user_id, kind, bucket, delta, item, ref_id, created_at) VALUES (?, 'grant', 'pack', 5, 'pack_5', 'ord_1', ?)").bind(ada.id, t),
+      // Bob subscribed 5 days ago; a bad signature today.
+      env.DB.prepare("INSERT INTO billing (user_id, status, product, updated_at) VALUES (?, 'active', 'pro_monthly', ?)").bind(bob.id, t),
+      env.DB.prepare("INSERT INTO billing_webhooks (received_at, webhook_id, type, outcome, user_id) VALUES (?, 'w1', 'subscription.active', 'applied', ?)").bind(t - 5 * 86_400_000, bob.id),
+      env.DB.prepare("INSERT INTO billing_webhooks (received_at, webhook_id, type, outcome, user_id) VALUES (?, NULL, NULL, 'bad_signature', NULL)").bind(t),
+      env.DB.prepare("INSERT INTO daily_counts (day, event, count) VALUES (?, 'editor_open', 4)").bind(day(0)),
+    ]);
+
+    expect((await adminCall('/api/admin/trends?days=14', admin)).status).toBe(400);
+    for (const days of [7, 30, 90]) {
+      const trends = (await (await adminCall(`/api/admin/trends?days=${days}`, admin)).json()) as { days: number; from: string; to: string; points: { day: string }[]; usage: { days: unknown[] } };
+      expect(trends).toMatchObject({ days, from: day(2 * days - 1), to: day(0) });
+      expect(trends.points).toHaveLength(2 * days);
+      expect(trends.usage.days).toHaveLength(2 * days);
+    }
+    const trends = (await (await adminCall('/api/admin/trends?days=30', admin)).json()) as { points: Record<string, number | string>[]; usage: { days: { counts: Record<string, number> }[] } };
+    const at = (n: number) => trends.points[trends.points.length - 1 - n];
+    expect(at(0)).toEqual({ day: day(0), signups: 1, active: 2, interviewsStarted: 0, interviewsFinished: 0, aiCostUsd: 0, packOrders: 1, webhookFailures: 1, proSubscribers: 1 });
+    expect(at(1)).toMatchObject({ interviewsFinished: 1 });
+    expect(at(2)).toMatchObject({ interviewsStarted: 1, aiCostUsd: 0.5 });
+    expect(at(3)).toMatchObject({ signups: 1, active: 1 });
+    // Bob's review 10 days ago keeps him in the weekly count until 4 days ago.
+    expect([at(10).active, at(4).active, at(9).active, at(11).active]).toEqual([1, 1, 1, 0]);
+    // Pro counted back from today: Bob from 5 days ago, nobody before.
+    expect([at(5).proSubscribers, at(6).proSubscribers]).toEqual([1, 0]);
+    expect(trends.usage.days.at(-1)!.counts).toEqual({ editor_open: 4 });
   });
 
   it('logs every webhook delivery with its outcome, never the payload, and prunes after 90 days', async () => {

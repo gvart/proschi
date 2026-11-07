@@ -114,7 +114,7 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
       content = <PasskeysTab onSignedOut={onSignedOut} />;
       break;
     default:
-      content = <OverviewTab onSignedOut={onSignedOut} onOpenEvents={openEvents} />;
+      content = <OverviewTab range={route.param} onRange={(days) => go({ page: 'overview', param: days })} onSignedOut={onSignedOut} onOpenEvents={openEvents} />;
   }
   return (
     <div className="adm-shell">
