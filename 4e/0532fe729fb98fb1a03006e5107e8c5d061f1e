@@ -1,0 +1,31 @@
+frontend/e2e/partner.ts
+  s_e17b87e0a1b3ca::t_1f8989e96af611 44,51
+  s_e17b87e0a1b3ca::t_926936403bee6f 1-43,45-50,52-124
+frontend/e2e/accounts.ts
+  s_e17b87e0a1b3ca::t_2986cce0010778 31-32
+frontend/src/partner/PartnerPanel.tsx
+  s_e17b87e0a1b3ca::t_eef764787f0f47 475
+  s_e17b87e0a1b3ca::t_decd806c3633dc 121-122,125-128,197,436
+frontend/e2e/partner.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_33ecf803f9eff7 1-2,4-20,22-116,118-174,176-213,215-220,223-229,231-255,257
+  s_e17b87e0a1b3ca::t_5fd6daf2ebe40f 21,175
+  s_e17b87e0a1b3ca::t_7cf922ca2cbe6b 3
+  s_e17b87e0a1b3ca::t_37fee7cfe92558 117,214,256
+  s_e17b87e0a1b3ca::t_decd806c3633dc 221-222,230
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "4e0532fe729fb98fb1a03006e5107e8c5d061f1e",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
