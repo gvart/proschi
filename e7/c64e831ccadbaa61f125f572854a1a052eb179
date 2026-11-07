@@ -1,0 +1,39 @@
+frontend/e2e/interview.e2e.ts
+  s_e17b87e0a1b3ca::t_fdcc1b2d7c9b39 1-205,207-221,223-227,229-258
+  s_e17b87e0a1b3ca::t_1170bcf696824d 206
+  s_e17b87e0a1b3ca::t_8fa6521fedede0 222,228
+frontend/src/practice/interview/Room.tsx
+  s_e17b87e0a1b3ca::t_5618b5708b4c21 64
+  s_e17b87e0a1b3ca::t_52db2e9ae9b2a2 326
+  s_e17b87e0a1b3ca::t_f7adea90241cc8 324
+frontend/src/practice/interview/useRoom.ts
+  s_e17b87e0a1b3ca::t_5618b5708b4c21 44-50
+frontend/src/dsl/editFlows.test.ts
+  s_e17b87e0a1b3ca::t_9c25da87907530 159-166
+  s_e17b87e0a1b3ca::t_3a83678b97846f 156-158
+frontend/e2e/aiInterview.ts
+  s_e17b87e0a1b3ca::t_d594a9d5f973a8 78,92
+frontend/src/practice/interview/Setup.tsx
+  s_e17b87e0a1b3ca::t_402fbc20fa6338 201
+  s_e17b87e0a1b3ca::t_8fa6521fedede0 465
+frontend/src/practice/interview/MockRoom.tsx
+  s_e17b87e0a1b3ca::t_33ab69cae18ec7 389
+frontend/e2e/modes.e2e.ts
+  s_e17b87e0a1b3ca::t_435386dbeb2bf1 4-6,12
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "e7c64e831ccadbaa61f125f572854a1a052eb179",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
