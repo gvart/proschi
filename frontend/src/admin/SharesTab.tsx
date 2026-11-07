@@ -2,12 +2,13 @@ import { useCallback, useState } from 'react';
 import { deleteShare, listLiveShares, listShares, revokeLiveShare } from './api';
 import { formatBytes, formatDateTime } from './format';
 import { useAction, useLoad } from './hooks';
-import { ErrorNote, Loading, Pager, SearchBox, Section } from './ui';
+import { ErrorNote, Loading, PageHeader, Pager, SearchBox, Section } from './ui';
 
 /** Every short link and live share link, newest first: the only user content other people see. */
 export default function SharesTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
   return (
     <>
+      <PageHeader page="links" />
       <ShortLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
       <LiveLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
     </>

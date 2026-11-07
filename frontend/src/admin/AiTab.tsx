@@ -3,7 +3,7 @@ import BarChart from './BarChart';
 import { formatCompact, formatNumber, formatPercent, formatUsd } from './format';
 import { useLoad } from './hooks';
 import LineChart from './LineChart';
-import { ErrorNote, Loading, Section, Stat } from './ui';
+import { ErrorNote, Loading, PageHeader, Section, Stat } from './ui';
 
 const INTERVIEW_SERIES = [
   { id: 'started', label: 'Started' },
@@ -21,6 +21,7 @@ export default function AiTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: st
   const today = days.at(-1);
   return (
     <>
+      <PageHeader page="ai" />
       <Section title="Last 30 days">
         <div className="adm-stats">
           <Stat label="AI spend" value={formatUsd(totals.costUsd)} note={`${formatUsd(today?.costUsd ?? 0)} today`} />

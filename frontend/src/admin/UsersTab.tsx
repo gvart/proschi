@@ -3,7 +3,7 @@ import { blockUser, deleteUser, deleteUserEmail, getUser, listUsers, patchUser, 
 import { formatBytes, formatDate, formatDateTime, formatDayAgo, formatNumber, humanize } from './format';
 import { useAction, useLoad } from './hooks';
 import UserBilling from './UserBilling';
-import { ErrorNote, Loading, Pager, SearchBox, Section, Stat } from './ui';
+import { ErrorNote, Loading, PageHeader, Pager, SearchBox, Section, Stat } from './ui';
 
 const FILTERS: { id: UserFilter; label: string }[] = [
   { id: 'all', label: 'All' },
@@ -37,69 +37,72 @@ function UserList({ onOpen, onSignedOut }: { onOpen: (id: string) => void; onSig
     setOffset(0);
   }, []);
   return (
-    <Section title="Accounts">
-      <div className="adm-toolbar">
-        <SearchBox value={q} onChange={search} label="Search accounts" placeholder="Name, account id or GitHub/Google user id" />
-        <select className="adm-input" aria-label="Show" value={filter} onChange={(e) => (setFilter(e.target.value as UserFilter), setOffset(0))}>
-          {FILTERS.map((f) => (
-            <option key={f.id} value={f.id}>
-              {f.label}
-            </option>
-          ))}
-        </select>
-        <select className="adm-input" aria-label="Sort by" value={sort} onChange={(e) => (setSort(e.target.value as UserSort), setOffset(0))}>
-          {SORTS.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-      <ErrorNote>{users.error}</ErrorNote>
-      {!users.data ? (
-        !users.error && <Loading what="accounts" />
-      ) : (
-        <>
-          <div className="adm-scroll">
-            <table className="adm-table">
-              <thead>
-                <tr>
-                  <th scope="col">Name</th>
-                  <th scope="col">Sign-in</th>
-                  <th scope="col">Joined</th>
-                  <th scope="col">Last seen</th>
-                  <th scope="col" className="adm-num">
-                    Solved
-                  </th>
-                  <th scope="col">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.data.users.map((u) => (
-                  <tr key={u.id}>
-                    <td>
-                      <button type="button" className="adm-link" onClick={() => onOpen(u.id)}>
-                        {u.displayName}
-                      </button>
-                    </td>
-                    <td>{u.providers.join(', ')}</td>
-                    <td>{formatDate(u.createdAt)}</td>
-                    <td>{formatDayAgo(u.lastSeenDay)}</td>
-                    <td className="adm-num">{formatNumber(u.solved)}</td>
-                    <td className="adm-badges">
-                      {u.blockedAt && <span className="ps-badge ps-badge--fail">blocked</span>}
-                      {u.publicProfile && <span className="ps-badge ps-badge--blue">public</span>}
-                      {u.hasEmail && <span className="ps-badge ps-badge--neutral">email</span>}
-                    </td>
+    <>
+      <PageHeader page="users" />
+      <Section title="Accounts">
+        <div className="adm-toolbar">
+          <SearchBox value={q} onChange={search} label="Search accounts" placeholder="Name, account id or GitHub/Google user id" />
+          <select className="adm-input" aria-label="Show" value={filter} onChange={(e) => (setFilter(e.target.value as UserFilter), setOffset(0))}>
+            {FILTERS.map((f) => (
+              <option key={f.id} value={f.id}>
+                {f.label}
+              </option>
+            ))}
+          </select>
+          <select className="adm-input" aria-label="Sort by" value={sort} onChange={(e) => (setSort(e.target.value as UserSort), setOffset(0))}>
+            {SORTS.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <ErrorNote>{users.error}</ErrorNote>
+        {!users.data ? (
+          !users.error && <Loading what="accounts" />
+        ) : (
+          <>
+            <div className="adm-scroll">
+              <table className="adm-table">
+                <thead>
+                  <tr>
+                    <th scope="col">Name</th>
+                    <th scope="col">Sign-in</th>
+                    <th scope="col">Joined</th>
+                    <th scope="col">Last seen</th>
+                    <th scope="col" className="adm-num">
+                      Solved
+                    </th>
+                    <th scope="col">Status</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-          <Pager offset={users.data.offset} pageSize={users.data.pageSize} total={users.data.total} onChange={setOffset} />
-        </>
-      )}
-    </Section>
+                </thead>
+                <tbody>
+                  {users.data.users.map((u) => (
+                    <tr key={u.id}>
+                      <td>
+                        <button type="button" className="adm-link" onClick={() => onOpen(u.id)}>
+                          {u.displayName}
+                        </button>
+                      </td>
+                      <td>{u.providers.join(', ')}</td>
+                      <td>{formatDate(u.createdAt)}</td>
+                      <td>{formatDayAgo(u.lastSeenDay)}</td>
+                      <td className="adm-num">{formatNumber(u.solved)}</td>
+                      <td className="adm-badges">
+                        {u.blockedAt && <span className="ps-badge ps-badge--fail">blocked</span>}
+                        {u.publicProfile && <span className="ps-badge ps-badge--blue">public</span>}
+                        {u.hasEmail && <span className="ps-badge ps-badge--neutral">email</span>}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+            <Pager offset={users.data.offset} pageSize={users.data.pageSize} total={users.data.total} onChange={setOffset} />
+          </>
+        )}
+      </Section>
+    </>
   );
 }
 

@@ -3,7 +3,7 @@ import { getOverview } from './api';
 import BarChart from './BarChart';
 import { formatNumber, formatUsd, humanize } from './format';
 import { useLoad } from './hooks';
-import { ErrorNote, Loading, Section, Stat } from './ui';
+import { ErrorNote, Loading, PageHeader, Section, Stat } from './ui';
 
 /** Users, sign-ups, content and the daily usage counts. */
 export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut: () => void; onOpenEvents: (kind: string) => void }) {
@@ -15,6 +15,7 @@ export default function OverviewTab({ onSignedOut, onOpenEvents }: { onSignedOut
   const issues = data.events.filter((e) => e.level !== 'info');
   return (
     <>
+      <PageHeader page="overview" />
       <Section title="Accounts">
         <div className="adm-stats">
           <Stat label="Accounts" value={formatNumber(users.total)} note={`${formatNumber(users.public)} public`} />

@@ -1,7 +1,8 @@
+import { RefreshCw } from 'lucide-react';
 import { getHealth } from './api';
 import { formatAgo, formatBytes, formatDateTime, formatNumber, humanize } from './format';
 import { useLoad } from './hooks';
-import { ErrorNote, LevelBadge, Loading, Section, Stat } from './ui';
+import { ErrorNote, LevelBadge, Loading, PageHeader, Section, Stat } from './ui';
 
 /** How long after its last run a job counts as late: the hourly reminders after 2 hours, the daily jobs after 26. */
 const LATE_AFTER: Record<string, number> = { reminders: 2 * 3600 };
@@ -18,14 +19,15 @@ export default function HealthTab({ onSignedOut, onOpenEvents }: { onSignedOut: 
   const runs = new Map(data.cron.runs.map((r) => [r.job, r]));
   return (
     <>
-      <Section
-        title="Worker and database"
+      <PageHeader
+        page="health"
         actions={
           <button type="button" className="ps-btn ps-btn--secondary ps-btn--sm" onClick={health.reload} disabled={health.loading}>
-            Check again
+            <RefreshCw size={14} aria-hidden="true" /> Check again
           </button>
         }
-      >
+      />
+      <Section title="Worker and database">
         <div className="adm-stats">
           <Stat label="Database" value={database.ok ? 'OK' : 'Down'} tone={database.ok ? 'pass' : 'fail'} note={database.ok ? `${database.latencyMs} ms` : database.error} />
           <Stat label="Database size" value={formatBytes(database.sizeBytes)} note={database.migration ?? undefined} />

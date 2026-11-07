@@ -1,14 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { tabPanelProps } from '../design/classes';
-import Tabs from '../design/Tabs';
 import ThemeToggle from '../design/ThemeToggle';
 import Wordmark from '../design/Wordmark';
 import { apiEnabled } from '../services/api';
 import { getStatus, signOut, type Status } from './api';
-import { parseRoute, routeHash, TABS, type Route } from './route';
+import { parseRoute, routeHash, type Route } from './route';
 import AiTab from './AiTab';
 import BillingTab from './BillingTab';
 import { AuditTab, EventsTab } from './EventsTab';
+import Nav from './Nav';
 import Gate from './Gate';
 import HealthTab from './HealthTab';
 import OverviewTab from './OverviewTab';
@@ -17,11 +16,19 @@ import SharesTab from './SharesTab';
 import { useLoad } from './hooks';
 import { ErrorNote, Loading } from './ui';
 import UsersTab from './UsersTab';
+import WebhooksTab from './WebhooksTab';
+
+/** The route in the hash; an old or unknown hash is replaced by the page's own (#/shares becomes #/links). */
+function canonical(hash: string): Route {
+  const route = parseRoute(hash);
+  if (hash && hash !== routeHash(route)) window.history.replaceState(null, '', routeHash(route));
+  return route;
+}
 
 function useRoute(): [Route, (route: Route) => void] {
-  const [route, setRoute] = useState(() => parseRoute(window.location.hash));
+  const [route, setRoute] = useState(() => canonical(window.location.hash));
   useEffect(() => {
-    const onHash = () => setRoute(parseRoute(window.location.hash));
+    const onHash = () => setRoute(canonical(window.location.hash));
     window.addEventListener('hashchange', onHash);
     return () => window.removeEventListener('hashchange', onHash);
   }, []);
@@ -75,10 +82,10 @@ export default function AdminApp() {
 
 function Panel({ onSignedOut }: { onSignedOut: () => void }) {
   const [route, go] = useRoute();
-  const openUser = (id?: string) => go({ tab: 'users', param: id });
-  const openEvents = (kind: string) => go({ tab: 'events', param: kind || undefined });
+  const openUser = (id?: string) => go({ page: 'users', param: id });
+  const openEvents = (kind: string) => go({ page: 'events', param: kind || undefined });
   let content;
-  switch (route.tab) {
+  switch (route.page) {
     case 'health':
       content = <HealthTab onSignedOut={onSignedOut} onOpenEvents={openEvents} />;
       break;
@@ -91,11 +98,14 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
     case 'ai':
       content = <AiTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
       break;
-    case 'shares':
+    case 'links':
       content = <SharesTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
       break;
     case 'events':
       content = <EventsTab kind={route.param ?? ''} onKind={openEvents} onSignedOut={onSignedOut} />;
+      break;
+    case 'webhooks':
+      content = <WebhooksTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
       break;
     case 'audit':
       content = <AuditTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
@@ -107,11 +117,11 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
       content = <OverviewTab onSignedOut={onSignedOut} onOpenEvents={openEvents} />;
   }
   return (
-    <main className="adm-main">
-      <Tabs label="Admin sections" idPrefix="adm" items={[...TABS]} value={route.tab} onChange={(tab) => go({ tab })} className="adm-tabs" />
-      <div {...tabPanelProps('adm', route.tab)} className="adm-panel">
+    <div className="adm-shell">
+      <Nav current={route.page} />
+      <main className="adm-main" key={route.page}>
         {content}
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }

@@ -1,46 +1,214 @@
-/* The admin panel (src/admin/): plain layout on the design tokens
-   (src/design/tokens.css), with the shared buttons, cards, badges and tabs
-   from components.css. */
+/* The admin panel (src/admin/): the site's tokens (src/design/tokens.css),
+   fonts, buttons and badges, with quieter chrome than the marketing pages:
+   hairline card borders instead of the thick ink outline and hard shadow, so
+   the data is the loudest thing on the page. */
 
 .adm {
+  /* Hairlines and fills, one step off the surface. */
+  --adm-line: rgb(var(--c-ink) / 0.12);
+  --adm-line-strong: rgb(var(--c-ink) / 0.22);
+  --adm-wash: rgb(var(--c-ink) / 0.04);
+  /* Delta text: the good and the bad direction, legible as text on the surface. */
+  --adm-good: #00754f;
+  --adm-bad: #c4281c;
   min-height: 100vh;
   background: rgb(var(--c-paper));
   color: rgb(var(--c-ink));
   font-family: var(--font-sans);
+}
+:root[data-theme='dark'] .adm {
+  --adm-line: rgb(var(--c-ink) / 0.13);
+  --adm-good: #2ee6b6;
+  --adm-bad: #ff7b72;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) .adm {
+    --adm-line: rgb(var(--c-ink) / 0.13);
+    --adm-good: #2ee6b6;
+    --adm-bad: #ff7b72;
+  }
+}
+
+/* The site's buttons, a notch lighter: a thinner outline and shadow. */
+.adm .ps-btn--sm {
+  --btn-sh: 2px;
+  min-height: 34px;
+  border-width: var(--bw-1);
+}
+.adm .ps-btn--sm:hover {
+  box-shadow: 4px 4px 0 rgb(var(--c-shadow));
 }
 
 .adm-header {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 12px 16px;
-  border-bottom: var(--bw-2) solid rgb(var(--c-ink));
+  height: 56px;
+  padding: 0 20px;
+  border-bottom: 1px solid var(--adm-line);
   background: rgb(var(--c-surface));
+  position: sticky;
+  top: 0;
+  z-index: 5;
 }
 
 .adm-header__title {
+  padding-left: 12px;
+  border-left: 1px solid var(--adm-line-strong);
   font-family: var(--font-display);
-  font-size: var(--fs-20);
-  font-weight: 800;
+  font-size: var(--fs-16);
+  font-weight: 700;
+  color: rgb(var(--c-muted));
 }
 
 .adm-header__space {
   flex: 1;
 }
 
+/* The sidebar and the page beside it. */
+.adm-shell {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  min-height: calc(100vh - 56px);
+}
+
+.adm-nav {
+  position: sticky;
+  top: 56px;
+  align-self: start;
+  height: calc(100vh - 56px);
+  overflow-y: auto;
+  padding: 20px 12px;
+  border-right: 1px solid var(--adm-line);
+  display: grid;
+  align-content: start;
+  gap: 16px;
+}
+
+.adm-nav ul {
+  display: grid;
+  gap: 2px;
+}
+
+.adm-nav__heading {
+  padding: 0 8px 4px;
+  font-size: var(--fs-12);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgb(var(--c-muted));
+}
+
+.adm-nav__item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 34px;
+  padding: 0 8px;
+  border-radius: 6px;
+  color: rgb(var(--c-ink) / 0.8);
+  font-size: var(--fs-14);
+  font-weight: 500;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: background-color var(--d-1) linear;
+}
+
+.adm-nav__item svg {
+  flex: none;
+  color: rgb(var(--c-muted));
+}
+
+.adm-nav__item:hover {
+  background: var(--adm-wash);
+  color: rgb(var(--c-ink));
+}
+
+.adm-nav__item:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: -2px;
+}
+
+/* The current page: the brand yellow as a marker, the label at full ink. */
+.adm-nav__item[aria-current='page'] {
+  background: rgb(var(--c-yellow) / 0.22);
+  color: rgb(var(--c-ink));
+  font-weight: 700;
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
+}
+
+.adm-nav__item[aria-current='page'] svg {
+  color: rgb(var(--c-ink));
+}
+
 .adm-main {
-  max-width: 1120px;
-  margin: 0 auto;
-  padding: 16px 16px 64px;
+  width: 100%;
+  max-width: 1240px;
+  padding: 24px 32px 64px;
+  display: grid;
+  gap: 16px;
+  align-content: start;
 }
 
-.adm-tabs {
-  overflow-x: auto;
-  margin-bottom: 16px;
+/* Under 900px the sidebar becomes one row of links above the page, scrolling sideways. */
+@media (max-width: 899px) {
+  .adm-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .adm-nav {
+    z-index: 4;
+    height: auto;
+    display: flex;
+    gap: 2px;
+    padding: 8px 12px;
+    overflow-x: auto;
+    border-right: 0;
+    border-bottom: 1px solid var(--adm-line);
+    background: rgb(var(--c-paper));
+  }
+  .adm-nav ul {
+    display: flex;
+  }
+  .adm-nav__heading {
+    display: none;
+  }
+  .adm-nav__item[aria-current='page'] {
+    box-shadow: inset 0 -3px 0 rgb(var(--c-yellow));
+  }
+  .adm-main {
+    padding: 16px 16px 48px;
+  }
 }
 
-.adm-panel:focus-visible {
-  outline: none;
+.adm-page-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px 24px;
+  padding-bottom: 8px;
+}
+
+.adm-page-head h1 {
+  font-family: var(--font-display);
+  font-size: var(--fs-h3);
+  font-weight: 800;
+  letter-spacing: var(--ls-display);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.adm-page-head__text {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.adm-page-head__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
 }
 
 .adm-gate {
@@ -63,14 +231,13 @@
 }
 
 .adm-section {
-  margin-bottom: 24px;
-  padding: 16px;
+  padding: 20px;
   background: rgb(var(--c-surface));
-  border: var(--bw-2) solid rgb(var(--c-ink));
+  border: 1px solid var(--adm-line);
   border-radius: var(--r-md);
-  box-shadow: var(--sh-sm);
   display: grid;
-  gap: 12px;
+  gap: 16px;
+  align-content: start;
   min-width: 0;
 }
 
@@ -84,38 +251,36 @@
 
 .adm-section__head h2 {
   font-family: var(--font-display);
-  font-size: var(--fs-20);
-  font-weight: 800;
+  font-size: var(--fs-18);
+  font-weight: 700;
   overflow-wrap: anywhere;
 }
 
 .adm-stats {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
-  gap: 8px;
+  gap: 12px;
 }
 
 .adm-stat {
   display: grid;
-  gap: 2px;
-  padding: 10px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.2);
-  border-radius: var(--r-md);
-  background: rgb(var(--c-paper));
+  align-content: start;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 8px;
+  background: var(--adm-wash);
 }
 
 .adm-stat__label {
   font-size: var(--fs-12);
+  font-weight: 500;
   color: rgb(var(--c-muted));
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
 }
 
 .adm-stat__value {
-  font-family: var(--font-display);
-  font-size: var(--fs-h3);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+  font-size: var(--fs-20);
+  font-weight: 700;
+  line-height: 1.2;
 }
 
 .adm-stat__note {
@@ -124,15 +289,15 @@
 }
 
 .adm-stat--pass {
-  border-left: 4px solid rgb(var(--c-pass));
+  box-shadow: inset 3px 0 0 rgb(var(--c-pass));
 }
 
 .adm-stat--fail {
-  border-left: 4px solid rgb(var(--c-fail));
+  box-shadow: inset 3px 0 0 rgb(var(--c-fail));
 }
 
 .adm-stat--warn {
-  border-left: 4px solid rgb(var(--c-yellow));
+  box-shadow: inset 3px 0 0 rgb(var(--c-yellow));
 }
 
 .adm-muted {
@@ -148,14 +313,14 @@
 
 .adm-error {
   padding: 8px 12px;
-  border: var(--bw-2) solid rgb(var(--c-fail));
+  border: 1px solid rgb(var(--c-fail));
   border-radius: var(--r-md);
   background: rgb(var(--c-fail) / 0.08);
 }
 
 .adm-notice {
   padding: 8px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.3);
+  border: 1px solid var(--adm-line-strong);
   border-radius: var(--r-md);
   background: rgb(var(--c-yellow) / 0.25);
 }
@@ -181,14 +346,14 @@
 
 .adm-danger-zone {
   padding-top: 12px;
-  border-top: var(--bw-1) dashed rgb(var(--c-ink) / 0.3);
+  border-top: 1px dashed var(--adm-line-strong);
 }
 
 .adm-input {
-  min-height: 36px;
+  min-height: 34px;
   padding: 6px 10px;
-  border: var(--bw-2) solid rgb(var(--c-ink));
-  border-radius: var(--r-md);
+  border: 1px solid var(--adm-line-strong);
+  border-radius: 6px;
   background: rgb(var(--c-surface));
   color: rgb(var(--c-ink));
   font: inherit;
@@ -226,17 +391,186 @@
 .adm-table th {
   text-align: left;
   font-size: var(--fs-12);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
   color: rgb(var(--c-muted));
   font-weight: 600;
+  white-space: nowrap;
 }
 
 .adm-table th,
 .adm-table td {
-  padding: 8px 10px;
-  border-bottom: var(--bw-1) solid rgb(var(--c-ink) / 0.12);
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--adm-line);
   vertical-align: top;
+}
+
+.adm-table th:first-child,
+.adm-table td:first-child {
+  padding-left: 0;
+}
+
+.adm-table th:last-child,
+.adm-table td:last-child {
+  padding-right: 0;
+}
+
+.adm-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.adm-nowrap {
+  white-space: nowrap;
+}
+
+/* A sortable column's header: the label and an arrow for the direction. */
+.adm-sort {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-num .adm-sort {
+  flex-direction: row-reverse;
+}
+
+.adm-sort svg {
+  opacity: 0.45;
+}
+
+.adm-sort.is-active {
+  color: rgb(var(--c-ink));
+}
+
+.adm-sort.is-active svg {
+  opacity: 1;
+}
+
+.adm-sort:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+  border-radius: 2px;
+}
+
+/* Loading and empty states. */
+.adm-skeleton {
+  display: grid;
+  gap: 12px;
+  padding: 4px 0;
+}
+
+.adm-skeleton__row {
+  display: block;
+  height: 14px;
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--adm-wash), rgb(var(--c-ink) / 0.09), var(--adm-wash));
+  background-size: 200% 100%;
+  animation: adm-shimmer 1.4s linear infinite;
+}
+
+@keyframes adm-shimmer {
+  to {
+    background-position: -200% 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .adm-skeleton__row {
+    animation: none;
+  }
+}
+
+.adm-empty {
+  padding: 24px 16px;
+  border: 1px dashed var(--adm-line-strong);
+  border-radius: 8px;
+  text-align: center;
+  color: rgb(var(--c-muted));
+  font-size: var(--fs-14);
+}
+
+/* While a list loads again, the old rows stay, dimmed: no jump, no flash. */
+.adm-refetching {
+  opacity: 0.55;
+  transition: opacity var(--d-2) linear;
+}
+
+.adm-footnote {
+  font-size: var(--fs-12);
+  color: rgb(var(--c-muted));
+}
+
+/* Filter chips with counts, one row above a list (the webhook log). */
+.adm-filters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.adm-filters__note {
+  margin-left: 4px;
+  font-size: var(--fs-12);
+}
+
+.adm-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--adm-line-strong);
+  border-radius: var(--r-pill);
+  background: rgb(var(--c-surface));
+  color: rgb(var(--c-ink));
+  font: 500 var(--fs-14) / 1 var(--font-sans);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.adm-filter:hover {
+  background: var(--adm-wash);
+}
+
+.adm-filter[aria-pressed='true'] {
+  border-color: rgb(var(--c-ink));
+  background: rgb(var(--c-ink));
+  color: rgb(var(--c-surface));
+}
+
+.adm-filter:focus-visible {
+  outline: 2px solid rgb(var(--c-blue));
+  outline-offset: 2px;
+}
+
+.adm-filter__n {
+  font-variant-numeric: tabular-nums;
+  opacity: 0.7;
+}
+
+.adm-dot {
+  flex: none;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: rgb(var(--c-ink) / 0.35);
+}
+
+.adm-dot--pass {
+  background: rgb(var(--c-pass));
+}
+
+.adm-dot--fail {
+  background: rgb(var(--c-fail));
+}
+
+.adm-dot--yellow {
+  background: rgb(var(--c-yellow));
 }
 
 .adm-table--compact th,
@@ -330,9 +664,9 @@
 .adm-event {
   display: grid;
   gap: 4px;
-  padding: 10px 12px;
-  border: var(--bw-1) solid rgb(var(--c-ink) / 0.15);
-  border-radius: var(--r-md);
+  padding: 12px;
+  border: 1px solid var(--adm-line);
+  border-radius: 8px;
 }
 
 .adm-event__head {
@@ -632,7 +966,7 @@
   padding: 20px;
   background: rgb(var(--c-surface));
   color: rgb(var(--c-ink));
-  border: var(--bw-2) solid rgb(var(--c-ink));
+  border: var(--bw-1) solid rgb(var(--c-ink));
   border-radius: var(--r-md);
   box-shadow: var(--sh-sm);
 }

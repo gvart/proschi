@@ -1,4 +1,7 @@
+import { ChevronDown, ChevronsUpDown, ChevronUp } from 'lucide-react';
 import { useEffect, useRef, useState, type ReactNode } from 'react';
+import type { SortDir } from './hooks';
+import { pageOf, type PageId } from './route';
 
 /** Shared pieces of the admin panel's tabs. */
 
@@ -8,6 +11,49 @@ export function ErrorNote({ children }: { children?: ReactNode }) {
     <p className="adm-error" role="alert">
       {children}
     </p>
+  );
+}
+
+/** The page's title (its sidebar label unless `title` says otherwise), its one-line description, and its actions on the right. */
+export function PageHeader({ page, title, description, actions }: { page: PageId; title?: ReactNode; description?: ReactNode; actions?: ReactNode }) {
+  const info = pageOf(page);
+  return (
+    <header className="adm-page-head">
+      <div className="adm-page-head__text">
+        <h1>{title ?? info.label}</h1>
+        <p className="adm-muted">{description ?? info.description}</p>
+      </div>
+      {actions && <div className="adm-page-head__actions">{actions}</div>}
+    </header>
+  );
+}
+
+/** Grey bars where rows or numbers will be, while the first load runs. */
+export function Skeleton({ rows = 5, what }: { rows?: number; what: string }) {
+  return (
+    <div className="adm-skeleton" role="status" aria-label={`Loading ${what}…`}>
+      {Array.from({ length: rows }, (_, i) => (
+        <span key={i} className="adm-skeleton__row" style={{ width: `${100 - ((i * 17) % 35)}%` }} />
+      ))}
+    </div>
+  );
+}
+
+/** A list or table with nothing in it: what that means, and what to do about it if anything. */
+export function Empty({ children }: { children: ReactNode }) {
+  return <p className="adm-empty">{children}</p>;
+}
+
+/** A column header that sorts the table: aria-sort says how it is sorted now. */
+export function SortHeader({ label, active, dir, onSort, numeric }: { label: string; active: boolean; dir?: SortDir; onSort: () => void; numeric?: boolean }) {
+  const Icon = !active ? ChevronsUpDown : dir === 'asc' ? ChevronUp : ChevronDown;
+  return (
+    <th scope="col" className={numeric ? 'adm-num' : undefined} aria-sort={active ? (dir === 'asc' ? 'ascending' : 'descending') : 'none'}>
+      <button type="button" className={`adm-sort${active ? ' is-active' : ''}`} onClick={onSort}>
+        {label}
+        <Icon size={14} aria-hidden="true" />
+      </button>
+    </th>
   );
 }
 
@@ -131,5 +177,15 @@ export function Dialog({ title, open, onClose, onSubmit, submitLabel, danger, bu
         </div>
       </form>
     </dialog>
+  );
+}
+
+/** An account's name, opening it; "unknown" without one. */
+export function UserLink({ user, onOpenUser }: { user: { id: string; displayName: string } | null; onOpenUser: (id: string) => void }) {
+  if (!user) return <span className="adm-muted">unknown</span>;
+  return (
+    <button type="button" className="adm-link" onClick={() => onOpenUser(user.id)}>
+      {user.displayName}
+    </button>
   );
 }
