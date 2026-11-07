@@ -1,5 +1,5 @@
 import type { Page } from '@playwright/test';
-import { answerDialog, canvasNodes, codeEditor, editorText, expect, test } from './fixtures';
+import { answerDialog, canvasNodes, codeEditor, editorText, expect, test, toSetupStep } from './fixtures';
 
 /**
  * The mock interview's pages without accounts (practice/interview, P45): the
@@ -23,7 +23,7 @@ async function recordCues(page: Page) {
 }
 const cues = (page: Page) => page.evaluate(() => (window as unknown as { __cues: string[] }).__cues);
 
-/** From the set-up: the problem chosen by name in the picker, then Start. */
+/** From the set-up wizard: the problem chosen by name in the picker, the length, then Start on the review. */
 async function startOn(page: Page, title: string, minutes?: string) {
   await page.goto('practice/#/interview');
   await page.getByRole('radio', { name: 'Choose a problem' }).click();
@@ -32,7 +32,11 @@ async function startOn(page: Page, title: string, minutes?: string) {
   await picker.getByRole('list', { name: 'Problems' }).getByRole('button', { name: new RegExp(title) }).first().click();
   await expect(picker).toBeHidden();
   await expect(page.getByTestId('chosen-problem')).toContainText(title);
-  if (minutes) await page.getByRole('radio', { name: minutes }).click();
+  if (minutes) {
+    await toSetupStep(page, 'length');
+    await page.getByRole('radio', { name: minutes }).click();
+  }
+  await toSetupStep(page);
   await page.getByRole('button', { name: 'Start the interview' }).click();
   await expect(room(page)).toBeVisible();
 }
@@ -41,14 +45,30 @@ test.describe('mock interview set-up', () => {
   test('Surprise me picks a problem not done yet, so the next one differs, and the problem waits for the room', async ({ page }) => {
     await page.goto('practice/#/interview');
     await expect(page.getByRole('heading', { level: 1, name: 'Mock interview' })).toBeVisible();
+    // Without the interviewer the wizard starts at the problem: one question a screen, a default chosen.
+    await expect(page.getByRole('heading', { level: 2, name: 'Which problem?' })).toBeVisible();
+    await expect(page.getByTestId('setup-progress')).toHaveText('Step 1 of 3');
     await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
     await expect(page.getByRole('radio', { name: 'Same as last time' })).toHaveCount(0);
-    await expect(page.getByRole('complementary', { name: 'Your interview' })).toContainText('A surprise, shown in the room');
-    // The filters narrow the pool.
+    // The filters, folded under Filters, narrow the pool.
+    await expect(page.getByRole('radiogroup', { name: 'Difficulty' })).toHaveCount(0);
+    await page.getByRole('button', { name: /^Filters/ }).click();
     await page.getByRole('radiogroup', { name: 'Difficulty' }).getByRole('radio', { name: 'Easy' }).click();
     await expect(page.getByTestId('pool-size')).toHaveText(/^5 problems to draw from, 5 not done yet\.$/);
     await page.getByRole('radiogroup', { name: 'Difficulty' }).getByRole('radio', { name: 'Any' }).click();
 
+    // Enter continues from the question, which takes the focus on each new screen.
+    await page.getByRole('button', { name: /^Continue/ }).click();
+    const question = page.getByRole('heading', { level: 2, name: 'How long?' });
+    await expect(question).toBeFocused();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('heading', { level: 2, name: 'Ready when you are' })).toBeFocused();
+    await expect(page.getByRole('list', { name: 'Your interview' })).toContainText('A surprise, shown in the room');
+    await expect(page.getByTestId('consent-line')).toHaveCount(0);
+    // Browser Back steps back through the screens, not off the page.
+    await page.goBack();
+    await expect(question).toBeVisible();
+    await page.goForward();
     await page.getByRole('button', { name: 'Start the interview' }).click();
     await expect(room(page)).toBeVisible();
     const first = roomProblem(page);
@@ -60,6 +80,7 @@ test.describe('mock interview set-up', () => {
     await answerDialog(page, 'Leave');
     await expect(page.getByTestId('open-solo')).toBeVisible();
     await expect(page.getByRole('radio', { name: 'Same as last time' })).toBeVisible();
+    await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the interview' }).click();
     await expect(room(page)).toBeVisible();
     expect(roomProblem(page)).not.toBe(first);
@@ -145,6 +166,7 @@ test.describe('the interview room on your own', () => {
     await expect(result.getByRole('link', { name: 'Try this problem again' })).toHaveAttribute('href', '#/interview?problem=url-shortener&with=solo');
     await result.getByRole('link', { name: 'New interview' }).click();
     await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
+    await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the interview' }).click();
     await expect(room(page)).toBeVisible();
     expect(roomProblem(page)).not.toBe('url-shortener');
@@ -173,11 +195,13 @@ test.describe('the interview room on your own', () => {
   test('sound is on by default, off from the set-up or the top bar, and remembered', async ({ page }) => {
     await recordCues(page);
     await page.goto('practice/#/interview');
-    const setupSound = page.getByTestId('setup-sound');
-    await expect(setupSound).toBeChecked();
-    await setupSound.uncheck();
     await page.getByRole('radio', { name: 'Choose a problem' }).click();
     await page.getByRole('dialog', { name: 'Choose a problem' }).getByRole('button', { name: /^URL Shortener/ }).click();
+    await toSetupStep(page);
+    const setupSound = page.getByTestId('setup-sound');
+    await expect(setupSound).toHaveAttribute('aria-checked', 'true');
+    await setupSound.click();
+    await expect(setupSound).toHaveAttribute('aria-checked', 'false');
     await page.getByRole('button', { name: 'Start the interview' }).click();
     const sound = page.getByTestId('room-sound');
     await expect(sound).toHaveAttribute('aria-pressed', 'false');

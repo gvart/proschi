@@ -1,7 +1,7 @@
 import type { Page } from '@playwright/test';
 import { mockSignedIn } from './accounts';
 import { mockInterviews } from './aiInterview';
-import { answerDialog, expect, test } from './fixtures';
+import { answerDialog, expect, test, toSetupStep } from './fixtures';
 
 /**
  * Max's extras on the mock interview (docs/design/paid-plans.md P31; build
@@ -10,11 +10,12 @@ import { answerDialog, expect, test } from './fixtures';
  * neither, only a quiet hint on the set-up.
  */
 
-/** The mock interview's set-up on URL Shortener, with the interviewer chosen. */
+/** The mock interview's set-up on URL Shortener, with the interviewer chosen, at its review. */
 async function toStart(page: Page) {
   await page.goto('practice/#/interview?problem=url-shortener&with=mock');
   const start = page.getByRole('main');
   await expect(start.getByRole('radio', { name: /Mock interview/ })).toHaveAttribute('aria-checked', 'true');
+  await toSetupStep(page);
   return start;
 }
 
