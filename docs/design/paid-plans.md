@@ -312,3 +312,42 @@ id; don't rewrite old ones.
   edit reaches the code editor as one isolated undo step, so Ctrl/Cmd+Z
   undoes it from the canvas or the code. In practice the canvas writes only
   the solution file: the problem's imported nodes are read-only there.
+- **P38. Mock interview: known facts and a calculator.** The interviewer
+  and the coaching hint never ask, or suggest asking, for what the
+  candidate already knows. Each turn hands both models a `<known_facts>`
+  list: the statement shown, the clarify topics the candidate asked about,
+  and the facts the interviewer gave (tracked on the server in the
+  session's `revealed`, by matching the fact's numbers in the reply and by
+  the hint model's `revealed` ids, so it holds even when the hint call
+  fails). `<not_asked>` leaves both out. The verdict counts a fact given
+  unasked as missed. Hints follow the current phase. For numbers the
+  interviewer has a `calculate` tool, evaluated on the server
+  (`src/ai/calc.ts`: units, k/M/B suffixes, `in <unit>`), at most 6 calls a
+  turn, every call billed; an estimate within 10x of the reference answer
+  is the right order of magnitude. The tool exchange is not kept in the
+  transcript, so the cached prefix stays append-only.
+- **P39. Voice: speech to text, and spoken replies.** The mic
+  (`frontend/src/voice`, in the mock interview and Design partner) uses the
+  browser's Web Speech recognition where there is one, free, continuous and
+  restarted when the browser ends it. Elsewhere it records chunks cut at a
+  pause (silence is never sent) to `POST /api/voice/transcribe`: Workers AI
+  `@cf/openai/whisper-large-v3-turbo` ($0.000513 an audio minute), metered
+  as `voice` at the usual 2x, about 0.1 credit a minute. A chunk is at most
+  1 MiB and 60 seconds and is billed for the larger of its declared length
+  and its size at 32 kbit/s; `VOICE_LIMITER` allows 30 a minute. Spoken
+  replies use the browser's `speechSynthesis` (the most natural English
+  voice it has), free, off by default, remembered, stopped by talking or
+  typing. Server text to speech was priced and left out for now: Workers
+  AI Aura-2 ($0.030 per 1k characters) is about 28-57 credits for a
+  45-minute interview at 2x, Aura-1 about half that; MeloTTS is nearly free
+  but sounds worse than a good browser voice. That is too much against the
+  P40 cap; revisit as a paid option.
+- **P40. Mock interview cap.** A session never charges more than 100, 150
+  or 200 credits for 30, 45 or 60 minutes, plus its verdict (reserved
+  apart, so the verdict can always be asked for). Each turn holds the lesser
+  of its worst case and the room left under the cap; when less than a
+  typical turn is left, the turn is refused (409 `budget`) and the session
+  moves to wrap-up. It is a credit cap, not a lower `TOKEN_CAP`: a token
+  bound has to price every token at the output rate, so one that kept the
+  worst case at 150 credits would end ordinary sessions early.
+  `TOKEN_CAP` stays as the runaway guard.

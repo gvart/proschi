@@ -245,8 +245,8 @@ export function Pricing({ account, plan, estimates }: { account: Account; plan?:
           <Faq q="What is a credit?">
             One cent of use. A mock interview or a Design partner answer costs what it took to write, so a short answer costs less than a long one. You see
             the estimate before you start and the real cost after, and nothing costs more than its cap: a Design partner review never more than{' '}
-            {formatCredits(estimates.partner_review.worst ?? estimates.partner_review.max, { floor: true })} credits, a mock interview never more than the
-            credits you have (and {formatCredits(estimates.mock_interview.worst ?? estimates.mock_interview.max, { floor: true })} at most).
+            {formatCredits(estimates.partner_review.worst ?? estimates.partner_review.max, { floor: true })} credits, a 45-minute mock interview never more than{' '}
+            {formatCredits(estimates.mock_interview.worst ?? estimates.mock_interview.max, { floor: true })} credits (30 or 60 minutes in proportion), nor more than the credits you have.
           </Faq>
           <Faq q="Why credits, and not a number of interviews?">
             You pay for what you use: a short review costs less than a full interview, and a 30-minute interview less than a 60-minute one. The plan only

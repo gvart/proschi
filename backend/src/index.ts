@@ -79,6 +79,7 @@ import { getEstimates, getUsage } from './meter';
 import { finishInterview, getInterview, interviewHistory, interviewReport, interviewTurn, listInterviews, startInterview } from './interviews';
 import { createPartnerSession, decidePartnerChange, getPartnerSession, postPartnerTurn } from './partner';
 import { getRoadmapNext } from './roadmap';
+import { transcribe } from './voice';
 import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedback, postFeedback } from './feedback';
 
 /**
@@ -179,6 +180,7 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   POST   /api/metrics {event} | {events}  anonymous daily usage counts (allow-listed event names, no identifiers)
  *   GET    /api/metrics/summary?days=30     the daily counts; only with X-Metrics-Token (404 without METRICS_TOKEN set)
  *   POST   /api/feedback                    a message to the operator (multipart, screenshots too; src/feedback.ts)
+ *   POST   /api/voice/transcribe?seconds=   a chunk of recorded audio as text, Workers AI Whisper, metered in credits (src/voice.ts)
  *   …      /api/admin/*                     the admin panel: passkey sign-in (src/adminAuth.ts) and its data (src/admin.ts)
  *
  * and, outside the API, public profiles at addresses of their own (src/profilePage.ts):
@@ -342,6 +344,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'metrics')) return postMetrics(request, ctx);
   if (is('GET', 'api', 'metrics', 'summary')) return getMetricsSummary(request, ctx);
   if (is('POST', 'api', 'feedback')) return postFeedback(request, ctx);
+  if (is('POST', 'api', 'voice', 'transcribe')) return transcribe(request, ctx);
   if (parts[0] === 'api' && parts[1] === 'admin') return adminRoute(request, ctx, is, parts);
   return errorResponse(404, 'Not found');
 }

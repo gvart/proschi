@@ -10,7 +10,7 @@ import type { Env } from './env';
 import { can, planRequired, requireFeature, type FeatureRoute } from './features';
 import { HttpError, json, rateLimit, readJson } from './http';
 import { errorText, log } from './log';
-import { balanceMc, CALLS, hold, HOLD_TTL_MS, interviewTurnHoldMc, noCredits, release, settle, settleFailed, topUp, verdictHoldMc, worstMc } from './meter';
+import { balanceMc, CALLS, hold, HOLD_TTL_MS, interviewTurnHoldMc, interviewTurnRoomMc, noCredits, release, settle, settleFailed, topUp, verdictHoldMc, worstMc } from './meter';
 import { recommendAfterInterview } from './roadmap';
 
 /**
@@ -41,6 +41,10 @@ import { recommendAfterInterview } from './roadmap';
  * Credits (P26–P28, src/meter.ts): starting needs enough for the verdict and
  * one turn, and holds the verdict's worst case for the whole session. Each
  * turn holds its own worst case, then is charged what its calls really cost.
+ * A session is charged at most its cap (P40: 100, 150 or 200 credits for 30,
+ * 45 or 60 minutes): a turn holds at most what is left of it less the
+ * verdict's hold, and once too little is left it answers 409 budget and the
+ * session moves to its wrap-up.
  * Every answer the model gave is charged, a refused, cut-off or malformed one
  * too (P34); a call that failed before the model answered (network, timeout,
  * overloaded) is charged nothing.
@@ -287,8 +291,16 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
   }
   const state = stateOf(row);
 
-  // The turn's worst case, held before any call; at 0 credits the session goes to its wrap-up (P28).
-  const held = await hold(ctx.env, user.id, interviewTurnHoldMc(ctx.env), id);
+  // The session's cap (P40): what its turns were charged so far, against what is left of it.
+  const spent = await DB.prepare("SELECT COALESCE(SUM(charged_mc), 0) AS mc FROM credit_charges WHERE ref = ? AND action = 'mock_interview'").bind(id).first<{ mc: number }>();
+  const room = interviewTurnRoomMc(ctx.env, row.duration_min, spent?.mc ?? 0);
+  if (room === undefined) {
+    await DB.prepare('UPDATE ai_interviews SET turning_until = NULL WHERE id = ? AND turning_until = ?').bind(id, lease).run();
+    await moveToWrapUp(DB, row, state, now);
+    return json({ error: 'budget', message: 'The interview has used its credit cap; ask for the verdict' }, 409, NO_STORE);
+  }
+  // The turn's worst case (or what is left of the cap), held before any call; at 0 credits the session goes to its wrap-up (P28).
+  const held = await hold(ctx.env, user.id, room, id);
   if (!held.ok) {
     await DB.batch([DB.prepare('UPDATE ai_interviews SET turning_until = NULL WHERE id = ? AND turning_until = ?').bind(id, lease)]);
     await moveToWrapUp(DB, row, state, now);

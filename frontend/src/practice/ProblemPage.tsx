@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MessagesSquare, MoreHorizontal, Network, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -368,6 +368,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           onRestart={() => setSession(undefined)}
           getSource={getSource}
           preferAi={interviewWith === 'ai'}
+          onShow={phone ? () => setPane('statement') : undefined}
         >
           <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
         </InterviewPanel>
@@ -582,12 +583,17 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         // The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target.
         <div className="flex items-stretch bg-surface border-b-bw-1 border-ink">
           <div role="tablist" aria-label="View" className="ps-tabs ps-tabs--fill flex-1 min-w-0 !border-b-0">
-            {PANES.map(({ id, label, icon: Icon }) => (
-              <button key={id} role="tab" data-tour={`tab-${id}`} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
-                <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
-                {label}
-              </button>
-            ))}
+            {PANES.map(({ id, label, icon }) => {
+              // In interview mode the first pane is the interview (its chat, with the problem folded inside it): it says so.
+              const interviewTab = id === 'statement' && interviewOn;
+              const Icon = interviewTab ? MessagesSquare : icon;
+              return (
+                <button key={id} role="tab" data-tour={`tab-${id}`} data-testid={interviewTab ? 'tab-interview' : undefined} aria-selected={pane === id} onClick={() => setPane(id)} className="ps-tab !px-2">
+                  <Icon size={15} className="hidden min-[420px]:block" aria-hidden="true" />
+                  {interviewTab ? 'Interview' : label}
+                </button>
+              );
+            })}
           </div>
           {lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
         </div>

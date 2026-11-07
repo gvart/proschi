@@ -17,7 +17,7 @@ export const ESTIMATE_MINUTES = 45;
 
 export const getEstimates = (): Promise<CreditEstimates> => api<CreditEstimates>('/api/credits/estimates');
 
-export type UsageAction = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps';
+export type UsageAction = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps' | 'voice';
 
 export interface UsageItem {
   /** Unix ms. */
@@ -33,6 +33,7 @@ export const USAGE_LABEL: Record<UsageAction, string> = {
   design_partner: 'Design partner',
   verdict: 'Verdict',
   next_steps: 'Your next steps',
+  voice: 'Voice input',
 };
 
 /** GET /api/credits/usage: the latest charges, newest first. */
@@ -71,9 +72,9 @@ export function interviewEstimate(estimates: CreditEstimates, minutes: number, d
   const extra = deep ? estimates.deepMultiplier - 1 : 0;
   const scale = (n: number, v: number) => Math.max(5, Math.round(((n * minutes) / ESTIMATE_MINUTES + v * extra) / 5) * 5);
   const range = { min: scale(estimates.mock_interview.min, verdict.min), max: scale(estimates.mock_interview.max, verdict.max) };
-  // The cap is the session's, whatever its length; a Deep verdict can take its own hold beyond it.
+  // The cap is the 45-minute one in proportion (100, 150, 200 credits; P40); a Deep verdict can take its own hold beyond it.
   const worst = estimates.mock_interview.worst;
-  return worst === undefined ? range : { ...range, worst: worst + (verdict.worst ?? 0) * extra };
+  return worst === undefined ? range : { ...range, worst: Math.round((worst * minutes) / ESTIMATE_MINUTES) + (verdict.worst ?? 0) * extra };
 }
 
 /** What the monthly or sign-up allowance is, to measure the balance against. */

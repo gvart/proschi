@@ -19,6 +19,8 @@ export interface CreditEstimates {
   partner_review: Range;
   partner_build: Range;
   partner_turn: Range;
+  /** Voice input's server speech-to-text, a minute of audio (where the browser has no speech recognition). */
+  voice_minute?: Range;
   /** The mock interview's verdict alone, inside `mock_interview`: what Deep mode multiplies there. */
   verdict?: Range;
   /** Deep mode (Max) costs about this many times as much. */
@@ -32,10 +34,11 @@ export interface CreditEstimates {
  * fails when the two differ, so change both together.
  */
 export const TYPICAL_COSTS: CreditEstimates = {
-  mock_interview: { min: 37.253, max: 57.039, worst: 1096.536 },
+  mock_interview: { min: 37.253, max: 57.039, worst: 150 },
   partner_review: { min: 8.36, max: 12.16, worst: 49.4 },
   partner_build: { min: 12.996, max: 20.596, worst: 72.2 },
   partner_turn: { min: 4.028, max: 5.928, worst: 30.4 },
+  voice_minute: { min: 0.098, max: 0.098, worst: 0.098 },
   verdict: { min: 12.692, max: 16.492, worst: 53.2 },
   // Opus's price per token over Sonnet's (meter.ts DEEP_MULTIPLIER).
   deepMultiplier: 2,

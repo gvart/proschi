@@ -1,4 +1,3 @@
-import { MAX_TURNS, TOKEN_CAP, VERDICT_RESERVE } from './ai/budget';
 import { AiError } from './ai/client';
 import { requireUser } from './auth';
 import type { Ctx } from './context';
@@ -27,8 +26,21 @@ import { MC } from './plans';
  * INSERT, and a settle one batch, which D1 runs atomically.
  */
 
-export type Usage = { model: string; input_tokens: number; output_tokens: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number };
-export type Action = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps';
+export type Usage = {
+  model: string;
+  input_tokens: number;
+  output_tokens: number;
+  cache_read_input_tokens?: number;
+  cache_creation_input_tokens?: number;
+  /** Speech-to-text (WHISPER): the audio's length, which it is priced by. */
+  audio_seconds?: number;
+};
+export type Action = 'mock_interview' | 'design_partner' | 'verdict' | 'next_steps' | 'voice';
+
+/** Workers AI's speech-to-text model for voice input (src/voice.ts, P39). */
+export const WHISPER = '@cf/openai/whisper-large-v3-turbo';
+/** What Whisper costs us, USD per audio minute (Workers AI pricing, checked 2026-11-07: $0.000513 a minute). At 2x and 0.95 EUR/USD, about 0.1 credit a minute. */
+export const WHISPER_USD_PER_MINUTE = 0.000513;
 
 /** How long a hold counts unless the caller asks otherwise. */
 export const HOLD_TTL_MS = 5 * 60_000;
@@ -78,6 +90,7 @@ export function usdToEur(env: Pick<Env, 'CREDITS_USD_EUR'>): number {
 
 /** What one call cost us, in USD. */
 export function costUsd(u: Usage): number {
+  if (u.model === WHISPER) return ((u.audio_seconds ?? 0) / 60) * WHISPER_USD_PER_MINUTE;
   const read = u.cache_read_input_tokens ?? 0;
   const write = u.cache_creation_input_tokens ?? 0;
   const p = priceOf(u.model, u.input_tokens + read + write);
@@ -278,8 +291,28 @@ export function typicalMc(c: CallShape, env: Pick<Env, 'CREDITS_USD_EUR'>, end: 
   return costMc({ model: c.model, input_tokens: Math.round(c.input * 0.2), cache_read_input_tokens: Math.round(c.input * 0.8), output_tokens: c.typicalOutput[end] }, env);
 }
 
-/** What one mock interview turn holds: the reply and the hint at their worst. */
-export const interviewTurnHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => worstMc(CALLS.interviewReply, env) + worstMc(CALLS.interviewHint, env);
+/** What one mock interview turn holds: the reply (twice: the calculator's follow-up, P38) and the hint at their worst. */
+export const interviewTurnHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>): number => 2 * worstMc(CALLS.interviewReply, env) + worstMc(CALLS.interviewHint, env);
+
+/** The most a 45-minute mock interview is ever charged, in credits (P40); other lengths in proportion. */
+export const INTERVIEW_CAP_CREDITS = 150;
+const CAP_MINUTES = 45;
+
+/** A mock interview's cap in millicredits: 100 credits for 30 minutes, 150 for 45, 200 for 60 (P40). */
+export const interviewCapMc = (minutes: number): number => Math.round((INTERVIEW_CAP_CREDITS * minutes) / CAP_MINUTES) * MC;
+
+/**
+ * What the next turn of a session may hold (P40): its usual hold, or less
+ * when the session is near its cap. Its turns are charged at most the cap
+ * less the (ordinary) verdict's hold, so the verdict always fits under it.
+ * Undefined when what is left is less than a turn usually costs: the session
+ * has used its budget and goes to the verdict.
+ */
+export function interviewTurnRoomMc(env: Pick<Env, 'CREDITS_USD_EUR'>, minutes: number, chargedMc: number): number | undefined {
+  const room = interviewCapMc(minutes) - verdictHoldMc(env) - chargedMc;
+  const usual = 2 * (typicalMc(CALLS.interviewReply, env, 1) + typicalMc(CALLS.interviewHint, env, 1));
+  return room < usual ? undefined : Math.min(room, interviewTurnHoldMc(env));
+}
 
 /** A Deep verdict (Max, P31): the same call on Opus. */
 const DEEP_VERDICT: CallShape = { ...CALLS.verdict, model: OPUS };
@@ -296,18 +329,19 @@ export const verdictHoldMc = (env: Pick<Env, 'CREDITS_USD_EUR'>, deep = false): 
 const TYPICAL_TURNS = [9, 13] as const;
 
 /**
- * The most a mock interview can be charged, whatever happens: its turns stop
- * once the session has used TOKEN_CAP less VERDICT_RESERVE billed tokens
- * (src/ai/budget.ts), no billed token of a turn costs more than Sonnet's
- * output, the turn that crosses the line is charged at most its hold, and
- * the verdict at most its hold (a settle never charges more than its hold).
- * MAX_TURNS turns at their holds bound it too.
+ * The most a mock interview of `minutes` can be charged, whatever happens
+ * (P40): each turn holds at most what is left of the cap less the verdict's
+ * hold (interviewTurnRoomMc) and a settle never charges more than its hold,
+ * so the turns together stay under it, and the verdict is charged at most
+ * its own hold. That is the cap; a Deep verdict (P31) adds what its hold is
+ * beyond the ordinary one.
  */
-function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolean): number {
-  const turnHold = interviewTurnHoldMc(env);
-  const turns = Math.min(costMc({ model: SONNET, input_tokens: 0, output_tokens: TOKEN_CAP - VERDICT_RESERVE }, env) + turnHold, MAX_TURNS * turnHold);
-  return turns + verdictHoldMc(env, deep);
+export function interviewWorstMc(env: Pick<Env, 'CREDITS_USD_EUR'>, deep: boolean, minutes = CAP_MINUTES): number {
+  return interviewCapMc(minutes) - verdictHoldMc(env) + verdictHoldMc(env, deep);
 }
+
+/** What `seconds` of audio cost the user to transcribe, in millicredits (P39). */
+export const voiceMc = (seconds: number, env: Pick<Env, 'CREDITS_USD_EUR'>): number => costMc({ model: WHISPER, input_tokens: 0, output_tokens: 0, audio_seconds: seconds }, env);
 
 /** Opus's price over Sonnet's: what Deep mode multiplies a call by (P31). */
 export const DEEP_MULTIPLIER = PRICES[OPUS].output / PRICES[SONNET].output;
@@ -331,6 +365,8 @@ export function estimates(env: Pick<Env, 'CREDITS_USD_EUR'>) {
     partner_review: one(CALLS.partnerReview),
     partner_build: one(CALLS.partnerBuild),
     partner_turn: one(CALLS.partnerTurn),
+    /** Voice input's server speech-to-text, per minute of audio (P39): the same at its worst. */
+    voice_minute: range(voiceMc(60, env), voiceMc(60, env), voiceMc(60, env)),
     /** The verdict alone, in the mock interview's estimate: what Deep mode multiplies there (P31). */
     verdict: one(CALLS.verdict),
     deepMultiplier: DEEP_MULTIPLIER,
