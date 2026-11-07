@@ -107,7 +107,7 @@ export default function ReviewPanel({ source, input, onSelect, reviewer: injecte
     <div className="px-3 py-3 space-y-3 text-sm" data-testid="design-review" aria-busy={loading || ai.status === 'checking'}>
       <p className="text-ink/80">
         {showsAi
-          ? 'An AI reviewer reads your design, the server’s run of its tests and the simulation’s numbers, and comments on the trade-offs.'
+          ? 'An in-depth review: Claude, by Anthropic, reads your design, the server’s run of its tests and the simulation’s numbers, and comments on the trade-offs.'
           : 'An automatic review, based on the simulation and the tests.'}
       </p>
       <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5">
@@ -117,7 +117,7 @@ export default function ReviewPanel({ source, input, onSelect, reviewer: injecte
         </button>
         {aiOn && (
           <span className="text-xs text-muted tabular-nums" data-testid="reviews-left">
-            {ai.usage.remaining > 0 ? `${ai.usage.remaining} of ${ai.usage.limit} AI reviews left today` : `No AI reviews left today · more at ${time(ai.usage.resetAt)}`}
+            {ai.usage.remaining > 0 ? `${ai.usage.remaining} of ${ai.usage.limit} in-depth reviews left today` : `No in-depth reviews left today · more at ${time(ai.usage.resetAt)}`}
           </span>
         )}
       </div>
@@ -129,11 +129,11 @@ export default function ReviewPanel({ source, input, onSelect, reviewer: injecte
       {!injected && (
         <Feature
           name="ai_review"
-          hint={<UpgradeHint>AI design review is part of Pro</UpgradeHint>}
+          hint={<UpgradeHint>The in-depth review is part of Pro</UpgradeHint>}
           free={(hint) =>
             hint && (
               <p className="text-xs text-muted" data-testid="review-upgrade-hint">
-                Want an AI reviewer to explain your design’s trade-offs? {hint}
+                Want an in-depth review that explains your design’s trade-offs? {hint}
               </p>
             )
           }
@@ -163,7 +163,7 @@ function NoticeLine({ notice }: { notice: Notice }) {
       <p role="alert" className="flex gap-2 rounded-sm border-bw-1 border-fail bg-fail/10 px-3 py-2 text-ink" data-testid="review-notice">
         <AlertCircle size={16} className="mt-0.5 shrink-0" />
         <span>
-          The AI review failed ({notice.message}), so here is the automatic review. Try the AI review again in a minute.
+          The in-depth review failed ({notice.message}), so here is the automatic review. Try the in-depth review again in a minute.
         </span>
       </p>
     );
@@ -171,8 +171,8 @@ function NoticeLine({ notice }: { notice: Notice }) {
   return (
     <p role="status" className="rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-3 py-2 text-ink" data-testid="review-notice">
       {notice.kind === 'limit'
-        ? `You have used today’s ${notice.usage?.limit ?? 20} AI reviews${notice.usage ? `; more at ${time(notice.usage.resetAt)}` : ''}. Here is the automatic review meanwhile.`
-        : 'The AI reviewer is not available right now, so here is the automatic review.'}
+        ? `You have used today’s ${notice.usage?.limit ?? 20} in-depth reviews${notice.usage ? `; more at ${time(notice.usage.resetAt)}` : ''}. Here is the automatic review meanwhile.`
+        : 'The in-depth review is not available right now, so here is the automatic review.'}
     </p>
   );
 }
@@ -207,7 +207,7 @@ function Review({ review, stale, locs, onSelect }: { review: DesignReview; stale
         </section>
       )}
       <p className="text-xs text-muted">
-        {review.by === 'rules' ? 'Every finding comes from the simulation and the tests; the tests are the verdict.' : 'AI feedback can be wrong; the tests are the verdict.'}
+        {review.by === 'rules' ? 'Every finding comes from the simulation and the tests; the tests are the verdict.' : 'The in-depth review can be wrong; the tests are the verdict.'}
       </p>
     </div>
   );
