@@ -271,7 +271,7 @@ describe('data export', () => {
       billing: null,
       billingWebhooks: [],
       credits: [],
-      reviewUsage: [],
+      creditCharges: [],
       roadmapRecs: [],
       aiInterviews: [],
     });

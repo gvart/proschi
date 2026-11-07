@@ -27,7 +27,7 @@ export interface Env {
   INTERVIEW_TURN_LIMITER: RateLimit;
   INTERVIEW_FINISH_LIMITER: RateLimit;
   INTERVIEW_READ_LIMITER: RateLimit;
-  /** AI design reviews (src/review.ts), per user, on top of the daily cap. */
+  /** In-depth reviews (src/review.ts), per user. */
   AI_REVIEW_LIMITER: RateLimit;
   /** Polar's webhook (src/billing.ts), per IP, before the signature is checked; and the bad signatures logged, one per IP a minute. */
   WEBHOOK_LIMITER: RateLimit;
@@ -68,7 +68,7 @@ export interface Env {
   ADMIN_SETUP_TOKEN?: string;
   /**
    * Billing through Polar (src/billing.ts; backend/README.md "Billing and
-   * credits"). Without the token, the webhook secret and the three product
+   * credits"). Without the token, the webhook secret and the five product
    * ids, checkout, the portal and the webhook answer 501.
    */
   POLAR_ACCESS_TOKEN?: string;
@@ -76,10 +76,17 @@ export interface Env {
   POLAR_WEBHOOK_SECRET?: string;
   /** `sandbox` for Polar's sandbox (sandbox-api.polar.sh); anything else is production. */
   POLAR_SERVER?: string;
-  /** Polar product ids of Pro monthly, Pro yearly and the 5 interview pack. */
+  /** Polar product ids of Pro and Max, monthly and yearly, and the 1,000-credit top-up. */
   POLAR_PRODUCT_PRO_MONTHLY?: string;
   POLAR_PRODUCT_PRO_YEARLY?: string;
-  POLAR_PRODUCT_PACK_5?: string;
+  POLAR_PRODUCT_MAX_MONTHLY?: string;
+  POLAR_PRODUCT_MAX_YEARLY?: string;
+  POLAR_PRODUCT_CREDITS_1000?: string;
+  /**
+   * EUR per USD for metering (src/meter.ts, P26): a model call costs the
+   * user 2x what it cost us, converted at this fixed rate. Unset, 0.95.
+   */
+  CREDITS_USD_EUR?: string;
   /**
    * The AI features (src/interviews.ts, src/review.ts, src/ai/client.ts).
    * Without the key their routes answer 501 (docs/design/paid-plans.md P10).

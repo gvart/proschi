@@ -6,7 +6,11 @@
  * server; the page reads the answer.
  */
 
-export const FEATURE_IDS = ['ai_interview', 'ai_review', 'interview_history', 'ai_roadmap', 'share_links'] as const;
+/**
+ * `ai_review` is deprecated: `design_partner` replaces it (P29). It stays
+ * until the page's in-depth review is replaced, then goes.
+ */
+export const FEATURE_IDS = ['ai_interview', 'ai_review', 'interview_history', 'ai_roadmap', 'share_links', 'design_partner', 'deep_mode', 'interview_report'] as const;
 
 export type FeatureId = (typeof FEATURE_IDS)[number];
 

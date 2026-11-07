@@ -9,7 +9,7 @@ import { planName, type Plan } from './plans';
 export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src/services/featureContract';
 
 /**
- * Which plans get each paid feature (docs/design/paid-plans.md P1, P22;
+ * Which plans get each paid feature (docs/design/paid-plans.md P1, P22, P26;
  * backend/README.md "Adding a paid feature"): the one place a route asks
  * whether an account may use something. How much of it (diagrams, interview
  * credits) is a number in src/plans.ts; whether the server can run it at all
@@ -18,11 +18,15 @@ export type { FeatureAccess, FeatureId, FeatureReason } from '../../frontend/src
  * which reads the answers from GET /api/me/plan.
  */
 export const FEATURES: Readonly<Record<FeatureId, { plans: readonly Plan[]; description: string }>> = {
-  ai_interview: { plans: ['free', 'pro'], description: 'Mock interviews are on every plan; the credits decide how many' },
-  ai_review: { plans: ['pro'], description: 'The in-depth review is part of Pro' },
-  interview_history: { plans: ['pro'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
-  ai_roadmap: { plans: ['pro'], description: 'Your next steps are part of Pro' },
-  share_links: { plans: ['pro'], description: 'Live share links are part of Pro' },
+  ai_interview: { plans: ['free', 'pro', 'max'], description: 'Mock interviews are on every plan; the credits decide how many' },
+  /** Deprecated: design_partner replaces it (P29); POST /api/review now needs design_partner. Kept while the page reads it. */
+  ai_review: { plans: ['pro', 'max'], description: 'The in-depth review is part of Pro' },
+  interview_history: { plans: ['pro', 'max'], description: 'Every mock interview verdict and the trend per skill are part of Pro; other plans see the latest verdict' },
+  ai_roadmap: { plans: ['pro', 'max'], description: 'Your next steps are part of Pro' },
+  share_links: { plans: ['pro', 'max'], description: 'Live share links are part of Pro' },
+  design_partner: { plans: ['free', 'pro', 'max'], description: 'Design partner is for every signed-in account; the credits decide how much' },
+  deep_mode: { plans: ['max'], description: 'Deep mode is part of Max' },
+  interview_report: { plans: ['max'], description: 'The printable interview report is part of Max' },
 };
 
 /**

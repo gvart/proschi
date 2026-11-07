@@ -8,7 +8,7 @@ import { pruneInterviewTranscripts } from './interviews';
 import { errorText, log } from './log';
 import { pruneDailyCounts } from './metrics';
 import { sendReminders } from './reminders';
-import { pruneReviewUsage } from './review';
+import { pruneHolds } from './meter';
 
 /** An unsubmitted game run counts as abandoned this long after its start. */
 export const ABANDONED_RUN_SECONDS = 7 * 86_400;
@@ -62,7 +62,7 @@ export async function dailyCron(env: Env): Promise<void> {
   });
   await runJob(env, 'app_events', async () => ({ deleted: await pruneEvents(env), audit: await pruneAudit(env) }));
   await runJob(env, 'interview_transcripts', async () => ({ cleared: await pruneInterviewTranscripts(env) }));
-  await runJob(env, 'review_usage', async () => ({ deleted: await pruneReviewUsage(env) }));
+  await runJob(env, 'credit_holds', async () => ({ deleted: await pruneHolds(env) }));
   await runJob(env, 'billing_webhooks', async () => ({ deleted: await pruneBillingWebhooks(env) }));
 }
 

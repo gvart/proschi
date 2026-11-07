@@ -24,7 +24,9 @@ export default defineConfig(async () => {
             POLAR_SERVER: 'sandbox',
             POLAR_PRODUCT_PRO_MONTHLY: 'prod-pro-monthly',
             POLAR_PRODUCT_PRO_YEARLY: 'prod-pro-yearly',
-            POLAR_PRODUCT_PACK_5: 'prod-pack-5',
+            POLAR_PRODUCT_MAX_MONTHLY: 'prod-max-monthly',
+            POLAR_PRODUCT_MAX_YEARLY: 'prod-max-yearly',
+            POLAR_PRODUCT_CREDITS_1000: 'prod-credits-1000',
             // Never a developer's .dev.vars, which wrangler reads: the AI is off unless a test sets a key, with fetch mocked.
             ANTHROPIC_API_KEY: '',
             AI_GATEWAY_URL: '',
