@@ -1,0 +1,41 @@
+frontend/src/dsl/editFlows.test.ts
+  s_e17b87e0a1b3ca::t_a20cee0a8cd06e 2,84,111
+frontend/src/dsl/edit.ts
+  s_e17b87e0a1b3ca::t_a20cee0a8cd06e 467,526,558,588,602
+frontend/src/components/Diagram/FlowsPanel.tsx
+  s_e17b87e0a1b3ca::t_0e850648c18a60 2-3,5-47,49-56,59-65,71-425
+  s_e17b87e0a1b3ca::t_a20cee0a8cd06e 4,48
+  s_e17b87e0a1b3ca::t_0350045b2bbb4e 1,57-58,66-70
+frontend/src/components/Diagram/EditableCanvas.tsx
+  s_e17b87e0a1b3ca::t_a91a1fadfedbe9 16-17,50-51,60,70-74,138-154,158,162,190-191,230,232,259-260,266,291-293
+  s_e17b87e0a1b3ca::t_206e2fce31030f 133-137,253
+  s_e17b87e0a1b3ca::t_fccdd7162d03fe 161
+  s_e17b87e0a1b3ca::t_06daae3d9ff8e8 294-295
+frontend/src/components/Diagram/CanvasEditing.tsx
+  s_e17b87e0a1b3ca::t_fccdd7162d03fe 119,125
+  s_e17b87e0a1b3ca::t_4800ba0b890adc 2,33-49,59-60,89,130-135
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_adcb7882de749b 868
+frontend/src/components/Diagram/flows.test.ts
+  s_e17b87e0a1b3ca::t_71757dc1a5828b 1-2,4-21,23-44
+  s_e17b87e0a1b3ca::t_a20cee0a8cd06e 3,22
+frontend/src/components/Diagram/flows.ts
+  s_e17b87e0a1b3ca::t_f2771e60535c39 2
+  s_e17b87e0a1b3ca::t_762c47be78e3cf 1,3-58
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "8467d49b84323e17e74016a6d95e33a51ac731bc",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
