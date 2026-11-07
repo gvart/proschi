@@ -17,7 +17,7 @@ const shortDay = (day: string) => new Date(`${day}T00:00:00Z`).toLocaleDateStrin
  * hovered or focused bar's value above the plot and the same numbers as a
  * table under "Show numbers".
  */
-export default function BarChart({ title, bars }: { title: string; bars: Bar[] }) {
+export default function BarChart({ title, bars, format = formatNumber }: { title: string; bars: Bar[]; format?: (n: number) => string }) {
   const [active, setActive] = useState<number>();
   const max = Math.max(1, ...bars.map((b) => b.value));
   const total = bars.reduce((sum, b) => sum + b.value, 0);
@@ -28,7 +28,7 @@ export default function BarChart({ title, bars }: { title: string; bars: Bar[] }
       <figcaption className="adm-chart__head">
         <span className="adm-chart__title">{title}</span>
         <span className="adm-chart__readout" aria-live="polite">
-          {shown ? `${shortDay(shown.day)}: ${formatNumber(shown.value)}` : `${formatNumber(total)} in ${bars.length} days`}
+          {shown ? `${shortDay(shown.day)}: ${format(shown.value)}` : `${format(total)} in ${bars.length} days`}
         </span>
       </figcaption>
       <div className="adm-chart__plot" style={{ height: HEIGHT }} onMouseLeave={() => setActive(undefined)}>
@@ -38,7 +38,7 @@ export default function BarChart({ title, bars }: { title: string; bars: Bar[] }
             type="button"
             className={`adm-chart__slot${active === i ? ' is-active' : ''}`}
             style={{ left: `${i * width}%`, width: `${width}%` }}
-            aria-label={`${shortDay(bar.day)}: ${formatNumber(bar.value)}`}
+            aria-label={`${shortDay(bar.day)}: ${format(bar.value)}`}
             onMouseEnter={() => setActive(i)}
             onFocus={() => setActive(i)}
             onBlur={() => setActive(undefined)}
@@ -52,7 +52,7 @@ export default function BarChart({ title, bars }: { title: string; bars: Bar[] }
       </div>
       <div className="adm-chart__axis" aria-hidden="true">
         <span>{bars[0] && shortDay(bars[0].day)}</span>
-        <span>max {formatNumber(max)}</span>
+        <span>max {format(max)}</span>
         <span>{bars.at(-1) && shortDay(bars.at(-1)!.day)}</span>
       </div>
       <details className="adm-chart__table">
@@ -70,7 +70,7 @@ export default function BarChart({ title, bars }: { title: string; bars: Bar[] }
             {[...bars].reverse().map((bar) => (
               <tr key={bar.day}>
                 <td>{bar.day}</td>
-                <td className="adm-num">{formatNumber(bar.value)}</td>
+                <td className="adm-num">{format(bar.value)}</td>
               </tr>
             ))}
           </tbody>

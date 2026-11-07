@@ -1,6 +1,6 @@
 import { hmacSha256 } from './crypto';
 import { secretOk, type Env } from './env';
-import { limitsFor } from './plans';
+import { effectivePlan, limitsFor } from './plans';
 
 /**
  * AI interview credits: a ledger in D1 (table `credits`, migration 0017;
@@ -55,8 +55,10 @@ export type SpendResult = { ok: true; bucket: Bucket } | { ok: false; reason: 'n
 /** The UTC month of `at` (Unix ms), YYYY-MM: the monthly allowance's period. */
 export const periodOf = (at: number): string => new Date(at).toISOString().slice(0, 7);
 
+/** The account's effective plan (a comp counts, src/plans.ts). */
 async function planOf(DB: D1Database, userId: string): Promise<string | undefined> {
-  return (await DB.prepare('SELECT plan FROM users WHERE id = ?').bind(userId).first<{ plan: string }>())?.plan;
+  const row = await DB.prepare('SELECT plan, comp_until FROM users WHERE id = ?').bind(userId).first<{ plan: string; comp_until: number | null }>();
+  return row ? effectivePlan(row.plan, row.comp_until) : undefined;
 }
 
 /** What the account can spend now. `at` (Unix ms) picks the month; the tests move it. */

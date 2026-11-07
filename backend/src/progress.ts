@@ -16,7 +16,7 @@ import { clientDay as runDay, utcDay } from './activity';
 import { exportShares } from './shares';
 import { exportEmailPrefs } from './reminders';
 import { BOARD_METRICS, cacheKey } from './stats';
-import { exportBilling, revokeOnDelete } from './billing';
+import { exportBilling, exportBillingWebhooks, revokeOnDelete } from './billing';
 import { exportCredits, tombstoneStatements } from './credits';
 import { exportReviewUsage } from './review';
 import { exportRoadmapRecs } from './roadmap';
@@ -148,7 +148,7 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
   const user = await requireUser(request, ctx);
   await rateLimit(ctx.env.PROFILE_LIMITER, user.id, 'Too many account changes; wait a minute');
   const [account, identities, sessions, progress, cardReviews, cardStates, achievements, challenges] = await DB.batch([
-    DB.prepare('SELECT created_at, daily_goal, last_seen_day, plan FROM users WHERE id = ?').bind(user.id),
+    DB.prepare('SELECT created_at, daily_goal, last_seen_day, plan, comp_until FROM users WHERE id = ?').bind(user.id),
     DB.prepare('SELECT provider, subject FROM identities WHERE user_id = ? ORDER BY provider').bind(user.id),
     DB.prepare('SELECT kind, created_at, expires_at, used_at FROM sessions WHERE user_id = ? ORDER BY created_at, rowid').bind(user.id),
     DB.prepare(
@@ -173,6 +173,8 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
       createdAt: (account.results[0] as Row).created_at,
       lastSeenDay: (account.results[0] as Row).last_seen_day,
       plan: (account.results[0] as Row).plan,
+      // Pro given by the admin until then (Unix seconds); null without.
+      compUntil: (account.results[0] as Row).comp_until,
     },
     identities: (identities.results as Row[]).map((r) => ({ provider: r.provider, subject: r.subject })),
     // kind: web (the site's cookie), app_access or app_refresh (an app's tokens; rotatedAt once a refresh token was used).
@@ -248,7 +250,9 @@ export async function exportMe(request: Request, ctx: Ctx): Promise<Response> {
     emailReminders: await exportEmailPrefs(DB, user.id),
     // The Polar customer and subscription (no card data is ever stored); null before a purchase.
     billing: await exportBilling(DB, user.id),
-    // AI interview credits: each grant, spend and refund.
+    // Polar's webhook deliveries about this account in the last 90 days: when, the event type and what was done (no payload).
+    billingWebhooks: await exportBillingWebhooks(DB, user.id),
+    // AI interview credits: each grant, spend and refund, and the admin's grants and revokes.
     credits: await exportCredits(DB, user.id),
     // AI design reviews asked for, per UTC day (Pro).
     reviewUsage: await exportReviewUsage(DB, user.id),

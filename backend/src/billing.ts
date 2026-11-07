@@ -92,9 +92,12 @@ export async function createCheckout(request: Request, ctx: Ctx): Promise<Respon
   const body = await readJson(request, 1024);
   const product = body.product;
   if (typeof product !== 'string' || !PRODUCTS.includes(product as Product)) throw new HttpError(400, `product must be one of ${PRODUCTS.join(', ')}`);
-  if (product !== 'pack_5' && planName(user.plan) === 'pro') return json({ error: 'already_pro', message: 'You are on Pro already; change or cancel it in the billing portal' }, 409, NO_STORE);
-  const origin = new URL(request.url).origin;
   const row = await billingRow(env.DB, user.id);
+  // A second subscription is refused; Pro from the admin's comp alone (src/plans.ts effectivePlan) can still subscribe.
+  if (product !== 'pack_5' && PRO_STATUSES.includes(row?.status ?? '')) {
+    return json({ error: 'already_pro', message: 'You are on Pro already; change or cancel it in the billing portal' }, 409, NO_STORE);
+  }
+  const origin = new URL(request.url).origin;
   const checkout = await polar<{ url: string }>(env, '/v1/checkouts/', {
     products: [productIds(env)[product as Product]],
     ...(row?.polar_customer_id ? { customer_id: row.polar_customer_id } : { external_customer_id: user.id }),
@@ -250,14 +253,73 @@ async function userOf(DB: D1Database, data: PolarObject): Promise<string | undef
  *   what is left of them (the balance never goes below 0), once per order.
  *   A refund that arrives before the order's `order.paid` keeps it from granting.
  *
- * Everything else is acknowledged and ignored.
+ * Everything else is acknowledged and ignored. Every delivery gets a row in
+ * `billing_webhooks` (the admin's webhook log, migration 0023): when, its id
+ * and type, the outcome and the account, never the payload. Requests are
+ * rate-limited per IP before the signature is checked (WEBHOOK_LIMITER, 429
+ * unlogged), and a bad signature is logged at most once per IP a minute
+ * (WEBHOOK_LOG_LIMITER).
  */
 export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
   const env = configured(ctx.env);
+  // Before anything is read or written: a flood answers 429 and isn't logged (Polar retries a 429).
+  await rateLimit(env.WEBHOOK_LIMITER, ctx.ip, 'Too many requests; wait a minute');
+  // Every delivery is logged (billing_webhooks), however it ends: an error unless the handler says otherwise.
+  const delivery: Delivery = { webhookId: request.headers.get('webhook-id')?.slice(0, 100) || null, type: null, outcome: 'error', userId: null };
+  try {
+    return await applyWebhook(request, env, delivery);
+  } finally {
+    // A bad signature is anyone's request: at most one is logged per IP a minute.
+    if (delivery.outcome !== 'bad_signature' || (await env.WEBHOOK_LOG_LIMITER.limit({ key: ctx.ip })).success) await logDelivery(env.DB, delivery);
+  }
+}
+
+/** What happened to a webhook delivery, for the admin's webhook log. */
+export type WebhookOutcome = 'applied' | 'duplicate' | 'ignored' | 'bad_signature' | 'stale' | 'error';
+
+interface Delivery {
+  webhookId: string | null;
+  type: string | null;
+  outcome: WebhookOutcome;
+  userId: string | null;
+}
+
+/** Webhook deliveries are kept this long (the daily cron). */
+export const WEBHOOK_LOG_RETENTION_DAYS = 90;
+
+/** Writes the delivery's row: when, its id and type, the outcome and the account. Never the payload or a header's secret. A failure is logged, not thrown. */
+async function logDelivery(DB: D1Database, d: Delivery): Promise<void> {
+  try {
+    await DB.prepare('INSERT INTO billing_webhooks (received_at, webhook_id, type, outcome, user_id) VALUES (?, ?, ?, ?, ?)')
+      .bind(Date.now(), d.webhookId, d.type, d.outcome, d.userId)
+      .run();
+  } catch (e) {
+    log('error', 'Logging a Polar webhook delivery failed', { outcome: d.outcome, error: e instanceof Error ? e.message : String(e) });
+  }
+}
+
+/** Deletes webhook log rows older than WEBHOOK_LOG_RETENTION_DAYS (the daily cron); returns how many. */
+export async function pruneBillingWebhooks(env: Pick<Env, 'DB'>): Promise<number> {
+  const { meta } = await env.DB.prepare('DELETE FROM billing_webhooks WHERE received_at < ?').bind(Date.now() - WEBHOOK_LOG_RETENTION_DAYS * 86_400_000).run();
+  return meta.changes;
+}
+
+/** The account's webhook deliveries in "Download my data". */
+export async function exportBillingWebhooks(DB: D1Database, userId: string): Promise<Record<string, unknown>[]> {
+  const { results } = await DB.prepare('SELECT received_at, type, outcome FROM billing_webhooks WHERE user_id = ? ORDER BY id')
+    .bind(userId)
+    .all<{ received_at: number; type: string | null; outcome: string }>();
+  return results.map((r) => ({ receivedAt: r.received_at, type: r.type, outcome: r.outcome }));
+}
+
+async function applyWebhook(request: Request, env: Configured, delivery: Delivery): Promise<Response> {
   if (Number(request.headers.get('Content-Length') ?? 0) > 256 * 1024) throw new HttpError(413, 'Request body too large');
   const body = await request.text();
   if (body.length > 256 * 1024) throw new HttpError(413, 'Request body too large');
-  if (!(await verifyWebhook(env.POLAR_WEBHOOK_SECRET, request.headers, body))) throw new HttpError(403, 'Invalid signature');
+  if (!(await verifyWebhook(env.POLAR_WEBHOOK_SECRET, request.headers, body))) {
+    delivery.outcome = 'bad_signature';
+    throw new HttpError(403, 'Invalid signature');
+  }
   let event: { type?: unknown; data?: PolarObject };
   try {
     event = JSON.parse(body) as typeof event;
@@ -266,15 +328,20 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
   }
   const type = typeof event.type === 'string' ? event.type : '';
   const data = event.data ?? {};
+  delivery.type = type.slice(0, 64) || null;
   const eventId = request.headers.get('webhook-id') as string;
   const { DB } = env;
   const t = Date.now();
+  // Which statement's change says whether the event did anything (the first, billing_events, always runs).
+  let effect: number | undefined;
   const statements: D1PreparedStatement[] = [DB.prepare('INSERT INTO billing_events (id, type, received_at) VALUES (?, ?, ?)').bind(eventId, type.slice(0, 64), t)];
 
   const userId = type.startsWith('subscription.') || type === 'order.paid' ? await userOf(DB, data) : undefined;
   const customerId = data.customer_id ?? data.customer?.id ?? null;
+  delivery.userId = userId ?? null;
   const product = productOf(env, data.product_id);
   if (userId && type.startsWith('subscription.') && (product === 'pro_monthly' || product === 'pro_yearly')) {
+    effect = statements.length;
     const modified = msOf(data.modified_at) ?? msOf(data.created_at) ?? t;
     const pro = PRO_STATUSES.map((s) => `'${s}'`).join(', ');
     const newer = 'billing.subscription_modified_at IS NULL OR excluded.subscription_modified_at >= billing.subscription_modified_at';
@@ -303,6 +370,7 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
       ).bind(userId),
     );
   } else if (userId && type === 'order.paid' && product === 'pack_5' && data.id) {
+    effect = statements.length + 1;
     statements.push(
       DB.prepare(
         `INSERT INTO billing (user_id, polar_customer_id, updated_at) VALUES (?1, ?2, ?3)
@@ -322,15 +390,28 @@ export async function webhook(request: Request, ctx: Ctx): Promise<Response> {
           ? data.order_id
           : undefined;
   // Marked first, so an order.paid that arrives later grants nothing.
-  if (refundedOrder) statements.push(refundedOrderStatement(DB, refundedOrder, t), revokeStatement(DB, refundedOrder, t));
+  if (refundedOrder) {
+    effect = statements.length;
+    statements.push(refundedOrderStatement(DB, refundedOrder, t), revokeStatement(DB, refundedOrder, t));
+    delivery.userId = (await DB.prepare("SELECT user_id FROM credits WHERE kind = 'grant' AND ref_id = ?").bind(refundedOrder).first<{ user_id: string }>())?.user_id ?? null;
+  }
 
+  let results: D1Result[];
   try {
-    await DB.batch(statements);
+    results = await DB.batch(statements);
   } catch (e) {
     // The event's row is first in the batch: a replay fails on it and the whole batch rolls back.
-    if (e instanceof Error && /UNIQUE constraint failed: billing_events\.id/.test(e.message)) return json({ ok: true, duplicate: true }, 200, NO_STORE);
+    if (e instanceof Error && /UNIQUE constraint failed: billing_events\.id/.test(e.message)) {
+      delivery.outcome = 'duplicate';
+      return json({ ok: true, duplicate: true }, 200, NO_STORE);
+    }
     throw e;
   }
+  // A subscription event older than what is stored (or another subscription's that may not replace it) changes nothing: stale.
+  // A pack's grant that adds nothing (a refund came first) or an event nothing handles: ignored.
+  if (effect === undefined) delivery.outcome = 'ignored';
+  else if (results[effect].meta.changes > 0 || refundedOrder) delivery.outcome = 'applied';
+  else delivery.outcome = type.startsWith('subscription.') ? 'stale' : 'ignored';
   if (!userId && (type.startsWith('subscription.') || type === 'order.paid')) log('warn', 'Polar event for no known account', { type, eventId });
   return json({ ok: true }, 200, NO_STORE);
 }

@@ -1,11 +1,21 @@
 import { useCallback, useState } from 'react';
-import { deleteShare, listShares } from './api';
+import { deleteShare, listLiveShares, listShares, revokeLiveShare } from './api';
 import { formatBytes, formatDateTime } from './format';
 import { useAction, useLoad } from './hooks';
 import { ErrorNote, Loading, Pager, SearchBox, Section } from './ui';
 
-/** Every short link, newest first: the only user content other people see. */
+/** Every short link and live share link, newest first: the only user content other people see. */
 export default function SharesTab({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
+  return (
+    <>
+      <ShortLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
+      <LiveLinks onOpenUser={onOpenUser} onSignedOut={onSignedOut} />
+    </>
+  );
+}
+
+/** Short links (/s/<id>): snapshots, free. */
+function ShortLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
   const [q, setQ] = useState('');
   const [offset, setOffset] = useState(0);
   const shares = useLoad(() => listShares(q, offset), [q, offset], onSignedOut);
@@ -72,6 +82,88 @@ export default function SharesTab({ onOpenUser, onSignedOut }: { onOpenUser: (id
             </table>
           </div>
           <Pager offset={shares.data.offset} pageSize={shares.data.pageSize} total={shares.data.total} onChange={setOffset} />
+        </>
+      )}
+    </Section>
+  );
+}
+
+/** Live share links (/share/<token>, Pro): they show a synced diagram as it is now, until revoked. */
+function LiveLinks({ onOpenUser, onSignedOut }: { onOpenUser: (id: string) => void; onSignedOut: () => void }) {
+  const [q, setQ] = useState('');
+  const [state, setState] = useState<'live' | 'all'>('live');
+  const [offset, setOffset] = useState(0);
+  const links = useLoad(() => listLiveShares(q, state, offset), [q, state, offset], onSignedOut);
+  const action = useAction(links.reload);
+  const search = useCallback((value: string) => {
+    setQ(value);
+    setOffset(0);
+  }, []);
+  return (
+    <Section title="Live share links">
+      <div className="adm-toolbar">
+        <SearchBox value={q} onChange={search} label="Search live share links" placeholder="Diagram name, token or owner's account id" />
+        <select className="adm-input" aria-label="Show" value={state} onChange={(e) => (setState(e.target.value as 'live' | 'all'), setOffset(0))}>
+          <option value="live">Live</option>
+          <option value="all">Live and revoked</option>
+        </select>
+      </div>
+      <ErrorNote>{links.error ?? action.error}</ErrorNote>
+      {!links.data ? (
+        !links.error && <Loading what="live share links" />
+      ) : (
+        <>
+          <div className="adm-scroll">
+            <table className="adm-table">
+              <thead>
+                <tr>
+                  <th scope="col">Diagram</th>
+                  <th scope="col">Owner</th>
+                  <th scope="col">Created</th>
+                  <th scope="col">Revoked</th>
+                  <th scope="col">
+                    <span className="adm-sr">Actions</span>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                {links.data.links.map((l) => (
+                  <tr key={l.token}>
+                    <td>
+                      {l.revokedAt ? (
+                        (l.document.name ?? <span className="adm-muted">deleted diagram</span>)
+                      ) : (
+                        <a href={l.url} target="_blank" rel="noreferrer">
+                          {l.document.name ?? l.document.id}
+                        </a>
+                      )}
+                    </td>
+                    <td>
+                      <button type="button" className="adm-link" onClick={() => onOpenUser(l.owner.id)}>
+                        {l.owner.displayName}
+                      </button>
+                      {l.owner.blocked && <span className="ps-badge ps-badge--fail adm-gap">blocked</span>}
+                    </td>
+                    <td>{formatDateTime(l.createdAt)}</td>
+                    <td>{l.revokedAt ? formatDateTime(l.revokedAt) : <span className="adm-muted">—</span>}</td>
+                    <td>
+                      {!l.revokedAt && (
+                        <button
+                          type="button"
+                          className="ps-btn ps-btn--danger ps-btn--sm"
+                          disabled={action.busy}
+                          onClick={() => window.confirm(`Revoke the live link to "${l.document.name ?? l.document.id}"? Its address stops working at once.`) && void action.run(() => revokeLiveShare(l.token))}
+                        >
+                          Revoke
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Pager offset={links.data.offset} pageSize={links.data.pageSize} total={links.data.total} onChange={setOffset} />
         </>
       )}
     </Section>

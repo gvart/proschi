@@ -6,6 +6,8 @@ import Wordmark from '../design/Wordmark';
 import { apiEnabled } from '../services/api';
 import { getStatus, signOut, type Status } from './api';
 import { parseRoute, routeHash, TABS, type Route } from './route';
+import AiTab from './AiTab';
+import BillingTab from './BillingTab';
 import { AuditTab, EventsTab } from './EventsTab';
 import Gate from './Gate';
 import HealthTab from './HealthTab';
@@ -82,6 +84,12 @@ function Panel({ onSignedOut }: { onSignedOut: () => void }) {
       break;
     case 'users':
       content = <UsersTab key={route.param ?? ''} userId={route.param} onOpen={openUser} onSignedOut={onSignedOut} />;
+      break;
+    case 'billing':
+      content = <BillingTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
+      break;
+    case 'ai':
+      content = <AiTab onOpenUser={openUser} onSignedOut={onSignedOut} />;
       break;
     case 'shares':
       content = <SharesTab onOpenUser={openUser} onSignedOut={onSignedOut} />;

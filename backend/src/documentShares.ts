@@ -4,6 +4,8 @@ import type { Ctx } from './context';
 import { checkId, limited } from './documents';
 import { FEATURES, openRoute, requireFeature } from './features';
 import { HttpError, json, rateLimit } from './http';
+import { now } from './env';
+import { effectivePlanSql } from './plans';
 
 /**
  * Live share links (backend/README.md "Live share links", docs/design/paid-plans.md
@@ -112,9 +114,9 @@ export async function getSharedDocument(ctx: Ctx, token: string): Promise<Respon
          FROM document_shares s
          JOIN documents d ON d.user_id = s.user_id AND d.id = s.document_id
          JOIN users u ON u.id = s.user_id
-         WHERE s.token = ? AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND u.plan IN (${SHARING_PLANS})`,
+         WHERE s.token = ?1 AND s.revoked_at IS NULL AND d.deleted_at IS NULL AND u.blocked_at IS NULL AND ${effectivePlanSql('u', '?2')} IN (${SHARING_PLANS})`,
       )
-        .bind(token)
+        .bind(token, now())
         .first<PublicRow>()
     : null;
   if (!row) throw new HttpError(404, 'No such share link; it may have been revoked');

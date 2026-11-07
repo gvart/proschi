@@ -45,3 +45,18 @@ export function limitsFor(plan: string | null | undefined): Readonly<Limits> {
 export function planName(plan: string | null | undefined): string {
   return plan && Object.prototype.hasOwnProperty.call(PLANS, plan) ? plan : 'free';
 }
+
+/**
+ * The plan an account gets now: the one place a comp counts
+ * (docs/design/paid-plans.md P24). Pro while the subscription keeps
+ * `users.plan` on 'pro' (src/billing.ts) OR while the admin's comp
+ * (`users.comp_until`, Unix seconds) is in the future; else `users.plan`.
+ * src/auth.ts reads it into `User.plan` on every request, so can() and
+ * limitsFor see it; src/credits.ts reads it for the monthly allowance.
+ */
+export function effectivePlan(plan: string | null | undefined, compUntil: number | null | undefined, at = Math.floor(Date.now() / 1000)): string {
+  return compUntil != null && compUntil > at ? 'pro' : (plan ?? 'free');
+}
+
+/** effectivePlan as SQL over the users row `u`, `at` the parameter that holds now in Unix seconds (e.g. '?2'), for a query that checks the plan itself. */
+export const effectivePlanSql = (u: string, at: string): string => `(CASE WHEN ${u}.comp_until > ${at} THEN 'pro' ELSE ${u}.plan END)`;

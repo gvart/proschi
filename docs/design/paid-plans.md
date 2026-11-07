@@ -126,3 +126,20 @@ id; don't rewrite old ones.
   account's current active one doesn't downgrade it. "Download my data"
   stays complete, gated data included (the history off Pro, every verdict):
   it is the user's right of access to their own data, not a paid feature.
+- **P24. The admin panel covers the paid product.** One effective plan
+  (`src/plans.ts` `effectivePlan`): Pro while the subscription keeps
+  `users.plan` on `pro` OR while the admin's comp (`users.comp_until`,
+  migration 0023) is in the future. `src/auth.ts` reads it into `User.plan`
+  on every request, so `can()` and `limitsFor` see it; the credits and the
+  live links read the same rule. A comp never calls Polar and no webhook
+  ends it; the admin can end it early. The admin grants or revokes pack
+  credits as ledger rows `admin_grant` / `admin_revoke` with an idempotent
+  ref; a revoke never takes the pack balance below 0. Every admin action
+  needs a reason and is in the audit log. Refunds stay in Polar: the panel
+  links to its dashboard (sandbox or live by `POLAR_SERVER`). Every webhook
+  delivery is logged (`billing_webhooks`: when, id, type, outcome, account;
+  never the payload) for 90 days. D1 stores no amounts, so the Billing tab
+  shows counts and the list prices; the AI tab shows interviews, reviews,
+  tokens and cost per day, and the share of sessions that reached the token
+  cap. The health page says whether each paid secret is set, never its
+  value.

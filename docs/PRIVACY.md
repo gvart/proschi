@@ -307,6 +307,12 @@ the right account) and which product you chose. Nothing else is sent.
   early, with the time of each;
 - for every message Polar's webhook sends: its id, its type and when it
   arrived, to apply it only once. It holds nothing about you.
+- a log of those messages for the site's operator, kept 90 days: when each
+  arrived, its id and type, what was done with it and the account it was
+  about; never its content.
+- if the operator gives you Pro for a while, or adds or takes back interview
+  credits (say, after a support request), the date the free Pro ends and
+  those credits in the ledger; the reason is kept in the operator's audit log.
 
 **What it is used for**: only to know your plan, renewal date and how many
 AI interviews you have left. It is shown in **Plan & billing** on your
@@ -314,7 +320,8 @@ account page.
 
 **How long**: as long as the account. Deleting the account cancels a
 subscription still running at Polar at once, then removes all of the above
-(the webhook log aside, which names no account). Polar keeps its own
+(the webhook log keeps its rows without your account id until they are 90
+days old; the list of applied message ids names no account). Polar keeps its own
 records of the payments, such as invoices, as the law requires of it.
 
 ## Live share links (Pro)
@@ -452,7 +459,7 @@ In Settings on the practice page (`#/me`, from the account menu):
 
 - **Download my data** saves everything stored about you as JSON, your
   synced diagrams and their versions included, your live share links, your
-  plan, subscription, interview credits, AI reviews a day and AI interviews with the AI roadmap's picks, every session with its kind (the site or an
+  plan (and any free Pro the operator gave), subscription, Polar webhook log entries, interview credits, AI reviews a day and AI interviews with the AI roadmap's picks, every session with its kind (the site or an
   app) but never the token hashes; short links come with their diagrams and
   the address of each preview, and email reminders with their address and
   settings (the unsubscribe secret stays out).

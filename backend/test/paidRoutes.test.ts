@@ -58,9 +58,17 @@ interface Who {
 }
 
 let bearers = 0;
-async function account(plan: 'free' | 'pro', credential: Credential): Promise<Who> {
+/**
+ * An account on `plan`: 'comp' is on free with Pro given by the admin until
+ * tomorrow (users.comp_until, src/plans.ts effectivePlan), 'expired' on free
+ * with a comp that ended an hour ago.
+ */
+async function account(plan: 'free' | 'pro' | 'comp' | 'expired', credential: Credential): Promise<Who> {
   const { id, token } = await signedInUser();
   if (plan === 'pro') await env.DB.prepare("UPDATE users SET plan = 'pro' WHERE id = ?").bind(id).run();
+  const nowS = Math.floor(Date.now() / 1000);
+  if (plan === 'comp') await env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(nowS + 86_400, id).run();
+  if (plan === 'expired') await env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(nowS - 3600, id).run();
   if (credential === 'cookie') return { id, as: { token } };
   const bearer = `bearer-${++bearers}-${id}`;
   await env.DB.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at, kind, family_id) VALUES (?, ?, 4000000000, 0, 'app_access', ?)").bind(await sha256(bearer), id, `f-${id}`).run();
@@ -274,6 +282,34 @@ describe('paid routes', () => {
     }
   }
 
+  // A comp (Pro given by the admin) is Pro on every route; one that has ended is free again.
+  for (const [method, path] of PAID_ROUTES) {
+    it(`${method} ${path}: an expired comp is free, a running comp is Pro`, async () => {
+      await CASES[`${method} ${path}`].free(await account('expired', 'cookie'));
+      await CASES[`${method} ${path}`].pro(await account('comp', 'bearer'));
+    });
+  }
+
+  it('the public link answers while its owner is comped, and stops when the comp ends', async () => {
+    const owner = await account('comp', 'cookie');
+    await syncedDocument(owner);
+    const { share } = (await (await send(owner, 'POST', '/api/me/documents/doc1/share')).json()) as { share: { token: string } };
+    expect((await call(`/api/share/${share.token}`)).status).toBe(200);
+    await env.DB.prepare('UPDATE users SET comp_until = ? WHERE id = ?').bind(Math.floor(Date.now() / 1000) - 1, owner.id).run();
+    expect((await call(`/api/share/${share.token}`)).status).toBe(404);
+  });
+
+  it('a comped account gets Pro’s limits and monthly interviews, and /api/me/plan says pro', async () => {
+    const who = await account('comp', 'cookie');
+    const plan = (await (await send(who, 'GET', '/api/me/plan')).json()) as { plan: string; limits: { documents: number | null }; credits: { monthly: number }; features: Record<string, { ok: boolean }> };
+    expect(plan.plan).toBe('pro');
+    expect(plan.limits.documents).toBeNull();
+    expect(plan.credits.monthly).toBe(4);
+    expect(Object.values(plan.features).every((f) => f.ok)).toBe(true);
+    const expired = await account('expired', 'cookie');
+    expect(((await (await send(expired, 'GET', '/api/me/plan')).json()) as { plan: string }).plan).toBe('free');
+  });
+
   it('a refresh token, an expired access token or an admin session is no credential for them', async () => {
     const { id } = await account('pro', 'cookie');
     const refresh = 'refresh-token';
@@ -339,11 +375,22 @@ describe('a downgrade', () => {
     });
   }
 
+  it('a Polar cancel does not end a comp, and the comp keeps Pro after it', async () => {
+    const who = await account('comp', 'cookie');
+    expect((await deliver(subscription(who.id, 'active', '2026-11-06T10:00:00Z'))).status).toBe(200);
+    expect((await deliver(subscription(who.id, 'canceled', '2026-11-06T11:00:00Z'))).status).toBe(200);
+    const row = await env.DB.prepare('SELECT plan, comp_until FROM users WHERE id = ?').bind(who.id).first<{ plan: string; comp_until: number }>();
+    expect(row!.plan).toBe('free');
+    expect(row!.comp_until).toBeGreaterThan(Date.now() / 1000);
+    expect((await send(who, 'GET', '/api/roadmap/next')).status).toBe(200);
+    expect((await send(who, 'GET', '/api/review/usage')).status).toBe(200);
+  });
+
   it('nothing a client sends sets the plan: only the signed webhook does', async () => {
     const who = await account('free', 'cookie');
-    expect((await send(who, 'PATCH', '/api/me', { plan: 'pro', displayName: 'Ada' })).status).toBe(200);
+    expect((await send(who, 'PATCH', '/api/me', { plan: 'pro', compUntil: 4_000_000_000, comp_until: 4_000_000_000, displayName: 'Ada' })).status).toBe(200);
     expect((await call('/api/billing/webhook', { method: 'POST', body: subscription(who.id, 'active', '2026-11-06T10:00:00Z') })).status).toBe(403);
-    expect((await env.DB.prepare('SELECT plan FROM users WHERE id = ?').bind(who.id).first<{ plan: string }>())!.plan).toBe('free');
+    expect(await env.DB.prepare('SELECT plan, comp_until FROM users WHERE id = ?').bind(who.id).first()).toEqual({ plan: 'free', comp_until: null });
     await planRequired(await send(who, 'GET', '/api/roadmap/next'), 'ai_roadmap');
   });
 });

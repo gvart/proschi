@@ -1,6 +1,30 @@
 import { SIM_VERSION } from '../../frontend/src/sim/version';
 import { getActivity } from './activity';
-import { blockUser, deleteAdminShare, deleteUser, deleteUserEmail, getHealth, getOverview, getUser, listAdminShares, listAudit, listEvents, listUsers, patchUser, signOutUser, unblockUser } from './admin';
+import {
+  adjustCredits,
+  adminRevokeDocumentShare,
+  blockUser,
+  compUser,
+  deleteAdminShare,
+  deleteUser,
+  deleteUserEmail,
+  endComp,
+  getAi,
+  getBilling,
+  getHealth,
+  getOverview,
+  getUser,
+  listAdminShares,
+  listAudit,
+  listDocumentShares,
+  listEvents,
+  listUserCredits,
+  listUsers,
+  listWebhooks,
+  patchUser,
+  signOutUser,
+  unblockUser,
+} from './admin';
 import { addPasskey, addPasskeyOptions, adminLogout, adminStatus, deletePasskey, listPasskeys, login as adminLogin, loginOptions, revokeAdminSessions, setup as adminSetup, setupOptions } from './adminAuth';
 import { getAchievements, markAchievementsSeen } from './achievements';
 import { revoke, token } from './apptokens';
@@ -278,6 +302,15 @@ function adminRoute(request: Request, ctx: Ctx, is: (m: string, ...path: string[
   if (is('DELETE', 'api', 'admin', 'shares', '*')) return deleteAdminShare(request, ctx, id);
   if (is('GET', 'api', 'admin', 'events')) return listEvents(request, ctx);
   if (is('GET', 'api', 'admin', 'audit')) return listAudit(request, ctx);
+  if (is('GET', 'api', 'admin', 'users', '*', 'credits')) return listUserCredits(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'credits')) return adjustCredits(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'comp')) return compUser(request, ctx, id);
+  if (is('POST', 'api', 'admin', 'users', '*', 'comp', 'end')) return endComp(request, ctx, id);
+  if (is('GET', 'api', 'admin', 'billing')) return getBilling(request, ctx);
+  if (is('GET', 'api', 'admin', 'ai')) return getAi(request, ctx);
+  if (is('GET', 'api', 'admin', 'webhooks')) return listWebhooks(request, ctx);
+  if (is('GET', 'api', 'admin', 'document-shares')) return listDocumentShares(request, ctx);
+  if (is('DELETE', 'api', 'admin', 'document-shares', '*')) return adminRevokeDocumentShare(request, ctx, id);
   return errorResponse(404, 'Not found');
 }
 

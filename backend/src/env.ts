@@ -29,6 +29,9 @@ export interface Env {
   INTERVIEW_READ_LIMITER: RateLimit;
   /** AI design reviews (src/review.ts), per user, on top of the daily cap. */
   AI_REVIEW_LIMITER: RateLimit;
+  /** Polar's webhook (src/billing.ts), per IP, before the signature is checked; and the bad signatures logged, one per IP a minute. */
+  WEBHOOK_LIMITER: RateLimit;
+  WEBHOOK_LOG_LIMITER: RateLimit;
   /** The deployed version's id, tag and time (wrangler.jsonc `version_metadata`), for the admin's health page. */
   CF_VERSION_METADATA?: WorkerVersionMetadata;
   /**
