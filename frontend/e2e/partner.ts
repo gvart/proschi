@@ -12,7 +12,7 @@ export const ESTIMATES = {
   partner_review: { min: 5, max: 15 },
   partner_build: { min: 10, max: 40 },
   partner_turn: { min: 1, max: 4 },
-  deepMultiplier: 5,
+  deepMultiplier: 2,
 };
 
 export interface TurnBody {

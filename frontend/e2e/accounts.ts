@@ -39,7 +39,7 @@ export const ESTIMATES = {
   partner_build: { min: 20, max: 40 },
   partner_turn: { min: 1, max: 5 },
   verdict: { min: 15, max: 55 },
-  deepMultiplier: 5,
+  deepMultiplier: 2,
 };
 
 type Credits = { balance: number; monthly: { allowance: number; left: number; resetsAt: number } | null; signup: number; topup: number };

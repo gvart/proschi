@@ -26,8 +26,8 @@ test('Max: a Deep verdict costs more, says so on the verdict, and the report pri
   await expect(deep).not.toBeChecked();
   await expect(start.getByTestId('ai-credits')).toContainText('about 45–60 credits for 45 min');
   await deep.check();
-  // Only the verdict runs Deep: the estimate adds its extra (15–55 credits, ×5).
-  await expect(start.getByTestId('ai-credits')).toContainText('about 105–280 credits for 45 min');
+  // Only the verdict runs Deep: the estimate adds its extra (15–55 credits, ×2).
+  await expect(start.getByTestId('ai-credits')).toContainText('about 60–115 credits for 45 min');
   await start.getByRole('button', { name: 'Start a mock interview' }).click();
   await page.getByRole('button', { name: 'I agree, start the interview' }).click();
   expect(mock.starts).toEqual([{ replace: false, deep: true }]);

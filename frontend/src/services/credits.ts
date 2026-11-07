@@ -1,5 +1,6 @@
 import { api, ApiError } from './api';
 import { PLAN_CREDITS, type CreditBalance } from './billing';
+import { TYPICAL_COSTS, type CreditEstimates, type Range } from './estimates';
 
 /**
  * Metered credits on the page (docs/design/paid-plans.md P26–P28, the
@@ -9,33 +10,7 @@ import { PLAN_CREDITS, type CreditBalance } from './billing';
  * (services/useCredits.ts).
  */
 
-export interface Range {
-  min: number;
-  max: number;
-}
-
-/** GET /api/credits/estimates. */
-export interface CreditEstimates {
-  /** A 45-minute mock interview, verdict included. */
-  mock_interview: Range;
-  partner_review: Range;
-  partner_build: Range;
-  partner_turn: Range;
-  /** The mock interview's verdict alone, inside `mock_interview`: what Deep mode multiplies there. */
-  verdict?: Range;
-  /** Deep mode (Max) costs about this many times as much. */
-  deepMultiplier: number;
-}
-
-/** The typical costs, shown signed out and until the server's estimates arrive (P26). */
-export const TYPICAL_COSTS: CreditEstimates = {
-  mock_interview: { min: 45, max: 60 },
-  partner_review: { min: 5, max: 15 },
-  partner_build: { min: 20, max: 40 },
-  partner_turn: { min: 1, max: 5 },
-  verdict: { min: 15, max: 55 },
-  deepMultiplier: 5,
-};
+export { TYPICAL_COSTS, type CreditEstimates, type Range } from './estimates';
 
 /** The interview length the mock interview's estimate is for. */
 export const ESTIMATE_MINUTES = 45;

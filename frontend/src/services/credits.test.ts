@@ -22,12 +22,13 @@ describe('estimates', () => {
     expect(formatRange({ min: 50, max: 50.2 })).toBe('about 50');
   });
   it('scales the 45-minute interview to the chosen length, to the nearest 5', () => {
-    expect(interviewEstimate(TYPICAL_COSTS, 45)).toEqual({ min: 45, max: 60 });
-    expect(interviewEstimate(TYPICAL_COSTS, 30)).toEqual({ min: 30, max: 40 });
-    expect(interviewEstimate(TYPICAL_COSTS, 60)).toEqual({ min: 60, max: 80 });
+    const e = { ...TYPICAL_COSTS, mock_interview: { min: 45, max: 60 } };
+    expect(interviewEstimate(e, 45)).toEqual({ min: 45, max: 60 });
+    expect(interviewEstimate(e, 30)).toEqual({ min: 30, max: 40 });
+    expect(interviewEstimate(e, 60)).toEqual({ min: 60, max: 80 });
   });
   it('adds what a Deep verdict costs beyond the ordinary one, whatever the length', () => {
-    const e = { ...TYPICAL_COSTS, verdict: { min: 15, max: 50 }, deepMultiplier: 2 };
+    const e = { ...TYPICAL_COSTS, mock_interview: { min: 45, max: 60 }, verdict: { min: 15, max: 50 } };
     expect(interviewEstimate(e, 45, true)).toEqual({ min: 60, max: 110 });
     expect(interviewEstimate(e, 30, true)).toEqual({ min: 45, max: 90 });
     // Without the server's verdict range, the typical one.
