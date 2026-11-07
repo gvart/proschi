@@ -21,8 +21,9 @@ instead ([Mobile apps](#mobile-apps)), and so does the `proschi` CLI
   and password ([Email sign-in](#email-sign-in)). A signed, ten-minute
   state cookie ties the callback to the browser that started the sign-in. No
   avatar is stored, and no email address but the one an account signs in
-  with or gives for [email reminders](#email-reminders): GitHub's and
-  Google's verified address is only hashed, for the sign-up credits' checks.
+  with, gives for [email reminders](#email-reminders), or GitHub's and
+  Google's verified address, kept as a contact address for account and
+  product news email only ([Campaigns](#campaigns)); never a sign-in identity.
 - **Personal stats**: per problem the number of test runs, the last design, the
   first solve, the runs it took, and the cheapest and fastest solving designs.
   Progress already in the browser is uploaded on first sign-in.
@@ -831,6 +832,55 @@ changes goes to the audit log in the same batch as the change.
 | `GET /api/admin/events?kind=&level=&before=`, `GET /api/admin/audit?before=` | 100 at a time, newest first; `next` is the next page's `before` |
 
 Every route but status, setup and login answers 401 without an admin session.
+
+### Campaigns
+
+**Campaigns** (Outreach in the sidebar; `src/campaigns.ts`, migration 0028,
+[docs/PRIVACY.md](../docs/PRIVACY.md#product-news)) give top-up credits to
+many accounts at once, email product news, and show an announcement in the
+app, in any mix. A campaign is a draft until it is sent with a reason (in the
+audit log, like every change to it, a test, a cancel and a resume).
+
+- **Audience**: everyone, a plan (the effective one, comps included), active
+  in the last N days, signed up before or after a date, or one account (for
+  a test on your own). Blocked accounts never count. The composer counts it
+  live, and how many an email skips. Sending fixes it: later sign-ups don't
+  get the campaign.
+- **Credits**: a ledger row `admin_grant` in the top-up bucket (never
+  expires, P24) with ref `campaign:<id>:<user>`, once per account.
+- **Email**: only to a confirmed email sign-in address or the verified
+  address of the latest GitHub or Google sign-in (`contact_emails`, saved by
+  `src/auth.ts`), never to the email reminders' address, and never to an
+  account that turned product news off (`news_optouts`: Settings ›
+  Notifications, or the signed **Stop product news** link, a year valid, with
+  `List-Unsubscribe` and `List-Unsubscribe-Post` for one-click). Markdown with
+  `{{name}}` and `{{credits}}`, escaped, in the reminders' layout. An email is
+  marked `sending` before it goes out, so an interrupted run never sends it
+  twice (it is counted as failed instead).
+- **In the app**: the newest announcement not dismissed (and, with credits,
+  only once they are granted) shows on the practice hub for 30 days.
+- **Sending** runs in the background, 50 recipients at a time: right after
+  the send (`waitUntil`, up to 20 seconds) and in every hourly cron run until
+  done. At most `CAMPAIGN_DAILY_CAP` emails a UTC day (default 500); the rest
+  wait for the next day. **Send a test to me** emails the draft, marked
+  `[Test]`, to `ADMIN_EMAIL` (a secret) and grants nothing.
+
+**Running the launch campaign**: set `ADMIN_EMAIL`, open Campaigns › **New
+campaign** › **Use launch template**, check the amount and the words, **Send
+a test to me**, then **Review and send…**: the dialog says what happens
+("Grant 150 credits to 30 accounts, email 4 and show the announcement to
+30"), and asks for a reason. The page follows the progress.
+
+| Endpoint | |
+|---|---|
+| `GET /api/admin/campaigns` | Every campaign with its stats (recipients, granted, sent, failed, skipped, shown, dismissed, clicked, unsubscribes since), the daily cap and today's emails |
+| `POST /api/admin/campaigns {audience, credits, email, inapp, subject, body, linkUrl?, linkLabel?}`, `GET` / `PUT /api/admin/campaigns/<id>` | Drafts (PUT only while a draft: 409 after) |
+| `POST /api/admin/campaigns/audience {audience}` | `{accounts, emails, optedOut, unconfirmed}` |
+| `POST /api/admin/campaigns/preview {draft}`, `POST /api/admin/campaigns/test {draft}` | The email's HTML for a sample recipient; a test to `ADMIN_EMAIL` (501 without it) |
+| `POST /api/admin/campaigns/<id>/send \| cancel \| resume {reason}` | 400 without a reason, 409 in the wrong state |
+| `GET /api/me/announcement`, `POST /api/me/announcement/<id>/dismiss \| click` | The user's announcement (marks it shown) |
+| `GET /api/me/news`, `PUT /api/me/news {on}` | Product news on or off, and the address it goes to |
+| `GET /api/news/unsubscribe?token=` / `POST` | The unsubscribe link: the GET page shows a button; the POST (one-click, no session or Origin check) records the opt-out; 400 for a forged or expired token |
 
 ## Mobile apps
 

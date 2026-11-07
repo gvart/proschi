@@ -104,6 +104,9 @@ import { getRoadmapNext } from './roadmap';
  *   DELETE /api/me/email                    removes the address
  *   GET    /api/email/confirm?token=        the confirmation link's page; POST confirms
  *   GET    /api/email/unsubscribe?token=    the unsubscribe link's page; POST unsubscribes (one-click, RFC 8058, no session)
+ *   GET    /api/me/news, PUT {on}           product news on or off (src/campaigns.ts)
+ *   GET    /api/me/announcement             the admin's newest announcement to show; POST …/<id>/dismiss | click
+ *   GET    /api/news/unsubscribe?token=     the "Stop product news" link's page; POST stops it (one-click, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
