@@ -49,6 +49,7 @@ import { hasAiInterview } from './modes/ai/api';
 import GuidedPanel from './modes/GuidedPanel';
 import { track } from '../services/metrics';
 import './practiceLayout.css';
+import { useFeedbackDiagram } from '../feedback/diagram';
 
 const PracticeTour = lazy(() => import('../onboarding/PracticeTour'));
 const PartnerPanel = lazy(() => import('../partner/PartnerPanel'));
@@ -113,6 +114,7 @@ function initialStage(problem: Problem, openLesson: ProblemPageProps['openLesson
  */
 export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, interviewWith }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
+  useFeedbackDiagram(source);
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const hasLesson = problem.lesson !== undefined;
@@ -663,6 +665,7 @@ function MoreMenu({ className, onReset, onTour }: { className: string; onReset: 
                   close();
                   setSheet(true);
                 }}
+                onFeedback={close}
               />
             </Suspense>
           </>

@@ -10,6 +10,7 @@ import { credits as creditsOf, creditsView } from './credits';
 import { MC } from './plans';
 import { HttpError, json, readJson } from './http';
 import { errorText } from './log';
+import { deleteFeedbackFiles } from './feedback';
 import { effectivePlan, effectivePlanSql } from './plans';
 
 /**
@@ -182,6 +183,8 @@ const TABLES = [
   'daily_counts',
   'app_events',
   'admin_audit',
+  'feedback_messages',
+  'feedback_files',
 ] as const;
 
 /** The daily and hourly jobs (src/cron.ts) that record a `cron` event when they run. */
@@ -532,6 +535,7 @@ export async function deleteUserEmail(request: Request, ctx: Ctx, id: string): P
 export async function deleteUser(request: Request, ctx: Ctx, id: string): Promise<Response> {
   const admin = await requireAdmin(request, ctx);
   await assertUser(ctx, id);
+  await deleteFeedbackFiles(ctx.env, id);
   await ctx.env.DB.batch([ctx.env.DB.prepare('DELETE FROM users WHERE id = ?').bind(id), auditStatement(ctx.env, admin, 'user.delete', id)]);
   return new Response(null, { status: 204 });
 }

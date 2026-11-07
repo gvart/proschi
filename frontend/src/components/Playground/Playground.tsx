@@ -133,6 +133,7 @@ import type { CoverBand } from '../../onboarding/Tour';
 import type { FitInset } from '../Diagram/useFitOnChange';
 import { PlaybackMiniMap, UseCasePlayback } from '../UseCases/UseCasePlayback';
 import { PLAYBACK_EDGE_TYPES, type PlaybackView } from '../UseCases/playbackView';
+import { useFeedbackDiagram } from '../../feedback/diagram';
 
 // Panes that are not visible at start load on first use.
 const HldView = lazy(() => import('../Hld/HldView'));
@@ -224,6 +225,7 @@ export default function Playground() {
   const [linkCloud, setLinkCloud] = useState(() => ({ docId: docStore.get().currentId, files: cloudImports(decodeShareLink(window.location.hash)?.imports) }));
   const linkCloudFiles = linkCloud.docId === current.id ? linkCloud.files : {};
   const source = current.source;
+  useFeedbackDiagram(source);
   const rootPath = fileNameOf(current);
   const setSource = useCallback((next: string) => setDocState((s) => updateCurrent(s, next)), [setDocState]);
   /** The reader's own edit in the code pane (not a value set from outside, which the editor echoes back). */
