@@ -274,6 +274,7 @@ describe('data export', () => {
       credits: [],
       creditCharges: [],
       roadmapRecs: [],
+      feedback: [],
       aiInterviews: [],
       partnerSessions: [],
     });

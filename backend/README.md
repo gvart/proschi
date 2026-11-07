@@ -812,6 +812,7 @@ changes goes to the audit log in the same batch as the change.
 | Health | D1 (latency, size, last migration, rows per table), the deployed version (`version_metadata`), each cron job's last run and result, errors and rate limits in the last day and week, email reminders, and configuration checks (secrets set, providers, the setup token removed) |
 | Users | Search by name, account id or the provider's user id; filter (active this week, blocked, public, email) and sort. An account's page: sign-ins, sessions, progress, cards, challenges, game, short links, synced diagrams, the email address masked (`a***@example.com`) and the admin actions on it. **Block** (with a reason; signs it out everywhere, apps too, refuses its sign-ins with `login_error=blocked`, makes its profile private and hides its short links; unblocking restores the links, the profile stays private until the user turns it on), **unblock**, **sign out everywhere**, **rename**, **make the profile private**, **remove the email address**, **delete the account** |
 | Short links | Every short link with its owner, searchable; delete one |
+| Inbox | Messages from the app's **Send feedback** ([Feedback](#feedback)): filter by type and status, search; one message with its sender (and their confirmed email address as a `mailto:` link, when the account has one), context, attached diagram and screenshots; set the status (new, in progress, done) and an internal note, or delete it with a reason, all audited. The sidebar counts unread messages, the overview the open ones |
 | Events | App events (`app_events`, kept 30 days): server errors with their stack, rate limits hit, failed and blocked sign-ins, failed reminder emails, cron runs, admin sign-ins. Never a user id, an IP or a query: paths have their ids replaced by `:id`. Server errors and rate limits are recorded at most once a minute per route and Worker instance, so a flood cannot become as many writes |
 | Audit log | Every admin action (`admin_audit`, kept 400 days): when, what, the target's id and the passkey's name |
 | Passkeys | Add, list and remove passkeys; sign every admin session out |
@@ -830,7 +831,37 @@ changes goes to the audit log in the same batch as the change.
 | `GET /api/admin/shares?q=&offset=`, `DELETE /api/admin/shares/<id>` | Short links |
 | `GET /api/admin/events?kind=&level=&before=`, `GET /api/admin/audit?before=` | 100 at a time, newest first; `next` is the next page's `before` |
 
+| `GET /api/admin/feedback?status=new\|in_progress\|done\|open&kind=&q=&offset=`, `GET /api/admin/feedback/<id>`, `PATCH /api/admin/feedback/<id> {status?, note?}`, `DELETE /api/admin/feedback/<id> {reason}`, `GET /api/admin/feedback/<id>/files/<key>` | The inbox (opening a message marks it read) |
+
 Every route but status, setup and login answers 401 without an admin session.
+
+### Feedback
+
+Signed-in users write to the operator from the app (the help menu's **Send
+feedback**, the footer and Settings → Contact us; `frontend/src/feedback/`):
+`POST /api/feedback` as `multipart/form-data` with `kind` (bug, question,
+proposal, other), `subject` (optional, 200 characters), `message` (5,000),
+the page's `path` and `viewport`, optionally `diagram` (the source, 64 KiB)
+and up to 3 `screenshot` files (PNG, JPEG or WebP, 5 MB each). The server
+adds the User-Agent, the account's plan and the deployed version
+(`version_metadata`). There is no email and no reply thread: the inbox is
+the admin panel's **Inbox** (`src/feedback.ts`, migration 0029).
+
+- **Limits**: 5 messages an hour and 20 a day per account, counted in D1
+  (429 with `Retry-After`); signed out, 401.
+- **Screenshots** are stored in R2 (`FEEDBACK_BUCKET`, bucket
+  `proschi-feedback`) under random keys, never at a public address: only
+  `GET /api/admin/feedback/<id>/files/<key>` serves them, to the admin, with
+  the API's `default-src 'none'` policy. Their type is the one their first
+  bytes show (an SVG or HTML page named `.png` is refused with 415), not the
+  browser's word. They are deleted with the message, and before the account
+  when it is deleted (by the user or the admin), since the cascade cannot
+  reach R2. Without the binding, messages are still accepted without
+  screenshots (503 with them).
+- **Text** is stored and served as written, as JSON; the admin panel shows it
+  as plain text, never as HTML.
+- **Download my data** has the user's messages with their context and
+  diagram (the screenshots' type and size); the admin's notes stay out.
 
 ## Mobile apps
 
@@ -1252,6 +1283,9 @@ Before turning the paid features on at proschi.app:
 - **An AI spend cap**: a monthly limit on the key in the Anthropic console
   (Settings → Limits), or a rate or spend limit on the Cloudflare AI Gateway
   in front of it.
+- **The feedback bucket**: `npx wrangler r2 bucket create proschi-feedback`
+  once ([Feedback](#feedback)); `wrangler dev` and the tests simulate it
+  locally.
 - **Migrations**: `npm run deploy` (and so every push to `main`) applies the
   pending ones, 0017 onwards, before it deploys the Worker; nothing to run by
   hand.
