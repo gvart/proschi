@@ -11,10 +11,11 @@ import { setupHref } from './links';
 /**
  * Step 3 of the mock interview (P45): the verdict of a mock interview, or the
  * summary of one on your own, then what to do next: a new interview (a new
- * random problem) or this problem again.
+ * random problem) or this problem again. Below it, the progress the
+ * interview made (`progress`, ResultProgress.tsx).
  */
 
-type ResultProps = { problem: Problem } & ({ kind: 'mock'; interview: AiInterview } | { kind: 'solo'; summary: InterviewSummary });
+type ResultProps = { problem: Problem; progress?: ReactNode } & ({ kind: 'mock'; interview: AiInterview } | { kind: 'solo'; summary: InterviewSummary });
 
 export default function Result(props: ResultProps) {
   const { problem } = props;
@@ -47,6 +48,7 @@ export default function Result(props: ResultProps) {
           </div>
         )}
       </div>
+      {props.progress}
     </main>
   );
 }

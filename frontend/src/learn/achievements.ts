@@ -3,7 +3,7 @@ import { CARD_ID, readLock } from './cards';
 import { isNew, reviewable, type CardStates } from './review';
 import { computeStreak, type DailyGoal, type Day, type DayActivity } from './streak';
 import type { Rating } from './fsrs';
-import { percent, skills, type MasteryInput, type ProblemInfo, type Skills } from './mastery';
+import { percent, skills, type InterviewDone, type MasteryInput, type ProblemInfo, type Skills } from './mastery';
 import type { ChallengeStats } from './challenge';
 
 /**
@@ -22,7 +22,7 @@ export const TIERS = ['bronze', 'silver', 'gold'] as const;
 export type Tier = (typeof TIERS)[number];
 
 /** The icons a badge can show, by name; the page maps each to a lucide icon, an app to its own. */
-export const ICONS = ['layers', 'brain', 'flame', 'trophy', 'check', 'zap', 'coins', 'calculator', 'target', 'map', 'database', 'radio', 'shield', 'star', 'book'] as const;
+export const ICONS = ['layers', 'brain', 'flame', 'trophy', 'check', 'zap', 'coins', 'calculator', 'target', 'map', 'database', 'radio', 'shield', 'star', 'book', 'mic'] as const;
 export type Icon = (typeof ICONS)[number];
 
 type Difficulty = ProblemInfo['difficulty'];
@@ -69,7 +69,13 @@ export type Rule =
   /** Every lesson of some roadmap stage read. */
   | { kind: 'stage-lessons' }
   /** Every problem lesson read. */
-  | { kind: 'all-lessons' };
+  | { kind: 'all-lessons' }
+  /** Problems with a finished mock interview, with the interviewer or on your own, optionally only those of one difficulty. */
+  | { kind: 'interviews'; min: number; difficulty?: Difficulty }
+  /** Problems with a passing verdict from the interviewer. */
+  | { kind: 'interview-passed'; min: number }
+  /** Problems with an interview finished within its time: with a pass, or on your own with every check passing. */
+  | { kind: 'interview-on-time'; min: number };
 
 export type RuleKind = Rule['kind'];
 
@@ -94,6 +100,9 @@ const RULE_FIELDS: Record<RuleKind, { required: string[]; optional: string[] }> 
   lessons: { required: ['min'], optional: ['stage'] },
   'stage-lessons': { required: [], optional: [] },
   'all-lessons': { required: [], optional: [] },
+  interviews: { required: ['min'], optional: ['difficulty'] },
+  'interview-passed': { required: ['min'], optional: [] },
+  'interview-on-time': { required: ['min'], optional: [] },
 };
 export const RULE_KINDS = Object.keys(RULE_FIELDS) as RuleKind[];
 
@@ -150,6 +159,8 @@ export interface StatsSnapshot {
   game: GameStats;
   /** The ids of the problems whose lessons were read (guides and unknown ids are not counted by the rules). */
   lessons: string[];
+  /** Mock interviews finished, with the interviewer or on your own. */
+  interviews: InterviewDone[];
 }
 
 /** What the game badges and the skill map's game bonus look at (src/game/engine/meta.ts gameStats). */
@@ -228,6 +239,14 @@ export function ruleProgress(rule: Rule, s: StatsSnapshot, context: AchievementC
     }
     case 'all-lessons':
       return { current: lessonsRead(s, context).length, target: Math.max(1, context.problems.length) };
+    case 'interviews': {
+      const known = new Set(context.problems.filter((p) => !rule.difficulty || p.difficulty === rule.difficulty).map((p) => p.id));
+      return count(interviewed(s, (i) => known.has(i.problem)), rule.min);
+    }
+    case 'interview-passed':
+      return count(interviewed(s, (i) => i.passed), rule.min);
+    case 'interview-on-time':
+      return count(interviewed(s, (i) => i.onTime), rule.min);
     case 'stage-lessons': {
       // The stage closest to done: its lessons read against its size.
       const read = new Set(lessonsRead(s, context));
@@ -242,6 +261,17 @@ export function ruleProgress(rule: Rule, s: StatsSnapshot, context: AchievementC
     default:
       return { current: 0, target: 1 };
   }
+}
+
+/** How many problems have an interview that `matches`, each counted once. */
+function interviewed(s: StatsSnapshot, matches: (i: InterviewDone) => boolean): number {
+  return new Set((s.interviews ?? []).filter(matches).map((i) => i.problem)).size;
+}
+
+/** The problems interviewed with the interviewer and on your own, each counted once per way: what the level counts. */
+export function interviewCounts(interviews: readonly InterviewDone[]): { interviews: number; soloInterviews: number } {
+  const problems = (mode: InterviewDone['mode']) => new Set(interviews.filter((i) => i.mode === mode).map((i) => i.problem)).size;
+  return { interviews: problems('mock'), soloInterviews: problems('solo') };
 }
 
 /** The lessons read that belong to a problem of the catalog, each once. */
@@ -329,6 +359,8 @@ export interface SnapshotInput extends Omit<MasteryInput, 'solved'> {
   game?: GameStats;
   /** The ids of the lessons read; none when absent. */
   lessons?: readonly string[];
+  /** Mock interviews finished; none when absent. */
+  interviews?: readonly InterviewDone[];
 }
 
 const NO_CHALLENGES: ChallengeStats = { completed: 0, perfect: 0, longestStreak: 0 };
@@ -336,7 +368,7 @@ const NO_CHALLENGES: ChallengeStats = { completed: 0, perfect: 0, longestStreak:
 /** The snapshot, and the skill map computed on the way. */
 export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; skills: Skills } {
   const game = input.game ?? NO_GAME;
-  const map = skills({ ...input, solved: input.solvedProblems.map((p) => p.id), gameLessons: game.lessons });
+  const map = skills({ ...input, solved: input.solvedProblems.map((p) => p.id), gameLessons: game.lessons, interviews: input.interviews ?? [] });
   return {
     snapshot: {
       reviews: input.reviews,
@@ -348,6 +380,7 @@ export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; 
       challenges: input.challenges ?? NO_CHALLENGES,
       game,
       lessons: [...(input.lessons ?? [])],
+      interviews: [...(input.interviews ?? [])],
     },
     skills: map,
   };
@@ -357,7 +390,8 @@ export function buildSnapshot(input: SnapshotInput): { snapshot: StatsSnapshot; 
 export interface AchievementsAnswer {
   achievements: AchievementStatus[];
   skills: { readiness: number; topics: { topic: string; mastery: number }[]; weakest: string[] };
-  stats: { reviews: number; mastered: number; longestStreak: number; estimateStreak: number; solved: number };
+  /** `interviews` and `soloInterviews`: problems with a mock interview finished with the interviewer, and on your own (interviewCounts). */
+  stats: { reviews: number; mastered: number; longestStreak: number; estimateStreak: number; solved: number; interviews: number; soloInterviews: number };
 }
 
 /** The answer from the statuses, the skill map and the snapshot. */
@@ -371,6 +405,7 @@ export function achievementsAnswer(statuses: AchievementStatus[], map: Skills, s
       longestStreak: snapshot.longestStreak,
       estimateStreak: snapshot.estimateStreak,
       solved: snapshot.solved.length,
+      ...interviewCounts(snapshot.interviews ?? []),
     },
   };
 }
@@ -515,7 +550,7 @@ function checkRule(raw: unknown, context: AchievementCheckContext, retired = fal
     const reachable = rule.stage ? (context.stageProblems?.[rule.stage as string]?.length ?? Infinity) : context.problems.length;
     if ((rule.min as number) > reachable) return `"min" is ${String(rule.min)}, but only ${reachable} lesson(s) can count towards it`;
   }
-  if (kind === 'solved' || kind === 'first-run' || kind === 'under-reference') {
+  if (kind === 'solved' || kind === 'first-run' || kind === 'under-reference' || kind === 'interviews' || kind === 'interview-passed' || kind === 'interview-on-time') {
     const reachable = context.problems.filter((p) => (!rule.difficulty || p.difficulty === rule.difficulty) && (!rule.tag || p.tags.includes(rule.tag as string))).length;
     if ((rule.min as number) > reachable) return `"min" is ${String(rule.min)}, but only ${reachable} problem(s) can count towards it`;
   }

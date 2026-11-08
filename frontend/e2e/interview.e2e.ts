@@ -325,6 +325,59 @@ test.describe('the interview room on your own', () => {
   });
 });
 
+test.describe('an interview as progress', () => {
+  test('one too short to count says so, with the bar, and earns nothing', async ({ page }) => {
+    await startOn(page, 'URL Shortener', '30 min');
+    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
+    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
+
+    const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
+    await expect(progress).toContainText('Too short to count towards your progress');
+    await expect(progress.getByTestId('result-too-short')).toContainText('10 minutes or more, or reaches Design with something drawn');
+    await expect(progress.locator('[data-new-badge]')).toHaveCount(0);
+
+    await page.goto('practice/#/progress');
+    await expect(page.getByTestId('xp')).toHaveText('0 XP');
+    await expect(page.getByRole('region', { name: 'Interviews on your own' }).getByRole('listitem')).toContainText('Too short to count');
+  });
+
+  test('a finished interview on your own adds XP and a badge on the result, once, and joins the progress page', async ({ page }) => {
+    await page.clock.install();
+    await startOn(page, 'URL Shortener', '30 min');
+    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
+    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    // Eleven minutes of design: past the 10 minutes an interview needs to count.
+    await page.clock.fastForward('11:00');
+    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
+
+    const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
+    await expect(progress.getByTestId('result-xp')).toHaveText('+20 XP · Level 1');
+    const badges = progress.getByRole('list', { name: 'New badges' });
+    await expect(badges.locator('[data-new-badge="interview-first"]')).toContainText('First interview');
+    // The skill map moved: URL Shortener's topics got the interview's bonus.
+    await expect(progress.getByRole('list', { name: 'Skills that moved' }).getByRole('listitem').first()).toContainText(/\d+% → \d+%/);
+
+    // A reload counts nothing twice: the badge was earned with the interview, and no XP is added again.
+    await page.reload();
+    await expect(progress.getByTestId('result-xp')).toHaveText('Level 1');
+    await expect(progress.locator('[data-new-badge="interview-first"]')).toBeVisible();
+
+    await progress.getByRole('link', { name: 'See your progress' }).click();
+    await expect(page).toHaveURL(/#\/progress$/);
+    await expect(page.getByTestId('xp')).toHaveText('20 XP');
+    await expect(page.locator('[data-achievement="interview-first"]')).toHaveAttribute('data-earned', 'true');
+    const history = page.getByRole('region', { name: 'Interviews on your own' });
+    await expect(history.getByRole('listitem')).toHaveCount(1);
+    await expect(history.getByRole('listitem')).toContainText('URL Shortener');
+    await expect(history.getByRole('link')).toHaveAttribute('href', '#/interview?problem=url-shortener&with=solo');
+    // Shown on the result already: no toast celebrates it again.
+    await expect(page.getByRole('status', { name: 'New badge' })).toHaveCount(0);
+  });
+});
+
 test.describe('the interview room on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 

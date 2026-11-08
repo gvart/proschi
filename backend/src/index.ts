@@ -68,6 +68,7 @@ import { assertSameOrigin, bearerToken, errorResponse, HttpError, json, withSecu
 import { errorText, log } from './log';
 import { deleteMe, exportMe, getMe, importProgress, recordRun, updateMe } from './progress';
 import { postLessonsRead } from './lessons';
+import { postSoloInterviews } from './soloInterviews';
 import { confirmEmail, confirmPage, deleteEmail, getEmailPrefs, patchEmail, putEmail, unsubscribe, unsubscribePage } from './reminders';
 import { getPublicProfile } from './profile';
 import { servePublicProfile } from './profilePage';
@@ -113,6 +114,7 @@ import { deleteFeedback, getFeedback, getFeedbackFile, listFeedback, patchFeedba
  *   GET    /api/news/unsubscribe?token=     the "Stop product news" link's page; POST stops it (one-click, no session)
  *   POST   /api/me/import {items}           the browser's progress, on first sign-in
  *   POST   /api/me/lessons {ids}            lessons and roadmap guides read
+ *   POST   /api/me/interviews/solo {sessions}   mock interviews finished on your own (src/soloInterviews.ts)
  *   GET    /api/me/achievements?day=        every badge with its progress, and the skill map (stores newly earned badges)
  *   POST   /api/me/achievements/seen {ids?} marks earned badges as celebrated
  *   GET    /api/me/documents?since=<ms>     the editor's synced diagrams changed since (tombstones too), {documents, cursor}
@@ -291,6 +293,7 @@ async function route(request: Request, ctx: Ctx, pathname: string): Promise<Resp
   if (is('POST', 'api', 'me', 'announcement', '*', 'click')) return markAnnouncement(request, ctx, parts[3], 'click');
   if (is('POST', 'api', 'me', 'import')) return importProgress(request, ctx);
   if (is('POST', 'api', 'me', 'lessons')) return postLessonsRead(request, ctx);
+  if (is('POST', 'api', 'me', 'interviews', 'solo')) return postSoloInterviews(request, ctx);
   if (is('GET', 'api', 'me', 'achievements')) return getAchievements(request, ctx);
   if (is('POST', 'api', 'me', 'achievements', 'seen')) return markAchievementsSeen(request, ctx);
   if (is('GET', 'api', 'me', 'documents')) return listDocuments(request, ctx);

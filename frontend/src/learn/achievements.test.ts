@@ -22,7 +22,7 @@ import {
   type StatsSnapshot,
   NO_GAME,
 } from './achievements';
-import type { ProblemInfo } from './mastery';
+import type { InterviewDone, ProblemInfo } from './mastery';
 import { addDays, goalFor } from './streak';
 
 const problems: ProblemInfo[] = [
@@ -33,8 +33,10 @@ const problems: ProblemInfo[] = [
 ];
 const context: AchievementContext = { problems, stages: [{ id: 'one', problems: ['a', 'b', 'gone'] }] };
 
-const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 }, game: NO_GAME, lessons: [] };
+const empty: StatsSnapshot = { reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: [], mastery: {}, challenges: { completed: 0, perfect: 0, longestStreak: 0 }, game: NO_GAME, lessons: [], interviews: [] };
 const snap = (over: Partial<StatsSnapshot>): StatsSnapshot => ({ ...empty, ...over });
+const mock = (problem: string, passed: boolean, onTime: boolean): InterviewDone => ({ problem, mode: 'mock', passed, onTime, scores: { design: 4 } });
+const solo = (problem: string, onTime: boolean): InterviewDone => ({ problem, mode: 'solo', passed: false, onTime });
 const solved = (...ids: string[]) => ids.map((id) => ({ id, firstRun: false, underReference: false }));
 
 describe('rules', () => {
@@ -69,6 +71,13 @@ describe('rules', () => {
     [{ kind: 'all-lessons' }, snap({ lessons: ['a', 'b', 'approach'] }), 2, 4],
     [{ kind: 'stage-lessons' }, snap({ lessons: ['a'] }), 1, 2],
     [{ kind: 'stage-lessons' }, snap({ lessons: ['a', 'b'] }), 2, 2],
+    // Interviews count problems once, either way; only those of this catalog.
+    [{ kind: 'interviews', min: 5 }, snap({ interviews: [mock('a', true, true), solo('a', false), solo('c', true), solo('gone', true)] }), 2, 5],
+    [{ kind: 'interviews', min: 1, difficulty: 'hard' }, snap({ interviews: [solo('a', true)] }), 0, 1],
+    [{ kind: 'interviews', min: 1, difficulty: 'hard' }, snap({ interviews: [mock('b', false, false)] }), 1, 1],
+    [{ kind: 'interview-passed', min: 1 }, snap({ interviews: [mock('a', false, false), solo('b', true)] }), 0, 1],
+    [{ kind: 'interview-passed', min: 2 }, snap({ interviews: [mock('a', true, false), mock('a', true, true)] }), 1, 2],
+    [{ kind: 'interview-on-time', min: 1 }, snap({ interviews: [mock('a', true, false), solo('b', true)] }), 1, 1],
   ])('%j on a snapshot is %d of %d', (rule, s, current, target) => {
     expect(ruleProgress(rule, s, context)).toEqual({ current, target });
   });
@@ -162,9 +171,16 @@ describe('the snapshot', () => {
     expect(snapshot.mastery.caching).toBeGreaterThan(0);
     const { statuses } = achievementStatuses(defs, snapshot, context, {}, NOW);
     const answer = achievementsAnswer(statuses, skills, snapshot);
-    expect(answer.stats).toEqual({ reviews: 7, mastered: 0, longestStreak: 2, estimateStreak: 3, solved: 1 });
+    expect(answer.stats).toEqual({ reviews: 7, mastered: 0, longestStreak: 2, estimateStreak: 3, solved: 1, interviews: 0, soloInterviews: 0 });
     expect(answer.skills.weakest).toEqual(['caching']);
     expect(JSON.parse(JSON.stringify(answer))).toEqual(answer);
+  });
+});
+
+describe('interview counts', () => {
+  it('counts each problem once per way', async () => {
+    const { interviewCounts } = await import('./achievements');
+    expect(interviewCounts([mock('a', true, true), mock('a', false, false), solo('a', true), solo('b', false), solo('b', false)])).toEqual({ interviews: 1, soloInterviews: 2 });
   });
 });
 
@@ -181,7 +197,7 @@ describe('the achievements check', () => {
     // The lock is as `proschi achievements lock` writes it.
     expect(lock).toBe(writeAchievementsLock([], (raw as { id: string }[]).map((a) => a.id)));
     expect(check.achievements.length).toBeGreaterThanOrEqual(25);
-    expect(check.achievements.length).toBeLessThanOrEqual(45);
+    expect(check.achievements.length).toBeLessThanOrEqual(50);
     // Every rule kind is used.
     expect(new Set(check.achievements.map((a) => a.rule.kind))).toEqual(new Set(RULE_KINDS));
   });

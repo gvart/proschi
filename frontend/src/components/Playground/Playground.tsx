@@ -1885,6 +1885,8 @@ function DiagramView({
         if ((e.key === 'Delete' || e.key === 'Backspace') && !target.closest('input, textarea, [contenteditable]')) {
           e.preventDefault();
           deleteSelection();
+          // The deleted item had the focus; keep it on the canvas so Ctrl+Z still works.
+          wrapperRef.current?.focus({ preventScroll: true });
         }
       }}
     >

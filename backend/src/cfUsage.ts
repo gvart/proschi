@@ -79,6 +79,10 @@ const R2_CLASS_B = /^(HeadBucket|HeadObject|GetObject|UsageSummary|GetBucket)/;
 
 const HOUR = 3_600_000;
 const DAY = 86_400_000;
+/** A daily quota's pace is measured over at least this much of the day (`dailyPace`). */
+const DAILY_WINDOW = 6 * HOUR;
+/** The days before today that make a typical day (`dailyPace`). */
+const TYPICAL_DAYS = 7;
 export const SERIES_DAYS = 30;
 const CACHE_SECONDS = 600;
 const API = 'https://api.cloudflare.com/client/v4';
@@ -111,7 +115,7 @@ export interface Metric {
   periodStart: string;
   /** When it resets. */
   periodEnd: string;
-  /** A straight line from the period's start through now to its end (a stock: as it stands). */
+  /** Used so far plus the rest of the period at its pace (`buildMetric`; a stock: as it stands). */
   projected: number;
   /** When the line passes the quota, if it does this period and hasn't yet. */
   passesAt: string | null;
@@ -176,9 +180,11 @@ export function statusOf(used: number, projected: number, included: number): Sta
 
 /**
  * One quota from its points (any bucket size; a stock's are daily levels).
- * A flow's projection is a straight line from the period's start through
- * now, with at least an hour elapsed so a period's first minutes don't
- * project wildly. `billing` is the plan's period, for a daily quota's
+ * A monthly flow's projection is a straight line from the period's start
+ * through now, with at least an hour elapsed so a period's first minutes
+ * don't project wildly. A daily flow's rest of the day runs at `dailyPace`.
+ * `projected`, `passesAt`, `status` and a daily quota's overage all follow
+ * from the same pace. `billing` is the plan's period, for a daily quota's
  * overage on Paid.
  */
 export function buildMetric(quota: Quota, points: Point[], period: Period, now: number, plan: Plan, billing: Period = period): Metric {
@@ -198,10 +204,13 @@ export function buildMetric(quota: Quota, points: Point[], period: Period, now: 
     used = latest?.value ?? 0;
   }
   const length = period.end - period.start;
-  const elapsed = Math.min(length, Math.max(HOUR, now - period.start));
-  const projected = quota.kind === 'flow' ? (used * length) / elapsed : used;
-  const rate = used / elapsed;
-  const passesAt = quota.kind === 'flow' && used < quota.included && projected > quota.included && rate > 0 ? iso(period.start + quota.included / rate) : null;
+  const daily = quota.kind === 'flow' && quota.period === 'day';
+  // How much of the period has run, and the pace (units per ms) for the rest of it.
+  const elapsed = Math.min(length, Math.max(daily ? 0 : HOUR, now - period.start));
+  const typicalDay = days.slice(-1 - TYPICAL_DAYS, -1).reduce((s, d) => s + byDay.get(d)!, 0) / TYPICAL_DAYS;
+  const rate = daily ? dailyPace(used, elapsed, typicalDay) : used / elapsed;
+  const projected = quota.kind === 'flow' ? used + rate * (length - elapsed) : used;
+  const passesAt = quota.kind === 'flow' && used < quota.included && projected > quota.included && rate > 0 ? iso(period.start + elapsed + (quota.included - used) / rate) : null;
   const excess = quota.kind === 'flow' && quota.period === 'day' ? dailyExcess(quota, points, projected, billing, now) : Math.max(0, projected - quota.included);
   const overageUsd = plan === 'paid' && quota.per && quota.priceUsd !== undefined ? round2((excess / quota.per) * quota.priceUsd) : null;
   return {
@@ -226,6 +235,21 @@ export function buildMetric(quota: Quota, points: Point[], period: Period, now: 
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100;
+
+/**
+ * A daily quota's pace for the rest of the day (units per ms). A straight
+ * line through the day's first minutes explodes (823 neurons by 00:03 would
+ * be 395,000 by midnight), so the pace is measured over at least the day's
+ * first `DAILY_WINDOW` hours: before 06:00 UTC, the hours of that window not
+ * yet run count at the typical day's pace (the mean of the 7 days before
+ * today, zero where there was no usage). Early on the projection is about a
+ * typical day; with no history, today's usage spread over 6 hours. From 06:00
+ * on it is the plain straight line.
+ */
+function dailyPace(used: number, elapsed: number, typicalDay: number): number {
+  if (elapsed >= DAILY_WINDOW) return used / elapsed;
+  return (used + ((DAILY_WINDOW - elapsed) * typicalDay) / DAY) / DAILY_WINDOW;
+}
 
 /** A daily quota over the billing period: each day's units past it, today's as projected, at that pace to the period's end. */
 function dailyExcess(quota: Quota, points: Point[], today: number, billing: Period, now: number): number {

@@ -78,7 +78,7 @@ describe('achievements', () => {
     expect(answer.skills.readiness).toBe(0);
     expect(answer.skills.topics.length).toBe(18);
     expect(answer.skills.weakest).toHaveLength(3);
-    expect(answer.stats).toEqual({ reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0 });
+    expect(answer.stats).toEqual({ reviews: 0, mastered: 0, longestStreak: 0, estimateStreak: 0, solved: 0, interviews: 0, soloInterviews: 0 });
     expect(await env.DB.prepare('SELECT COUNT(*) AS n FROM achievements').first('n')).toBe(0);
   });
 
@@ -100,7 +100,7 @@ describe('achievements', () => {
 
     const answer = await get(token);
     // cache-aside, reviewed again and again over two days, is mastered.
-    expect(answer.stats).toEqual({ reviews: 20, mastered: 1, longestStreak: 2, estimateStreak: 3, solved: 2 });
+    expect(answer.stats).toEqual({ reviews: 20, mastered: 1, longestStreak: 2, estimateStreak: 3, solved: 2, interviews: 0, soloInterviews: 0 });
     for (const earned of ['first-card', 'first-solve', 'first-run-1', 'under-reference-1', 'estimate-streak-3']) {
       expect(badge(answer, earned)).toMatchObject({ earned: true, unseen: true, current: badge(answer, earned).target });
     }
