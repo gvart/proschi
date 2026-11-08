@@ -94,14 +94,15 @@ text. Headings get ids from their text, GitHub style
 
 The lesson teaches the ideas behind the problem before the solver tries it:
 each roadmap step is *Learn → Challenge → Review*. A problem
-(`practice/#/<id>`, or `practice/#/roadmap/<id>` from the roadmap) opens on
-its lesson, a page of its own with a table of contents and a **Start the
-challenge** button at the top and the bottom; once that was pressed the
-browser remembers it and later visits open the workspace (the statement, the
-editor and the diagram in resizable panes, the tests folded under them until
-the first run). There the **Lesson** button opens the lesson in a drawer,
-and a failed run's common mistake links to its section.
-`practice/#/<id>/lesson` and `practice/#/roadmap/<id>/lesson` always open on
+from the roadmap (`practice/#/roadmap/<id>`) opens on its lesson, a page of
+its own with a table of contents and a button at the top and the bottom that
+leads on to the stages (see below); once the lesson was read the browser
+remembers it. A problem from the list (`practice/#/<id>`) opens straight on
+the workspace (the statement, the editor and the diagram in resizable panes,
+the tests folded under them until the first run), with no lesson first. There
+the **Lesson** button opens the lesson in a drawer, and a failed run's common
+mistake links to its section. `practice/#/<id>/lesson` opens that workspace
+with the drawer open, and `practice/#/roadmap/<id>/lesson` always opens on
 the lesson. Lessons are never locked: on the roadmap only a step's challenge
 waits (until every earlier step is solved, and signed out past stage 1), and
 the address of a locked challenge shows the roadmap with what unlocks it;
@@ -212,13 +213,19 @@ account are joined. The reading badges count them (docs/CARDS.md,
 
 ### The stages
 
-A problem is worked through in stages, self-paced: **Lesson**, **Clarify**
+A problem opened from **Interview prep** (the roadmap) is worked through in
+stages; one opened from the **Problems** list stays the plain workspace of
+the lesson section above (the statement, editor and diagram, Run tests, the
+Interview mode and Guided walkthrough buttons, Design partner), like a
+coding-practice site, with no stage bar. Solved state and saved code are
+shared between the two entries; the stage notes only exist on the roadmap.
+The stages are self-paced: **Lesson**, **Clarify**
 (your own questions first, then the interviewer's answers from
 `interview.md`), **Estimate** (its estimates, each checked after you commit
 to a number), **Design** (the whiteboard, with the full editor one click
 away) and **Wrap-up** (the tests, the review and a recall prompt). The
 notes of each stage are kept per problem in the browser
-(`proschi.practice.stages.<id>`); see `docs/design/paid-plans.md` P50.
+(`proschi.practice.stages.<id>`); see `docs/design/paid-plans.md` P50 and P51.
 
 ## `interview.md`
 

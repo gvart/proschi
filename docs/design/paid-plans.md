@@ -530,3 +530,18 @@ id; don't rewrite old ones.
   partner" and Copy (the code editor and the canvas keep their own), and
   a small floating button under it does the same on touch; the quote goes
   into the composer, after anything typed.
+- **P51. The stages are for Interview prep only.** P50's flow (Lesson,
+  Clarify, Estimate, Design, Wrap-up, the stage rail and select-to-ask)
+  runs only for a problem opened from the roadmap
+  (`practice/#/roadmap/<id>`). A problem opened from the Problems list
+  (`practice/#/<id>`) stays a simple workspace, like a coding-practice
+  site: it opens straight on the brief, the editor and the diagram, with
+  the Tests and Review footer, Run tests and Design partner as before
+  P50, and no lesson gate, stage bar, Clarify or Estimate. The header's
+  optional **Lesson** button (a drawer) and the **Interview mode** and
+  **Guided walkthrough** buttons of the brief are back there;
+  `practice/#/<id>/lesson` opens the workspace with the lesson drawer
+  open. It is one page with a `staged` switch set by the route, not a
+  second component. The solved state and the saved code are shared by
+  the two entries of a problem (the same practice progress); the stage
+  notes (`proschi.practice.stages.<id>`) matter only on the roadmap.

@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, Lightbulb, MoreHorizontal, Network, Presentation, RotateCcw } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, Presentation, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -41,12 +41,13 @@ import { useZenMode } from '../components/Playground/useZenMode';
 import { useKeyboardViewport } from '../components/Playground/useKeyboardViewport';
 import { ZenButton, ZenCollapse, ZenStatus } from '../components/Playground/Zen';
 import EditorZone from '../components/Playground/EditorZone';
-import { eyebrow, iconButton, subBar, toolButton } from '../components/Playground/ui';
+import { eyebrow, iconButton, outlineButton, subBar, toolButton } from '../components/Playground/ui';
 import { evaluateChecks, guidedReducer, parseGuided } from './modes/guidedFile';
 import { loadGuided, saveGuided, type GuidedState } from './modes/store';
 import GuidedPanel from './modes/GuidedPanel';
 import { parseInterview } from './modes/interviewFile';
 import { questionRowId } from './interview/stages';
+import { setupHref } from './interview/links';
 import { ChecksSheet } from './interview/Room';
 import { useCodePref } from './interview/prefs';
 import { factsOf, goTo as reachStage, labelOf, loadNotes, nextOf, openingScreen, saveNotes, stageDone, type StageId, type StageNotes, type WorkStage } from './stages/flow';
@@ -102,6 +103,12 @@ interface ProblemPageProps {
    * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
    */
   openLesson?: 'always' | 'unread';
+  /**
+   * The staged flow (P50) is for Interview prep only (P51). Without it the
+   * problem opens straight on the workspace, as it did before the stages:
+   * no lesson gate, no stage bar, the lesson one click away in the header.
+   */
+  staged?: boolean;
 }
 
 /**
@@ -115,7 +122,7 @@ interface ProblemPageProps {
  * coaches in every stage, and any text selected on a stage can be asked
  * about.
  */
-export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson }: ProblemPageProps) {
+export default function ProblemPage({ problem, progress, onProgress, engine, account, back = { href: '#/', label: 'Problems' }, banner, openLesson, staged = false }: ProblemPageProps) {
   const [source, setSource] = useState(() => sourceOf(progress, problem));
   useFeedbackDiagram(source);
   const [parsedSource, setParsedSource] = useState(source);
@@ -123,7 +130,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const hasLesson = problem.lesson !== undefined;
   // The notes of each stage, kept per problem; the screen opens on the lesson until it is read, else where it was left.
   const [notes, setNotes] = useState<StageNotes>(() => loadNotes(problem.id));
-  const [screen, setScreen] = useState<StageId>(() => openingScreen(hasLesson, openLesson, lessonRead(problem.id), loadNotes(problem.id)));
+  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, lessonRead(problem.id), loadNotes(problem.id)) : 'design'));
   const updateNotes = useCallback(
     (update: (n: StageNotes) => StageNotes) =>
       setNotes((n) => {
@@ -138,7 +145,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [checksOpen, setChecksOpen] = useState(false);
   // Phones, on the Design stage: the guide, the whiteboard or the code.
   const [designTab, setDesignTab] = useState<'guide' | 'board' | 'code'>('board');
-  const [drawer, setDrawer] = useState(false);
+  // On a plain problem, `practice/#/<id>/lesson` opens the lesson beside the workspace.
+  const [drawer, setDrawer] = useState(!staged && hasLesson && openLesson === 'always');
   // A heading to bring into view once the drawer shows (openLessonAt).
   const [lessonTarget, setLessonTarget] = useState<string>();
   const phone = useIsPhone();
@@ -308,7 +316,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   // The tour shows the full editor, so asking for it opens Design there.
   const startTour = () => {
-    if (screen !== 'design' || !notes.editor) {
+    if (staged && (screen !== 'design' || !notes.editor)) {
       updateNotes((n) => ({ ...reachStage(n, 'design'), editor: true }));
       setScreen('design');
     }
@@ -361,8 +369,15 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
 
   const inLesson = hasLesson && screen === 'lesson';
   // Design in the full editor: the workspace as it always was.
-  const editorView = screen === 'design' && notes.editor;
+  const editorView = screen === 'design' && (!staged || notes.editor);
   usePartnerShortcut(togglePartner, hasPartner);
+  const lessonButton = (className: string) =>
+    hasLesson && (
+      <button type="button" onClick={() => setDrawer(true)} aria-haspopup="dialog" aria-expanded={drawer} className={className} title="Open the lesson beside your work">
+        <GraduationCap size={15} aria-hidden="true" />
+        Lesson
+      </button>
+    );
 
   const guidedPanel = guidedSteps && (
             <GuidedPanel
@@ -385,7 +400,30 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     <div data-tour="statement" className="h-full overflow-y-auto bg-surface">
       <>
           {guidedOn && guidedPanel}
-          <Statement problem={problem} solved={status === 'solved'} onUseSolution={() => setSource(problem.solution)} />
+          <Statement
+            problem={problem}
+            solved={status === 'solved'}
+            onUseSolution={() => setSource(problem.solution)}
+            modes={
+              !staged &&
+              (problem.interview !== undefined || (guidedSteps && !guidedOn)) && (
+                <div className="flex flex-wrap items-center gap-2" aria-label="Practice modes" role="group">
+                  {problem.interview !== undefined && (
+                    <a href={setupHref(problem.id)} className={outlineButton} title="A mock interview on this problem: clarify, estimate, design and wrap up against the clock">
+                      <Timer size={14} aria-hidden="true" />
+                      Interview mode
+                    </a>
+                  )}
+                  {guidedSteps && !guidedOn && (
+                    <button type="button" onClick={openGuided} className={outlineButton} title="Build the design step by step, with a check after each step">
+                      <Compass size={14} aria-hidden="true" />
+                      Guided walkthrough
+                    </button>
+                  )}
+                </div>
+              )
+            }
+          />
         </>
     </div>
   );
@@ -693,7 +731,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       style={keyboard.style}
       data-zen={zenOn || undefined}
       data-keyboard={keyboard.open || undefined}
-      data-stage={screen}
+      data-stage={staged ? screen : 'workspace'}
       data-view={editorView ? 'editor' : 'stages'}
     >
       <ZenCollapse zen={zenOn}>
@@ -717,6 +755,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
           <>
             {/* From sm up Reset and Help have their own buttons; on phones they share "More", so the row does not wrap. */}
             <span className={`hidden sm:flex items-center gap-1 ml-auto`}>
+              {!staged && lessonButton(outlineButton)}
               <button onClick={reset} className={toolButton} aria-label="Reset" title="Reset: start over from the starter code">
                 <RotateCcw size={14} />
                 <span className="hidden min-[1440px]:inline">Reset</span>
@@ -732,16 +771,18 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         <HelpMenu className="hidden sm:block" tourLabel="Take the practice tour" onTour={startTour} />
       </Header>
       {banner}
-      <StageBar
-        notes={notes}
-        shown={screen}
-        hasLesson={hasLesson}
-        onOpen={openStage}
-        next={next}
-        tools={designTools}
-        partner={phone && hasPartner && !editorView && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
-        phone={phone}
-      />
+      {staged && (
+        <StageBar
+          notes={notes}
+          shown={screen}
+          hasLesson={hasLesson}
+          onOpen={openStage}
+          next={next}
+          tools={designTools}
+          partner={phone && hasPartner && !editorView && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
+          phone={phone}
+        />
+      )}
 
       {phone && editorView && (
         // The design system's tab look (widgets.css); plain buttons so each tab keeps its data-tour target.
@@ -757,13 +798,14 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
               );
             })}
           </div>
+          {!staged && lessonButton('flex-none inline-flex items-center gap-1.5 px-3 text-sm font-semibold text-ink border-l-bw-1 border-ink hover:bg-pop-yellow/30')}
           {/* In the tab bar, not over the panes. */}
           {hasPartner && <PartnerButton bar open={partnerOpen} onToggle={togglePartner} />}
         </div>
       )}
       </ZenCollapse>
 
-      <AskSelection enabled={hasPartner} onAsk={askPartner} className="flex flex-1 min-h-0">
+      <AskSelection enabled={hasPartner && staged} onAsk={askPartner} className="flex flex-1 min-h-0">
         <div ref={main} className="flex min-w-0 flex-1 flex-col">
           {body && (
             <div key={editorView ? 'editor' : screen} className={`flex min-h-0 flex-1 flex-col ${editorView ? '' : 'ps-stage-enter'}`}>
@@ -780,7 +822,7 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         {!phone && partnerDock}
       </AskSelection>
       {phone && partnerDock}
-      {phone && next && !editorView && <StageFoot next={next} />}
+      {staged && phone && next && !editorView && <StageFoot next={next} />}
 
       <ZenStatus zen={zen} />
       {tour === 'tour' && editorView && (
@@ -843,7 +885,7 @@ function MoreMenu({ className, onReset, onTour }: { className: string; onReset: 
   );
 }
 
-function Statement({ problem, solved, onUseSolution }: { problem: Problem; solved: boolean; onUseSolution: () => void }) {
+function Statement({ problem, solved, onUseSolution, modes }: { problem: Problem; solved: boolean; onUseSolution: () => void; modes?: ReactNode }) {
   const [hints, setHints] = useState(0);
   const [showSolution, setShowSolution] = useState(false);
 
@@ -853,6 +895,7 @@ function Statement({ problem, solved, onUseSolution }: { problem: Problem; solve
 
   return (
     <div className="px-4 py-4 space-y-5">
+      {modes}
       {/* The header shows it from sm up. */}
       {problem.company && (
         <p className="sm:hidden">
