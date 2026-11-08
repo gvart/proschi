@@ -759,8 +759,13 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       </ZenCollapse>
 
       <AskSelection enabled={hasPartner} onAsk={askPartner} className="flex flex-1 min-h-0">
-        <div ref={main} key={editorView ? 'editor' : screen} className={`flex min-w-0 flex-1 flex-col ${editorView ? '' : 'ps-stage-enter'}`}>
-          {body}
+        <div ref={main} className="flex min-w-0 flex-1 flex-col">
+          {body && (
+            <div key={editorView ? 'editor' : screen} className={`flex min-h-0 flex-1 flex-col ${editorView ? '' : 'ps-stage-enter'}`}>
+              {body}
+            </div>
+          )}
+          {/* Outside the stage's own box, so the lesson stays mounted: hints shown and quick checks answered survive leaving it. */}
           {hasLesson && (
             <LessonHost mode={inLesson ? 'page' : drawer ? 'drawer' : 'closed'} onClose={() => setDrawer(false)} scrollRef={lessonScroll} title={problem.title}>
               <LessonView source={problem.lesson!} onStart={inLesson ? () => openStage(notes.stage) : undefined} startLabel={next?.label} startAtTop={false} large={inLesson} onRead={() => markLessonRead(problem.id)} />

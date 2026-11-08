@@ -40,7 +40,7 @@ test.describe('interview prep roadmap', () => {
     await expect(banner.getByRole('link', { name: /Next in roadmap/ })).toHaveCount(0);
     // A step is a lesson first, then the challenge.
     await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
-    await page.getByRole('button', { name: 'Start the challenge' }).first().click();
+    await page.getByTestId('stage-next').click();
     await waitForCanvas(page);
 
     // Solve it with the reference solution (both steps ask for confirmation).

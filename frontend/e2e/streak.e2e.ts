@@ -172,7 +172,7 @@ test.describe('solve celebration', () => {
     const solved = { status: 'solved' };
     await seed(page, { 'proschi.practice': { 'url-shortener': solved, pastebin: solved, 'shopping-cart': solved } });
     await page.goto('practice/#/roadmap/snowflake-ids');
-    await page.getByRole('button', { name: 'Start the challenge' }).first().click();
+    await page.getByTestId('stage-next').click();
     await solveWithReference(page);
     const celebration = page.getByRole('region', { name: 'First solve' });
     await expect(celebration.getByRole('heading', { name: 'Stage complete: Foundations' })).toBeVisible();

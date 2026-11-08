@@ -273,7 +273,7 @@ test.describe('practice', () => {
 test.describe('practice on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('shows the tabbed layout, with the lesson a button away', async ({ page }) => {
+  test('shows the tabbed layout, with the lesson in the stages’ rail', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
     await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
@@ -293,13 +293,12 @@ test.describe('practice on a phone', () => {
     await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
     await expect(canvasNodes(page)).toHaveCount(0);
 
-    // The lesson opens over the tabs, full width, and closes back to the same tab.
-    await page.getByRole('button', { name: 'Lesson', exact: true }).click();
-    const drawer = page.getByRole('dialog', { name: 'Lesson' });
-    await expect(drawer.getByRole('article', { name: 'Lesson' })).toBeVisible();
-    expect((await drawer.boundingBox())!.width).toBeGreaterThanOrEqual(389);
-    await drawer.getByRole('button', { name: 'Close the lesson' }).click();
-    await expect(drawer).toHaveCount(0);
+    // The lesson is the first stage in the rail above, full width, and Continue leads back to the same tab.
+    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
+    const lesson = page.getByRole('article', { name: 'Lesson' });
+    await expect(lesson).toBeVisible();
+    await page.getByTestId('stage-foot').getByRole('button', { name: 'Continue: Design' }).click();
+    await expect(lesson).toBeHidden();
     await expect(tabs.getByRole('tab', { name: 'Tests' })).toHaveAttribute('aria-selected', 'true');
   });
 });

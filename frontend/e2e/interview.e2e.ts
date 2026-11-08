@@ -98,7 +98,7 @@ test.describe('mock interview set-up', () => {
     expect(roomProblem(page)).not.toBe(first);
   });
 
-  test('Choose a problem: a searchable list, and the problem page’s Interview mode preselects its problem', async ({ page }) => {
+  test('Choose a problem: a searchable list, and a problem’s Wrap-up preselects its problem', async ({ page }) => {
     await page.goto('practice/#/interview');
     await page.getByRole('radio', { name: 'Choose a problem' }).click();
     const picker = page.getByRole('dialog', { name: 'Choose a problem' });
@@ -113,7 +113,8 @@ test.describe('mock interview set-up', () => {
     await expect(page.getByRole('radio', { name: 'Surprise me' })).toHaveAttribute('aria-checked', 'true');
 
     await page.goto('practice/#/url-shortener');
-    const link = page.getByRole('link', { name: 'Interview mode' });
+    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Wrap-up' }).click();
+    const link = page.getByRole('link', { name: /Practice this as a mock interview/ });
     await expect(link).toHaveAttribute('href', '#/interview?problem=url-shortener');
     await link.click();
     await expect(page.getByRole('radio', { name: 'Choose a problem' })).toHaveAttribute('aria-checked', 'true');
