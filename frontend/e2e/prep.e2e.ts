@@ -154,7 +154,7 @@ test.describe('practice hub', () => {
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(140);
   });
 
-  test('the progress tab reads as one system: the level first, then skills, the roadmap and badges', async ({ page }) => {
+  test('the progress tab reads as one system: the level first, then what to do next, skills, history and badges', async ({ page }) => {
     await setPracticeGoal(page, ['habit']);
     await page.addInitScript(() => {
       if (sessionStorage.getItem('seeded')) return;
@@ -167,9 +167,15 @@ test.describe('practice hub', () => {
     await expect(page.getByTestId('xp')).toHaveText('100 XP');
     await expect(page.getByRole('progressbar', { name: 'Progress to level 3' })).toHaveAttribute('aria-valuenow', '100');
     const headings = await page.getByRole('main').getByRole('heading', { level: 2 }).allTextContents();
-    expect(headings.slice(0, 4)).toEqual(['Your level', 'Streak', 'Skills and mastery', 'Roadmap']);
-    expect(headings.some((h) => /Badges/.test(h))).toBe(true);
-    await expect(page.getByRole('region', { name: 'Roadmap' }).getByRole('progressbar', { name: 'Roadmap progress' })).toHaveAttribute('aria-valuenow', '1');
+    expect(headings).toEqual(['Your level', 'What to do next', 'Skills', 'History', 'Badges']);
+    // The roadmap's next problem is the recommended step, with how far along the roadmap is.
+    const next = page.getByRole('region', { name: 'What to do next' });
+    await expect(next.getByTestId('next-primary')).toContainText('Continue the roadmap');
+    await expect(next.getByRole('progressbar', { name: 'Roadmap progress' })).toHaveAttribute('aria-valuenow', '1');
+    // The summary's numbers: the streak (kept for a daily habit), problems solved, interviews and badges.
+    for (const label of ['Streak', 'Problems solved', 'Interviews', 'Badges']) {
+      await expect(page.getByRole('region', { name: 'Your level' }).getByRole('term').filter({ hasText: new RegExp(`^${label}$`) })).toHaveCount(1);
+    }
   });
 
   test('the progress page holds the streak (for a daily habit), badges and problems solved; the account page only settings', async ({ page }) => {
@@ -200,8 +206,11 @@ test.describe('practice hub', () => {
     await expect(page.getByRole('radiogroup', { name: 'Daily goal' })).toBeVisible();
     await expect(page.getByRole('img', { name: /^Topic mastery, from 0 to 100%/ })).toBeVisible();
 
-    // Every badge, small: 40 to 48px each, the grid well short of the page.
+    // The earned badges first; every badge, small, on demand: 40 to 48px each, the grid well short of the page.
     const grid = page.getByTestId('badge-grid');
+    await expect(grid.locator('[data-earned="true"]').first()).toBeVisible();
+    await expect(grid.locator('[data-earned="false"]')).toHaveCount(0);
+    await page.getByRole('button', { name: /^Show all \d+$/ }).click();
     const medals = grid.getByRole('button');
     await expect(medals.first()).toBeVisible();
     const count = await medals.count();

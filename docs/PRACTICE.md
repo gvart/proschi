@@ -644,7 +644,8 @@ waits on the picks: they are made after it is answered, and the page shows
 "Picking your next steps…" and asks again about 2, 5 and 10 s later, then
 says quietly if none came. A failed pick never fails the verdict. The card under the roadmap's progress links each pick to
 its roadmap step (`practice/#/roadmap/<id>`) or its card deck
-(`practice/#/review/<topic>`); the verdict links the same picks. Signed in
+(`practice/#/review/<topic>`); the verdict links the same picks, and the
+progress page's "What to do next" shows them in place of its own suggestions. Signed in
 without Pro, with billing on, the card shows the way to Pro instead. Without
 an Anthropic key on the server (`GET /api/roadmap/next` answers 501), or with no picks
 yet, the roadmap keeps its own order (backend `src/roadmap.ts`,

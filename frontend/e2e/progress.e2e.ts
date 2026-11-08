@@ -5,16 +5,17 @@ import { expect, loadReferenceSolution, test } from './fixtures';
  * The progress page in a build without accounts: the skill map, the
  * readiness score and the badges are computed from this browser's reviews
  * and solves (src/practice/skills/localAchievements.ts), and a new badge is
- * celebrated once. A new learner sees one next step and the next three
- * badges, with every badge behind "All badges": a compact grid whose
- * badges' details open on a tap.
+ * celebrated once. A new learner sees what to do next and the next three
+ * badges, with every badge behind "Show all": a compact grid whose badges'
+ * details open on a tap.
  */
 
 const badge = (page: Page, id: string) => page.locator(`[data-achievement="${id}"]`);
-/** Opens "All badges" when it is collapsed (it is, before a first badge). */
+/** Shows every badge, not only the earned ones. */
 async function openAllBadges(page: Page) {
-  const all = page.locator('details', { has: page.getByTestId('badge-grid') });
-  if (!(await all.evaluate((e) => (e as HTMLDetailsElement).open))) await all.locator('summary').click();
+  await expect(page.getByRole('region', { name: 'Badges', exact: true })).toBeVisible();
+  const all = page.getByRole('button', { name: /^Show all \d+$/ });
+  if ((await all.count()) > 0) await all.click();
 }
 /** Opens a badge's details under the grid. */
 async function details(page: Page, id: string) {
@@ -33,8 +34,14 @@ test.describe('progress page', () => {
     await expect(prepTab(page, 'Progress')).toHaveAttribute('aria-current', 'page');
     await expect(page).toHaveTitle('Your progress · Proschi practice');
     await expect(page.getByRole('heading', { level: 1, name: 'Your progress' })).toBeVisible();
-    // Nothing earned yet: the page leads with the next step, and offers three badges instead of the whole grid.
-    await expect(page.getByRole('region', { name: 'Your next step' }).getByRole('link', { name: 'Start' })).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
+    // Nothing earned yet: no row of zeros, one recommended step and two more, and three badges instead of the whole grid.
+    await expect(page.getByRole('region', { name: 'Your level' })).toContainText('Nothing counted yet');
+    const next = page.getByRole('region', { name: 'What to do next' });
+    await expect(next.getByTestId('next-primary')).toHaveAttribute('href', /^#\/roadmap\/[a-z0-9-]+$/);
+    await expect(next.getByTestId('next-primary')).toContainText(/^Recommended\s*Start the roadmap: /);
+    await expect(next.getByRole('link')).toHaveCount(3);
+    await expect(next.getByRole('link', { name: /Learn Estimation/ })).toHaveAttribute('href', '#/review/estimation');
+    await expect(next.getByRole('link', { name: /Try a mock interview/ })).toHaveAttribute('href', /^#\/interview/);
     await expect(page.locator('[data-next-badge]')).toHaveCount(3);
     await expect(page.getByTestId('badge-grid')).toBeHidden();
     await expect(page.getByTestId('readiness')).toHaveText('0%');
@@ -49,6 +56,7 @@ test.describe('progress page', () => {
     await train.first().click();
     await expect(page).toHaveURL(/#\/review\/estimation$/);
     await page.goBack();
+    await openAllBadges(page);
     await expect(badge(page, 'first-card')).toHaveAttribute('data-earned', 'false');
     await expect((await details(page, 'reviews-100')).getByRole('progressbar')).toHaveAttribute('aria-valuemax', '100');
     await expect(page.getByText(/^0 of \d+ earned$/)).toBeVisible();
@@ -98,6 +106,7 @@ test.describe('progress page', () => {
     await toast(page).getByRole('button', { name: 'Dismiss' }).click();
     await expect(toast(page)).toHaveCount(0);
     await prepTab(page, 'Progress').click();
+    await openAllBadges(page);
     await expect(badge(page, 'first-solve')).toHaveAttribute('data-earned', 'true');
     await expect(badge(page, 'first-run-1')).toHaveAttribute('data-earned', 'true');
     await expect(badge(page, 'under-reference-1')).toHaveAttribute('data-earned', 'false');
