@@ -1,0 +1,54 @@
+frontend/src/practice/interview/stages.ts
+  s_e17b87e0a1b3ca::t_e5ed6acee87a83 166-169
+  s_e17b87e0a1b3ca::t_34ca4f13f10726 75
+  s_e17b87e0a1b3ca::t_c7f37b0094fd7d 218-223
+  s_e17b87e0a1b3ca::t_9882912de657d9 19
+  s_e17b87e0a1b3ca::t_e1e4f258f3b5d0 1-18,20-74,76-165,170-217,224-238
+frontend/src/practice/interview/Room.tsx
+  s_e17b87e0a1b3ca::t_a4096cb4b22ca8 255-257,260,277,279,283-294,296-315,338-348,350-356,360-362,365-366,369-393,448-476
+  s_e17b87e0a1b3ca::t_cca45e08012fdb 1-2,13,15,27-30,39,41-49,67,74-88,143-197,199,204-207,217-242,244-247
+frontend/src/practice/interview/useMock.ts
+  s_e17b87e0a1b3ca::t_7bc07640384b58 81-82,90-91
+frontend/src/practice/interview/stages.test.ts
+  s_e17b87e0a1b3ca::t_3ed9da50c8ea94 2-81
+  s_e17b87e0a1b3ca::t_9882912de657d9 1
+frontend/src/practice/modes/ai/api.ts
+  s_e17b87e0a1b3ca::t_7bc07640384b58 41-42,62-63,118-121,129
+frontend/src/practice/interview/SoloRoom.tsx
+  s_e17b87e0a1b3ca::t_e5ed6acee87a83 14-15
+  s_e17b87e0a1b3ca::t_282dea032bef4f 171
+  s_e17b87e0a1b3ca::t_28009567bc0d90 1-2,4,6,10-11,16,19-24,37-43,51,56-73,82,92-170,172-178,180-216,220,226-231,237,267-268,271,273-276,278,280-291,295,297-322,324
+frontend/src/practice/interview/useRoom.ts
+  s_e17b87e0a1b3ca::t_e8143fe2819809 2,8,86-105
+  s_e17b87e0a1b3ca::t_3cc2ebfff99740 106-107
+frontend/src/practice/interview/room.css
+  s_e17b87e0a1b3ca::t_dda06ca21d7c2e 42-65,69-79,82-84
+  s_e17b87e0a1b3ca::t_1370430029cee6 66-68,80-81
+frontend/src/practice/interview/StageParts.tsx
+  s_e17b87e0a1b3ca::t_9ef1309bee0ea0 1-9,11-66,68-91,93-251,253,255-267,269-296,298-302,304-318,327-361,363-401,426-436
+  s_e17b87e0a1b3ca::t_e5ed6acee87a83 10
+  s_e17b87e0a1b3ca::t_f5945dbf5e9128 319-326
+  s_e17b87e0a1b3ca::t_f6c320ea49b7e9 402-425
+  s_e17b87e0a1b3ca::t_1370430029cee6 67,92
+  s_e17b87e0a1b3ca::t_282dea032bef4f 252,254,268,297,303,362
+frontend/src/practice/interview/MockRoom.tsx
+  s_e17b87e0a1b3ca::t_e8143fe2819809 140,152,175-177
+  s_e17b87e0a1b3ca::t_bd270116d9e97a 1-2,14,21-23,27-36,42-43,70-83,111-116,124,129-139,141-145,149,151,153-174,184,211-212,218-219,222-224,229,231-234,236,242-244,253,258,267,272-281,283-286,307-310,313-314,318,347,349-384,386-387,389-397,407,414,424,435-439,441-442,445-569,578-583
+  s_e17b87e0a1b3ca::t_86db22273b424f 282
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "d8f6cfa25bb5e293f1e04f9b8a480f5f7c1accbc",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
