@@ -14,7 +14,7 @@ export default function Footer({ base }: { base: string }) {
         <div className="ps-footer__about">
           <Wordmark href={base} />
           <p className="ps-footer__tagline">Architecture diagrams as text, with request flows you can play.</p>
-          <p className="ps-footer__fine">Free and open source. No account needed: signed out, your diagrams never leave your browser.</p>
+          <p className="ps-footer__fine">Open source and free to start. The editor runs in your browser; signed out, your diagrams stay there.</p>
         </div>
         <nav className="ps-footer__nav" aria-label="Footer">
           {FOOTER_COLUMNS.map((column) => (
