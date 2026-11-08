@@ -45,11 +45,16 @@ describe('MicButton', () => {
     fireEvent.click(button);
     expect(button.getAttribute('data-state')).toBe('listening');
     expect(button.getAttribute('aria-pressed')).toBe('true');
-    expect(button.textContent).toContain('Listening');
+    // The button stays an icon: Listening is in its label and the status, not its text.
+    expect(button.getAttribute('aria-label')).toContain('Listening');
+    expect(button.textContent).toBe('');
+    expect(screen.getByRole('status').textContent).toBe('Listening');
+    expect(screen.getByTestId('mic-ring')).toBeTruthy();
     act(() => Recognition.last.onresult!({ resultIndex: 0, results: [{ isFinal: false, 0: { transcript: 'how many' } }] }));
     expect(onText).toHaveBeenLastCalledWith('how many', false);
     fireEvent.click(button);
     expect(button.getAttribute('data-state')).toBe('idle');
+    expect(screen.queryByTestId('mic-ring')).toBeNull();
     expect(onText).toHaveBeenLastCalledWith('how many', true);
     expect(onState.mock.calls.map((c) => c[0])).toEqual(['starting', 'listening', 'idle']);
   });
