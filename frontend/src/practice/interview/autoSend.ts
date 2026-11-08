@@ -5,7 +5,9 @@
  * from `autoSendLeft` and sends at 0.
  */
 
-export const AUTO_SEND_MS = 1800;
+import { SEND_AFTER_SILENCE_MS } from '../../voice/recognizer';
+
+export const AUTO_SEND_MS = SEND_AFTER_SILENCE_MS;
 
 export interface SpeechDraft {
   /** The draft has finished words in it. */

@@ -15,7 +15,7 @@ import type { Phase } from '../modes/session';
 import { redactedStatement } from '../modes/interviewFile';
 import { shownPhase, type AiMessage, type Hint, type TurnDone } from '../modes/ai/api';
 import { HINT_ICON, HINT_LABEL, HINT_STYLE } from '../modes/ai/hints';
-import { autoSendLeft } from './autoSend';
+import { AUTO_SEND_MS, autoSendLeft } from './autoSend';
 import { useCodePref, useRailFoldedPref, useSoundPref, useTalkPref } from './prefs';
 import Room, { ChecksSheet, type RoomTab } from './Room';
 import { Brief, PinnedBrief, RequirementsCard, StageContext, StageHeading, StartClarifying, Worksheet, EstimatesSummary } from './StageParts';
@@ -651,7 +651,7 @@ function VoiceStatus({ speaking, listening, due, onInterrupt, onCancel, onSendNo
     const seconds = (due / 1000).toFixed(1);
     return (
       <div role="status" data-testid="voice-status" data-state="sending" className="relative overflow-hidden rounded-sm border-bw-1 border-ink bg-pop-yellow/25 px-2 py-1.5 text-xs font-semibold text-ink">
-        <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-pop-yellow/50 transition-[width] duration-100 ease-linear" style={{ width: `${100 - (due / 1800) * 100}%` }} />
+        <span aria-hidden="true" className="absolute inset-y-0 left-0 bg-pop-yellow/50 transition-[width] duration-100 ease-linear" style={{ width: `${100 - (due / AUTO_SEND_MS) * 100}%` }} />
         <span className="relative flex items-center gap-2">
           <Send size={13} aria-hidden="true" />
           <span className="flex-1 tabular-nums">Sending in {seconds} s</span>
