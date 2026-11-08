@@ -26,11 +26,13 @@ import { loadRunStats } from '../runStats';
 import { gameContent } from '../../game/content';
 import { gameStats } from '../../game/engine/meta';
 import { loadLocalMeta } from '../../game/ui/store';
+import { soloInterviewsDone } from '../interview/record';
 
 /**
  * Achievements and the skill map in a build without accounts, from what this
  * browser keeps: the review log (proschi.cards), practice progress
- * (proschi.practice) and test runs (proschi.practice.runs). The badges earned
+ * (proschi.practice), test runs (proschi.practice.runs) and interviews on your
+ * own (proschi.interview.history). The badges earned
  * are kept here too, so they are celebrated once. Builds the same answer as
  * GET /api/me/achievements, with the same src/learn code.
  *
@@ -100,6 +102,8 @@ export function localAchievements(now: number, progress: Progress = loadProgress
     game: gameStats(loadLocalMeta(), gameContent().content),
     // Lessons read in this browser.
     lessons: lessonsRead(),
+    // Interviews on your own kept in this browser (an AI interview needs an account).
+    interviews: soloInterviewsDone(),
   });
   const earned = loadEarned();
   const { statuses, newly } = achievementStatuses(ACHIEVEMENTS, snapshot, context, earned, now);

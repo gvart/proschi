@@ -421,3 +421,33 @@ id; don't rewrite old ones.
   and Design partner run on credits, with a free account's credits to try
   one (`<!--if:accounts-->` and `<!--if:billing-->` blocks in
   `index.html`, `src/landing/flags.ts`, filled at build time).
+- **P48. A finished interview is progress.** A mock interview that ends,
+  with the interviewer (a verdict) or on your own, counts towards the level,
+  the skill map and five interview badges (`interview-first`,
+  `interviews-5`, `interview-hard`, `interview-on-time`,
+  `interview-passed`; rule kinds `interviews`, `interview-passed`,
+  `interview-on-time`). **Least effort**: one on your own counts only after
+  10 minutes on the clock, or once it reached Design with the whiteboard
+  changed from the starter; below that the result says it was too short,
+  with the bar, and the history marks it. One with the interviewer counts
+  once it has a verdict, since its credits were spent. The server stores
+  what was done (time, Design reached, drawn, solved) and derives whether it
+  counts and was on time when it reads progress, so a crafted request
+  cannot skip the bar. **XP**: 50 per problem interviewed with the
+  interviewer, 20 per problem on your own, each problem once per way, so
+  repeating one adds nothing. **Skill map**: a bonus of up to 5% (like
+  Scale or Fail's) to the topics the problem relates to, scaled by the
+  verdict's mean score, with its estimation score also counting for
+  `estimation`; on your own, a flat half; the best interview counts, so
+  mastery never drops for interviewing. **Storage**: AI interviews were
+  already on the server (`ai_interviews`); interviews on your own stay in
+  the browser and, signed in, go to `solo_interviews` (migration 0032) via
+  `POST /api/me/interviews/solo`, keyed by problem and start time so a
+  reload or another sign-in adds nothing; every sign-in sends the browser's
+  history. Without accounts it is all computed in the browser, as before;
+  signed out, the result invites to sign in. **The result** shows "Your
+  progress" under the verdict: XP and level gained, the skills that moved
+  (before → after, against the progress when the room opened) and the new
+  badges, marked seen so the toast does not repeat them; reopened later, the
+  badges earned as it ended. The progress page lists the interviews on your
+  own (date, problem, how it ended) under the AI interview history.

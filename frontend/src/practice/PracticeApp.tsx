@@ -37,6 +37,8 @@ import { continueTarget, loadLastProblem, saveLastProblem } from './hub/continue
 import { profileIdOf } from './profile/profile';
 import { track } from '../services/metrics';
 import { setupHref } from './interview/links';
+import { sendSoloInterviews } from './interview/record';
+import { loadHistory } from './modes/store';
 
 // The editor, canvas, simulation and problem files load when a problem is opened.
 const ProblemRoute = lazy(() => import('./ProblemRoute'));
@@ -162,6 +164,9 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
       const missing = lessonsRead().filter((id) => !remote.has(id));
       markLessonsRead([...remote], 'account');
       if (me.lessons && missing.length) void sendLessonsRead(missing);
+      // Interviews on your own done in this browser: the account keeps each once, and its interview badges count them.
+      const solo = loadHistory();
+      if (solo.length) void sendSoloInterviews(solo).then(notifyActivity);
       // The learning goal: the account's wins; an account without one gets this browser's.
       const goalToSend = mergeAccountGoal(me.user.practiceGoal);
       if (goalToSend) void sendGoal(goalToSend);
@@ -307,7 +312,7 @@ export default function PracticeApp({ engine }: { engine?: Engine }) {
     return (
       <FeaturesContext.Provider value={features}>
         <Suspense fallback={<PageLoading label="Loading the mock interview…" />}>
-          <InterviewRoute problemId={route.slice('interview/'.length) || undefined} query={params} engine={engine} header={header} />
+          <InterviewRoute problemId={route.slice('interview/'.length) || undefined} query={params} engine={engine} header={header} achievements={achievements} signedIn={signedIn} />
         </Suspense>
       </FeaturesContext.Provider>
     );

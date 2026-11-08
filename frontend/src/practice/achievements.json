@@ -52,5 +52,10 @@
   { "id": "lesson-first", "title": "First lesson", "description": "Read a roadmap lesson to the end.", "icon": "book", "rule": { "kind": "lessons", "min": 1 } },
   { "id": "lessons-10", "title": "Avid reader", "description": "Read 10 roadmap lessons.", "icon": "book", "tier": "bronze", "rule": { "kind": "lessons", "min": 10 } },
   { "id": "lessons-stage", "title": "Stage scholar", "description": "Read every lesson of a roadmap stage.", "icon": "book", "tier": "silver", "rule": { "kind": "stage-lessons" } },
-  { "id": "lessons-all", "title": "Bookworm", "description": "Read every lesson on the roadmap.", "icon": "book", "tier": "gold", "rule": { "kind": "all-lessons" } }
+  { "id": "lessons-all", "title": "Bookworm", "description": "Read every lesson on the roadmap.", "icon": "book", "tier": "gold", "rule": { "kind": "all-lessons" } },
+  { "id": "interview-first", "title": "First interview", "description": "Finish a mock interview, with the interviewer or on your own.", "icon": "mic", "rule": { "kind": "interviews", "min": 1 } },
+  { "id": "interviews-5", "title": "Interview season", "description": "Finish mock interviews on 5 different problems.", "icon": "mic", "tier": "bronze", "rule": { "kind": "interviews", "min": 5 } },
+  { "id": "interview-hard", "title": "Grace under pressure", "description": "Finish a mock interview on a hard problem.", "icon": "shield", "tier": "silver", "rule": { "kind": "interviews", "min": 1, "difficulty": "hard" } },
+  { "id": "interview-on-time", "title": "Beat the clock", "description": "Finish a mock interview within its time with a pass, or on your own with every check passing.", "icon": "zap", "tier": "silver", "rule": { "kind": "interview-on-time", "min": 1 } },
+  { "id": "interview-passed", "title": "Hired", "description": "Get a passing verdict from the interviewer.", "icon": "star", "tier": "gold", "rule": { "kind": "interview-passed", "min": 1 } }
 ]

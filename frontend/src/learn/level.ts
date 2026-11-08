@@ -5,6 +5,7 @@
  * src/learn: the progress page and a future mobile app compute it the same way.
  *
  *   XP    = 100 × problems solved + 20 × cards mastered + 10 × longest streak (days)
+ *         + 50 × problems interviewed with the interviewer + 20 × problems interviewed on your own
  *   level = ⌊√(XP / 50)⌋ + 1
  *
  * So level L starts at 50 × (L − 1)² XP: level 2 at 50 XP, 3 at 200, 4 at
@@ -12,11 +13,15 @@
  * is level 15 or so. A card is mastered at a stability of 21 days or more
  * (achievements.ts), so XP grows with what is remembered, not with clicks.
  * The longest streak, not the current one, so a missed day never takes XP away.
+ * A mock interview counts once per problem and way (achievements.ts
+ * interviewCounts), so repeating one never adds XP.
  */
 
 export const XP_PER_SOLVE = 100;
 export const XP_PER_MASTERED_CARD = 20;
 export const XP_PER_STREAK_DAY = 10;
+export const XP_PER_INTERVIEW = 50;
+export const XP_PER_SOLO_INTERVIEW = 20;
 /** Level L starts at LEVEL_STEP × (L − 1)² XP. */
 export const LEVEL_STEP = 50;
 
@@ -24,6 +29,9 @@ export interface LevelInput {
   solved: number;
   mastered: number;
   longestStreak: number;
+  /** Problems with a mock interview finished with the interviewer, and on your own; none when absent. */
+  interviews?: number;
+  soloInterviews?: number;
 }
 
 export interface Level {
@@ -36,7 +44,7 @@ export interface Level {
   /** How far from this level to the next, from 0 to 1. */
   progress: number;
   /** The XP from each source, in the formula's order. */
-  parts: { solves: number; mastered: number; streak: number };
+  parts: { solves: number; mastered: number; streak: number; interviews: number };
 }
 
 const count = (n: number) => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
@@ -44,9 +52,14 @@ const count = (n: number) => (Number.isFinite(n) && n > 0 ? Math.floor(n) : 0);
 /** The XP where level `level` starts. */
 export const levelFloor = (level: number) => LEVEL_STEP * (Math.max(1, level) - 1) ** 2;
 
-export function levelOf({ solved, mastered, longestStreak }: LevelInput): Level {
-  const parts = { solves: XP_PER_SOLVE * count(solved), mastered: XP_PER_MASTERED_CARD * count(mastered), streak: XP_PER_STREAK_DAY * count(longestStreak) };
-  const xp = parts.solves + parts.mastered + parts.streak;
+export function levelOf({ solved, mastered, longestStreak, interviews = 0, soloInterviews = 0 }: LevelInput): Level {
+  const parts = {
+    solves: XP_PER_SOLVE * count(solved),
+    mastered: XP_PER_MASTERED_CARD * count(mastered),
+    streak: XP_PER_STREAK_DAY * count(longestStreak),
+    interviews: XP_PER_INTERVIEW * count(interviews) + XP_PER_SOLO_INTERVIEW * count(soloInterviews),
+  };
+  const xp = parts.solves + parts.mastered + parts.streak + parts.interviews;
   let level = Math.floor(Math.sqrt(xp / LEVEL_STEP)) + 1;
   // Guard against floating point at the exact boundaries.
   while (levelFloor(level + 1) <= xp) level++;

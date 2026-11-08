@@ -263,6 +263,7 @@ describe('data export', () => {
       challengeAttempts: [],
       game: { meta: null, runs: [] },
       lessonReads: [],
+      soloInterviews: [],
       shares: [],
       documents: [],
       documentVersions: [],
