@@ -19,12 +19,10 @@ import { calc, countWords, plainText, questionOf, revealBlocks, shortNumber, sta
 const WORD_MS = 42;
 
 /** The heading each stage screen opens with; focus moves to it on a new stage (Room.tsx). */
-export function StageHeading({ stage, title, children }: { stage: Phase; title?: string; children?: ReactNode }) {
+export function StageHeading({ stage, title, eyebrow, children }: { stage: Phase; title?: string; /** The line above the title, when not the interview's "Stage n of 4". */ eyebrow?: string; children?: ReactNode }) {
   return (
     <div className="space-y-1">
-      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">
-        Stage {stageIndex(stage) + 1} of 4 · {stageLabel(stage)}
-      </p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{eyebrow ?? `Stage ${stageIndex(stage) + 1} of 4 · ${stageLabel(stage)}`}</p>
       <h2 data-stage-heading tabIndex={-1} className="font-display text-2xl font-bold tracking-tight text-ink outline-none sm:text-3xl">
         {title ?? stageLabel(stage)}
       </h2>
@@ -38,7 +36,7 @@ export function StageHeading({ stage, title, children }: { stage: Phase; title?:
  * first time (a click or a key shows it all; none under reduced motion).
  * Screen readers get the whole text once, in a status, not word by word.
  */
-export function Brief({ title, source, reveal, onRevealStart, footer }: { title: string; source: string; reveal: boolean; onRevealStart?: (text: string) => void; footer?: ReactNode }) {
+export function Brief({ title, source, reveal, onRevealStart, footer, eyebrow = 'Stage 1 of 4 · Clarify · The brief' }: { title: string; source: string; reveal: boolean; onRevealStart?: (text: string) => void; footer?: ReactNode; eyebrow?: string }) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
   const total = useMemo(() => countWords(blocks), [blocks]);
   const [shown, setShown] = useState(() => (reveal && !prefersReducedMotion() ? 0 : total));
@@ -80,7 +78,7 @@ export function Brief({ title, source, reveal, onRevealStart, footer }: { title:
   const visible = typing ? revealBlocks(blocks, shown) : blocks;
   return (
     <article aria-labelledby="brief-title" className="mx-auto w-full max-w-[68ch] px-5 pb-16 pt-10 sm:px-8 sm:pt-16" data-testid="brief" data-typing={typing || undefined} onClick={() => typing && setShown(total)}>
-      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">Stage 1 of 4 · Clarify · The brief</p>
+      <p className="text-[11px] font-bold uppercase tracking-[0.08em] text-muted">{eyebrow}</p>
       <h2 id="brief-title" data-stage-heading tabIndex={-1} className="mt-2 font-display text-3xl font-bold tracking-tight text-ink outline-none sm:text-4xl">
         {title}
       </h2>

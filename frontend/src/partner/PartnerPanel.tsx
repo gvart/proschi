@@ -53,6 +53,8 @@ export interface PartnerPanelProps {
   onAssisted?: () => void;
   /** The diagram of a source (with this page's imports), for the change cards' previews. */
   diagramOf?: (source: string) => Diagram;
+  /** Text to put in the composer (e.g. a quote picked with "Ask Design partner"); a new `id` puts it again. */
+  prefill?: { id: number; text: string };
 }
 
 const MAX_MESSAGE = 4000;
@@ -142,7 +144,7 @@ function PanelHeader({ practice, onClose, children }: { practice: boolean; onClo
   );
 }
 
-function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
+function Conversation({ storeKey, context, account, base = '../', source, getSource, getFiles, apply, undo, onClose, onAssisted, diagramOf, prefill, deepAllowed }: PartnerPanelProps & { deepAllowed: boolean }) {
   const practice = context.kind === 'practice';
   const { state, send, decide, reset, dismiss } = usePartner({ storeKey, context, enabled: true, getSource, getFiles, onAssisted });
   const estimates = useEstimates(account.state.status === 'signed-in');
@@ -211,6 +213,19 @@ function Conversation({ storeKey, context, account, base = '../', source, getSou
       el?.setSelectionRange(el.value.length, el.value.length);
     });
   };
+
+  // A quote to ask about lands in the composer, after what is already typed, with the caret at the end.
+  const prefilled = useRef<number | undefined>(undefined);
+  useEffect(() => {
+    if (!prefill || prefilled.current === prefill.id) return;
+    prefilled.current = prefill.id;
+    setDraft((d) => (d.trim() ? `${d.trimEnd()}\n\n${prefill.text}` : prefill.text).slice(0, MAX_MESSAGE));
+    requestAnimationFrame(() => {
+      const el = input.current;
+      el?.focus();
+      el?.setSelectionRange(el.value.length, el.value.length);
+    });
+  }, [prefill]);
 
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) void submit(e);
