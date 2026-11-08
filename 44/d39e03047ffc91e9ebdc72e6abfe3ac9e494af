@@ -1,0 +1,46 @@
+frontend/src/practice/ProblemRoute.tsx
+  s_e17b87e0a1b3ca::t_1c8643cbd701e1 39-40
+  s_e17b87e0a1b3ca::t_609287810d2486 20
+frontend/src/practice/stages/flow.test.ts
+  s_e17b87e0a1b3ca::t_609287810d2486 16,18-22
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_f2b08491e9264a 131
+  s_e17b87e0a1b3ca::t_609287810d2486 20,102-103,105,133
+frontend/src/practice/stages/flow.ts
+  s_e17b87e0a1b3ca::t_609287810d2486 106-109,111-112
+frontend/e2e/lesson.e2e.ts
+  s_e17b87e0a1b3ca::t_7195884dd63ac3 4-8,12,20,22-30,45,51-52,65,69-75,77,82,122,162,175
+frontend/e2e/onboarding.e2e.ts
+  s_e17b87e0a1b3ca::t_9f8b1bada87446 306,309-310
+frontend/e2e/stages.accounts.e2e.ts
+  s_e17b87e0a1b3ca::t_9f8b1bada87446 33
+frontend/e2e/roadmap.e2e.ts
+  s_e17b87e0a1b3ca::t_ef7669fd7633e7 41-42
+docs/design/paid-plans.md
+  s_e17b87e0a1b3ca::t_ceb87e29a27112 548-554
+frontend/e2e/fixtures.ts
+  s_e17b87e0a1b3ca::t_08636400c8d2b2 86-90,128
+frontend/src/practice/PracticeApp.tsx
+  s_e17b87e0a1b3ca::t_609287810d2486 283
+frontend/e2e/stages.e2e.ts
+  s_e17b87e0a1b3ca::t_1c8643cbd701e1 47
+  s_e17b87e0a1b3ca::t_9f8b1bada87446 7,38-40,43-45,120
+docs/PRACTICE.md
+  s_e17b87e0a1b3ca::t_ceb87e29a27112 97-101,229-231
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "44d39e03047ffc91e9ebdc72e6abfe3ac9e494af",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
