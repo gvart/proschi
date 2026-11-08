@@ -38,9 +38,8 @@ test.describe('interview prep roadmap', () => {
     const banner = page.getByRole('region', { name: 'Roadmap' });
     await expect(banner).toContainText(/Stage 1 of \d+: Foundations · 1 of \d+/);
     await expect(banner.getByRole('link', { name: /Next in roadmap/ })).toHaveCount(0);
-    // A step is a lesson first, then the challenge.
-    await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
-    await page.getByTestId('stage-next').click();
+    // A step opens on its stage (here Design, by the stages fixture), not its lesson (P52).
+    await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
     await waitForCanvas(page);
 
     // Solve it with the reference solution (both steps ask for confirmation).

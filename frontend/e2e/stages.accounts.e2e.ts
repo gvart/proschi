@@ -30,7 +30,8 @@ async function select(el: Locator) {
 async function openClarify(page: Page) {
   await mockSignedIn(page);
   await new PartnerMock().mock(page);
-  await page.goto('practice/#/url-shortener');
+  // The stages are on the roadmap only (P51); a first visit opens on Clarify (P52).
+  await page.goto('practice/#/roadmap/url-shortener');
   const brief = page.getByTestId('brief');
   await expect(brief).toBeVisible();
   // A click shows the whole brief at once.

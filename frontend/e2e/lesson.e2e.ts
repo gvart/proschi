@@ -1,14 +1,15 @@
 import { expect, test, waitForCanvas } from './fixtures';
 
 /**
- * Lessons: a problem opens on its lesson (a page of its own, the first of
- * its stages) until it is read; its Next leads on to the stage you were on
- * (here, by the stages fixture, Design in the full editor), the lesson
- * stays in the stages' rail, and a revisit goes straight to the stage.
+ * Lessons: on the roadmap a problem opens on the stage the learner was on
+ * (here, by the stages fixture, Design in the full editor), never on its
+ * lesson first (P52); the lesson is the first stage in the rail, a page of
+ * its own whose Next leads back to that stage. From the Problems list the
+ * problem is the plain workspace and the lesson a drawer (P51).
  * The e2e build has no accounts, so the roadmap is open.
  */
 test.describe('lessons', () => {
-  test('a roadmap step opens on its lesson, then the challenge; revisits open the challenge', async ({ page }) => {
+  test('a roadmap step opens on its stage, with the lesson one click away in the rail', async ({ page }) => {
     await page.goto('practice/#/roadmap');
     const step = page.getByRole('listitem', { name: /^Stage 1: / }).getByRole('link', { name: /Hello, Proschi/ });
     await expect(step).toContainText('Lesson · Challenge');
@@ -16,8 +17,17 @@ test.describe('lessons', () => {
     await step.click();
     await expect(page).toHaveURL(/#\/roadmap\/hello-proschi$/);
 
-    // The lesson is the page: nothing of the workspace yet.
+    // Not the lesson first, even unread: the stage, here Design in the full editor.
     const lesson = page.getByRole('article', { name: 'Lesson' });
+    await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
+    await expect(lesson).toHaveCount(0);
+    await waitForCanvas(page);
+    // The tests stay folded to their bar until the first run.
+    await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Show the test results' })).toHaveAttribute('aria-expanded', 'false');
+
+    // The lesson is the first stage in the rail: a page of its own, nothing of the workspace.
+    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
     await expect(lesson).toBeVisible();
     await expect(lesson.getByRole('heading', { level: 2, name: "What you'll learn" })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Run tests' })).toHaveCount(0);
@@ -31,25 +41,15 @@ test.describe('lessons', () => {
     await page.getByTestId('stage-next').click();
     await expect(lesson).toBeHidden();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-    await waitForCanvas(page);
-    // The tests stay folded to their bar until the first run.
-    await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Show the test results' })).toHaveAttribute('aria-expanded', 'false');
 
-    // The lesson stays one click away, in the stages' rail.
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
-    await expect(lesson).toBeVisible();
-    await page.getByTestId('stage-next').click();
-    await expect(lesson).toBeHidden();
-
-    // Read once: opening the step again goes straight to the problem.
+    // Opening the step again goes straight back to the stage.
     await page.reload();
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
     await expect(page.getByRole('article', { name: 'Lesson' })).toBeHidden();
   });
 
-  test('from the list a problem whose lesson was read opens on its stage, with the lesson in the rail', async ({ page }) => {
-    await page.goto('practice/#/url-shortener');
+  test('from the roadmap a problem opens on its stage, with the lesson in the rail', async ({ page }) => {
+    await page.goto('practice/#/roadmap/url-shortener');
     await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
     await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
     await expect(page.getByRole('article', { name: 'Lesson' }).getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
@@ -62,23 +62,24 @@ test.describe('lessons', () => {
   test.describe('a lesson not read yet', () => {
     test.use({ lessons: 'fresh' });
 
-    test('comes first from the list too, until the challenge is started', async ({ page }) => {
+    test('never comes first: not from the list, not from the roadmap', async ({ page }) => {
       await page.goto('practice/');
       await page.getByRole('main').getByRole('list').first().getByRole('link', { name: /URL shortener/i }).click();
       await expect(page).toHaveURL(/#\/url-shortener$/);
-      const lesson = page.getByRole('article', { name: 'Lesson' });
-      await expect(lesson.getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
-      await expect(page.getByRole('button', { name: 'Run tests' })).toHaveCount(0);
-      await lesson.getByRole('button', { name: 'Continue: Design' }).click();
+      await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
+      // From the list it is a drawer beside the workspace.
+      await page.getByRole('button', { name: 'Lesson' }).first().click();
+      await expect(page.getByRole('dialog', { name: 'Lesson' }).getByRole('heading', { level: 2, name: 'Concepts' })).toBeVisible();
+
+      await page.goto('practice/#/roadmap/url-shortener');
       await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-      await page.reload();
-      await expect(page.getByRole('heading', { level: 2, name: 'Functional requirements' })).toBeVisible();
-      await expect(page.getByRole('article', { name: 'Lesson' })).toBeHidden();
+      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
     });
   });
 
   test('what was revealed in the lesson survives leaving it and coming back', async ({ page }) => {
-    await page.goto('practice/#/url-shortener');
+    await page.goto('practice/#/roadmap/url-shortener');
     const open = page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' });
     await open.click();
     const drawer = page.getByRole('article', { name: 'Lesson' });
@@ -118,6 +119,7 @@ test.describe('lessons', () => {
     const stage = page.getByRole('listitem', { name: /^Stage 1: / });
     await expect(stage).toContainText(/0 \/ \d+ lessons read/);
     await stage.getByRole('link', { name: /Hello, Proschi/ }).click();
+    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
     await page.getByRole('article', { name: 'Lesson' }).getByRole('button', { name: 'Continue: Design' }).click();
     await page.goto('practice/#/roadmap');
     await expect(stage).toContainText(/1 \/ \d+ lessons read/);
@@ -157,7 +159,7 @@ test.describe('lessons', () => {
     test('the lesson and its tables never widen the page', async ({ page }, testInfo) => {
       const noPageScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth);
 
-      await page.goto('practice/#/url-shortener/lesson');
+      await page.goto('practice/#/roadmap/url-shortener/lesson');
       const lesson = page.getByRole('article', { name: 'Lesson' });
       await expect(lesson).toBeVisible();
       // The lesson stage is the lesson alone: no tabs yet.
@@ -170,7 +172,7 @@ test.describe('lessons', () => {
       await testInfo.attach('lesson-390', { body: await page.screenshot(), contentType: 'image/png' });
 
       await lesson.getByRole('button', { name: 'Continue: Design' }).click();
-      await expect(page).toHaveURL(/#\/url-shortener$/);
+      await expect(page).toHaveURL(/#\/roadmap\/url-shortener$/);
       await expect(page.getByRole('tab', { name: 'Problem' })).toBeVisible();
       // Every tab fits, the last one included, and the stages' rail with the lesson above them.
       await expect(page.getByRole('tab', { name: 'Tests' })).toBeInViewport({ ratio: 0.99 });

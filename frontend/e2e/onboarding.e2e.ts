@@ -296,8 +296,14 @@ test.describe('practice tour', () => {
   test.describe('on a problem whose lesson is unread', () => {
     test.use({ lessons: 'fresh' });
 
-    test('waits for the lesson, then starts with the challenge', async ({ page }) => {
+    test('starts straight away: a problem from the list has no lesson gate', async ({ page }) => {
       await page.goto('practice/#/url-shortener');
+      await expect(practiceTour(page)).toHaveAccessibleName('Practice tour: Read the problem');
+      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
+    });
+
+    test('from the roadmap, waits while the lesson is shown', async ({ page }) => {
+      await page.goto('practice/#/roadmap/url-shortener/lesson');
       await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
       await expect(practiceTour(page)).toHaveCount(0);
       await page.getByTestId('stage-next').click();

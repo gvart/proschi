@@ -94,10 +94,11 @@ text. Headings get ids from their text, GitHub style
 
 The lesson teaches the ideas behind the problem before the solver tries it:
 each roadmap step is *Learn → Challenge → Review*. A problem
-from the roadmap (`practice/#/roadmap/<id>`) opens on its lesson, a page of
-its own with a table of contents and a button at the top and the bottom that
-leads on to the stages (see below); once the lesson was read the browser
-remembers it. A problem from the list (`practice/#/<id>`) opens straight on
+from the roadmap (`practice/#/roadmap/<id>`) opens on the stage the learner
+was last on, a first visit on Clarify, never on the lesson (P52); the lesson
+is the first stage in the stage bar, a page of its own with a table of
+contents and a button at the top and the bottom that leads on to the stages
+(see below), and the browser remembers once it was read. A problem from the list (`practice/#/<id>`) opens straight on
 the workspace (the statement, the editor and the diagram in resizable panes,
 the tests folded under them until the first run), with no lesson first. There
 the **Lesson** button opens the lesson in a drawer, and a failed run's common
@@ -225,7 +226,9 @@ The stages are self-paced: **Lesson**, **Clarify**
 to a number), **Design** (the whiteboard, with the full editor one click
 away) and **Wrap-up** (the tests, the review and a recall prompt). The
 notes of each stage are kept per problem in the browser
-(`proschi.practice.stages.<id>`); see `docs/design/paid-plans.md` P50 and P51.
+(`proschi.practice.stages.<id>`); a problem opens on the stage it was
+left on, a first visit on Clarify. See `docs/design/paid-plans.md` P50, P51
+and P52.
 
 ## `interview.md`
 

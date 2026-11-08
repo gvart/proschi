@@ -545,3 +545,10 @@ id; don't rewrite old ones.
   second component. The solved state and the saved code are shared by
   the two entries of a problem (the same practice progress); the stage
   notes (`proschi.practice.stages.<id>`) matter only on the roadmap.
+- **P52. The roadmap opens where you left off, never on the lesson.** A
+  problem opened from the roadmap (`practice/#/roadmap/<id>`) opens on the
+  stage the learner was last on; a first visit opens on **Clarify**, even
+  with the lesson unread. The lesson is no gate: it stays one click away
+  as the first stage in the stage bar, and its own address
+  (`practice/#/roadmap/<id>/lesson`, the roadmap's "Read the lesson"
+  links) still opens on it.

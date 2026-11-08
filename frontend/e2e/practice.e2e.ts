@@ -273,7 +273,7 @@ test.describe('practice', () => {
 test.describe('practice on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true });
 
-  test('shows the tabbed layout, with the lesson in the stages’ rail', async ({ page }) => {
+  test('shows the tabbed layout, with the lesson one tap away in the tab bar', async ({ page }) => {
     await page.goto('practice/#/url-shortener');
     const tabs = page.getByRole('tablist', { name: 'View', exact: true });
     await expect(tabs.getByRole('tab')).toHaveText(['Problem', 'Code', 'Diagram', 'Tests']);
@@ -293,11 +293,12 @@ test.describe('practice on a phone', () => {
     await expect(page.getByRole('button', { name: 'Run tests' })).toBeVisible();
     await expect(canvasNodes(page)).toHaveCount(0);
 
-    // The lesson is the first stage in the rail above, full width, and Continue leads back to the same tab.
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Lesson' }).click();
-    const lesson = page.getByRole('article', { name: 'Lesson' });
+    // A problem from the list has no stages (P51): the lesson opens in a drawer from the tab bar, and closing it leads back to the same tab.
+    await expect(page.getByRole('navigation', { name: 'Stages' })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Lesson' }).click();
+    const lesson = page.getByRole('dialog', { name: 'Lesson' });
     await expect(lesson).toBeVisible();
-    await page.getByTestId('stage-foot').getByRole('button', { name: 'Continue: Design' }).click();
+    await page.keyboard.press('Escape');
     await expect(lesson).toBeHidden();
     await expect(tabs.getByRole('tab', { name: 'Tests' })).toHaveAttribute('aria-selected', 'true');
   });

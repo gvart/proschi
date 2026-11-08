@@ -361,13 +361,13 @@ function CalculatorLine() {
 }
 
 /** The estimates, read-only and compact, beside the whiteboard. */
-export function EstimatesSummary({ rows, questions }: { rows: WorksheetRow[]; questions?: EstimateQuestion[] }) {
+export function EstimatesSummary({ rows, questions, plain = false }: { rows: WorksheetRow[]; questions?: EstimateQuestion[]; /** Without its card and heading, inside a panel that names it. */ plain?: boolean }) {
   const filled = rows.filter((r) => r.expression.trim());
   return (
-    <section aria-label="Your estimates" className="rounded-sm border-bw-1 border-ink/40 bg-surface px-4 py-3" data-testid="estimates-summary">
-      <h3 className="text-sm font-bold text-ink">Your estimates</h3>
+    <section aria-label="Your estimates" className={plain ? '' : 'rounded-sm border-bw-1 border-ink/40 bg-surface px-4 py-3'} data-testid="estimates-summary">
+      {!plain && <h3 className="text-sm font-bold text-ink">Your estimates</h3>}
       {filled.length ? (
-        <dl className="mt-1.5 space-y-1 text-sm">
+        <dl className={`${plain ? '' : 'mt-1.5 '}space-y-1 text-sm`}>
           {filled.map((r) => {
             const q = questionOf(r);
             const label = q !== undefined ? (questions?.[q]?.question ?? r.label) : r.label || 'Row';
@@ -386,7 +386,7 @@ export function EstimatesSummary({ rows, questions }: { rows: WorksheetRow[]; qu
           })}
         </dl>
       ) : (
-        <p className="mt-1 text-sm text-muted">None written down.</p>
+        <p className={`${plain ? '' : 'mt-1 '}text-sm text-muted`}>None written down.</p>
       )}
     </section>
   );

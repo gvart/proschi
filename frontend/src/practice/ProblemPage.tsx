@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, Presentation, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, PanelsTopLeft, Presentation, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -17,7 +17,7 @@ import TestPanel from './TestPanel';
 import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
 import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import { lessonRead, markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
+import { markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
 import PartnerButton from '../partner/PartnerButton';
 import { usePartnerShortcut } from '../partner/shortcut';
 import PartnerDock from '../partner/PartnerDock';
@@ -99,10 +99,10 @@ interface ProblemPageProps {
   /** Shown under the header, e.g. the roadmap's banner. */
   banner?: ReactNode;
   /**
-   * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson),
-   * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
+   * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson,
+   * practice/#/roadmap/<id>/lesson); otherwise never first (P52).
    */
-  openLesson?: 'always' | 'unread';
+  openLesson?: 'always';
   /**
    * The staged flow (P50) is for Interview prep only (P51). Without it the
    * problem opens straight on the workspace, as it did before the stages:
@@ -128,9 +128,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const hasLesson = problem.lesson !== undefined;
-  // The notes of each stage, kept per problem; the screen opens on the lesson until it is read, else where it was left.
+  // The notes of each stage, kept per problem; the screen opens where it was left (the lesson only on its own address).
   const [notes, setNotes] = useState<StageNotes>(() => loadNotes(problem.id));
-  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, lessonRead(problem.id), loadNotes(problem.id)) : 'design'));
+  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, loadNotes(problem.id)) : 'design'));
   const updateNotes = useCallback(
     (update: (n: StageNotes) => StageNotes) =>
       setNotes((n) => {
@@ -569,17 +569,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     return () => cancelAnimationFrame(frame);
   }, [screen, editorView]);
 
-  const walkthrough =
-    guidedSteps &&
-    (guidedOn ? (
-      <div className="-mx-4 border-y-bw-1 border-ink">{guidedPanel}</div>
-    ) : (
-      <button type="button" onClick={openGuided} className={toolButton} title="Build the design step by step, with a check after each step">
-        <Compass size={14} aria-hidden="true" />
-        Walk me through it, step by step
-      </button>
-    ));
-
   const whiteboard = (
     <section aria-label="Whiteboard" className="relative h-full min-w-0">
       <EditableCanvas
@@ -604,7 +593,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   );
   const guide = (
     <DesignGuide
-      title={problem.title}
       statement={problem.statement}
       facts={factsOf(interview)}
       rows={rows}
@@ -613,8 +601,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       run={run?.result}
       running={running}
       onRun={runDesign}
-      walkthrough={walkthrough}
-      onEditor={() => setEditor(true)}
+      onWalkthrough={guidedSteps && !guidedOn ? openGuided : undefined}
+      walkthrough={guidedSteps && guidedOn ? guidedPanel : undefined}
     />
   );
   const designStage = phone ? (
@@ -717,12 +705,18 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         <span className="max-sm:sr-only">Whiteboard</span>
       </button>
     ) : (
-      !phone && (
-        <button type="button" aria-label="Show code" aria-pressed={codeShown} onClick={() => setCodeShown(!codeShown)} className={`${toolButton} shrink-0 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
-          <Code2 size={15} aria-hidden="true" />
-          Code
+      <>
+        {!phone && (
+          <button type="button" aria-label="Show code" aria-pressed={codeShown} onClick={() => setCodeShown(!codeShown)} className={`${toolButton} shrink-0 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
+            <Code2 size={15} aria-hidden="true" />
+            Code
+          </button>
+        )}
+        <button type="button" aria-label="Open the full editor" onClick={() => setEditor(true)} className={`${toolButton} shrink-0`} title="The full editor: code, tests, scenario playback and the capacity analysis, side by side">
+          <PanelsTopLeft size={15} aria-hidden="true" />
+          <span className="max-sm:sr-only">Full editor</span>
         </button>
-      )
+      </>
     ));
 
   return (
