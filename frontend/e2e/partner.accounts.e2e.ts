@@ -279,8 +279,7 @@ test.describe('practice', () => {
   test('is not in the interview room, so the interview stays your own work', async ({ page }) => {
     await openProblem(page);
     await expect(page.getByTestId('partner-button')).toBeVisible();
-    await page.getByRole('navigation', { name: 'Stages' }).getByRole('button', { name: 'Wrap-up' }).click();
-    await page.getByRole('link', { name: /Practice this as a mock interview/ }).click();
+    await page.getByRole('link', { name: 'Interview mode' }).click();
     await page.getByRole('radio', { name: /On my own/ }).click();
     await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the interview' }).click();
