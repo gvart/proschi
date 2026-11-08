@@ -78,7 +78,8 @@ export function useMockInterview(id: string, onReply: (done: TurnDone) => void):
     setBusy('turn');
     setError(undefined);
     const sentAt = Date.now();
-    setMessages((m) => [...m, { role: 'candidate', text: input.message, at: sentAt, ...(input.design !== undefined ? { design: true } : {}) }]);
+    const stage = input.stage ? { stage: input.stage } : {};
+    setMessages((m) => [...m, { role: 'candidate', text: input.message, at: sentAt, ...stage, ...(input.design !== undefined ? { design: true } : {}) }]);
     let text = '';
     setStreaming('');
     try {
@@ -86,8 +87,8 @@ export function useMockInterview(id: string, onReply: (done: TurnDone) => void):
         text += piece;
         setStreaming(text);
       });
-      setMessages((m) => [...m, { role: 'interviewer', text: done.reply, at: Date.now(), ...(done.hint ? { hint: done.hint } : {}) }]);
-      setInterview((i) => i && { ...i, phase: done.phase, turns: done.turns });
+      setMessages((m) => [...m, { role: 'interviewer', text: done.reply, at: Date.now(), ...stage, ...(done.hint ? { hint: done.hint } : {}) }]);
+      setInterview((i) => i && { ...i, phase: done.phase, turns: done.turns, ...(done.known ? { known: done.known } : {}) });
       replied.current(done);
       return true;
     } catch (e) {

@@ -38,6 +38,8 @@ export interface AiMessage {
   hint?: Hint;
   /** The candidate's turn sent the design. */
   design?: boolean;
+  /** The stage screen it was said on (P49). */
+  stage?: Phase;
 }
 
 export type AiStatus = 'active' | 'finishing' | 'finished' | 'failed' | 'abandoned';
@@ -57,6 +59,8 @@ export interface AiInterview {
   /** No turn after this (the 60-minute wall clock). */
   deadline?: number;
   messages?: AiMessage[];
+  /** The facts the candidate has learned (P38), for "Requirements so far" (P49). */
+  known?: string[];
 }
 
 /** GET /api/interviews; undefined when the server has no AI key (501) or the call fails. The credits come with the plan (services/useCredits.ts). */
@@ -111,6 +115,10 @@ export interface TurnInput {
   message: string;
   design?: string;
   advance?: boolean;
+  /** The stage screen the candidate is on (P49). */
+  stage?: Phase;
+  /** The estimation worksheet's filled rows (P49); the server evaluates them. */
+  worksheet?: { label: string; expression: string; unit?: string }[];
 }
 
 export interface TurnDone {
@@ -118,6 +126,7 @@ export interface TurnDone {
   phase: Phase;
   elapsedMs: number;
   turns: number;
+  known?: string[];
   hint?: Hint;
   grade?: { passed: number; total: number; solved: boolean; blocked?: string };
 }
