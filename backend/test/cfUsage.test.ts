@@ -92,13 +92,31 @@ describe('cf usage: quotas and projections', () => {
     expect(m.overageUsd).toBe(1.5); // 2 GB at $0.75
   });
 
-  it('projects at least an hour into a period, and Free has no overage cost', () => {
-    const day = utcDay(at('2026-11-07T00:01:00Z'));
-    const m = buildMetric(quota('free', 'workers.requests'), [{ t: day.start, value: 4000 }], day, at('2026-11-07T00:01:00Z'), 'free');
-    expect(m.projected).toBe(96_000); // 4000 an hour, not 4000 a minute
+  it('projects a monthly flow at least an hour into its period', () => {
+    const m = buildMetric(quota('paid', 'workers.requests'), [{ t: month.start, value: 1000 }], month, at('2026-11-01T00:01:00Z'), 'paid');
+    expect(m.projected).toBeCloseTo(720_000); // 1000 an hour over 720 hours, not 1000 a minute
+  });
+
+  it("measures a daily quota's pace over at least 6 hours, and Free has no overage cost", () => {
+    const now = at('2026-11-07T00:01:00Z');
+    const m = buildMetric(quota('free', 'workers.requests'), [{ t: utcDay(now).start, value: 4000 }], utcDay(now), now, 'free');
+    expect(m.projected).toBeCloseTo(4000 + (1439 / 360) * 4000); // the rest of the day at 4000 per 6 hours, not per minute
     expect(m.overageUsd).toBeNull();
-    expect(m.status).toBe('watch');
+    expect(m.status).toBe('ok');
     expect(m.periodEnd).toBe('2026-11-08T00:00:00.000Z');
+  });
+
+  it('at 00:03 UTC a little usage with no earlier days is no overage and no warning', () => {
+    const now = at('2026-11-16T00:03:00Z');
+    const q = quota('paid', 'ai.neurons');
+    const m = buildMetric(q, [{ t: at('2026-11-16T00:00:00Z'), value: 823 }], utcDay(now), now, 'paid', month);
+    expect(m.projected).toBeCloseTo(823 + (1437 / 360) * 823); // about 4,100, not 395,000
+    expect(m.overageUsd).toBe(0);
+    expect(m.passesAt).toBeNull();
+    expect(m.status).toBe('ok');
+    // With 30,000 a day before, the day's first minutes project about a typical day.
+    const busy = [...Array.from({ length: 15 }, (_, i) => ({ t: month.start + i * DAY, value: 30_000 })), { t: at('2026-11-16T00:00:00Z'), value: 100 }];
+    expect(buildMetric(q, busy, utcDay(now), now, 'paid', month).projected).toBeCloseTo(100 + (1437 / 360) * (100 + (357 / 1440) * 30_000));
   });
 
   it('status: over once used reaches the quota, watch from 80% projected', () => {
@@ -236,6 +254,7 @@ describe('GET /api/admin/cf-usage', () => {
     cfEnv.CF_ZONE_ID = '';
     cfEnv.CF_PLAN = '';
     vi.restoreAllMocks();
+    vi.useRealTimers();
   });
 
   it('is for the admin only: 401 without an admin session, also with a user’s', async () => {
@@ -255,6 +274,9 @@ describe('GET /api/admin/cf-usage', () => {
   });
 
   it('reports each quota on Paid (CF_PLAN default), sends the token only to Cloudflare, never back, and caches the answer', async () => {
+    // Just after 00:00 UTC, when a straight line through today's 823 neurons would be over 10,000.
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(at('2026-11-08T00:03:00Z'));
     const admin = await setUp();
     cfEnv.CF_ZONE_ID = 'zone-1';
     const { calls } = mockCloudflare();
@@ -263,7 +285,7 @@ describe('GET /api/admin/cf-usage', () => {
     const text = await response.text();
     expect(text).not.toContain(TOKEN);
     const body = JSON.parse(text) as CfUsage;
-    expect(body).toMatchObject({ plan: 'paid', planSource: 'CF_PLAN', cached: false, errors: [], period: { source: 'calendar' } });
+    expect(body).toMatchObject({ plan: 'paid', planSource: 'CF_PLAN', cached: false, errors: [], period: { source: 'calendar' }, fetchedAt: '2026-11-08T00:03:00.000Z' });
     expect(body.metrics.map((m) => m.id)).toEqual(QUOTAS.paid.map((q) => q.id));
     const byId = Object.fromEntries(body.metrics.map((m) => [m.id, m]));
     expect(byId['workers.requests'].used).toBe(1200);
