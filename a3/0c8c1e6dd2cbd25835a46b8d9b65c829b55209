@@ -1,0 +1,25 @@
+frontend/src/practice/interview/StageParts.tsx
+  s_e17b87e0a1b3ca::t_abe513f1de90aa 364,367-368,370,389
+frontend/src/practice/stages/DesignGuide.tsx
+  s_e17b87e0a1b3ca::t_2fe903304456b8 50
+  s_e17b87e0a1b3ca::t_875062107b5643 1-6,8,21-23,27-34,36,38-43,49,51,55-61,63-82,84,87-90,92,94-141,143-144
+  s_e17b87e0a1b3ca::t_abfa0f5e783e28 62
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_f3522583fa2438 2,604-605,708-717,719
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "a30c8c1e6dd2cbd25835a46b8d9b65c829b55209",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
