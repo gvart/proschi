@@ -45,6 +45,15 @@ async function connect(page: Page, from: string, to: string) {
   await page.mouse.up();
 }
 
+/** Clicks the middle of a connection, the first by default (a straight edge is a zero-width path, which Playwright will not click). */
+async function clickConnection(page: Page, edge = page.locator('.react-flow__edge').first()) {
+  await layoutSettled(page);
+  const path = edge.locator('path.react-flow__edge-interaction');
+  await expect(path).toHaveAttribute('d', /\d/);
+  const line = (await path.boundingBox())!;
+  await page.mouse.click(line.x + line.width / 2, line.y + line.height / 2);
+}
+
 test.describe('visual editing', () => {
   test.beforeEach(async ({ page }) => {
     await newEmptyDiagram(page);
@@ -142,11 +151,45 @@ test.describe('visual editing', () => {
     // A straight edge is a zero-width path, which Playwright will not click; click its middle.
     const line = (await page.locator('.react-flow__edge path.react-flow__edge-interaction').first().boundingBox())!;
     await page.mouse.click(line.x, line.y + line.height / 2);
-    // The connection's card focuses its label field, where Delete types; its own button removes it.
+    // Its settings card's own button removes it too.
     await page.getByRole('region', { name: /redis.*postgresql.*settings/i }).getByRole('button', { name: /Delete/ }).click();
     await expect.poll(() => editorText(page)).not.toMatch(/->/);
     await expect(page.locator('.react-flow__edge')).toHaveCount(0);
     await expect(canvasNodes(page)).toHaveCount(2);
+  });
+
+  for (const key of ['Delete', 'Backspace']) {
+    test(`the ${key} key removes the selected connection, as one undo step`, async ({ page }) => {
+      await addComponent(page, 'redis', 'Redis');
+      await addComponent(page, 'postgres', 'PostgreSQL');
+      await connect(page, 'Redis', 'PostgreSQL');
+      await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
+
+      await clickConnection(page);
+      await expect(page.getByRole('region', { name: /redis.*postgresql.*settings/i })).toBeVisible();
+      await page.keyboard.press(key);
+      await expect.poll(() => editorText(page)).not.toMatch(/->/);
+      await expect(page.locator('.react-flow__edge')).toHaveCount(0);
+      await expect(canvasNodes(page)).toHaveCount(2);
+
+      await page.keyboard.press('ControlOrMeta+z');
+      await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
+    });
+  }
+
+  test('Delete in the connection label field edits the label, not the connection', async ({ page }) => {
+    await addComponent(page, 'redis', 'Redis');
+    await addComponent(page, 'postgres', 'PostgreSQL');
+    await connect(page, 'Redis', 'PostgreSQL');
+    await expect.poll(() => editorText(page)).toMatch(/redis\s*->\s*postgresql/);
+
+    await clickConnection(page);
+    const label = page.getByRole('region', { name: /redis.*postgresql.*settings/i }).getByLabel('Label or protocol');
+    await label.fill('gRPC');
+    await label.press('Backspace');
+    await label.press('Delete');
+    await expect(label).toHaveValue('gRP');
+    expect(await editorText(page)).toMatch(/redis\s*->\s*postgresql/);
   });
 
   test('a diagram built with the mouse has no problems', async ({ page }) => {
@@ -246,6 +289,25 @@ test.describe('visual editing in practice', () => {
     await expect(page.getByRole('status').filter({ hasText: 'problem.proschi' })).toBeVisible();
     expect(await editorText(page)).toBe(before);
   });
+
+  for (const key of ['Delete', 'Backspace']) {
+    test(`the ${key} key removes a selected connection of the solution`, async ({ page }) => {
+      await page.goto('practice/#/url-shortener');
+      await expect(codeEditor(page)).toBeVisible();
+      await waitForCanvas(page, 2);
+      await addFromPalette(page, 'cache', 'Cache');
+      await connect(page, 'Visitor', 'Cache');
+      await expect.poll(() => editorText(page)).toMatch(/^visitor\s*->\s*cache$/m);
+
+      await clickConnection(page, page.getByTestId('rf__edge-visitor->cache'));
+      await expect(page.getByRole('region', { name: /visitor.*cache.*settings/i })).toBeVisible();
+      await page.keyboard.press(key);
+      await expect.poll(() => editorText(page)).not.toMatch(/^visitor\s*->\s*cache$/m);
+      expect(await editorText(page)).toMatch(/^cache "Cache" \[Cache\]$/m);
+      await page.keyboard.press('ControlOrMeta+z');
+      await expect.poll(() => editorText(page)).toMatch(/^visitor\s*->\s*cache$/m);
+    });
+  }
 
   test('in the narrow practice pane the palette floats over the canvas, and the diagram fits beside it unless zoomed by hand', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });

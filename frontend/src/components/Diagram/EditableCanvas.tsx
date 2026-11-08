@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ReactFlow, { Background, BackgroundVariant, Controls, Panel, ReactFlowProvider } from 'reactflow';
 import type { Edge, EdgeTypes, Node } from 'reactflow';
 import 'reactflow/dist/style.css';
@@ -89,9 +89,20 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
   // A selection the text no longer has (deleted, or renamed in the code) is dropped.
   const current: Selected = node || edge ? selected : null;
 
+  const canvasRef = useRef<HTMLDivElement>(null);
+  /**
+   * Keeps the keys on the canvas. A selected connection is drawn again (React Flow lifts it), so the focus
+   * a click gave it falls to the page and Delete never reached the canvas; a removed one takes it along too.
+   */
+  const keepFocus = () => {
+    if (!canvasRef.current?.contains(document.activeElement)) return;
+    canvasRef.current.focus({ preventScroll: true });
+  };
+
   const select = (next: Selected) => {
     setSelected(next);
     setSettingsClosed(false);
+    keepFocus();
   };
 
   useEffect(() => {
@@ -128,6 +139,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
       onChange(removeConnections(source, own));
     }
     setSelected(null);
+    keepFocus();
   };
 
   const shownNodes = useMemo(() => {
@@ -197,6 +209,7 @@ function Canvas({ source, diagram, onChange, onUndo, onRedo, nodes, edges, fitKe
         onFloatingChange={setFloating}
       />
       <div
+        ref={canvasRef}
         tabIndex={-1}
         className="pc-editable relative h-full min-w-0 flex-1 outline-hidden"
         onDragOver={(e) => {
