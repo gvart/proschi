@@ -1,0 +1,55 @@
+frontend/src/practice/stages/flow.test.ts
+  s_e17b87e0a1b3ca::t_a23e6e14247c82 1-66
+frontend/src/practice/stages/ask.test.ts
+  s_e17b87e0a1b3ca::t_1e848d31e7f296 1-17
+frontend/src/partner/PartnerPanel.tsx
+  s_e17b87e0a1b3ca::t_20d078cc85cb05 56-57,147,217-228
+  s_e17b87e0a1b3ca::t_4088d9809fce0e 229
+frontend/src/practice/interview/StageParts.tsx
+  s_e17b87e0a1b3ca::t_2145dc8030fc80 22,25,39,81
+frontend/src/practice/stages/DesignGuide.tsx
+  s_e17b87e0a1b3ca::t_f0b42369ce026c 1-82
+frontend/src/practice/stages/ask.ts
+  s_e17b87e0a1b3ca::t_58fd21750137a7 1-18
+frontend/src/practice/stages/flow.ts
+  s_e17b87e0a1b3ca::t_f04728d7e3491d 3,134-136
+  s_e17b87e0a1b3ca::t_bd7bf83eacebf6 1-2,4-133
+frontend/src/practice/relatedTopics.ts
+  s_e17b87e0a1b3ca::t_7cba60e9cfbc35 1-24
+frontend/src/practice/SolveCelebration.tsx
+  s_e17b87e0a1b3ca::t_7cba60e9cfbc35 11
+frontend/src/practice/stages/Screens.tsx
+  s_e17b87e0a1b3ca::t_f04728d7e3491d 14
+  s_e17b87e0a1b3ca::t_09078a88e19c23 1-13,15-259
+frontend/src/practice/stages/AskSelection.tsx
+  s_e17b87e0a1b3ca::t_4275c05b81b2bd 1-179
+frontend/src/practice/LessonView.tsx
+  s_e17b87e0a1b3ca::t_e875e3309f99c4 46-47,69,89
+  s_e17b87e0a1b3ca::t_2145dc8030fc80 44-45,77
+frontend/src/practice/ProblemPage.tsx
+  s_e17b87e0a1b3ca::t_2220694bc43bd0 348-355,357-361,383,443-445,453-454,836
+  s_e17b87e0a1b3ca::t_f6a879cc687f54 362,377-382,499-511,513-557,559-684,689,691-692,694,711,713,721,723-724,730-739,741,761-765,767-773,776
+  s_e17b87e0a1b3ca::t_f04728d7e3491d 52,54
+  s_e17b87e0a1b3ca::t_e875e3309f99c4 44,558,766
+  s_e17b87e0a1b3ca::t_e3821a295eea11 2,48-51,53,55-57,108-116,124-140,168-169,171-184,188,190
+  s_e17b87e0a1b3ca::t_fba7aae1602524 187,436
+  s_e17b87e0a1b3ca::t_bceb4a108b7a7a 512
+frontend/src/practice/stages/StageBar.tsx
+  s_e17b87e0a1b3ca::t_8a07e6ef0cc18b 1-89
+---
+{
+  "schema_version": "authorship/3.0.0",
+  "git_ai_version": "1.7.5",
+  "base_commit_sha": "634c5ddf96e69562f87965897d38c63ad45e60cd",
+  "prompts": {},
+  "sessions": {
+    "s_e17b87e0a1b3ca": {
+      "agent_id": {
+        "tool": "claude",
+        "id": "5236c549-8c9b-4389-b211-7f6e079017f7",
+        "model": "claude-opus-5-5"
+      },
+      "human_author": "Vladlen Gladis <vladlen.gladis@deliveryhero.com>"
+    }
+  }
+}
