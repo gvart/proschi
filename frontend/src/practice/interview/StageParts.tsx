@@ -38,17 +38,13 @@ export function StageHeading({ stage, title, children }: { stage: Phase; title?:
  * first time (a click or a key shows it all; none under reduced motion).
  * Screen readers get the whole text once, in a status, not word by word.
  */
-export function Brief({ title, source, reveal, onRevealStart, onDone, footer }: { title: string; source: string; reveal: boolean; onRevealStart?: (text: string) => void; onDone?: () => void; footer?: ReactNode }) {
+export function Brief({ title, source, reveal, onRevealStart, footer }: { title: string; source: string; reveal: boolean; onRevealStart?: (text: string) => void; footer?: ReactNode }) {
   const blocks = useMemo(() => parseMarkdown(source), [source]);
   const total = useMemo(() => countWords(blocks), [blocks]);
   const [shown, setShown] = useState(() => (reveal && !prefersReducedMotion() ? 0 : total));
   const typing = shown < total;
   const [announce, setAnnounce] = useState('');
   const started = useRef(false);
-  const done = useRef(onDone);
-  useEffect(() => {
-    done.current = onDone;
-  }, [onDone]);
 
   useEffect(() => {
     if (started.current) return;
@@ -63,7 +59,6 @@ export function Brief({ title, source, reveal, onRevealStart, onDone, footer }: 
 
   useEffect(() => {
     if (!typing) {
-      done.current?.();
       setAnnounce('');
       return;
     }

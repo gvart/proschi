@@ -221,8 +221,6 @@ const BRIEF_KEY = (id: string) => `proschi.interview.brief.${id}`;
 export const loadBriefRead = (id: string): boolean => loadJson<unknown>(BRIEF_KEY(id), false) === true;
 export const saveBriefRead = (id: string): void => saveJson(BRIEF_KEY(id), true);
 
-/** The later of two stages. */
-export const laterStage = (a: Phase, b: Phase | undefined): Phase => (b && stageIndex(b) > stageIndex(a) ? b : a);
 
 /** The messages said on `stage`, and how many came before it; a message without a stage counts as the first stage's. */
 export function splitByStage<T extends { stage?: Phase }>(messages: readonly T[], stage: Phase): { earlier: T[]; here: T[] } {

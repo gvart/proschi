@@ -40,15 +40,13 @@
   background-color: rgb(var(--c-surface));
 }
 
-/* A new stage screen (P49): a short fade and rise; none under reduced motion. */
+/* A new stage screen (P49): a short fade, no movement (the bars over the toasts are measured where they land); none under reduced motion. */
 @keyframes ps-stage-enter {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 

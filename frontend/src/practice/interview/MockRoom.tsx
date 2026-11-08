@@ -141,6 +141,10 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
   const session = useMockInterview(id, useCallback((done: TurnDone) => replied.current(done), []));
   const { interview, messages, streaming, busy, error } = session;
   const stage: Phase = chosen ?? savedStage ?? interview?.phase ?? 'clarify';
+  // The stage is fixed once the session loads: only Next moves it, never the server's clock (P49).
+  useEffect(() => {
+    if (interview && chosen === undefined) setChosen(stage);
+  }, [interview, chosen, stage]);
   const shown = viewing ?? stage;
   const boardStage = stage === 'design' || stage === 'wrapup';
 
@@ -216,7 +220,9 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
   }, []);
 
   // Where the composer is: it moves with the stage, so the hands-free mic starts again where it lands.
-  const composerAt = viewing || (stage === 'clarify' && !briefRead) ? 'none' : boardStage ? 'rail' : stage;
+  // The brief is typed out once, before the first question (not again for an interview already under way).
+  const briefShown = stage === 'clarify' && !briefRead && !messages.some((m) => m.role === 'candidate');
+  const composerAt = viewing || briefShown ? 'none' : boardStage ? 'rail' : stage;
   useEffect(() => {
     if (!active) return;
     if (voice) {
@@ -471,7 +477,7 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
       </div>
     );
   } else if (stage === 'clarify') {
-    screen = !briefRead ? (
+    screen = briefShown ? (
       <div className="min-h-0 flex-1 overflow-y-auto bg-paper">
         <Brief
           title={problem.title}
@@ -482,6 +488,9 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
             <StartClarifying
               note="The scale and the constraints aren't in the brief: ask the interviewer for them."
               onStart={() => {
+                // Ready to talk: the reading stops, and in voice mode the mic listens.
+                stopSpeaking();
+                setSpeaking(false);
                 setBriefRead(true);
                 saveBriefRead(id);
               }}
@@ -499,8 +508,10 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
             <PinnedBrief title={problem.title} source={statement} />
           </div>
         </div>
-        {log('clarify', true)}
-        {composer}
+        <div role="region" aria-label="Mock interview" className="flex min-h-0 flex-1 flex-col">
+          {log('clarify', true)}
+          {composer}
+        </div>
       </div>
     );
   } else if (stage === 'estimate') {
@@ -516,7 +527,7 @@ export default function MockRoom({ id, problem, engine, phone, onExit, onVerdict
       </div>
     );
     const talkPane = (
-      <div className="flex h-full min-h-0 flex-col bg-paper">
+      <div role="region" aria-label="Mock interview" className="flex h-full min-h-0 flex-col bg-paper">
         {log('estimate', true)}
         {composer}
       </div>

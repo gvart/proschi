@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { beforeEach, describe, expect, it } from 'vitest';
 import { parseMarkdown } from '../markdownReader';
-import { calc, countWords, laterStage, loadStage, loadWorksheet, nextStage, plainText, revealBlocks, saveStage, saveWorksheet, shortNumber, splitByStage, STARTER_ROWS, worksheetPayload } from './stages';
+import { calc, countWords, loadStage, loadWorksheet, nextStage, plainText, revealBlocks, saveStage, saveWorksheet, shortNumber, splitByStage, STARTER_ROWS, worksheetPayload } from './stages';
 
 describe('the brief revealed word by word', () => {
   const blocks = parseMarkdown('# Chat\n\nBuild a **chat service** for teams.\n\n- Send messages\n- Load history');
@@ -63,12 +63,10 @@ describe('worksheet rows and stages', () => {
     expect(loadWorksheet('chat')).toBeUndefined();
   });
 
-  it('remembers the stage and never goes back', () => {
+  it('remembers the stage and knows the next one', () => {
     expect(loadStage('x')).toBeUndefined();
     saveStage('x', 'estimate');
     expect(loadStage('x')).toBe('estimate');
-    expect(laterStage('clarify', 'design')).toBe('design');
-    expect(laterStage('design', 'clarify')).toBe('design');
     expect(nextStage('design')).toBe('wrapup');
     expect(nextStage('wrapup')).toBeUndefined();
   });
