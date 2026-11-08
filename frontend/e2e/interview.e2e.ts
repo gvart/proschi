@@ -17,8 +17,9 @@ const currentStage = (page: Page) => page.getByRole('list', { name: 'Stages' }).
 /** Clicks Next until the room is on `stage` (P49). */
 async function toStage(page: Page, stage: 'Estimate' | 'Design' | 'Wrap-up') {
   const order = ['Clarify', 'Estimate', 'Design', 'Wrap-up'];
-  for (const label of order.slice(1, order.indexOf(stage) + 1)) {
-    if ((await currentStage(page).textContent())?.includes(label)) continue;
+  const now = (await currentStage(page).textContent()) ?? '';
+  const from = order.findIndex((label) => now.includes(label));
+  for (const label of order.slice(from + 1, order.indexOf(stage) + 1)) {
     await page.getByRole('button', { name: `Next: ${label}` }).click();
     await expect(currentStage(page)).toContainText(label);
   }
@@ -328,9 +329,7 @@ test.describe('the interview room on your own', () => {
 test.describe('an interview as progress', () => {
   test('one too short to count says so, with the bar, and earns nothing', async ({ page }) => {
     await startOn(page, 'URL Shortener', '30 min');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
-    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await toStage(page, 'Wrap-up');
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
     const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
@@ -346,11 +345,10 @@ test.describe('an interview as progress', () => {
   test('a finished interview on your own adds XP and a badge on the result, once, and joins the progress page', async ({ page }) => {
     await page.clock.install();
     await startOn(page, 'URL Shortener', '30 min');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await toStage(page, 'Design');
     // Eleven minutes of design: past the 10 minutes an interview needs to count.
     await page.clock.fastForward('11:00');
-    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await toStage(page, 'Wrap-up');
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
     const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
