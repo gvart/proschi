@@ -57,7 +57,10 @@ export async function sectionLink(page: Page, section: string): Promise<Locator>
 /** The key src/practice/progress.ts keeps the lessons read in. */
 export const LESSONS_KEY = 'proschi.lessons';
 
-export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void }>({
+/** The key prefix src/practice/stages/flow.ts keeps each problem's stage notes under. */
+export const STAGES_KEY = 'proschi.practice.stages.';
+
+export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'; onboardingSeen: void; lessons: 'skip' | 'fresh'; lessonsSkipped: void; stages: 'editor' | 'fresh'; stagesSkipped: void }>({
   /**
    * First-run tours would cover the pages most tests look at, so by default
    * every page starts with them marked as seen. Tests of the tours themselves
@@ -111,6 +114,40 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
           // Registered before the app's own listener, so it runs first.
           window.addEventListener('hashchange', markRead);
         }, LESSONS_KEY);
+      }
+      await use();
+    },
+    { auto: true },
+  ],
+  /**
+   * A problem is worked through in stages (Clarify, Estimate, Design,
+   * Wrap-up), and Design opens on the whiteboard. Most tests are about the
+   * full editor, so by default a problem opened (`#/<id>`, `#/<id>/lesson`
+   * or `#/roadmap/<id>`) whose stages were never touched opens on Design in
+   * the full editor, every stage reached, as for someone who has been through
+   * them. Its lesson still shows first until read (see `lessons`). Tests of
+   * the stages use `test.use({ stages: 'fresh' })`.
+   */
+  stages: ['editor', { option: true }],
+  stagesSkipped: [
+    async ({ context, stages }, use) => {
+      if (stages === 'editor') {
+        await context.addInitScript((prefix) => {
+          const PAGES = new Set(['roadmap', 'review', 'progress', 'challenge', 'arcade', 'me', 'interview', 'guide']);
+          const skip = () => {
+            if (!window.location.pathname.includes('/practice/')) return;
+            const m = /^#\/(?:roadmap\/)?([a-z0-9-]+)(?:\/lesson)?$/.exec(window.location.hash);
+            const id = m?.[1];
+            if (!id || PAGES.has(id)) return;
+            try {
+              if (window.localStorage.getItem(prefix + id) === null) window.localStorage.setItem(prefix + id, JSON.stringify({ stage: 'design', reached: 'wrapup', editor: true, briefRead: true }));
+            } catch {
+              // Storage blocked: the stages show.
+            }
+          };
+          skip();
+          window.addEventListener('hashchange', skip);
+        }, STAGES_KEY);
       }
       await use();
     },

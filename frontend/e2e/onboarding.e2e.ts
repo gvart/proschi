@@ -300,7 +300,7 @@ test.describe('practice tour', () => {
       await page.goto('practice/#/url-shortener');
       await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
       await expect(practiceTour(page)).toHaveCount(0);
-      await page.getByRole('button', { name: 'Start the challenge' }).first().click();
+      await page.getByTestId('stage-next').click();
       await expect(practiceTour(page)).toHaveAccessibleName('Practice tour: Read the problem');
     });
   });
