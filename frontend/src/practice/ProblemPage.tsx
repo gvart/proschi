@@ -1,5 +1,5 @@
 import { Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, Presentation, RotateCcw, Timer } from 'lucide-react';
+import { ArrowLeft, BookOpen, Code2, Compass, Eye, FlaskConical, GraduationCap, Lightbulb, MoreHorizontal, Network, PanelsTopLeft, Presentation, RotateCcw, Timer } from 'lucide-react';
 import { confirm } from '../design/dialogs';
 import { Group, Panel, Separator, usePanelRef } from 'react-resizable-panels';
 import type { Diagnostic, SourceLoc } from '../dsl';
@@ -569,17 +569,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
     return () => cancelAnimationFrame(frame);
   }, [screen, editorView]);
 
-  const walkthrough =
-    guidedSteps &&
-    (guidedOn ? (
-      <div className="-mx-4 border-y-bw-1 border-ink">{guidedPanel}</div>
-    ) : (
-      <button type="button" onClick={openGuided} className={toolButton} title="Build the design step by step, with a check after each step">
-        <Compass size={14} aria-hidden="true" />
-        Walk me through it, step by step
-      </button>
-    ));
-
   const whiteboard = (
     <section aria-label="Whiteboard" className="relative h-full min-w-0">
       <EditableCanvas
@@ -604,7 +593,6 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   );
   const guide = (
     <DesignGuide
-      title={problem.title}
       statement={problem.statement}
       facts={factsOf(interview)}
       rows={rows}
@@ -613,8 +601,8 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
       run={run?.result}
       running={running}
       onRun={runDesign}
-      walkthrough={walkthrough}
-      onEditor={() => setEditor(true)}
+      onWalkthrough={guidedSteps && !guidedOn ? openGuided : undefined}
+      walkthrough={guidedSteps && guidedOn ? guidedPanel : undefined}
     />
   );
   const designStage = phone ? (
@@ -717,12 +705,18 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
         <span className="max-sm:sr-only">Whiteboard</span>
       </button>
     ) : (
-      !phone && (
-        <button type="button" aria-label="Show code" aria-pressed={codeShown} onClick={() => setCodeShown(!codeShown)} className={`${toolButton} shrink-0 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
-          <Code2 size={15} aria-hidden="true" />
-          Code
+      <>
+        {!phone && (
+          <button type="button" aria-label="Show code" aria-pressed={codeShown} onClick={() => setCodeShown(!codeShown)} className={`${toolButton} shrink-0 aria-pressed:border-ink aria-pressed:bg-pop-yellow aria-pressed:text-on-accent`} title="The design as Proschi code, beside the whiteboard">
+            <Code2 size={15} aria-hidden="true" />
+            Code
+          </button>
+        )}
+        <button type="button" aria-label="Open the full editor" onClick={() => setEditor(true)} className={`${toolButton} shrink-0`} title="The full editor: code, tests, scenario playback and the capacity analysis, side by side">
+          <PanelsTopLeft size={15} aria-hidden="true" />
+          <span className="max-sm:sr-only">Full editor</span>
         </button>
-      )
+      </>
     ));
 
   return (
