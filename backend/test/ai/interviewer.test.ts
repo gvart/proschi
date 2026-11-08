@@ -72,6 +72,40 @@ describe('AI interviewer', () => {
     expect(state.turns).toBe(5);
   });
 
+  it('follows the candidate\'s screen: a later stage moves the session on, an earlier one is nudged and kept on the transcript (P49)', async () => {
+    const { client, calls } = claude();
+    let { state } = start(context, 45, T0);
+    ({ state } = await turn(deps(client, 1), state, { message: 'Ready to estimate', stage: 'estimate' }));
+    expect(state.phase).toBe('estimate');
+    expect(state.phaseStarts.estimate).toBe(1 * MIN);
+    expect(state.transcript.slice(-2).map((e) => e.stage)).toEqual(['estimate', 'estimate']);
+    // The clock is in the design phase while the screen is still on the estimate one: never moved back, only nudged.
+    ({ state } = await turn(deps(client, 12), state, { message: 'Still estimating', stage: 'estimate' }));
+    expect(state.phase).toBe('design');
+    expect(state.transcript.at(-1)!.stage).toBe('estimate');
+    const turns = sonnetStreams(calls).map(lastUser);
+    expect(turns[0]).toContain('<candidate_screen stage="estimate"></candidate_screen>');
+    expect(turns[1]).toContain('still on the estimate stage while the interview is in design');
+  });
+
+  it('gives the model the worksheet with each row evaluated by the server\'s calculator (P49)', async () => {
+    const { client, calls } = claude();
+    const { state } = start(context, 45, T0);
+    await turn(deps(client, 6), state, {
+      message: 'Here are my numbers',
+      stage: 'estimate',
+      worksheet: [
+        { label: 'Writes per second', expression: '100M / 30 / 86400', unit: '/s' },
+        { label: 'Storage over 5 years', expression: 'lots', unit: 'TB' },
+      ],
+    });
+    const sent = lastUser(sonnetStreams(calls)[0]);
+    expect(sent).toContain('<candidate_worksheet>');
+    expect(sent).toContain('- Writes per second: 100M / 30 / 86400 = 38.5802 /s');
+    expect(sent).toContain('- Storage over 5 years: lots (not a number the calculator can evaluate)');
+    expect(JSON.stringify(sonnetStreams(calls)[0].body.system)).toContain('<candidate_worksheet>');
+  });
+
   it('caches the problem context and the newest turn, and keeps the history a stable prefix', async () => {
     const { client, calls } = claude();
     let { state } = start(context, 45, T0);

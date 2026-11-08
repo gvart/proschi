@@ -1,9 +1,10 @@
-import { DURATIONS, type Duration } from '../../frontend/src/practice/modes/session';
+import { DURATIONS, PHASES, type Duration, type Phase } from '../../frontend/src/practice/modes/session';
 import type { User } from './auth';
 import { aiEnabled, AiError, createClient, HAIKU, OPUS, SONNET, type Model } from './ai/client';
 import { addUsage, billedTokens, emptyUsage, sessionCostUsd, usageSince, WALL_CLOCK_MS, type SessionUsage } from './ai/budget';
 import { problemContext } from './ai/context';
-import { InterviewLimitError, start, turn, verdict, type Hint, type InterviewState, type InterviewVerdict } from './ai/interviewer';
+import { InterviewLimitError, MAX_WORKSHEET_ROWS, start, turn, verdict, type Hint, type InterviewState, type InterviewVerdict, type WorksheetRow } from './ai/interviewer';
+import { knownTopics } from './ai/facts';
 import type { Ctx } from './context';
 import { creditsView } from './credits';
 import type { Env } from './env';
@@ -19,7 +20,7 @@ import { recommendAfterInterview } from './roadmap';
  * own per-user rate limit; without ANTHROPIC_API_KEY every route answers 501.
  *
  *   POST /api/interviews {problem, minutes, replace?, deep?}   holds the verdict's credits, opens a session (402 no_credits or plan_required, 409 active_session)
- *   POST /api/interviews/<id>/turn {message, design?, advance?}
+ *   POST /api/interviews/<id>/turn {message, design?, advance?, stage?, worksheet?}
  *                                                 the reply as Server-Sent Events: text…, then hint, grade, done
  *   POST /api/interviews/<id>/finish              the verdict (once; again answers the same one)
  *   GET  /api/interviews/<id>                     the session with its transcript, to resume
@@ -141,16 +142,40 @@ function stateOf(row: Row): InterviewState {
 async function view(ctx: Ctx, row: Row) {
   const { results } = await ctx.env.DB.prepare('SELECT role, text, hint, design, at FROM ai_interview_messages WHERE interview_id = ? ORDER BY id').bind(row.id).all<MessageRow>();
   const state = row.state ? (JSON.parse(row.state) as InterviewState) : undefined;
+  // The messages and the transcript are written together, one entry each: the stage each was said on (P49) comes from the transcript.
+  const entries = state && state.transcript.length === results.length ? state.transcript : undefined;
   return {
     ...summary(row),
     phase: state?.phase,
     phaseStarts: state?.phaseStarts,
     turns: state?.turns ?? 0,
     covered: state?.covered.length ?? 0,
+    ...(state ? { known: knownFacts(row.problem_id, state) } : {}),
     // The wall clock (P3): no turn after this, whatever the chosen length.
     deadline: row.started_at + WALL_CLOCK_MS,
-    messages: results.map((m) => ({ role: m.role, text: m.text, at: m.at, ...(m.hint ? { hint: JSON.parse(m.hint) as Hint } : {}), ...(m.design ? { design: true } : {}) })),
+    messages: results.map((m, i) => {
+      const stage = entries ? (entries[i].stage ?? entries[i].phase) : undefined;
+      return { role: m.role, text: m.text, at: m.at, ...(stage ? { stage } : {}), ...(m.hint ? { hint: JSON.parse(m.hint) as Hint } : {}), ...(m.design ? { design: true } : {}) };
+    }),
   };
+}
+
+/** What the candidate has learned (P38), for the room's "Requirements so far" (P49): each known clarify topic's fact, or its question when it has none. */
+function knownFacts(problemId: string, state: InterviewState): string[] {
+  const context = problemContext(problemId);
+  return context ? knownTopics(context, state).map((t) => t.source ?? t.label) : [];
+}
+
+/** A turn's worksheet (P49): at most 24 rows of short strings, or a 400. */
+function readWorksheet(raw: unknown): WorksheetRow[] | undefined {
+  if (raw === undefined) return undefined;
+  const str = (v: unknown, max: number) => typeof v === 'string' && v.length <= max;
+  if (!Array.isArray(raw) || raw.length > MAX_WORKSHEET_ROWS) throw new HttpError(400, `worksheet must be at most ${MAX_WORKSHEET_ROWS} rows`);
+  return raw.map((r: unknown) => {
+    const row = r as Partial<WorksheetRow> | null;
+    if (!row || !str(row.label, 80) || !str(row.expression, 120) || (row.unit !== undefined && !str(row.unit, 24))) throw new HttpError(400, 'worksheet rows are {label, expression, unit?}, short strings');
+    return { label: row.label!, expression: row.expression!, ...(row.unit ? { unit: row.unit } : {}) };
+  });
 }
 
 function summary(row: Row) {
@@ -260,7 +285,7 @@ const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.str
  *   event: text   {text}                 the reply, piece by piece
  *   event: hint   {kind, text}           the coaching card (absent when it failed)
  *   event: grade  {passed, total, …}     the server's run of the design sent (only with one)
- *   event: done   {reply, phase, elapsedMs, turns}
+ *   event: done   {reply, phase, elapsedMs, turns, known}
  *   event: error  {error}                instead of done, when the turn failed midway (charged for what the model answered, P34)
  *
  * 402 no_credits {needed, balance, wrapUp: true} when the turn can't be held:
@@ -274,6 +299,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
   if (typeof message !== 'string') throw new HttpError(400, 'message must be a string');
   if (body.design !== undefined && typeof body.design !== 'string') throw new HttpError(400, 'design must be a string');
   if (body.advance !== undefined && typeof body.advance !== 'boolean') throw new HttpError(400, 'advance must be a boolean');
+  if (body.stage !== undefined && !PHASES.some((p) => p.id === body.stage)) throw new HttpError(400, 'stage must be a phase');
+  const worksheet = readWorksheet(body.worksheet);
   stateOf(loaded);
   const context = problemContext(loaded.problem_id);
   if (!context) throw new HttpError(409, 'The problem is no longer available');
@@ -316,6 +343,8 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
     message,
     ...(body.design !== undefined ? { design: body.design as string } : {}),
     ...(body.advance ? { advance: true } : {}),
+    ...(body.stage !== undefined ? { stage: body.stage as Phase } : {}),
+    ...(worksheet?.length ? { worksheet } : {}),
     onText: (text) => {
       if (!streaming) {
         streaming = true;
@@ -370,7 +399,7 @@ export const interviewTurn = interviewRoute((env) => env.INTERVIEW_TURN_LIMITER,
       }
       if (result.hint) await writer.write(sse('hint', result.hint));
       if (result.grade) await writer.write(sse('grade', result.grade));
-      await writer.write(sse('done', { reply: result.reply, phase: s.phase, elapsedMs: result.elapsedMs, turns: s.turns }));
+      await writer.write(sse('done', { reply: result.reply, phase: s.phase, elapsedMs: result.elapsedMs, turns: s.turns, known: knownFacts(row.problem_id, s) }));
     } catch (e) {
       log('warn', 'AI interview turn failed midway', { requestId: ctx.requestId, error: errorText(e).split('\n')[0] });
       if (e instanceof AiError) used = failedUsage(e);
