@@ -19,9 +19,22 @@ async function toStart(page: Page) {
   return start;
 }
 
+/** Past the brief that opens Clarify (P49), to the chat. */
+async function openChat(page: Page) {
+  await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+}
+
+/** Next, and the turn it sends answered. */
+async function next(page: Page, label: 'Estimate' | 'Design') {
+  await page.getByRole('button', { name: `Next: ${label}` }).click();
+  await expect(page.getByRole('list', { name: 'Stages' }).locator('[aria-current="step"]')).toContainText(label);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+}
+
 test('Max: a Deep verdict costs more, says so on the verdict, and the report prints without the app around it', async ({ page, errors }) => {
   await mockSignedIn(page);
-  const mock = await mockInterviews(page, { plan: 'max', credits: 2200, replies: [{ text: 'Seven of ten tests pass. Why this cache?' }] });
+  const mock = await mockInterviews(page, { plan: 'max', credits: 2200, replies: [{ text: 'Numbers?' }, { text: 'Design?' }, { text: 'Seven of ten tests pass. Why this cache?' }] });
   const start = await toStart(page);
   const deep = start.getByRole('checkbox', { name: /Deep verdict/ });
   await expect(deep).not.toBeChecked();
@@ -30,9 +43,12 @@ test('Max: a Deep verdict costs more, says so on the verdict, and the report pri
   // Only the verdict runs Deep: the estimate adds its extra (15–55 credits, ×2).
   await expect(start.getByTestId('ai-credits')).toContainText('about 60–115 credits for 45 min');
   await start.getByRole('button', { name: 'Start the mock interview' }).click();
+  await openChat(page);
   const chat = page.getByRole('region', { name: 'Mock interview', exact: true });
   await expect(chat).toBeVisible();
   expect(mock.starts).toEqual([{ replace: false, deep: true }]);
+  await next(page, 'Estimate');
+  await next(page, 'Design');
   await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
   await chat.getByRole('button', { name: 'Send my design' }).click();
   await expect(chat.getByText(/Why this cache\?/)).toBeVisible();
@@ -78,6 +94,7 @@ test('Pro: no Deep toggle (a quiet hint instead) and no report', async ({ page }
   await expect(start.getByTestId('interview-deep-hint')).toContainText('Deep verdicts come with Max');
   await expect(start.getByTestId('interview-deep-hint').getByRole('link', { name: 'See Max' })).toHaveAttribute('href', '../pricing/');
   await start.getByRole('button', { name: 'Start the mock interview' }).click();
+  await openChat(page);
   await expect(page.getByRole('region', { name: 'Mock interview', exact: true })).toBeVisible();
   expect(mock.starts).toEqual([{ replace: false, deep: false }]);
   await page.getByRole('button', { name: 'Finish and get the verdict' }).click();

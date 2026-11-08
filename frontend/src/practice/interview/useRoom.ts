@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { notify } from '../../design/dialogs';
 import type { CodeEditorHandle } from '../../components/Playground/CodeEditor';
 import { useDiagramLayout } from '../../components/Diagram/useDiagramLayout';
 import type { Engine } from '../../hld/engine';
 import type { Problem } from '../types';
 import { parseSolution, runTests, type RunResult } from '../workspace';
-import type { Phase } from '../modes/session';
+import { PHASES, type Phase } from '../modes/session';
 import { loadDesign, saveDesign } from './prefs';
 import { playCue, type Cue } from './sounds';
 
@@ -80,6 +81,28 @@ export function usePhaseCue(phase: Phase, play: (cue: Cue) => void): number {
     setPulse((n) => n + 1);
   }, [phase, play]);
   return pulse;
+}
+
+const at = (p: Phase) => PHASES.findIndex((x) => x.id === p);
+
+/**
+ * The clock's nudge (P49): when the clock's phase passes the stage the user
+ * is on, once per phase, a toast offers to move on and the phase cue plays.
+ * The user still decides; nothing moves by itself.
+ */
+export function useStageNudge(clock: Phase, stage: Phase, running: boolean, onNext: () => void, play: (cue: Cue) => void): void {
+  const nudged = useRef(new Set<Phase>());
+  const next = useRef(onNext);
+  useEffect(() => {
+    next.current = onNext;
+  });
+  useEffect(() => {
+    if (!running || at(clock) <= at(stage) || nudged.current.has(clock)) return;
+    nudged.current.add(clock);
+    const following = PHASES[at(stage) + 1];
+    play('phase');
+    notify({ title: `Time to move on to ${following.label}?`, body: 'The clock is past this stage. Move on when you are ready.', action: { label: `Next: ${following.label}`, onClick: () => next.current() }, duration: 12_000 });
+  }, [clock, stage, running, play]);
 }
 
 /** `play` that is silent while sound is off. */

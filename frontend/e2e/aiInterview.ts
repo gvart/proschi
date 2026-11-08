@@ -44,7 +44,7 @@ const REPORT_TESTS = [
 ];
 
 export interface InterviewMock {
-  turns: { message: string; design?: string; advance?: boolean }[];
+  turns: { message: string; design?: string; advance?: boolean; stage?: string; worksheet?: { label: string; expression: string; unit?: string }[] }[];
   starts: { replace: boolean; deep: boolean }[];
 }
 
@@ -56,7 +56,7 @@ export interface InterviewMock {
  */
 export async function mockInterviews(
   page: Page,
-  opts: { replies: MockReply[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string; runsOutAfter?: number; needed?: number; plan?: 'free' | 'pro' | 'max' },
+  opts: { replies: MockReply[]; known?: string[]; verdict?: typeof PASS_VERDICT; credits?: number; startedAt?: number; open?: string; runsOutAfter?: number; needed?: number; plan?: 'free' | 'pro' | 'max' },
 ): Promise<InterviewMock> {
   const mock: InterviewMock = { turns: [], starts: [] };
   let left = opts.credits ?? 100;
@@ -98,7 +98,7 @@ export async function mockInterviews(
         const grade = { passed: 2, total: 3, solved: false, errors: [], results: REPORT_TESTS };
         return route.fulfill({ json: { report: { ...session, ...(design !== undefined ? { design: { source: design, grade } } : {}) } } });
       }
-      if (req.method() === 'GET') return route.fulfill({ json: { interview: { ...session, phase, turns: mock.turns.length, messages } } });
+      if (req.method() === 'GET') return route.fulfill({ json: { interview: { ...session, phase, turns: mock.turns.length, messages, ...(opts.known ? { known: opts.known.slice(0, mock.turns.length) } : {}) } } });
       if (parts[3] === 'turn') {
         const body = req.postDataJSON() as InterviewMock['turns'][number];
         mock.turns.push(body);
@@ -110,15 +110,16 @@ export async function mockInterviews(
           left = 0;
           phase = 'wrapup';
         }
-        messages.push({ role: 'candidate', text: body.message, at: Date.now(), ...(body.design !== undefined ? { design: true } : {}) });
-        messages.push({ role: 'interviewer', text: reply.text, at: Date.now(), ...(reply.hint ? { hint: reply.hint } : {}) });
+        const stage = body.stage ? { stage: body.stage } : {};
+        messages.push({ role: 'candidate', text: body.message, at: Date.now(), ...stage, ...(body.design !== undefined ? { design: true } : {}) });
+        messages.push({ role: 'interviewer', text: reply.text, at: Date.now(), ...stage, ...(reply.hint ? { hint: reply.hint } : {}) });
         const sse = (event: string, data: unknown) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
         const pieces = reply.text.match(/.{1,12}/gs) ?? [];
         const text =
           pieces.map((t) => sse('text', { text: t })).join('') +
           (reply.hint ? sse('hint', reply.hint) : '') +
           (body.design !== undefined ? sse('grade', { passed: 7, total: 10, solved: false, results: [], errors: [] }) : '') +
-          sse('done', { reply: reply.text, phase, elapsedMs: 1000, turns: mock.turns.length });
+          sse('done', { reply: reply.text, phase, elapsedMs: 1000, turns: mock.turns.length, ...(opts.known ? { known: opts.known.slice(0, mock.turns.length) } : {}) });
         return route.fulfill({ status: 200, headers: { 'Content-Type': 'text/event-stream' }, body: text });
       }
       if (parts[3] === 'finish') {

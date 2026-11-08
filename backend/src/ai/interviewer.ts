@@ -1,6 +1,6 @@
 import { PHASES, PHASE_SHARE, type Duration, type Phase } from '../../../frontend/src/practice/modes/session';
 import { addUsage, emptyUsage, MAX_DESIGN_CHARS, MAX_MESSAGE_CHARS, MAX_TURNS, turnFits, VERDICT_RESERVE, WALL_CLOCK_MS, billedTokens, TOKEN_CAP, type SessionUsage } from './budget';
-import { CALCULATE_TOOL, calculateTool } from './calc';
+import { CALCULATE_TOOL, calculate, calculateTool, CalcError, formatNumber } from './calc';
 import { AiError, collect, HAIKU, malformed, OPUS, SONNET, type ClaudeClient, type MessageParam, type MessageRequest, type MessageResult, type ModelUsage, type TextBlock, type ToolResultBlock, type Usage } from './client';
 import { approxTokens, gradeDesign, type DesignGrade, type ProblemContext } from './context';
 import { knownFactsBlock, knownTopics, revealedIn } from './facts';
@@ -40,6 +40,8 @@ export interface Entry {
   /** The candidate's own words, for the transcript. */
   said?: string;
   phase: Phase;
+  /** The stage the candidate's screen was on (P49); absent before it, when it was the phase. */
+  stage?: Phase;
   /** Milliseconds since the start. */
   at: number;
 }
@@ -169,14 +171,18 @@ function testResultsText(grade: DesignGrade): string {
 }
 
 /** The candidate's turn as the model sees it. Rendered once and stored, so the history never changes. */
-function renderTurn(context: ProblemContext, state: InterviewState, phase: Phase, elapsed: number, message: string, design?: { source: string; grade: DesignGrade }): string {
+function renderTurn(context: ProblemContext, state: InterviewState, phase: Phase, elapsed: number, message: string, design?: { source: string; grade: DesignGrade }, screen?: { stage?: Phase; worksheet?: WorksheetRow[] }): string {
   const ends = phaseEnds(state.durationMin);
+  const stage = screen?.stage;
   const known = new Set(knownTopics(context, state).map((t) => t.id));
   const notAsked = context.topics.filter((t) => t.kind === 'clarify' && !known.has(t.id));
   const attrs = `phase="${phase}" elapsed="${minutes(elapsed)}" phase_left="${minutes(Math.max(0, ends[phase] - elapsed))}" total_left="${minutes(Math.max(0, state.durationMin * 60_000 - elapsed))}"`;
   const parts = [
     ...(phase !== state.phase ? [`The phase changed from ${state.phase} to ${phase}.`] : []),
+    // The stage the candidate's screen is on (P49): they move on themselves, so a screen behind the clock is nudged, never moved.
+    ...(stage ? [`<candidate_screen stage="${stage}">${stage !== phase ? `The candidate's screen is still on the ${stage} stage while the interview is in ${phase}: when it fits, ask in one sentence whether they are ready to move on to ${phase}.` : ''}</candidate_screen>`] : []),
     fence('candidate_message', message),
+    ...(screen?.worksheet?.length ? [fence('candidate_worksheet', worksheetText(screen.worksheet))] : []),
     // What the candidate knows (P38): never asked for again, by the interviewer or the hint.
     knownFactsBlock(context, state),
     // Server text, not the candidate's: the facts behind these stay hidden until asked (the coverage is the hint's, up to the last turn).
@@ -184,6 +190,33 @@ function renderTurn(context: ProblemContext, state: InterviewState, phase: Phase
     ...(design ? [fence('candidate_design', design.source), fence('test_results', testResultsText(design.grade))] : []),
   ];
   return `<turn ${attrs}>\n${parts.join('\n')}\n</turn>`;
+}
+
+/** A row of the candidate's estimation worksheet (P49): what they typed. */
+export interface WorksheetRow {
+  label: string;
+  /** A number or an expression ("10k * 86400"). */
+  expression: string;
+  unit?: string;
+}
+
+export const MAX_WORKSHEET_ROWS = 24;
+
+/** The worksheet as the model sees it, each row's expression evaluated by the server's calculator (src/ai/calc.ts), the authority for its arithmetic. */
+export function worksheetText(rows: readonly WorksheetRow[]): string {
+  return rows
+    .map((r) => {
+      const unit = r.unit ? ` ${r.unit}` : '';
+      let value: string;
+      try {
+        value = `= ${formatNumber(calculate(r.expression).value)}${unit}`;
+      } catch (e) {
+        if (!(e instanceof CalcError)) throw e;
+        value = '(not a number the calculator can evaluate)';
+      }
+      return `- ${r.label}: ${r.expression} ${value}`;
+    })
+    .join('\n');
 }
 
 /** The conversation for Sonnet: a fixed first user message, then the transcript, with the cache breakpoint on the newest turn. */
@@ -201,6 +234,10 @@ export interface TurnInput {
   design?: string;
   /** The candidate moves on to the next phase before the clock does. */
   advance?: boolean;
+  /** The stage the candidate's screen is on (P49); a later one than the phase moves the session on to it. */
+  stage?: Phase;
+  /** The candidate's estimation worksheet as it is now (P49). */
+  worksheet?: WorksheetRow[];
   /** Receives the reply as it streams. */
   onText?: (text: string) => void;
 }
@@ -236,8 +273,10 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
 
   let phase = currentPhase(state, elapsed);
   if (input.advance && phase !== 'wrapup') phase = PHASES[phaseIndex(phase) + 1].id;
+  if (input.stage && phaseIndex(input.stage) > phaseIndex(phase)) phase = input.stage;
+  const stage = input.stage ?? phase;
   const design = input.design !== undefined ? { source: input.design, grade: gradeDesign(context.problem, input.design) } : undefined;
-  const rendered = renderTurn(context, state, phase, elapsed, input.message, design);
+  const rendered = renderTurn(context, state, phase, elapsed, input.message, design, { stage: input.stage, worksheet: input.worksheet });
 
   // Sonnet sees the new turn (twice with a calculation) and the reply; Haiku sees them again in its window.
   const estimate = 3 * approxTokens(rendered) + 2 * REPLY_MAX_TOKENS + HINT_MAX_TOKENS + 3_000;
@@ -247,7 +286,7 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
     ...state,
     phase,
     phaseStarts: state.phaseStarts[phase] === undefined ? { ...state.phaseStarts, [phase]: elapsed } : state.phaseStarts,
-    transcript: [...state.transcript, { role: 'candidate', text: rendered, said: input.message, phase, at: elapsed }],
+    transcript: [...state.transcript, { role: 'candidate', text: rendered, said: input.message, phase, stage, at: elapsed }],
     turns: state.turns + 1,
     ...(design ? { design } : {}),
   };
@@ -270,7 +309,7 @@ export async function turn(deps: Deps, state: InterviewState, input: TurnInput):
   next = {
     ...next,
     usage: addUsage(next.usage, SONNET, sonnetUsed),
-    transcript: [...next.transcript, { role: 'interviewer', text: reply_, phase, at: elapsed }],
+    transcript: [...next.transcript, { role: 'interviewer', text: reply_, phase, stage, at: elapsed }],
     // The facts the reply stated, by their numbers: kept even when the hint below fails (P38).
     revealed: union(next.revealed, revealedIn(context.topics, reply_)),
   };

@@ -158,6 +158,26 @@ describe('AI interviews', () => {
     expect(await balanceMc(e, userId)).toBe(100_000 - verdictHoldMc(e) - charge.charged_mc);
   });
 
+  it('takes the stage and the worksheet with a turn, tags the transcript by stage and lists the facts learned (P49)', async () => {
+    const calls = claude({ reply: () => sseResponse(streamEvents('About 100M new links a month.')) });
+    const { token } = await user();
+    const id = await started(token);
+    expect((await turnOf(token, id, { message: 'hi', stage: 'later' })).status).toBe(400);
+    expect((await turnOf(token, id, { message: 'hi', worksheet: [{ label: 'x' }] })).status).toBe(400);
+    expect((await turnOf(token, id, { message: 'hi', worksheet: Array.from({ length: 25 }, () => ({ label: 'x', expression: '1' })) })).status).toBe(400);
+    expect(calls).toHaveLength(0);
+
+    const asked = await events(await turnOf(token, id, { message: 'How many new links a month?', stage: 'clarify' }));
+    expect(asked.at(-1)!.data).toMatchObject({ phase: 'clarify', known: [expect.any(String)] });
+    const res = await turnOf(token, id, { message: 'My numbers', stage: 'estimate', worksheet: [{ label: 'Writes per second', expression: '100M / 30 / 86400', unit: '/s' }] });
+    expect((await events(res)).at(-1)!.data).toMatchObject({ phase: 'estimate' });
+    expect(JSON.stringify(calls.at(-2)!.body.messages)).toContain('Writes per second: 100M / 30 / 86400 = 38.5802 /s');
+
+    const got = (await (await call(`/api/interviews/${id}`, { token })).json()) as { interview: { messages: { role: string; stage?: string }[]; known: string[] } };
+    expect(got.interview.messages.map((m) => m.stage)).toEqual(['clarify', 'clarify', 'clarify', 'estimate', 'estimate']);
+    expect(got.interview.known).toHaveLength(1);
+  });
+
   it('answers 404 for another user’s session', async () => {
     claude();
     const owner = await user();

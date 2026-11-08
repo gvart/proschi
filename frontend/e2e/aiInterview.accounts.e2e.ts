@@ -12,6 +12,21 @@ import { answerDialog, expect, test, toSetupStep } from './fixtures';
  */
 
 const chatOf = (page: Page) => page.getByRole('region', { name: 'Mock interview', exact: true });
+const currentStage = (page: Page) => page.getByRole('list', { name: 'Stages' }).locator('[aria-current="step"]');
+
+/** Past the brief (typed out on Clarify): a key shows it all, then to the questions. */
+async function openChat(page: Page) {
+  await expect(page.getByTestId('brief')).toBeVisible();
+  await page.keyboard.press('Space');
+  await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+}
+
+/** Next, and the turn it sends answered (P49). */
+async function next(page: Page, label: 'Estimate' | 'Design' | 'Wrap-up') {
+  await page.getByRole('button', { name: `Next: ${label}` }).click();
+  await expect(currentStage(page)).toContainText(label);
+  await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+}
 
 /** From the set-up, on URL Shortener: Start, then the room's chat. */
 async function startInterview(page: Page, opts: { talk?: 'Voice' | 'Text' } = {}) {
@@ -22,6 +37,7 @@ async function startInterview(page: Page, opts: { talk?: 'Voice' | 'Text' } = {}
   }
   await toSetupStep(page);
   await page.getByRole('button', { name: 'Start the mock interview' }).click();
+  await openChat(page);
   const chat = chatOf(page);
   await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
   return chat;
@@ -119,6 +135,8 @@ test.describe('mock interview with the interviewer', () => {
     const mock = await mockInterviews(page, {
       replies: [
         { text: 'About 100 million new links a month, and reads outnumber writes 100 to 1.', hint: { kind: 'focus', text: 'Ask how fast a redirect must be.' } },
+        { text: 'How many writes a second is that?', phase: 'estimate' },
+        { text: 'Show me the design when it is ready.', phase: 'design' },
         { text: 'Seven of ten tests pass. What happens when the cache misses?', hint: { kind: 'improve', text: 'Explain the cache miss path and its p99.' }, phase: 'design' },
         { text: 'Good. Where is the bottleneck now?', hint: { kind: 'focus', text: 'Name the component that saturates first.' }, phase: 'design' },
       ],
@@ -147,11 +165,13 @@ test.describe('mock interview with the interviewer', () => {
     await page.getByRole('button', { name: 'Start the mock interview' }).click();
 
     await expect(page).toHaveURL(/#\/interview\/url-shortener$/);
+    await expect(page.getByRole('timer')).toHaveAccessibleName(/^Time left: (45:00|44:5\d)$/);
+    await expect(currentStage(page)).toContainText('Clarify');
+    // Clarify opens on the brief, then pins it over the chat.
+    await openChat(page);
+    await expect(page.getByTestId('pinned-brief')).toContainText('URL Shortener');
     const chat = chatOf(page);
     await expect(chat.getByText(/Today we'll design URL Shortener/)).toBeVisible();
-    await expect(page.getByRole('timer')).toHaveAccessibleName(/^Time left: (45:00|44:5\d)$/);
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Clarify');
-    await expect(chat.getByText('The problem: URL Shortener')).toBeVisible();
 
     const box = chat.getByRole('textbox', { name: 'Your answer' });
     await box.fill('How many new links a month, and what is the read to write ratio?');
@@ -163,6 +183,9 @@ test.describe('mock interview with the interviewer', () => {
     await expect(toasts.first()).toHaveText('Ask how fast a redirect must be.');
     await expect(chat.getByTestId('coaching-card')).toHaveCount(1);
 
+    // Next moves on, telling the interviewer; the design is sent from the whiteboard's stages.
+    await next(page, 'Estimate');
+    await next(page, 'Design');
     await box.fill('Here is my design.');
     await chat.getByRole('button', { name: 'Send my design' }).click();
     await expect(chat.getByText(/What happens when the cache misses\?/)).toBeVisible();
@@ -173,18 +196,22 @@ test.describe('mock interview with the interviewer', () => {
     // Never more than two toasts at once: the oldest went. All three stay in the chat.
     await expect(toasts).toHaveCount(2);
     await expect(toasts).toHaveText(['Explain the cache miss path and its p99.', 'Name the component that saturates first.']);
+    // The chat shows this stage's conversation; the earlier stages are behind an expander.
+    await expect(chat.getByTestId('coaching-card')).toHaveCount(2);
+    await chat.getByTestId('show-earlier').click();
     await expect(chat.getByTestId('coaching-card')).toHaveCount(3);
-    expect(mock.turns).toHaveLength(3);
-    expect(mock.turns[0]).toEqual({ message: 'How many new links a month, and what is the read to write ratio?' });
-    expect(mock.turns[1].message).toBe('Here is my design.');
-    expect(mock.turns[1].design).toContain('import "problem.proschi"');
+    expect(mock.turns).toHaveLength(5);
+    expect(mock.turns[0]).toEqual({ message: 'How many new links a month, and what is the read to write ratio?', stage: 'clarify' });
+    expect(mock.turns[1]).toMatchObject({ message: "I'm ready to move on to the estimate stage.", stage: 'estimate' });
+    expect(mock.turns[3].message).toBe('Here is my design.');
+    expect(mock.turns[3].design).toContain('import "problem.proschi"');
 
-    // A reload resumes the session from the server.
+    // A reload resumes the session from the server, on the same stage.
     await page.reload();
     await expect(chat.getByText('Good. Where is the bottleneck now?')).toBeVisible();
     await expect(toasts).toHaveCount(0);
-    await expect(chat.getByTestId('coaching-card')).toHaveCount(3);
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Design');
+    await expect(chat.getByTestId('coaching-card')).toHaveCount(2);
+    await expect(currentStage(page)).toContainText('Design');
 
     await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
     await answerDialog(page, 'Finish');
@@ -213,7 +240,7 @@ test.describe('mock interview with the interviewer', () => {
     await page.getByRole('radiogroup', { name: 'Difficulty' }).getByRole('radio', { name: 'Easy' }).click();
     await toSetupStep(page);
     await page.getByRole('button', { name: 'Start the mock interview' }).click();
-    await expect(chatOf(page)).toBeVisible();
+    await expect(page.getByTestId('brief')).toBeVisible();
     expect(mock.starts).toHaveLength(1);
     expect(['pastebin', 'rate-limiter', 'snowflake-ids', 'shopping-cart', 'url-shortener']).toContain(problems[0]);
     await expect(page).toHaveURL(new RegExp(`#/interview/${problems[0]}$`));
@@ -252,11 +279,13 @@ test.describe('mock interview with the interviewer', () => {
       if (choice === 'resume') {
         await open.getByRole('button', { name: 'Resume it' }).click();
         await expect(page).toHaveURL(/#\/interview\/url-shortener$/);
+        await openChat(page);
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toBeVisible();
         expect(mock.starts).toEqual([{ replace: false, deep: false }]);
       } else {
         await open.getByRole('button', { name: 'End it and start a new one' }).click();
         await expect(page).toHaveURL(/#\/interview\/pastebin$/);
+        await openChat(page);
         await expect(chat.getByText(/Today we'll design/)).toBeVisible();
         await expect(chat.getByText('Welcome back: where were we on the read path?')).toHaveCount(0);
         expect(mock.starts).toEqual([{ replace: false, deep: false }, { replace: true, deep: false }]);
@@ -294,7 +323,7 @@ test.describe('mock interview with the interviewer', () => {
     await expect(page.getByTestId('consent-line')).toHaveCount(0);
     await expect(page.getByTestId('ai-credits')).toHaveCount(0);
     await page.getByRole('button', { name: 'Start the interview' }).click();
-    await expect(page.getByRole('region', { name: 'Interview on your own' }).getByRole('button', { name: 'Ask: How fast must a redirect be?' })).toBeVisible();
+    await expect(page.getByTestId('brief')).toBeVisible();
   });
 
   test('out of credits mid-interview: a calm note, the wrap-up and the verdict', async ({ page }) => {
@@ -305,7 +334,8 @@ test.describe('mock interview with the interviewer', () => {
     await chat.getByRole('textbox', { name: 'Your answer' }).fill('How many links a month?');
     await chat.getByRole('button', { name: 'Send', exact: true }).click();
     await expect(chat.getByTestId('out-of-credits')).toHaveText(/out of credits, so the interviewer is wrapping up\. Your verdict is already paid for/);
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Wrap-up');
+    // The stage stays the user's to move on; finishing works from any of them.
+    await expect(currentStage(page)).toContainText('Clarify');
     await page.getByRole('button', { name: 'Finish and get the verdict' }).click();
     await answerDialog(page, 'Finish');
     await expect(page.getByRole('region', { name: 'Interview verdict' }).getByTestId('verdict-result')).toHaveText('Pass');
@@ -313,21 +343,74 @@ test.describe('mock interview with the interviewer', () => {
 
   test('Check my design runs the tests on the whiteboard and can send it to the interviewer', async ({ page }) => {
     await mockSignedIn(page);
-    const mock = await mockInterviews(page, { replies: [{ text: 'Thanks, I see the design.' }] });
+    const mock = await mockInterviews(page, { replies: [{ text: 'Numbers?' }, { text: 'Design?' }, { text: 'Thanks, I see the design.' }] });
     const chat = await startInterview(page);
+    await expect(page.getByRole('button', { name: 'Check my design' })).toHaveCount(0);
+    await next(page, 'Estimate');
+    await next(page, 'Design');
     await page.getByRole('button', { name: 'Check my design' }).click();
     const checks = page.getByTestId('checks');
     await expect(checks.getByRole('status')).toHaveText(/^\d+ of 10 checks pass$/);
     await checks.getByRole('button', { name: 'Send my design to the interviewer' }).click();
     await expect(chat.getByText('Thanks, I see the design.')).toBeVisible();
-    expect(mock.turns[0].design).toContain('import "problem.proschi"');
+    expect(mock.turns[2].design).toContain('import "problem.proschi"');
+  });
+
+  test('each turn sends the stage and, from Estimate on, the worksheet; the facts learned and the transcript follow the stage', async ({ page }) => {
+    await mockSignedIn(page);
+    const mock = await mockInterviews(page, {
+      known: ['New links: 100M a month', 'Reads outnumber writes 100 to 1'],
+      replies: [{ text: 'About 100 million new links a month.' }, { text: 'How many writes a second is that?' }, { text: 'Right order of magnitude.' }],
+    });
+    const chat = await startInterview(page);
+    const box = chat.getByRole('textbox', { name: 'Your answer' });
+    await box.fill('How many new links a month?');
+    await box.press('Enter');
+    await expect(chat.getByText('About 100 million new links a month.')).toBeVisible();
+
+    await next(page, 'Estimate');
+    await expect(page.getByRole('heading', { level: 2, name: 'Back-of-the-envelope numbers' })).toBeFocused();
+    // What the interviewer has told the candidate, from the server (P38).
+    await expect(page.getByTestId('requirements').getByRole('listitem')).toHaveText(['New links: 100M a month', 'Reads outnumber writes 100 to 1']);
+    const sheet = page.getByTestId('worksheet');
+    await sheet.getByLabel('Writes per second: value').fill('100M / 30 / 86400');
+    await expect(sheet.getByText('= 38.6 /s')).toBeVisible();
+    await sheet.getByRole('button', { name: 'Add row' }).click();
+    await sheet.getByLabel('What this row estimates').last().fill('Short codes in 5 years');
+    await sheet.getByLabel('Short codes in 5 years: value').fill('6B');
+    await box.fill('About 39 writes a second.');
+    await box.press('Enter');
+    await expect(chat.getByText('Right order of magnitude.')).toBeVisible();
+
+    expect(mock.turns.map((t) => t.stage)).toEqual(['clarify', 'estimate', 'estimate']);
+    expect(mock.turns[0].worksheet).toBeUndefined();
+    expect(mock.turns[2].worksheet).toEqual([
+      { label: 'Writes per second', expression: '100M / 30 / 86400', unit: '/s' },
+      { label: 'Short codes in 5 years', expression: '6B' },
+    ]);
+    // This stage's conversation only, with Clarify's behind the expander.
+    await expect(chat.getByText('About 100 million new links a month.')).toHaveCount(0);
+    await chat.getByTestId('show-earlier').click();
+    await expect(chat.getByText('About 100 million new links a month.')).toBeVisible();
+
+    // Clarify, read-only from the stepper; the worksheet survives a reload.
+    await page.getByRole('button', { name: 'View Clarify (read-only)' }).click();
+    await expect(page.getByTestId('stage-banner')).toHaveText(/^Viewing Clarify \(read-only\)\s*·\s*Back to Estimate$/);
+    const past = page.getByTestId('past-stage');
+    await expect(past.getByText('How many new links a month?')).toBeVisible();
+    await expect(past.getByRole('textbox', { name: 'Your answer' })).toHaveCount(0);
+    await page.getByTestId('stage-banner').getByRole('button', { name: 'Back to Estimate' }).click();
+    await page.reload();
+    await expect(page.getByTestId('worksheet').getByLabel('Writes per second: value')).toHaveValue('100M / 30 / 86400');
   });
 
   test('the coaching toasts sit clear of the chat on the right', async ({ page }) => {
     await page.setViewportSize({ width: 1440, height: 900 });
     await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
+    await mockInterviews(page, { replies: [{ text: 'Numbers?' }, { text: 'Design?' }, { text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }] });
     const chat = await startInterview(page);
+    await next(page, 'Estimate');
+    await next(page, 'Design');
     await chat.getByRole('textbox', { name: 'Your answer' }).fill('Here is my design.');
     await chat.getByRole('button', { name: 'Send my design' }).click();
     await expect(page.getByTestId('hint-toast')).toBeVisible();
@@ -364,7 +447,11 @@ test.describe('mock interview with the interviewer', () => {
     await expect(status).toHaveAttribute('data-state', 'sending');
     await expect(chat.getByText('About 100 million links a month.')).toBeVisible({ timeout: 5000 });
     // The reply is spoken while the mic waits, then it listens again.
-    await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken)).toEqual(['About 100 million links a month.']);
+    // The brief was read aloud first (P49), then the reply.
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken.length)).toBe(2);
+    const spoken = await page.evaluate(() => (window as unknown as { __spoken: string[] }).__spoken);
+    expect(spoken[0]).toMatch(/^URL Shortener\. Design a service that turns long URLs/);
+    expect(spoken[1]).toBe('About 100 million links a month.');
     await expect(status).toHaveAttribute('data-state', 'listening');
     await expect(mic).toHaveAttribute('data-state', 'listening');
 
@@ -406,8 +493,18 @@ test.describe('mock interview on a phone', () => {
 
   test('Chat first, the toasts above the composer, and a reply on the whiteboard says so with a way back', async ({ page }) => {
     await mockSignedIn(page);
-    await mockInterviews(page, { replies: [{ text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }, { text: 'Go on.' }] });
+    await mockInterviews(page, { replies: [{ text: 'Numbers?' }, { text: 'Design?' }, { text: 'Seven of ten tests pass.', hint: { kind: 'improve', text: 'Explain the cache miss path.' } }, { text: 'Go on.' }] });
     const chat = await startInterview(page);
+    // A stage at a time: Estimate has its own Worksheet and Chat tabs, Chat first; the Next bar sits at the foot.
+    const nextBar = page.getByTestId('next-bar');
+    await nextBar.getByRole('button', { name: 'Next: Estimate' }).click();
+    const estimate = page.getByRole('tablist', { name: 'Estimate' });
+    await expect(estimate.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');
+    await expect(chat.getByText('Numbers?')).toBeVisible();
+    await estimate.getByRole('tab', { name: 'Worksheet' }).click();
+    await expect(page.getByTestId('worksheet')).toBeVisible();
+    await nextBar.getByRole('button', { name: 'Next: Design' }).click();
+    await expect(chat.getByText('Design?')).toBeVisible();
     const tabs = page.getByRole('tablist', { name: 'Room' });
     await expect(tabs.getByRole('tab')).toHaveText(['Chat', 'Whiteboard']);
     await expect(tabs.getByRole('tab', { name: 'Chat' })).toHaveAttribute('aria-selected', 'true');

@@ -12,6 +12,18 @@ import { answerDialog, canvasNodes, chooseOption, codeEditor, editorText, expect
 const room = (page: Page) => page.getByTestId('interview-room');
 const rail = (page: Page) => page.getByRole('region', { name: 'Interview on your own' });
 const roomProblem = (page: Page) => new URL(page.url()).hash.replace('#/interview/', '');
+const currentStage = (page: Page) => page.getByRole('list', { name: 'Stages' }).locator('[aria-current="step"]');
+
+/** Clicks Next until the room is on `stage` (P49). */
+async function toStage(page: Page, stage: 'Estimate' | 'Design' | 'Wrap-up') {
+  const order = ['Clarify', 'Estimate', 'Design', 'Wrap-up'];
+  const now = (await currentStage(page).textContent()) ?? '';
+  const from = order.findIndex((label) => now.includes(label));
+  for (const label of order.slice(from + 1, order.indexOf(stage) + 1)) {
+    await page.getByRole('button', { name: `Next: ${label}` }).click();
+    await expect(currentStage(page)).toContainText(label);
+  }
+}
 
 /** Records the sound cues played (sounds.ts dispatches one event per cue) in `window.__cues`. */
 async function recordCues(page: Page) {
@@ -73,7 +85,7 @@ test.describe('mock interview set-up', () => {
     await expect(room(page)).toBeVisible();
     const first = roomProblem(page);
     expect(first).not.toBe('hello-proschi');
-    await expect(rail(page).getByText(/^The problem: /)).toBeVisible();
+    await expect(page.getByTestId('brief')).toBeVisible();
 
     // Leaving keeps it (paused) and offers it back; the next surprise is another problem.
     await page.getByRole('button', { name: 'Exit the interview' }).click();
@@ -119,40 +131,59 @@ test.describe('mock interview set-up', () => {
 });
 
 test.describe('the interview room on your own', () => {
-  test('clarify, estimate, design and wrap up against the clock, then the summary and a new interview', async ({ page }) => {
+  test('clarify, estimate, design and wrap up with Next, against the clock, then the summary and a new interview', async ({ page }) => {
     await recordCues(page);
     await startOn(page, 'URL Shortener', '30 min');
     await expect(page.getByRole('timer')).toHaveAccessibleName(/^Time left: (30:00|29:5\d)\. Pause the clock$/);
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Clarify');
+    await expect(currentStage(page)).toContainText('Clarify');
 
-    // Clarify: the scale and constraints are hidden until asked for.
-    await rail(page).getByRole('button', { name: 'Ask: How fast must a redirect be?' }).click();
-    await expect(rail(page).getByText('Good question')).toBeVisible();
-    await rail(page).getByRole('button', { name: 'Ask: Can I use Kubernetes?' }).click();
-    await expect(rail(page).getByText('Weak question')).toBeVisible();
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Estimate');
+    // Clarify: the brief is typed out until a key shows it all; the scale and constraints are hidden until asked for.
+    const brief = page.getByTestId('brief');
+    await expect(brief).toHaveAttribute('data-typing', 'true');
+    await page.keyboard.press('Space');
+    await expect(brief).not.toHaveAttribute('data-typing');
+    await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+    await expect(page.getByTestId('pinned-brief')).toBeVisible();
+    await page.getByRole('button', { name: 'Ask: How fast must a redirect be?' }).click();
+    await expect(page.getByText('Good question')).toBeVisible();
+    await page.getByRole('button', { name: 'Ask: Can I use Kubernetes?' }).click();
+    await expect(page.getByText('Weak question')).toBeVisible();
+
+    // Estimate: the requirements learned, and the worksheet's rows scored against their range.
+    await page.getByRole('button', { name: 'Next: Estimate' }).click();
+    await expect(currentStage(page)).toContainText('Estimate');
+    await expect(page.getByRole('heading', { level: 2, name: 'Back-of-the-envelope numbers' })).toBeFocused();
     await expect.poll(() => cues(page)).toContain('phase');
+    await expect(page.getByTestId('requirements')).toContainText('p99 of a redirect under 50 ms');
+    const sheet = page.getByTestId('worksheet');
+    await sheet.getByLabel('How many short codes are created in a year at 100 a second?').fill('100 * 86400 * 365');
+    await expect(sheet.getByText('= 3.15B codes')).toBeVisible();
+    await sheet.getByRole('button', { name: 'Check' }).first().click();
+    await expect(sheet.getByText(/In range: the answer is 3,200,000,000 codes/)).toBeVisible();
+    await expect(page.getByTestId('worksheet-score')).toHaveText('1 of 3 in range');
+    await sheet.getByRole('button', { name: 'Add row' }).click();
+    await expect(sheet.getByTestId('worksheet-row')).toHaveCount(4);
+    await expect(sheet.getByLabel('What this row estimates')).toBeFocused();
+    await page.getByLabel('Calculator').fill('2^10');
+    await expect(page.getByTestId('calc-result')).toHaveText('= 1.02k');
 
-    // Estimate: graded against a range.
-    await rail(page).getByLabel('How many short codes are created in a year at 100 a second?').fill('3B');
-    await rail(page).getByRole('button', { name: 'Check' }).first().click();
-    await expect(rail(page).getByText(/In range: the answer is 3,200,000,000 codes/)).toBeVisible();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
-
-    // Design: checking runs the tests over the whiteboard.
+    // Design: the whiteboard; checking runs the tests over it.
+    await page.getByRole('button', { name: 'Next: Design' }).click();
     await rail(page).getByRole('button', { name: 'Check my design' }).click();
     await expect(page.getByTestId('checks').getByRole('status')).toHaveText(/^\d+ of 10 checks pass$/);
     await expect.poll(() => cues(page)).toContain('fail');
     await expect(rail(page).getByText(/Last check: \d+ of 10 pass/)).toBeVisible();
+    await rail(page).getByRole('button', { name: /^Requirements \(1\) · Estimates \(1\)/ }).click();
+    await expect(page.getByTestId('estimates-summary')).toContainText('3.15B codes');
 
     // Pausing stops the clock, and the interview survives a reload.
     await page.getByRole('timer').click();
     await expect(page.getByRole('timer')).toHaveAccessibleName(/Resume the clock$/);
     await page.reload();
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Design');
+    await expect(currentStage(page)).toContainText('Design');
 
-    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await page.getByRole('button', { name: 'Next: Wrap-up' }).click();
+    await expect(page.getByRole('button', { name: /^Next/ })).toHaveCount(0);
     await rail(page).getByLabel(/I can explain one trade-off/).check();
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
@@ -172,8 +203,44 @@ test.describe('the interview room on your own', () => {
     expect(roomProblem(page)).not.toBe('url-shortener');
   });
 
+  test('past stages open read-only from the stepper, with a banner back to the current one', async ({ page }) => {
+    await page.emulateMedia({ reducedMotion: 'reduce' });
+    await startOn(page, 'URL Shortener');
+    // Under reduced motion the brief is shown whole at once.
+    await expect(page.getByTestId('brief')).not.toHaveAttribute('data-typing');
+    await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+    await page.getByRole('button', { name: 'Ask: How fast must a redirect be?' }).click();
+    await toStage(page, 'Estimate');
+    await page.getByTestId('worksheet').getByLabel('How many short codes are created in a year at 100 a second?').fill('1B');
+    await page.getByTestId('worksheet').getByRole('button', { name: 'Check' }).first().click();
+    await toStage(page, 'Design');
+
+    await page.getByRole('button', { name: 'View Clarify (read-only)' }).click();
+    const banner = page.getByTestId('stage-banner');
+    await expect(banner).toContainText('Viewing Clarify (read-only)');
+    await expect(page.getByRole('heading', { level: 2, name: 'Clarify, as it was' })).toBeFocused();
+    const past = page.getByTestId('past-stage');
+    await expect(past.getByText('How fast must a redirect be?')).toBeVisible();
+    await expect(past.getByRole('button', { name: /^Ask:/ })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Next: Wrap-up' })).toBeDisabled();
+
+    await page.getByRole('button', { name: 'View Estimate (read-only)' }).click();
+    await expect(banner).toContainText('Viewing Estimate (read-only)');
+    await expect(past.getByLabel('Your estimate').first()).toHaveAttribute('readonly', '');
+    await expect(past.getByRole('button', { name: 'Check' })).toHaveCount(0);
+    await expect(past.getByRole('button', { name: 'Add row' })).toHaveCount(0);
+
+    await banner.getByRole('button', { name: 'Back to Design' }).click();
+    await expect(banner).toHaveCount(0);
+    await expect(page.getByRole('region', { name: 'Whiteboard' })).toBeVisible();
+    await expect(currentStage(page)).toContainText('Design');
+  });
+
   test('the code is hidden until Show code, which opens a drawer beside the whiteboard and is remembered', async ({ page }) => {
     await startOn(page, 'URL Shortener');
+    // The whiteboard's stages only: no code or checks while clarifying.
+    await expect(page.getByRole('button', { name: 'Show code' })).toHaveCount(0);
+    await toStage(page, 'Design');
     await expect(page.getByRole('region', { name: 'Whiteboard' })).toBeVisible();
     await expect(codeEditor(page)).toHaveCount(0);
     const show = page.getByRole('button', { name: 'Show code' });
@@ -205,22 +272,20 @@ test.describe('the interview room on your own', () => {
     await page.getByRole('button', { name: 'Start the interview' }).click();
     const sound = page.getByTestId('room-sound');
     await expect(sound).toHaveAttribute('aria-pressed', 'false');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await expect(page.getByRole('list', { name: 'Phases' }).locator('[aria-current="step"]')).toContainText('Estimate');
+    await toStage(page, 'Estimate');
     expect(await cues(page)).toEqual([]);
 
     await sound.click();
     await expect(sound).toHaveAttribute('aria-pressed', 'true');
     await page.reload();
     await expect(page.getByTestId('room-sound')).toHaveAttribute('aria-pressed', 'true');
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await toStage(page, 'Design');
     await expect.poll(() => cues(page)).toEqual(['phase']);
   });
 
   test('an easy problem solved with the mouse alone: settings, Flows and Check my design', async ({ page }) => {
     await startOn(page, 'Snowflake IDs');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await toStage(page, 'Design');
     const board = page.getByRole('region', { name: 'Whiteboard' });
 
     // 15 generators, from the settings of the component.
@@ -264,9 +329,7 @@ test.describe('the interview room on your own', () => {
 test.describe('an interview as progress', () => {
   test('one too short to count says so, with the bar, and earns nothing', async ({ page }) => {
     await startOn(page, 'URL Shortener', '30 min');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
-    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await toStage(page, 'Wrap-up');
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
     const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
@@ -282,11 +345,10 @@ test.describe('an interview as progress', () => {
   test('a finished interview on your own adds XP and a badge on the result, once, and joins the progress page', async ({ page }) => {
     await page.clock.install();
     await startOn(page, 'URL Shortener', '30 min');
-    await rail(page).getByRole('button', { name: 'Reveal the rest' }).click();
-    await rail(page).getByRole('button', { name: 'Start designing' }).click();
+    await toStage(page, 'Design');
     // Eleven minutes of design: past the 10 minutes an interview needs to count.
     await page.clock.fastForward('11:00');
-    await rail(page).getByRole('button', { name: 'Wrap up' }).click();
+    await toStage(page, 'Wrap-up');
     await rail(page).getByRole('button', { name: 'Finish the interview' }).click();
 
     const progress = page.getByTestId('interview-result').getByRole('region', { name: 'Your progress' });
@@ -317,8 +379,15 @@ test.describe('an interview as progress', () => {
 test.describe('the interview room on a phone', () => {
   test.use({ viewport: { width: 390, height: 844 }, isMobile: true, hasTouch: true });
 
-  test('the interview tab first, then the whiteboard; the code tab only with Show code', async ({ page }) => {
+  test('a stage at a time with the Next bar; the interview tab first, then the whiteboard; the code tab only with Show code', async ({ page }) => {
     await startOn(page, 'URL Shortener');
+    const next = page.getByTestId('next-bar');
+    await expect(next.getByRole('button', { name: 'Next: Estimate' })).toBeVisible();
+    await page.keyboard.press('Space');
+    await page.getByRole('button', { name: 'Ask your clarifying questions' }).click();
+    await next.getByRole('button', { name: 'Next: Estimate' }).click();
+    await expect(page.getByTestId('worksheet')).toBeVisible();
+    await next.getByRole('button', { name: 'Next: Design' }).click();
     const tabs = page.getByRole('tablist', { name: 'Room' });
     await expect(tabs.getByRole('tab')).toHaveText(['Interview', 'Whiteboard']);
     await expect(tabs.getByRole('tab', { name: 'Interview' })).toHaveAttribute('aria-selected', 'true');
@@ -331,5 +400,9 @@ test.describe('the interview room on a phone', () => {
     await expect(tabs.getByRole('tab')).toHaveText(['Interview', 'Whiteboard', 'Code']);
     const width = await page.evaluate(() => document.documentElement.scrollWidth);
     expect(width).toBeLessThanOrEqual(390);
+    // The wrap-up's bar finishes, and the toasts sit above it.
+    await next.getByRole('button', { name: 'Next: Wrap-up' }).click();
+    await expect(next.getByRole('button', { name: 'Finish' })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => document.documentElement.style.getPropertyValue('--ps-toast-bottom'))).not.toBe('');
   });
 });

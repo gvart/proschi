@@ -451,3 +451,38 @@ id; don't rewrite old ones.
   badges, marked seen so the toast does not repeat them; reopened later, the
   badges earned as it ended. The progress page lists the interviews on your
   own (date, problem, how it ended) under the AI interview history.
+- **P49. The interview room as four stage screens.** The room (P45) is
+  now a screen per phase, and the user moves on with "Next: <stage>"
+  (top bar; a sticky bar on phones, above which the toasts sit). Nothing
+  advances by itself: when the clock's phase passes the stage, a toast
+  offers to move on and the phase cue plays, and with the interviewer each
+  turn carries `<candidate_screen stage="…">`, so a screen behind the
+  clock is nudged in a sentence ("ready to estimate?"). **Clarify** types
+  the brief out word by word (a click or a key shows it all, none under
+  reduced motion, the whole text announced once in a status), reads it
+  aloud in voice mode, then pins it, compact, over a centred chat (on
+  your own, the questions to pick become the conversation). **Estimate**
+  has "Requirements so far" (with the interviewer, the known facts of
+  P38, from the session's `known`; on your own, the good questions
+  asked) beside a worksheet: rows of a number or an expression and a
+  unit, "Add row", and a calculator. On your own the problem's estimate
+  questions are its rows, checked against their range as before ("1 of 3
+  in range"). With the interviewer each turn from Estimate on sends the
+  filled rows (`worksheet`, at most 24), which the server evaluates with
+  its calculator (`src/ai/calc.ts`, the authority) into
+  `<candidate_worksheet>`. **Design** is the whiteboard room as it was,
+  with the requirements and the estimates folded at the top of the rail;
+  **Wrap-up** keeps the diagram editable, widens the chat and makes
+  finishing the primary action. Next with the interviewer sends a short
+  turn saying so (or what is in the box). A stage later than the
+  session's phase moves the session on to it (`advance` still works);
+  the transcript records each entry's `stage`, so the session view tags
+  messages by stage and each screen shows its own conversation, the
+  earlier ones behind "Show earlier stages". Past stages open read-only
+  from the stepper under a banner ("Viewing Clarify (read-only) · Back
+  to Design"); the current stage's chat stays live. The stage (with the
+  interviewer), the worksheet and whether the brief was read are kept in
+  this browser per interview, so a reload lands where it was; on your
+  own the stage is the session's phase. Late clarifying questions on
+  your own are not possible past Clarify (the questions are a fixed
+  list); with the interviewer the chat of every stage takes them.
