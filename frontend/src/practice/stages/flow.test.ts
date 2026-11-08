@@ -13,12 +13,13 @@ describe('the stages of a practice problem', () => {
     expect(nextOf('wrapup')).toBeUndefined();
   });
 
-  it('opens on the lesson until it is read, then where the learner left off', () => {
+  it('opens where the learner left off, a first visit on Clarify; the lesson only when asked for', () => {
     const atDesign = goTo(EMPTY_NOTES, 'design');
-    expect(openingScreen(true, 'unread', false, atDesign)).toBe('lesson');
-    expect(openingScreen(true, 'unread', true, atDesign)).toBe('design');
-    expect(openingScreen(true, 'always', true, atDesign)).toBe('lesson');
-    expect(openingScreen(false, 'always', false, EMPTY_NOTES)).toBe('clarify');
+    expect(openingScreen(true, undefined, EMPTY_NOTES)).toBe('clarify');
+    expect(openingScreen(true, undefined, atDesign)).toBe('design');
+    expect(openingScreen(true, undefined, goTo(atDesign, 'estimate'))).toBe('estimate');
+    expect(openingScreen(true, 'always', atDesign)).toBe('lesson');
+    expect(openingScreen(false, 'always', EMPTY_NOTES)).toBe('clarify');
   });
 
   it('remembers the furthest stage, so going back keeps the later ones open', () => {

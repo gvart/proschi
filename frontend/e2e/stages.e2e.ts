@@ -4,7 +4,7 @@ import { expect, test, waitForCanvas } from './fixtures';
 
 /**
  * A practice problem worked through in stages (docs/design/paid-plans.md
- * P50): the lesson, then Clarify, Estimate, Design and Wrap-up, each asking
+ * P50), on the roadmap only (P51): the lesson, then Clarify, Estimate, Design and Wrap-up, each asking
  * for your own answer before it shows the facts or the worked answer. Going
  * back keeps the notes, and a reload lands where you were. With
  * STAGES_SHOTS=<dir>, the walk-through saves a screenshot of every stage.
@@ -35,11 +35,16 @@ for (const [device, viewport] of [
       }, SOLUTION);
       await page.goto('practice/#/roadmap/url-shortener');
 
-      // The lesson first, with the stages on top.
-      await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
+      // A first visit opens on Clarify, even with the lesson unread (P52), with the stages on top.
+      await expect(page.getByTestId('stage-clarify')).toBeVisible();
+      await expect(page.getByRole('article', { name: 'Lesson' })).toHaveCount(0);
       await expect(rail(page).getByRole('button')).toHaveText(['1Lesson', '2Clarify', '3Estimate', '4Design', '5Wrap-up']);
       await expect(rail(page).getByRole('button', { name: 'Estimate' })).toBeDisabled();
+      // The lesson is one click away in the rail, and leads back to Clarify.
+      await rail(page).getByRole('button', { name: 'Lesson' }).click();
+      await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
       await expect(page.locator('.cm-content')).toHaveCount(0);
+      await expect(next(page)).toHaveText('Next: Clarify');
       await shot(page, `${device}-1-lesson`);
       await next(page).click();
 
@@ -111,9 +116,8 @@ for (const [device, viewport] of [
 }
 
 test('going back keeps the notes, and a reload lands where you were', async ({ page }) => {
-  await page.addInitScript(() => localStorage.setItem('proschi.lessons', JSON.stringify({ 'url-shortener': true })));
   await page.goto('practice/#/roadmap/url-shortener');
-  // The lesson was read: straight to Clarify.
+  // A first visit: straight to Clarify.
   await expect(page.getByTestId('stage-clarify')).toBeVisible();
   const notes = page.getByLabel('Your clarifying questions and assumptions');
   await notes.fill('Is there a budget?');

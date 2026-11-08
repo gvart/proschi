@@ -303,9 +303,11 @@ test.describe('practice tour', () => {
     });
 
     test('from the roadmap, waits while the lesson is shown', async ({ page }) => {
-      await page.goto('practice/#/roadmap/url-shortener');
+      await page.goto('practice/#/roadmap/url-shortener/lesson');
       await expect(page.getByRole('article', { name: 'Lesson' })).toBeVisible();
       await expect(practiceTour(page)).toHaveCount(0);
+      await page.getByTestId('stage-next').click();
+      await expect(practiceTour(page)).toHaveAccessibleName('Practice tour: Read the problem');
     });
   });
 

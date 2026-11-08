@@ -17,7 +17,7 @@ import TestPanel from './TestPanel';
 import ReviewPanel from '../review/ReviewPanel';
 import { practiceReviewInput } from '../review/practice';
 import { AssistedTag, CompanyBadge, DifficultyBadge, StatusIcon } from './Badges';
-import { lessonRead, markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
+import { markLessonRead, sourceOf, statusOf, withAssisted, withRun, withSource, type Progress } from './progress';
 import PartnerButton from '../partner/PartnerButton';
 import { usePartnerShortcut } from '../partner/shortcut';
 import PartnerDock from '../partner/PartnerDock';
@@ -99,10 +99,10 @@ interface ProblemPageProps {
   /** Shown under the header, e.g. the roadmap's banner. */
   banner?: ReactNode;
   /**
-   * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson),
-   * or `unread` until "Start the challenge" was pressed once (practice/#/<id>, and from the roadmap).
+   * Open on the lesson (when the problem has one): `always` (practice/#/<id>/lesson,
+   * practice/#/roadmap/<id>/lesson); otherwise never first (P52).
    */
-  openLesson?: 'always' | 'unread';
+  openLesson?: 'always';
   /**
    * The staged flow (P50) is for Interview prep only (P51). Without it the
    * problem opens straight on the workspace, as it did before the stages:
@@ -128,9 +128,9 @@ export default function ProblemPage({ problem, progress, onProgress, engine, acc
   const [parsedSource, setParsedSource] = useState(source);
   const [run, setRun] = useState<{ result: RunResult; source: string }>();
   const hasLesson = problem.lesson !== undefined;
-  // The notes of each stage, kept per problem; the screen opens on the lesson until it is read, else where it was left.
+  // The notes of each stage, kept per problem; the screen opens where it was left (the lesson only on its own address).
   const [notes, setNotes] = useState<StageNotes>(() => loadNotes(problem.id));
-  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, lessonRead(problem.id), loadNotes(problem.id)) : 'design'));
+  const [screen, setScreen] = useState<StageId>(() => (staged ? openingScreen(hasLesson, openLesson, loadNotes(problem.id)) : 'design'));
   const updateNotes = useCallback(
     (update: (n: StageNotes) => StageNotes) =>
       setNotes((n) => {

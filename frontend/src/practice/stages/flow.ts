@@ -103,12 +103,13 @@ export function goTo(notes: StageNotes, stage: WorkStage): StageNotes {
 export const canOpen = (notes: StageNotes, stage: StageId): boolean => stage === 'lesson' || stageAt(stage) <= stageAt(notes.reached);
 
 /**
- * The screen a problem opens on: its lesson when asked for (`always`) or not
- * read yet (`unread`), else the stage the learner left it on.
+ * The screen a problem opens on: its lesson only when asked for (`always`,
+ * practice/#/roadmap/<id>/lesson), else the stage the learner left it on, so
+ * a first visit opens on Clarify even with the lesson unread (P52); the
+ * lesson stays one click away in the stage bar.
  */
-export function openingScreen(hasLesson: boolean, openLesson: 'always' | 'unread' | undefined, read: boolean, notes: StageNotes): StageId {
-  if (hasLesson && (openLesson === 'always' || (openLesson === 'unread' && !read))) return 'lesson';
-  return notes.stage;
+export function openingScreen(hasLesson: boolean, openLesson: 'always' | undefined, notes: StageNotes): StageId {
+  return hasLesson && openLesson === 'always' ? 'lesson' : notes.stage;
 }
 
 /** Checks an estimate once (a checked one stays as it was), against the question's accepted range. */

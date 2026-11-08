@@ -30,8 +30,7 @@ async function select(el: Locator) {
 async function openClarify(page: Page) {
   await mockSignedIn(page);
   await new PartnerMock().mock(page);
-  // The stages are on the roadmap only (P51); the lesson was read, so it opens on Clarify.
-  await page.addInitScript(() => localStorage.setItem('proschi.lessons', JSON.stringify({ 'url-shortener': true })));
+  // The stages are on the roadmap only (P51); a first visit opens on Clarify (P52).
   await page.goto('practice/#/roadmap/url-shortener');
   const brief = page.getByTestId('brief');
   await expect(brief).toBeVisible();

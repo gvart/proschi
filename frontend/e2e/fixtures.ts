@@ -83,11 +83,11 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
     { auto: true },
   ],
   /**
-   * A problem opens on its lesson until the lesson is read, which would put
-   * a page of reading in front of every test of the workspace. By default,
-   * opening `practice/#/<problem id>` (loaded or navigated to) marks that
-   * problem's lesson read just before the page reads it, so the workspace
-   * opens as for someone who has read it. Only the lesson of the problem
+   * Whether a lesson was read (it shows as read on the roadmap; no problem
+   * opens on its lesson first any more, P51/P52). By default, opening
+   * `practice/#/<problem id>` (loaded or navigated to) marks that
+   * problem's lesson read just before the page reads it, as for someone
+   * who has read it. Only the lesson of the problem
    * opened is marked; `#/<id>/lesson` and `#/roadmap/…` are left alone, and
    * so is every other lesson. Tests of the lesson stage use
    * `test.use({ lessons: 'fresh' })`.
@@ -125,7 +125,7 @@ export const test = base.extend<{ errors: string[]; onboarding: 'seen' | 'fresh'
    * full editor, so by default a problem opened (`#/<id>`, `#/<id>/lesson`
    * or `#/roadmap/<id>`) whose stages were never touched opens on Design in
    * the full editor, every stage reached, as for someone who has been through
-   * them. Its lesson still shows first until read (see `lessons`). Tests of
+   * them. Tests of
    * the stages use `test.use({ stages: 'fresh' })`.
    */
   stages: ['editor', { option: true }],
